@@ -53,10 +53,35 @@ def bounds(p): return p.bounds  # (xmin, ymin, xmax, ymax)
 
 HAT_SRC = "M154.8 364.7C177.3 300.0 220.4 174.9 222.3 168.8C228.1 150.2 231.2 127.4 229.6 114.3C228.0 101.3 224.9 94.3 217.8 87.6C212.3 82.4 211.4 80.9 212.5 78.2C214.2 74.3 222.5 74.5 232.2 78.7C245.6 84.5 258.3 99.2 271.1 123.7C284.9 150.1 297.7 185.7 354.4 354.7L372.3 408.0L328.3 408.0L284.4 408.0L284.2 381.7C284.0 351.7 283.8 350.7 276.6 343.6C273.7 340.7 258.7 329.9 257.6 329.9C256.7 329.9 244.7 338.2 241.2 341.3C231.1 350.2 230.8 351.2 230.8 382.5L230.8 408.0L185.3 408.0L139.7 408.0L154.8 364.7Z"  # newest WizardOS hat (Oct 16 slides, Oct 21 lockup), traced; door is a notch at the base
 HAT_DOOR_BOX = (226.8, 325.9, 288.3)  # x0, y0 (above the arch apex), x1; the bottom is the base line y=408
+HAT_WIDEN = 1.12   # Robert, 30 Oct 2026: every hat is drawn 12% wider than the logo, like the Wizard tile
+def _widen(p): return T(p, 1, 256 - 256 * HAT_WIDEN, 0, sx=HAT_WIDEN, sy=1)
 def hat_door():
     x0, y0, x1 = HAT_DOOR_BOX
-    return D(P(f"M{x0} {y0} H{x1} V408 H{x0} Z"), P(HAT_SRC))
-def hat(): return U(P(HAT_SRC), hat_door())
+    return _widen(D(P(f"M{x0} {y0} H{x1} V408 H{x0} Z"), P(HAT_SRC)))
+def hat(): return U(_widen(P(HAT_SRC)), hat_door())
+def door_at(cx, base_y, height):
+    """The logo's own door (as widened), `height` tall, centred on cx, standing on base_y. Every door uses this."""
+    d = hat_door(); x0, y0, x1, y1 = d.bounds; s = height / (y1 - y0)
+    return T(d, s, cx - s * (x0 + x1) / 2, base_y - s * y1)
+def taper(pts, half):
+    """A Mail-style line: width follows `half` (half-width at each point), round ends, so 4-20-4 gives a line that
+    swells in the middle and fades to soft points. The only kind of thin line the set uses."""
+    out = None
+    for i in range(len(pts) - 1):
+        (x0, y0), (x1, y1) = pts[i], pts[i + 1]
+        L = math.hypot(x1 - x0, y1 - y0); nx, ny = -(y1 - y0) / L, (x1 - x0) / L
+        h0, h1 = half[i], half[i + 1]
+        q = poly((x0 + nx * h0, y0 + ny * h0), (x1 + nx * h1, y1 + ny * h1), (x1 - nx * h1, y1 - ny * h1), (x0 - nx * h0, y0 - ny * h0))
+        out = q if out is None else U(out, q)
+    for (x, y), h in zip(pts, half): out = U(out, circle(x, y, h))
+    return out
+def bez(p0, p1, p2, p3, n=14):
+    """Points along a cubic, for tapering a curved line."""
+    pts = []
+    for i in range(n + 1):
+        t = i / n; u = 1 - t
+        pts.append(tuple(u**3 * a + 3 * u * u * t * b + 3 * u * t * t * c + t**3 * d for a, b, c, d in zip(p0, p1, p2, p3)))
+    return pts
 def hat_at(cx, base_y, height):
     """Hat scaled to `height`, centred on cx, base sitting on base_y."""
     s = height / (408 - 75)
@@ -73,13 +98,27 @@ def glyph(name, desc, scale=1.0, dy=0):
         G[name] = dict(fn=fn, desc=desc, scale=scale, dy=dy); return fn
     return deco
 
-@glyph('pages', 'A folded page with a reading line cut through it: what your agent makes.')
+@glyph('pages', 'A page with its corner folded over and one line of writing: what your agent makes.')
 def g_pages():
-    return D(P('M146 88H300L384 172V424H146Z'), P('M300 88V172H384Z'), rrect(190, 244, 150, 26, 8))
+    # A clean dog-ear: the corner is cut on the diagonal, and the folded flap sits inside it, cut free of the page.
+    page = D(rrect(150, 88, 230, 336, 28), poly((230, 28), (520, 28), (520, 318)))
+    flap = poly((290, 88), (380, 178), (290, 178))
+    page = D(page, U(flap, stroke(flap, 28)))
+    return U(D(page, taper([(206, 312), (265, 312), (324, 312)], [5, 15, 5])), flap)
+
+@glyph('pages-stack', 'Two pages, the front one cut free of the one behind: what your agent makes.')
+def g_pages_stack():
+    back, front = rrect(196, 72, 216, 288, 34), rrect(100, 152, 216, 288, 34)
+    return U(D(back, U(front, stroke(front, 36))), front)
+
+@glyph('pages-chart', 'A page with three rising bars cut out: the reports and dashboards your agent makes.')
+def g_pages_chart():
+    page = rrect(116, 80, 280, 352, 48)
+    return D(page, rrect(170, 300, 44, 82, 14), rrect(234, 242, 44, 140, 14), rrect(298, 170, 44, 212, 14))
 
 @glyph('wizard', 'The mother mark: the hat, with its door joined to the ground line.')
 def g_wizard():
-    return P(HAT_SRC)
+    return _widen(P(HAT_SRC))
 
 @glyph('chats', 'A speech bubble with the hat cut out of it: you talking to your Wizard.')
 def g_chats():
@@ -100,8 +139,7 @@ def g_wisdom():
     Rr = P("M256 172 C298 136 360 124 420 132 L420 376 C360 368 298 380 256 408 Z")
     book = U(L, Rr)
     flame = P("M256 186 C274 222 304 248 304 290 C304 322 282 344 256 344 C230 344 208 322 208 290 C208 256 240 236 256 186 Z")
-    return D(book, flame, rrect(249, 330, 14, 90, 2))
-
+    return D(book, flame, taper([(256, 332), (256, 376), (256, 420)], [4, 9, 9]))   # spine: a taper, not a slot
 
 @glyph('track', 'A record in the crosshairs: hunting down the track.')
 def g_track():
@@ -127,13 +165,13 @@ def g_projects():
     lanes = U(rrect(140, 156, 64, 204, 22), rrect(224, 156, 64, 144, 22), rrect(308, 156, 64, 84, 22))
     return D(board, lanes)
 
-@glyph('calendar', 'A calendar page with today punched out.')
+@glyph('calendar', 'A calendar page hanging from its two rings: your days.')
 def g_calendar():
     body = rrect(96, 128, 320, 284, 56)
     tabs = U(rrect(162, 84, 40, 88, 20), rrect(310, 84, 40, 88, 20))
     gap = U(rrect(150, 72, 64, 116, 32), rrect(298, 72, 64, 116, 32))
-    page = D(body, gap, rrect(96, 206, 320, 22, 0))
-    return D(U(page, tabs), rrect(282, 278, 80, 80, 20))
+    # Robert, 30 Oct 2026: no box; the header line is a Mail-style taper, not a cut band.
+    return U(D(body, gap, taper([(136, 222), (256, 222), (376, 222)], [5, 15, 5])), tabs)
 
 @glyph('cine', 'A clapperboard with play cut into the slate: your watch queue.')
 def g_cine():
@@ -149,10 +187,7 @@ def g_cine():
 def g_files():
     # Landscape like a real folder (Robert, 30 Oct 2026: "not as tall"): 320 wide, 244 tall.
     folder = P("M128 136 H204 Q218 136 228 148 L252 172 H384 Q416 172 416 204 V348 Q416 380 384 380 H128 Q96 380 96 348 V168 Q96 136 128 136 Z")
-    # The logo's own door (Robert, 30 Oct 2026), scaled to the old door's 64 px width and cut up from the base.
-    x0, _, x1, _ = hat_door().bounds
-    s = 64 / (x1 - x0)
-    return D(folder, T(hat_door(), s, 256 - s * (x0 + x1) / 2, 388 - 408 * s))
+    return D(folder, door_at(256, 388, 93))   # the logo's door, as tall as the old one
 @glyph('iching', 'A casting coin with its square hole: cast and read.')
 def g_iching():
     coin = circle(256, 256, 156)
@@ -172,13 +207,12 @@ def g_android():
     ant = U(stroke("M178 222 L142 158", 24), stroke("M334 222 L370 158", 24))
     return D(U(head, ant), circle(198, 284, 22), circle(314, 284, 22))
 
-@glyph('usuals', 'A bowl and chopsticks with a heart cut in: your regular order.')
+@glyph('usuals', 'A bowl with chopsticks resting in it: your regular order.')
 def g_usuals():
     bowl = P("M92 236 H420 C420 328 348 392 256 392 C164 392 92 328 92 236 Z")
     foot = rrect(200, 380, 112, 34, 12)
     sticks = U(stroke("M282 226 L366 96", 24), stroke("M314 226 L410 116", 24))
-    heart = P("M256 360 C214 330 186 306 186 278 C186 258 202 244 220 244 C236 244 248 254 256 266 C264 254 276 244 292 244 C310 244 326 258 326 278 C326 306 298 330 256 360 Z")
-    return D(U(bowl, foot, sticks), heart)
+    return U(bowl, foot, sticks)   # Robert, 30 Oct 2026: no heart
 
 @glyph('side', 'A phone with the orb cut into it and its side key raised: talk from anywhere.')
 def g_side():
@@ -239,23 +273,24 @@ def g_pin():
 def g_home():
     body = U(poly((256, 92), (432, 244), (400, 244), (400, 404), (112, 404), (112, 244), (80, 244)),
              rrect(332, 116, 44, 96, 8))
-    door = P("M218 404 V320 A38 38 0 0 1 294 320 V404 Z")
+    door = door_at(256, 404, 112)   # the logo's door
     return D(U(body, stroke(body, 24)), door)
 
 # Installed Wizard apps that still showed a letter (Oct 2026).
-@glyph('bell', 'A bell with its rim band cut out: your Wizard tells you when something is done.')
+@glyph('bell', 'A bell with a flared lip and its clapper hanging free: your Wizard tells you when something is done.')
 def g_bell():
-    body = P("M256 84 C318 84 360 132 360 196 V272 C360 308 380 334 412 356 V376 H100 V356 C132 334 152 308 152 272 V196 C152 132 194 84 256 84 Z")
-    knob = circle(256, 82, 26)
-    clapper = circle(256, 404, 38)
-    return D(U(body, knob, clapper), rrect(80, 340, 352, 22, 0))
+    body = P("M256 98 C318 98 354 146 356 208 L360 278 C362 318 382 342 412 360 C426 368 426 390 408 390 "
+             "H104 C86 390 86 368 100 360 C130 342 150 318 152 278 L156 208 C158 146 194 98 256 98 Z")
+    knob = circle(256, 88, 26)
+    clapper = P("M212 412 H300 A44 44 0 0 1 212 412 Z")
+    return U(body, knob, clapper)
 
-@glyph('coffee', 'A steaming coffee cup with its rim band cut out: your morning briefing.')
+@glyph('coffee', 'A coffee cup with two curls of steam rising: your morning briefing.')
 def g_coffee():
     cup = P("M104 228 H364 V292 C364 362 310 412 234 412 C158 412 104 362 104 292 Z")
     handle = stroke(circle(372, 290, 46), 30)
-    steam = U(stroke("M196 196 C172 166 220 142 196 104", 32), stroke("M276 196 C252 166 300 142 276 104", 32))
-    return D(U(cup, handle, steam), rrect(104, 254, 260, 22, 0))
+    rise = lambda x: taper(bez((x, 200), (x - 26, 168), (x + 24, 142), (x, 96)), [18, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5])
+    return U(cup, handle, rise(196), rise(276))   # Robert, 30 Oct 2026: no rim band; steam tapers like Mail's line
 
 @glyph('globe', 'A globe with its meridian and latitudes cut out: the shared browser.')
 def g_globe():
@@ -376,26 +411,33 @@ def g_foot():
     chevron = stroke("M212 300 L256 344 L300 300", 34)
     return U(D(sole, chevron), toes)
 
-@glyph('tasks', 'A box with its tick breaking out of the corner: the list of what is next, and what got done.', scale=0.88)
+@glyph('tasks', 'A solid box with a check knocked out of it: what is next, and what got done.', scale=0.9)
 def g_tasks():
-    box = stroke(rrect(112, 132, 268, 268, 64), 38)
-    tick = stroke("M180 252 L240 312 L400 128", 44)
-    gap = stroke("M180 252 L240 312 L400 128", 108)
-    return U(D(box, gap), tick)
+    return D(rrect(104, 104, 304, 304, 76), taper([(172, 262), (232, 322), (346, 196)], [17, 27, 15]))
 
-@glyph('shelf', 'Three books on a shelf, the last one leaning: your saved knowledge, ready to pull down.')
+@glyph('tasks-check', 'A bold check that swells and fades like the Mail line: what got done.')
+def g_tasks_check():
+    return taper([(110, 270), (210, 368), (404, 150)], [22, 44, 18])
+
+SHELF_LEAN = 21   # degrees: the top corner reaches past the upright's edge, so the knockout leaves it touching
+
+@glyph('shelf', 'Books on a shelf, one leaning on an upright one: your saved knowledge, ready to pull down.')
 def g_shelf():
-    b1, b2 = rrect(104, 150, 76, 262, 18), rrect(194, 110, 76, 302, 18)
-    b3 = R(rrect(290, 156, 76, 256, 18), 15, 290, 412)
-    bands = U(rrect(118, 190, 48, 18, 9), rrect(208, 150, 48, 18, 9), R(rrect(304, 196, 48, 18, 9), 15, 290, 412))
-    shelf = rrect(84, 406, 344, 30, 15)
-    return U(D(U(b1, b2, b3), bands), shelf)
+    # Robert, 30 Oct 2026: the leaning book rests against a book standing straight; no spine bands.
+    a = rrect(248, 112, 78, 300, 18)            # upright, tall
+    b = rrect(340, 158, 78, 254, 18)            # upright
+    # Tip the left book on its bottom-right corner until its top corner reaches into the upright, then cut a thin
+    # knockout round the upright: the corner ends flush against it, so it reads as resting there.
+    lean = R(rrect(96, 166, 78, 246, 18), SHELF_LEAN, 174, 412)
+    lean = D(lean, U(a, stroke(a, 16)), rrect(60, 406, 400, 60, 0))
+    shelf = rrect(80, 406, 352, 30, 15)
+    return U(lean, a, b, shelf)
 
 @glyph('setup', 'A gear with the Wizard door at its centre: setting up your Wizard.')
 def g_setup():
     teeth = U(*[R(rrect(230, 70, 52, 70, 14), i * 45, 256, 256) for i in range(8)])
     gear = U(circle(256, 256, 138), teeth)
-    return D(gear, P("M218 318 V246 A38 38 0 0 1 294 246 V318 Z"))
+    return D(gear, door_at(256, 316, 104))   # the logo's door (Robert, 30 Oct 2026)
 
 @glyph('router', 'One line branching to three ends: which model or service each job goes to.')
 def g_router():
@@ -413,7 +455,7 @@ def g_bank():
 
 # ---------- normalise + emit ----------
 # First batch (Robert, 8-12 Oct 2026): the approved sheet, ported outline-for-outline from its masks.
-from first_batch import FIRST_BATCH
+from first_batch import FIRST_BATCH, PARTS, AUTHORITY_BITE_BOX
 
 SIGNAL_TILT = -12   # degrees; negative turns the bowl counterclockwise on screen
 
@@ -450,15 +492,25 @@ def g_music():
     left = P("M150 262 H178 A24 24 0 0 1 202 286 V398 A24 24 0 0 1 178 422 H150 A58 80 0 0 1 150 262 Z")
     right = P("M362 262 H334 A24 24 0 0 0 310 286 V398 A24 24 0 0 0 334 422 H362 A58 80 0 0 0 362 262 Z")
     return U(band, left, right)
-@glyph('recall', 'A crystal ball on its stand: ask it what you already know.')
-def g_recall(): return P(FIRST_BATCH['recall'])
+@glyph('recall', 'A crystal ball on its stand, a glint on its shoulder: see what is coming.')
+def g_recall():
+    stand, ball, glare = P(PARTS['recall-stand']), P(PARTS['recall-ball']), P(PARTS['recall-glare'])
+    # Robert, 30 Oct 2026: a bigger glint (1.35x), pulled in so it keeps its clearance from the ball's edge.
+    bx, by, br = 256, 212, 138
+    far = lambda p: max(math.hypot(x - bx, y - by) for x, y in p.points)
+    gx0, gy0, gx1, gy1 = glare.bounds; cx, cy = (gx0 + gx1) / 2, (gy0 + gy1) / 2
+    big = T(glare, 1.35, cx - 1.35 * cx, cy - 1.35 * cy)
+    push = far(big) - far(glare); dx, dy = bx - cx, by - cy; L = math.hypot(dx, dy)
+    big = T(big, 1, push * dx / L, push * dy / L)
+    return U(D(ball, big), stand)
 
 @glyph('camera', 'A video camera with circuit traces in its body: your meetings, recorded and summarised.')
 def g_camera(): return P(FIRST_BATCH['meetings'])
 
 @glyph('seal', 'A scalloped seal with the Wizard hat cut out: what your Wizard is allowed to do.')
-def g_seal(): return P(FIRST_BATCH['authority'])
-
+def g_seal():
+    x0, y0, x1, y1 = AUTHORITY_BITE_BOX
+    return D(P(PARTS['authority-seal']), hat_at((x0 + x1) / 2, y1, y1 - y0))   # the (wider) house hat
 
 @glyph('voice', 'A disc with a spoken wave cut through it: your Wizard listens and talks back.')
 def g_voice():
