@@ -465,14 +465,6 @@ def g_voice():
     wave = stroke("M150 256 Q176.5 176 203 256 T256 256 T309 256 T362 256", 32)
     return D(circle(256, 256, 156), wave)
 
-@glyph('butterfly', 'A monarch butterfly, its body cut free of its wings: your Monarch accounts.')
-def g_butterfly():
-    upper = P("M244 236 C224 162 156 110 108 124 C76 134 80 196 110 226 C140 256 196 262 244 256 Z")
-    lower = P("M244 270 C196 270 154 292 150 332 C146 374 192 394 220 366 C238 348 244 312 244 270 Z")
-    mirror = lambda p: T(p, 1, 512, 0, sx=-1, sy=1)
-    wings = D(U(upper, lower, mirror(upper), mirror(lower)), rrect(226, 140, 60, 270, 30))
-    body = U(rrect(242, 178, 28, 196, 14), stroke("M250 186 C244 158 232 140 212 128", 12), stroke("M262 186 C268 158 280 140 300 128", 12))
-    return U(wings, body)
 
 
 def fmt(p):
