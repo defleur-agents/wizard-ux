@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('hat',      296, None),
+    'wizard':        ('hat',      '#7A5CFF', None),   # brand ultraviolet (Robert, 30 Oct 2026)
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
@@ -69,7 +69,7 @@ HOUSE = {
     'usuals':        ('usuals',   42,  None),
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
-    'app-store':     ('apps',     284, None),
+    'app-store':     ('apps',     '#7A5CFF', None),
     'system':        ('gauge',    200, 0.07),
     'notifications': ('bell',     70,  None),
     'morning-report':('coffee',   46,  None),
@@ -86,7 +86,7 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
-    'profiles':      ('profile',  296, None),
+    'profiles':      ('profile',  '#7A5CFF', None),
     'defleur-video': ('clip',     268, None),
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
@@ -97,7 +97,7 @@ HOUSE = {
     'wizard-ux':     ('wizard',   280, 0.09),
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
-    'agents':        ('agents',   270, 0.10),
+    'agents':        ('agents',   '#7A5CFF', None),   # front hat #7A5CFF too (style.css)
     # Launch set (Robert, 29 Oct 2026): every app on a stock Wizard gets a sigil.
     'messages':      ('chats',    191, None),   # speech bubble with the newest hat inside, same as Messenger
     'recorder':      ('recorder', 30,  None),
@@ -105,6 +105,7 @@ HOUSE = {
     'tasks':         ('tasks',    128, None),
     'knowledge':     ('shelf',    268, None),
     'setup':         ('setup',    300, 0.07),
+    'settings':      ('setup',    300, 0.07),   # Settings wears the Setup gear with the logo door, never the ⚙ letter fallback
     'wizard-connection-router': ('router', 210, 0.08),
     'wizard-simplefin': ('bank',  112, None),
     'wizard-google': ('search',   250, None),
@@ -148,7 +149,7 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
+    house = {k: [g, h if isinstance(h, str) else tone(h, c)] for k, (g, h, c) in HOUSE.items()}   # a hex string is used as is
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
