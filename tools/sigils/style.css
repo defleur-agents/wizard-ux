@@ -46,6 +46,12 @@
  * (tools/sigils/private_hat.py); its outer silhouette is the main hat's, pixel for pixel.
  * 62% ink height matches neighbouring sigils, on tiles and bare dock/overview marks. */
 .sgi.sg-hat, .sgi.sg-hat-private { -webkit-mask-size: auto 62%; mask-size: auto 62%; }
+/* Wider-hat test (Robert, 30 Oct 2026: "a little wider so it's not so tall and small inside the box"). At 62% tall
+ * the hat's optical size (sqrt of ink width x height) was 0.53 of the box against ~0.62 for its neighbours. The test
+ * draws it 12% wider than the logo's proportions and taller, so it matches them; main and private stay one size.
+ * Agents (two hats) keeps the logo's proportions. Undo by deleting these two rules. */
+.sgi.sg-hat, .sgi.sg-hat-private { -webkit-mask-size: 56.6% 68%; mask-size: 56.6% 68%; }
+:is(.wbar .ic, .wic, .app-chip i, .pal-it .ic, .ag-sig.xs, .ch-agent.thread .ag-sig).sgt > :is(.sg-hat, .sg-hat-private) { -webkit-mask-size: 66.6% 80%; mask-size: 66.6% 80%; }
 .sg-hat { --sg: url("/wizard-os-home/brand/wizard-mark-white.png"); }
 .sg-hat-private { --sg: url("/wizard-os-home/brand/wizard-mark-private.png"); }
 /* Agents (the app): two hats layered (tools/sigils/agent_hats.py). The private agent's green hat stands
