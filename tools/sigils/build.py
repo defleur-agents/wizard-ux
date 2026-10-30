@@ -109,6 +109,8 @@ HOUSE = {
     'wizard-simplefin': ('bank',  112, None),
     'wizard-google': ('search',   250, None),
     'wizard-youtube-music': ('music', 352, None),
+    'wizard-monarch': ('butterfly', 40, None),   # Monarch: no public brand mark, so a monarch butterfly
+    'wizard-voice-service': ('voice', 318, None),
 }
 # Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
 #   hat          supplied company hat (Chats, main agent)

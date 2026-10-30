@@ -149,8 +149,10 @@ def g_cine():
 def g_files():
     # Landscape like a real folder (Robert, 30 Oct 2026: "not as tall"): 320 wide, 244 tall.
     folder = P("M128 136 H204 Q218 136 228 148 L252 172 H384 Q416 172 416 204 V348 Q416 380 384 380 H128 Q96 380 96 348 V168 Q96 136 128 136 Z")
-    return D(folder, P("M224 388 V320 A32 32 0 0 1 288 320 V388 Z"))
-
+    # The logo's own door (Robert, 30 Oct 2026), scaled to the old door's 64 px width and cut up from the base.
+    x0, _, x1, _ = hat_door().bounds
+    s = 64 / (x1 - x0)
+    return D(folder, T(hat_door(), s, 256 - s * (x0 + x1) / 2, 388 - 408 * s))
 @glyph('iching', 'A casting coin with its square hole: cast and read.')
 def g_iching():
     coin = circle(256, 256, 156)
@@ -214,7 +216,8 @@ def g_meditate():
 @glyph('apps', 'Four tiles, one of them is a hat: where the Wizard gets new powers.')
 def g_apps():
     tiles = U(rrect(112, 112, 124, 124, 30), rrect(112, 276, 124, 124, 30), rrect(276, 276, 124, 124, 30))
-    return U(tiles, T(hat(), 0.375, 242, 83))
+    # Hat a touch bigger (Robert, 30 Oct 2026): 0.375 -> 0.41, same centre and ground line as the tiles.
+    return U(tiles, T(hat(), 0.41, 338 - 0.41 * 256, 236 - 0.41 * 408))
 
 
 @glyph('image', 'A photo frame with a mountain and sun bitten out: image search.')
@@ -412,9 +415,15 @@ def g_bank():
 # First batch (Robert, 8-12 Oct 2026): the approved sheet, ported outline-for-outline from its masks.
 from first_batch import FIRST_BATCH
 
-@glyph('signal', 'A satellite dish on its stand, its feed reaching for the sky: your signal, pulled in.')
-def g_signal(): return P(FIRST_BATCH['signal'])
+SIGNAL_TILT = -12   # degrees; negative turns the bowl counterclockwise on screen
 
+@glyph('signal', 'A satellite dish on its stand, its feed reaching for the sky: your signal, pulled in.')
+def g_signal():
+    # The approved dish (first batch), its bowl tilted back 12 degrees on the stand so the lower lip clears the
+    # base (Robert, 30 Oct 2026).
+    base = P("M237.9 265.4 Q240 262 242.1 265.4 L329.8 407.2 Q334 414 326.0 414.0 L154.0 414.0 Q146 414 150.2 407.2 Z")
+    dish = U(P("M355.3 315.3 A132 132 0 0 1 168.7 128.7 Z"), P("M232.0 214.0 L338.4 145.6 L270.0 252.0 Z"), circle(338.4, 145.6, 34))
+    return U(base, R(dish, SIGNAL_TILT, 240, 262))
 @glyph('eye', 'An eye cut into a sphere, its corners clear of the edge: a question about the world that keeps looking.')
 def g_eye(): return P(FIRST_BATCH['topics'])
 
@@ -434,11 +443,13 @@ def g_inbox(): return P(FIRST_BATCH['drop'])
 def g_mail(): return P(FIRST_BATCH['mail'])
 
 @glyph('music', 'Over-ear headphones: your music.')
-def g_music(): return P(FIRST_BATCH['music'])
-
-@glyph('link', 'Two chain links cut into a disc: phone and box, paired.')
-def g_link(): return P(FIRST_BATCH['link'])
-
+def g_music():
+    # The approved headphones, with the cups' outer sides rounded so they read as headphones, not earmuffs
+    # (Robert, 30 Oct 2026).
+    band = P("M116 300 V226 A140 140 0 0 1 396 226 V300 H358 V226 A102 102 0 0 0 154 226 V300 Z")
+    left = P("M150 262 H178 A24 24 0 0 1 202 286 V398 A24 24 0 0 1 178 422 H150 A58 80 0 0 1 150 262 Z")
+    right = P("M362 262 H334 A24 24 0 0 0 310 286 V398 A24 24 0 0 0 334 422 H362 A58 80 0 0 0 362 262 Z")
+    return U(band, left, right)
 @glyph('recall', 'A crystal ball on its stand: ask it what you already know.')
 def g_recall(): return P(FIRST_BATCH['recall'])
 
@@ -448,13 +459,20 @@ def g_camera(): return P(FIRST_BATCH['meetings'])
 @glyph('seal', 'A scalloped seal with the Wizard hat cut out: what your Wizard is allowed to do.')
 def g_seal(): return P(FIRST_BATCH['authority'])
 
-@glyph('radar', 'A disc with one sweep cut from the centre to the rim and a blip caught in it: the scan.')
-def g_radar():
-    import math
-    a0, a1, r = math.radians(-90), math.radians(-30), 220
-    sweep = P(f"M256 256 L{256 + r*math.cos(a0):.1f} {256 + r*math.sin(a0):.1f} A{r} {r} 0 0 1 {256 + r*math.cos(a1):.1f} {256 + r*math.sin(a1):.1f} Z")
-    bx, by = 256 + 104 * math.cos(math.radians(-58)), 256 + 104 * math.sin(math.radians(-58))
-    return U(D(circle(256, 256, 152), sweep), circle(round(bx, 1), round(by, 1), 20))
+
+@glyph('voice', 'A disc with a spoken wave cut through it: your Wizard listens and talks back.')
+def g_voice():
+    wave = stroke("M150 256 Q176.5 176 203 256 T256 256 T309 256 T362 256", 32)
+    return D(circle(256, 256, 156), wave)
+
+@glyph('butterfly', 'A monarch butterfly, its body cut free of its wings: your Monarch accounts.')
+def g_butterfly():
+    upper = P("M244 236 C224 162 156 110 108 124 C76 134 80 196 110 226 C140 256 196 262 244 256 Z")
+    lower = P("M244 270 C196 270 154 292 150 332 C146 374 192 394 220 366 C238 348 244 312 244 270 Z")
+    mirror = lambda p: T(p, 1, 512, 0, sx=-1, sy=1)
+    wings = D(U(upper, lower, mirror(upper), mirror(lower)), rrect(226, 140, 60, 270, 30))
+    body = U(rrect(242, 178, 28, 196, 14), stroke("M250 186 C244 158 232 140 212 128", 12), stroke("M262 186 C268 158 280 140 300 128", 12))
+    return U(wings, body)
 
 
 def fmt(p):
