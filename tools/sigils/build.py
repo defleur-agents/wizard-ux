@@ -65,7 +65,7 @@ HOUSE = {
     'v-day':         ('day',      48,  None),
     'v-week':        ('week',     310, None),
     'v-month':       ('month',    262, 0.08),
-    'v-inbox':       ('inbox',    166, None),
+    'v-inbox':       ('inbox',    92,  None),   # Drop: sunny yellow, so it never reads as Secret Drop's teal (Robert, 30 Oct 2026)
     'usuals':        ('usuals',   42,  None),
     'side-button':   ('side',     300, 0.07),
     'maps':          ('pin',      114, None),
@@ -109,7 +109,6 @@ HOUSE = {
     'wizard-simplefin': ('bank',  112, None),
     'wizard-google': ('search',   250, None),
     'wizard-youtube-music': ('music', 352, None),
-    'wizard-monarch': ('butterfly', 40, None),   # Monarch: no public brand mark, so a monarch butterfly
     'wizard-voice-service': ('voice', 318, None),
 }
 # Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
