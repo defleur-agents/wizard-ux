@@ -114,7 +114,7 @@ test('James: Settings › Look lists skins with their colors underneath (no flat
   assert.match(look, /<h4>Colors<\/h4>/, 'the worn skin\'s colors under it');
   assert.match(look, /\(family\?\.palettes \|\| \[\]\)\.map\(id => S\.list\.find\(k => k\.id === id\)\)/, 'only that skin\'s colors');
   assert.doesNotMatch(look, /S\.list\.map\(k => skinCard\(k, cur\)\)/, 'not every color as a skin');
-  assert.doesNotMatch(s, /data-tweakauthor=/, 'tweaks ride with their skin, no per-author switches');
+  assert.match(s, /The picked skin brings these ideas/, '#779 groups this skin’s tweaks, never changes which skin carries them');
   // #761 stays: Welcome never switches skin on its own.
   assert.ok(existsSync(new URL('../web/core/welcome.js', import.meta.url)));
 });

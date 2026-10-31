@@ -146,9 +146,24 @@
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', on: groupOf(id) ? groupOn(id) : enabled(id) })) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, author: id.split('/')[0], builtin: globalIds().includes(id), name: m.name, description: m.description || '', on: groupOf(id) ? groupOn(id) : enabled(id) })) });
     },
     installed, defaults,
+    async authors() {
+      return (await Promise.all((catalog?.profiles || []).map(async id => {
+        const p = await profile(id);
+        return { id, name: p.name || ({ wizard: 'James', miguel: 'Miguel', novaire: 'Novairecito' })[id] || id,
+          ids: experience.state.tweaks.filter(t => t.author === id && !t.builtin).map(t => t.id) };
+      }))).filter(a => a.ids.length);
+    },
+    async chooseAuthor(who) {
+      // Only the worn skin's offered tweaks; never turn on another skin's packages or release-wide defaults.
+      const mine = experience.state.tweaks.filter(t => t.author === who && !t.builtin);
+      if (!mine.length) return;
+      const on = !mine.every(t => t.on);
+      for (const t of mine) for (const id of groupOf(t.id) || [t.id]) await setOne(id, on);
+      return apply();
+    },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },

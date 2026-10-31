@@ -253,13 +253,22 @@
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
     if (!s.tweaks.length && !s.error) return '';
-    const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
-    const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
-    const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
+    const name = who => (authorList || []).find(a => a.id === who)?.name || ({ wizard: 'James', miguel: 'Miguel' })[who] || who;
+    const exp = s.tweaks.filter(t => !t.builtin);
+    const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
+    const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
+    // Group only this skin's available tweaks: another author's All switch never promotes their taste to core.
+    const order = [...(authorList || []).map(a => a.id), ...exp.map(t => t.author)].filter((who, i, all) => all.indexOf(who) === i);
+    const groups = order.map(who => {
+      const mine = exp.filter(t => t.author === who); if (!mine.length) return '';
+      const on = mine.filter(t => t.on).length, all = on === mine.length;
+      const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
+      return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
+    }).join('');
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">The picked skin brings these ideas. Switch each one on or off.</p>${err}${groups}</div>`;
   }
-  let tweaksOpen = false;
+  let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
@@ -362,9 +371,9 @@
     const own = el.closest('[data-ownskin]');
     if (own) { skinAction(() => M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
-    if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
-    const set = el.closest('[data-tweakset] > summary');
-    if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
+    if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
+    const quick = el.closest('[data-tweakauthor]');
+    if (quick) { void window.WosExperience.chooseAuthor(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const family = el.closest('[data-skinfamily]');
