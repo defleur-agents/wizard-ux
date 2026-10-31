@@ -19,13 +19,13 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
   const id = 'wizard/pin-buttons'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
-  await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
+  await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
   const f = fixture(); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/home-bars'], f.slots);
+  await f.host.loadTweaks(['miguel/send-and-go'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -44,10 +44,10 @@ test('a skin brings its tweaks; offs are remembered per skin; another skin drops
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
   skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['wizard/pin-buttons']);
   await E.toggle('wizard/pin-buttons'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
-  published = { ...published, version:2, tweaks: ['miguel/home-bars','wizard/pin-buttons'] }; await E.refresh();
-  assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  published = { ...published, version:2, tweaks: ['miguel/send-and-go','wizard/pin-buttons'] }; await E.refresh();
+  assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
   skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => !['wizard/unified-inbox', 'wizard/machines-home'].includes(t.id)).length, 0);
-  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
 });
 
 test('event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert', async () => {
