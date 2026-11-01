@@ -110,7 +110,7 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    assert.equal(b.calls.filter(x=>x.url.endsWith('/steer')).length,before);
   });
   await check('same-model active run permits verified steer',async()=>{
-   b.runtime({model:'glm-5-3',provider:'custom:tinfoil-operator'});
+   b.runtime({model:'glm-5-3',provider:'custom:tinfoil-operator',model_lock:'confirmed'});
    const it=await b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic',steerRunId:'glm-active'});assert((await settled(b,it.id)).steered);
   });
   await check('outage rejects and retry preserves model, provider, key and body',async()=>{
@@ -143,7 +143,7 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
   });
   await check('wrong backend acknowledgement never claims model selected',async()=>{
    b.badAck(true);await assert.rejects(b.c.WosModels.setThreadModel('s1',{value:'glm-5-3',provider:'custom:tinfoil-operator'}),/confirm/);
-   assert.equal(b.c.WosModels.snapshot('s1').model,'gpt-6.1-sol');
+   assert.throws(()=>b.c.WosModels.snapshot('s1'),/not confirmed/);
   });
   await check('old already-frozen unpinned request stays unsent',async()=>{
    const it={id:'legacy',kind:'reply',sessionId:'private',state:'queued',createdAt:Date.now(),attempts:0,text:'synthetic old',model:'glm-5-3',provider:'custom:tinfoil-operator',body:JSON.stringify({session_id:'private',input:'synthetic old'})};

@@ -1028,7 +1028,7 @@
       if (s && WORKING.has(s.status) && s.runId) {
         try {
           const active = await (await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}${aq(id)}`)).json();
-          if (!M.matchesRuntime(active.runtime, route))
+          if (active.runtime?.model_lock !== 'confirmed' || !M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
           if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
