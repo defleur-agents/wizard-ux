@@ -160,7 +160,7 @@ try:
   # Frozen actual protocol passes inherited by exact hash, never rerun.
   report['inheritedProtocolPasses']=M['r34Diagnostic']['inheritedProtocolPasses']
   case('consumer-probe','consumer-probe',390,60,probe='consumer')
-  assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'new stream canary failed; no isolation admission'
+  assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'completed PAGE body canary failed; NO_FIX_CAPTURE_PATH; no isolation admission'
  else:
   raise RuntimeError('R34 permits selected isolation diagnostic only')
  for entry in CASES:

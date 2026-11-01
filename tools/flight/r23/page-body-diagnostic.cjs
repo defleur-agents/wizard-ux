@@ -29,6 +29,7 @@ exports.create=({contextId,generationId,origin,send,limits={}})=>{
    if(p.response.url!==r.url){bad(r,'wrong response URL');return}
    Object.assign(r,{status:p.response.status,headers:safeHeaders(p.response.headers),fromServiceWorker:p.response.fromServiceWorker??null,serviceWorkerResponseSource:p.response.serviceWorkerResponseSource??null});
   }else if(method==='Network.dataReceived'){
+   if(r.status===undefined)bad(r,'data before response');
    if(r.finished||r.failed)bad(r,'data after terminal');
    const sig=JSON.stringify(p);if(r.seen.has(sig))bad(r,'duplicate data');if(r.seen.size>=cap.events){drops++;bad(r,'data event cap')}else r.seen.add(sig);
   }else if(method==='Network.loadingFailed'){
@@ -52,8 +53,9 @@ exports.create=({contextId,generationId,origin,send,limits={}})=>{
  function link(inner,member){
   const v=snapshot(),matches=v.rows.filter(r=>['page','iframe'].includes(r.targetType)&&['contextId','generationId','browserContextId','url','method','status'].every(k=>r[k]===inner[k])&&r.headers?.['x-qa-write-id']&&r.headers['x-qa-write-id']===inner.headers?.['x-qa-write-id']);
   const inners=v.rows.filter(r=>r.targetType==='service_worker'&&['contextId','generationId','browserContextId','url','method','status','sessionId','requestId','targetId'].every(k=>r[k]===inner[k])&&r.headers?.['x-qa-write-id']===inner.headers?.['x-qa-write-id']);
+  const innerCandidates=v.rows.filter(r=>r.targetType==='service_worker'&&['contextId','generationId','browserContextId','url','method','status'].every(k=>r[k]===inner[k])&&r.headers?.['x-qa-write-id']===inner.headers?.['x-qa-write-id']);
   const r=matches[0];const encoding=r?.headers?.['content-encoding'];
-  const linked=matches.length===1&&inners.length===1&&!v.drops&&!v.errors.length&&!inner.invalid&&!inner.failed&&r.started&&r.finished&&!r.invalid&&!r.failed&&r.fromServiceWorker===true&&r.method==='GET'&&r.status===200&&!r.requestHeaders.range&&!inner.requestHeaders?.range&&(!encoding||encoding==='identity')&&r.body?.completed&&r.body.decodedBytes===member.bytes&&r.body.sha256===member.sha256&&member.bytes>0;
+  const linked=matches.length===1&&inners.length===1&&innerCandidates.length===1&&!v.drops&&!v.errors.length&&!inner.invalid&&!inner.failed&&r.started&&r.finished&&!r.invalid&&!r.failed&&r.fromServiceWorker===true&&r.method==='GET'&&r.status===200&&!r.requestHeaders.range&&!inner.requestHeaders?.range&&(!encoding||encoding==='identity')&&r.body?.completed&&r.body.decodedBytes===member.bytes&&r.body.sha256===member.sha256&&member.bytes>0;
   return {...flags,linked:!!linked,innerFinished:!!inner.finished,consumer:matches.length===1?r:null,matches:matches.length,innerMatches:inners.length,scope:'page network-agent completed-response bytes only; not application consumption, streaming PASS, or inner completion'};
  }
  return {feed,snapshot,link,async flush(){await Promise.allSettled(rows.map(r=>r.task))},detach(s){for(const r of rows)if(r.sessionId===s.id&&!r.finished)bad(r,'target closed before finish')},async close(){await Promise.allSettled(rows.map(r=>r.task));sealed=true;return snapshot()}};

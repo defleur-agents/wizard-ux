@@ -1,5 +1,7 @@
 # R35 completed-PAGE body diagnostic — not acceptance
 
+SOURCE ONLY. Local source root: `/home/telos/.hermes/cache/scratch/wisdom-flight-finish/ux-r35-page-body`; seal builder: `/home/telos/.hermes/cache/scratch/wisdom-flight-finish/stage-r35-page-body.py`. Final immutable Forum stage and manifest/argv are recorded in its `parent-light-spec.json` and `source-verification.json` (the parent must read these, not derive an old R34 argv).
+
 SOURCE ONLY. No browser, fixture, or heavy job launched during preparation. Parent admission only; one-use Forum light packet, canary then existing 55-second isolation. Never run the full matrix.
 
 REUSE: original owned-browser/public-spawn provenance, 2,079 frozen product files, historical nine functional reports and actual R32 protocol evidence, strict inner completion, cleanup.
