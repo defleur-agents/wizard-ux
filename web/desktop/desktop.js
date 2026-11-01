@@ -92,6 +92,7 @@
     save,
     layout: id => { syncChatsPane(id); },
     toast: (...a) => toast(...a),
+    toastPlain: (...a) => toast(...a),
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
     visible: () => [...(homeOpen ? [] : ws[cur].wins), ...(hud?.open ? [hud.id] : [])],
@@ -113,6 +114,7 @@
     finishVoice: () => talk('send'),
     // A private-origin link in a message opens as a window on this workspace; the shell never navigates away.
     openLink: (url, title) => openAppLink(url, title),
+    openApp: id => { const a = APP[id]; if (!a) return false; toast('↗', `Opening ${a.name}`, 1600); requestAnimationFrame(() => { try { openApp(a); } catch (_) { toast('!', `Couldn’t open ${a.name} · try again`, 2400); } }); return true; },
     changed: () => { for (const id of Object.keys(W)) if (W[id].app === 'chats') syncChatsPane(id); },
     openThread: (sid, options) => openThread(sid, options),
   });
