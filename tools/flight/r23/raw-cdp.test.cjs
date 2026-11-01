@@ -1,4 +1,5 @@
 'use strict';
+require('./ownership.test.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),{createHash}=require('node:crypto'),{EventEmitter}=require('node:events'),C=require('./contracts.cjs'),D=require('./raw-cdp.cjs');
 const bytes=Buffer.from('actual source bytes'),member={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};
 function pair(){const row={contextId:'mock',generationId:'mock',worker:'https://localhost/wisdom/sw.js',workerInstanceId:'w1',url:'https://localhost/wisdom/app.js?q=1',method:'GET',status:200,requestHeaders:{},responseHeaders:{'x-qa-write-id':'unique'}};const raw={...row,targetId:'t',sessionId:'s',requestId:'r',headers:{'x-qa-write-id':'unique','content-length':String(bytes.length),'content-type':'text/javascript'},started:1,finished:{at:20},bodyBytes:bytes.length,sha256:member.sha256};return {row,raw}}

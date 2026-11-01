@@ -47,7 +47,7 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','raw-cdp-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','ownership.test.cjs','raw-cdp-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
  regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
  # Recompute policy from frozen source, never trust a served manifest/cache list.
  import runpy
@@ -147,11 +147,11 @@ def case(identity,phase,width,cap,probe: bool | str=False):
    save()
 try:
  save()
- case('observer-probe','observer-probe',390,70,probe=True)
- assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
  if A.isolation_only:
   case('raw-cdp-probe','raw-cdp-probe',390,60,probe='cdp')
   assert report['rawCDPProbe']['status']=='pass' and report['rawCDPProbe']['cleanup']['verified'],'raw CDP probe failed; no isolation admission'
+ case('observer-probe','observer-probe',390,70,probe=True)
+ assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
  for entry in CASES:
   if entry not in SELECTED:continue
   if time.monotonic()>=overall:report['cases'][entry[0]]={'status':'not-run-budget-exhausted'};save();continue

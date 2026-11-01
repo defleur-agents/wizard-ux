@@ -15,16 +15,44 @@ exports.verify=(row,raw,member)=>{
  assert(raw.headers['content-type'],'CDP MIME');
  return {contextId:raw.contextId,generationId:raw.generationId,worker:raw.worker,targetId:raw.targetId,sessionId:raw.sessionId,browserContextId:raw.browserContextId,requestId:raw.requestId,url:raw.url,writeId:id,bytes:raw.bodyBytes,sha256:raw.sha256,loadingFinished:raw.finished,encodedDataLength:raw.encodedDataLength,scope:'independent raw CDP loadingFinished + decoded source bytes; NOT PW response.finished PASS'};
 };
-exports.connect=async({profile,origin,workers,contextId,generationId,out,timeoutMs=8000})=>{
- const portFile=path.join(profile,'DevToolsActivePort');let lines;
- for(let i=0;i<100;i++){try{lines=fs.readFileSync(portFile,'utf8').trim().split('\n');break}catch{await sleep(20)}}
- assert(lines&&/^\d+$/.test(lines[0])&&lines[1]?.startsWith('/devtools/browser/'),'owned DevToolsActivePort');
- // Prove the listener is loopback-only and belongs to our exact profile PID.
- const listeners=fs.readFileSync('/proc/net/tcp','utf8').trim().split('\n').slice(1).map(l=>l.trim().split(/\s+/)).filter(c=>parseInt(c[1].split(':')[1],16)===Number(lines[0])&&c[3]==='0A');
- assert.equal(listeners.length,1,'one owned IPv4 debugger listener');assert.equal(listeners[0][1].split(':')[0],'0100007F','debugger must bind 127.0.0.1 only');
- const ipv6=fs.readFileSync('/proc/net/tcp6','utf8').trim().split('\n').slice(1).map(l=>l.trim().split(/\s+/));assert(!ipv6.some(c=>parseInt(c[1].split(':')[1],16)===Number(lines[0])&&c[3]==='0A'),'no IPv6 debugger exposure');
- const owners=[];for(const pid of fs.readdirSync('/proc').filter(x=>/^\d+$/.test(x))){try{const root='/proc/'+pid,args=fs.readFileSync(root+'/cmdline','utf8').split('\0');if(fs.statSync(root).uid!==process.getuid()||!args.includes('--user-data-dir='+profile)||args.some(a=>a.startsWith('--type=')))continue;if(fs.readdirSync(root+'/fd').some(fd=>{try{return fs.readlinkSync(root+'/fd/'+fd)==='socket:['+listeners[0][9]+']'}catch{return false}}))owners.push({pid:Number(pid),profile,start:fs.readFileSync(root+'/stat','utf8').split(') ')[1].split(' ')[19]})}catch{}}
- assert.equal(owners.length,1,'debugger listener must belong to exact owned profile PID');const ownership={...owners[0],address:'127.0.0.1',port:Number(lines[0]),inode:listeners[0][9]};
+const fingerprint=s=>[s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].map(String).join(':');
+exports.prepareProfile=profile=>{
+ fs.mkdirSync(profile,{recursive:true,mode:0o700});const canonical=fs.realpathSync(profile),s=fs.statSync(canonical);assert.equal(s.uid,process.getuid(),'owned profile UID');assert.equal(s.mode&0o077,0,'private profile permissions');
+ let previous=null;try{previous=fingerprint(fs.lstatSync(path.join(canonical,'DevToolsActivePort'),{bigint:true}))}catch(e){if(e.code!=='ENOENT')throw e}
+ return {canonical,previous,preparedAt:Date.now()};
+};
+// Only the already-owned Playwright browser channel supplies the candidate PID.
+// No raw endpoint is contacted to discover its own owner (no circular trust).
+exports.ownedBrowserPID=async(context,out)=>{
+ let session;const diagnostic={phase:'trusted-playwright-browser-channel',rawSocketOpened:false};
+ try{const browser=context.browser();assert(browser,'owned Playwright browser available');session=await browser.newBrowserCDPSession();const info=await session.send('SystemInfo.getProcessInfo'),rows=info.processInfo.filter(p=>p.type==='browser');assert.equal(rows.length,1,'one trusted browser PID');const pid=Number(rows[0].id);assert(Number.isSafeInteger(pid)&&pid>0,'trusted browser PID');diagnostic.pid=pid;return pid}
+ catch(e){diagnostic.error={message:e.message,code:e.code};throw e}
+ finally{fs.writeFileSync(out,JSON.stringify(diagnostic,null,2));if(session)await session.detach()}
+};
+// Injectable filesystem is for browser-free fixtures only; connect always uses fs.
+exports.inspectOwnership=({profile,prepared,knownOwnedBrowserPID,lines,diagnostic},io=fs)=>{
+ const pid=knownOwnedBrowserPID;assert(Number.isSafeInteger(pid)&&pid>0,'trusted owned browser PID required');
+ const root='/proc/'+pid;Object.assign(diagnostic,{pid,pidPath:root,logicalProfile:profile,canonicalProfile:io.realpathSync(profile),port:Number(lines[0]),endpointPath:lines[1],expectedUID:process.getuid(),matchingFDs:[],inspectionErrors:[]});
+ assert.equal(diagnostic.canonicalProfile,prepared.canonical,'profile canonical identity unchanged');
+ const file=io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true});assert(!file.isSymbolicLink(),'port file not symlink');assert.equal(Number(file.uid),process.getuid(),'port file UID');assert.notEqual(fingerprint(file),prepared.previous,'fresh DevToolsActivePort required');diagnostic.portFileFingerprint=fingerprint(file);
+ const stat=()=>io.readFileSync(root+'/stat','utf8').split(') ')[1].split(' ')[19];diagnostic.start=stat();
+ const args=io.readFileSync(root+'/cmdline','utf8').split('\0'),profileArgs=args.filter(a=>a.startsWith('--user-data-dir='));diagnostic.userDataArgs=profileArgs;diagnostic.uid=io.statSync(root).uid;
+ assert.equal(diagnostic.uid,process.getuid(),'exact browser UID');assert(!args.some(a=>a.startsWith('--type=')),'browser main process only');assert.equal(profileArgs.length,1,'one browser profile argument');diagnostic.argumentCanonicalProfile=io.realpathSync(profileArgs[0].slice('--user-data-dir='.length));assert.equal(diagnostic.argumentCanonicalProfile,diagnostic.canonicalProfile,'exact canonical browser profile');
+ const table=name=>io.readFileSync('/proc/net/'+name,'utf8').trim().split('\n').slice(1).map(l=>l.trim().split(/\s+/)).filter(c=>parseInt(c[1].split(':')[1],16)===Number(lines[0])&&c[3]==='0A');
+ const listeners=table('tcp');diagnostic.listeners=listeners;diagnostic.ipv6Listeners=table('tcp6');assert.equal(listeners.length,1,'one owned IPv4 debugger listener');assert.equal(listeners[0][1].split(':')[0],'0100007F','debugger must bind 127.0.0.1 only');assert.equal(diagnostic.ipv6Listeners.length,0,'no IPv6 debugger exposure');assert.equal(Number(listeners[0][7]),process.getuid(),'listener exact UID');diagnostic.inode=listeners[0][9];assert(/^\d+$/.test(diagnostic.inode)&&diagnostic.inode!=='0','listener inode');
+ let descriptors;try{descriptors=io.readdirSync(root+'/fd')}catch(e){diagnostic.inspectionErrors.push({path:root+'/fd',code:e.code,message:e.message});throw e}
+ for(const fd of descriptors){const p=root+'/fd/'+fd;try{if(io.readlinkSync(p)==='socket:['+diagnostic.inode+']')diagnostic.matchingFDs.push(fd)}catch(e){diagnostic.inspectionErrors.push({path:p,code:e.code,message:e.message})}}
+ assert(diagnostic.matchingFDs.length>0,'debugger listener must belong to exact trusted owned profile PID');assert.equal(stat(),diagnostic.start,'browser PID starttime stable');assert.equal(fingerprint(io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true})),diagnostic.portFileFingerprint,'port file stable during inspection');
+ return {pid,profile,canonicalProfile:diagnostic.canonicalProfile,start:diagnostic.start,address:'127.0.0.1',port:Number(lines[0]),inode:diagnostic.inode,matchingFDs:diagnostic.matchingFDs};
+};
+exports.connect=async({profile,prepared,knownOwnedBrowserPID,origin,workers,contextId,generationId,out,timeoutMs=8000})=>{
+ const portFile=path.join(profile,'DevToolsActivePort'),diagnostic={phase:'preconnect-ownership',rawSocketOpened:false,logicalProfile:profile,knownOwnedBrowserPID};let lines,ownership;
+ try{
+  for(let i=0;i<100;i++){try{lines=fs.readFileSync(portFile,'utf8').trim().split('\n');break}catch(e){if(e.code!=='ENOENT')throw e;await sleep(20)}}
+  assert(lines&&lines.length===2&&/^\d+$/.test(lines[0])&&Number(lines[0])>0&&Number(lines[0])<=65535&&/^\/devtools\/browser\/[a-zA-Z0-9-]+$/.test(lines[1]),'owned DevToolsActivePort');
+  ownership=exports.inspectOwnership({profile,prepared,knownOwnedBrowserPID,lines,diagnostic});diagnostic.status='verified';
+ }catch(e){diagnostic.status='refused';diagnostic.error={message:e.message,code:e.code};throw e}
+ finally{fs.writeFileSync(out+'.ownership.json',JSON.stringify(diagnostic,null,2))}
  const socket=new WebSocket('ws://127.0.0.1:'+lines[0]+lines[1]);await new Promise((r,j)=>{const timer=setTimeout(()=>{socket.close();j(Error('owned CDP connection timeout'))},3000);socket.addEventListener('open',()=>{clearTimeout(timer);r()},{once:true});socket.addEventListener('error',e=>{clearTimeout(timer);j(e)},{once:true})});
  let seq=0,active=true;const commands=new Map(),sessions=new Map(),attaching=new Map(),rows=[],errors=[],workerBindings=new Map(),claimed=new Map();
  const save=()=>fs.writeFileSync(out,JSON.stringify({contextId,generationId,ownership,route:'owned-loopback-raw-WebSocket-discovery-nested-sessions-no-pause',sessions:[...sessions.values()].map(s=>({id:s.id,target:s.target,enabledAt:s.enabledAt,detached:s.detached})),rows,errors},null,2));
