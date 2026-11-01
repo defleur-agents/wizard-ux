@@ -15,6 +15,7 @@ def main():
  p=argparse.ArgumentParser();p.add_argument('--manifest-sha',required=True);p.add_argument('--verify-only',action='store_true');a=p.parse_args()
  assert gate.sha(R/'source-manifest.json')==a.manifest_sha
  m=gate.read(R/'source-manifest.json')
+ assert gate.sha('/usr/bin/ffmpeg')==m['qa_retry']['ffmpeg_sha256'],'pixel decoder host drift'
  for name,meta in {**m['members'],**m['export_members']}.items():
   f=gate.safe(R,name)
   if meta['mode']=='120000':assert f.is_symlink() and os.readlink(f)==meta['target'],name

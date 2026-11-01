@@ -1,7 +1,8 @@
 """Native pixel boundary evidence only; no DOM or owner storage claims."""
 import hashlib,json,re
 from pathlib import Path
-from PIL import Image
+import struct,zlib,subprocess as sp
+from collections import Counter
 import native_ui_r16 as native_ui
 
 def geometry(raw,size):
@@ -18,17 +19,21 @@ def geometry(raw,size):
 def sample(raw,image,crop=None,save_crop=True):
  counts=[native_ui.label(n) for n in native_ui.visible(raw) if re.fullmatch(r'\d+\s*/\s*\d+',native_ui.label(n))]
  assert len(counts)==1,counts
- with Image.open(image) as im:
-  im=im.convert('RGB');actual=geometry(raw,im.size)
-  assert crop is None or tuple(crop)==actual,('reader geometry drift',crop,actual)
-  body=im.crop(actual)
-  # Fixed numeric nonblank gate is diagnostic; parent still reviews real passage pixels.
-  hist=body.convert('L').point([x//4 for x in range(256)]).histogram()[:64]
-  ink_pixels=body.width*body.height-max(hist)
-  populated_bins=sum(n>0 for n in hist)
-  assert populated_bins>=4 and ink_pixels>=1000,('blank/textless crop',populated_bins,ink_pixels)
-  digest=hashlib.sha256(body.tobytes()).hexdigest()
-  if save_crop:body.save(Path(image).with_suffix('.body.png'))
+ data=Path(image).read_bytes();assert data[:8]==b'\x89PNG\r\n\x1a\n'
+ w,h=struct.unpack('>II',data[16:24]);actual=geometry(raw,(w,h))
+ assert crop is None or tuple(crop)==actual,('reader geometry drift',crop,actual)
+ x,y,right,bottom=actual;cw,ch=right-x,bottom-y
+ body=sp.check_output(['/usr/bin/ffmpeg','-v','error','-threads','1','-i',str(image),'-vf',f'crop={cw}:{ch}:{x}:{y}','-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1'],timeout=8)
+ assert len(body)==cw*ch*3
+ hist=Counter(((299*r+587*g+114*b)//1000)//4 for r,g,b in zip(body[::3],body[1::3],body[2::3]))
+ ink_pixels=cw*ch-max(hist.values());populated_bins=len(hist)
+ assert populated_bins>=4 and ink_pixels>=1000,('blank/textless crop',populated_bins,ink_pixels)
+ digest=hashlib.sha256(body).hexdigest()
+ if save_crop:
+  def chunk(t,d):return struct.pack('>I',len(d))+t+d+struct.pack('>I',zlib.crc32(t+d)&0xffffffff)
+  rows=b''.join(b'\0'+body[i*cw*3:(i+1)*cw*3] for i in range(ch))
+  Path(image).with_suffix('.body.png').write_bytes(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',cw,ch,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(rows))+chunk(b'IEND',b''))
+
  return {'pair':list(map(int,counts[0].split('/'))),'crop':list(actual),'body_rgb_sha256':digest,'image':Path(image).name,'body_image':Path(image).with_suffix('.body.png').name,'nonblank':{'populated_64_bins':populated_bins,'nonmodal_pixels':ink_pixels,'minimum_bins':4,'minimum_pixels':1000}}
 
 def compare(before,after):
