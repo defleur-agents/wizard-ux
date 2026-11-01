@@ -21,7 +21,7 @@ function look(shell, ownSkins = false) {
     document: { activeElement: null }, location: { host: 'example.test' }, WizCore: {}, WosSkin: S };
   if (ownSkins) {
     s.WosMySkin = { recipes: [], active: null, on() {}, create(draft) { this.created = JSON.parse(JSON.stringify(draft)); } };
-    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [] } };
+    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [{ id: 'sample', on: true }] } };
   }
   s.window = s;
   vm.runInNewContext(source, s);
@@ -63,11 +63,32 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and co
   h.view.destroy();
 });
 
+for (const shell of ['phone', 'desktop']) test(`${shell}: installed own-skin API does not make plain family selection depend on the box`, async () => {
+  const h = look(shell, true);
+  h.s.WosMySkin.leave = () => { throw Error('offline: must not call leave without a worn own skin'); };
+  h.act('data-skinfamily', 'mizel');
+  await Promise.resolve();
+  assert.equal(h.S.current, 'obsidian-light');
+  h.s.WosMySkin.active = { id: 'own-1', name: 'Quiet', base: 'obsidian-light' };
+  let updated;
+  h.s.WosMySkin.update = async change => { updated = change.base; h.S.set(change.base); };
+  h.act('data-skinpick', 'obsidian');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(updated, 'obsidian', 'Colours edit the worn own skin');
+  let left = false;
+  h.s.WosMySkin.leave = async () => { left = true; h.s.WosMySkin.active = null; };
+  h.act('data-skinfamily', 'wizard');
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(left, true, 'choosing another family takes the own skin off, as before #755');
+  assert.equal(h.S.current, 'grove');
+  h.view.destroy();
+});
+
 for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base skin and Colour independent without resetting name or tweaks`, async () => {
   const h = look(shell, true);
   h.S.set('grove');
   h.act('data-newskin', '');
-  for (let tick = 0; tick < 10 && h.view.context.skinDraft.loading; tick++) await Promise.resolve();
+  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
   assert.equal(h.view.context.skinDraft.loading, false);
   assert.match(h.root.innerHTML, /Base skin<select data-skin-base>/);
   assert.match(h.root.innerHTML, /<h4>Colour<\/h4>/);
@@ -90,5 +111,31 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base sk
   assert.equal(h.view.back(), true, 'Back leaves New skin, not Wizard');
   assert.equal(h.view.context.skinDraft, null);
   assert.match(h.root.innerHTML, /aria-label="Skins"/);
+  h.view.destroy();
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: slow Create saves a snapshot and cannot wipe a later draft`, async () => {
+  const h = look(shell, true);
+  let finish, submitted;
+  h.s.WosMySkin.create = snapshot => { submitted = snapshot; return new Promise(resolve => { finish = resolve; }); };
+  h.act('data-newskin', '');
+  for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
+  h.input('data-skin-name', 'First');
+  h.act('data-skin-create', '');
+  h.input('data-skin-name', 'Changed while saving');
+  h.input('data-skin-base', 'mizel');
+  h.act('data-skinpick', 'grove');
+  h.act('data-draft-tweak', 'sample');
+  assert.equal(h.view.context.skinDraft.name, 'First');
+  assert.equal(submitted.base, 'nebula');
+  assert.equal(submitted.tweaks.sample, true);
+  assert.equal(h.view.back(), true);
+  h.act('data-newskin', '');
+  h.input('data-skin-name', 'Second');
+  const next = h.view.context.skinDraft;
+  finish();
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(h.view.context.skinDraft, next);
+  assert.equal(next.name, 'Second');
   h.view.destroy();
 });
