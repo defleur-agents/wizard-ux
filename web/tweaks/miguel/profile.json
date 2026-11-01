@@ -13,10 +13,11 @@
     "miguel/arrange-download",
     "miguel/refresh-button",
     "miguel/orb-shell",
-    "miguel/orb-switch"
+    "miguel/apps-home"
   ],
   "flags": {},
   "off": [
-    "miguel/orb-shell"
+    "miguel/orb-shell",
+    "miguel/apps-home"
   ]
 }

@@ -24,8 +24,11 @@
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
-    // Desktop only (Miguel's miguel/orb-shell tweak wears it): the orb in the middle, apps around it, threads under it.
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'Desktop: the orb in the middle, apps around it, your threads under it', css: true, js: true }),
+    // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
+    // phone = the same orb scene on Home only (layouts/orb/phone.js).
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
+    // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
+    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
@@ -374,6 +377,9 @@
       apps: Object.freeze({
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
+        // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
+        // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
+        openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
         all: () => { if (live()) shell.openPicker?.(); },
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
         search: () => { if (live()) shell.openPalette?.(); },
@@ -425,6 +431,27 @@
         dock: on => live() && panelHolders.has(a) ? !!shell.panelDock?.(!!on) : false,
         back: () => live() ? !!shell.panelBack?.() : false,
         state: () => { const s = live() ? shell.panelState?.() : null; if (!s) return null; const o = { ...s }; for (const k of ['list', 'chat', 'app']) if (o[k]) o[k] = Object.freeze({ ...o[k] }); return Object.freeze(o); },
+      }),
+      /* Phone only (null elsewhere): the Home desk's section, where a layout's Home scene goes (it slides with the
+       * desks), and the dock orb's box, where a layout drawing the dock orb puts its canvas (the stock gestures stay on
+       * it: a layout may hand it a press with dispatchEvent). The layout removes what it put there on teardown. */
+      phone: Object.freeze({
+        home: () => live() ? shell.homeHost?.() || null : null,
+        orb: () => live() ? shell.orbHost?.() || null : null,
+        // The desks in order, one app each: [{ desk, id, name }] (Home and empty desks left out). nav.goDesk(desk) opens one.
+        desks: () => { const l = live() ? shell.phoneDesks?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
+        // An app's mark as the dock draws it (logo or sigil, colour; 'wizard' = Chats), as a fresh element the layout
+        // may place; null when the app is unknown.
+        mark: id => {
+          const h = live() && typeof id === 'string' && id ? shell.phoneMark?.(id) : '';
+          if (!h || !isDoc) return null;
+          const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
+        },
+      }),
+      /* The desks in order, one app each, on either shell: [{ desk, id, name }] (Home and empty desks left out; a Chats
+       * desk is id 'wizard'). nav.goDesk(desk) opens one. The Apps view's grid (phone: phoneDesks, desktop: deskApps). */
+      desks: Object.freeze({
+        list: () => { const l = live() ? (shell.deskApps || shell.phoneDesks)?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
@@ -811,7 +838,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if (layoutId === 'orb' && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if ((layoutId === 'orb' || layoutId === 'apps') && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }

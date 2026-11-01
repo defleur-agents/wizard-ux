@@ -5,7 +5,9 @@ import { fixture, contract, read } from './fixtures/tweaks.mjs';
 const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/orb-switch'].includes(id) ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell'].includes(id) ? 'desktop' : 'phone'));
+  // The Orbs view and its switch act on both shells (the phone: Home only).
+  if (id === 'miguel/orb-shell') test(`${id}: shipped contract on the phone shell too`, () => contract(id, check, 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
@@ -53,7 +55,8 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   await E.toggle('miguel/swipe-strip'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/swipe-strip'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
-  const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id));
+  // shell views (manifest `view`) are one choice in Settings › Look › Shell view, never part of the quick button
+  const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id) && !JSON.parse(read(`web/tweaks/${id}/manifest.json`)).view);
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/pin-buttons', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
