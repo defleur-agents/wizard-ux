@@ -71,7 +71,7 @@ async function ready(p) {
   if (!isOn) {
     ok(await p.evaluate(() => !window.WosOrbSwitcher && !document.querySelector('.wor,.wor-scrim,link[href*="orb-radial/tweak.css"],script[src*="orb-switcher"]') && !performance.getEntriesByType('resource').some(r=>/orb-switcher\.(js|css)/.test(r.name))), 'OFF before opt-in: no radial module, CSS, listeners or elements');
     await p.evaluate(() => __wos.openSheet('settings')); await sleep(350);
-    await p.locator('[data-st="look"]').click(); await sleep(500);
+    await p.locator('[data-st-page="appearance"], [data-st="look"]').first().click(); await sleep(500);
     await p.locator('[data-tweak-toggle="wizard/orb-radial"]').scrollIntoViewIfNeeded();
     await shot(p, 'orb-radial-tweak-settings-off');
     await p.locator('[data-tweak-toggle="wizard/orb-radial"]').click();
