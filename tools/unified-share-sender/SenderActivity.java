@@ -11,8 +11,10 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /** Separate synthetic source app: genuine ACTION_SEND, content URI and temporary read grant.
  * Explicit target makes this a receiver/bridge test, not a claim about the OS chooser or Gmail. */
@@ -77,6 +79,20 @@ public class SenderActivity extends Activity {
                     for (int i = 1; i <= 4; i++) out.write(String.format(java.util.Locale.US, "%010d 00000 n \n", offsets[i]).getBytes(StandardCharsets.US_ASCII));
                     out.write(("trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n" + xref + "\n%%EOF\n").getBytes(StandardCharsets.US_ASCII));
                 }
+                // Independently hash the closed source file BEFORE handing it to
+                // Wizard. No debugger, exported file reader or broad read grant.
+                String launch = getIntent().getStringExtra("fixture_launch");
+                if (launch == null || !launch.matches("[0-9a-f]{32}")) {
+                    throw new IllegalArgumentException("Missing synthetic launch identity");
+                }
+                MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                try (FileInputStream in = new FileInputStream(f)) {
+                    byte[] buffer = new byte[65536]; int count;
+                    while ((count = in.read(buffer)) != -1) digest.update(buffer, 0, count);
+                }
+                StringBuilder hash = new StringBuilder();
+                for (byte b : digest.digest()) hash.append(String.format(java.util.Locale.US, "%02x", b & 255));
+                Log.i("UnifiedShareSender", "source launch=" + launch + " name=" + name + " sha256=" + hash);
                 Uri uri = Uri.parse("content://qa.unifiedshare.sender.files/" + name);
                 Intent send = new Intent(Intent.ACTION_SEND).setType("application/pdf")
                     .setComponent(new ComponentName("ai.wizards.os.qa", "ai.wizards.os.share.ShareActivity"))

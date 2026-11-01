@@ -449,7 +449,7 @@ def sender_lifecycle_sources():
           static int launches=0;
           static Intent intent(String mode){return new Intent().putExtra("fixture_case",mode)
             .putExtra("fixture_launch",String.format("%032x",++launches));}
-          static void verify(SenderActivity a,Intent current,String mode){
+          static void verify(SenderActivity a,Intent current,String mode) throws Exception {
             boolean g="genuine".equals(mode); String name=g?"genuine.pdf":"x.pdf";
             check(a.getIntent()==current,"getIntent not replaced: "+mode);
             check(android.util.Log.last.equals("event="+(launches==1?"onCreate":"onNewIntent")+
@@ -457,6 +457,12 @@ def sender_lifecycle_sources():
             TextView title=(TextView)a.content.children.get(0);
             check(title.text.equals("Synthetic external PDF sender\n"+name+"\nNo owner files or accounts"),"stale rendered title: "+mode);
             ((Button)a.content.children.get(1)).performClick();
+            java.security.MessageDigest md=java.security.MessageDigest.getInstance("SHA-256");
+            byte[] bytes=java.nio.file.Files.readAllBytes(new java.io.File(a.getFilesDir(),name).toPath());
+            StringBuilder hash=new StringBuilder();
+            for(byte b:md.digest(bytes))hash.append(String.format(java.util.Locale.US,"%02x",b&255));
+            check(android.util.Log.last.equals("source launch="+current.getStringExtra("fixture_launch")+
+              " name="+name+" sha256="+hash),"independent closed-file hash receipt");
             Intent s=a.sent; check(s!=null,"listener did not send");
             check(name.equals(s.getStringExtra(Intent.EXTRA_SUBJECT)),"stale listener subject: "+mode);
             check((g?"A genuine shared note mentioning genuine.pdf":"Emailing x.pdf").equals(s.getStringExtra(Intent.EXTRA_TEXT)),"stale listener text: "+mode);
@@ -468,7 +474,7 @@ def sender_lifecycle_sources():
             check((s.flags&Intent.FLAG_GRANT_READ_URI_PERMISSION)!=0,"grant");
             check(new java.io.File(a.getFilesDir(),name).length()>24L*1024*1024,"source file");
           }
-          public static void main(String[] args){
+          public static void main(String[] args) throws Exception {
             SenderActivity a=new SenderActivity(); Intent b=intent("boilerplate");a.setIntent(b);a.onCreate(null);verify(a,b,"boilerplate");
             Intent g=intent("genuine");a.onNewIntent(g);verify(a,g,"genuine");
             b=intent("boilerplate");a.onNewIntent(b);verify(a,b,"boilerplate");
@@ -913,13 +919,28 @@ class Rig:
         self.run([bt / 'apksigner', 'verify', apk])
         self.report['sender_apk_sha256'] = sha(apk)
         self.adb_cmd('install', '-r', '-g', apk)
-        self.verify_sender_debug_access()
 
-    def verify_sender_debug_access(self):
-        # aapt2 does not infer debuggability from the disposable debug signer.
-        # The independent source-byte hash below needs run-as on THIS sender.
-        uid = self.sx('run-as ' + SENDER + ' id -u').strip()
-        assert uid.isdecimal() and int(uid) >= 10000, 'sender run-as access unavailable'
+    def sender_source_hash(self, name, attempt=None):
+        # Source-only receipt, independent of Wizard's staged/uploaded bytes.
+        # Bind to one verified native launch; old/duplicate/malformed logs fail.
+        if attempt is None:
+            attempt = next((a for a in reversed(self.report['sender_attempts'])
+                            if a.get('status') == 'VERIFIED' and a.get('source_name') == name), None)
+        assert attempt is not None and name in ('x.pdf', 'genuine.pdf'), 'missing sender source identity'
+        token = attempt['launch_id']
+        assert re.fullmatch('[0-9a-f]{32}', token), 'invalid sender launch identity'
+        log = self.sx('logcat -d -v raw -s UnifiedShareSender:I')
+        (self.out / ('sender-source-' + token + '.log')).write_text(log)
+        prefix = 'source launch=' + token + ' '
+        lines = [line.strip() for line in log.splitlines() if line.strip().startswith(prefix)]
+        assert len(lines) == 1, 'missing or duplicate sender source receipt'
+        match = re.fullmatch(re.escape(prefix + 'name=' + name + ' sha256=') + '([0-9a-f]{64})', lines[0])
+        assert match, 'invalid sender source receipt'
+        digest = match.group(1)
+        assert attempt.get('source_sha256', digest) == digest, 'sender source receipt drift'
+        attempt.update(source_name=name, source_sha256=digest)
+        self.save()
+        return digest
 
     def connect_page(self):
         if self.page:
@@ -1055,7 +1076,7 @@ class Rig:
         assert staged['subject'] == name and len(staged['items']) == 1
         expected_text = 'A genuine shared note mentioning genuine.pdf' if mode == 'genuine' else 'Emailing x.pdf'
         assert staged['text'] == expected_text and staged['items'][0]['name'] == name
-        assert staged['items'][0]['sha256'] == self.sx('run-as ' + SENDER + ' sha256sum files/' + name).split()[0]
+        assert staged['items'][0]['sha256'] == self.sender_source_hash(name, attempt)
         attempt['status'] = 'VERIFIED'
         self.report['external_intents'].append({'case': mode, 'action': 'android.intent.action.SEND',
             'sender_package': SENDER, 'receiver': 'ai.wizards.os.share.ShareActivity',
@@ -1096,7 +1117,7 @@ class Rig:
             assert sh['thread_id'] not in ('qa_private_thread', 'qa_existing_thread', 'qa_second_thread')
         u = next(u for u in state['uploads'] if u['share'] == sh['share_id'])
         actual = self.out / 'fixture-data/files' / u['file']
-        src_hash = self.sx('run-as ' + SENDER + ' sha256sum files/' + name).split()[0]
+        src_hash = self.sender_source_hash(name)
         assert actual.is_file() and actual.stat().st_size == u['bytes'] and sha(actual) == src_hash
         self.report['deliveries'].append({'share': sh, 'file_sha256': src_hash, 'file_bytes': u['bytes'], 'delivery_count': len(deliveries)})
         self.save()

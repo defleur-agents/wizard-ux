@@ -62,6 +62,7 @@ def main():
         if os.environ.get('PIN_TLS_CERT'):
             import ssl
             tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            tls.minimum_version = ssl.TLSVersion.TLSv1_2
             tls.load_cert_chain(os.environ['PIN_TLS_CERT'], os.environ['PIN_TLS_KEY'])
             http.socket = tls.wrap_socket(http.socket, server_side=True); scheme = 'https'
         threading.Thread(target=http.serve_forever, daemon=True).start()

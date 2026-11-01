@@ -276,30 +276,38 @@ class ControllerTest(unittest.TestCase):
         result=subprocess.run(['node','-e',script],capture_output=True,text=True,timeout=15)
         self.assertEqual(result.returncode,0,result.stderr)
 
-    def test_sender_manifest_explicitly_allows_independent_source_hash(self):
+    def test_sender_manifest_is_not_debuggable_and_keeps_private_provider(self):
         manifest = ET.parse(HERE / 'unified-share-sender/AndroidManifest.xml').getroot()
         android = '{http://schemas.android.com/apk/res/android}'
         self.assertEqual(manifest.attrib['package'], runner.SENDER)
         app = manifest.find('application')
         self.assertIsNotNone(app)
         assert app is not None
-        self.assertEqual(app.attrib.get(android + 'debuggable'), 'true')
+        self.assertEqual(app.attrib.get(android + 'debuggable'), 'false')
         provider = app.find('provider')
         assert provider is not None
         self.assertEqual(provider.attrib[android + 'authorities'], runner.SENDER + '.files')
+        self.assertEqual(provider.attrib[android + 'exported'], 'false')
 
-    def test_sender_run_as_preflight_is_sender_scoped_and_fails_closed(self):
-        rig = runner.Rig.__new__(runner.Rig)
-        rig.sx = Mock(return_value='10123\n')
-        rig.verify_sender_debug_access()
-        rig.sx.assert_called_once_with('run-as qa.unifiedshare.sender id -u')
-        for value in ('', '0', '2000', 'run-as: package not debuggable: qa.unifiedshare.sender'):
-            rig.sx = Mock(return_value=value)
-            with self.subTest(value=value), self.assertRaisesRegex(AssertionError, 'sender run-as'):
-                rig.verify_sender_debug_access()
-        rig.sx = Mock(side_effect=RuntimeError('package not debuggable'))
-        with self.assertRaisesRegex(RuntimeError, 'not debuggable'):
-            rig.verify_sender_debug_access()
+    def test_sender_source_receipt_fails_closed_on_stale_duplicate_malformed_or_drift(self):
+        token = 'a' * 32
+        line = 'source launch=' + token + ' name=x.pdf sha256=' + 'b' * 64
+        with tempfile.TemporaryDirectory(dir=os.environ['TMPDIR']) as d:
+            rig = runner.Rig.__new__(runner.Rig); rig.out = Path(d); rig.save = Mock()
+            attempt = {'launch_id': token, 'status': 'VERIFIED', 'source_name': 'x.pdf'}
+            rig.report = {'sender_attempts': [attempt]}
+            rig.sx = Mock(return_value=line)
+            self.assertEqual(rig.sender_source_hash('x.pdf'), 'b' * 64)
+            rig.sx.assert_called_once_with('logcat -d -v raw -s UnifiedShareSender:I')
+            for bad in ('', line.replace(token, 'c' * 32), line+'\n'+line,
+                        line.replace('x.pdf', 'genuine.pdf'), line+' extra=value',
+                        line.replace('b' * 64, 'c' * 64), line.replace('b' * 64, 'X' * 64)):
+                rig.sx = Mock(return_value=bad)
+                with self.subTest(log=bad), self.assertRaises(AssertionError):
+                    rig.sender_source_hash('x.pdf')
+            with self.assertRaises(AssertionError): rig.sender_source_hash('../private')
+            rig.report['sender_attempts'] = []
+            with self.assertRaises(AssertionError): rig.sender_source_hash('x.pdf')
 
     def test_fixture_startup_wait_already_retries_connection_refusal(self):
         state = Mock(side_effect=[urllib.error.URLError(ConnectionRefusedError()), {'shares': []}])
@@ -797,7 +805,12 @@ class ControllerTest(unittest.TestCase):
                 rig.page = Mock(); rig.page.ev.return_value = True
                 staged = {'subject':'x.pdf', 'text':'Emailing x.pdf',
                           'items':[{'name':'x.pdf','sha256':'a' * 64}]}
-                rig.sx = Mock(side_effect=['', '', json.dumps(staged), source_hash + '  files/x.pdf'])
+                def transport(command):
+                    if command.startswith('logcat '):
+                        return 'source launch=' + rig.report['sender_attempts'][-1]['launch_id'] + ' name=x.pdf sha256=' + source_hash
+                    if command.startswith('run-as '): return json.dumps(staged)
+                    return ''
+                rig.sx = Mock(side_effect=transport)
                 if source_hash == 'a' * 64:
                     rig.share('boilerplate')
                     self.assertEqual(len(rig.report['external_intents']), 1)
@@ -806,7 +819,7 @@ class ControllerTest(unittest.TestCase):
                         rig.share('boilerplate')
                     self.assertEqual(rig.report['external_intents'], [])
                 self.assertEqual(rig.sx.call_args_list[-1].args,
-                                 ('run-as qa.unifiedshare.sender sha256sum files/x.pdf',))
+                                 ('logcat -d -v raw -s UnifiedShareSender:I',))
 
     def test_bounds(self):
         xml = '<hierarchy><node text="Share synthetic PDF" bounds="[10,20][110,80]"/></hierarchy>'

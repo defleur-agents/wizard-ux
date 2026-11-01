@@ -115,6 +115,17 @@ with the same `--reuse-build` protocol; preserve all earlier failure evidence.
 
 ## Sender debug access and remaining native-contract audit
 
+**Security repair (PR826):** the historical debug-access workaround below is
+superseded. The sender now explicitly disables debuggability. After closing its
+synthetic PDF, it reads and SHA256-hashes that file before ACTION_SEND, recording
+only its allowlisted filename, digest and the verified 32-hex launch identity.
+The controller requires exactly one matching source receipt, rejects stale,
+duplicate, malformed or drifting receipts, and compares both staged and delivered
+bytes against it. No root, exported reader, broader URI grant or product APK
+change is introduced. The existing host-JVM lifecycle seam independently hashes
+the actual generated file. Controller/JVM proof is not native acceptance; the
+updated sender still needs its own admitted native reuse run.
+
 The next failed reuse run reached the real Wizard share sheet, then refused
 `run-as qa.unifiedshare.sender sha256sum files/x.pdf`: signing a fixture with a
 debug key does **not** make its manifest debuggable. Only the **test sender's**
