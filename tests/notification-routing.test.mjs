@@ -138,7 +138,7 @@ test('Settings has a Notifications page with Badge | Chats per app, and Chats ro
   const s = read('web/core/settings.js');
   assert.match(s, /\{ id: 'notifications', title: 'Notifications', available: /);
   assert.match(s, /register\(\{ id: 'notification-routing', page: 'notifications'/);
-  assert.match(s, /data-notify-route="\$\{esc\(r\.id\)\}" data-notify-to="\$\{to\}"/);
+  assert.match(read('web/core/notif-bell.js'), /data-notify-route="\$\{escH\(id\)\}" data-notify-to="\$\{to\}"/);
   assert.match(s, /window\.WosBell\?\.setRoute\?\.\(b\.dataset\.notifyRoute, b\.dataset\.notifyTo\)/);
   const c = read('web/core/chats.js');
   assert.match(c, /it\.app \? \(it\.appName \|\| it\.app\) \+ ' · '/, 'an app item names its app in the row');
@@ -146,4 +146,58 @@ test('Settings has a Notifications page with Badge | Chats per app, and Chats ro
   assert.match(read('web/core/skin-host.js'), /open\(id\) \{\n        if \(a\.dead\) return false;/);
   assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /action === 'app'/);
   assert.doesNotMatch(read('web/tweaks/wizard/unified-inbox/tweak.css'), /\[data-chbell\] \{ display: none/, 'the bell follows the routing, not the tweak');
+});
+
+// One simple design everywhere (Miguel, 1 Nov 2026): the picker inside a notification in Chats is THE Settings picker.
+test('one Badge | Chats picker: Settings and every notification in Chats render WosBell.picker', () => {
+  const w = boot(), B = w.WosBell;
+  const html = B.picker('messenger');
+  assert.match(html, /role="radiogroup" aria-label="Where Messenger notifications go"/);
+  const btns = [...html.matchAll(/<button type="button" role="radio" data-notify-route="messenger" data-notify-to="(badge|chats)" aria-checked="(true|false)">(<svg class="wos-route-ic"[^]*?<\/svg>)<span>(Badge|Chats)<\/span><\/button>/g)];
+  assert.deepEqual(btns.map(m => [m[1], m[2], m[4]]), [['badge', 'true', 'Badge'], ['chats', 'false', 'Chats']], 'two labelled options, Badge picked by default');
+  assert.match(btns[0][3], /<circle /, 'Badge wears a badge dot'); assert.match(btns[1][3], /<path /, 'Chats wears a chat bubble');
+  assert.match(B.picker('messenger', { off: true }), /data-notify-to="chats" aria-checked="false" disabled/, 'without Chats only Badge can be picked');
+  const s = read('web/core/settings.js'), c = read('web/core/chats.js');
+  assert.match(s, /const routeSeg = \(r, off\) => window\.WosBell\.picker\(r\.id, \{ name: r\.name, off \}\);/, 'Settings renders the shared picker');
+  assert.match(c, /\$\{B\.picker\(id, \{ name \}\)\}/, 'Chats renders the same shared picker');
+  assert.match(c, /if \(NV\) msgs = noteRouteHtml\(NV\) \+ msgs;/, 'on every notification opened in Chats');
+  assert.doesNotMatch(s + c, /data-notify-to="\$\{to\}"/, 'nobody builds a second copy of the picker');
+  const css = read('web/core/settings.css');
+  assert.match(css, /\.st-nr-seg\.wos-route button \{/, 'styled once, for both places');
+});
+
+test('one saved setting: a pick in either place updates the other at once', async () => {
+  const w = boot(), B = w.WosBell; let heard = 0;
+  w.addEventListener('wizard:notify-route', () => heard++);
+  B.watch(() => {}); await B.refresh(true); await settle();
+  B.setRoute('notifications', 'badge');
+  assert.equal(heard, 1, 'both Settings and Chats repaint on wizard:notify-route');
+  assert.match(B.picker('notifications'), /data-notify-to="badge" aria-checked="true"/);
+  const c = read('web/core/chats.js'), s = read('web/core/settings.js');
+  assert.match(c, /window\.addEventListener\('wizard:notify-route', \(\) => \{[^\n]*renderThreadNow\(x\)/, 'an open notification repaints its picker');
+  assert.match(s, /window\.addEventListener\?\.\('wizard:notify-route', appsChanged\)/, 'Settings repaints too');
+  assert.match(c, /notifRoute\(id, nrt\.dataset\.notifyRoute, nrt\.dataset\.notifyTo\)/, 'a tap in Chats writes the same route');
+});
+
+test('Badge from inside a notification: out of Chats at once, toast "<App> moved to badges · Undo", Undo brings it back', async () => {
+  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ messenger: 'chats' })], ['wos.inbox.feeds.v2', JSON.stringify({ messenger: { s: 'yes', at: Date.now() } })]]);
+  const w = boot({ storage }), B = w.WosBell;
+  const mk = tag => { const el = { tag, children: [], classList: { set: new Set(), add(...a) { a.forEach(x => this.set.add(x)); }, remove(...a) { a.forEach(x => this.set.delete(x)); } }, dataset: {}, textContent: '', on: {},
+    append(...k) { this.children.push(...k); }, addEventListener(t, fn) { this.on[t] = fn; }, querySelectorAll(sel) { return sel === 'span' ? this.children.filter(k => k.tag === 'span') : []; } }; return el; };
+  const t = mk('div'); w.document.getElementById = id => id === 'toast' ? t : null; w.document.createElement = mk; w.document.createTextNode = x => ({ tag: '#text', textContent: x });
+  B.watch(() => {}); await B.refresh(true); await settle();
+  assert.ok(B.items().some(i => i.app === 'messenger'));
+  const toasts = []; const toast = (i, x, ms) => { toasts.push([i, x, ms]); t.children = [mk('span'), mk('span')]; t.classList.add('show'); };
+  B.setRoute('messenger', 'badge');
+  assert.ok(!B.items().some(i => i.app === 'messenger'), 'its items leave Chats right away');
+  const undo = B.movedToast('messenger', toast);
+  assert.equal(toasts.length, 1, 'the shell toast shows');
+  assert.equal(t.children[1].textContent, 'Messenger moved to badges · ');
+  assert.equal(undo.textContent, 'Undo'); assert.ok(t.children.includes(undo));
+  undo.on.click({ preventDefault() {}, stopPropagation() {} }); await settle();
+  assert.equal(B.route('messenger'), 'chats', 'Undo restores Chats');
+  assert.ok(B.items().some(i => i.app === 'messenger'), 'and its items are back');
+  assert.ok(!t.classList.set.has('show'), 'the toast goes');
+  const c = read('web/core/chats.js');
+  assert.match(c, /if \(to === 'badge'\) \{[^]*chatsBack\(w\);[^]*B\.movedToast\?\.\(app, toast\);/, 'picking Badge in Chats closes the notification and shows the toast');
 });
