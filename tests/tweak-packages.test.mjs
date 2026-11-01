@@ -23,9 +23,11 @@ test('incompatible API disables only that tweak, toasts, and finishes loading th
   assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
-  const f = fixture(); let api;
+  // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/swipe-strip/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/swipe-strip': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/send-and-go'], f.slots);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
