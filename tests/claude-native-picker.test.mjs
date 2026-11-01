@@ -13,7 +13,7 @@ const payload = (native = true) => ({ provider:'openai-codex', model:'gpt-6.1-so
 function models(connection, fail=false) {
  const window={};
  const requests=[];
- const fetch=async (url,init) => {requests.push({url,init}); if(url.includes('/sessions/'))return {ok:true,json:async()=>({runtime:{model_lock:'accepted',model:'claude-opus-5-5',provider:'anthropic',selection_version:12}})};
+ const fetch=async (url,init) => {requests.push({url,init}); if(url.includes('/sessions/'))return {ok:true,json:async()=>({runtime:{model_lock:'accepted',model:'claude-opus-5-5',provider:'anthropic',selection_version:JSON.parse(init.body).selection_version+1}})};
  if(url.includes('wizard-claude')){if(fail)throw Error('offline'); return {ok:true,json:async()=>connection};}
  return {ok:true,json:async()=>url.includes('model/options')?payload():null};};
  vm.runInNewContext(source,{window,fetch,AbortSignal,console,crypto});

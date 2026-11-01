@@ -29,7 +29,7 @@ function boot() {
    if(url.endsWith('/api/model/options'))return response(200,options);
    if(url.endsWith('/model')) {
     if(delayLock)await delayLock;
-    return response(200,{runtime:{...payload,provider:badAck?'wrong-provider':payload.provider,model_lock:'accepted',selection_version:100}});
+    return response(200,{runtime:{...payload,provider:badAck?'wrong-provider':payload.provider,model_lock:'accepted',selection_version:(payload.selection_version||0)+1}});
    }
    if(/\/v1\/runs\/[^/]+$/.test(url)&&method==='GET')return response(200,{runtime:runRuntime,status:'running'});
    if(url.endsWith('/steer'))return response(200,{status:'accepted'});
@@ -124,9 +124,9 @@ async function settled(b,id) { for(let i=0;i<150;i++){const it=b.c.WosOutbox.get
    await assert.rejects(b.c.WosOutbox.enqueue({kind:'reply',sessionId:'s1',text:'synthetic'}),/saving/);res();await task;b.lockDelay(null);
   });
   await check('newer authoritative selection on another device replaces local override',async()=>{
-   const s=b.sessions.get('s1');s.model='glm-5-3';s.provider='custom:tinfoil-operator';s.modelLockAt=90;
+   const s=b.sessions.get('s1'),version=b.c.WosModels.snapshot('s1').selection_version;s.model='glm-5-3';s.provider='custom:tinfoil-operator';s.modelLockAt=version-1;
    b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'gpt-6.1-sol');
-   s.modelLockAt=101;b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'glm-5-3');
+   s.modelLockAt=version+1;b.c.WosModels.reconcile([s]);assert.equal(b.c.WosModels.snapshot('s1').model,'glm-5-3');
    await b.c.WosModels.setThreadModel('s1',{value:'gpt-6.1-sol',provider:'openai-codex'});
   });
   await check('older native model-only take completes its saved provider without changing model',async()=>{

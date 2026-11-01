@@ -279,7 +279,8 @@
       const s = sid && M.row(sid, scope);
       const cached = sid && M.selections.get(M.selectionKey(sid, scope));
       const live = s?.selection || (s?.model ? { model: s.model, provider: s.provider, version: s.modelLockAt } : null);
-      const confirmed = cached && (!live || Number(cached.version) > Number(live.version || 0)) ? cached : live;
+      const confirmed = cached && (!live || Number(cached.version) > Number(live.version || 0)
+        || (cached.state === 'confirmed' && live.state === 'pending' && cached.version === live.version)) ? cached : live;
       if (ag) {
         const own = M.agentRoute(ag, sid, choice?.agent === ag.id ? choice : confirmed ? { ...confirmed, agent: ag.id } : null);
         return own && { ...own, selection_version: Number((choice?.agent === ag.id ? choice.selection_version : confirmed?.selection_version ?? confirmed?.version)) || 0 };
@@ -302,7 +303,9 @@
       const ag = M.agentFor(sid, agent || choice?.agent || '');
       const key = M.selectionKey(sid, agent || ag?.id || 'hermes');
       if (sid && M.pending.has(key)) throw new Error('Model change is still saving · send after it finishes');
-      if (sid && (M.uncertain.has(key) || M.row(sid, agent || ag?.id || 'hermes')?.selection?.state === 'pending')) throw new Error('Model choice is not confirmed · choose it again; message kept');
+      const listed = sid && M.row(sid, agent || ag?.id || 'hermes')?.selection, acknowledged = M.selections.get(key);
+      if (sid && (M.uncertain.has(key) || (listed?.state === 'pending'
+        && !(acknowledged?.state === 'confirmed' && acknowledged.version >= listed.version)))) throw new Error('Model choice is not confirmed · choose it again; message kept');
       if (ag?.missing) throw new Error('Agent unavailable · open Agents and check it is running');
       return M.currentRoute(sid, choice, agent || choice?.agent || '');
     },
@@ -335,7 +338,8 @@
         const key = M.selectionKey(s.id, s.agent || 'hermes');
         const selected = M.selections.get(key);
         const choice = s.selection || (s.model ? { model: s.model, provider: s.provider, version: s.modelLockAt || 0 } : null);
-        if (!choice || (selected && Number(choice.version) < Number(selected.version))) continue;
+        if (!choice || (selected && Number(choice.version) < Number(selected.version))
+          || (selected?.state === 'confirmed' && choice.state === 'pending' && choice.version === selected.version)) continue;
         // Keep the highest server-confirmed revision: a delayed list cannot undo a picker ack.
         M.selections.set(key, { ...choice, selection_version: choice.version });
         if (choice.state === 'confirmed' && (!M.uncertain.get(key) || choice.request_id === M.uncertain.get(key).id)) {
@@ -389,7 +393,7 @@
         const ack = await r.json();
         // Both main and routed adapters acknowledge the exact deliberate display route.
         if (!['accepted', 'confirmed'].includes(ack.runtime?.model_lock) || !M.matchesRuntime(ack.runtime, route)
-          || !Number.isSafeInteger(ack.runtime.selection_version) || ack.runtime.selection_version < 1)
+          || !Number.isSafeInteger(ack.runtime.selection_version) || ack.runtime.selection_version !== attempt.version + 1)
           throw new Error('Wizard did not confirm the selected model');
         M.selections.set(key, { model: route.model, provider: route.provider, version: ack.runtime.selection_version, state: 'confirmed' });
         M.uncertain.delete(key); M.savePickerAttempts();
