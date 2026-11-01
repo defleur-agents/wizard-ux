@@ -18,11 +18,64 @@ function experience(skin) {
     WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = ids; } },
     addEventListener() {}, dispatchEvent() {} };
   const storage = new Map();
-  vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal,
+  vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, setTimeout() {},
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
-  return { E: window.WosExperience, active: () => Array.from(active) };
+  return { E: window.WosExperience, active: () => Array.from(active), window };
 }
+
+test('#778/#779/#789: author All switches stay skin-scoped and never turn Miguel on in default skins', async () => {
+  for (const skin of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
+    const f = experience(skin); await f.E.refresh();
+    assert.equal(f.E.state.error, '');
+    await f.E.chooseAuthor('miguel');
+    assert.ok(!f.active().some(id => id.startsWith('miguel/')), skin + ': no Miguel package after Miguel All');
+    await f.E.chooseAuthor('wizard');
+    assert.ok(!f.active().some(id => id.startsWith('miguel/')), skin + ': James All never enables Miguel');
+    assert.ok(!f.E.state.tweaks.some(t => t.id.endsWith('/home-bars') || t.id.endsWith('/switch-row-actions')));
+  }
+  const f = experience('landscapes'); await f.E.refresh();
+  assert.ok(f.active().includes('miguel/model-pills'));
+  assert.ok(f.active().includes('miguel/hidden-pin'));
+  assert.ok(!f.active().includes('miguel/home-bars'));
+  const globals = f.active().filter(id => catalog.defaults.includes(id));
+  await f.E.chooseAuthor('miguel');
+  assert.ok(f.active().includes('wizard/pin-buttons'), 'Miguel All includes his carried shared tweak: mixed → all on');
+  await f.E.chooseAuthor('miguel');
+  assert.ok(!f.active().some(id => id.startsWith('miguel/')));
+  assert.ok(!f.active().includes('wizard/pin-buttons'), 'Miguel All off also drops his carried shared tweak');
+  assert.deepEqual(f.active().filter(id => catalog.defaults.includes(id)), globals, 'All does not touch core defaults');
+  await f.E.chooseAuthor('miguel');
+  assert.ok(f.active().includes('miguel/model-pills') && f.active().includes('miguel/hidden-pin'));
+  f.window.WosSkin.current = 'nebula'; await f.E.chooseSkin();
+  assert.ok(!f.active().some(id => id.startsWith('miguel/')), 'switching back to James drops Miguel');
+});
+
+test('failed tweak apply restores per-skin choices (including shared ideas) and rejects for the pending receipt', async () => {
+  for (const op of ['toggle', 'all']) {
+    const f = experience('obsidian'); await f.E.refresh();
+    const before = JSON.stringify(f.E.state.tweaks);
+    const load = f.window.WosSkinHost.loadTweaks; let fail = true;
+    f.window.WosSkinHost.loadTweaks = async (...args) => { if (fail) { fail = false; throw Error('Package load failed'); } return load(...args); };
+    await assert.rejects(op === 'toggle' ? f.E.toggle('wizard/pin-buttons') : f.E.chooseAuthor('miguel'), /Package load failed/);
+    assert.equal(JSON.stringify(f.E.state.tweaks), before, 'original switch selection is restored');
+    assert.equal(f.E.state.busy, false);
+  }
+});
+
+test('worn owner authors list carries shared tweaks and never labels house choices James', async () => {
+  for (const [skin, who, label] of [['nebula', 'wizard', 'Wizard'], ['obsidian', 'miguel', 'Miguel']]) {
+    const f = experience(skin); await f.E.refresh();
+    const authors = await f.E.authors();
+    assert.equal(authors.length, 1); assert.equal(authors[0].id, who); assert.equal(authors[0].name, label);
+    assert.ok(authors[0].ids.includes('wizard/pin-buttons'));
+    assert.ok(!authors[0].ids.includes('wizard/unified-inbox'));
+    assert.ok(!authors.some(a => /James/i.test(a.name)));
+    const before = JSON.stringify(f.E.state.tweaks);
+    await f.E.chooseAuthor(who === 'wizard' ? 'miguel' : 'wizard');
+    assert.equal(JSON.stringify(f.E.state.tweaks), before, 'another author cannot act on this skin');
+  }
+});
 
 test('James: the default Wizard skins keep the classic Home: no network map, no AI fuel widget', async () => {
   assert.ok(!existsSync(new URL('../web/tweaks/wizard/machines-home', import.meta.url)), 'no stock copy of the network Home');
@@ -114,7 +167,7 @@ test('James: Settings › Look lists skins with their colors underneath (no flat
   assert.match(look, /<h4>Colors<\/h4>/, 'the worn skin\'s colors under it');
   assert.match(look, /\(family\?\.palettes \|\| \[\]\)\.map\(id => S\.list\.find\(k => k\.id === id\)\)/, 'only that skin\'s colors');
   assert.doesNotMatch(look, /S\.list\.map\(k => skinCard\(k, cur\)\)/, 'not every color as a skin');
-  assert.doesNotMatch(s, /data-tweakauthor=/, 'tweaks ride with their skin, no per-author switches');
+  assert.match(s, /The picked skin brings these ideas/, '#779 groups this skin’s tweaks, never changes which skin carries them');
   // #761 stays: Welcome never switches skin on its own.
   assert.ok(existsSync(new URL('../web/core/welcome.js', import.meta.url)));
 });

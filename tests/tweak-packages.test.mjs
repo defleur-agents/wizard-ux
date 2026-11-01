@@ -19,13 +19,15 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
   const id = 'wizard/pin-buttons'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
-  await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
+  await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
-  const f = fixture(); let api;
+  // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/swipe-strip/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/swipe-strip': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/home-bars'], f.slots);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -44,10 +46,10 @@ test('a skin brings its tweaks; offs are remembered per skin; another skin drops
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
   skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['wizard/pin-buttons']);
   await E.toggle('wizard/pin-buttons'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
-  published = { ...published, version:2, tweaks: ['miguel/home-bars','wizard/pin-buttons'] }; await E.refresh();
-  assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  published = { ...published, version:2, tweaks: ['miguel/send-and-go','wizard/pin-buttons'] }; await E.refresh();
+  assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
   skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => !['wizard/unified-inbox', 'wizard/machines-home'].includes(t.id)).length, 0);
-  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
 });
 
 test('event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert', async () => {
@@ -62,7 +64,7 @@ test('event access is capability-gated, render payloads have no DOM, stale model
   await f.clear(); assert.equal(await api.thread.model({id:'test-model',provider:'test'}),null); assert.deepEqual(Array.from(await api.models.list()),[]);
 });
 test('a core repaint removes the origin marker: teardown never resurrects stale duplicate actions', async () => {
-  const f=fixture(); await f.mount('miguel/switch-row-actions');
+  const f=fixture(); await f.mount('miguel/model-pills');
   const marker=f.thread.children.find(n=>n.tagName==='comment'); assert.ok(marker); marker.remove();
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
@@ -318,4 +320,14 @@ test('Show pin buttons stays off for a device that saved tweak choices before it
   assert.ok(f.all().includes('wizard/app-borders'), 'the earlier deliberate App borders on is untouched');
   await f.E.toggle('wizard/pin-buttons'); assert.ok(f.all().includes('wizard/pin-buttons'));
   f = wizardExperience(saved); await f.E.refresh(); assert.ok(f.all().includes('wizard/pin-buttons'), 'the migration runs once');
+});
+
+test('Settings › Look: one All switch belongs to the worn skin owner, not package namespaces', () => {
+  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
+  assert.match(rows, /class="tw-author"/, 'one section per author');
+  assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
+  assert.doesNotMatch(rows, /exp\.filter\(t => t\.author === who\)/, 'carried shared tweaks remain in the worn set');
+  assert.doesNotMatch(rows, /wizard: 'James'/);
+  assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
+  assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
 });

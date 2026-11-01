@@ -127,11 +127,11 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-title:focus, .st-page-head h3:focus { outline: none; }
 
 
-/* Tweaks that come with the picked skin: one disclosure under the picker. */
-.tw-set > summary { list-style: none; cursor: pointer; }
-.tw-set > summary::-webkit-details-marker { display: none; }
-.tw-set[open] > summary .st-go { transform: rotate(90deg); }
-.tw-set .tw-row { padding-left: 18px; }
+/* Tweaks carried by the picked skin, grouped by author with an All switch. */
+.tw-group { margin-top: 20px; }
+.tw-author { margin-top: 14px; }
+.tw-author > h5 { margin: 0 0 6px; font-size: var(--wz-text-sm); font-weight: 600; color: var(--wz-text-2, var(--wz-text)); }
+.tw-author > .tw-row:not(.tw-all) { padding-left: 18px; }
 /* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
  * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
 .st-hint { margin: 0 4px 16px; font-size:var(--wz-text-md); line-height: 1.45; color: var(--wz-text-secondary); }
@@ -253,3 +253,9 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-desktop .st-page:has(.st-embed) { display: flex; flex-direction: column; padding-bottom: 0; }
 .st-desktop .st-page:has(.st-embed) > section { flex: 1; min-height: 0; }
 .st-desktop .st-embed { block-size: 100%; min-block-size: 360px; }
+/* Same-frame selected-pending receipt: opaque even on glass/light collaborator skins. */
+.st-root .st-pending:disabled { position: relative; isolation: isolate; opacity: 1; outline: 2px solid var(--wz-accent); outline-offset: -2px; }
+.st-root .st-pending::before { content: ""; position: absolute; inset: 2px; z-index: 2; border-radius: inherit; background: var(--wz-panel, var(--wz-base)); }
+.st-root .st-pending::after { content: ""; position: absolute; z-index: 3; left: calc(50% - 12px); top: calc(50% - 12px); width: 24px; height: 24px; box-sizing: border-box; border: 3px solid var(--wz-border); border-top-color: var(--wz-text); border-right-color: var(--wz-accent); border-radius: 50%; animation: st-busy-spin .7s linear infinite; }
+@keyframes st-busy-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .st-root .st-pending::after { animation: none; } }
