@@ -18,14 +18,16 @@ const rowsFor = agent => [
 ].map(([suffix, title, hours, extra]) => { const at = new Date(NOW - hours * HOUR).toISOString(); return { id: `qa_${agent}_${suffix}`, agent, title, preview: 'Synthetic answer', status: 'completed', archived: false, hidden: false, messageCount: 2, listVersion: 1, cardTime: at, updatedAt: at, activityAt: at, previewAt: at, lastUserAt: at, assignedAt: at, requestAt: at, ...extra }; });
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const errors = [], writes = [];
+  const errors = [], writes = [], bodyRequests = [];
   const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   try {
     for (const shell of ['phone', 'desktop']) {
       const ctx = await browser.newContext({ viewport: shell === 'phone' ? { width: 412, height: 892 } : { width: 1280, height: 860 }, ...(shell === 'phone' ? { isMobile: true, hasTouch: true } : {}), serviceWorkers: 'block' });
       try {
         await ctx.addInitScript(() => {
-          for (const [k,v] of Object.entries({ 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': 'phone', 'wos.chats.layout.v1': 'status', 'wos.chats.archiveAfter.v1': '0' })) localStorage.setItem(k,v);
+          for (const [k,v] of Object.entries({
+            'wos.chats.pinned.v2': JSON.stringify(['qa_hermes_old', 'qa_qa-host_old']), 'wos.chats.pinned.migrated.v1': '1',
+            'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': 'phone', 'wos.chats.layout.v1': 'status', 'wos.chats.archiveAfter.v1': '0' })) localStorage.setItem(k,v);
         });
         await ctx.route('**/*', async route => {
           const req = route.request(), u = new URL(req.url());
@@ -38,7 +40,7 @@ const rowsFor = agent => [
           if (u.pathname === '/wizard/hermes/model/options') return json({ options: [{ provider: 'synthetic', model: 'qa', authenticated: true }], current: { provider: 'synthetic', model: 'qa' } });
           if (u.pathname === '/wizard/hermes/api/sessions') {
             const agent = u.searchParams.get('agent') || 'hermes', rows = rowsFor(agent);
-            if (u.searchParams.get('mode') === 'body') return json({ mode: 'body', data: rows.map(r => ({ id: r.id, agent, snippet: r.searchSnippet || 'messenger synthetic match' })), search_total: rows.length, has_more: false, partial: false });
+            if (u.searchParams.get('mode') === 'body') { bodyRequests.push(agent); return json({ mode: 'body', data: rows.map(r => ({ id: r.id, agent, snippet: r.searchSnippet || 'messenger synthetic match' })), search_total: rows.length, has_more: false, partial: false }); }
             return json({ data: rows, view: 'list', list_version: 1, window: 'archive-50', archive_total: 1, archive_returned: 1, has_more: false, archive_cursor: null, snapshot: 'qa-flat-' + agent, fields: u.searchParams.get('fields') || undefined });
           }
           if (u.pathname === '/wizard/thread-seen') return json({ state: { initializedAt: 1, threads: {} } });
@@ -66,6 +68,8 @@ const rowsFor = agent => [
           await page.waitForSelector(`${root} [data-chbs="done"]`); await sleep(400);
           const get = () => page.evaluate(root => { const r = document.querySelector(root), rows = [...r.querySelectorAll('.ch-row')], footer = r.querySelector('[data-chbs="done"]'); return { headers: r.querySelectorAll('.ch-sec-h').length, ids: rows.map(e => e.dataset.chopen), tags: rows.map(e => e.querySelector('.ch-search-status')?.textContent), bounds: rows.map(e => { const b=e.getBoundingClientRect(); return { top:b.top,bottom:b.bottom,width:b.width }; }), footer: footer?.getBoundingClientRect().top }; }, root);
           let s = await get();
+          ok(bodyRequests.includes(agent), `${shell}/${agent}: body search uses the requested agent route`, bodyRequests);
+          ok(await page.locator(`${root} .ch-row-wrap.pinned [data-chopen="qa_${agent}_old"]`).count() === 1, `${shell}/${agent}: the oldest fixture really is pinned`);
           ok(s.headers === 0, `${shell}/${agent}: no search section headers`, s.headers);
           const expected = ['working', 'preview', 'body', 'snoozed', 'error', 'old'].map(k => `qa_${agent}_${k}`);
           ok(JSON.stringify(s.ids) === JSON.stringify(expected), `${shell}/${agent}: exact recency-plus-bonus rank, pins receive no boost`, s.ids);
@@ -92,6 +96,6 @@ const rowsFor = agent => [
     }
     ok(errors.length === 0, 'no page errors', errors);
   } finally { await browser.close(); }
-  fs.writeFileSync(path.join(OUT, 'search-flat-results.json'), JSON.stringify({ pass, fail, cases, writes, tree: TREE }, null, 2));
+  fs.writeFileSync(path.join(OUT, 'search-flat-results.json'), JSON.stringify({ pass, fail, cases, writes, bodyRequests, tree: TREE }, null, 2));
   console.log(`${pass} pass, ${fail} fail`); process.exitCode = fail ? 1 : 0;
 })().catch(e => { console.error(e); process.exitCode = 1; });
