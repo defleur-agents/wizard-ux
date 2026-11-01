@@ -302,12 +302,20 @@ def settle_reader(phase,crop=None):
 
 
 
-def pin_observation():
+def pin_observation(deadline=None):
     # Root only in the fresh job-owned user-0 AVD. Never an owner device.
-    return {'shortcuts':shell('dumpsys shortcut'),
-            'appwidget':shell('dumpsys appwidget'),
-            'preferences':shell('cat /data/user/0/'+PKG+'/shared_prefs/home-screen-pins.xml',ok=False),
-            'activity':top()}
+    commands={'shortcuts':'dumpsys shortcut','appwidget':'dumpsys appwidget',
+              'preferences':'cat /data/user/0/'+PKG+'/shared_prefs/home-screen-pins.xml',
+              'activity':'dumpsys activity activities'}
+    observed={}
+    for field,command in commands.items():
+        remaining=5 if deadline is None else deadline-time.monotonic()
+        if remaining<=0:
+            observed[field]='not read: persistence deadline expired'
+            continue
+        try:observed[field]=shell(command,ok=False,timeout=min(5,remaining))
+        except Exception as error:observed[field]='read failed: '+repr(error)
+    return observed
 
 def wait_pin(phase, launcher):
     def save(index, observed, receipt, ready):

@@ -37,7 +37,7 @@ verified. Failure diagnostics precede cleanup.
 The actual R17/R18 XML/shortcut fixtures and exact signed-source hashes are in
 fixtures/r19-pin/provenance.json. The delayed observation/callback unit sequence
 is explicitly synthetic scheduling of historical captures, not new native proof.
-The 26 combined tests include the exact 5/13-versus-5/15 rejection and all R18
+The 27 combined tests include the exact 5/13-versus-5/15 rejection and all R18
 reader-readiness negatives. settle_reader, reader comparator, fixture, egress,
 renderer and inherited browser/product bytes remain unchanged. e45 remains unused.
 

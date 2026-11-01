@@ -59,9 +59,9 @@ def await_persisted(observe, save, origin, launcher, monotonic, sleep, timeout=6
     deadline=monotonic()+timeout
     index=0
     while True:
-        observation=observe()
+        observation=observe(deadline)
         receipt=shortcut_receipt(observation['shortcuts'],origin,launcher)
-        ready=receipt is not None and confirmed(observation['preferences'],receipt['id'])
+        ready=monotonic()<=deadline and receipt is not None and confirmed(observation['preferences'],receipt['id'])
         save(index,observation,receipt,ready)  # always before assertion/return
         if ready:return receipt
         if monotonic()>=deadline:raise TimeoutError('OS pin/callback not persisted within 60 seconds; never recreate')

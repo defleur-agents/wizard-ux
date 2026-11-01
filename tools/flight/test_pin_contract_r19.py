@@ -42,7 +42,7 @@ class PinContract(unittest.TestCase):
             self.assertFalse(pin.confirmed(prefs,self.id))
     def wait(self,observations):
         times=[0.0];saved=[];it=iter(observations);last=[None]
-        def observe():
+        def observe(deadline):
             last[0]=next(it,last[0]);return last[0]
         def sleep(n):times[0]+=n
         def save(*args):saved.append(args)
@@ -56,6 +56,14 @@ class PinContract(unittest.TestCase):
         result,saved,elapsed=self.wait([empty,os_only,ready])
         self.assertEqual(result['id'],self.id);self.assertEqual(len(saved),3);self.assertEqual(elapsed,1)
         self.assertEqual([x[3] for x in saved],[False,False,True])
+    def test_late_ready_receipt_is_not_accepted_after_deadline(self):
+        times=[0.0];saved=[]
+        def slow(deadline):
+            times[0]=deadline+.01
+            return {'shortcuts':self.shortcuts,'preferences':self.prefs}
+        with self.assertRaises(TimeoutError):
+            pin.await_persisted(slow,lambda *args:saved.append(args),ORIGIN,LAUNCHER,lambda:times[0],lambda _:None,timeout=1)
+        self.assertEqual(len(saved),1);self.assertFalse(saved[0][3])
     def test_timeout_never_accepts_missing_callback_or_os_identity(self):
         for obs in ({'shortcuts':self.shortcuts,'preferences':'<map/>'},{'shortcuts':'','preferences':self.prefs}):
             with self.assertRaises(TimeoutError):self.wait([obs])
