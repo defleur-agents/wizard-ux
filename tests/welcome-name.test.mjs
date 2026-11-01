@@ -189,8 +189,8 @@ test('Name your Wizard: the name field is in the keyboard focus trap', () => {
   assert.match(welcome, /querySelectorAll\('button:not\(\[disabled\]\),input:not\(\[disabled\]\),textarea/)
 })
 
-test('Welcome: an already configured Wizard ignores stale local onboarding progress', async () => {
-  const d = device(fakeBox({ authenticated: true, firstRun: false }), { initial: { 'wos.welcome.v1': 'ai' } })
+test('Welcome: an already configured Wizard ignores stale local onboarding progress even without a connected AI', async () => {
+  const d = device(fakeBox({ authenticated: false, firstRun: false }), { initial: { 'wos.welcome.v1': 'ai' } })
   await d.boot()
   assert.equal(d.W.active, false)
   assert.equal(d.store.get('wos.welcome.v1'), 'done')
@@ -208,4 +208,8 @@ test('Welcome: Cancel setup is always visible and permanently dismisses the flow
   assert.equal(d.store.get('wos.welcome.v1'), 'done')
   assert.equal(box.seen, 1)
   assert.equal(box.puts.length, 0)
+
+  const reloaded = device(fakeBox({ authenticated: false, firstRun: true }), { initial: { 'wos.welcome.v1': 'done' } })
+  await reloaded.boot()
+  assert.equal(reloaded.W.active, false)
 })

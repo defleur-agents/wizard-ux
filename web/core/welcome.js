@@ -313,11 +313,12 @@
       log('boot:' + ok + ':' + state + ':' + (setup?.first_run === true));
       try { removeEventListener('pointerdown', act, true); removeEventListener('keydown', act, true); } catch (e) {}
       if ((ok === false || ok === true) && (acted || h.busy?.() || h.deeplinked?.())) { log('boot:busy'); return; }
-      if (ok === false) return open('ai');
       // A configured Wizard wins over stale per-browser progress left by an older Welcome. Existing owners should
-      // never be asked to name or set up their Wizard again merely because this browser once stopped after AI sign-in.
-      if (ok === true && setup?.first_run === false) { if (state !== 'done') write('done'); return; }
-      if (ok === true && state !== 'done' && (state === 'ai' || setup?.first_run === true)) return open('look');
+      // never be asked to set up this browser again, and a local cancellation remains closed while its seen write retries.
+      if (setup?.first_run === false) { if (state !== 'done') write('done'); return; }
+      if (state === 'done') return;
+      if (ok === false) return open('ai');
+      if (ok === true && (state === 'ai' || setup?.first_run === true)) return open('look');
     }, 0);
   }
 

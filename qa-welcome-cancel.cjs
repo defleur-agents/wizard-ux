@@ -29,7 +29,13 @@ const ready = new Promise((resolve, reject) => {
 const reset = () => fetch(origin + '/__fake/reset', { method: 'POST' });
 const modelOptions = {
   provider: 'openai-codex',
-  providers: [{ slug: 'openai-codex', authenticated: true, source: 'hermes' }],
+  providers: [{ slug: 'openai-codex', authenticated: false, source: 'hermes' }],
+};
+const bootstrap = {
+  bootstrap: 1,
+  settings: { owner: { name: 'Owner', place: '' }, agent: { name: 'Nebula' }, clock: { timezone: '', day_starts_at: '00:00' }, voice: { language: '', vocabulary: [] } },
+  capabilities: {},
+  endpoints: {},
 };
 
 (async () => {
@@ -59,6 +65,9 @@ const modelOptions = {
         if (pathname === '/wizard/hermes/api/model/options') {
           return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(modelOptions) });
         }
+        if (pathname === '/wizard/v1/bootstrap') {
+          return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(bootstrap) });
+        }
         if (override && pathname === '/wizard-os-home/core/welcome.js') {
           return route.fulfill({ status: 200, contentType: 'application/javascript', body: override.js });
         }
@@ -73,7 +82,7 @@ const modelOptions = {
       const entry = phone ? '/wizard-os-home/?shell=phone' : '/wizard-os-home/desktop.html?shell=desktop';
       await page.goto(origin + entry, { waitUntil: 'load' });
       await page.locator('#wosWelcome h2').waitFor({ timeout: 15000 });
-      assert.equal(await page.locator('#wosWelcome h2').textContent(), 'Name your Wizard');
+      assert.equal(await page.locator('#wosWelcome h2').textContent(), 'Connect your AI');
       await page.screenshot({ path: path.join(out, `${mode}.png`), fullPage: true, animations: 'disabled' });
 
       const cancel = page.locator('#wosWelcome [data-wl="cancel"]');
@@ -123,11 +132,20 @@ const modelOptions = {
       localStorage.setItem('wos.coached', 'true');
       localStorage.setItem('wos.welcome.v1', 'ai');
     });
-    await context.route('**/wizard/hermes/api/model/options', route => route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify(modelOptions),
-    }));
+    await context.route('**/*', route => {
+      const pathname = new URL(route.request().url()).pathname;
+      if (pathname === '/wizard/hermes/api/model/options') return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(modelOptions),
+      });
+      if (pathname === '/wizard/v1/bootstrap') return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(bootstrap),
+      });
+      return route.continue();
+    });
     const page = await context.newPage();
     await page.goto(origin + '/wizard-os-home/?shell=phone', { waitUntil: 'load' });
     await page.waitForTimeout(1200);
