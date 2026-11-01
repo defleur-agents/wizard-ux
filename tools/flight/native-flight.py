@@ -19,6 +19,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 import importlib.util
 import renderer_r14
+import egress_r15
 _spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
 _transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
 
@@ -81,6 +82,43 @@ def shell(command, **kw):
         return transport.read('shell',command,timeout=kw.get('timeout',120)).decode(errors='replace')
     if 'am force-stop ' in command:transport.identity=None
     return a('shell', command, **kw)
+
+def verify_app_egress(uid, phase):
+    # No new external destination, route changes or policy exemptions. Persist stderr.
+    def command(text):
+        r=transport.command('shell',text,timeout=15)
+        return {'returncode':r.returncode,'stdout':r.stdout.decode(errors='replace'),
+                'stderr':r.stderr.decode(errors='replace'),'command':text}
+    def snapshots():
+        result={}
+        for family,tool in ((4,'iptables-save'),(6,'ip6tables-save')):
+            r=command(tool+' -c -t filter')
+            if r['returncode'] or r['stderr'].strip():
+                raise RuntimeError('filter snapshot failed: '+str(r))
+            result[str(family)]=r['stdout']
+        return result
+    # Bounded samples cover network initialization without requiring Internet access.
+    for attempt in range(3):
+        sample={'uid':uid,'phase':phase,'attempt':attempt,'before':snapshots()}
+        # Refuse malformed/missing guards BEFORE issuing even the synthetic probe.
+        for family in (4,6):egress_r15.policy_snapshot(sample['before'][str(family)],uid,family)
+        sample['route']=command(f"su {uid} /system/bin/sh -c 'id; ip route get {egress_r15.DEST}'")
+        sample['probe']=command(f"su {uid} /system/bin/sh -c 'id; toybox nc -w 2 {egress_r15.DEST} 443 </dev/null; s=$?; echo probe_status=$s; exit $s'")
+        sample['after']=snapshots()
+        try:
+            sample['verdict']=egress_r15.classify(uid,sample['before'],sample['after'],sample['probe'],sample['route'])
+        except ValueError as error:
+            sample['refusal']=str(error)
+        path=OUT/('egress-'+phase+'-%d.json'%attempt)
+        path.write_text(json.dumps(sample,indent=2))
+        if 'verdict' in sample:
+            (OUT/('egress-'+phase+'.json')).write_text(json.dumps(sample,indent=2))
+            record('app external egress impossible '+phase,True,sample['verdict'])
+            break
+        if attempt==2:record('app external egress impossible '+phase,False,sample)
+        time.sleep(1)
+    (OUT/('egress-connectivity-'+phase+'.txt')).write_text(shell('dumpsys connectivity'))
+
 
 def top():
     return '\n'.join(s for s in shell('dumpsys activity activities').splitlines() if 'ResumedActivity' in s)
@@ -345,12 +383,7 @@ try:
     policy=shell('iptables -S OUTPUT; iptables -S WISDOM_QA_EGRESS; ip6tables -S OUTPUT; ip6tables -S WISDOM_QA_EGRESS')
     (OUT/'device-egress-policy.txt').write_text(policy)
     record('app external egress denied IPv4 and IPv6 before launch',policy.count(f'--uid-owner {uid} -j WISDOM_QA_EGRESS')==2 and policy.count('! -o lo -j REJECT')==2,{'uid':uid,'scope':'release app UID; loopback retained; root/adbd unaffected'})
-    # Documentation-only address cannot receive traffic: the UID rule rejects the SYN.
-    probe=shell(f"su {uid} /system/bin/sh -c 'id; toybox nc -w 2 192.0.2.1 443 </dev/null; echo probe_status=$?'",timeout=10)
-    counters=shell('iptables -nvx -L WISDOM_QA_EGRESS; ip6tables -nvx -L WISDOM_QA_EGRESS; ss -ntp')
-    (OUT/'device-egress-probe.txt').write_text(probe+'\n'+counters)
-    rejected=sum(int(m[1]) for m in re.finditer(r'^\s*(\d+)\s+\d+\s+REJECT\b',counters,re.M))
-    record('app UID external SYN rejected by actual firewall counter',f'uid={uid}' in probe and 'probe_status=0' not in probe and rejected>0,{'probe':probe,'rejected_packets':rejected})
+    verify_app_egress(uid,'before-launch')
     record('ADB healthy immediately after app egress isolation',a('get-state',timeout=10).strip()=='device' and shell('echo adb-control-alive',timeout=10).strip()=='adb-control-alive')
     (OUT/'device-sockets-after.txt').write_text(shell('ss -ntp; cat /proc/net/nf_conntrack 2>/dev/null',ok=False))
     # Pair through the real release Connect screen (no QA origin hook or TLS bypass).
@@ -371,6 +404,7 @@ try:
         raw=ui(); p=find(r'^(Skip|Got it|GOT IT|OK|Not now)$',raw)
         if not p: break
         shell(f'input tap {p[0]} {p[1]}');time.sleep(1)
+    verify_app_egress(uid,'after-connect')
     orb=until(lambda:find(r'^Wizard orb\.'),60)
     # Native swipe on the actual accessible orb opens the existing Apps launcher.
     shell(f'input swipe {orb[0]} {orb[1]} {orb[0]} {orb[1]-500} 350')
@@ -481,6 +515,8 @@ try:
     record('same native pin identity retained',re.findall(r'id=homeapp-[^,}\s]+',shortcuts_before)==re.findall(r'id=homeapp-[^,}\s]+',after_shortcuts))
     capture('12-reconnected-same-pin')
     record('actual ANGLE Vulkan SwiftShader backend after complete flight', renderer_r14.observe(emulator,OUT,'renderer-complete',SDK)['accepted'])
+    verify_app_egress(uid,'after-flight')
+    record('independent complete egress evidence verified',egress_r15.verify_evidence(OUT,checks))
     result['status']='passed-needs-visual-inspection'
 except Exception as e:
     result['failure']=repr(e)

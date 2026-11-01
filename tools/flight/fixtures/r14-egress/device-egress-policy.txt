@@ -1,0 +1,16 @@
+-P OUTPUT ACCEPT
+-A OUTPUT -m owner --uid-owner 10209 -j WISDOM_QA_EGRESS
+-A OUTPUT -j oem_out
+-A OUTPUT -j fw_OUTPUT
+-A OUTPUT -j st_OUTPUT
+-A OUTPUT -j bw_OUTPUT
+-N WISDOM_QA_EGRESS
+-A WISDOM_QA_EGRESS ! -o lo -j REJECT --reject-with icmp-port-unreachable
+-P OUTPUT ACCEPT
+-A OUTPUT -m owner --uid-owner 10209 -j WISDOM_QA_EGRESS
+-A OUTPUT -j oem_out
+-A OUTPUT -j fw_OUTPUT
+-A OUTPUT -j st_OUTPUT
+-A OUTPUT -j bw_OUTPUT
+-N WISDOM_QA_EGRESS
+-A WISDOM_QA_EGRESS ! -o lo -j REJECT --reject-with icmp6-port-unreachable

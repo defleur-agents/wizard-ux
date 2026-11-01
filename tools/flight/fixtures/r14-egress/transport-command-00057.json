@@ -1,0 +1,1 @@
+{"argv": ["/srv/work/android-sdk/platform-tools/adb", "-H", "127.0.0.1", "-P", "5147", "-s", "127.0.0.1:6169", "shell", "su 10209 /system/bin/sh -c 'id; toybox nc -w 2 192.0.2.1 443 </dev/null; echo probe_status=$?'"], "started": 1793548719.6623726, "finished": 1793548719.7047439, "returncode": 0}

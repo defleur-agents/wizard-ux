@@ -1,0 +1,12 @@
+uid=10209(u0_a209) gid=10209(u0_a209) groups=10209(u0_a209),1004(input),1007(log),1011(adb),1015(sdcard_rw),1028(sdcard_r),1078(ext_data_rw),1079(ext_obb_rw),3001(net_bt_admin),3002(net_bt),3003(inet),3006(net_bw_stats),3009(readproc),3011(uhid),3012(readtracefs) context=u:r:su:s0
+probe_status=1
+
+Chain WISDOM_QA_EGRESS (1 references)
+    pkts      bytes target     prot opt in     out     source               destination         
+       0        0 REJECT     all  --  *      !lo     0.0.0.0/0            0.0.0.0/0            reject-with icmp-port-unreachable
+Chain WISDOM_QA_EGRESS (1 references)
+    pkts      bytes target     prot opt in     out     source               destination         
+       0        0 REJECT     all  --  *      !lo     ::/0                 ::/0                 reject-with icmp6-port-unreachable
+State       Recv-Q Send-Q Local Address:Port               Peer Address:Port              
+SYN-SENT    0      1      10.0.2.16:59180              10.0.2.3:853                 users:(("binder:400_4",pid=400,fd=51))
+SYN-SENT    0      1      10.0.2.16:32868              10.0.2.4:853                 users:(("binder:400_4",pid=400,fd=50))

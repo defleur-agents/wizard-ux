@@ -1,0 +1,1 @@
+{"argv": ["/srv/work/android-sdk/platform-tools/adb", "-H", "127.0.0.1", "-P", "5147", "-s", "127.0.0.1:6169", "shell", "iptables -nvx -L WISDOM_QA_EGRESS; ip6tables -nvx -L WISDOM_QA_EGRESS; ss -ntp"], "started": 1793548719.7048311, "finished": 1793548719.765963, "returncode": 0}

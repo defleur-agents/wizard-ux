@@ -1,0 +1,14 @@
+{
+  "stage": "/srv/work/wisdom-flight-a57056e3-a800c16c-r14",
+  "historical_route_output": "not captured; new R15 route check is required before no-route acceptance",
+  "files": {
+    "transport-command-00058.stdout": "297147589cae6af890e469f4e0654b0365819365a4d2e46fc7ffeb864bacfac8",
+    "device-egress-probe.txt": "fc6538228cab5e768a2df0947774b457370df4ba92d996984b3714ff60dfbbae",
+    "device-egress-policy.txt": "31169427da2695bd6817bd87bec16f3a3d6a259934ed8477de6b02f852efeda3",
+    "transport-command-00057.stderr": "c04a3a70d60b6e7ed9d57593937d0f5ee97abfb4f82633f1d15865536074fa35",
+    "transport-command-00057.stdout": "356a29d2328c1241250d7662e2e24ccfb5e33b02e945b4fa7548fa931cb6dce7",
+    "transport-command-00058.json": "966797159a5a77a330a5f6f663f93542c945fdacb10c99af101c51dcf0ef2472",
+    "transport-command-00057.json": "4e204513a3e34b8691bbd161302b5f2652c3e181c139e79c52ee0c04677c6793",
+    "transport-command-00058.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}
