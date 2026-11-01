@@ -29,7 +29,6 @@ class H(server.Handler):
    import socket
    self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
   return super().send(code,data,ctype,headers)
- def host_ok(self):return True,None
  def do_GET(self):
   path=unquote(urlsplit(self.path).path)
   if path=='/__fixture__/receipt':
@@ -66,5 +65,9 @@ http=ThreadingHTTPServer(('127.0.0.1',a.port),H)
 if a.cert:
  ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);ctx.load_cert_chain(a.cert,a.key);http.socket=ctx.wrap_socket(http.socket,server_side=True)
 print(json.dumps({'url':f'{"https" if a.cert else "http"}://localhost:{http.server_port}/wizard-os-home/?app-session=wisdom','port':http.server_port,'synthetic':True,'data':str(server.DATA),'web':str(a.web),'wisdom_source':str(a.wisdom_source),'body_sha256':hashlib.sha256(body.encode()).hexdigest()}),flush=True)
+server.ORIGINS={f'{"https" if a.cert else "http"}://localhost:{http.server_port}'}
+import signal
+signal.signal(signal.SIGTERM,lambda *_:(_ for _ in ()).throw(KeyboardInterrupt()))
 try:http.serve_forever()
+except KeyboardInterrupt:pass
 finally:http.server_close();tmp.cleanup()
