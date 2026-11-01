@@ -1,23 +1,24 @@
-/* Orbs view on the phone (Miguel, 31 Oct 2026; experimental). Worn by the same miguel/orb-shell tweak as the desktop
- * (layout.js hands the phone shell here), so the Desks | Orbs switch flips it per device, no reload.
+/* Orbs view on the phone (Miguel, 31 Oct 2026; simplified 1 Nov 2026). Worn by the same miguel/orb-shell tweak as the
+ * desktop (layout.js hands the phone shell here), so the Desks | Orbs | Apps switch flips it per device, no reload.
  *
- *   Only Home changes. On Home the phone shows the desktop's orb scene: the same night sky (shared.js paintSky), the
- *   same orb in the same Style × Colour kept per device (styles.js renderer, shared.js lookOf: the desktop's own drawing
- *   code and stored choice), centred as the hero, with the same status satellites orbiting it (shared.js orbitApps: the
- *   one list the desktop floats; the phone adapter says what is running = the apps on its desks). Home's own top stays:
- *   the which-Wizard menu, the Desks | Orbs switch, the AI fuel gauge and the gear (Settings).
+ *   Only Home changes, and it stays simple (Miguel found the three-slot bottom bar, the orb jumping between the
+ *   centre and the bar, the spin and the bolts impossible to use, 1 Nov 2026):
+ *     - the desktop's night sky (shared.js paintSky) and orb in the same Style × Colour kept per device (styles.js
+ *       renderer, shared.js lookOf), FIXED in the middle of Home. It never flies anywhere; it only slides with the
+ *       Home desk like everything on it. Tap talks, hold commands, swipes do what the dock orb's do (a press on it is
+ *       handed to the dock orb as it starts, same pointer, so the stock gestures run unchanged).
+ *     - the same status satellites as the desktop (shared.js orbitApps: the apps on your desks and apps with
+ *       something new) as plain buttons standing still on one ring around the orb: tap = open that app (its desk).
+ *       Big targets (48 px), never on the orb, nothing moving under the finger.
+ *     - one large Chats pill under the orb, in thumb reach where the dock sits, with the Ready count: tap = the
+ *       stock Chats list.
+ *     - no bottom bar on Home (the stock dock steps aside there; the orb in the middle is the orb). Home's own top
+ *       stays: the which-Wizard menu, the Desks | Orbs | Apps switch, the AI fuel gauge and the gear.
+ *   Everything beyond Home (Chats, threads, apps, desks, sheets, the dock, swipes, Back) is the stock phone; the dock
+ *   orb wears the same Style × Colour. Desks (the tweak off) brings the stock Home back exactly.
  *
- *   Continuity: the orb IS the dock orb. On Home it grows up out of the dock into the centre; when anything opens
- *   (Chats, a thread, an app, another desk) or a voice take starts, it shrinks back into the dock (about 250 ms, eased,
- *   no bounce) and the dock orb wears the same Style × Colour. The dock orb's gestures are the stock ones, unchanged:
- *   a press on the centre orb is handed to the dock orb as it starts (same pointer), so tap talks, hold commands and
- *   the swipes (up, down, sideways) do exactly what they do on the dock.
- *
- *   Everything else (Chats, threads, apps, desks, sheets, swipes) is the phone as it is. Desks (the tweak off) brings
- *   the stock Home back exactly: every node here is removed and the stock orb shows again.
- *
- * Motion: one loop, only while the page is visible; the sky and satellites only on Home; about 30 fps; reduced motion
- * = still frames and no flight. Colours are the tweak's skin-layer tokens (--ob-*). Everything through the layout API. */
+ * Motion: one loop, only while the page is visible; the sky and orb drawn about 30 times a second on Home only;
+ * reduced motion = still frames. Colours are the tweak's skin-layer tokens (--ob-*). Everything through the layout API. */
 import { renderer } from './styles.js';
 import { lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf } from './shared.js';
 
@@ -25,24 +26,27 @@ export default function phone(api) {
   const doc = document, root = doc.documentElement;
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
-  const FLY = 250;
+  const SAT = 48;   // a satellite's tap target (px), the phone's comfortable minimum and then some
 
-  /* ---------- nodes: the sky inside the Home desk (it slides with Home); the orb and its satellites in one layer over
-   * the desks and under the dock and sheets; a small canvas inside the dock orb ---------- */
+  /* ---------- nodes: the sky inside the Home desk (it slides with Home); the orb, its satellites and the Chats pill in
+   * one layer over the desks and under every sheet; a small canvas inside the dock orb ---------- */
   const css = el('link', '', { rel: 'stylesheet', href: api.asset('phone.css') || '' });
   const sky = el('canvas', 'obp-sky', { 'aria-hidden': 'true' });
   const layer = el('div', 'obp-layer', { 'aria-hidden': 'false' });
-  const field = el('div', 'obp-field', { role: 'group', 'aria-label': 'Open and new apps' });
+  const field = el('div', 'obp-field', { role: 'group', 'aria-label': 'Your apps' });
   const orbBox = el('div', 'obp-orb');
   const orbCv = el('canvas', 'obp-orbc', { 'aria-hidden': 'true' });
-  const orbBtn = el('button', 'obp-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Tap to talk, hold for a command, swipe up for apps, down to hide the bars, sideways for desks.' });
-  orbBox.append(orbCv, orbBtn); layer.append(field, orbBox);
+  const orbBtn = el('button', 'obp-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Tap to talk, hold for a command, swipe up for apps.' });
+  orbBox.append(orbCv, orbBtn);
+  const chats = el('button', 'obp-chats', { type: 'button', 'aria-label': 'Chats' });
+  const chatsWord = el('span', 'obp-chats-word', { text: 'Chats' }), chatsN = el('span', 'obp-chats-n');
+  chats.append(chatsWord, chatsN);
+  layer.append(field, orbBox, chats);
   const dockCv = el('canvas', 'obp-dockc', { 'aria-hidden': 'true' });
   layer.hidden = true; sky.hidden = true;
   api.mount(css); api.mount(layer);
-  let cssReady = false;
-  api.listen(css, 'load', () => { cssReady = true; layer.hidden = false; sky.hidden = false; paint(); });
-  // the stock orb steps aside only while the phone wears the scene (phone.css: html[data-orb-phone])
+  api.listen(css, 'load', () => { layer.hidden = false; sky.hidden = false; W = 0; paint(); });
+  // the stock orb drawing (and, on Home, the stock dock) step aside only while the phone wears the scene (phone.css)
   root.dataset.orbPhone = 'on';
 
   /* ---------- the look: the desktop's stored Style × Colour, its colours and drawing code ---------- */
@@ -52,7 +56,7 @@ export default function phone(api) {
   const drawBig = renderer(look.styleId, mk), drawSmall = renderer(look.styleId, mk);
   const sx = sky.getContext('2d'), ox = orbCv.getContext('2d'), dx = dockCv.getContext('2d');
 
-  /* ---------- voice: the same take and level the dock orb shows ---------- */
+  /* ---------- voice: the same take and level the dock orb shows (a take started here is drawn right here) ---------- */
   const modeOf = v => !v || v.state === 'idle' ? 'idle' : v.state === 'think' || v.state === 'done' ? 'thinking' : v.state === 'paused' ? 'paused' : 'listening';
   let voice = api.voice.state(), level = 0, lvlTarget = 0, flash = 0, lastMode = 'idle';
   api.orb.onLevel(v => { lvlTarget = Math.max(0, Math.min(1, +v || 0)); });
@@ -64,17 +68,22 @@ export default function phone(api) {
   });
   const frameOf = (t, cmd) => ({ t, lv: level, state: modeOf(voice), fl: flash, blink: false, cmd, P: palette(look.colourId) });
 
-  /* ---------- size: the orb centred as the hero, the sky the Home desk's size ---------- */
-  let W = 0, H = 0, DPR = 1, O = 0, cy = 0, stars = [];
+  /* ---------- size: the orb in the middle of the room between Home's top and the Chats pill; one ring around it ---------- */
+  let W = 0, H = 0, DPR = 1, O = 0, cy = 0, R = 0, stars = [];
   function size() {
     const w = layer.clientWidth, h = layer.clientHeight; if (!w || !h) return false;
     if (w === W && h === H) return true;
     W = w; H = h; DPR = Math.min(2, globalThis.devicePixelRatio || 1);
-    O = Math.round(Math.min(W * .74, H * .38, 320)); cy = Math.round(H * .5);
+    // the free room: under Home's top (the switch and the fuel gauge) and above the Chats pill
+    const top = Math.min(150, H * .17), pillTop = chats.offsetTop || H - 110, room = Math.max(160, pillTop - top);
+    // the sphere is ~60% of its canvas; the ring sits a thumb's width outside it and inside the screen's edges
+    O = Math.round(Math.max(150, Math.min(W * .6, room * .6, 260)));
+    R = Math.round(Math.min(O * .3 + SAT / 2 + 22, W / 2 - SAT / 2 - 8, room / 2 - SAT / 2 - 4));
+    cy = Math.round(top + room / 2);
     layer.style.setProperty('--obp-orb', O + 'px'); layer.style.setProperty('--obp-cy', cy + 'px');
     orbCv.width = orbCv.height = Math.round(O * DPR);
     stars = starsFor(W, H);
-    sizeSky(); placeSats(0);
+    sizeSky(); placeSats();
     return true;
   }
   function sizeSky() {
@@ -83,8 +92,8 @@ export default function phone(api) {
     if (sky.width !== pw || sky.height !== ph) { sky.width = pw; sky.height = ph; sx.setTransform(DPR, 0, 0, DPR, 0, 0); }
   }
 
-  /* ---------- satellites: the shared list (shared.js orbitApps), each app's own mark on two tilted orbits ---------- */
-  let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); });
+  /* ---------- satellites: the shared list (shared.js orbitApps), each app's own mark, still, on one ring ---------- */
+  let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); paintChats(); });
   let appSig = '', sats = [];
   function sat(a) {
     const b = el('button', 'ob-sat obp-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id });
@@ -107,30 +116,36 @@ export default function phone(api) {
     if (sig !== appSig) {
       appSig = sig;
       const was = new Map(sats.map(s => [s.id, s]));
-      sats = apps.map((a, i) => { const old = was.get(a.id); const s = old || { id: a.id, ...sat(a) }; s.a = i / apps.length * Math.PI * 2 + .4; s.ring = i % 2 ? 1 : 1.32; return s; });
+      // evenly round the ring from the top, clockwise; fixed places (a satellite never moves under the finger)
+      sats = apps.map((a, i) => { const s = was.get(a.id) || { id: a.id, ...sat(a) }; s.a = -Math.PI / 2 + i / apps.length * Math.PI * 2; return s; });
       field.replaceChildren(...sats.map(s => s.b));
-      placeSats(0);
+      placeSats();
     }
     for (const s of sats) {
       const a = apps.find(x => x.id === s.id), n = badgeMap[s.id] || 0;
       s.count.textContent = n > 99 ? '99+' : n ? String(n) : ''; s.count.hidden = !n;
       s.b.dataset.run = a?.run ? (a.run.open ? 'open' : 'hidden') : ''; s.b.classList.toggle('is-new', !a?.run);
-      s.b.setAttribute('aria-label', 'Open ' + s.name + (n ? ` · ${n} new` : '') + (a?.run ? ' · open on a desk' : ''));
+      s.b.setAttribute('aria-label', 'Open ' + s.name + (n ? ` · ${n} new` : '') + (a?.run ? ' · on a desk' : ''));
     }
   }
-  function placeSats(dt) {
+  function placeSats() {
     if (!W) return;
-    // the desktop's two tilted rings, opened up for a tall screen: as wide as the phone allows, a little deeper
-    const out = Math.min(W / 2 - 28, O * .9);
     for (const s of sats) {
-      if (!reduced) s.a += .035 * dt;
-      const rx = out * s.ring / 1.32, ry = rx * .5;
-      const x = W / 2 + homeX + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry;   // they ride with the Home desk
-      const depth = Math.sin(s.a), sc = .8 + .2 * (depth + 1) / 2, op = .55 + .45 * (depth + 1) / 2;
-      s.b.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
-      s.b.style.zIndex = depth > 0 ? 7 : 4; s.b.style.opacity = op.toFixed(3);   // in front of the orb (5) or behind it
+      const x = W / 2 + homeX + Math.cos(s.a) * R, y = cy + Math.sin(s.a) * R;   // they ride with the Home desk
+      s.b.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
     }
+    orbBox.style.transform = homeX ? `translateX(${homeX}px)` : '';
+    chats.style.transform = homeX ? `translateX(${homeX}px)` : '';
   }
+
+  /* ---------- the Chats pill: the stock Chats list, with the Ready count ---------- */
+  function paintChats() {
+    const n = badgeMap.wizard || 0;
+    chatsN.textContent = n ? `${n > 99 ? '99+' : n} ready` : '';
+    chatsN.hidden = !n; chats.classList.toggle('has-ready', !!n);
+    chats.setAttribute('aria-label', n ? `Chats, ${n} ready` : 'Chats');
+  }
+  api.listen(chats, 'click', () => api.sessions.openList('ready'));
 
   /* ---------- the press: the centre orb hands its pointer to the dock orb, whose stock gestures run unchanged ---------- */
   api.listen(orbBtn, 'pointerdown', e => {
@@ -145,53 +160,24 @@ export default function phone(api) {
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
   api.listen(orbBtn, 'keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); api.voice.tap(); } });
 
-  /* ---------- where the orb is: the centre of Home, or the dock ---------- */
-  let home = false, at = '', flyOff = null;
-  // up in the middle while Home is (mostly) in view and no take runs; a desk sliding in or a take: in the dock
-  const want = () => home && modeOf(voice) === 'idle' && Math.abs(homeX) < W * .5 ? 'centre' : 'dock';
-  function dockMatrix() {
-    const host = api.phone.orb(), r = host?.getBoundingClientRect(), L = layer.getBoundingClientRect();
-    if (!r || !r.width || !O) return null;
-    const side = r.width * 1.76, k = side / O;   // the stock orb canvas is 176% of its box (styles.css .orb)
-    return `translate(${(r.left + r.width / 2 - L.left - W / 2).toFixed(1)}px, ${(r.top + r.height / 2 - L.top - cy).toFixed(1)}px) scale(${k.toFixed(4)})`;
-  }
-  function place(next, animate) {
-    if (next === at) return; const from = at; at = next;
-    flyOff?.(); flyOff = null;
-    layer.dataset.at = next; root.dataset.orbAt = next;
-    const m = dockMatrix(), fly = animate && !reduced && !!m && !!from && cssReady;
-    if (next === 'dock') {
-      if (!fly) { orbBox.style.transition = 'none'; orbBox.style.transform = m || ''; orbBox.dataset.show = ''; dockCv.dataset.show = 'on'; return; }
-      orbBox.dataset.show = 'fly'; orbBox.style.transition = `transform ${FLY}ms cubic-bezier(.3, .7, .2, 1), opacity ${FLY}ms ease`; orbBox.style.transform = m;
-      flyOff = api.after(FLY, () => { orbBox.dataset.show = ''; dockCv.dataset.show = 'on'; });
-    } else {
-      dockCv.dataset.show = '';
-      if (!fly) { orbBox.style.transition = 'none'; orbBox.style.transform = ''; orbBox.dataset.show = 'on'; return; }
-      orbBox.style.transition = 'none'; orbBox.style.transform = m; orbBox.dataset.show = 'fly';
-      void orbBox.getBoundingClientRect();   // start from the dock, then grow into place
-      orbBox.style.transition = `transform ${FLY}ms cubic-bezier(.3, .7, .2, 1)`; orbBox.style.transform = '';
-      flyOff = api.after(FLY, () => { orbBox.dataset.show = 'on'; });
-    }
-  }
-
-  /* ---------- motion: one loop while the page is visible; the follow (satellites ride with the Home desk while it is
+  /* ---------- motion: one loop while the page is visible; the follow (everything rides with the Home desk while it is
    * dragged) every frame, the drawing about 30 times a second ---------- */
-  let running = false, lastT = 0, cancel = null, homeX = 0;
+  let running = false, lastT = 0, cancel = null, homeX = 0, home = false;
   function follow() {
     const sec = api.phone.home(); if (!sec) return;
     const x = Math.round(sec.getBoundingClientRect().left - layer.getBoundingClientRect().left);
-    if (x !== homeX) { homeX = x; placeSats(0); if (at) place(want(), true); }
+    if (x !== homeX) { homeX = x; placeSats(); }
   }
   function draw(now) {
     const t = now / 1000, dt = lastT ? Math.min(.1, (now - lastT) / 1000) : 0; lastT = now;
     if (!size()) return;
     level += (lvlTarget - level) * .25;
     if (flash > 0) flash = Math.max(0, flash - dt * 1.5);
-    const P = palette(look.colourId);
-    if (home) { sizeSky(); paintSky(sx, { W: sky.clientWidth, H: sky.clientHeight, gx: sky.clientWidth / 2, cy: Math.round(sky.clientHeight * .5), t, lv: level, P, stars }); placeSats(dt); }
     const cmd = voice?.kind === 'command' || voice?.state === 'command' ? 1 : 0;
-    if (orbBox.dataset.show) drawBig(ox, orbCv.width, frameOf(t, cmd));
-    if (dockCv.dataset.show && dockCv.isConnected) {
+    if (home) {
+      sizeSky(); paintSky(sx, { W: sky.clientWidth, H: sky.clientHeight, gx: sky.clientWidth / 2, cy, t, lv: level, P: palette(look.colourId), stars });
+      drawBig(ox, orbCv.width, frameOf(t, cmd));
+    } else if (dockCv.isConnected) {
       const n = Math.round((dockCv.clientWidth || 100) * DPR); if (n && dockCv.width !== n) dockCv.width = dockCv.height = n;
       drawSmall(dx, dockCv.width, frameOf(t, cmd));
     }
@@ -212,9 +198,9 @@ export default function phone(api) {
     if (reduced && awake) still();
   }
   api.listen(doc, 'visibilitychange', wake);
-  api.listen(globalThis, 'resize', () => { W = 0; size(); if (at) { const a = at; at = ''; place(a, false); } if (reduced) still(); });
+  api.listen(globalThis, 'resize', () => { W = 0; size(); if (reduced) still(); });
 
-  /* ---------- Home or not: the scene on Home only; the orb where it belongs ---------- */
+  /* ---------- Home or not: the scene on Home only (the orb stays in the middle there, a take included) ---------- */
   function attach() {
     const sec = api.phone.home(); if (sec && sky.parentNode !== sec) sec.prepend(sky);   // a rebuilt desk strip: back in
     const host = api.phone.orb(); if (host && dockCv.parentNode !== host) host.append(dockCv);
@@ -223,18 +209,19 @@ export default function phone(api) {
     attach();
     const h = !!api.route().home;
     if (h !== home) {
-      home = h; root.dataset.orbScene = h ? 'home' : 'desk';
-      layer.classList.toggle('is-home', h); sky.classList.toggle('is-home', h); field.inert = !h;
-      if (h) { paintApps(); api.frame(() => { size(); sizeSky(); }); }
+      home = h; root.dataset.orbScene = h ? 'home' : 'desk'; root.dataset.orbAt = h ? 'centre' : 'dock';
+      layer.classList.toggle('is-home', h); sky.classList.toggle('is-home', h); layer.inert = !h;
+      orbBox.dataset.show = h ? 'on' : ''; dockCv.dataset.show = h ? '' : 'on';
+      if (h) { paintApps(); paintChats(); api.frame(() => { W = 0; size(); sizeSky(); }); }
     }
-    if (size()) place(want(), true);
+    size();
   }
   api.on('route', paint);
   api.on('home', paint);
-  paint(); wake();
+  paintChats(); paint(); wake();
 
   return () => {
-    running = false; cancel?.(); flyOff?.();
+    running = false; cancel?.();
     sky.remove(); dockCv.remove();
     delete root.dataset.orbPhone; delete root.dataset.orbScene; delete root.dataset.orbAt;
   };

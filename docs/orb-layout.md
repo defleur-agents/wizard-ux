@@ -2,7 +2,7 @@
 
 Opt-in, off by default: Settings › Look › Tweaks › **Orbs view**. The desktop has two equal views,
 **Desks** and **Orbs**; switching it off brings the Desks view straight back (no reload). On the phone (experimental) it
-changes Home only; see **Phone** below.
+changes Home only; see **Phone** below (and **Apps view** for the third view).
 
 **Try it:** desktop › Settings (the gear) › Look › Tweaks › **Miguel** › switch on **Orbs view**. Optionally also
 **Desks | Orbs switch** for a one-click switch in the middle of the bar. (Miguel's one-tap author button turns all of his
@@ -133,13 +133,34 @@ on their line). Per device, no reload.
   apps float). The phone adapter (`app.js`) answers the same layout calls: `apps()` (the desktop's row shape and kinds),
   `panelRunning()` (the app on each desk, one per app) and `route().home`. So when the desktop's satellites change
   (`orbitApps`, or what `api.panel.running()` means), the phone follows.
-- **Continuity**: the orb is the dock orb. On Home it grows out of the dock into the centre; a thread, Chats, an app,
-  another desk (Home dragged past half way) or a voice take sends it back into the dock (250 ms, eased, no bounce),
-  where `phone.js` draws it in the same look inside `#orbWrap` (the stock drawing steps aside while
-  `html[data-orb-phone]`). The stock gestures stay on the dock orb: a press on the centre orb is handed to `#orbWrap`
-  as it starts (same pointer id), so tap, hold and the swipes are the dock orb's own.
-- Layout-only hosts: `api.phone.home()` (the Home desk section; the sky lives there and slides with the desks) and
-  `api.phone.orb()` (the dock orb's box). Desks (the tweak off) removes every node and flag: the stock phone is back.
+- **Simple Home (1 Nov 2026)**: the orb is FIXED in the middle of Home (it only slides with the Home desk; it never
+  flies to the dock and back, a take included). The satellites are plain still buttons (48 px) on one ring clear of
+  the orb: tap = open that app (its desk). One big Chats pill (56 px) under the orb, where the dock sits, with the Ready
+  count, opens the stock Chats list. No bottom bar on Home (the stock dock steps aside there only), no spin, no bolts:
+  Miguel found the three-slot bar round (orb jumping between centre and bar, tiny corner targets, spin fighting swipes)
+  impossible to use. Off Home everything is the stock phone, with the dock orb drawn in the same look by `phone.js`
+  inside `#orbWrap` (the stock drawing steps aside while `html[data-orb-phone]`). The stock gestures stay on the dock
+  orb: a press on the centre orb is handed to `#orbWrap` as it starts (same pointer id), so tap, hold and the swipes are
+  the dock orb's own (the hidden dock still takes it: dispatched events need no hit test).
+- **Hold for a command** (core, every view): a press held still on the orb for 90 ms opens the browser mic early
+  (`warmMic`, only once the mic is known to be allowed, never with the native recorder), so the take that starts
+  (a 380 ms hold = command, or a tap = message, unchanged) records at once; any other end of the press closes it.
+- Layout-only hosts: `api.phone.home()` (the Home desk section; the sky lives there and slides with the desks),
+  `api.phone.orb()` (the dock orb's box), `api.phone.desks()` (one `{ desk, id, name }` per desk) and
+  `api.phone.mark(id)` (the dock's own mark for an app). Desks (the tweak off) removes every node and flag: the stock
+  phone is back.
+
+## Apps view (phone, 1 Nov 2026)
+
+A third view, `miguel/apps-home` wearing the `apps` layout (`web/layouts/apps/`), picked with the same switch, which
+on the phone reads **Desks | Orbs | Apps** (three equal options; the desktop keeps Desks | Orbs). Home becomes a
+standard phone home screen: a four-column grid of app icons, ONE per desk (each desk is one app) in desk order, each
+with its logo (else the dock's mark in its colour), its name and its live count; a tap opens that desk. Chats is always
+the first icon, with the Ready count, and opens the stock Chats list. Home's top stays (which Wizard, the switch, the
+fuel gauge, the gear) and the stock dock stays as the home screen's dock row; everything beyond Home is the stock phone.
+The views are mutually exclusive: the switch asks every view tweak that must change in the same turn (one tweak reload).
+The desktop never wears Apps: there a grid of desk icons would only repeat the bar's desks, and Desks and Orbs stay
+exactly as they are.
 
 ## Layouts a tweak can wear
 

@@ -27,6 +27,8 @@
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
+    // Miguel's miguel/apps-home tweak wears it on the phone: Home as a standard phone home screen, one app icon per desk.
+    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Phone Home as an app grid: one icon per desk, Chats first', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
@@ -442,6 +444,15 @@
       phone: Object.freeze({
         home: () => live() ? shell.homeHost?.() || null : null,
         orb: () => live() ? shell.orbHost?.() || null : null,
+        // The desks in order, one app each: [{ desk, id, name }] (Home and empty desks left out). nav.goDesk(desk) opens one.
+        desks: () => { const l = live() ? shell.phoneDesks?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
+        // An app's mark as the dock draws it (logo or sigil, colour; 'wizard' = Chats), as a fresh element the layout
+        // may place; null when the app is unknown.
+        mark: id => {
+          const h = live() && typeof id === 'string' && id ? shell.phoneMark?.(id) : '';
+          if (!h || !isDoc) return null;
+          const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
+        },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
@@ -927,7 +938,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if (layoutId === 'orb' && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if ((layoutId === 'orb' || layoutId === 'apps') && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }

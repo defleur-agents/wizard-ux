@@ -23,7 +23,8 @@
     "wizard/unified-inbox",
     "miguel/inbox",
     "miguel/orb-shell",
-    "miguel/orb-switch"
+    "miguel/orb-switch",
+    "miguel/apps-home"
   ],
   "defaults": [
     "miguel/inbox",

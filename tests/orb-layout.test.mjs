@@ -281,10 +281,13 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
 
 test('Desks | Orbs switch: desktop bar and phone Home, switches only its own author\'s tweak, through the device tweak mix', async () => {
   const src = read('web/tweaks/miguel/orb-switch/tweak.js');
-  // two equal views, named Desks and Orbs (Miguel, 31 Oct 2026); the tweak ids stay, so devices keep their choice
-  assert.match(src, /side\(false, 'Desks'\), orb = side\(true, 'Orbs'\)/); assert.ok(!/'Classic'|'Orb'\)/.test(src));
-  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orbs view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orbs switch');
-  assert.match(src, /api\.settings\.toggleTweak\(ORB\)/); assert.match(src, /if \(desk\) api\.slot\.mount\('bar-center', box, -10\);\n  else api\.slot\.mount\('home-main', box, -20\);/);
+  // equal views, named Desks, Orbs and (phone) Apps (Miguel, 31 Oct / 1 Nov 2026); the tweak ids stay, so devices keep
+  // their choice; never classic / new / experimental wording on the options
+  assert.match(src, /\[\['classic', 'Desks', null\], \['orb', 'Orbs', 'miguel\/orb-shell'\]\]/);
+  assert.match(src, /\[\['classic', 'Desks', null\], \['orb', 'Orbs', 'miguel\/orb-shell'\], \['apps', 'Apps', 'miguel\/apps-home'\]\]/);
+  assert.ok(!/'(Classic|Orb|New|Experimental)'/.test(src), 'labels are Desks, Orbs, Apps');
+  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orbs view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orbs | Apps switch');
+  assert.match(src, /api\.settings\.toggleTweak\(t\)/); assert.match(src, /if \(desk\) api\.slot\.mount\('bar-center', box, -10\);\n  else api\.slot\.mount\('home-main', box, -20\);/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
   assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');

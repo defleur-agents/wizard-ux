@@ -1,0 +1,11 @@
+{
+  "id": "miguel/apps-home",
+  "name": "Apps view",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Phone: Home becomes a standard home screen, a grid of app icons with one icon per desk (tap opens that desk) and Chats first with its Ready count; the rest of the phone as it is. The desktop is unchanged. Off = the Desks view"
+}
