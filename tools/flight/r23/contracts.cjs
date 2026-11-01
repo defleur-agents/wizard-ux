@@ -30,7 +30,7 @@ exports.observeAssets=({context,origin,members,served,records,failures,contextId
    if(row.status===304){assert(row.responseHeaders.etag||row.responseHeaders['last-modified'],'304 validator');row.provenance='not-modified-no-full-body-coverage';return}
    if(row.status===206||row.requestHeaders.range){row.provenance='range-no-full-body-coverage';return}
    assert.equal(row.status,200,'full GET success');const b=await r.body();row.bodyBytes=b.length;
-   if(b.length===0&&members[rel].bytes>0&&(row.worker||row.fromServiceWorker)&&readProof){row.networkBody='UNOBSERVABLE-empty-PW-body';pending.push(row);return}
+   if(b.length===0&&members[rel].bytes>0&&(row.worker||row.fromServiceWorker)&&readProof){assert.equal(Number(row.responseHeaders['content-length']),members[rel].bytes,'unobservable GET exact Content-Length');assert(row.responseHeaders['content-type'],'unobservable GET MIME required');row.networkBody='UNOBSERVABLE-empty-PW-body';pending.push(row);return}
    assert(b.length>0||members[rel].bytes===0,'empty completed GET for nonempty source '+rel);
    const h=createHash('sha256').update(b).digest('hex');row.sha256=h;assert.equal(h,members[rel].sha256,'served exact-source asset '+rel);served[rel]=h;row.provenance='completed-full-GET-sha256';
   }catch(e){row.failure=e.message;failures.push({path:rel,method:row.method,status:row.status,message:e.message})}
