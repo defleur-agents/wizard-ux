@@ -1,5 +1,6 @@
 """Parent-admitted synthetic acceptance. Preflight never starts a browser.
 Run with the immutable manifest hash. A receipt preserves every phase failure.
+The browser report retains the synthetic service trace for its final run check.
 """
 import argparse, hashlib, json, os, signal, subprocess, sys, time
 from pathlib import Path

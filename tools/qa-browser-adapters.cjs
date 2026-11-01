@@ -49,6 +49,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
   const service = createWizardServer({ ...serviceOptions, ownerPrivateNotes: true, browserAdapterPrototype:adapterOptions });
   const serviceOff = createWizardServer({ ...serviceOptions, ownerPrivateNotes: false });
   const serviceTrace = [];
+  report.serviceTrace = serviceTrace;
   for (const [target, privateNotes] of [[service, true], [serviceOff, false]]) {
     target.on('request', (request, response) => response.on('finish', () => serviceTrace.push({
       privateNotes, method: request.method, path: new URL(request.url, 'http://fixture').pathname, status: response.statusCode,
