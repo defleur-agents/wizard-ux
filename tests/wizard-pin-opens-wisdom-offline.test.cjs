@@ -64,7 +64,7 @@ test('composed worker preserves live workspace and exactly one fetch owner',()=>
  const src=readFileSync('web/sw.js','utf8');
  assert.match(src,/WizOfflineWorker\?\.handles\(req\)/);
  assert.match(src,/const CACHE = 'wos-shell-v1', PREFIX = 'wos-shell-'/);
- assert.match(src,/wos-shell-warm/);assert.match(src,/pendingPage/);
+ assert.match(src,/wos-shell-warm/);assert.match(src,/async function complete/);
  const generic=readFileSync('web/core/offline-sw.js','utf8');
  assert.match(generic,/self.WizOfflineWorker = Object.freeze\(\{handles\}\)/);
 });
