@@ -40,9 +40,10 @@ const rowsFor = agent => [
           if (u.pathname === '/wizard/hermes/model/options') return json({ options: [{ provider: 'synthetic', model: 'qa', authenticated: true }], current: { provider: 'synthetic', model: 'qa' } });
           if (u.pathname === '/wizard/hermes/api/sessions') {
             const agent = u.searchParams.get('agent') || 'hermes', rows = rowsFor(agent);
-            if (u.searchParams.get('mode') === 'body') { bodyRequests.push(agent); return json({ mode: 'body', data: rows.map(r => ({ id: r.id, agent, snippet: r.searchSnippet || 'messenger synthetic match' })), search_total: rows.length, has_more: false, partial: false }); }
+            if (u.searchParams.get('mode') === 'body') { bodyRequests.push(agent); return json({ mode: 'body', list_version: 1, snapshot: 'qa-body-' + agent, data: rows.map(r => ({ id: r.id, agent, snippet: r.searchSnippet || 'messenger synthetic match' })), search_total: rows.length, has_more: false, partial: false }); }
             return json({ data: rows, view: 'list', list_version: 1, window: 'archive-50', archive_total: 1, archive_returned: 1, has_more: false, archive_cursor: null, snapshot: 'qa-flat-' + agent, fields: u.searchParams.get('fields') || undefined });
           }
+          if (u.pathname === '/wizard/thread-dispositions') return json({ state: { 'direct:qa_hermes_snoozed': { deferred: true, updatedAt: new Date(NOW).toISOString() }, [`agent/${ROUTED}/direct:qa_${ROUTED}_snoozed`]: { deferred: true, updatedAt: new Date(NOW).toISOString() } } });
           if (u.pathname === '/wizard/thread-seen') return json({ state: { initializedAt: 1, threads: {} } });
           if (u.pathname === '/wizard/v1/boomerangs') return json({ reminders: [] });
           if (u.pathname.startsWith('/wizard/')) return json({});
@@ -60,7 +61,7 @@ const rowsFor = agent => [
         for (const agent of ['hermes', ROUTED]) {
           ok(await page.evaluate(a => WizOpenAgentChats(a), agent), `${shell}/${agent}: shell opens agent Chats`);
           const wid = await page.waitForFunction(a => Object.values((window.__wux || window.__wos).wins).find(w => w.app === 'chats' && w.focus?.kind === 'agent' && w.focus.key === a)?.id, agent).then(h => h.jsonValue());
-          const root = `[data-chats="${wid}${shell === 'desktop' ? '::list' : ''}"]`;
+          const root = shell === 'desktop' ? `.win[data-win="${wid}"]` : `[data-chats="${wid}"]`;
           await page.waitForSelector(`${root} [data-chsearch]`);
           await page.waitForFunction(() => window.WosExperience && !WosExperience.state.busy);
           await sleep(700); await page.evaluate(() => document.getElementById('wosWelcome')?.remove());

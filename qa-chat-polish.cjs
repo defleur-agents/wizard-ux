@@ -337,7 +337,7 @@ async function archiveRouteChecks(b, desktop) {
     ok(instant.length === 1 && instant[0] === 'qa_t05' && W.msgFetch.filter(f => f.order === 'latest').length === 0, '#26 titles match instantly, before any message is read', instant);
     // Progress shows above the results, not under a long Archive.
     await sleep(320);
-    ok(await p.evaluate(id => { const sc = document.querySelector(`.win[data-win="${id}"] .ch-scroll`), b = sc?.querySelector('[data-chbs="busy"]'), s = sc?.querySelector('.ch-sec'); return !!b && !!s && !!(b.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }, wid), 'Searching progress sits above the result sections');
+    ok(await p.evaluate(id => { const sc = document.querySelector(`.win[data-win="${id}"] .ch-scroll`), b = sc?.querySelector('[data-chbs="busy"]'), s = sc?.querySelector('[data-search-results], .ch-sec'); return !!b && !!s && !!(b.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }, wid), 'Searching progress sits above the results');
     W.msgFetch.length = 0;
     // cancel: start a body search, change the query mid-flight
     await p.fill(sel, 'zebrac'); await sleep(450);
