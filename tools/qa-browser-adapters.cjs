@@ -217,6 +217,8 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
       await page.evaluate(s=>{WosSkin.set(s);WizAppearance.sync();},skin);
       await list.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
       await page.waitForTimeout(600);
+      const panelOpaque=await list.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.querySelector('#status')).backgroundColor;x.fillRect(0,0,1,1);return x.getImageData(0,0,1,1).data[3]===255;});
+      check(panelOpaque,'text status panel fully opaque on '+skin);
       const shot=path.join(out,'fixture-list-'+skin+'.png');await page.screenshot({path:shot});report.screenshots.push(shot);
     }
     let drafts=await openFixture('fixture-drafts');
@@ -241,6 +243,9 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     const revoked=await drafts.evaluate(async()=>{try{await WizardApp.state.read({area:'persistent',key:'draft'});return 'ALLOWED';}catch(e){return e.code;}});
     check(revoked==='not_allowed','revoked grant denied on next call without frame reload');
     report.stage2={syntheticOnly:true,migratedFixtures:2,localProfileOnly:true,fullSuiteRun:false};
+    const standalone=await context.newPage();await standalone.goto(`http://127.0.0.1:${np}/fixture-list/`);
+    check(await standalone.evaluate(()=>getComputedStyle(document.documentElement).colorScheme==='dark'&&getComputedStyle(document.body).backgroundColor!=='rgba(0, 0, 0, 0)'),'standalone fixture has opaque dark fallback without shell authority');
+    const fallbackShot=path.join(out,'fixture-standalone-dark.png');await standalone.screenshot({path:fallbackShot});report.screenshots.push(fallbackShot);
     await context.close();
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));

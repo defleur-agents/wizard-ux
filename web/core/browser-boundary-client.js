@@ -6,7 +6,7 @@
   let channel = '', port = null, connected = false, back = null, applyTheme = null;
   const seals = new Map(), requests = new Map();
   let serial = 0;
-  const error = (code, message) => Object.assign(new Error(message), { code });
+  const error = (code, message, retryable = false) => Object.assign(new Error(message), { code, retryable });
   function cancelRequests() {
     for (const wait of requests.values()) { clearTimeout(wait.timer); wait.reject(error('denied', 'App document changed')); }
     requests.clear();
@@ -35,7 +35,7 @@
     if (d.op === 'service.reply') {
       const wait = requests.get(d.id); if (!wait) return;
       clearTimeout(wait.timer); requests.delete(d.id);
-      if (d.error) wait.reject(error(d.error.code || 'failed', d.error.message || 'App request failed')); else wait.resolve(d.value);
+      if (d.error) wait.reject(error(d.error.code || 'failed', d.error.message || 'App request failed', d.error.retryable === true)); else wait.resolve(d.value);
       return;
     }
     const reply = (status, extra = {}) => send({ op: 'reply', id: d.id, status, ...extra });

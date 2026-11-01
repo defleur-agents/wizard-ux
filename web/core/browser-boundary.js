@@ -100,8 +100,8 @@
     const authorize = () => connected(st) && st.ready && st.channel === channel && st.authorize?.(channel) === true;
     const reply = (value,error) => { if (authorize()) send(st,'service.reply',{id:d.id,value,error}); };
     if (!authorize() || typeof d.id !== 'string' || !/^wbs-[1-9][0-9]{0,9}$/.test(d.id)) return;
-    if (st.seen.has(d.id)) { reply(undefined,{code:'replay',message:'Request already used'}); return; }
-    if (st.seen.size >= 4096 || st.inflight >= 32) { reply(undefined,{code:'busy',message:'Reconnect app'}); return; }
+    if (st.seen.has(d.id)) { reply(undefined,{code:'replay',message:'Request already used',retryable:false}); return; }
+    if (st.seen.size >= 4096 || st.inflight >= 32) { reply(undefined,{code:'busy',message:'Reconnect app',retryable:true}); return; }
     st.seen.add(d.id); st.inflight++;
     try {
       if (Object.keys(d).sort().join(',') !== 'args,channel,id,method,op,type,version') throw coded('bad_request');
@@ -126,7 +126,7 @@
       } else if (['ready','share.wizard','voice.transcribe'].includes(d.method)) {
         await st.service?.(d,reply,authorize);
       } else throw coded('not_allowed');
-    } catch(e) { reply(undefined,{code:e.code || 'backend_failed',message:e.code || 'App request failed'}); }
+    } catch(e) { const code=e.code || 'backend_failed'; reply(undefined,{code,message:code,retryable:['backend_failed','storage_unavailable','busy','timeout'].includes(code)}); }
     finally { if (st.channel === channel) st.inflight--; }
   }
   const api = Object.freeze({
