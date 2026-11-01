@@ -114,12 +114,8 @@ Reuse:
 
 `WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`, items), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`, rig).
 
-AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
+AI usage: EXTEND `WosResources`/`WosUsage`; unknown cap/spend is text, not zero/unlimited (`tests/claude-extra-usage.test.mjs`).
 
-Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
+Devices: `WizPhoneConnect` shared kit (#677/#648): Setup/Mac; +16px tint, step-2 green check/Show again, Done.
 
-## Wisdom flight pin — 1 Nov 2026
-- REUSE #544's scoped pin host, offline-apps allowlist, shared offline-kit and single-app-session Back/Appearance bridge. No Chrome PWA, new cache origin or pin replacement.
-- EXTEND the exact-live workspace worker by composing its fetch ownership with offline-sw; preserve wos-shell-v1 lifecycle and all sibling caches.
-- REUSE existing Android .23/code87 signed artifact; no native changes. EXTEND current Wisdom adapter with #52 quiet failures and finite progress while preserving recovery.
-- NEW only source-bound synthetic flight acceptance runner/fixture; no owner-state writes or models/content changes.
+Offline: EXTEND `WizOfflineSession`; REUSE `WizOffline` (#544); NEW QA.
