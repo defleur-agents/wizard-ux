@@ -437,11 +437,11 @@
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const family = el.closest('[data-skinfamily]');
     if (family) {
-      lookAction(ctx, family, async () => { if (M?.active) await M.leave(); S.setFamily(family.dataset.skinfamily); await skinSettled(); }, () => ctx.haptic?.(8), restorePick); return true;
+      lookAction(ctx, family, async () => { if (M?.active && !M.overlay) await M.leave(); S.setFamily(family.dataset.skinfamily); await skinSettled(); }, () => ctx.haptic?.(8), restorePick); return true;
     }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     lookAction(ctx, b, async () => {
-      if (M?.active) await M.update({ base: b.dataset.skinpick }); else S.set(b.dataset.skinpick);
+      if (M?.active && !M.overlay) await M.update({ base: b.dataset.skinpick }); else S.set(b.dataset.skinpick);
       await skinSettled();
     }, () => { for (const m of mounts) m.render(); ctx.haptic?.(8); }, restorePick); return true;
   } });

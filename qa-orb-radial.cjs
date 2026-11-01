@@ -20,7 +20,7 @@ const APPS = [['wizard-search', 'Search'], ['notes', 'Notes'], ['wizard-calendar
 // What would reach the agent: a run, a new session. (The take's own audio custody upload is not a message.)
 const runs = () => allRunRequests;
 
-async function boot(b, vp = { width: 412, height: 892 }, seed = {}, enable = true) {
+async function boot(b, vp = { width: 412, height: 892 }, seed = {}, enable = true, beforePage = null) {
   const ctx = await b.newContext({ viewport: vp, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, permissions: ['microphone'], serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (Linux; Android 15; Pixel 9) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36' });
   const json = (r, o, s = 200) => r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) });
   await ctx.route('**/*', async r => {
@@ -57,6 +57,7 @@ async function boot(b, vp = { width: 412, height: 892 }, seed = {}, enable = tru
     return json(r, {});
   });
   await ctx.addInitScript(s => { try { if (!sessionStorage.getItem('qa.seeded')) { sessionStorage.setItem('qa.seeded', '1'); localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.voiceTipSeen', 'true'); localStorage.setItem('wos.welcome.v1', 'done'); for (const k in s) localStorage.setItem(k, s[k]); } } catch (e) {} }, seed);
+  if (beforePage) await beforePage(ctx);
   const p = await ctx.newPage(); p.errs = [];
   p.on('pageerror', e => p.errs.push(String(e)));
   p.cdp = await ctx.newCDPSession(p);
@@ -113,7 +114,7 @@ async function setPins(p, pins, extra = {}) { await p.evaluate(a => WosOrbSwitch
 const settle = async p => { await p.waitForFunction(() => __wos.V.state === 'idle' && !__wos.V.admitting, null, { timeout: 10000 }).catch(() => {}); await sleep(500); };
 async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(true)); await sleep(400); }
 
-(async () => {
+if (require.main === module) (async () => {
   const b = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   try {
   const {ctx:offCtx,p:off}=await boot(b,undefined,{},false);
@@ -249,3 +250,4 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
   console.log(`\n${pass} passed, ${fail} failed`);if(fail)process.exitCode=1;
   } finally { await b.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports = { boot, ready, T, slide, orbXY, sleep, runs, log };

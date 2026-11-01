@@ -94,6 +94,10 @@
     }
   } catch (_) {}
   const own = () => recipes.skins.find(s => s.id === recipes.active) || null;
+  // Before named recipes, My skin was an owner layer over ANY palette. Its default
+  // base is not a saved palette choice. Keep that contract, not named-skin semantics.
+  const overlay = (s = own()) => !!s && (s.legacy === true || (s.id === 'My skin' && s.has_recipe === false && !s.forked_from));
+  const paletteBound = (s = own()) => !!s && !overlay(s) && !(s.id === 'My skin' && s.has_recipe === undefined);
   function persist(next) {
     localStorage.setItem(RECIPES, JSON.stringify(next));
     if (serverMode === false) { try { localStorage.removeItem(BOX_CACHE); } catch (_) {} }
@@ -116,7 +120,7 @@
   }
   function wear(id) {
     const skin = recipes.skins.find(s => s.id === id); if (!skin) throw new Error('Skin not found');
-    persist({ ...recipes, active: id }); window.WosSkin?.set(skin.base); recipeChanged(); return clone(skin);
+    persist({ ...recipes, active: id }); if (!overlay(skin)) window.WosSkin?.set(skin.base); recipeChanged(); return clone(skin);
   }
   function leave() { if (!own()) return; persist({ ...recipes, active: null }); recipeChanged(); }
   function create({ name, base, tweaks }) {
@@ -141,13 +145,13 @@
     const index = recipes.skins.findIndex(s => s.id === id); if (index < 0) return null;
     const snapshot = { skin: clone(recipes.skins[index]), index, worn: recipes.active === id };
     persist({ ...recipes, skins: recipes.skins.filter(s => s.id !== id), active: snapshot.worn ? null : recipes.active, migrated: true });
-    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged(); return snapshot;
+    if (snapshot.worn && !overlay(snapshot.skin)) window.WosSkin?.set(snapshot.skin.base); recipeChanged(); return snapshot;
   }
   function restore(snapshot) {
     if (!snapshot || recipes.skins.some(s => s.id === snapshot.skin.id)) return;
     const skins = [...recipes.skins]; skins.splice(snapshot.index, 0, snapshot.skin);
     persist({ ...recipes, skins, active: snapshot.worn ? snapshot.skin.id : recipes.active });
-    if (snapshot.worn) window.WosSkin?.set(snapshot.skin.base); recipeChanged();
+    if (snapshot.worn && !overlay(snapshot.skin)) window.WosSkin?.set(snapshot.skin.base); recipeChanged();
   }
   async function request(path, method = 'GET', body) {
     const r = await fetch(URL_SKINS + path, { method, credentials: 'same-origin', cache: 'no-store',
@@ -157,7 +161,23 @@
       const e = new Error(code || 'Older Wizard'); e.older = r.status === 405 || !code || code === 'not_found'; throw e;
     }
     if (!r.ok) throw new Error(`Could not save skin on your Wizard (${r.status})`);
-    return r.json();
+    const result = await r.json();
+    // Files PATCH creates skin.json even for a tweak-only edit. has_recipe therefore
+    // does not mean a palette was selected: inspect the existing recipe metadata.
+    // Reuse the legacy overlay flag, without inventing a store or binding a folder id.
+    if (Array.isArray(result?.skins)) for (const s of result.skins) {
+      if (s.forked_from || s.has_recipe === false || (s.has_recipe === undefined && s.id !== 'My skin')) continue;
+      try {
+        const file = 'Skins/' + s.id + '/skin.json';
+        const f = await fetch('/wizard/v1/user-files/content?path=' + encodeURIComponent(file), { credentials: 'same-origin', cache: 'no-store' });
+        if (f.ok) {
+          s.has_recipe = true;
+          const meta = await f.json();
+          if (meta && typeof meta === 'object' && !Array.isArray(meta)) s.legacy = !Object.hasOwn(meta, 'base') && Object.hasOwn(meta, 'tweaks');
+        } else if (s.has_recipe === undefined && f.status === 404 && (await f.json()).error === 'not_found') s.has_recipe = false;
+      } catch (_) {} // Unknown/offline is not evidence of missing metadata.
+    }
+    return result;
   }
   function receive(list) {
     if (!list || !Array.isArray(list.skins)) throw new Error('Invalid skins response');
@@ -169,7 +189,7 @@
     try { localStorage.setItem(BOX_CACHE, JSON.stringify(recipes)); } catch (_) {}
     if (oldActive !== recipes.active) { verified = null; stopScript(); apply(''); cache(''); }
     selecting = true;
-    try { if (own() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
+    try { if (paletteBound() && window.WosSkin?.current !== own().base && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base); }
     finally { selecting = false; }
     if (changed) recipeChanged();
   }
@@ -190,7 +210,10 @@
             if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
             let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
             if (!found) { const made = await request('', 'POST', { name: s.name, base: s.base, tweaks: s.tweaks, migration_key: s.id, activate: s.id === active }); found = { id: made.id }; }
-            else if (s.id === active) await request('/active', 'PUT', { id: found.id });
+            // Cached CSS can recreate the legacy local entry before box discovery.
+            // Reading an already-worn match is not an activation; keep real migrations
+            // to a different selection authoritative, including explicit remote wear().
+            else if (s.id === active && list.active !== found.id) list = await request('/active', 'PUT', { id: found.id });
             legacy.skins = legacy.skins.filter(k => k.id !== s.id);
             localStorage.setItem(RECIPES, JSON.stringify(legacy));
           }
@@ -307,6 +330,7 @@
     get FILE() { return own() ? 'Skins/' + own().id + '/skin.css' : FILE; },
     get recipes() { return clone(recipes.skins); },
     get active() { return own() ? clone(own()) : null; },
+    get overlay() { return overlay(); },
     create: boxAction(create, createOnBox), wear: boxAction(wear, wearOnBox), leave: boxAction(leave, leaveOnBox), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
     get storage() { return serverMode === true ? 'box' : serverMode === false ? 'local' : 'offline'; },
     get state() { return state; },
@@ -319,8 +343,8 @@
   };
   if (typeof window !== 'undefined') {
     window.WosMySkin = api;
-    if (own() && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base);
-    window.addEventListener?.('wos:skin', () => { if (!selecting && own() && own().base !== window.WosSkin.current) { const pending = api.leave(); pending?.catch?.(() => {}); } });
+    if (paletteBound() && window.WosSkin?.list.some(s => s.id === own().base)) window.WosSkin.set(own().base);
+    window.addEventListener?.('wos:skin', () => { if (!selecting && paletteBound() && own().base !== window.WosSkin.current) { const pending = api.leave(); pending?.catch?.(() => {}); } });
     if (isDoc && !off) {
       window.addEventListener?.('storage', e => { if (e.key === OK) { stopScript(); refresh(); } });
       window.addEventListener?.('wos:personal-error', e => failed(e.detail));
