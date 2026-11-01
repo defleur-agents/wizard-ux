@@ -7,11 +7,11 @@
  *     its Ready count; a + tile last: the sheet of every app not open yet (chrome.js, the same as the phone's), whose
  *     pick opens on a desk of its own and then shows here as its own icon.
  *   - A tap opens that app's desk: the stock desktop window, the full desk, as in Desks.
- *   - Back to the grid: the round Back beside the orb (always there away from Home) or the shell's own Home key ⌥`
- *     (it already toggles Home and back; no new binding, so the desktop's key map is unchanged).
+ *   - Back to the grid: a drag up on the orb (the phone's home swipe) or the shell's own Home key ⌥` (it already
+ *     toggles Home and back; no new binding, so the desktop's key map is unchanged). No Back button (round 6).
  *   - The orb floats at the bottom centre on every screen, as on the phone (the shell's own orb drawing, orb.js): click
- *     talks (again = send), hold = a local command (release runs it), a sideways drag steps to the next / previous
- *     desk. Windows end above its row, so it never covers a window's own buttons.
+ *     talks (again = send), hold = a local command (release runs it), a drag up = Home; a sideways drag does nothing
+ *     (no desk steps). Windows end above its row, so it never covers a window's own buttons.
  *   - The bar keeps the switch and the AI fuel gauge in its centre and the gear (Settings) on the right; the desk
  *     numbers step aside (the grid is the desks).
  *
@@ -26,7 +26,7 @@ export default function desktop(api) {
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const desks = () => api.desks.list();
 
-  /* ---------- nodes: the launchpad (Home only) and the bottom row (Back · orb) on the stage ---------- */
+  /* ---------- nodes: the launchpad (Home only) and the bottom row (the orb) on the stage ---------- */
   const scene = el('div', 'apd');
   const pad = el('section', 'apd-home', { 'aria-label': 'Apps' });
   const grid = el('nav', 'apd-grid', { 'aria-label': 'Your open apps' });
@@ -35,10 +35,10 @@ export default function desktop(api) {
   const orbBox = el('div', 'apd-orb');
   const cv = el('canvas', 'apd-orbc', { width: '128', height: '128', 'aria-hidden': 'true' });
   const fb = el('img', 'apd-orbfb', { alt: '', src: 'robert-thread-orb.png', draggable: 'false' }); fb.hidden = true;
-  const orbBtn = el('button', 'apd-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Click to talk, hold for a command, drag sideways for the next desk.' });
+  const orbBtn = el('button', 'apd-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Click to talk, hold for a command, drag up for Home.' });
   orbBox.append(cv, fb, orbBtn);
-  const chrome = viewChrome(api, { home: () => api.desk.home(), openIds: () => desks().map(d => d.id) });
-  row.append(chrome.back, orbBox);
+  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id) });
+  row.append(orbBox);
   scene.append(pad, row);
   api.mount(scene);
   root.dataset.appsDesk = 'home';
@@ -92,13 +92,13 @@ export default function desktop(api) {
     paintCounts();
     const home = !!api.route().home;
     root.dataset.appsDesk = home ? 'home' : 'desk';
-    pad.hidden = !home; chrome.paintBack(home);
+    pad.hidden = !home;
     if (!home) chrome.close();
   }
   api.on('route', paint); api.on('render', paint); api.on('home', paint);
   paint();
 
-  /* ---------- the orb: the shell's own drawing; click talks, hold commands, a sideways drag steps desks ---------- */
+  /* ---------- the orb: the shell's own drawing; click talks, hold commands, a drag up goes Home ---------- */
   let eng = null;
   api.orb.ready().then(ok => { if (!ok || !scene.isConnected) return; eng = api.orb.create(cv, fb, { R: .64 }); eng?.setRestingMotion?.(false); mode(api.voice.state()); });
   const MODES = ['idle', 'listen', 'command', 'think', 'paused', 'done', 'agent', 'typing'];
@@ -111,15 +111,17 @@ export default function desktop(api) {
   let press = null;
   api.listen(orbBtn, 'pointerdown', e => {
     if (e.button) return;
-    const p = { held: false, started: null, cancel: null, x: e.clientX, moved: false }; press = p;
+    const p = { held: false, started: null, cancel: null, x: e.clientX, y: e.clientY, moved: false }; press = p;
     try { orbBtn.setPointerCapture(e.pointerId); } catch (_) {}
     orbBox.classList.add('is-pressed'); eng?.press?.(true);
     p.cancel = api.after(HOLD_MS, () => { if (press !== p || p.moved || (api.voice.state()?.state || 'idle') !== 'idle') return; p.held = true; p.started = Promise.resolve(api.voice.command()); });
   });
   api.listen(orbBtn, 'pointermove', e => {
     const p = press; if (!p || p.held || p.moved) return;
-    const dx = e.clientX - p.x; if (Math.abs(dx) < 48) return;
-    p.moved = true; p.cancel?.(); step(dx < 0 ? 1 : -1);   // drag left = the next desk, as a swipe
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) < 48) return;
+    // a drag is never a click; up = Home (the phone's home swipe), sideways / down = nothing (no desk steps)
+    p.moved = true; p.cancel?.();
+    if (dy < 0 && -dy > Math.abs(dx) && !api.route().home) api.desk.home();
   });
   const release = run => {
     const p = press; press = null; if (!p) return; p.cancel?.(); orbBox.classList.remove('is-pressed'); eng?.press?.(false);
@@ -131,13 +133,6 @@ export default function desktop(api) {
   api.listen(orbBtn, 'pointercancel', () => release(false));
   api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
-  // the desks in grid order (Chats' desk included); from Home the first / last one
-  function step(dir) {
-    const list = desks(); if (!list.length) return;
-    const r = api.route(), i = r.home ? -1 : list.findIndex(d => d.desk === r.desk);
-    const next = i < 0 ? list[dir > 0 ? 0 : list.length - 1] : list[(i + dir + list.length) % list.length];
-    if (next) api.nav.goDesk(next.desk);
-  }
 
   return () => { chrome.dispose(); scene.remove(); delete root.dataset.appsDesk; };
 }

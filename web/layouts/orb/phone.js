@@ -5,8 +5,8 @@
  *   centre and the bar, the spin and the bolts impossible to use, 1 Nov 2026):
  *     - the desktop's night sky (shared.js paintSky) and orb in the same Style × Colour kept per device (styles.js
  *       renderer, shared.js lookOf), FIXED in the middle of Home. It never flies anywhere; it only slides with the
- *       Home desk like everything on it. Tap talks, hold commands, swipes do what the dock orb's do (a press on it is
- *       handed to the dock orb as it starts, same pointer, so the stock gestures run unchanged).
+ *       Home desk like everything on it. Tap talks, hold commands, as the dock orb's (a press on it is handed to the
+ *       dock orb as it starts, same pointer, so the stock tap and hold run unchanged).
  *     - the same status satellites as the desktop (shared.js orbitApps: the apps on your desks and apps with
  *       something new) as plain buttons standing still on one ring around the orb: tap = open that app (its desk).
  *       Big targets (48 px), never on the orb, nothing moving under the finger.
@@ -16,11 +16,12 @@
  *       stays: the which-Wizard menu, the Desks | Orb | Apps switch, the AI fuel gauge and the gear.
  *   Everywhere (1 Nov 2026, round 4): the stock desk switcher is gone on every screen (layouts/apps/chrome.css): only the
  *   dock orb is left, floating at the bottom centre exactly where it sits, with its stock gestures and the same Style ×
- *   Colour; on Home the big centre orb is the orb, so the dock orb shows (a plain fade) once something is open. Away from
- *   Home a round Back beside it goes Home (the ring). A small + beside the Chats pill opens the sheet of every app not
- *   open yet (the Apps view's own, chrome.js); a pick opens it on a desk of its own and it joins the ring.
- *   Everything else (Chats, threads, apps, desks, sheets, swipes) is the stock phone. Desks (the tweak off) brings the
- *   stock Home and dock back exactly.
+ *   Colour; on Home the big centre orb is the orb, so the dock orb shows (a plain fade) once something is open. A swipe
+ *   up on the orb goes Home (the ring), like the iPhone's home swipe; sideways and down do nothing here (chrome.js
+ *   ORB_SWIPES, round 6: no Back button, no desk steps, no distraction-free from the orb). A small + beside the Chats
+ *   pill opens the sheet of every app not open yet (the Apps view's own, chrome.js); a pick opens it on a desk of its
+ *   own and it joins the ring. Everything else (Chats, threads, apps, desks, sheets) is the stock phone. Desks (the
+ *   tweak off) brings the stock Home and dock back exactly.
  *
  * Motion: one loop, only while the page is visible; the sky and orb drawn about 30 times a second on Home only;
  * reduced motion = still frames. Colours are the tweak's skin-layer tokens (--ob-*). Everything through the layout API. */
@@ -42,14 +43,14 @@ export default function phone(api) {
   const field = el('div', 'obp-field', { role: 'group', 'aria-label': 'Your apps' });
   const orbBox = el('div', 'obp-orb');
   const orbCv = el('canvas', 'obp-orbc', { 'aria-hidden': 'true' });
-  const orbBtn = el('button', 'obp-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Tap to talk, hold for a command, swipe up for apps.' });
+  const orbBtn = el('button', 'obp-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Tap to talk, hold for a command.' });
   orbBox.append(orbCv, orbBtn);
   const chats = el('button', 'obp-chats', { type: 'button', 'aria-label': 'Chats' });
   const chatsWord = el('span', 'obp-chats-word', { text: 'Chats' }), chatsN = el('span', 'obp-chats-n');
   chats.append(chatsWord, chatsN);
   // the small + beside the pill: the sheet of every app not open yet (chrome.js, the same as the Apps view's)
   const desks = () => (api.desks?.list || api.phone.desks)?.() || [];
-  const chrome = viewChrome(api, { home: () => api.nav.goDesk(0), openIds: () => desks().map(d => d.id) });
+  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id) });
   const plus = chrome.plus('obp-plus', 'Open an app');
   layer.append(field, orbBox, chats, plus);
   const dockCv = el('canvas', 'obp-dockc', { 'aria-hidden': 'true' });
@@ -216,8 +217,6 @@ export default function phone(api) {
   function attach() {
     const sec = api.phone.home(); if (sec && sky.parentNode !== sec) sec.prepend(sky);   // a rebuilt desk strip: back in
     const host = api.phone.orb(); if (host && dockCv.parentNode !== host) host.append(dockCv);
-    // Back lives in the dock row, left of the dock orb (it hides and slides with the dock, like the orb)
-    if (host?.parentNode && chrome.back.parentNode !== host.parentNode) host.parentNode.insertBefore(chrome.back, host);
   }
   function paint() {
     attach();
@@ -228,7 +227,6 @@ export default function phone(api) {
       orbBox.dataset.show = h ? 'on' : ''; dockCv.dataset.show = h ? '' : 'on';
       if (h) { paintApps(); paintChats(); api.frame(() => { W = 0; size(); sizeSky(); }); }
     }
-    chrome.paintBack(h);
     size();
   }
   api.on('route', paint);

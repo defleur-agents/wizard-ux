@@ -3461,13 +3461,27 @@
   // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
   function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
+  /* A worn layout's own orb swipes (WosSkinHost.orbSwipes, e.g. the Orb and Apps views: up = Home, the rest nothing).
+   * 'stock' = the dock's own swipe below; Desks declares none, so it is always 'stock' there. Tap and hold never ask. */
+  function orbSwipeAct(g) {
+    const s = g && g.swipes, k = !g ? '' : g.mode === 'h' ? 'side' : g.mode === 'v' ? (g.dy < 0 ? 'up' : 'down') : '';
+    return !s || !k || !(k in s) ? 'stock' : s[k];
+  }
+  // Home from the orb: as a desk swipe it may be the iPhone's own swipe home in disguise (undoLastMove puts it back)
+  function orbSwipeHome() {
+    const from = desks[idx]?.id;
+    if (sheet) closeSheets(true);
+    if (pillOvOpen()) closeOverview();
+    if (idx !== HOME) goDesk(HOME);
+    if (desks[idx]?.id !== from) lastMove = { from, at: Date.now() };
+  }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
     if (G || e.isPrimary === false) return;
     e.preventDefault(); try { orbWrap.setPointerCapture(e.pointerId); } catch (_) {} closeMenu();
     G = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), mode: 'pending', dx: 0, dy: 0, aim: null };
     Orb.press(true);
-    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks();
+    G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks(); G.swipes = window.WosSkinHost?.orbSwipes?.() || null;
     if (V.state === 'idle') G.warm = setTimeout(() => { if (G && G.mode === 'pending') warmMic(); }, MIC_WARM_MS);
     if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
@@ -3495,12 +3509,14 @@
       return;
     }
     // Swipes work in every voice state: recording or sending never locks navigation.
-    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner) { clearTimeout(G.hold); G.mode = 'still'; }
+    if (G.mode === 'pending' && Math.hypot(G.dx, G.dy) > 14 && G.corner && !G.swipes) { clearTimeout(G.hold); G.mode = 'still'; }
     if (G.mode === 'still') return; // the corner orb only talks: a slid finger cancels, it never swipes the shell
     // A downward slide commits sooner (10 px): the orb sits near the bottom of the glass, so there is little room below it.
     if (G.mode === 'pending' && (Math.hypot(G.dx, G.dy) > 14 || (G.dy > 10 && G.dy > Math.abs(G.dx) * 1.4))) {
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
+    // A layout's own swipe (Orb / Apps): nothing follows the finger; only the hint for Home.
+    if (G.swipes && orbSwipeAct(G) !== 'stock') { orbWrap.dataset.dir = orbSwipeAct(G) === 'home' && G.dy < -40 ? '↑ Home' : ''; return; }
     if (G.mode === 'h' && sheet === 'settings') liftSettings(); // swipe away from Settings: it stays on its desk
     if (G.mode === 'h' && !sheet) {
       let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
@@ -3546,6 +3562,9 @@
     // Our skins, desks panel open: the orb is its handle. Any tap or swipe on it closes the panel (nothing else fires).
     if (g.ovWas && pillOvOpen()) { if (!cancelled && g.mode !== 'hold') { closeOverview(); return; } }
     if (g.ovOpened) { if (cancelled) closeOverview(); return; }
+    // A layout's own swipe (Orb / Apps): up far or fast enough = Home; a swipe it set to null does nothing.
+    const own = orbSwipeAct(g);
+    if (own !== 'stock') { if (own === 'home' && !cancelled && (g.dy < -70 || g.dy / vt < -.55)) orbSwipeHome(); return; }
     if (g.upDesks && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();

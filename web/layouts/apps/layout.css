@@ -1,7 +1,7 @@
 /* Apps view (layouts/apps/layout.js): Home as a standard home screen, one app icon per desk; phone (layout.js) and
  * desktop (desktop.js, a launchpad). Loaded only while the Apps layout is worn (html[data-layout="apps"]); every rule is
- * scoped to one shell. Colours are the wearing tweak's skin-layer tokens (--ap-*: miguel/apps-home tweak.css). The Back
- * button, the + sheet and the phone dock without its desk switcher are chrome.css (shared with the Orb view). */
+ * scoped to one shell. Colours are the wearing tweak's skin-layer tokens (--ap-*: miguel/apps-home tweak.css). The +
+ * sheet and the phone dock without its desk switcher are chrome.css (shared with the Orb view). No Back button. */
 
 /* Home: only its top stays (which Wizard, the switch, the AI fuel gauge, the gear): the tweak.css hides the rest from
  * the first frame; the grid takes its place. */
@@ -57,7 +57,7 @@ html[data-shell="phone"][data-layout="apps"] .ap-plus .vc-ico { width: 28px; hei
 /* The bar keeps the switch and the AI fuel gauge in its centre and the gear on the right; the desk numbers step aside
  * (the grid is the desks) and so do the voice buttons (the orb floats at the bottom). */
 html[data-shell="desktop"][data-layout="apps"] #bar :is(#logo, #wsList, #searchBtn, #micBtn, #generalVoice, #commandBtn, #dictateBtn, #status, #keysBtn, .mh-root.is-wiz, .mh-bi, .mh-bar-sep) { display: none !important; }
-/* Windows end above the orb's row, so the floating orb and Back never sit on a window's own buttons. */
+/* Windows end above the orb's row, so the floating orb never sits on a window's own buttons. */
 html[data-shell="desktop"][data-layout="apps"] #stage > .wsp { bottom: 76px; }
 /* Home is the launchpad: the stock Home's content (and an empty desk's) steps aside for the grid. */
 html[data-shell="desktop"][data-layout="apps"] #desktopHome > * { display: none !important; }
@@ -106,9 +106,8 @@ html[data-shell="desktop"][data-layout="apps"] .apd-label {
   font: 500 var(--wz-text-sm) / 1.25 var(--wz-font-ui); color: var(--ap-label); text-shadow: var(--ap-label-shadow);
 }
 
-/* the bottom row: the orb at the bottom centre on every screen, Back beside it (left) away from Home */
+/* the bottom row: the orb at the bottom centre on every screen (a drag up on it = Home) */
 html[data-shell="desktop"][data-layout="apps"] .apd-row { position: absolute; left: 50%; bottom: 8px; width: 60px; height: 60px; margin-left: -30px; pointer-events: none; }
-html[data-shell="desktop"][data-layout="apps"] .apd-row > .vc-back { position: absolute; right: calc(100% + 16px); top: 50%; margin-top: -24px; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orb { position: absolute; inset: 0; pointer-events: none; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orbc { position: absolute; inset: -38%; width: 176%; height: 176%; display: block; pointer-events: none; transition: transform 180ms ease; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orbfb { position: absolute; inset: 4%; width: 92%; height: 92%; border-radius: 50%; pointer-events: none; }

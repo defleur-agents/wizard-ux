@@ -1,10 +1,10 @@
-/* View chrome (layouts/apps/chrome.js): the round Back button and the + sheet the Orb and Apps views share. Loaded by
- * that script only; every rule is scoped to html[data-view-chrome] (set only while the Orb or the Apps view wears it), so
+/* View chrome (layouts/apps/chrome.js): the + sheet the Orb and Apps views share (no Back button: a swipe up on the
+ * orb goes Home). Loaded by that script only; every rule is scoped to html[data-view-chrome] (set only while the Orb or the Apps view wears it), so
  * the Desks view never sees a rule of it. Colours are the skin's own tokens (--wz-*), so it reads on every skin. */
 
 /* ---------- phone: the stock desk switcher goes on EVERY screen; the dock orb stays exactly where it is ---------- */
-/* Only the orb is left of the dock row (same place, same gestures: tap talks, hold commands, sideways swipes between
- * desks); its dots, its scrub handle and its pill glass step aside. The empty row no longer takes touches. */
+/* Only the orb is left of the dock row (same place; tap talks, hold commands, a swipe up goes Home); its dots, its
+ * scrub handle and its pill glass step aside. The empty row no longer takes touches. */
 html[data-view-chrome="phone"] #dock > :is(#dotsL, #dotsR, .scrub) { display: none !important; }
 html[data-view-chrome="phone"] #dock {
   background: none !important; border-color: transparent !important; box-shadow: none !important;
@@ -13,24 +13,8 @@ html[data-view-chrome="phone"] #dock {
 html[data-view-chrome="phone"] #dock::before { display: none !important; }
 html[data-view-chrome="phone"] #dock > #orbWrap { pointer-events: auto; }
 
-/* ---------- Back: round, beside the orb, away from Home only ---------- */
-html[data-view-chrome] .vc-back {
-  width: 48px; height: 48px; padding: 0; margin: 0; border: 0; border-radius: 50%; box-sizing: border-box; flex: none;
-  display: grid; place-items: center; cursor: pointer; pointer-events: auto;
-  color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 72%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent), 0 6px 18px color-mix(in srgb, var(--wz-base, var(--bg)) 40%, transparent);
-  -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
-  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 120ms ease, opacity 160ms ease;
-}
-html[data-view-chrome] .vc-back[hidden] { display: none !important; }
-html[data-view-chrome] .vc-back:active { transform: scale(.92); }
-html[data-view-chrome] .vc-back:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 2px; }
+/* ---------- icons (the + and the sheet's ✕) ---------- */
 html[data-view-chrome] .vc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }
-/* phone: in the dock row, at the left, level with the orb and inside the safe area */
-html[data-view-chrome="phone"] #dock > .vc-back {
-  position: absolute; left: max(var(--safe-l, 0px), 14px); top: 50%; margin-top: -24px; z-index: 4;
-}
-html[data-view-chrome="phone"] #dock > .vc-back:active { transform: scale(.92); }
 
 /* ---------- the + sheet: every app not open yet ---------- */
 html[data-view-chrome] .vc-sheet { position: fixed; inset: 0; z-index: 400; display: grid; pointer-events: auto; }
