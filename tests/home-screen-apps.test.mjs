@@ -174,7 +174,7 @@ test('mounted session Back consumes app overlay, safe in-app history and forever
   const w={location:{href:'https://box.example/wisdom/#/read/chapter'},history:{state:{wisdom:true},back(){traversals++;w.location.href='https://box.example/wisdom/';}},navigation:{currentEntry:{index:1},entries:()=>[{url:'https://box.example/wisdom/'}]},document:rootDoc,WizardApp:{ready(){}},addEventListener(){}};
   const window={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{wisdom:app}}),appsLoaded:()=>Promise.resolve()},WosSelMenu:{back:()=>false},WizAppReadingPosition:{flush(){flushes++;}},WizAppServices:{attach:()=>()=>{},guardBack(){},back:()=>serviceStep}};
   const ctx=vm.createContext({window,document,localStorage:store,location:{origin:'https://box.example'},URL,addEventListener(){},setInterval(){},setTimeout(){}});
-  vm.runInContext(read('core/single-app-session.js'),ctx);await Promise.resolve();frame.contentWindow=w;frame.contentDocument=rootDoc;frame.events.load();
+  vm.runInContext(read('core/single-app-session.js'),ctx);await new Promise(setImmediate);frame.contentWindow=w;frame.contentDocument=rootDoc;frame.events.load();
   assert.equal(window.__wosNativeBack(),'app');assert.equal(traversals,0);
   serviceStep='atRoot';assert.equal(window.__wosNativeBack(),'root');assert.equal(window.__wosNativeBack(),'root');assert.equal(traversals,0,'connected app root is authoritative even with older history');
   serviceStep='notReady';assert.equal(window.__wosNativeBack(),'history');assert.equal(traversals,1,'generic history is only a fallback without a connected client');

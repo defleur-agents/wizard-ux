@@ -10,7 +10,7 @@
   win.id = 'singleApp'; win.className = 'win full'; win.dataset.win = key;
   device.appendChild(win);
   let frame = null, app = null, detach = null, mountedURL = '', loaded = false, cut = 0, top = 0;
-  const read = () => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
+  const read = () => { const durable = policy.presentationRoute?.(); if (durable !== undefined) return durable; try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
   function toast(icon, text) { const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1400); }
   // Reuse the shared link/media utilities, but never their desk-placement action.
   // Wisdom's selection Search uses window.open; without this guard it is a dead tap in Android.
@@ -27,7 +27,10 @@
       if (!policy.within(href, app.url)) return;
       const state = w.history.state;
       const value = JSON.stringify({ v:1, href, state, at:Date.now(), base:app.url });
-      if (value.length < 65536) localStorage.setItem(key, value);
+      if (value.length < 65536) {
+        policy.savePresentationRoute?.(JSON.parse(value));
+        try { localStorage.setItem(key, value); } catch (_) {}
+      }
       window.WizAppReadingPosition?.flush();
     } catch (_) {}
   }
@@ -81,9 +84,14 @@
   };
   window.WizAppServices?.guardBack(() => { window.__wosNativeBack(); return true; }, toast);
   window.WizCore.bridge?.handle({ back:window.__wosNativeBack });
+  let mountGeneration = 0;
   async function mount() {
+    const generation = ++mountGeneration;
+    if (id === 'wisdom' && policy.preparePresentation) await policy.preparePresentation();
+    if (generation !== mountGeneration) return;
     // Prepare the small host document before Wisdom can announce Ready offline.
     if (window.WizOfflineApps?.apps[id]?.offline) await window.WizOfflineSession?.ready;
+    if (generation !== mountGeneration) return;
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
@@ -114,7 +122,9 @@
           // with a hash, or #sources silently shows the feed after process/frame recreation.
           if (!(id === 'wisdom' && state.wisdom)) w.dispatchEvent(new w.PopStateEvent('popstate',{state}));
         }
-        frame.contentWindow.WizardApp?.ready?.(); safeInsets(); checkpoint();
+        frame.contentWindow.WizardApp?.ready?.();
+        if (policy.presentationFailed) frame.contentWindow.WisdomOffline?.savingFailed?.();
+        safeInsets(); checkpoint();
         if (links) window.WizLinks.guardFrame(frame.contentWindow,app.url,links);
         const w = frame.contentWindow;
         if (w.__wosSessionHistory !== w.document) {

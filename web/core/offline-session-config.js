@@ -2,7 +2,7 @@
 importScripts("./core/offline-apps.js");
 self.WIZ_OFFLINE_CONFIG = {
   "prefix": "wizard-os-home-",
-  "version": "4c7a4e8a32afd8fae5da",
+  "version": "6913c9e98f3e586699f3",
   "shell": [
     "app-session.html",
     "core/agents.js",
@@ -21,6 +21,7 @@ self.WIZ_OFFLINE_CONFIG = {
     "core/links.css",
     "core/links.js",
     "core/offline-apps.js",
+    "core/offline-kit.js",
     "core/offline-session.js",
     "core/offline-sw.js",
     "core/sigils.js",

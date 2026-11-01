@@ -37,7 +37,7 @@ Reuse:
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
-| Offline replica, edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable fail |
+| Offline replica, edits; pinned presentation journal | `WizOffline.create` / `.presentation` (`core/offline-kit.js`), existing replica `meta`, opt-in strict transactions; [protocol](pinned-reading-durability.md) | app outbox or extra presentation database | recoverable fail; stale-cache old/new; await hydration before child mount |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
 | Offline shell | `web/sw.js` | API cache | offline reload |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
