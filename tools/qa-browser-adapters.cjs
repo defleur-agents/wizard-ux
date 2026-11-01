@@ -4,6 +4,7 @@
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const assert = require('node:assert/strict'), { spawn } = require('node:child_process');
 const { pathToFileURL } = require('node:url'), crypto = require('node:crypto');
+const appFrame = require('./qa-browser-frame.cjs');
 const root = path.resolve(process.env.QA_UX_ROOT || path.join(__dirname, '..')), out = process.env.QA_OUT;
 const { chromium } = require(path.join(root, 'tools/qa-playwright.cjs'));
 if (!out || !process.env.QA_SERVICE_ROOT) throw new Error('QA_OUT and QA_SERVICE_ROOT are required');
@@ -93,21 +94,38 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
   const nginx = spawn(process.env.QA_NGINX || 'nginx', ['-p', out + '/', '-e', path.join(out, 'nginx-startup.log'), '-c', configPath, '-g', 'daemon off;'], { stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = ''; nginx.stderr.on('data', b => { stderr += b; });
   let browser;
+  let lifecycleSerial = 0;
+  report.lifecycle = [];
+  const event = (name, extra = {}) => {
+    report.lifecycle.push({serial:++lifecycleSerial,at:Date.now(),name,phase:report.phase || 'boot',...extra});
+    if (report.lifecycle.length > 256) report.lifecycle.shift();
+    fs.writeFileSync(path.join(out,'lifecycle.json'),JSON.stringify(report.lifecycle,null,2));
+  };
+  const settled = async frame => {
+    const wait=target=>target.waitForFunction(() => document.getAnimations().every(a => a.effect?.getTiming().iterations === Infinity || ['finished','idle','paused'].includes(a.playState)),null,{timeout:5000});
+    await wait(page);if(frame)await wait(frame);
+  };
+  let page;
   try {
     let available = false;
     for (let i = 0; i < 30; i++) { try { const r = await fetch(`http://127.0.0.1:${np}/wizard-os-home/core/browser-boundary.js`); if (r.ok) { available = true; break; } } catch (_) {} await new Promise(r => setTimeout(r, 100)); }
     assert.ok(available, 'nginx readiness: ' + stderr);
     browser = await chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
+    browser.on('disconnected',()=>event('browser.disconnected'));
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
-    const page = await context.newPage(); page.on('pageerror', e => report.errors.push(e.message));
+    context.on('close',()=>event('context.close'));
+    page = await context.newPage(); page.on('pageerror', e => report.errors.push(e.message));
+    page.on('crash',()=>event('page.crash'));page.on('close',()=>event('page.close'));
+    page.on('framedetached',f=>event('frame.detached',{url:f.url()}));
+    page.on('framenavigated',f=>event('frame.navigated',{url:f.url(),main:f===page.mainFrame()}));
+    page.on('console',m=>{if(m.text().startsWith('[qa-canvas]'))event(m.text());});
     await page.goto(`http://127.0.0.1:${np}/wizard-os-home/desktop.html?open=boundary-fixture`);
     await page.waitForFunction(() => window.WizBrowserBoundary?.enabled && window.wizardUX, { timeout: 15000 });
     check(await page.locator('meta[name="wizard-shell-token"]').count() === 0, 'bootstrap secret removed from shell DOM');
     check(await page.evaluate(async () => (await fetch('/wizard/v1/settings')).status) === 200, 'real shell fetch reaches token-gated service');
     await page.evaluate(() => dispatchEvent(new CustomEvent('wizard:open', { detail: { path: '/fixture-app/' } })));
-    await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => f.src.includes('/fixture-app/')));
-    const app = page.frames().find(f => f.url().includes('/fixture-app/'));
-    await app.waitForFunction(() => typeof window.probe === 'function');
+    const app = await appFrame(page,'/fixture-app/');
+    await app.waitForFunction(() => typeof window.probe === 'function' && window.WizBoundaryClient?.ready);
     check(await page.locator('iframe[src*="/fixture-app/"]').getAttribute('sandbox') === 'allow-scripts allow-forms allow-downloads', 'real shell render sandboxes app without same-origin/top-navigation/popups');
     const probe = await app.evaluate(() => window.probe());
     report.hostileProbe = probe;
@@ -166,6 +184,43 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     check(pinned, 'field pin acknowledged by opaque client');
     check(await page.evaluate(() => window.testPin.insert('world')), 'field insertion acknowledged, not fire-and-forget');
     check(await app.locator('input').inputValue() === 'Hello world', 'dictation bridge inserts only in pinned field');
+    // Only resource endpoints are synthetic: the SDK, port/nonce handshake,
+    // admission, budgets and trusted-click sheet all run unmodified real code.
+    await page.evaluate(() => {
+      if(WizAppServices.inspect().some(s=>s.appId==='boundary-fixture' && s.holds.length))throw new Error('fixture transcription budget was used before SDK proof');
+      window.qaServices={transcribes:[],shares:[]};
+      window.qaOriginalTranscribe=WizConfig.transcribe;
+      WizConfig.transcribe=async(file,opts)=>{qaServices.transcribes.push({bytes:file.size,language:opts.language});return {text:' synthetic spoken words '};};
+      const chats=(window.__wos || window.__wux).chats;
+      if(!chats?.sendChat)throw new Error('synthetic share delivery sink unavailable');
+      window.qaOriginalSend=chats.sendChat;
+      chats.sendChat=async(wid,text,how,audio,opts)=>{qaServices.shares.push({text,how,sid:opts.sid});return {accepted:true};};
+    });
+    const voice=await app.evaluate(async()=>{
+      const audio=()=>new Blob(['synthetic audio'],{type:'audio/ogg'}),out={};
+      out.first=await WizardApp.voice.transcribe(audio(),{language:'en'});
+      try {await WizardApp.voice.transcribe(new Blob([new Uint8Array(25*1024*1024+1)]));} catch(e){out.large=e.code;}
+      for(let i=1;i<10;i++)await WizardApp.voice.transcribe(audio());
+      try {await WizardApp.voice.transcribe(audio());} catch(e){out.limit=e.code;}
+      return out;
+    });
+    check(voice.first.text==='synthetic spoken words' && voice.large==='too_large' && voice.limit==='rate_limited','real opaque WizardApp transcribe preserves results, size limit and ten-call budget');
+    check(await page.evaluate(()=>qaServices.transcribes.length===10 && qaServices.transcribes[0].language==='en'),'only ten authorized synthetic transcription calls reach upstream');
+    const startShare=()=>app.evaluate(()=>{window.qaShareResult=null;WizardApp.share.wizard({text:'Synthetic channel share'}).then(r=>window.qaShareResult=r);});
+    await startShare();await page.locator('.wz-share [data-sharesend]').waitFor();
+    await page.locator('.wz-share [data-sharesend]').evaluate(b=>b.click());
+    await app.waitForFunction(()=>window.qaShareResult==='denied');
+    await page.locator('.wz-share').waitFor({state:'detached'});
+    check(await page.evaluate(()=>qaServices.shares.length===0),'programmatic shell Send cannot authorize an opaque share');
+    await startShare();await page.locator('.wz-share [data-sharesend]').click();
+    await app.waitForFunction(()=>window.qaShareResult==='sent');
+    await page.locator('.wz-share').waitFor({state:'detached'});
+    check(await page.evaluate(()=>qaServices.shares.length===1 && qaServices.shares[0].text==='Synthetic channel share' && qaServices.shares[0].sid==='__new__'),'real opaque WizardApp share reaches shared sheet and delivers once after trusted shell click');
+    await startShare();await page.locator('.wz-share .dv-scrim[data-dvclose]').click({position:{x:5,y:5}});
+    await app.waitForFunction(()=>window.qaShareResult==='cancelled');
+    await page.locator('.wz-share').waitFor({state:'detached'});
+    check(await page.evaluate(()=>qaServices.shares.length===1),'outside sheet tap cancels share without another delivery');
+    await page.evaluate(()=>{WizConfig.transcribe=qaOriginalTranscribe;(window.__wos || window.__wux).chats.sendChat=qaOriginalSend;});
     await app.locator('input').click();
     await page.evaluate(async () => { window.testPin = await WizBrowserBoundary.pinField(document.querySelector('iframe[src*="/fixture-app/"]')); });
     await app.locator('input').fill('Changed');
@@ -195,8 +250,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     await page.evaluate(()=>localStorage.setItem('fixture-drafts.legacy.v1',JSON.stringify({version:1,text:'Synthetic recovered draft'})));
     const openFixture=async id=>{
       await page.evaluate(id=>dispatchEvent(new CustomEvent('wizard:open',{detail:{path:'/'+id+'/'}})),id);
-      await page.waitForFunction(id=>[...document.querySelectorAll('iframe')].some(f=>f.src.includes('/'+id+'/')),id);
-      const frame=page.frames().find(f=>f.url().includes('/'+id+'/'));
+      const frame=await appFrame(page,'/'+id+'/');
       await frame.waitForFunction(()=>window.WizBoundaryClient?.ready);return frame;
     };
     const list=await openFixture('fixture-list');
@@ -216,11 +270,14 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     for(const skin of ['nebula','sepia']){
       await page.evaluate(s=>{WosSkin.set(s);WizAppearance.sync();},skin);
       await list.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
-      await page.waitForTimeout(600);
-      const panelOpaque=await list.evaluate(()=>{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.querySelector('#status')).backgroundColor;x.fillRect(0,0,1,1);return x.getImageData(0,0,1,1).data[3]===255;});
+      await settled(list);
+      report.phase='list-opacity-'+skin;event('opacity.before-evaluate',{frameDetached:list.isDetached(),pageClosed:page.isClosed(),browserConnected:browser.isConnected()});
+      const panelOpaque=await list.evaluate(()=>{console.error('[qa-canvas] begin');const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle=getComputedStyle(document.querySelector('#status')).backgroundColor;x.fillRect(0,0,1,1);const alpha=x.getImageData(0,0,1,1).data[3];console.error('[qa-canvas] after-readback');return alpha===255;});
+      event('opacity.after-evaluate');
       check(panelOpaque,'text status panel fully opaque on '+skin);
       const shot=path.join(out,'fixture-list-'+skin+'.png');await page.screenshot({path:shot});report.screenshots.push(shot);
     }
+    report.phase='drafts';
     let drafts=await openFixture('fixture-drafts');
     await drafts.waitForFunction(()=>!document.querySelector('#draft').disabled);
     check(await drafts.locator('#draft').inputValue()==='Synthetic recovered draft','verified migration hydrates synthetic legacy draft');
@@ -230,7 +287,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
       await page.evaluate(s=>{WosSkin.set(s);WizAppearance.sync();},skin);
       await drafts.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
       check(await drafts.locator('#draft').inputValue()==='Synthetic newer autosaved draft','skin change preserves unsent draft '+skin);
-      await page.waitForTimeout(600);
+      await settled(drafts);
       const shot=path.join(out,'fixture-drafts-'+skin+'.png');await page.screenshot({path:shot});report.screenshots.push(shot);
     }
     await page.evaluate(()=>localStorage.setItem('fixture-drafts.legacy.v1',JSON.stringify({version:1,text:'Synthetic old-state rollback'})));
@@ -243,17 +300,21 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     const revoked=await drafts.evaluate(async()=>{try{await WizardApp.state.read({area:'persistent',key:'draft'});return 'ALLOWED';}catch(e){return e.code;}});
     check(revoked==='not_allowed','revoked grant denied on next call without frame reload');
     report.stage2={syntheticOnly:true,migratedFixtures:2,localProfileOnly:true,fullSuiteRun:false};
-    const standalone=await context.newPage();await standalone.goto(`http://127.0.0.1:${np}/fixture-list/`);
+    const darkContext=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block',colorScheme:'dark'});
+    const standalone=await darkContext.newPage();await standalone.goto(`http://127.0.0.1:${np}/fixture-list/`);
     check(await standalone.evaluate(()=>getComputedStyle(document.documentElement).colorScheme==='dark'&&getComputedStyle(document.body).backgroundColor!=='rgba(0, 0, 0, 0)'),'standalone fixture has opaque dark fallback without shell authority');
     const fallbackShot=path.join(out,'fixture-standalone-dark.png');await standalone.screenshot({path:fallbackShot});report.screenshots.push(fallbackShot);
+    check(new Set(report.screenshots.filter(s=>/fixture-(?:list|drafts)-(?:nebula|sepia)\.png$|fixture-standalone-dark\.png$/.test(s))).size===5,'all five stage-2 acceptance screenshots retained');
+    await darkContext.close();
+    check(!report.serviceTrace.some(r=>/\/runs(?:[/?]|$)/.test(r.url) && r.method==='POST' && r.status<400),'browser proof never sends a run to an owner agent');
     await context.close();
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
   } catch (error) {
-    report.failure = error.stack; fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
+    event('harness.catch',{message:error.message});report.failure = error.stack; fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
     throw error;
   } finally {
-    await browser?.close(); nginx.kill('SIGTERM');
+    event('harness.finally');await browser?.close(); nginx.kill('SIGTERM');
     await Promise.all([close(fixture), close(service), close(serviceOff)]);
     await Promise.all([service.drained, serviceOff.drained]);
     await hermes.closeFixture();

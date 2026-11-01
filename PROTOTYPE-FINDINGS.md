@@ -25,6 +25,27 @@
 - Canonical strict fixture style check reports no findings. Changed-line whole-repo style ratchet has zero errors (existing warnings retained). COMPONENTS size gate must pass before commit.
 - Claude Opus independently found receipt exhaustion and cached binding failure; both fixed with regressions. Follow-up: PASS for default-off synthetic scope. Reviews are in `docs/browser-trust-review/`.
 
+## Channel-test repair and harness diagnosis
+
+The unchanged #327 fixture passes 12/12 on stacked base `f85d6231` but fails eight on the port prototype. Each failed before reaching its intended assertion because its `ready` omitted `portRole`/MessagePort/challenge and its requests used `rpc-*` rather than `wbs-*`. Real MessageChannels now connect the actual shell boundary/services and actual SDK/client; only DOM and resource endpoints are synthetic. No product handler changes were needed.
+
+| Original failing case | Verdict |
+|---|---|
+| Opaque registered transcription | Obsolete transport fixture; real handler returns trimmed text without child DOM access |
+| Ten-call budget across reload/reattach | Obsolete transport fixture; eleventh refused upstream |
+| Oversized audio | Obsolete transport fixture; `too_large`, no budget spent |
+| Shared sheet / trusted confirmation | Obsolete transport fixture; mandatory `requireTrusted` and generation authorization retained |
+| Actual WizardApp share/transcribe facade | Obsolete transport fixture; real SDK/client on real ports preserves results and structured errors |
+| Forged replies / hello / pagehide | Obsolete transport fixture; even exact-looking window replies ignored, pending calls revoked |
+| Budget expiry / simultaneous frames | Obsolete transport fixture; shared identity budget and ten-minute expiry retained |
+| Navigation after upstream admission | Obsolete transport fixture; old result suppressed |
+
+Unsupported operations already explicitly return `not_allowed` on an authenticated port rather than disappearing; they still grant no capability. A new test rejects missing ports/guessed nonce before services, and a harness unit regression guards the frame-context acquisition order against the blank-frame URL-enumeration race.
+
+The diagnostic's `openFixture` waits for an iframe's **src attribute**, then searches `page.frames()` for the navigated URL. At that instant its browsing context can still be `about:blank`, so `.find()` returns undefined. The retained lifecycle shows drafts navigation *after* `harness.catch`/`finally`. Resolve the iframe's own browsing context and await its URL instead. The original canvas target-closed failure lacks crash/disconnect telemetry, so its historical cause remains unproven; the diagnostic completes both canvas readbacks and screenshots, ruling out a deterministic canvas failure on that run. Keep the original failed evidence unchanged. The repaired harness retains the opacity assertion, logs lifecycle and readback events, and the staged runner retains Chromium stderr.
+
+Browser acceptance additionally exercises real WizardApp transcription and sharing with synthetic upstream/delivery sinks: oversized/rate-limited calls, programmatic Send denial, trusted Send admission once, and outside dismissal. It retains the hostile, Back, field, appearance, migration, reload and grant checks plus all five required stage-2 screenshots. These browser checks and full suites are staged, **not claimed passed until the parent-admitted run returns**.
+
 ## Not proven / required parent-run gate
 
 The child cannot submit durable work (409 restriction). The exact forum job stages the r5 hostile-page pattern extended with the two fixtures, fixture identity/grant resolvers, browser migration/autosave/reload/old-legacy-rollback/recovery, revoked grants, and four in-shell screenshots (both fixtures on Nebula and Sepia). It must run on forum before screenshot inspection or a browser PASS is claimed. Full repository suites are included as separate phases, not inherited from the earlier source heads. No screenshots have yet been produced or viewed by this child. Any browser or baseline failures remain visible in phase logs/receipt; no test filtering to manufacture a green suite.

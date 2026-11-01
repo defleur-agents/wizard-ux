@@ -13,6 +13,10 @@ mp = Path(a.manifest).resolve()
 sha = lambda path: hashlib.sha256(Path(path).read_bytes()).hexdigest()
 assert sha(mp) == a.manifest_sha256, 'manifest drift'
 m = json.loads(mp.read_text())
+assert mp.parent.is_relative_to(Path(m['env']['WIZARD_WORK_ROOT']).resolve()), 'configured scratch root required'
+assert Path(m['env']['TMPDIR']).parent.is_dir(), 'prepare TMPDIR parent before admission'
+for fresh in [mp.parent/'evidence', mp.parent/'synthetic-home', Path(m['env']['TMPDIR'])]:
+    assert not fresh.exists(), 'stage already consumed: '+str(fresh)
 assert sha(__file__) == m['runner_sha256'], 'runner drift'
 for repo, row in m['sources'].items():
     assert subprocess.check_output(['git','rev-parse','HEAD'],cwd=row['path'],text=True).strip() == row['head'], repo+' HEAD drift'
