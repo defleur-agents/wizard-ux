@@ -108,18 +108,21 @@ function sigils(logos) {
 
 test('every icon surface draws a shipped logo as a picture tile; no logo keeps the sigil', () => {
   const url = '/wizard-os-home/store-data/app-logo/maverick-command?v=0123456789abcdef';
-  const S = sigils({ 'maverick-command': url, files: '/elsewhere/logo.png?v=0123456789abcdef', calendar: "/wizard-os-home/store-data/app-logo/calendar?v=0123456789abcdef')x" });
-  const h = S.html({ id: 'maverick-command', name: 'Maverick Command' });
+  const S = sigils({ 'jet-lab': url, files: '/elsewhere/logo.png?v=0123456789abcdef', calendar: "/wizard-os-home/store-data/app-logo/calendar?v=0123456789abcdef')x" });
+  const h = S.html({ id: 'jet-lab', name: 'Jet Lab' });
   assert.equal(h, `<i class="sglogo" aria-hidden="true" style="--logo:url('${url}')"></i>`);
-  assert.equal(S.of({ id: 'maverick-command' }).logo, url);
-  assert.ok(S.of({ id: 'maverick-command' }).color, 'the colour stays for glows');
-  assert.match(S.box('span', 'ic', { id: 'maverick-command', name: 'M' }), /^<span class="ic sgt" style="--c:#[0-9A-F]{6}"><i class="sglogo"/i);
+  assert.equal(S.of({ id: 'jet-lab' }).logo, url);
+  assert.ok(S.of({ id: 'jet-lab' }).color, 'the colour stays for glows');
+  assert.match(S.box('span', 'ic', { id: 'jet-lab', name: 'M' }), /^<span class="ic sgt" style="--c:#[0-9A-F]{6}"><i class="sglogo"/i);
   // only the box's own logo route is ever drawn
   assert.match(S.html({ id: 'files' }), /class="sgi sg-files"/);
   assert.match(S.html({ id: 'calendar' }), /class="sgi sg-calendar"/);
   // apps without a logo: unchanged
   assert.match(S.html({ id: 'money' }), /class="sgi /);
-  assert.match(S.html({ id: 'zz-unknown', name: 'Zed' }), /class="sgi sgl"/);
+  assert.match(S.html({ id: 'zz-unknown', name: 'Zed' }), /class="sgi sg-apps"/);
+  // a designed house sigil beats a shipped picture: one family of marks on every surface
+  const S2 = sigils({ 'wizard-mail': '/wizard-os-home/store-data/app-logo/wizard-mail?v=0123456789abcdef' });
+  assert.equal(S2.html({ id: 'wizard-mail', name: 'Mail' }), '<i class="sgi sg-mail" aria-hidden="true"></i>');
 });
 
 test('the logo tile is styled outside .sgi, so skins that recolour sigils never touch it', () => {

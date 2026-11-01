@@ -99,6 +99,32 @@ HOUSE = {
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   270, 0.10),
+    # Every app on a Wizard box wears a house sigil (Miguel, 1 Nov 2026): a designed sigil beats a shipped picture, so
+    # the launcher, dock, Desks and Orbs all show one family of marks.
+    'wizard-mail':    ('mail',     214, None),
+    'wizard-microsoft':('mail',    236, 0.09),
+    'wizard-google':  ('mail',     176, 0.09),
+    'smart-home':     ('home',     188, None),
+    'wizard-health':  ('heart',    12,  None),
+    'wizard-apple-health':('heart', 2,  0.12),
+    'wizard-whoop':   ('heart',    24,  0.06),
+    'wizard-oura':    ('heart',    290, 0.07),
+    'wizard-garmin':  ('heart',    226, 0.08),
+    'wizard-polar':   ('heart',    350, 0.08),
+    'wizard-coros':   ('heart',    40,  0.08),
+    'wizard-fitbit':  ('heart',    170, 0.08),
+    'wizard-withings':('heart',    200, 0.06),
+    'wizard-youtube-music':('music', 4, 0.12),
+    'wizard-monarch': ('dollar',   120, 0.08),
+    'wizard-simplefin':('dollar',  176, 0.06),
+    'wizard-brightdata':('globe',  238, 0.08),
+    'wizard-twitterapi':('social', 210, 0.07),
+    'backup':         ('cloud',    224, 0.10),
+    'contacts':       ('social',   336, None),
+    'carlos-crm-demo':('social',   300, 0.08),
+    'maverick-command':('console', 60,  0.10),
+    'pr-board':       ('projects', 160, 0.08),
+    'setup':          ('wrench',   260, 0.06),
 }
 # Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
 #   hat          supplied company hat (Chats, main agent)
