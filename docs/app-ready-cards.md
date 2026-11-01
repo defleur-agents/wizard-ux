@@ -75,4 +75,3 @@ The preview is read-only except its disposable sample hide and sandbox skin choi
 - Five real apps opened on each staged skin without a nested shell: Morning, Wisdom, Meditate, Profiles and Outline. No page errors in those checks.
 - Forum heavy admission returned `409 heavy admission refused`; the requested bounded local-browser fallback was used. Full unrelated suites were not rerun; their supplied baseline failures are not claimed fixed.
 - The live shell HEAD, Morning source and owner launcher are untouched. Their original bytes were backed up before staging; only the staging launcher copy carries the declaration. No merge or PR was opened.
-
