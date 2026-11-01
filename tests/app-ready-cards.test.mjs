@@ -44,6 +44,12 @@ test('poll is per-app, cheap, unchanged state does not repaint, uninstall discar
  t.c.readySet(t.cards.get('garden'),state());assert.equal(t.events.filter(x=>x==='render').length,1);
  t.cards.get('garden').at=0;t.c.readyPoll();t.uninstall();t.c.readyPoll();settle({ok:true,json:async()=>state()});await flush();assert.equal(t.cards.size,0);
 });
+test('invalidation coalesces behind an in-flight status read without painting its stale payload',async()=>{
+ const t=setup(), replies=[];t.c.fetch=()=>{t.events.push('fetch');return new Promise(r=>replies.push(r));};t.c.readyPoll();
+ t.cards.get('garden').at=0;replies.shift()({ok:true,json:async()=>state()});await flush();
+ assert.deepEqual(t.events,['fetch','fetch']);assert.equal(t.cards.get('garden').data,null);
+ replies.shift()({ok:true,json:async()=>({...state(),hidden:true})});await flush();assert.equal(t.cards.get('garden').data.hidden,true);
+});
 test('registry paths are relative, bounded, confined to same-origin app; no cached opt-in',()=>{
  const c={};vm.createContext(c);vm.runInContext(fn(apps,'readyCard'),c);
  const a={id:'garden',url:'/garden/',ready_card:{title:'Garden',status:'api/status',dismiss:'api/hide'}};assert.equal(c.readyCard(a).status,'/garden/api/status');
