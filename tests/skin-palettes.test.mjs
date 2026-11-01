@@ -21,14 +21,15 @@ test('the saved choice stays the palette id; the last palette per skin is rememb
   assert.match(s, /return ids\.includes\(v\) \? v : ids\[0\]/, 'a stale or foreign saved palette falls back to the skin\'s first');
 });
 
-test('Settings › Look shows every color as a preview card in one flat grid, without family headings or a Chats pairing', () => {
+test('Settings › Look separates family tiles from family-scoped Colours, without a Chats pairing', () => {
   const s = read('web/core/settings.js');
-  assert.doesNotMatch(s, /data-skinfamily=/);
+  assert.match(s, /data-skinfamily=/);
   assert.doesNotMatch(s, /suggestionHtml|data-chats-suggest/);
-  assert.match(s, /\$\{S\.list\.map\(k => skinCard\(k, cur\)\)\.join\(''\)\}/, 'one list of every color');
-  assert.match(s, /aria-label="Your skins">\$\{ownTiles\(S\)\}\$\{newTile\(\)\}<\/div>/);
-  assert.match(s, /<h4>Skin<\/h4>/);
-  assert.doesNotMatch(read('web/core/skins.css'), /\.skp-fam/);
+  assert.match(s, /aria-label="Skins">\$\{tiles\}\$\{ownTiles\(S\)\}\$\{newTile\(\)\}<\/div>/, 'own skins stay in the family row');
+  assert.match(s, /<h4>Colours<\/h4>/);
+  assert.match(s, /\(family\?\.palettes \|\| \[\]\)\.map/, 'only the chosen family supplies colours');
+  assert.doesNotMatch(s, /S\.list\.map\(k => skinCard/, 'never flatten all colours into a Skin grid');
+  assert.match(s, /S\.setFamily\(family\.dataset\.skinfamily\)/);
 });
 
 test('Appearance v1 adds the skin family without changing the palette field', () => {
