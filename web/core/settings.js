@@ -336,7 +336,7 @@
     if (!ctx.skinDraft) return false;
     ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-newskin]')?.focus(); return true;
   }, input(ctx, el) {
-    if (!ctx.skinDraft) return;
+    if (!ctx.skinDraft || ctx.skinDraft.saving) return;
     if (el.matches('[data-skin-name]')) ctx.skinDraft.name = el.value;
     if (el.matches('[data-skin-base]')) {
       const S = window.WosSkin, family = S.families.find(f => f.id === el.value);
@@ -361,12 +361,14 @@
     }
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
+      if (draft.saving) return true;
       if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
         if (draft.saving) return true; draft.saving = true; ctx.render();
-        skinAction(() => M.create(draft), () => { draft.saving = false; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; ctx.render(); }); return true;
+        const snapshot = { name: draft.name, base: draft.base, tweaks: { ...draft.tweaks } };
+        skinAction(() => M.create(snapshot), () => { draft.saving = false; if (ctx.skinDraft !== draft) return; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; if (ctx.skinDraft === draft) ctx.render(); }); return true;
       }
       return false;
     }
@@ -382,7 +384,7 @@
     const quick = el.closest('[data-tweakauthor]');
     if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const family = el.closest('[data-skinfamily]');
-    if (family) { skinAction(() => M?.leave?.(), () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
+    if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();
