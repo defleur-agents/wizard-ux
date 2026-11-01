@@ -56,7 +56,7 @@ class H(server.Handler):
   if path=='/sibling-pin/sw.js':
    return self.send(200,b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));",'application/javascript')
   if path=='/sibling-pin/':
-   return self.send(200,b'<html><body><h1 id="sibling-ready">Synthetic sibling</h1><script src="/wizard-os-home/core/app-client.js"></script></body></html>','text/html')
+   return self.send(200,b'<html><body><h1 id="sibling-ready">Synthetic sibling</h1></body></html>','text/html')
   if path.startswith('/wizard-os-home/'):
    rel=path[len('/wizard-os-home/'):];target=(a.web/(rel or 'index.html')).resolve()
    if not target.is_relative_to(a.web):return self.send(403,{})

@@ -20,6 +20,12 @@ def integrity():
  for root in ('ux','wisdom'):
   assert len([k for k in M['members'] if k.startswith(root+'/')])==M['counts'][root]
  for name,digest in M['toolchain']['files'].items():assert sha(name)==digest,'toolchain drift '+name
+ historical=json.loads((R/'historical/r8-evidence-index.json').read_text());assert len(historical['files'])==2291,'historical R8 inventory count'
+ assert len(historical['checks'])==9 and historical['overall_status']=='failed','retain failed-native overall status separately from browser checks'
+ for name,row in historical['files'].items():
+  target=Path(historical['root'])/name;assert target.is_file() and not target.is_symlink() and target.stat().st_size==row['bytes'] and sha(target)==row['sha256'],'historical artifact drift '+name
+ for name,row in historical['checks'].items():
+  if 'receipt' in row:assert sha(Path(historical['stage'])/row['receipt'])==row['sha256'],'historical phase receipt drift '+name
  assert sha(CHROME)==M['toolchain']['chrome_sha256']
  assert os.access(CHROME,os.X_OK)
  assert subprocess.check_output([NODE,'--version'],text=True,timeout=5).strip()==M['toolchain']['node_version']
