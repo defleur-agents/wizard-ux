@@ -198,7 +198,15 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
-    adopt(mix) { state.mix = { ...mix }; state.preset = 'none'; delete state.carry; Store.write(state); return apply(); },
+    // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
+    async adopt(mix) {
+      catalog ||= await read('tweaks/catalog.json');
+      const grouped = new Set((catalog.oneOf || []).flat()), next = {};
+      for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
+      for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
+      state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
+      return apply();
+    },
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
     chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
