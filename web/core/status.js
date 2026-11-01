@@ -17,43 +17,25 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const agent = () => { try { return window.WizConfig?.agent() || 'Wizard'; } catch (e) { return 'Wizard'; } };
   let netOpen = false;
-  /* Background failures show only a pill after GRACE_MS. The checks may open once per outage after owner
-   * navigation (including a failure starting within 8 s of it), never during voice/capture. Explicitly tapping
-   * the pill or Troubleshoot reopens the checks. Recovery turns them green and closes them. */
-  const INTENT_MS = 8000;
-  let navigationAt = 0, outageIntent = false, offAutoOpened = false, intentT = 0;
+  /* Connection trouble is only ever a small pill at the top, after a grace so a momentary blip shows nothing. The
+   * checks open only when the owner taps the pill (or Troubleshoot); they never open by themselves, and a voice or
+   * capture starting tucks them away again. (James, 1 Nov: an automatic pop-up for a short outage is too much.) */
   function captureBusy() {
     const shared = window.WizAppCapture?.getState?.();
     const voice = window.__wos?.voice || window.__wux?.voice;
     return !!(shared?.active || shared?.recording || shared?.hold || (voice && voice !== 'idle'));
   }
   function captureChanged(e) {
-    if (captureBusy() || (e?.detail?.state && e.detail.state !== 'idle')) {
-      navigationAt = 0; outageIntent = false;
-      if (offOpen) dismissOffline(false);
-    }
-  }
-  // An allowlist, not "any activity": typing, send/retry, mic controls and scrolling never arm the checks.
-  const NAV_TARGET = '[data-chopen],button[data-thread],.pal-app,.pal-it,[data-panenew],[data-plus],[data-app],[data-goto],[data-ws],[data-chback],[data-chnew],[data-chfocusopt],[data-home-act],[data-home-settings],[data-home-unsent],[role="tab"],a[href],#logo,#clock,[data-back],[data-chtroubleshoot],[data-wxtroubleshoot]';
-  const NOT_NAV = '.ch-compose,[data-part="composer"],input,textarea,[contenteditable],#orbWrap,#voice,#voicePill,#micBtn,#commandBtn,#dictateBtn,#wxBanners,#wxOffline,#wxFatal';
-  function navigationIntent(e) {
-    if (e.type === 'keydown' && (e.key !== 'Enter' || e.repeat)) return;
-    if (e.isTrusted === false || e.button > 0 || !e.target?.closest) return;
-    if (e.target.closest(NOT_NAV) || !e.target.closest(NAV_TARGET) || captureBusy()) return;
-    navigationAt = Date.now();
-    if (net === 'offline' || net === 'reconnecting') {
-      // Open after the navigation has run: the desktop Home action (and Back) fold open overlays, including this one.
-      outageIntent = true; clearTimeout(intentT); intentT = setTimeout(() => { intentT = 0; render(); }, 150);
-    }
+    if ((captureBusy() || (e?.detail?.state && e.detail.state !== 'idle')) && offOpen) dismissOffline(false);
   }
   addEventListener('click', e => {
     if (offOpen && !e.target?.closest?.('#wxOffline .wx-off-card')) dismissOffline();
-    navigationIntent(e);
   }, true);
-  addEventListener('keydown', navigationIntent, true);
   addEventListener('wizard-app-capture-state', captureChanged);
   addEventListener('wizard-voice-state', captureChanged);
-  const GRACE_MS = 3000;
+  // A slow server flaps for a few seconds at a time and heals itself: wait longer before saying anything. A device
+  // that reports itself offline is certain, so it keeps the short wait.
+  const graceMs = () => (navigator.onLine === false ? 3000 : 8000);
   let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
@@ -117,11 +99,11 @@
     }
     net = n; log('net:' + n);
     const down = n === 'offline' || n === 'reconnecting';
-    if (down && !downSince) { downSince = Date.now(); outageIntent = !!navigationAt && downSince - navigationAt <= INTENT_MS; clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, GRACE_MS + 50); }
-    if (!down) { downSince = 0; clearTimeout(graceT); graceT = 0; offDismissed = false; offAutoOpened = false; navigationAt = 0; outageIntent = false; if (offOpen) recovered(); }
+    if (down && !downSince) { downSince = Date.now(); clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, graceMs() + 50); }
+    if (!down) { downSince = 0; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
     render();
   }
-  const alerted = () => !!downSince && Date.now() - downSince >= GRACE_MS;
+  const alerted = () => !!downSince && Date.now() - downSince >= graceMs();
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
@@ -186,7 +168,6 @@
     if (!(net === 'offline' || net === 'reconnecting')) netOpen = false;
     if ((net === 'offline' || net === 'reconnecting') && alerted()) {
       if (captureBusy()) captureChanged();
-      if (outageIntent && !offAutoOpened && !offDismissed && !offOpen && !captureBusy()) { offAutoOpened = true; openOffline(); }
       // Tucked away: one small pill that says what still works. Tapping it brings the checks back.
       if (!offOpen) {
         const kind = net === 'offline' ? 'offline' : 'reconnecting';
