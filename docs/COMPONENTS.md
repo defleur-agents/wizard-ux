@@ -51,6 +51,7 @@ Reuse:
 |---|---|---|
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
+| Saved Wizards: list/switch/add/rename/forget | `WizWorkspaces` (`web/core/workspaces.js`, `.css`); native bridge first, web registry + device-local list; `WosSkinHost` Back; [contract](workspaces.md) | per-tweak switchers; cross-Wizard data merging |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
 | Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
