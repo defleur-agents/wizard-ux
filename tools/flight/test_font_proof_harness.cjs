@@ -2,7 +2,7 @@
 // Browser-free guards of the three observed setup defects. No PW import/launch.
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),{test}=require('node:test');
 const source=fs.readFileSync(__dirname+'/font-proof.cjs','utf8');
-const runner=fs.readFileSync(__dirname+'/run-font-proof.py','utf8');
+const runner=fs.readFileSync(__dirname+(fs.existsSync(__dirname+'/run-font-proof.py')?'/run-font-proof.py':'/runner.py'),'utf8');
 const pick=(start,end)=>source.slice(source.indexOf(start),source.indexOf(end,source.indexOf(start)));
 function context(width,extra={}){return vm.createContext({assert,WIDTH:width,HEIGHT:789,BASE:'https://localhost:1234/wisdom/',URL,process:{env:{QA_CHROME:'/fixture/chrome'}},manifest:{fixture_tls:{leaf_spki_sha256:'A'.repeat(43)+'='}},report:{},save(){},...extra})}
 function inputs(width,{trusted=true,blocked=false}={}){
