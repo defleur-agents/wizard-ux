@@ -456,6 +456,14 @@
           if (!h || !isDoc) return null;
           const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
         },
+        /* The dock orb's swipes while this layout is worn: { up, side, down }, each 'stock' (or left out) = the dock's
+         * own, null = nothing; up may be 'home' (go Home). Tap and hold are always the stock ones. Desks (no layout)
+         * declares nothing, so every stock swipe stays. Released on teardown. */
+        swipes(map) {
+          if (!live() || !map || typeof map !== 'object') return () => {};
+          const m = orbSwipeMap(map); orbSwipeHolders.set(a, m);
+          const off = () => { if (orbSwipeHolders.get(a) === m) orbSwipeHolders.delete(a); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
       }),
       /* The desks in order, one app each, on either shell: [{ desk, id, name }] (Home and empty desks left out; a Chats
        * desk is id 'wizard'). nav.goDesk(desk) opens one. The Apps view's grid (phone: phoneDesks, desktop: deskApps). */
@@ -472,6 +480,16 @@
     };
   }
   const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
+  const orbSwipeHolders = new Map();      // layout → its dock-orb swipe map (api.phone.swipes); none = the stock swipes
+  const ORB_SWIPE_ACTS = { up: ['home'], side: [], down: [] };
+  function orbSwipeMap(map) {
+    const o = {};
+    for (const k of Object.keys(ORB_SWIPE_ACTS)) {
+      if (!(k in map) || map[k] === 'stock') continue;
+      o[k] = ORB_SWIPE_ACTS[k].includes(map[k]) ? map[k] : null;
+    }
+    return Object.freeze(o);
+  }
   const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
   let panelOn = false, panelHold = 0;
   function panelSync() {
@@ -884,6 +902,8 @@
     keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
     get holdKeys() { return [...keyHandlers].some(h => h.hold && !h.a.dead); },
     keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 20)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at }); } return out; },
+    /* app.js: the dock orb's swipes a worn layout asked for ({ up, side, down }: null = nothing, 'home'), or null = stock. */
+    orbSwipes() { for (const [l, m] of orbSwipeHolders) if (!l.dead) return m; return null; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
     orbTap() { for (const fn of [...taps]) { if (fn() === true) return true; } return false; },
     level(v) { if (levels.size) for (const fn of [...levels]) fn(v); },

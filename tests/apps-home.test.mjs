@@ -3,9 +3,9 @@
 //     worn view does nothing, the lit option follows html[data-layout];
 //   - Apps on the phone: Home is an app grid with ONE icon per desk (each desk is one app), in desk order, Chats first
 //     with its Ready count, a + tile last; a tap opens that desk (Chats: the stock list); the stock Home widgets step
-//     aside; no stock desk switcher on any screen; Back beside the orb goes Home;
+//     aside; no stock desk switcher on any screen; no Back button: a swipe up on the orb goes Home;
 //   - the + sheet: the picker's apps minus Chats and every app already open; a pick opens it on a desk of its own;
-//   - Apps on the desktop: a launchpad, one icon per desk, Chats first, +, Back, the orb at the bottom centre;
+//   - Apps on the desktop: a launchpad, one icon per desk, Chats first, +, the orb at the bottom centre (drag up = Home);
 //   - Desks = the stock shell: the tweak off leaves no grid, no flag, no layout.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -58,7 +58,8 @@ function appsWorld({ shell = 'phone' } = {}) {
     desk: { home: () => { state.homes++; } },
     voice: { state: () => ({ state: 'idle' }), talk: () => state.voice.push('talk'), command: () => { state.voice.push('command'); return 'voice'; } },
     orb: { ready: () => Promise.resolve(false), create: () => null, onLevel() {} },
-    phone: { home: () => homeSec, desks: () => state.desks.map(d => ({ ...d })), mark, orb: () => orbWrap },
+    phone: { home: () => homeSec, desks: () => state.desks.map(d => ({ ...d })), mark, orb: () => orbWrap,
+      swipes: m => { state.swipes = m; return () => { state.swipes = 'released'; }; } },
   };
   const find = cls => { const all = []; const walk = n => { for (const c of n.children) { if (String(c.className).split(' ').includes(cls)) all.push(c); walk(c); } }; walk(html); return all; };
   return { html, device, homeSec, dock, orbWrap, api, state, find, fire: t => { for (const fn of state.on[t] || []) fn(); } };
@@ -89,7 +90,7 @@ test('Apps on the phone: one icon per desk in desk order, Chats first with its R
   assert.equal(P.html.dataset.viewChrome, undefined, 'the dock switcher is back (chrome.css only matches while worn)'); assert.equal(P.find('vc-back').length, 0, 'no Back left');
 });
 
-test('Apps on the desktop: a launchpad, one icon per desk (Chats first, + last), Back beside the orb, the orb at the bottom on every screen', async () => {
+test('Apps on the desktop: a launchpad, one icon per desk (Chats first, + last), no Back, the orb at the bottom on every screen (drag up = Home)', async () => {
   const P = appsWorld({ shell: 'desktop' });
   P.state.desks = [{ desk: 0, id: 'mail', name: 'Mail' }, { desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'music', name: 'Music' }];
   const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
@@ -100,20 +101,27 @@ test('Apps on the desktop: a launchpad, one icon per desk (Chats first, + last),
   assert.equal(grid.children[0].attrs['data-desk'], '1', 'Chats is the Chats desk');
   assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 7 ready'); assert.equal(grid.children[1].attrs['aria-label'], 'Mail, 2 new');
   assert.equal(P.html.dataset.appsDesk, 'home'); assert.equal(P.html.dataset.viewChrome, 'desktop');
-  const back = P.find('vc-back')[0]; assert.ok(back.hidden, 'no Back on Home');
+  assert.equal(P.find('vc-back').length, 0, 'no Back button');
   assert.ok(P.find('apd-orbbtn')[0], 'the orb is there on Home');
+  assert.equal(P.state.swipes, undefined, 'the desktop orb is the layout\'s own: no dock swipe map');
   grid.children[2].dispatchEvent({ type: 'click' }); assert.deepEqual(P.state.gone, [2], 'an icon opens its desk');
-  // away from Home: the grid steps aside, Back + the orb stay; Back = Home
+  // away from Home: the grid steps aside, the orb stays (still no Back)
   P.state.home = false; P.state.desk = 2; P.fire('route');
-  assert.equal(P.html.dataset.appsDesk, 'desk'); assert.equal(P.find('apd-home')[0].hidden, true); assert.equal(back.hidden, false);
+  assert.equal(P.html.dataset.appsDesk, 'desk'); assert.equal(P.find('apd-home')[0].hidden, true); assert.equal(P.find('vc-back').length, 0);
   assert.ok(P.find('apd-orbbtn')[0].parentNode, 'the orb floats on every screen');
-  back.dispatchEvent({ type: 'click', preventDefault() {} }); assert.equal(P.state.homes, 1, 'Back = Home (the grid)');
-  // the orb: a click talks; a sideways drag steps desks (drag left = the next desk)
-  const ob = P.find('apd-orbbtn')[0];
-  ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, pointerId: 1 }); ob.dispatchEvent({ type: 'pointerup' });
+  // the orb: a click talks; a sideways drag does nothing (no desk steps); a drag up = Home (the grid)
+  const ob = P.find('apd-orbbtn')[0], gone = P.state.gone.length;
+  ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, clientY: 700, pointerId: 1 }); ob.dispatchEvent({ type: 'pointerup' });
   assert.deepEqual(P.state.voice, ['talk']);
-  ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, pointerId: 1 }); ob.dispatchEvent({ type: 'pointermove', clientX: 530 }); ob.dispatchEvent({ type: 'pointerup' });
-  assert.deepEqual(P.state.gone.slice(-1), [0], 'from Music (the last desk) the next desk wraps to Mail'); assert.deepEqual(P.state.voice, ['talk'], 'a drag never talks');
+  for (const [dx, dy] of [[-70, 0], [70, 0], [0, 60]]) {
+    ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, clientY: 700, pointerId: 1 }); ob.dispatchEvent({ type: 'pointermove', clientX: 600 + dx, clientY: 700 + dy }); ob.dispatchEvent({ type: 'pointerup' });
+  }
+  assert.equal(P.state.gone.length, gone, 'sideways / down: no desk step'); assert.equal(P.state.homes, 0, 'and not Home'); assert.deepEqual(P.state.voice, ['talk'], 'a drag never talks');
+  ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, clientY: 700, pointerId: 1 }); ob.dispatchEvent({ type: 'pointermove', clientX: 610, clientY: 630 }); ob.dispatchEvent({ type: 'pointerup' });
+  assert.equal(P.state.homes, 1, 'drag up = Home (the grid)'); assert.deepEqual(P.state.voice, ['talk']);
+  P.state.home = true; P.fire('route');
+  ob.dispatchEvent({ type: 'pointerdown', button: 0, clientX: 600, clientY: 700, pointerId: 1 }); ob.dispatchEvent({ type: 'pointermove', clientX: 600, clientY: 620 }); ob.dispatchEvent({ type: 'pointerup' });
+  assert.equal(P.state.homes, 1, 'on Home a drag up does nothing more (⌥` would toggle away; this never does)');
   // the + sheet on the desktop: every app not open yet, a pick opens it on a desk of its own
   P.state.home = true; P.fire('route');
   grid.children.at(-1).dispatchEvent({ type: 'click' });
@@ -144,28 +152,26 @@ test('the + sheet lists the stock picker\'s apps minus Chats and every app alrea
   off();
 });
 
-test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb stays where it is; Back beside it goes Home', async () => {
+test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb stays where it is; no Back: the orb swipes up = Home', async () => {
   const P = appsWorld();
   const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
   const off = setup(P.api);
-  const back = P.find('vc-back')[0];
-  assert.equal(back.parentNode, P.dock, 'Back lives in the dock row'); assert.equal(P.dock.children.indexOf(back), P.dock.children.indexOf(P.orbWrap) - 1, 'left of the orb');
-  assert.equal(back.hidden, true, 'no Back on Home');
-  P.state.home = false; P.fire('route'); assert.equal(back.hidden, false, 'Back on an opened app / thread / Chats');
-  back.dispatchEvent({ type: 'click', preventDefault() {} }); assert.deepEqual(P.state.gone, [0], 'Back = the Home desk (the grid)');
-  off();
+  assert.equal(P.find('vc-back').length, 0, 'no Back button on Home');
+  P.state.home = false; P.fire('route'); assert.equal(P.find('vc-back').length, 0, 'nor on an opened app / thread / Chats');
+  assert.deepEqual({ ...P.state.swipes }, { up: 'home', side: null, down: null }, 'the dock orb: up = Home, sideways and down nothing');
+  assert.equal(P.dock.children.length, 1, 'only the orb in the dock row');
+  off(); assert.equal(P.state.swipes, 'released', 'Desks: the stock swipes are back');
   const css = read('web/layouts/apps/chrome.css').replace(/\/\*[\s\S]*?\*\//g, '');
   // the switcher goes on every screen (never gated on Home), only while a view wears the chrome
   assert.match(css, /html\[data-view-chrome="phone"\] #dock > :is\(#dotsL, #dotsR, \.scrub\) \{ display: none !important; \}/);
   assert.ok(!/data-orb-scene|home-desk/.test(css), 'not just on Home');
-  assert.match(css, /html\[data-view-chrome\] \.vc-back \{[^}]*width: 48px; height: 48px;/, 'a 48 px target');
-  assert.match(css, /#dock > \.vc-back \{[^}]*left: max\(var\(--safe-l, 0px\), 14px\)/, 'inside the safe area');
+  assert.ok(!/vc-back/.test(css + read('web/layouts/apps/layout.css')), 'no Back button styles left');
   for (const sel of [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(x => !/^(from|to)$/.test(x))) for (const part of sel.split(/,(?![^(]*\))/)) assert.ok(part.trim().startsWith('html[data-view-chrome'), `chrome.css reaches Desks: ${part.trim()}`);
-  // the Orb view wears the same chrome: Back in the dock, + beside the Chats pill
+  // the Orb view wears the same chrome (+ beside the Chats pill, the same swipes), and no Back either
   const ph = read('web/layouts/orb/phone.js');
   assert.match(ph, /import \{ viewChrome \} from '\.\.\/apps\/chrome\.js';/);
   assert.match(ph, /const plus = chrome\.plus\('obp-plus', 'Open an app'\);\n  layer\.append\(field, orbBox, chats, plus\);/);
-  assert.match(ph, /host\.parentNode\.insertBefore\(chrome\.back, host\)/); assert.match(ph, /chrome\.paintBack\(h\);/);
+  assert.ok(!/chrome\.back|paintBack|vc-back/.test(ph + read('web/layouts/apps/chrome.js') + read('web/layouts/apps/desktop.js') + read('web/layouts/apps/layout.js')), 'no Back anywhere');
   assert.ok(!/fly|FLY|animate\(/.test(ph), 'the orb never flies between the centre and the dock');
 });
 

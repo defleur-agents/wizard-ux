@@ -1,10 +1,9 @@
-/* The chrome the Orb and Apps views share (Miguel, 1 Nov 2026): a round Back button that goes Home, and the + sheet that
- * opens an app that is not open yet. Used by the Apps view on both shells (layouts/apps) and by the Orb view on the
- * phone (layouts/orb/phone.js); one source, so both views offer exactly the same list and the same Back.
+/* The chrome the Orb and Apps views share (Miguel, 1 Nov 2026): the + sheet that opens an app that is not open yet,
+ * and the orb swipes both views wear. Used by the Apps view on both shells (layouts/apps) and by the Orb view on the
+ * phone (layouts/orb/phone.js); one source, so both views offer exactly the same list and the same gestures.
  *
- *   - Back: a round button, at least 44 px, beside the orb (the caller places it: phone = in the dock row beside the
- *     dock orb, desktop = in the Apps view's own bottom row). It shows only away from Home; a tap = Home (the ring in
- *     Orb, the grid in Apps).
+ *   - No Back button (Miguel, 1 Nov 2026, round 6): Home is a swipe up on the orb, like the iPhone's home swipe
+ *     (ORB_SWIPES: up = Home; sideways and down do nothing in these views). The desktop also keeps ⌥`.
  *   - The + sheet: every installed app that is NOT already open, as the stock app picker lists them (api.apps.list()
  *     = WosAppKinds.kinds().apps: the picker's Apps group, so no agents, agent apps, connectors or in-development
  *     copies) minus Chats (always there already) and minus every app open on a desk. A tap opens it on a desk of its
@@ -23,7 +22,12 @@ export function notOpen(apps, openIds) {
   return (apps || []).filter(a => a && a.id && a.id !== CHATS && !a.agent && !a.connector && !a.dev && !open.has(a.id));
 }
 
-export function viewChrome(api, { home, openIds }) {
+/** The phone dock orb's swipes in the Orb and Apps views (api.phone.swipes): up = Home; sideways (desk steps) and down
+ * (distraction-free) do nothing; no Desks panel / app picker from the orb (the + covers new apps). Tap and hold stay
+ * the stock ones. Desks declares nothing, so the dock keeps every stock swipe there. */
+export const ORB_SWIPES = Object.freeze({ up: 'home', side: null, down: null });
+
+export function viewChrome(api, { openIds }) {
   const doc = document, root = doc.documentElement, shell = api.env.shell === 'desktop' ? 'desktop' : 'phone';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (d, cls) => {
@@ -37,12 +41,8 @@ export function viewChrome(api, { home, openIds }) {
   const unmountCss = api.mount(css);
   root.dataset.viewChrome = shell;
 
-  /* ---------- Back: Home, from anywhere that is not Home ---------- */
-  const back = el('button', 'vc-back', { type: 'button', 'aria-label': 'Back to Home', title: shell === 'desktop' ? 'Back to Home (⌥`)' : 'Back to Home' });
-  back.append(icon('M15 5l-7 7 7 7', 'vc-ico'));
-  back.hidden = true;
-  api.listen(back, 'click', e => { e.preventDefault?.(); close(); home(); });
-  const paintBack = isHome => { back.hidden = !!isHome; };
+  // the dock orb's swipes (phone; the desktop Apps orb is the layout's own button): up = Home, the rest inert
+  const offSwipes = shell === 'phone' && api.phone?.swipes ? api.phone.swipes(ORB_SWIPES) : null;
 
   /* ---------- the + sheet ---------- */
   let sheet = null, offBack = null, offMount = null;
@@ -94,8 +94,8 @@ export function viewChrome(api, { home, openIds }) {
   }
 
   return {
-    back, paintBack, plus, open, close, list,
+    plus, open, close, list,
     get isOpen() { return !!sheet; },
-    dispose() { close(); back.remove(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
+    dispose() { close(); offSwipes?.(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
   };
 }

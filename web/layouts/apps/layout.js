@@ -5,9 +5,10 @@
  *   app), in desk order, each with its real logo (else the dock's own mark for it), its name and its live count. A tap
  *   opens that desk. Chats is always the first icon, with the Ready count, and opens the stock Chats list. The grid
  *   ends with a + tile: the sheet of every app not open yet (chrome.js); a pick opens it on a desk of its own. Home's
- *   own top stays (which Wizard, the switch, the AI fuel gauge, the gear). The stock desk switcher is gone on EVERY
- *   screen (chrome.css): only the dock orb is left at the bottom centre, exactly where it sits (tap talks, hold
- *   commands, sideways swipes between desks), and away from Home a round Back beside it goes Home (this grid).
+ *   own top stays (which Wizard, the AI fuel gauge, the gear). The stock desk switcher is gone on EVERY screen
+ *   (chrome.css): only the dock orb is left at the bottom centre, exactly where it sits: tap talks, hold commands, a
+ *   swipe up goes Home (this grid), like the iPhone's home swipe; sideways and down do nothing (chrome.js ORB_SWIPES).
+ *   No Back button.
  *
  *   Desktop: the same idea as a launchpad (desktop.js).
  *
@@ -27,11 +28,10 @@ export default function setup(api) {
   const grid = el('nav', 'ap-grid', { 'aria-label': 'Apps' });
   root.dataset.appsHome = 'on';
   const desks = () => (api.desks?.list || api.phone.desks)();
-  // Back (in the dock row beside the orb, away from Home) and the + sheet (every app not open yet)
-  const chrome = viewChrome(api, { home: () => api.nav.goDesk(0), openIds: () => desks().map(d => d.id) });
+  // the + sheet (every app not open yet) and the orb swipes (up = Home)
+  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id) });
   // the grid's last tile: a + in a plain tile, labelled like the others
   const plus = chrome.plus('ap-icon ap-plus', 'Open an app', (b, ico) => { const t = el('span', 'ap-tile', { 'aria-hidden': 'true' }); t.append(ico); b.append(t, el('span', 'ap-label', { text: 'Open app' })); });
-  const placeBack = () => { const o = api.phone.orb?.(); if (o?.parentNode && chrome.back.parentNode !== o.parentNode) o.parentNode.insertBefore(chrome.back, o); };
 
   let badgeMap = api.apps.badges(m => { badgeMap = m; paintCounts(); });
   let names = new Map(), sig = '', icons = [];
@@ -81,7 +81,6 @@ export default function setup(api) {
       grid.replaceChildren(...icons.map(x => x.b), plus);
     }
     paintCounts();
-    placeBack(); chrome.paintBack(!!api.route().home);
   }
   api.on('route', paint);
   api.on('render', paint);
