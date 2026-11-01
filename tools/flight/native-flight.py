@@ -390,6 +390,13 @@ def tls_prepare():
     record('test CA mounted only in disposable AVD zygotes', bool(mounted), mounted)
     return cert, server_key
 
+def cache_inventory(phase):
+    # Root read-only observation ONLY in this fresh synthetic AVD. No cache
+    # mutation, JS/CDP inspection, fake font-ready predicate or extra settle wait.
+    text=shell('find /data/user/0/'+PKG+'/app_webview -type f -exec stat -c "%n %s %Y" {} \\;',ok=False,timeout=20)
+    (OUT/('webview-cache-'+phase+'.txt')).write_text(text)
+    return {'inventory':'webview-cache-'+phase+'.txt','fontface_ready':'not-observable-release-WebView','native_JS_injected':False}
+
 started_at=time.time()
 result = {'name':'wizard pin opens wisdom offline', 'source_revision':MANIFEST['shell_candidate'],
           'apk':{'version':'0.10.23','versionCode':87,'sha256':EXPECTED},'checks':checks,
@@ -541,6 +548,8 @@ try:
     # fixture request closure is a server-side readiness diagnostic, never a fake API.
     until(lambda: any('/wisdom/api/wisdom' == x['path'] for x in receipt()['reads']) and any('/wisdom/wisdom-art/c/flight-chapter.jpg' == x['path'] for x in receipt()['reads']),60)
     capture('03-online-pinned')
+    result['cache_observations']={'online':cache_inventory('online')}
+    (OUT/'served-resources-online.json').write_text(json.dumps(receipt(),indent=2))
     result['onlineLabels']=[label(n) for n in nodes() if label(n)]
     record('pinned online Wisdom rendered',any(re.search('Browse|Suggested|Currently reading',s) for s in result['onlineLabels']))
     record('confirmed exact pin identity before process deaths',pin_before['id']==pin_contract.identity(ORIGIN),pin_before)
@@ -674,6 +683,12 @@ except Exception as e:
             observed=pin_observation()
             for field,text in observed.items():(OUT/('FAIL-pin-'+field+'.txt')).write_text(text)
         except Exception as diagnostic_error:(OUT/'FAIL-pin-diagnostics.error').write_text(repr(diagnostic_error))
+        try:result.setdefault('cache_observations',{})['failure']=cache_inventory('failure')
+        except Exception as diagnostic_error:(OUT/'FAIL-cache-diagnostics.error').write_text(repr(diagnostic_error))
+        try:
+            if fixture and fixture.poll() is None and 'receipt' in globals():
+                (OUT/'served-resources-failure.json').write_text(json.dumps(receipt(),indent=2))
+        except Exception as diagnostic_error:(OUT/'FAIL-serving-diagnostics.error').write_text(repr(diagnostic_error))
         capture('FAIL')
 finally:
     result['emulator_pre_cleanup_returncode']=emulator.poll() if emulator else None

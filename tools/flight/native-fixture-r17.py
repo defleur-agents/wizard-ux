@@ -28,7 +28,13 @@ class H(server.Handler):
  reads=[]
  lost=False
  lost_ack=None
+ resources=[]
  def send(self,code,data,ctype='application/json',headers=None):
+  # Passive first-party serving journal. This observes real font/static bytes;
+  # it does not claim a non-debuggable WebView's FontFaceSet is ready.
+  if self.command=='GET' and isinstance(data,(bytes,bytearray)):
+   H.resources.append({'path':urlsplit(self.path).path,'status':code,'content_type':ctype,
+     'bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()})
   # Deliberately lose one ACK *after* the real SQLite transaction commits.
   if os.environ.get('QA_LOST_HIGHLIGHT')=='1' and not H.lost and self.command=='POST' and urlsplit(self.path).path=='/wisdom/api/wisdom/highlight' and code==200:
    H.lost=True
@@ -43,7 +49,7 @@ class H(server.Handler):
    with server.db() as c:
     state=wisdom.state(c);tables={r[0] for r in c.execute('select name from sqlite_master')};count=c.execute('select count(*) from wisdom_offline_receipts').fetchone()[0] if 'wisdom_offline_receipts' in tables else 0
     rows=[dict(r) for r in c.execute('SELECT id,path,digest,result FROM wisdom_offline_receipts')] if 'wisdom_offline_receipts' in tables else []
-   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'writes':self.calls,'reads':self.reads,'offline_receipt_rows':rows,'lost_ack':H.lost_ack})
+   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'writes':self.calls,'reads':self.reads,'offline_receipt_rows':rows,'lost_ack':H.lost_ack,'served_resources':H.resources,'native_fontface_ready':'not-observable-no-JS-injection'})
   if path.startswith('/wisdom/wisdom-art/f/'):
    font=(a.wisdom_source/'static'/path.removeprefix('/wisdom/')).resolve()
    if font.is_relative_to(a.wisdom_source/'static') and font.is_file():return self.send(200,font.read_bytes(),mimetypes.guess_type(font.name)[0] or 'font/woff2')
