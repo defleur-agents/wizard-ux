@@ -25,13 +25,33 @@ exports.prepareProfile=profile=>{
 // No raw endpoint is contacted to discover its own owner (no circular trust).
 exports.ownedBrowserPID=async(context,out)=>{
  let session;const diagnostic={phase:'trusted-playwright-browser-channel',rawSocketOpened:false};
- try{const browser=context.browser();assert(browser,'owned Playwright browser available');session=await browser.newBrowserCDPSession();const info=await session.send('SystemInfo.getProcessInfo'),rows=info.processInfo.filter(p=>p.type==='browser');assert.equal(rows.length,1,'one trusted browser PID');const pid=Number(rows[0].id);assert(Number.isSafeInteger(pid)&&pid>0,'trusted browser PID');diagnostic.pid=pid;return pid}
+ try{const browser=context.browser();assert(browser,'owned Playwright browser available');session=await browser.newBrowserCDPSession();const info=await session.send('SystemInfo.getProcessInfo'),rows=info.processInfo.filter(p=>p.type==='browser');assert.equal(rows.length,1,'one trusted browser PID');const pid=Number(rows[0].id);assert(Number.isSafeInteger(pid)&&pid>0,'trusted browser PID');diagnostic.pid=pid;try{const command=await session.send('Browser.getBrowserCommandLine');diagnostic.commandLine=exports.argumentEvidence(command.arguments)}catch(e){diagnostic.commandLineError={code:e.code||null,name:e.name}}return pid}
  catch(e){diagnostic.error={message:e.message,code:e.code};throw e}
  finally{fs.writeFileSync(out,JSON.stringify(diagnostic,null,2));if(session)await session.detach()}
+};
+// Evidence never authorizes ownership. Only exact synthetic profile/debug options
+// retain values; all other arguments (including URLs and positional operands) redact.
+exports.argumentEvidence=args=>{
+ assert(Array.isArray(args)&&args.length<=1024,'bounded argument count');
+ let operand=false;const safe=args.map(a=>{assert(typeof a==='string'&&a.length<=65536,'bounded argument');if(operand){operand=false;return a}if(a==='--user-data-dir'||a==='--remote-debugging-port'){operand=true;return a}if(/^--(?:user-data-dir|remote-debugging-port)=/.test(a))return a;return /^--[a-zA-Z0-9-]+(?:=|$)/.test(a)?a.split('=')[0]+'=REDACTED':'REDACTED'});
+ return {argc:args.length,arguments:safe};
+};
+exports.captureOwnedProc=(pid,io=fs)=>{
+ assert(Number.isSafeInteger(pid)&&pid>0,'explicit owned PID');const root='/proc/'+pid,result={pid,errors:[]};
+ const read=(key,fn)=>{try{result[key]=fn()}catch(e){result.errors.push({field:key,code:e.code||null,name:e.name})}};
+ read('uid',()=>io.statSync(root).uid);
+ // Refuse foreign UID before reading any foreign process content.
+ if(result.uid!==process.getuid())return result;
+ read('comm',()=>io.readFileSync(root+'/comm','utf8').slice(0,256).trim());
+ read('exe',()=>io.readlinkSync(root+'/exe'));
+ read('stat',()=>{const s=io.readFileSync(root+'/stat','utf8');assert(s.length<=4096);const a=s.slice(s.lastIndexOf(') ')+2).split(' ');return {state:a[0],ppid:a[1],start:a[19]}});
+ read('cmdline',()=>{const b=io.readFileSync(root+'/cmdline');assert(b.length<=65536,'bounded cmdline bytes');const text=b.toString('utf8'),args=text.split('\0');if(args.at(-1)==='')args.pop();return {bytes:b.length,sha256:createHash('sha256').update(b).digest('hex'),endsNUL:b.length>0&&b.at(-1)===0,...exports.argumentEvidence(args)}});
+ return result;
 };
 // Injectable filesystem is for browser-free fixtures only; connect always uses fs.
 exports.inspectOwnership=({profile,prepared,knownOwnedBrowserPID,lines,diagnostic},io=fs)=>{
  const pid=knownOwnedBrowserPID;assert(Number.isSafeInteger(pid)&&pid>0,'trusted owned browser PID required');
+ diagnostic.proc=exports.captureOwnedProc(pid,io);
  const root='/proc/'+pid;Object.assign(diagnostic,{pid,pidPath:root,logicalProfile:profile,canonicalProfile:io.realpathSync(profile),port:Number(lines[0]),endpointPath:lines[1],expectedUID:process.getuid(),matchingFDs:[],inspectionErrors:[]});
  assert.equal(diagnostic.canonicalProfile,prepared.canonical,'profile canonical identity unchanged');
  const file=io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true});assert(!file.isSymbolicLink(),'port file not symlink');assert.equal(Number(file.uid),process.getuid(),'port file UID');assert.notEqual(fingerprint(file),prepared.previous,'fresh DevToolsActivePort required');diagnostic.portFileFingerprint=fingerprint(file);
@@ -48,6 +68,7 @@ exports.inspectOwnership=({profile,prepared,knownOwnedBrowserPID,lines,diagnosti
 exports.connect=async({profile,prepared,knownOwnedBrowserPID,origin,workers,contextId,generationId,out,timeoutMs=8000})=>{
  const portFile=path.join(profile,'DevToolsActivePort'),diagnostic={phase:'preconnect-ownership',rawSocketOpened:false,logicalProfile:profile,knownOwnedBrowserPID};let lines,ownership;
  try{
+  diagnostic.proc=exports.captureOwnedProc(knownOwnedBrowserPID);
   for(let i=0;i<100;i++){try{lines=fs.readFileSync(portFile,'utf8').trim().split('\n');break}catch(e){if(e.code!=='ENOENT')throw e;await sleep(20)}}
   assert(lines&&lines.length===2&&/^\d+$/.test(lines[0])&&Number(lines[0])>0&&Number(lines[0])<=65535&&/^\/devtools\/browser\/[a-zA-Z0-9-]+$/.test(lines[1]),'owned DevToolsActivePort');
   ownership=exports.inspectOwnership({profile,prepared,knownOwnedBrowserPID,lines,diagnostic});diagnostic.status='verified';

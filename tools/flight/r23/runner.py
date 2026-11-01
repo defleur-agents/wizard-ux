@@ -3,12 +3,13 @@
 import argparse,base64,hashlib,json,os,selectors,shutil,signal,subprocess,sys,time,traceback
 from pathlib import Path
 R=Path(__file__).resolve().parent
-P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--verify-only',action='store_true');P.add_argument('--remaining-only',action='store_true');P.add_argument('--isolation-only',action='store_true');A=P.parse_args();assert not(A.remaining_only and A.isolation_only)
+P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--verify-only',action='store_true');P.add_argument('--remaining-only',action='store_true');P.add_argument('--isolation-only',action='store_true');P.add_argument('--diagnostic-only',action='store_true');A=P.parse_args();assert not(A.remaining_only and A.isolation_only)
 sha=lambda p:hashlib.file_digest(open(p,'rb'),'sha256').hexdigest()
 assert sha(R/'source-manifest.json')==A.manifest_sha,'manifest drift'
 M=json.loads((R/'source-manifest.json').read_text());NODE=M['tools']['node'];PW=M['tools']['playwright'];CHROME=M['tools']['chrome']
 CASES=[('functional-mobile','functional',390,145),('functional-desktop','functional',1440,145),('presentation-mobile','presentation',390,65),('presentation-desktop','presentation',1440,65),('strict-quota','strict-quota',390,45),('strict-unsupported','strict-unsupported',390,45),('boot-read-fail','boot-read-fail',390,55),('boot-strict-unsupported','boot-strict-unsupported',390,55),('boot-open-unsupported','boot-open-unsupported',390,45),('isolation','isolation',390,55)]
 assert len(CASES)==10 and len({c[0] for c in CASES})==10
+assert not A.diagnostic_only or A.isolation_only,'diagnostic mode requires historical isolation binding'
 SELECTED=[c for c in CASES if (c[0]=='isolation' if A.isolation_only else not A.remaining_only or c[0] in ('presentation-mobile','presentation-desktop','isolation'))]
 if A.isolation_only:
  binding=M['r29SourceEquivalence'];assert binding['productBytesUnchanged'] and binding['priorActualPasses']==9
@@ -65,7 +66,8 @@ TMP=Path('/srv/work/wr24-'+A.manifest_sha[:12]);assert not TMP.exists(),'fresh s
 ENV.update(TMPDIR=str(TMP),QA_R23_OWNED_ROOT=str(OUT))
 report={'status':'incomplete','manifest_sha256':A.manifest_sha,'sources':M['sources'],'preflight':preflight,'cases':{},'historical':M['historical'],'releaseAllowed':False,'nativeAcceptance':False,'liveParityAcceptance':False,'visualReview':'PARENT_MUST_INSPECT_REAL_PNGS','freshBrowserAcceptance':False}
 report.update(scope='isolation-only' if A.isolation_only else 'remaining-three-only' if A.remaining_only else 'all-ten',currentCaseAcceptance=False,freshRemainingBrowserAcceptance=False,historicalBrowserPasses=M.get('r29SourceEquivalence' if A.isolation_only else 'r28SourceEquivalence',{}).get('priorPassReports',{}),historicalPassesAreFresh=False)
-fixture=child=None;overall=time.monotonic()+(210 if A.isolation_only else 830)
+fixture=child=None;overall=time.monotonic()+(65 if A.diagnostic_only else 210 if A.isolation_only else 830)
+class DiagnosticDone(Exception):pass
 
 def save():(OUT/'acceptance.json').write_text(json.dumps(report,indent=2)+'\n')
 def stop(p):
@@ -149,6 +151,7 @@ try:
  save()
  if A.isolation_only:
   case('raw-cdp-probe','raw-cdp-probe',390,60,probe='cdp')
+  if A.diagnostic_only:raise DiagnosticDone()
   assert report['rawCDPProbe']['status']=='pass' and report['rawCDPProbe']['cleanup']['verified'],'raw CDP probe failed; no isolation admission'
  case('observer-probe','observer-probe',390,70,probe=True)
  assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
@@ -163,6 +166,7 @@ try:
  report['freshBrowserAcceptance']=report['currentCaseAcceptance'] and not (A.remaining_only or A.isolation_only)
  report['freshRemainingBrowserAcceptance']=report['currentCaseAcceptance'] and (A.remaining_only or A.isolation_only)
  report['status']=('passed-fresh-isolation-plus-nine-historical' if A.isolation_only else 'passed-fresh-remaining-three-pending-parent-visual-review' if A.remaining_only else 'passed-fresh-browser-pending-parent-visual-review') if report['currentCaseAcceptance'] else 'failed-browser-cases'
+except DiagnosticDone:report.update(status='diagnostic-only-'+report['rawCDPProbe']['status'],scope='raw-canary-diagnostic-only',diagnosticOnly=True)
 except BaseException as e:report.update(status='failed',errorType=type(e).__name__,error=str(e));(OUT/'runner-failure.txt').write_text(traceback.format_exc())
 finally:
  report['cleanup']=cleanup();report['artifacts']={str(p.relative_to(R)):{'sha256':sha(p),'bytes':p.stat().st_size} for p in OUT.rglob('*') if p.is_file() and p.name!='acceptance.json' and 'profile' not in p.relative_to(OUT).parts};save()
