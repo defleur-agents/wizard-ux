@@ -17,6 +17,9 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
+import importlib.util
+_spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
+_transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
 
 def installed_application_uid(installed, package):
     """API35 exact-package appId, cross-checked against actual user-0 UID."""
@@ -46,13 +49,17 @@ APK = ROOT / 'current-release.apk'
 EXPECTED = '04a188ae173b3a2cd22139256be9fe3158355079949f8b44c4be0eca2f90b767'
 PKG = 'ai.wizards.os'
 PORT = 28543
-SERIAL = 'emulator-5568'
+SERIAL = '127.0.0.1:6169'
 ORIGIN = f'https://localhost:{PORT}'
 ENV = {**os.environ, 'ANDROID_HOME': str(SDK), 'ANDROID_SDK_ROOT': str(SDK),
-       'ANDROID_AVD_HOME': str(ROOT / 'avds'), 'TMPDIR': str(ROOT / 'tmp'), 'ANDROID_ADB_SERVER_PORT': '5147'}
+       'ANDROID_AVD_HOME': str(ROOT / 'avds'), 'TMPDIR': str(ROOT / 'tmp'), 'ANDROID_ADB_SERVER_PORT': '5147',
+       'ADB_SERVER_SOCKET':'tcp:127.0.0.1:5147', 'ADB_LOCAL_TRANSPORT_MAX_PORT':'5553',
+       'ADB_MDNS_AUTO_CONNECT':''}
 checks = []
 fixture = emulator = None
 adb = SDK / 'platform-tools/adb'
+transport = _transport.Transport(adb,ENV,OUT,SERIAL)
+wrapper = ROOT/'isolated-adb.py'
 
 def run(argv, *, ok=True, timeout=120, input=None):
     r = sp.run([str(x) for x in argv], env=ENV, input=input, capture_output=True, timeout=timeout)
@@ -62,9 +69,16 @@ def run(argv, *, ok=True, timeout=120, input=None):
 
 def a(*args, **kw):
     # Fail fast: a lost transport is evidence, not three 180-second waits.
-    return run([adb, '-P', '5147', '-s', SERIAL, *args], **kw)
+    r=transport.command(*args,timeout=kw.pop('timeout',120))
+    if kw.get('ok',True) and r.returncode:raise RuntimeError(f'ADB command failed, NOT replayed: {args!r} rc={r.returncode} stderr={r.stderr.decode(errors="replace")[-3000:]}')
+    if r.returncode==0 and args and args[0]=='reverse':
+        transport.reverse=None if '--remove' in args else tuple(args[1:])
+    return r.stdout.decode(errors='replace')
 
 def shell(command, **kw):
+    if command.startswith(('getprop ','dumpsys ','pidof ','cat ','ss ','iptables -S ','logcat -d ')) and kw.get('ok',True):
+        return transport.read('shell',command,timeout=kw.get('timeout',120)).decode(errors='replace')
+    if 'am force-stop ' in command:transport.identity=None
     return a('shell', command, **kw)
 
 def top():
@@ -104,7 +118,8 @@ def readiness(name, command, predicate, seconds=60):
 ui_serial = 0
 
 def raw_screen(name):
-    r = sp.run([str(adb), '-P', '5147', '-s', SERIAL, 'exec-out', 'screencap', '-p'], env=ENV, capture_output=True, timeout=15)
+    image=transport.read('exec-out','screencap','-p',timeout=15)
+    r=sp.CompletedProcess([],0,image,b'')
     (OUT / (name + '-screencap.stderr')).write_bytes(r.stderr)
     if r.returncode == 0 and r.stdout.startswith(b'\x89PNG'):
         (OUT / (name + '.png')).write_bytes(r.stdout)
@@ -126,10 +141,12 @@ def ui():
     deadline = time.monotonic() + 65
     for attempt in range(3):
         prefix = OUT / (name + '-attempt-%d' % attempt)
-        shell('rm -f /sdcard/pin-ui.xml', timeout=10)
-        argv = [str(adb), '-P', '5147', '-s', SERIAL, 'shell', 'timeout 18s uiautomator dump --compressed /sdcard/pin-ui.xml']
+        # uiautomator overwrites its capture path; no mutating rm before a read.
+        argv = [str(adb), '-H','127.0.0.1','-P', '5147', '-s', SERIAL, 'shell', 'timeout 18s uiautomator dump --compressed /sdcard/pin-ui.xml']
         try:
-            r = sp.run(argv, env=ENV, capture_output=True, timeout=22)
+            # Idempotent capture only: offline reconnect cannot duplicate an input.
+            data=transport.read('shell',argv[-1],timeout=22)
+            r=sp.CompletedProcess(argv,0,data,b'')
             prefix.with_suffix('.stdout').write_bytes(r.stdout)
             prefix.with_suffix('.stderr').write_bytes(r.stderr)
             prefix.with_suffix('.json').write_text(json.dumps({'argv':argv,'returncode':r.returncode}))
@@ -139,6 +156,7 @@ def ui():
                 if root.tag == 'hierarchy' and list(root.iter('node')):
                     (OUT / (name + '.xml')).write_text(raw)
                     (OUT / 'latest.xml').write_text(raw)
+                    transport.bind_identity()
                     return raw
         except (sp.TimeoutExpired, ET.ParseError) as e:
             prefix.with_suffix('.error').write_text(repr(e))
@@ -209,7 +227,7 @@ def sdk_prepare():
     # Reuse preflighted SDK/API35; no downloads or old AVD state. Fresh disposable device.
     manager = SDK/'cmdline-tools/latest/bin/avdmanager'
     assert manager.is_file() and (SDK/'system-images/android-35/google_apis/x86_64/system.img').is_file()
-    run([SDK/'platform-tools/adb','-P','5147','start-server'])
+    transport.start()
     run([manager,'create','avd','--name','wisdom-flight','--package',IMAGE,'--path',ROOT/'avd'],input=b'no\n',timeout=90)
     config=ROOT/'avd/config.ini'
     lines=config.read_text().splitlines()
@@ -247,6 +265,7 @@ def tls_prepare():
     record('test CA mounted only in disposable AVD zygotes', bool(mounted), mounted)
     return cert, server_key
 
+started_at=time.time()
 result = {'name':'wizard pin opens wisdom offline', 'source_revision':MANIFEST['shell_candidate'],
           'apk':{'version':'0.10.23','versionCode':87,'sha256':EXPECTED},'checks':checks,
           'origin':ORIGIN,'device':'disposable forum API35 x86_64 AVD','status':'failed'}
@@ -262,10 +281,14 @@ try:
     (ROOT/'tmp').mkdir(exist_ok=True)
     record('hardware KVM accessible', os.access('/dev/kvm', os.R_OK|os.W_OK))
     sdk_prepare()
-    emulator = sp.Popen([str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-port','5568',
+    # SDK-documented explicit pair outside shared ADB's default scan range.
+    emulator = sp.Popen([str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-ports','6168,6169',
+        '-no-direct-adb','-adb-path',str(wrapper),
         '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','swiftshader',
         '-memory','4096','-cores','4'], env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
+    transport.attach(emulator)
     until(lambda:a('get-state',ok=False).strip()=='device',180)
+    transport.start_logcat()
     record('native readiness: adb transport', True)
     readiness('boot-completed', 'getprop sys.boot_completed', lambda s:s.strip()=='1', 240)
     shell('input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard')
@@ -278,6 +301,7 @@ try:
         shell('settings put global '+setting+' 0')
     record('boot unlocked API35 input/window services ready',shell('getprop ro.build.version.sdk').strip()=='35')
     cert, key = tls_prepare()
+    transport.start_logcat(restart=True)  # root changed adbd before installation
     readiness('post-tls-user-unlocked', 'dumpsys user', lambda s:bool(re.search(r'UserInfo\{0:[^\n]+\n(?:(?!\s*UserInfo\{)[\s\S])*?\n\s+State: RUNNING_UNLOCKED\b',s)) and 'Started users state: [0=RUNNING_UNLOCKED]' in s)
     readiness('post-tls-zygote', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
     diagnostics('boot-ready')
@@ -319,7 +343,14 @@ try:
     (OUT/'device-sockets-after.txt').write_text(shell('ss -ntp; cat /proc/net/nf_conntrack 2>/dev/null',ok=False))
     # Pair through the real release Connect screen (no QA origin hook or TLS bypass).
     data='wizard://connect?origin=https%3A%2F%2Flocalhost%3A'+str(PORT)
+    transport.identity=None  # intentional Activity/process transition, never recovery
     shell('am start -W -a android.intent.action.VIEW -d '+data+' -p '+PKG)
+    transport.bind_identity()
+    # Bounded real stability probe, same AVD/install and untouched Connect screen.
+    for stability_index in range(20):
+        raw=ui();raw_screen('connect-stability-%02d'%stability_index)
+        record('Connect transport stability %02d'%stability_index,find('^Connect$',raw) is not None and 'ai.wizards.os' in raw,{'xml':'ui-%04d.xml'%ui_serial,'screenshot':'connect-stability-%02d.png'%stability_index})
+        time.sleep(.5)
     capture('00-connect-before-input')
     scroll_tap('^Connect$')
     until(lambda:'.MainActivity' in top(),60)
@@ -364,6 +395,7 @@ try:
     record('airplane mode actually enabled',shell('settings get global airplane_mode_on').strip()=='1')
     (OUT/'connectivity-airplane.txt').write_text(shell('dumpsys connectivity'))
     a('reverse','--remove',f'tcp:{PORT}')
+    transport.identity=None  # subsequent intentional process-death gate
     # Removing reverse makes this origin unreachable; keep server state for later reconnect.
     shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG);time.sleep(2)
     record('Wizard process stopped before icon tap',not shell('pidof '+PKG,ok=False).strip())
@@ -442,20 +474,42 @@ except Exception as e:
     print('FAILED',repr(e),flush=True)
     if emulator: capture('FAIL')
 finally:
+    result['emulator_pre_cleanup_returncode']=emulator.poll() if emulator else None
     if emulator:
         try:(OUT/'logcat.txt').write_text(a('logcat','-d','-t','5000',ok=False))
         except Exception:pass
-        try:a('emu','kill',ok=False)
-        except Exception:pass
+        # Own Popen only: TCP serial is not an 'adb emu' serial.
+        if emulator.poll() is None:emulator.terminate()
         try:emulator.wait(timeout=20)
         except Exception:emulator.kill();emulator.wait(timeout=10)
-    try:run([adb,'-P','5147','kill-server'],ok=False)
-    except Exception:pass
+        try:
+            transport.command('disconnect',SERIAL,serial=False)
+            until(lambda: SERIAL not in transport.command('devices','-l',serial=False).stdout.decode(),10)
+        except Exception as e:
+            result['status']='failed';result['cleanup_error']=repr(e)
+    transport_cleanup=transport.close()
+    # Preserve crash reports only for this run's advertised crash DB. No crash assumption.
+    if emulator:
+        try:
+            text=(OUT/'emulator.log').read_text(errors='replace')
+            for crash_path in re.findall(r'Storing crashdata in: ([^,\n]+)',text):
+                path=Path(crash_path)
+                if path.is_dir():
+                    inventory=[{'path':str(f.relative_to(path)),'size':f.stat().st_size,'mtime':f.stat().st_mtime} for f in path.rglob('*') if f.is_file()]
+                    (OUT/'crashdb-inventory.json').write_text(json.dumps({'path':crash_path,'files':inventory},indent=2))
+                    # Shared SDK crashdb metadata is read-only. Never copy older runs.
+                    if result['emulator_pre_cleanup_returncode'] is not None:
+                        for item in inventory:
+                            f=path/item['path']
+                            if item['mtime']>=started_at and item['size']<16*1024**2:
+                                target=OUT/'emulator-crashdb'/item['path'];target.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(f,target)
+        except Exception as e:(OUT/'crashdb-capture.error').write_text(repr(e))
     if fixture:
         fixture.terminate()
         try:fixture.wait(timeout=15)
         except Exception:fixture.kill();fixture.wait(timeout=10)
-    result['cleanup']={'emulator_stopped':emulator is None or emulator.poll() is not None,'fixture_stopped':fixture is None or fixture.poll() is not None,'adb_server_port':5147}
+    result['cleanup']={'emulator_stopped':emulator is None or emulator.poll() is not None,'fixture_stopped':fixture is None or fixture.poll() is not None,'adb_server_port':5147,'emulator_returncode':emulator.poll() if emulator else None,**transport_cleanup}
+    if not result['cleanup']['adb_server_stopped']:result['status']='failed'
     result['passed']=sum(c['pass'] for c in checks);result['total']=len(checks)
     (OUT/'acceptance.json').write_text(json.dumps(result,indent=2))
     print(json.dumps(result,indent=2),flush=True)
