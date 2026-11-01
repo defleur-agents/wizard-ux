@@ -51,7 +51,7 @@ test('features on for everyone are plain settings where they act, not tweaks', (
   assert.doesNotMatch(s, /Built in/, 'no "built-in tweaks"');
   assert.match(s, /register\(\{ id: 'notifications-in-chats', page: 'chats'/);
   assert.match(s, /register\(\{ id: 'home-network', page: 'appearance'/);
-  assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin && !t\.view\);/, 'Tweaks lists only contributed ones');
+  assert.match(s, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'Tweaks lists only contributed ones');
 });
 
 test('review: a new skin starts from the worn own skin\'s choices; an upgraded device keeps the retired Home map CSS for its first frame', () => {

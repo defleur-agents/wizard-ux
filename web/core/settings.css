@@ -129,10 +129,6 @@ a.st-row { color: inherit; text-decoration: none; }
 
 /* Tweaks, separate from skin: one section per author, an "All of theirs" switch, then each tweak. */
 .tw-group { margin-top: 20px; }
-/* Shell view (Look): one segmented choice between the skin grid and the tweaks */
-.sv-group { margin-top: 20px; }
-.sv-group h4 { margin-bottom: 8px; }
-.sv-group .st-hint { margin-bottom: 0; }
 .tw-author { margin-top: 14px; }
 .tw-author > h5 { margin: 0 0 6px; font-size: var(--wz-text-sm); font-weight: 600; color: var(--wz-text-2, var(--wz-text)); }
 .tw-author > .tw-row:not(.tw-all) { padding-left: 18px; }

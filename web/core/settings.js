@@ -258,8 +258,7 @@
     if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
-    // Shell views (a manifest `view`) are chosen in Shell view above, one at a time, never as switches here.
-    const exp = s.tweaks.filter(t => !t.builtin && !t.view);
+    const exp = s.tweaks.filter(t => !t.builtin);
     const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // One section per author (Miguel, 31 Oct 2026): a switch that turns all of theirs on or off, then each tweak by itself.
@@ -267,22 +266,12 @@
     const order = [...(authorList || []).map(a => a.id), ...exp.map(t => t.author)].filter((who, i, all) => all.indexOf(who) === i);
     const groups = order.map(who => {
       const mine = exp.filter(t => t.author === who); if (!mine.length) return '';
-      const on = mine.filter(t => t.on).length, all = on === mine.length;
+      // shell views (manifest `view`) are one at a time, so the quick button counts as all on without them
+      const on = mine.filter(t => t.on).length, all = mine.every(t => t.on || t.view);
       const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
       return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
     }).join('');
     return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
-  }
-  /* Shell view: how this device's shell is laid out, Desks (the stock shell) or a view a tweak wears (manifest `view`,
-   * e.g. Orb, Apps). One segmented choice like Settings' other choices, mutually exclusive, per device; lives in Look
-   * between the skin (colours only) and the tweaks, so it is reachable from every view on both shells. */
-  function shellViewHtml() {
-    const E = window.WosExperience; if (!E?.chooseView) return '';
-    const s = E.state, views = s.tweaks.filter(t => t.view && !t.builtin); if (!views.length) return '';
-    const worn = views.find(t => t.on)?.id || '';
-    const opts = [['', 'Desks'], ...views.map(t => [t.id, t.view])];
-    const btn = ([id, label]) => `<button type="button" data-shellview="${esc(id)}" role="radio" aria-checked="${id === worn}"${s.busy ? ' disabled' : ''}>${esc(label)}</button>`;
-    return `<div class="sv-group"><h4 id="sv-label">Shell view</h4><div class="st-seg sv-seg" role="radiogroup" aria-labelledby="sv-label">${opts.map(btn).join('')}</div><p class="st-hint">For this device. Desks is the usual shell.</p></div>`;
   }
   let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -331,7 +320,7 @@
     const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S)}${newTile()}</div></div>` : '';
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${shellViewHtml()}${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -376,8 +365,6 @@
     const own = el.closest('[data-ownskin]');
     // Tapping the skin you wear takes it off (back to plain color + tweaks); any other one puts it on.
     if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
-    const view = el.closest('[data-shellview]');
-    if (view) { if (view.getAttribute?.('aria-checked') !== 'true') void window.WosExperience.chooseView(view.dataset.shellview || '').catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');
@@ -723,9 +710,9 @@
         e.preventDefault(); const buttons = [...root.querySelectorAll('[data-st-page]')], at = buttons.indexOf(category), n = (at + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
         const id = buttons[n].dataset.stPage; focus(id); root.querySelector(`[data-st-page="${id}"]`)?.focus(); return;
       }
-      const radio = e.target.closest('[data-chats-choice], [data-shellview]');
+      const radio = e.target.closest('[data-chats-choice]');
       if (radio && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        e.preventDefault(); const buttons = [...root.querySelectorAll(radio.matches('[data-shellview]') ? '[data-shellview]' : '[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
+        e.preventDefault(); const buttons = [...root.querySelectorAll('[data-chats-choice]')], at = buttons.indexOf(radio), delta = ['ArrowUp', 'ArrowLeft'].includes(e.key) ? -1 : 1;
         buttons[(at + delta + buttons.length) % buttons.length].focus(); return;
       }
       const b = e.target.closest('[data-skinpick], [data-skinfamily], [data-ownskin], [data-newskin]');
