@@ -1,4 +1,17 @@
-# Independent browser byte evidence (R27)
+# Independent browser byte evidence (R28)
+
+## R28: sealed lifecycle and remaining-case scope
+
+R27 recorded **seven actual browser passes** and a real pass of all five protocol modes. Presentation's skin/back/standalone checks and isolation's namespace/workspace checks succeeded, but those three case rows failed final byte-observer closure. Preserve the original reports and hashes as historical R27 evidence; do not relabel them or call them fresh R28 passes.
+
+Recorded presentation snapshots prove the missing optional entries include skins, tweaks, slots and JSON, not merely the four sample paths listed below. Derive **all** tracked host files outside the shared shell from frozen source. The same strict actual-write alternative applies: completed worker GET, no-store header, unique response write ID, exact full URL, actual written size/hash, context/generation/worker binding. Required shell URLs are excluded. CacheStorage and empty plain-page GET guards are unchanged. Legacy CACHE/NEXT names are parsed from the real worker (NEXT is `wos-shell-v1-next`, not the formerly invented `wos-shell-next-v1`).
+
+Drain now seals new-request admission synchronously, captures late responses only for already-admitted requests, bounds every inspect continuation, settles all captured tasks before owned context close, and is single-flight. A late rejected protocol promise cannot modify a sealed report or the next context. One fresh context/generation-bound proof covers the settled batch; at most two additional read-only snapshots address legitimately late cache writes. No fetch, put, backfill, screenshot setup or product change. Detached font documents are excluded only after actual detached/closed readback; they supply no loaded-font evidence, and alive controllers/fonts/cache bytes remain mandatory.
+
+R27 isolation's actual unresolved rows are context-2 worker fetches with `responseEnd=-1` before cleanup. Cleanup created the later TargetClosed strings. This repair removes that report race but **does not declare those incomplete downloads successful**. The frozen legacy worker has a branch that leaves non-cacheable fetched bodies unread; whether that or a lost worker lifetime explains the pending requests remains unproven. R28 records exact worker-instance closures, request failure, response/completion stage and document URLs. An actual ERR_ABORTED is diagnostic-only, never byte coverage. Still-unfinished requests fail before cleanup, without invented completion or a server-write waiver.
+
+Parent argv `--remaining-only` reruns presentation-mobile, presentation-desktop and isolation plus all five real protocol probes, with a 360-second external light-lane bound. The report keeps seven hashed historical pass reports separate from the three current rows; `freshBrowserAcceptance` remains false for this selective run even if all three succeed. `freshRemainingBrowserAcceptance` describes only those three. No browser/fixture/VM was launched in preparation or source-only verification. Frozen product sources and all behavior assertions remain unchanged; native/release acceptance remains false.
+
 
 ## Actual R26 findings and narrow R27 repair
 

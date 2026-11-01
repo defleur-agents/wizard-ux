@@ -14,11 +14,17 @@ def from_sources(root):
  naming="const names = {shell: c.prefix+'shell-'+c.version, data: c.prefix+'data-v1', assets: c.prefix+'assets-v1'};"
  for worker in ('ux/web/core/offline-sw.js','wisdom/static/offline-sw.js'):assert naming in (root/worker).read_text(),'shared worker cache naming changed'
  prefixes=[host['prefix'],app['prefix']]
- allowed=['wos-shell-v1','wos-shell-next-v1']+[p+kind+suffix for p,version in ((host['prefix'],host['version']),(app['prefix'],app['version'])) for kind,suffix in (('shell-',version),('data-','v1'),('assets-','v1'))]
  legacy=(root/'ux/web/sw.js').read_text();shared=(root/'ux/web/core/offline-sw.js').read_text()
+ # Legacy NEXT spelling is defined by this actual worker, not the shared naming.
+ legacy_names=[re.search(r"const "+key+r" = '([^']+)'",legacy)[1] for key in ('CACHE','NEXT')]
+ allowed=legacy_names+[p+kind+suffix for p,version in ((host['prefix'],host['version']),(app['prefix'],app['version'])) for kind,suffix in (('shell-',version),('data-','v1'),('assets-','v1'))]
  assert "!/no-store/i.test(res.headers.get('cache-control') || '')" in legacy
  assert "shell.has(clean.href)" in shared and "if (self.WizOfflineWorker?.handles(req)) return" in legacy
  assert not any(host.get(k) for k in ('data','assets','onlineOnly')),'rederive network-only policy for new host config'
- network_only=[{'url':urljoin('/wizard-os-home/',p),'path':'ux/web/'+p,'worker':'/wizard-os-home/sw.js','reason':'outside source-defined shared shell; legacy cacheable rejects no-store'} for p in ('store/store-router.js','store/store-install.js','icon-192.png','favicon.ico')]
+ # Derive the complete class, not a filename sample. A row must ALSO prove
+ # no-store, observed completion and its unique actual server body-write hash.
+ # No shell URL gets this alternative and no incomplete GET can use it.
+ shell_urls={x['url'] for x in required}
+ network_only=[{'url':urljoin('/wizard-os-home/',p),'path':'ux/web/'+p,'worker':'/wizard-os-home/sw.js','reason':'outside source-defined shared shell; legacy cacheable rejects no-store'} for p in sorted(str(f.relative_to(root/'ux/web')) for f in (root/'ux/web').rglob('*') if f.is_file()) if p!='sw.js' and urljoin('/wizard-os-home/',p) not in shell_urls]
  assert not any(x['url'] in [i['url'] for i in required] for x in network_only)
  return {'networkOnly':network_only,'allowed':allowed, 'prefixes':['wos-shell-']+[p+kind for p in prefixes for kind in ('shell-','data-','assets-')], 'workers':[{'scope':'/wizard-os-home/','script':'/wizard-os-home/sw.js'},{'scope':'/wisdom/','script':'/wisdom/sw.js'}], 'required':required,'fontSources':[{'url':urljoin('/wisdom/',src),'family':family} for family,src in re.findall(r'@font-face\{font-family:"([^"]+)";src:url\(([^)]+)\)',(root/'wisdom/static/wisdom.css').read_text())],'generationSourceHashes':{f:hashlib.sha256((root/f).read_bytes()).hexdigest() for f in files},'claim':'Complete source-defined app+host shell closure and every unobservable tracked GET exact URL; not every unused product-file or per-worker network-response body.'}
