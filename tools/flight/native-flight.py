@@ -240,7 +240,7 @@ try:
     record('native readiness: adb transport', True)
     readiness('boot-completed', 'getprop sys.boot_completed', lambda s:s.strip()=='1', 240)
     shell('input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard')
-    readiness('user-unlocked', 'cmd user is-user-unlocked 0', lambda s:s.strip()=='true')
+    readiness('user-unlocked', 'dumpsys user', lambda s:bool(re.search(r'UserInfo\{0:[^\n]+\n(?:(?!\s*UserInfo\{)[\s\S])*?\n\s+State: RUNNING_UNLOCKED\b',s)) and 'Started users state: [0=RUNNING_UNLOCKED]' in s)
     readiness('zygote-running', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
     readiness('system-server', 'pidof system_server', lambda s:bool(re.fullmatch(r'[0-9]+(?:\s+[0-9]+)*',s.strip())))
     # R4 full dumpsys window captured this real field; the windows subcommand did not.
@@ -249,7 +249,7 @@ try:
         shell('settings put global '+setting+' 0')
     record('boot unlocked API35 input/window services ready',shell('getprop ro.build.version.sdk').strip()=='35')
     cert, key = tls_prepare()
-    readiness('post-tls-user-unlocked', 'cmd user is-user-unlocked 0', lambda s:s.strip()=='true')
+    readiness('post-tls-user-unlocked', 'dumpsys user', lambda s:bool(re.search(r'UserInfo\{0:[^\n]+\n(?:(?!\s*UserInfo\{)[\s\S])*?\n\s+State: RUNNING_UNLOCKED\b',s)) and 'Started users state: [0=RUNNING_UNLOCKED]' in s)
     readiness('post-tls-zygote', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
     diagnostics('boot-ready')
     # No device traffic may leave this disposable rig: loopback + adb reverse only.

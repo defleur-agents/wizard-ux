@@ -48,7 +48,10 @@ assert reads and reads<={'--wz-'+n for n in names},reads
 assert "WosSkin.set(s)" in qa and "WizardTheme.current?.skin===s" in qa
 native=text(u,'tools/flight/native-flight.py')
 assert "'dumpsys window windows'" not in native
-assert "'cmd user is-user-unlocked 0'" in native and "'dumpsys window'" in native
+assert 'cmd user is-user-unlocked' not in native and native.count("'dumpsys user', lambda") == 2 and "'dumpsys window'" in native
+assert 'Started users state: [0=RUNNING_UNLOCKED]' in native
+assert 'value:17' not in qa and 'chosen-real-page' in qa and 'before-process-close' in qa
+assert "name:'Next page',exact:true" in qa and "'server equals exact final durable reader page'" in qa
 assert 'Connect' in connect and 'EditText' in connect and 'connect' in connect
 for file in (u/'tools/flight').glob('*.py'):ast.parse(file.read_text(),filename=str(file))
 result={'kind':'read-only source AST contract; no rendered QA claim','selectors':{k:owners[k] for k in sorted(selectors)},'readerClasses':sorted(expected),'fixture':'synthetic catalog; server source normalizes render fields','files':{str(x.relative_to(u) if x.is_relative_to(u) else 'wisdom/'+str(x.relative_to(w))):hashlib.sha256(x.read_bytes()).hexdigest() for x in [u/'tools/qa-flight-offline.cjs',u/'tools/qa-flight-offline-fixture.py',u/'tools/flight/native-flight.py',w/'static/wisdom.js',w/'static/offline.js',w/'wisdom.py']}}
