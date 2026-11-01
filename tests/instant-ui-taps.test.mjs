@@ -7,22 +7,7 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 const chats = read('web/core/chats.js');
 const fn = name => { const start = chats.indexOf(`  function ${name}(`); assert.ok(start > 0); return chats.slice(start, chats.indexOf('\n  }', start) + 4); };
-for (const held of [false, true]) test(`Morning removes every pane before fetch and rolls back with list held=${held}`, async () => {
-  const gate = deferred(), events = [], state = { day:'day',done:0,total:3,hidden:false }, nodes = [];
-  for (let i = 0; i < 2; i++) {
-    const parent = { isConnected:true,querySelector:()=>nodes.find(n=>n.parentNode===parent&&n.connected),insertBefore(node){node.connected=true;node.parentNode=this;} };
-    nodes.push({ parentNode:parent,nextSibling:null,connected:true,remove(){this.connected=false;events.push('remove');} });
-  }
-  const w = { id:'desk',app:'chats',thread:'__new__' }, pane = { id:'desk::list',thread:null };
-  const c = { MORNING:{data:state},H:{root:()=>({querySelectorAll:()=>nodes.filter(n=>n.connected)}),win:id=>id==='desk'?w:pane},CH:{'desk::list':{}},owner:id=>id.replace(/::list$/,''),elOf:()=>({querySelector:()=>true}),holdList:()=>held,renderChatList:()=>events.push('render'),toast:(...a)=>events.push(a),fetch:()=>{assert.ok(nodes.every(n=>!n.connected));assert.equal(c.MORNING.data.hidden,true);events.push('fetch');return gate.promise;} };
-  vm.createContext(c);vm.runInContext(fn('morningSet')+'\n'+fn('morningHide'),c);
-  c.morningHide(); c.morningHide();
-  assert.deepEqual(events,['remove','remove','fetch'],'no duplicate write or background rerender');
-  c.morningSet(state); assert.equal(c.MORNING.data.hidden,true,'stale read cannot resurrect pending hide');
-  gate.resolve({ok:false,status:500});await flush();
-  assert.ok(nodes.every(n=>n.connected));assert.equal(c.MORNING.data.hidden,false);assert.ok(events.some(e=>Array.isArray(e)&&e[0]==='!'));
-  assert.equal(events.includes('render'),!held,'desktop proxy uses owner app while preserving background hold');
-});
+// App-card tap/rollback matrix lives in app-ready-cards.test.mjs.
 for (const ok of [true,false]) test(`attention and failure dismiss are optimistic, backend ok=${ok}`, async () => {
   const gates = [], notices = [];
   const c = {window:null,fetch:()=>{const g=deferred();gates.push(g);return g.promise;}};c.window=c;

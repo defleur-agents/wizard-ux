@@ -369,59 +369,72 @@ window.WizCore.chats = function createChats(H) {
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
-  /* ---- Morning: the owner's daily check-in (Morning app, /morning/), pinned at the top of Ready ----
-   * Status is the Morning app's /morning/api/status; the app also posts {type:'wizard:morning'} when a step is
-   * ticked so the card updates at once. No Morning app on this Wizard (not in Apps, or unreachable) = no card;
-   * all steps done = no card until Morning's day rolls over.
-   * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
-   * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
-  const MORNING = { data: null, at: 0, busy: false };
-  const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
-  function morningSet(d) {
-    // A stale poll or app message cannot undo the owner's pending dismiss.
-    if (MORNING.hiding) return;
-    const ok = d && typeof d.done === 'number' && typeof d.total === 'number' && typeof d.day === 'string';
-    const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || ''), hidden: !!d.hidden } : null;
-    if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
-    MORNING.data = next;
+  // Installed apps opt into Ready through the existing registry; apps own progress and day rollover.
+  const READY_CARDS = new Map();
+  const readyApps = () => (window.WizCore.readyCards?.() || []).filter(a => window.WizCanOpen?.(a.id));
+  function readyPaint() {
     // Desktop's ::list proxy has no app field; the owning window is Chats.
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && H.win(owner(id))?.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
   }
-  function morningPoll() {
-    if (MORNING.busy || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
-    MORNING.busy = true; MORNING.at = Date.now();
-    fetch('/morning/api/status', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
-      .then(morningSet, () => {}).finally(() => { MORNING.busy = false; });
+  function readyStatus(d) {
+    if (!d || typeof d.day !== 'string' || !Number.isInteger(d.done) || !Number.isInteger(d.total) || d.done < 0 || d.total < 1 || d.total > 32 || d.done > d.total) return null;
+    return { day: d.day.slice(0, 64), done: d.done, total: d.total, next_label: String(d.next_label || '').slice(0, 160), hidden: !!d.hidden };
   }
-  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
-  // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
-  // routine, it's evening, stop showing it). Morning owns the flag so every device agrees; undo lives in Morning.
-  function morningHide() {
-    if (!MORNING.data || MORNING.hiding) return;
-    const prev = MORNING.data;
-    // Explicit taps bypass background-paint guards (selection, press, sheet and split panes).
-    // Retain the exact nodes so a failed write also rolls back a held list.
-    const removed = [...H.root().querySelectorAll('.ch-morning-w')].map(node => ({ node, parent: node.parentNode, next: node.nextSibling }));
+  function readySet(s, d) {
+    if (s.hiding) return;
+    const next = readyStatus(d);
+    if (JSON.stringify(next) === JSON.stringify(s.data)) return;
+    s.data = next; readyPaint();
+  }
+  function readyPoll() {
+    const apps = readyApps(), ids = new Set(apps.map(a => a.id));
+    for (const id of READY_CARDS.keys()) if (!ids.has(id)) READY_CARDS.delete(id);
+    for (const a of apps) {
+      const key = JSON.stringify(a.ready_card); let s = READY_CARDS.get(a.id);
+      if (!s || s.key !== key) { s = { key, data: null, at: 0, busy: false, rev: 0 }; READY_CARDS.set(a.id, s); }
+      if (s.busy || s.hiding || Date.now() - s.at < 60000) continue;
+      s.busy = true; s.at = Date.now(); const rev = s.rev;
+      fetch(a.ready_card.status, { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
+        .then(d => { if (s.at && s.rev === rev && READY_CARDS.get(a.id) === s) readySet(s, d); }, () => {})
+        .finally(() => { s.busy = false; if (!s.at && READY_CARDS.get(a.id) === s) readyPoll(); });
+    }
+  }
+  // Messages are invalidations only: never trust a frame to supply another app's state or endpoint.
+  addEventListener('message', e => {
+    if (e.origin !== location.origin || e.data?.type !== 'wizard:ready-card' || !readyApps().some(a => a.id === e.data.app)) return;
+    const s = READY_CARDS.get(e.data.app); if (s) s.at = 0; readyPoll();
+  });
+  addEventListener('wizard:apps', () => { readyPoll(); readyPaint(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { for (const s of READY_CARDS.values()) s.at = 0; readyPoll(); } });
+  function readyHide(id) {
+    const a = readyApps().find(a => a.id === id), s = READY_CARDS.get(id);
+    if (!a?.ready_card.dismiss || !s?.data || s.hiding) return;
+    const prev = s.data, selector = `[data-chappcard="${id}"]`;
+    // Explicit taps bypass background-paint guards. Keep exact nodes for rollback even with a held split pane.
+    const removed = [...H.root().querySelectorAll(selector)].map(node => ({ node, parent: node.parentNode, next: node.nextSibling }));
     for (const { node } of removed) node.remove();
-    MORNING.data = { ...prev, hidden: true }; MORNING.hiding = true;
-    fetch('/morning/api/hide', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"hidden":true}' })
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(st => { MORNING.hiding = false; MORNING.at = Date.now(); morningSet(st); },
-        () => {
-          MORNING.hiding = false;
-          for (const { node, parent, next } of removed) if (parent.isConnected && !parent.querySelector('.ch-morning-w')) parent.insertBefore(node, next?.parentNode === parent ? next : null);
-          morningSet(prev); toast('!', 'Couldn’t hide Morning · try again', 2400);
+    s.data = { ...prev, hidden: true }; s.hiding = true; s.rev++;
+    // Paint is synchronous; I/O starts next frame so a slow backend cannot swallow the tap.
+    requestAnimationFrame(() => setTimeout(() => {
+      fetch(a.ready_card.dismiss, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"hidden":true}' })
+        .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(st => { if (!readyStatus(st)?.hidden) throw new Error('Hide not confirmed'); s.hiding = false; s.at = Date.now(); readySet(s, st); })
+        .catch(() => {
+          s.hiding = false;
+          if (READY_CARDS.get(id) !== s || !readyApps().some(a => a.id === id)) return;
+          for (const { node, parent, next } of removed) if (parent.isConnected && !parent.querySelector(selector)) parent.insertBefore(node, next?.parentNode === parent ? next : null);
+          readySet(s, prev); toast('!', `Couldn’t hide ${a.ready_card.title} · try again`, 2400);
         });
+    }, 0));
   }
-  function morningCard() {
-    // Done for today = gone until the next morning (the day rolls at the owner's day start, on Morning's side).
-    // Hidden for today (the owner tapped × or Morning's "Skip today") = gone too, steps untouched; back at rollover.
-    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total || d.hidden) return '';
-    const all = false;
-    const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
-    const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
-    return `<div class="ch-morning-w"><button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span></button><button type="button" class="ch-morning-x" data-chmorninghide aria-label="Hide Morning until tomorrow" title="Hide until tomorrow">×</button></div>`;
+  function readyCards() {
+    return readyApps().map(a => {
+      const d = READY_CARDS.get(a.id)?.data, c = a.ready_card;
+      if (!d || d.done >= d.total || d.hidden) return '';
+      const sub = d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : c.subtitle;
+      const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
+      return `<div class="ch-appcard-w" data-chappcard="${esc(a.id)}"><button type="button" class="ch-appcard" data-chappopen="${esc(a.id)}" aria-label="Open ${esc(c.title)} · ${esc(sub)}"><span class="badge" aria-hidden="true"></span><span class="tx"><span class="hd"><b>${esc(c.title)}</b><i>Pinned</i></span><small>${esc(sub)}</small><span class="dots" aria-hidden="true">${dots}</span></span></button>${c.dismiss ? `<button type="button" class="ch-appcard-x" data-chapphide="${esc(a.id)}" aria-label="Hide ${esc(c.title)} until tomorrow" title="Hide until tomorrow">×</button>` : ''}</div>`;
+    }).join('');
   }
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
@@ -1085,7 +1098,7 @@ window.WizCore.chats = function createChats(H) {
     if (!n && c.sOpen) c.sOpen = null;
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
     rowListAgent = AGID;
-    if (!AGID) morningPoll();
+    if (!AGID) readyPoll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
@@ -1167,7 +1180,7 @@ window.WizCore.chats = function createChats(H) {
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}${n && k === 'archive' ? ' ch-sec-last' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n + notesN}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + readyCards() : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
     }).sort((a, b) => n ? +SEARCH_LAST.test(a) - +SEARCH_LAST.test(b) : 0).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
@@ -2869,8 +2882,8 @@ window.WizCore.chats = function createChats(H) {
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
-    if (e.target.closest('[data-chmorninghide]')) { morningHide(); return true; }
-    if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(H.openApp?.('morning', e.target) || window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
+    const appHide = e.target.closest('[data-chapphide]'); if (appHide) { readyHide(appHide.dataset.chapphide); return true; }
+    const appOpen = e.target.closest('[data-chappopen]'); if (appOpen) { H.openApp?.(appOpen.dataset.chappopen, e.target); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
