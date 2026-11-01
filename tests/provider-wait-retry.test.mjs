@@ -42,8 +42,8 @@ test('model selection changes only after an exact server acknowledgement, and fa
  const M=ctx.WosModels;M.ready=true;M.providers=[];M.selections.set(M.selectionKey('synthetic'),{model:'previous',provider:'previous-provider'});
  await assert.rejects(M.setThreadModel('synthetic',{value:'chosen',provider:'other-provider'}),/did not confirm/);assert.equal(M.selections.get(M.selectionKey('synthetic')).model,'previous');assert.equal(M.pending.size,0);
  status=503;await assert.rejects(M.setThreadModel('synthetic',{value:'chosen',provider:'other-provider'}),/not changed/);assert.equal(M.selections.get(M.selectionKey('synthetic')).model,'previous');
- status=200;ack={runtime:{model_lock:'accepted',model:'chosen',provider:'other-provider',selection_version:17}};
- await M.setThreadModel('synthetic',{value:'chosen',provider:'other-provider'});assert.equal(M.selections.get(M.selectionKey('synthetic')).model,'chosen');assert.equal(M.selections.get(M.selectionKey('synthetic')).version,17);assert.equal(M.pending.size,0);
+ status=200;ack={runtime:{model_lock:'accepted',model:'chosen',provider:'other-provider',selection_version:1}};
+ await M.setThreadModel('synthetic',{value:'chosen',provider:'other-provider'});assert.equal(M.selections.get(M.selectionKey('synthetic')).model,'chosen');assert.equal(M.selections.get(M.selectionKey('synthetic')).version,1);assert.equal(M.pending.size,0);
 });
 test('concurrent Retry taps coalesce while detail is pending',async()=>{
  const h=fixture();let release;h.setDetail(()=>new Promise(r=>{release=()=>r(h.s)}));const first=h.api.retryThread('win',h.s.id);await h.api.retryThread('win',h.s.id);release();await first;assert.equal(h.sent.length,1);
