@@ -25,6 +25,7 @@ def chunk(t,d):return struct.pack('!I',len(d))+t+d+struct.pack('!I',zlib.crc32(t
 PNG=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
 class H(server.Handler):
  calls=[]
+ reads=[]
  lost=False
  def send(self,code,data,ctype='application/json',headers=None):
   # Deliberately lose one ACK *after* the real SQLite transaction commits.
@@ -35,10 +36,11 @@ class H(server.Handler):
   return super().send(code,data,ctype,headers)
  def do_GET(self):
   path=unquote(urlsplit(self.path).path)
+  self.reads.append({'path':path})
   if path=='/__fixture__/receipt':
    with server.db() as c:
     state=wisdom.state(c);tables={r[0] for r in c.execute('select name from sqlite_master')};count=c.execute('select count(*) from wisdom_offline_receipts').fetchone()[0] if 'wisdom_offline_receipts' in tables else 0
-   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'writes':self.calls})
+   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'writes':self.calls,'reads':self.reads})
   if path.startswith('/wisdom/wisdom-art/f/'):
    font=(a.wisdom_source/'static'/path.removeprefix('/wisdom/')).resolve()
    if font.is_relative_to(a.wisdom_source/'static') and font.is_file():return self.send(200,font.read_bytes(),mimetypes.guess_type(font.name)[0] or 'font/woff2')

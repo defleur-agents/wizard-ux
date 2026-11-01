@@ -227,7 +227,7 @@ class ControllerTest(unittest.TestCase):
         script = r"""
         const assert=require('node:assert/strict');
         let t=0,mode='settle',scrolled=0,frames=[],timers=new Map(),next=1;
-        global.window=global;global.innerWidth=400;global.innerHeight=800;global.devicePixelRatio=2.625;
+        global.window=global;Object.defineProperty(global,'navigator',{value:{userAgent:'synthetic-node-replay',maxTouchPoints:1},configurable:true});global.innerWidth=400;global.innerHeight=800;global.devicePixelRatio=2.625;
         global.scrollX=0;global.scrollY=0;global.visualViewport={offsetLeft:0,offsetTop:0,scale:1,width:400,height:800};
         global.performance={now:()=>t};global.getComputedStyle=()=>({visibility:'visible',display:'block'});
         global.requestAnimationFrame=f=>frames.push(f);
