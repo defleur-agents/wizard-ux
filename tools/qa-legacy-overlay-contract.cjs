@@ -15,7 +15,7 @@ function checks(broken=false,diagnostic=false){
       names.push(`${skin} radial:${enabled} two-orbs:${two}: actual Look -> Miguel selector`,'Miguel pill has opaque shared panel and rounded identity','selector panel pixels unchanged over loud text');
       if(diagnostic)return names;
     }
-    names.push('reload reads restored CSS and active pointer from box without reseeding','cache-free reload preserves overlay metadata and actual two-orbs choice',enabled?'long hold remains pins-only radial (no desk wedges)':'OFF long hold remains ordinary voice command','tap remains voice','skin changes and reload perform no hidden owner active writes','only explicit two-orbs recipe PATCH occurs; no other recipe writes or refused routes','explicit leave is durable opt-out; no automatic resurrection','restored profile has zero page errors');
+    names.push('reload reads restored CSS and active pointer from box without reseeding','cache-free reload preserves overlay metadata and actual two-orbs choice',enabled?'long hold remains pins-only radial (no desk wedges)':'OFF long hold remains ordinary voice command','tap remains voice','skin changes and reload perform no hidden owner active writes','only explicit radial and two-orbs recipe PATCHes occur; no other recipe writes or refused routes','explicit leave is durable opt-out; no automatic resurrection','restored profile has zero page errors');
   }
   names.push('no agent runs or new sessions');return names;
 }

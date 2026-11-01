@@ -17,7 +17,7 @@ function createSkinFixture(data, { id = 'My skin', activeWrites = [], recipeWrit
     if (pathname === '/wizard/v1/skins/' + encodeURIComponent(id) && method === 'PATCH') {
       if (!object(input) || !Object.keys(input).length || Object.keys(input).some(k => !['base', 'tweaks'].includes(k))) return deny(pathname, method, input);
       if (Object.hasOwn(input, 'base') && !['nebula', 'grove'].includes(input.base)) return deny(pathname, method, input);
-      if (Object.hasOwn(input, 'tweaks') && (!object(input.tweaks) || !Object.keys(input.tweaks).length || Object.entries(input.tweaks).some(([k, v]) => k !== 'wizard/two-orbs' || typeof v !== 'boolean'))) return deny(pathname, method, input);
+      if (Object.hasOwn(input, 'tweaks') && (!object(input.tweaks) || !Object.keys(input.tweaks).length || Object.entries(input.tweaks).some(([k, v]) => !['wizard/two-orbs', 'wizard/orb-radial'].includes(k) || typeof v !== 'boolean'))) return deny(pathname, method, input);
       // metadata(id) defaults only name; list()'s default nebula is NOT persisted.
       meta = { name: id, ...(meta || {}), ...copy(input), ...(input.tweaks ? { tweaks: { ...(meta?.tweaks || {}), ...input.tweaks } } : {}) };
       Object.assign(skin, { base: meta.base || 'nebula', tweaks: meta.tweaks || {}, has_recipe: Object.hasOwn(meta, 'base') || Object.hasOwn(meta, 'tweaks') });
