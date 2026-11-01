@@ -7,5 +7,5 @@
   "capabilities": [
     "layout"
   ],
-  "description": "Phone: Home becomes a standard home screen, a grid of app icons with one icon per desk (tap opens that desk) and Chats first with its Ready count; the rest of the phone as it is. The desktop is unchanged. Off = the Desks view"
+  "description": "Home becomes a grid of app icons, one per desk (tap opens that desk), Chats first with its Ready count, and a + for an app not open yet. Phone: a home screen, the bottom desk switcher gone (the orb and a Back stay). Desktop: a launchpad over the wallpaper, the orb at the bottom. Off = the Desks view"
 }

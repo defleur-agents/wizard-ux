@@ -5,12 +5,12 @@ desktop has two equal views, **Desks** and **Orbs**; switching the Orbs view off
 reload). On the phone (experimental) it changes Home only; see **Phone** below (and **Apps view** for the third view).
 
 **Try it:** Settings (the gear) › Look › Tweaks › **Miguel** › switch on **Orbs view**. Optionally also
-**Desks | Orbs switch** for a one-click switch in the middle of the bar. (Miguel's one-tap author button turns all of his
+**Desks | Orb | Apps switch** for a one-click switch in the middle of the bar. (Miguel's one-tap author button turns all of his
 tweaks on, these two included.) Ways back to Desks,
 with or without the switch: the scene's **Look** button › **Back to the Desks view** (`api.desk.classic()`), or the
 gear › Look › Tweaks › Orbs view off.
 
-**Desks | Orbs switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
+**Desks | Orb | Apps switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
 in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
 `core/slots.json`): while that slot holds anything the clock steps aside (`desktop.css`), and the slot hides under the
 voice pill like the clock did. One click switches `miguel/orb-shell` for this device through the same tweak mix as
@@ -80,7 +80,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
   `api.voice.ask`). No toast and no bar voice pill for it here (`api.voice.onCommand`; `html.voice-cmd`).
 - Under the orb: only a caption line while a take runs (no name label: the orb is the entity). The real keys are the hint line near the
   bottom: `⌥V` to talk (new voice chat; `Right ⌘` in the Mac app) and `⌥N` to type (new chat). The fuel gauge and the
-  gear stay top right; the Desks | Orbs switch sits in the bar's centre.
+  gear stay top right; the Desks | Orb | Apps switch sits in the bar's centre.
 - **Around a fixed orb** (v6, Miguel: "the orb never moves"). The orb stays at the screen's centre whatever is open;
   panels only cover the sides (satellites under them are simply covered). **Left: the stock Chats list, docked** for
   good (v5, "bake the stock session list in"): the same Chats window as everywhere (Archive / Working / Ready, the
@@ -127,7 +127,7 @@ on their line). Per device, no reload.
 
 - **Home** shows the desktop scene: the same sky, the same orb in the device's stored Style × Colour (no picker on the
   phone yet: Glass · Nebula unless chosen on that device), the same status satellites, and Home's own top (which
-  Wizard, Desks | Orbs, the fuel gauge, the gear for Settings). The stock Home content and the other machines-home tiles
+  Wizard, Desks | Orb | Apps, the fuel gauge, the gear for Settings). The stock Home content and the other machines-home tiles
   are hidden from the first frame (`orb-shell/tweak.css`), with the night sky as the placeholder.
 - **One source with the desktop** (`shared.js`): `lookOf`, `palettes`, `starsFor` / `paintSky` and `orbitApps` (which
   apps float). The phone adapter (`app.js`) answers the same layout calls: `apps()` (the desktop's row shape and kinds),
@@ -150,17 +150,35 @@ on their line). Per device, no reload.
   `api.phone.mark(id)` (the dock's own mark for an app). Desks (the tweak off) removes every node and flag: the stock
   phone is back.
 
-## Apps view (phone, 1 Nov 2026)
+## Apps view (phone and desktop, 1 Nov 2026)
 
 A third view, `miguel/apps-home` wearing the `apps` layout (`web/layouts/apps/`), picked with the same switch, which
-on the phone reads **Desks | Orbs | Apps** (three equal options; the desktop keeps Desks | Orbs). Home becomes a
-standard phone home screen: a four-column grid of app icons, ONE per desk (each desk is one app) in desk order, each
-with its logo (else the dock's mark in its colour), its name and its live count; a tap opens that desk. Chats is always
-the first icon, with the Ready count, and opens the stock Chats list. Home's top stays (which Wizard, the switch, the
-fuel gauge, the gear) and the stock dock stays as the home screen's dock row; everything beyond Home is the stock phone.
-The views are mutually exclusive: the switch asks every view tweak that must change in the same turn (one tweak reload).
-The desktop never wears Apps: there a grid of desk icons would only repeat the bar's desks, and Desks and Orbs stay
-exactly as they are.
+reads **Desks | Orb | Apps** on both shells (three equal options, mutually exclusive: the switch asks every view tweak
+that must change in the same turn, one tweak reload).
+
+- **Phone:** Home becomes a standard phone home screen: a four-column grid of app icons, ONE per desk (each desk is one
+  app) in desk order, each with its logo (else the dock's mark in its colour), its name and its live count; a tap opens
+  that desk. Chats is always the first icon, with the Ready count, and opens the stock Chats list; a **+** tile ends the
+  grid. Home's top stays (which Wizard, the switch, the fuel gauge, the gear).
+- **Desktop:** Home is a launchpad over the wallpaper (`desktop.js`): one icon per open app / desk (logo, name, live
+  count), Chats first, **+** last; a click opens that app's desk (the stock window, the full desk). Back to the grid:
+  the round Back beside the orb or the shell's own Home key ⌥` (no new binding). The orb floats at the bottom centre on
+  every screen (the shell's own orb drawing: click talks, hold commands, a sideways drag steps desks) and windows end
+  above its row. The bar keeps the switch, the fuel gauge and the gear; the desk numbers step aside.
+
+**View chrome shared by Orb and Apps** (`web/layouts/apps/chrome.js` + `chrome.css`, scoped to `html[data-view-chrome]`):
+
+- Phone, Orb and Apps: the stock desk switcher (dots, scrub, pill glass) is gone on every screen; only the dock orb is
+  left, at the same spot with its stock gestures. On Orb Home the centre orb is the orb (the dock fades out there).
+- A round 48 px **Back** beside the orb (phone: in the dock row, left; desktop: left of the floating orb) on any opened
+  app / thread / Chats screen; it goes Home (the ring in Orb, the grid in Apps).
+- **+** (Apps: the grid's last tile; Orb: a small button beside the Chats pill) opens a sheet of every installed app not
+  open yet: `api.apps.list()` (the stock picker's Apps group, `WosAppKinds.kinds().apps`: no agents, agent apps,
+  connectors or in-development copies) minus Chats and every app open on a desk. A pick opens it on a desk of its own
+  (`api.apps.openDesk`: the phone gives a new app its own desk; the desktop adapter's `openAppDesk` starts a fresh desk,
+  or goes to the app's desk if it has one); it then shows as its own icon / satellite.
+- Layout-only API added: `api.desks.list()` (one `{ desk, id, name }` per desk on either shell: phone `phoneDesks`,
+  desktop `deskApps`) and `api.apps.openDesk(id)`.
 
 ## Layouts a tweak can wear
 

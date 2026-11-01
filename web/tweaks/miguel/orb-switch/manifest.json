@@ -1,6 +1,6 @@
 {
   "id": "miguel/orb-switch",
-  "name": "Desks | Orbs | Apps switch",
+  "name": "Desks | Orb | Apps switch",
   "version": "1.0.0",
   "author": "miguel",
   "apiVersion": 1,
@@ -8,5 +8,5 @@
     "layout",
     "settings"
   ],
-  "description": "A small view switch: desktop, Desks | Orbs in the middle of the top bar in place of the date and time; phone, Desks | Orbs | Apps at the top of Home. One tap changes the view for this device, no reload"
+  "description": "A small view switch, Desks | Orb | Apps: desktop, in the middle of the top bar in place of the date and time; phone, at the top of Home. One tap changes the view for this device, no reload"
 }

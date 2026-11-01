@@ -32,7 +32,7 @@ html[data-layout="orb"] {
   --ob-v1: #7c5cff; --ob-v2: #c26bff; --ob-v3: #4cc9ff;
 }
 /* Phone Home from the first frame (before the layout's script has drawn anything): the night sky in place of the
- * stock Home, and only Home's top stays (which Wizard, Desks | Orbs, the AI fuel gauge, the gear). The orb and its
+ * stock Home, and only Home's top stays (which Wizard, Desks | Orb | Apps, the AI fuel gauge, the gear). The orb and its
  * satellites come from layouts/orb/phone.js. Every other screen of the phone is untouched. */
 html[data-shell="phone"][data-layout="orb"] .home-desk::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--ob-sky); }
 html[data-shell="phone"][data-layout="orb"] .home-desk .home > :not([data-slot="home-main"], .home-tools) { display: none !important; }

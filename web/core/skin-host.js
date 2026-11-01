@@ -27,8 +27,8 @@
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
-    // Miguel's miguel/apps-home tweak wears it on the phone: Home as a standard phone home screen, one app icon per desk.
-    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Phone Home as an app grid: one icon per desk, Chats first', css: true, js: true }),
+    // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
+    Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
   ]);
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
@@ -386,6 +386,9 @@
       apps: Object.freeze({
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
+        // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
+        // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
+        openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
         all: () => { if (live()) shell.openPicker?.(); },
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
         search: () => { if (live()) shell.openPalette?.(); },
@@ -453,6 +456,11 @@
           if (!h || !isDoc) return null;
           const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
         },
+      }),
+      /* The desks in order, one app each, on either shell: [{ desk, id, name }] (Home and empty desks left out; a Chats
+       * desk is id 'wizard'). nav.goDesk(desk) opens one. The Apps view's grid (phone: phoneDesks, desktop: deskApps). */
+      desks: Object.freeze({
+        list: () => { const l = live() ? (shell.deskApps || shell.phoneDesks)?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {

@@ -2,7 +2,7 @@
  * layout while the scene is mounted (html[data-orb-phone]); the desktop and Desks never see a rule of it. The colours
  * are the wearing tweak's skin-layer tokens (--ob-*: miguel/orb-shell tweak.css). */
 
-/* ---------- Home: the night sky under Home's own top (which Wizard, Desks | Orbs, the fuel gauge, the gear) ---------- */
+/* ---------- Home: the night sky under Home's own top (which Wizard, Desks | Orb | Apps, the fuel gauge, the gear) ---------- */
 /* Behind everything on Home (z-index -1 in the desk strip's own stacking context), so Home's top keeps its exact
  * places; the stock Home markup is never re-positioned. */
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sky {
@@ -36,7 +36,7 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat {
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:active .ob-sat-face { transform: scale(.92); }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
 /* off Home they fade out with it */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer:not(.is-home) :is(.obp-sat, .obp-chats) { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: opacity 200ms ease, visibility 0s linear 200ms; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer:not(.is-home) :is(.obp-sat, .obp-chats, .obp-plus) { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: opacity 200ms ease, visibility 0s linear 200ms; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-face {
   width: 40px; height: 40px; display: grid; place-items: center; pointer-events: none; transition: transform 120ms ease;
   filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 35%, transparent));
@@ -83,5 +83,17 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats:focus-vis
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats-n { color: var(--ob-amber); font-variant-numeric: tabular-nums; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats-n[hidden] { display: none; }
 /* back on Home: they fade in with the scene */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home :is(.obp-sat, .obp-chats) { animation: obp-in 200ms ease; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home :is(.obp-sat, .obp-chats, .obp-plus) { animation: obp-in 200ms ease; }
+/* the small + beside the pill (right of it, level with it): the sheet of every app not open yet (chrome.js) */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus {
+  position: absolute; left: calc(50% + var(--obp-pill-w, 200px) / 2 + 10px); bottom: calc(var(--safe-b, 0px) + 28px);
+  width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; box-sizing: border-box; z-index: 6; pointer-events: auto;
+  display: grid; place-items: center; color: var(--ob-ink);
+  background: var(--ob-glass); box-shadow: inset 0 0 0 1px var(--ob-line2), 0 8px 22px var(--ob-core);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background 140ms ease;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus:active { background: var(--ob-glass-solid); }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ob-ink2); }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus .vc-ico { width: 20px; height: 20px; }
 @keyframes obp-in { from { opacity: 0; } }

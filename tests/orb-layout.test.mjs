@@ -80,7 +80,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'search']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'openDesk', 'search']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
@@ -279,14 +279,14 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
   D.host.setLayout('classic'); await settle();
 });
 
-test('Desks | Orbs switch: desktop bar and phone Home, switches only its own author\'s tweak, through the device tweak mix', async () => {
+test('Desks | Orb | Apps switch: desktop bar and phone Home, switches only its own author\'s tweak, through the device tweak mix', async () => {
   const src = read('web/tweaks/miguel/orb-switch/tweak.js');
-  // equal views, named Desks, Orbs and (phone) Apps (Miguel, 31 Oct / 1 Nov 2026); the tweak ids stay, so devices keep
-  // their choice; never classic / new / experimental wording on the options
-  assert.match(src, /\[\['classic', 'Desks', null\], \['orb', 'Orbs', 'miguel\/orb-shell'\]\]/);
-  assert.match(src, /\[\['classic', 'Desks', null\], \['orb', 'Orbs', 'miguel\/orb-shell'\], \['apps', 'Apps', 'miguel\/apps-home'\]\]/);
-  assert.ok(!/'(Classic|Orb|New|Experimental)'/.test(src), 'labels are Desks, Orbs, Apps');
-  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orbs view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orbs | Apps switch');
+  // equal views, named Desks, Orb (singular, round 4) and Apps, the same three on both shells (Miguel, 31 Oct / 1 Nov
+  // 2026); the tweak ids stay, so devices keep their choice; never classic / new / experimental wording on the options
+  assert.match(src, /const VIEWS = \[\['classic', 'Desks', null\], \['orb', 'Orb', 'miguel\/orb-shell'\], \['apps', 'Apps', 'miguel\/apps-home'\]\];/);
+  assert.ok(!/'(Classic|Orbs|New|Experimental)'/.test(src), 'labels are Desks, Orb, Apps');
+  assert.ok(!/VIEWS = desk \?/.test(src), 'one list for both shells');
+  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orb view'); assert.equal(JSON.parse(read('web/tweaks/miguel/orb-switch/manifest.json')).name, 'Desks | Orb | Apps switch');
   assert.match(src, /api\.settings\.toggleTweak\(t\)/); assert.match(src, /if \(desk\) api\.slot\.mount\('bar-center', box, -10\);\n  else api\.slot\.mount\('home-main', box, -20\);/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
@@ -300,7 +300,7 @@ test('Desks | Orbs switch: desktop bar and phone Home, switches only its own aut
   assert.equal(await api.settings.toggleTweak('miguel/orb-shell'), true); assert.deepEqual(asked, ['miguel/orb-shell']);
   await f.clear();
   const css = read('web/tweaks/miguel/orb-switch/tweak.css');
-  assert.match(css, /html\[data-shell="desktop"\]:not\(\[data-layout="orb"\]\) \.os-side\.is-classic/, 'the lit side follows what is really worn');
+  assert.match(css, /html\[data-shell="desktop"\]:not\(\[data-layout="orb"\], \[data-layout="apps"\]\) \.os-side\.is-classic,\nhtml\[data-shell="desktop"\]\[data-layout="orb"\] \.os-side\.is-orb,\nhtml\[data-shell="desktop"\]\[data-layout="apps"\] \.os-side\.is-apps \{/, 'the lit side follows what is really worn');
 });
 
 test('bar-center: a core slot in the middle of the desktop bar; the clock steps aside while it holds anything', () => {
