@@ -1,7 +1,7 @@
-/* Orb switcher (James, 31 Oct 2026 prototype): hold the orb and a radial semicircle opens above the thumb, two
- * rings of annular wedges. Slide onto one without lifting, release to choose. One slot is the voice command (it
- * needs a deliberate slide and slow dwell so holding or sliding past never records); open desktops fill the inner
- * ring in strip order, and unopened pinned apps fill the outer ring. Slots are fixed so the thumb learns them. The shell owns apps, desks and voice and hands them in
+/* Orb switcher: hold the orb for pinned apps, voice and Customize only (James, 1 Nov 2026).
+ * Pinned apps fill the inner ring first, then the outer ring, in the saved pin order. Open desktops stay on swipe up.
+ * Voice needs a deliberate slide and slow dwell: holding or sliding past never records.
+ * The shell owns app placement, desktop previews and voice and hands them in
  * through the trusted tweak host; this module owns geometry, hit-testing, paint and the Customize sheet.
  *
  *   createOrbSwitcher(adapter)       host: { apps(), openItems(), hover(i|null), vib(ms),
@@ -13,8 +13,8 @@
 export default function createOrbSwitcher(adapter) {
   'use strict';
   const KEY = 'wos.orbSwitcher.v1', EVT = 'wos:orb-switcher';
-  const HOLDS = [200, 300, 450];
-  const DEFAULTS = Object.freeze({ pins: [], voiceSlot: 'near', holdMs: 300, quickTakes: false, showOpen: true });
+  const HOLDS = [200, 300, 450], MAX_PINS = 13;
+  const DEFAULTS = Object.freeze({ pins: [], voiceSlot: 'near', holdMs: 300, quickTakes: false });
   // Condensed for the thumb (James, 31 Oct): the inner ring starts right at the orb's edge, the outer ring is directly
   // beside it (2 px hairline gap). Six inner and nine outer slots over a 210° sweep keep every wedge >= 40 px of arc at
   // its mid-radius (inner 41, outer 47). Everything is within 138 px of the orb centre, so it fits a 360 px phone unscaled.
@@ -29,31 +29,34 @@ export default function createOrbSwitcher(adapter) {
   function norm(o) {
     o = o && typeof o === 'object' ? o : {};
     const pins = []; for (const id of Array.isArray(o.pins) ? o.pins : []) if (typeof id === 'string' && id && id.length < 80 && !pins.includes(id)) pins.push(id);
-    return { pins: pins.slice(0, 40), voiceSlot: o.voiceSlot === 'far' ? 'far' : 'near', holdMs: HOLDS.includes(o.holdMs) ? o.holdMs : DEFAULTS.holdMs,
-      quickTakes: o.quickTakes === true, showOpen: o.showOpen !== false };
+    return { pins: pins.slice(0, MAX_PINS), voiceSlot: o.voiceSlot === 'far' ? 'far' : 'near', holdMs: HOLDS.includes(o.holdMs) ? o.holdMs : DEFAULTS.holdMs,
+      quickTakes: o.quickTakes === true };
   }
   let cfg = (() => { try { return norm(JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (_) { return norm({}); } })();
   function save() { try { localStorage.setItem(KEY, JSON.stringify(cfg)); } catch (_) {} window.dispatchEvent(new CustomEvent(EVT, { detail: cfg })); }
   function set(patch) { cfg = norm({ ...cfg, ...patch }); save(); paintSheet(); }
   const onStorage = e => { if (e.key === KEY) { cfg = (() => { try { return norm(JSON.parse(e.newValue || '{}')); } catch (_) { return norm({}); } })(); paintSheet(); } };
   window.addEventListener('storage', onStorage);
+  // The registry may finish loading/installing after Customize opened. Never freeze an empty app picker.
+  const onApps = () => paintSheet();
+  window.addEventListener('wizard:apps', onApps);
 
   let host = adapter, st = null, sheet = null, disposed = false;
   const H = () => host || { apps: () => [], openItems: () => [], openApp() {}, goDesk() {}, hover() {}, vib() {}, cancelGesture() {}, armBack() {}, voice: { enabled: () => false, start() {}, active: () => false, finish() {}, cancel() {}, pause() {} } };
 
   /* ---------------- layout ---------------- */
-  // k increases right-to-left. Assign strip/pin order left-to-right, without repacking
+  // k increases right-to-left. Assign pin order left-to-right, inner ring first, without filling
   // empty slots. Voice is always rightmost; Customize always far left on the outer ring.
   function assign(items, voiceSlot) {
     const out = [], vRing = voiceSlot === 'far' ? 1 : 0;
     out.push({ kind: 'voice', ring: vRing, k: 0 });
     out.push({ kind: 'custom', ring: 1, k: N_OUT - 1 });
-    const desks = items.filter(it => it.open), pins = items.filter(it => !it.open);
+    const pins = items;
     const inner = Array.from({ length: N_IN - (vRing === 0 ? 1 : 0) }, (_, i) => N_IN - 1 - i);
     const outer = Array.from({ length: N_OUT - 1 - (vRing === 1 ? 1 : 0) }, (_, i) => N_OUT - 2 - i);
     const add = (item, ring, k) => out.push({ kind: 'app', ring, k, item });
-    desks.slice(0, inner.length).forEach((it, i) => add(it, 0, inner[i]));
-    const rest = pins.concat(desks.slice(inner.length)); // pins own their slots; overflow uses only room left after them
+    pins.slice(0, inner.length).forEach((it, i) => add(it, 0, inner[i]));
+    const rest = pins.slice(inner.length);
     rest.slice(0, outer.length).forEach((it, i) => add(it, 1, outer[i]));
     if (rest.length > outer.length) console.info('[orb-switcher] ' + (rest.length - outer.length) + ' app(s) did not fit and were left out');
     return out;
@@ -80,15 +83,13 @@ export default function createOrbSwitcher(adapter) {
 
   /* ---------------- items ---------------- */
   function buildItems() {
-    const h = H(), catalog = new Map(h.apps().map(a => [a.id, a])), open = h.openItems(), byId = new Map(open.map(o => [o.id, o]));
-    const list = [], openIds = new Set(open.flatMap(o => o.appIds || [o.id]));
-    if (cfg.showOpen) for (const o of open) list.push({ id: o.id, label: o.name, html: o.html, desk: o.desk, open: true, cur: !!o.cur, pinned: cfg.pins.includes(o.id) });
-    for (const id of cfg.pins) {
-      const a = catalog.get(id) || byId.get(id); if (!a || (cfg.showOpen && openIds.has(id))) continue;
-      // With Show open apps off, pins remain launch shortcuts even when their app is open.
-      list.push({ id, label: a.name, html: a.html, desk: null, open: false, cur: false, pinned: true });
-    }
-    return list;
+    const h = H(), catalog = new Map(h.apps().map(a => [a.id, a])), open = h.openItems();
+    // A desk can hold several apps. Its focused title/id must not replace or hide another pinned app on it.
+    return cfg.pins.flatMap(id => {
+      const a = catalog.get(id); if (!a) return [];
+      const o = open.find(o => (o.appIds || [o.id]).includes(id));
+      return [{ id, label: a.name, html: a.html, desk: o?.desk ?? null, open: !!o, cur: !!o?.cur, pinned: true }];
+    });
   }
 
   /* ---------------- the radial ---------------- */
@@ -111,7 +112,7 @@ export default function createOrbSwitcher(adapter) {
     }).join('')}</svg>`;
     const icons = wedges.map((w, i) => {
       const dx = Math.cos(w.am * Math.PI / 180) * 5, dy = -Math.sin(w.am * Math.PI / 180) * 5;
-      return `<div class="wor-ic ${w.kind}${w.item?.cur ? ' cur' : ''}${w.kind === 'voice' && !voiceOk ? ' dis' : ''}" data-i="${i}" style="left:${w.x.toFixed(1)}px;top:${w.y.toFixed(1)}px;--mx:${dx.toFixed(1)}px;--my:${dy.toFixed(1)}px;--d:${Math.round((w.ring * 90 + w.k * 22))}ms">${w.kind === 'voice' ? MIC : w.kind === 'custom' ? GEAR : w.item.html}${w.item?.cur ? '<i class="wor-dot"></i>' : ''}</div>`;
+      return `<div class="wor-ic ${w.kind}${w.item?.cur ? ' cur' : ''}${w.kind === 'voice' && !voiceOk ? ' dis' : ''}" data-i="${i}" style="left:${w.x.toFixed(1)}px;top:${w.y.toFixed(1)}px;--mx:${dx.toFixed(1)}px;--my:${dy.toFixed(1)}px;--d:${Math.round((w.ring * 90 + w.k * 22))}ms">${w.kind === 'voice' ? MIC : w.kind === 'custom' ? GEAR : w.item.html}${w.item?.open ? '<i class="wor-dot"></i>' : ''}</div>`;
     }).join('');
     el.innerHTML = `<div class="wor-veil"></div>${svg}${icons}<div class="wor-label" role="status" aria-live="polite"></div>`;
     document.body.appendChild(el); document.body.classList.add('wor-open');
@@ -167,7 +168,7 @@ export default function createOrbSwitcher(adapter) {
     if (!st) return;
     const L = st.el.querySelector('.wor-label'), w = st.sel == null ? null : st.wedges[st.sel];
     let t;
-    if (!w) t = 'Slide to choose';
+    if (!w) t = st.items.length ? 'Slide to choose' : 'Pin apps in Customize';
     else if (w.kind === 'voice') t = !st.voiceOk ? 'Voice command · finish the current recording first'
       : st.voice === 'rec' ? 'Listening · let go to run · slide out to cancel'
       : st.voice === 'starting' ? 'Starting…' : 'Voice command · hold still to start';
@@ -231,7 +232,7 @@ export default function createOrbSwitcher(adapter) {
       if (vs.voice === 'rec') { H().voice.finish(); out = { kind: 'voice' }; }
       else if (vs.voice === 'starting') { vs.after = 'finish'; out = { kind: 'voice' }; }
     } else if (w?.kind === 'custom') out = { kind: 'customize' };
-    else if (w?.kind === 'app') out = w.item.desk != null ? { kind: 'desk', desk: w.item.desk, id: w.item.id } : { kind: 'open', id: w.item.id };
+    else if (w?.kind === 'app') out = { kind: 'open', id: w.item.id }; // the shared opener, never a cached desk index
     close();
     return out;
   }
@@ -247,9 +248,9 @@ export default function createOrbSwitcher(adapter) {
   const UP2 = '<span class="wor-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>';
   function pinRows() {
     const catalog = new Map(H().apps().map(a => [a.id, a])), pinned = cfg.pins.filter(id => catalog.has(id));
-    const row = (a, on, i, n) => `<div class="wor-row" data-app="${esc(a.id)}"><span class="wor-rico">${a.html}</span><span class="wor-nm">${esc(a.name)}</span>${on ? `<span class="wor-mv" role="group" aria-label="Move ${esc(a.name)}"><button type="button" data-mv="top" aria-label="Move ${esc(a.name)} to top"${i === 0 ? ' disabled' : ''}>${UP2}</button><button type="button" data-mv="up" aria-label="Move ${esc(a.name)} up"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" data-mv="down" aria-label="Move ${esc(a.name)} down"${i === n - 1 ? ' disabled' : ''}>↓</button></span>` : ''}<button type="button" class="wor-sw${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="Pin ${esc(a.name)}" data-pin><i></i></button></div>`;
+    const row = (a, on, i, n) => `<div class="wor-row" data-app="${esc(a.id)}"><span class="wor-rico">${a.html}</span><span class="wor-nm">${esc(a.name)}</span>${on ? `<span class="wor-mv" role="group" aria-label="Move ${esc(a.name)}"><button type="button" data-mv="top" aria-label="Move ${esc(a.name)} to top"${i === 0 ? ' disabled' : ''}>${UP2}</button><button type="button" data-mv="up" aria-label="Move ${esc(a.name)} up"${i === 0 ? ' disabled' : ''}>↑</button><button type="button" data-mv="down" aria-label="Move ${esc(a.name)} down"${i === n - 1 ? ' disabled' : ''}>↓</button></span>` : ''}<button type="button" class="wor-sw${on ? ' on' : ''}" role="switch" aria-checked="${on}" aria-label="Pin ${esc(a.name)}" data-pin${!on && cfg.pins.length >= MAX_PINS ? ' disabled' : ''}><i></i></button></div>`;
     const rest = H().apps().filter(a => !cfg.pins.includes(a.id));
-    return `<div class="wor-g"><h4>Pinned apps</h4><p class="wor-note">Inner ring: open desktops. Outer ring: pinned apps. Both run left to right; already-open pins appear only as desktops.</p>${pinned.length ? pinned.map((id, i) => row(catalog.get(id), true, i, pinned.length)).join('') : '<div class="wor-empty">Nothing pinned yet. Pin an app below.</div>'}</div>
+    return `<div class="wor-g"><h4>Pinned apps</h4><p class="wor-note">Pinned apps fill the radial. Open desktops stay on swipe up.</p><p class="wor-note">Up to ${MAX_PINS} pins, in your order: inner ring first, then outer. Open apps keep their pin.</p>${pinned.length ? pinned.map((id, i) => row(catalog.get(id), true, i, pinned.length)).join('') : '<div class="wor-empty">Nothing pinned yet. Pin an app below.</div>'}</div>
       <div class="wor-g"><h4>Add an app</h4>${rest.length ? rest.map(a => row(a, false)).join('') : '<div class="wor-empty">Every app is pinned.</div>'}</div>`;
   }
   const seg = (name, opts, cur) => `<div class="wor-seg" role="radiogroup" aria-label="${esc(name)}">${opts.map(([v, t]) => `<button type="button" role="radio" aria-checked="${v === cur}" data-set="${esc(name)}" data-v="${esc(v)}">${esc(t)}</button>`).join('')}</div>`;
@@ -258,7 +259,7 @@ export default function createOrbSwitcher(adapter) {
     return `${pinRows()}
       <div class="wor-g"><h4>Voice command slot</h4><p class="wor-note">Near: directly right of the orb on the inner ring. Far: rightmost outer slot. Slide onto it, then hold still to start; holding the orb never records.</p>${seg('voiceSlot', [['near', 'Near the orb'], ['far', 'Outer ring']], cfg.voiceSlot)}</div>
       <div class="wor-g"><h4>Voice hold time</h4><p class="wor-note">How long to stay on the microphone before it starts.</p>${seg('holdMs', HOLDS.map(v => [String(v), v + ' ms']), String(cfg.holdMs))}</div>
-      <div class="wor-g">${toggle('showOpen', 'Show open apps', 'Show desktops on the inner ring. Off: only voice inside, pins outside.', cfg.showOpen)}${toggle('quickTakes', 'Short takes (under 3 s) run as commands', 'Off: a tap on the orb always sends a message to your agent, however short.', cfg.quickTakes)}</div>`;
+      <div class="wor-g">${toggle('quickTakes', 'Short takes (under 3 s) run as commands', 'Off: a tap on the orb always sends a message to your agent, however short.', cfg.quickTakes)}</div>`;
   }
   function openSettings() {
     if (disposed || sheet) return;
@@ -287,7 +288,8 @@ export default function createOrbSwitcher(adapter) {
       pins.splice(i, 1); pins.splice(mv.dataset.mv === 'top' ? 0 : mv.dataset.mv === 'up' ? Math.max(0, i - 1) : Math.min(pins.length, i + 1), 0, id);
       return set({ pins });
     }
-    if (e.target.closest('[data-pin]') && id) return set({ pins: cfg.pins.includes(id) ? cfg.pins.filter(x => x !== id) : cfg.pins.concat(id) });
+    const pin = e.target.closest('[data-pin]');
+    if (pin && id && !pin.disabled) return set({ pins: cfg.pins.includes(id) ? cfg.pins.filter(x => x !== id) : cfg.pins.concat(id) });
     const sg = e.target.closest('[data-set]');
     if (sg) return set({ [sg.dataset.set]: sg.dataset.set === 'holdMs' ? +sg.dataset.v : sg.dataset.v });
     const tg = e.target.closest('[data-toggle]');
@@ -305,7 +307,7 @@ export default function createOrbSwitcher(adapter) {
     if (st) { H().cancelGesture(); close(true); return 'radial'; }
     return null;
   }
-  const settingsRow = () => `<div class="st-group" data-orbsw><h4>Orb switcher</h4><button type="button" class="st-row wz-row" data-orbsw-open><span class="st-tx"><b>Hold the orb to switch</b><small>${cfg.pins.length ? cfg.pins.length + ' pinned' : 'Nothing pinned'} · voice command ${cfg.voiceSlot === 'far' ? 'on the outer ring' : 'near the orb'}</small></span><span class="st-go">›</span></button></div>`;
+  const settingsRow = () => `<div class="st-group" data-orbsw><h4>Orb switcher</h4><button type="button" class="st-row wz-row" data-orbsw-open><span class="st-tx"><b>Hold the orb for pinned apps</b><small>${cfg.pins.length ? cfg.pins.length + ' pinned' : 'Nothing pinned'} · voice command ${cfg.voiceSlot === 'far' ? 'on the outer ring' : 'near the orb'}</small></span><span class="st-go">›</span></button></div>`;
 
   const instance = {
     active: () => !disposed,
@@ -316,6 +318,7 @@ export default function createOrbSwitcher(adapter) {
       document.querySelectorAll('.wor, .wor-scrim').forEach(n => n.remove());
       document.body.classList.remove('wor-open');
       window.removeEventListener('storage', onStorage);
+      window.removeEventListener('wizard:apps', onApps);
       disposed = true;
       if (window.WosOrbSwitcher === instance) delete window.WosOrbSwitcher;
     },
