@@ -1,7 +1,7 @@
 // Fixture-only browser acceptance. No request is forwarded; writes are refused.
 // QA_PLAYWRIGHT=<module> node qa-workspaces.cjs; QA_OUT=<evidence directory>.
 const { chromium } = require('./tools/qa-playwright.cjs');
-const fs = require('fs'), path = require('path'), assert = require('assert/strict');
+const fs = require('fs'), path = require('path');
 const ROOT = process.env.QA_WEB_DIR || __dirname, ORIGIN = 'http://wizard-switcher.test';
 const OUT = process.env.QA_OUT || path.join(ROOT, 'evidence/wizard-switcher');
 fs.mkdirSync(OUT, { recursive: true });
@@ -13,6 +13,8 @@ const items = [
   { id: 'managed', name: 'Shared Wizard', kind: 'managed', org: 'Example team', role: 'technical-admin', url: 'http://shared.test', status: 'ready' },
   { id: 'unavailable', name: 'Future Wizard', kind: 'managed', status: 'unknown' }
 ];
+const at = Math.floor(Date.now() / 1000);
+const thread = { id: 'qa-thread', title: 'Synthetic switcher thread', source: 'wizard-mobile', status: 'done', archived: false, hidden: false, message_count: 1, started_at: at - 200, last_active: at - 100, preview: 'Synthetic text only', preview_role: 'user' };
 const registry = { this: { wizard: 'Personal Wizard', owner: 'Example owner' }, devices: [], managed: [items[2], items[3]] };
 const type = f => ({ '.html': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' }[path.extname(f)] || 'application/octet-stream');
 async function boot(browser, { width, skin = 'nebula', native = true, standalone = false }) {
@@ -34,12 +36,16 @@ async function boot(browser, { width, skin = 'nebula', native = true, standalone
     }
     if (/\/api\/system\/devices$/.test(u.pathname)) return route.fulfill({ json: registry });
     if (/\/ui-preferences$/.test(u.pathname)) return route.fulfill({ json: { pinnedChats: [], spaces: [], migrations: { 'launcher.v1': true } } });
-    if (/\/api\/sessions$/.test(u.pathname)) return route.fulfill({ json: { data: [], has_more: false } });
+    if (u.pathname === '/wizard/v1/bootstrap') return route.fulfill({ json: { bootstrap: 1, settings: { owner: { name: 'Fixture owner' }, agent: { name: 'Fixture Wizard' }, clock: { timezone: 'UTC' }, voice: {} }, endpoints: { apps: '/wizard/v1/apps', sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs' }, capabilities: { files: true } } });
+    if (/\/api\/sessions$/.test(u.pathname)) return route.fulfill({ json: { data: [thread], has_more: false, total: 1 } });
+    if (u.pathname === '/wizard/hermes/api/sessions/qa-thread') return route.fulfill({ json: { session: thread } });
+    if (u.pathname === '/wizard/hermes/api/sessions/qa-thread/messages') return route.fulfill({ json: { data: [{ id: 1, role: 'user', content: 'Synthetic text only', timestamp: at - 100 }], pagination: { returned: 1, total: 1 }, has_more: false } });
     if (/\/v1\/apps$/.test(u.pathname)) return route.fulfill({ json: { apps: [] } });
     return route.fulfill({ json: {} });
   });
   await ctx.addInitScript(({ skin, native, items, standalone }) => {
-    localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.skin', skin); localStorage.setItem('wos.layout', 'classic');
+    for (const k of ['wos.coached', 'wos.tour.v1', 'wos.tour.done', 'wos.voiceTipSeen']) localStorage.setItem(k, 'true');
+    localStorage.setItem('wos.skin.composition.v1', JSON.stringify({ version: 1, extends: skin })); localStorage.setItem('wos.skin', skin); localStorage.setItem('wos.layout', 'classic');
     localStorage.setItem('wos.workspaces.v1', JSON.stringify([{ id: 'saved', name: 'Saved computer', url: 'http://saved.test', kind: 'remote' }]));
     // Empty saved mix explicitly keeps collaborator Home off in stock screenshots.
     localStorage.setItem('wos.tweaks.mix', '[]');
@@ -91,6 +97,18 @@ async function opaque(b, label) {
 }
 async function checks(b, label) {
   const { p } = b;
+  // Real Look controls, not direct WosSkin.set or a test-only class.
+  await p.evaluate(() => WizCore.deeplink.route('/wizard-os-home/?view=skin'));
+  for (const target of [label.endsWith('nebula') ? 'grove' : 'nebula', label.endsWith('nebula') ? 'nebula' : 'obsidian-light']) {
+    const family = target === 'obsidian-light' ? 'mizel' : 'wizard';
+    const familyButton = p.locator(`[data-skinfamily="${family}"]:visible`).first();
+    if (await familyButton.count()) await familyButton.click();
+    await p.locator(`[data-skinpick="${target}"]:visible`).first().click();
+    await p.waitForFunction(id => document.documentElement.dataset.skin === id, target);
+    await p.waitForFunction(() => !document.querySelector('.mz-intro'));
+  }
+  await p.evaluate(() => WizCore.deeplink.route('/wizard-os-home/?view=home'));
+  await p.waitForTimeout(800);
   const hitIcon = await hit(p, '.wz-workspaces-control'); ok(hitIcon.hits && hitIcon.onScreen && hitIcon.width >= 44 && hitIcon.height >= 44, label + ': icon hit target', JSON.stringify(hitIcon));
   await open(b);
   const rows = await p.locator('.wz-workspaces-item').count();
@@ -107,7 +125,20 @@ async function checks(b, label) {
   ok(await p.locator('.wz-workspaces-panel').count() === 0 && p.url() === url, label + ': native Back closes menu without exit');
   await open(b); await p.evaluate(() => history.back()); await p.waitForTimeout(200);
   ok(await p.locator('.wz-workspaces-panel').count() === 0 && p.url() === url, label + ': browser Back closes menu without exit');
-  await open(b);
+  // Hold a real split thread beside the desktop list, and the actual Chats
+  // header on phone, for the delayed-switch proof (not only plain Home).
+  if (b.phone) {
+    await p.evaluate(() => __wos.openWizardThread('qa-thread'));
+    await p.locator('.ch-thread').first().waitFor({ state: 'visible' });
+    await p.evaluate(() => __wos.onBack());
+    await p.locator('.wz-workspaces-control.in-chats').waitFor({ state: 'visible' });
+    const h = await hit(p, '.wz-workspaces-control.in-chats'); ok(h.hits && h.onScreen, label + ': phone Chats header control hit-test');
+  } else {
+    await p.evaluate(() => __wux.openThread('qa-thread'));
+    await p.locator('.pane-main .ch-thread').first().waitFor({ state: 'visible' });
+    ok(await p.locator('.pane-list').first().isVisible(), label + ': thread remains beside visible Chats list');
+  }
+  await open(b); await p.screenshot({ path: path.join(OUT, label + '-chats-menu.png') });
   await p.evaluate(() => {
     const row = document.querySelector('[data-workspace-id="mac"]');
     row.addEventListener('click', () => {
