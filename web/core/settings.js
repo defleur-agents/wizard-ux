@@ -266,7 +266,10 @@
       const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
       return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
     }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">The picked skin brings these ideas. Switch each one on or off.</p>${err}${groups}</div>`;
+    // Core defaults keep their individual off-switches; author All never changes those release-wide choices.
+    const core = s.tweaks.filter(t => t.builtin);
+    const coreRows = core.length ? `<div class="tw-author"><h5>Built-in choices</h5>${rows(core)}</div>` : '';
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">The picked skin brings these ideas. Switch each one on or off.</p>${err}${groups}${coreRows}</div>`;
   }
   let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
