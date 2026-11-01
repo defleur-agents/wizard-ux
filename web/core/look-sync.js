@@ -64,7 +64,8 @@
       } catch (_) {}
       return { version: null, synced: false, pending: empty() };
     };
-    let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null;
+    let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null, known = null;
+    const live = id => !known || known.has(id); // retired ids an old device still stores are no choice: never seeded, never counted
     const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0;
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
@@ -72,7 +73,7 @@
     function local() {
       const doc = empty(), s = skin.chosen;
       if (typeof s === 'string' && SKIN.test(s)) doc.skin = { id: s, at: 0 };
-      for (const id of mixOn(exp.mix)) doc.tweaks[id] = { on: true, at: 0 };
+      for (const id of mixOn(exp.mix)) if (live(id)) doc.tweaks[id] = { on: true, at: 0 };
       return doc;
     }
     const absent = () => Object.assign(new Error('absent'), { absent: true });
@@ -113,6 +114,7 @@
       if (busy) { again = true; return; }
       busy = true; cancel(timer); timer = 0; last = 'syncing';
       try {
+        if (!known) try { known = new Set(await exp.tweakIds()); } catch (_) { /* catalog unreadable now: count every id */ }
         let { doc, version } = await get();
         for (let tries = 0; tries < 4; tries++) {
           const pending = JSON.parse(JSON.stringify(meta.pending));
@@ -120,7 +122,7 @@
           if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || dirty()) want = mine; } // seed; an untouched empty device never writes
           else if (dirty()) want = merge(doc, pending);
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
-          else if (!meta.synced && mixOn(exp.mix).length > onIds(seeds(doc)).length) want = merge(changes(doc), local());
+          else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
           if (want) want = exclusive(want, views());
           if (want && !same(want, doc)) {
             const w = await put(want, version);
