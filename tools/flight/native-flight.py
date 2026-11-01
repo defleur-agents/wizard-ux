@@ -18,6 +18,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 import importlib.util
+import renderer_r13
 _spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
 _transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
 
@@ -280,17 +281,19 @@ try:
     (ROOT/'avds').mkdir(exist_ok=True)
     (ROOT/'tmp').mkdir(exist_ok=True)
     record('hardware KVM accessible', os.access('/dev/kvm', os.R_OK|os.W_OK))
+    renderer_meta=renderer_r13.preflight(SDK)
+    pinned=json.loads((ROOT/'proof/renderer-preflight-r13.json').read_text())
+    record('installed lavapipe metadata matches pinned host inputs', renderer_meta['host_inputs']==pinned['host_inputs'] and renderer_meta['help_gpu']==pinned['help_gpu'])
     sdk_prepare()
     # SDK-documented explicit pair outside shared ADB's default scan range.
-    # Official workaround for Chromium graphics incompatibility; host-only.
-    # https://developer.android.com/studio/run/emulator-troubleshooting#cannot-open
-    # Keep every R9 argument unchanged except this one documented feature disable.
+    # R13: installed -help-gpu documents lavapipe. GLES auto-selection is not proof.
+    # Keep R10 guest Vulkan disabled; prove actual Mesa library + backend at boot/end.
     (OUT/'emulator-help-feature.txt').write_text(run([SDK/'emulator/emulator','-help-feature']))
     emulator_argv = [str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-ports','6168,6169',
         '-no-direct-adb','-adb-path',str(wrapper),
-        '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','swiftshader',
+        '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','lavapipe',
         '-memory','4096','-cores','4','-feature','-Vulkan']
-    result['graphics']={'gpu':'swiftshader','feature_override':['-feature','-Vulkan'],
+    result['graphics']={'gpu':'lavapipe','feature_override':['-feature','-Vulkan'],
         'argv':emulator_argv,'scope':'emulator functional acceptance; not physical GPU proof'}
     (OUT/'emulator-argv.json').write_text(json.dumps(emulator_argv,indent=2))
     emulator = sp.Popen(emulator_argv, env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
@@ -308,6 +311,7 @@ try:
     for setting in ['window_animation_scale','transition_animation_scale','animator_duration_scale']:
         shell('settings put global '+setting+' 0')
     record('boot unlocked API35 input/window services ready',shell('getprop ro.build.version.sdk').strip()=='35')
+    record('actual Mesa lavapipe backend at boot', renderer_r13.observe(emulator,OUT,'renderer-boot',SDK)['accepted'])
     cert, key = tls_prepare()
     transport.start_logcat(restart=True)  # root changed adbd before installation
     readiness('post-tls-user-unlocked', 'dumpsys user', lambda s:bool(re.search(r'UserInfo\{0:[^\n]+\n(?:(?!\s*UserInfo\{)[\s\S])*?\n\s+State: RUNNING_UNLOCKED\b',s)) and 'Started users state: [0=RUNNING_UNLOCKED]' in s)
@@ -476,6 +480,7 @@ try:
     after_shortcuts=shell('dumpsys shortcut');(OUT/'shortcuts-after.txt').write_text(after_shortcuts)
     record('same native pin identity retained',re.findall(r'id=homeapp-[^,}\s]+',shortcuts_before)==re.findall(r'id=homeapp-[^,}\s]+',after_shortcuts))
     capture('12-reconnected-same-pin')
+    record('actual Mesa lavapipe backend after complete flight', renderer_r13.observe(emulator,OUT,'renderer-complete',SDK)['accepted'])
     result['status']='passed-needs-visual-inspection'
 except Exception as e:
     result['failure']=repr(e)
