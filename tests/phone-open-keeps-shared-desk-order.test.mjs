@@ -10,7 +10,7 @@ const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const syncSrc = fs.readFileSync(new URL('../web/core/workspace-sync.js', import.meta.url), 'utf8');
 const features = fs.readFileSync(new URL('../web/core/features.js', import.meta.url), 'utf8');
 const grab = (re, what) => { const m = app.match(re); assert.ok(m, `${what} not found in app.js`); return m[0]; };
-const helper = grab(/const sharedDeskOrder = [^\n]+\n/, 'sharedDeskOrder');
+const helper = grab(/const sharedDeskOrder = [^\n]+\n  function insertPos\(\) \{[^\n]+\n/, 'sharedDeskOrder + insertPos');
 const bring = grab(/function bringBeside\(id\) \{[\s\S]*?\n  \}\n/, 'bringBeside');
 
 function phone(sync) {
@@ -21,11 +21,10 @@ function phone(sync) {
   };
   vm.runInNewContext(`
     function deskOf(id) { return desks.findIndex(d => d.wins.includes(id)); }
-    function insertPos() { return idx + 1; }
     function syncDesks() {} function save() {} function renderDesk() {}
     function blank(o) { return { id: 'dn', wins: [], focus: null, full: false, ...o }; }
     ${helper}${bring}
-    this.bringBeside = bringBeside; this.order = () => desks.map(d => d.id);`, ctx);
+    this.bringBeside = bringBeside; this.insert = () => desks.splice(insertPos(), 0, blank({ wins: ['wn'] })); this.order = () => desks.map(d => d.id);`, ctx);
   return ctx;
 }
 
@@ -41,6 +40,13 @@ test('with workspace sync on the phone leaves the shared desk order alone', () =
     const p = phone({ on: true, ok }); p.bringBeside('w3');
     assert.deepEqual(p.order(), ['home', 'd1', 'd2', 'd3']);
   }
+});
+
+test('with workspace sync on a new app opens on a new desk at the end, not beside Home', () => {
+  const p = phone({ on: true, ok: true }); p.insert();
+  assert.deepEqual(p.order(), ['home', 'd1', 'd2', 'd3', 'dn']);
+  const off = phone(undefined); off.insert();
+  assert.deepEqual(off.order(), ['home', 'dn', 'd1', 'd2', 'd3']);
 });
 
 test('the box without the sync API (ok stays null) keeps the old phone behaviour', () => {
