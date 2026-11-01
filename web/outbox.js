@@ -464,14 +464,16 @@
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
     if (it.steerRunId && !it.steerBody && it.steerDispatch !== 'started') {
-      try {
-        const active = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}` + aq)).json();
-        if (!['running','waiting_for_approval'].includes(active.status) || active.runtime?.model_lock !== 'confirmed'
-          || !window.WosModels?.matchesRuntime(active.runtime, it)) { delete it.steerRunId; await put(it); }
-      } catch (e) {
-        if (![404,409,410].includes(e.status)) throw e;
-        delete it.steerRunId; await put(it);
-      }
+      // A failed preflight has no matching run/session proof either: propagate
+      // it without clearing the steer or silently admitting a new run.
+      const active = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}` + aq)).json();
+      // Identity must be proven before either steering OR converting this
+      // intent into a new turn. A foreign/malformed read is not a route change.
+      if (!active || (active.run_id || active.id) !== it.steerRunId || active.session_id !== it.sessionId
+        || ('run_id' in active && active.run_id !== it.steerRunId) || ('id' in active && active.id !== it.steerRunId))
+        throw new HttpError(412, 'Running reply identity could not be verified · original message kept');
+      if (!['running','waiting_for_approval'].includes(active.status) || active.runtime?.model_lock !== 'confirmed'
+        || !window.WosModels?.matchesRuntime(active.runtime, it)) { delete it.steerRunId; await put(it); }
     }
     if (it.steerRunId) {
       if (it.steerDispatch === 'started') { it.state = 'unconfirmed'; it.error = unconfirmed; await put(it); return; }
@@ -510,6 +512,7 @@
             const r = await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerTarget)}` + aq);
             const run = await r.json();
             terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
+              (!('run_id' in run) || run.run_id === it.steerTarget) && (!('id' in run) || run.id === it.steerTarget) &&
               ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
