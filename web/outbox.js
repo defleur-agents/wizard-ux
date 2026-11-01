@@ -801,7 +801,9 @@
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
         const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, selection_version: it.selection_version, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
-        if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
+        // An unfrozen legacy recap label may become its verified exact transport, not a different route.
+        const legacyAlias = it.provider === 'tinfoil' && route.provider === 'custom:tinfoil-operator';
+        if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider && !legacyAlias))) throw new Error('Selected route changed · original message kept');
         if (it.cancelled || it.cancelRequested) throw new StopRequested(); // Stop tapped while the route was resolving
         Object.assign(it, route, { state: 'queued' });
         if (it.agent) window.WizLive?.pinAgent?.(it.sessionId, it.agent);

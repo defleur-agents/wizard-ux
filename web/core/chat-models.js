@@ -365,7 +365,14 @@
         if (matches.length === 1) provider = matches[0].provider;
       }
       // Old recap metadata used a display label; the transport needs the configured provider slug.
-      if (provider === 'tinfoil') provider = 'custom:tinfoil-operator';
+      if (provider === 'tinfoil') {
+        // This legacy label names only the operator route, never an arbitrary private/public model match.
+        const aliases = M.providers.filter(p => p.slug === 'tinfoil-operator');
+        if (aliases.length !== 1 || aliases[0].is_user_defined !== true
+          || !M.options.some(o => o.value === route.model && o.provider === 'custom:tinfoil-operator'))
+          throw new Error('Saved private provider is not verifiable · choose the model again; original kept');
+        provider = 'custom:tinfoil-operator';
+      }
       if (provider && M.providers.some(p => p.slug === provider && p.is_user_defined)) provider = 'custom:' + provider;
       if (!provider) throw new Error('Model provider unavailable · choose the model again');
       if (isTinfoil(provider) && !M.tinfoilReady()) throw new Error('Set up Tinfoil in its connection app before choosing it');
