@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 const appsJs = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
 const kindsJs = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
-async function boot({ shell = 'mobile', inboxThreads = false, apps = [] } = {}) {
+async function boot({ shell = 'mobile', inboxThreads = false, apps = [], backendApps = [] } = {}) {
   const storage = new Map();
   const window = {
     WizCore: { norm: s => String(s).toLowerCase() },
@@ -32,6 +32,10 @@ async function boot({ shell = 'mobile', inboxThreads = false, apps = [] } = {}) 
   vm.runInNewContext(appsJs, context);
   vm.runInNewContext(kindsJs, context);
   await window.WizCore.appsLoaded();
+  // Production normalizes backend records to kind:wizard. Exercise that shape and
+  // defensive routing for a retained URL or an incomplete registry projection.
+  const registeredBackends = window.WizCore.backendApps();
+  window.WizCore.backendApps = () => [...registeredBackends, ...backendApps];
   const { APPS, APP } = window.WizCore.apps(shell);
   return { window, APPS, APP, page: APP.pages, groups: window.WosAppKinds.kinds(APPS, APP), opens: window.WosAppKinds.opensScreen(APP.pages) };
 }
@@ -50,9 +54,9 @@ test('Pages stays directly openable from both shell pickers', () => {
   const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
   const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(kinds, /const opensScreen = a =>/);
-  assert.match(phone, /const kindTile = a => AK\.opensScreen\(a\)/);
+  assert.match(phone, /const kindTile = a => APP\[a\.id\] && AK\.opensScreen\(a\)/);
   assert.match(phone, /wiz: grp\('wiz', sysSplit\(K\.wiz, kindTile\)\)/);
-  assert.match(desktop, /run: o => AK\.opensScreen\(a\) \? openApp\(a, o\)/);
+  assert.match(desktop, /run: o => APP\[a\.id\] && AK\.opensScreen\(a\) \? openApp\(a, o\)/);
 });
 
 // Execute the actual grouped picker and opener bodies, not a second copy of their policy.
@@ -63,8 +67,8 @@ function section(src, start, end) {
   return src.slice(from, to);
 }
 
-async function picker(shell, inboxThreads) {
-  const state = await boot({ shell, inboxThreads, apps: [
+async function picker(shell, inboxThreads, backendApps = []) {
+  const state = await boot({ shell, inboxThreads, backendApps, apps: [
     { id: 'notifications', name: 'Notifications', url: '/notifications/' },
     { id: 'calendar', name: 'Calendar', url: '/calendar/' },
     { id: 'screenless', name: 'Screenless' },
@@ -109,6 +113,21 @@ async function picker(shell, inboxThreads) {
 }
 
 for (const shell of ['mobile', 'desktop']) {
+  test(`${shell}: backend-only records open settings even with a stale URL or missing kind`, async () => {
+    const apps = [
+      { id: 'backend-normal', kind: 'wizard', name: 'Backend normal' },
+      { id: 'backend-url', kind: 'wizard', name: 'Backend URL', url: '/old-backend/' },
+      { id: 'backend-kindless', name: 'Backend kindless' },
+    ];
+    const p = await picker(shell, true, apps);
+    for (const app of apps) {
+      assert.equal(p.APP[app.id], undefined);
+      p.activate(app.id);
+      assert.equal(p.calls.at(-1)[0], 'settings');
+      assert.equal(p.calls.at(-1)[1], app.id);
+    }
+  });
+
   test(`${shell}: unified-inbox Notifications tile opens settings, never its legacy URL`, async () => {
     const p = await picker(shell, true);
     assert.ok(p.groups.wiz.some(a => a.id === 'notifications'));
@@ -156,4 +175,7 @@ test('agent utilities need an explicit screen opt-in even when they retain a URL
   assert.equal(window.WosAppKinds.opensScreen(app), false);
   assert.equal(window.WosAppKinds.opensScreen({ ...app, screen: true }), true);
   assert.equal(window.WosAppKinds.opensScreen(null), false);
+  const notification = { id: 'notifications', kind: 'wizard', screen: true, url: '/notifications/' };
+  window.WosSkinHost.inboxThreads = true;
+  assert.equal(window.WosAppKinds.opensScreen(notification), false, 'unified inbox wins over screen opt-in');
 });

@@ -24,7 +24,7 @@
   const isAgentApp = a => !!a && (a.agentApp === true || inChats(a));
   // Agent apps may retain a legacy URL (Notifications with the unified inbox). Only an explicit screen opts them
   // into direct opening; ordinary URL-backed apps keep opening their page.
-  const opensScreen = a => !!a && (a.screen === true || (!isAgentApp(a) && (a.kind !== 'wizard' || !!a.url)));
+  const opensScreen = a => !!a && !inChats(a) && (a.screen === true || (!isAgentApp(a) && (a.kind !== 'wizard' || !!a.url)));
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
