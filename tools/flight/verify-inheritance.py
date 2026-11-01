@@ -59,8 +59,10 @@ def verify_inherited(root,manifest,prior_override=None):
  return {'link':link,'checks':checks,'image':report['image'],'image_build':report['image_build'],'image_reuse':report['image_reuse']}
 def verify_native(root,manifest):
  import egress_r15
+ import reader_boundary_r17
  root=Path(root);f=root/'evidence/native/acceptance.json';n=read(f)
  assert egress_r15.verify_evidence(root/'evidence/native',n['checks'])
+ assert reader_boundary_r17.verify_evidence(root/'evidence/native',n['checks'])
  assert n['status']=='passed-needs-visual-inspection' and not n.get('failure') and not n.get('cleanup_error')
  assert n['source_manifest_sha256']==sha(root/'source-manifest.json') and n['source_revision']==manifest['shell_candidate']
  assert n['apk']=={k:manifest['apk'][k] for k in ('sha256','version','versionCode')}

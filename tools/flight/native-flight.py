@@ -21,6 +21,7 @@ import importlib.util
 import renderer_r14
 import egress_r15
 import native_ui_r16 as native_ui
+import reader_boundary_r17 as boundary
 _spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
 _transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
 
@@ -262,6 +263,28 @@ def capture(name):
             with (OUT / (name + '-capture-error.txt')).open('a') as f:f.write(repr(e)+'\n')
 
 
+def settle_reader(phase,crop=None):
+    frames=[];last=None;streak=0
+    for index in range(8):
+        raw=ui()
+        assert find('^Chapter discussions$',raw), 'reader must stay foreground'
+        assert not find(r'^(Highlight|Remove highlight|Add a note|Edit note|Ask AI|Open discussion)$',raw), 'selection toolbar must be closed'
+        stem=phase+'-%02d'%index
+        (OUT/(stem+'.xml')).write_text(raw)
+        raw_screen(stem)
+        stamp=time.monotonic()
+        frame=boundary.sample(raw,OUT/(stem+'.png'),crop)
+        crop=frame['crop'];frame.update(xml=stem+'.xml',monotonic=stamp)
+        frames.append(frame)
+        key=(frame['pair'],frame['crop'],frame['body_rgb_sha256'])
+        streak=streak+1 if key==last else 1;last=key
+        # Save every observed state, not only the successful tail.
+        (OUT/(phase+'.json')).write_text(json.dumps({'frames':frames},indent=2))
+        if streak>=3:return {'frames':frames}
+        time.sleep(.4)
+    raise AssertionError('native reader did not settle within eight captures: '+phase)
+
+
 def sdk_prepare():
     # Reuse preflighted SDK/API35; no downloads or old AVD state. Fresh disposable device.
     manager = SDK/'cmdline-tools/latest/bin/avdmanager'
@@ -359,7 +382,7 @@ try:
     # Do not filter root/adbd: its TCP control transport is not app web egress.
     (OUT/'device-sockets-before.txt').write_text(shell('ss -ntp; iptables -S OUTPUT; ip6tables -S OUTPUT'))
     env={**ENV,'QA_LOST_HIGHLIGHT':'1'}
-    fixture = sp.Popen([sys.executable,str(ROOT/'ux/tools/qa-flight-offline-fixture.py'),
+    fixture = sp.Popen([sys.executable,str(ROOT/'native-fixture-r17.py'),
         '--web',str(ROOT/'ux/web'),'--wisdom-source',str(ROOT/'wisdom'),'--port',str(PORT),
         '--cert',str(cert),'--key',str(key)],env=env,stdout=(OUT/'fixture.jsonl').open('w'),stderr=(OUT/'fixture.log').open('w'))
     until(lambda:(OUT/'fixture.jsonl').stat().st_size>0,60)
@@ -506,10 +529,39 @@ try:
     scroll_tap(re.escape(chosen['entry']['title']));next_page()
     # Move forward to save actual reading position, then kill the process again offline.
     next_page();saved_page=next_page()
-    shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)
+    # Preserve the historical early observation independently; it is not the death baseline.
+    raw=ui();(OUT/'initial-saved.xml').write_text(raw);raw_screen('initial-saved')
+    result['initial_saved_pair']=list(saved_page)
+    result['initial_observed_pair']=list(page_count(raw))
+    # If a real selection toolbar is still exposed, Back dismisses ONLY that surface.
+    if find(r'^(Highlight|Remove highlight|Add a note|Edit note|Ask AI|Open discussion)$',raw):
+        shell('input keyevent KEYCODE_BACK')
+        raw=ui();record('selection Back keeps reader foreground',find('^Chapter discussions$',raw) is not None)
+    reader_evidence:dict={'initial_saved_pair':list(saved_page),'initial_observed_pair':list(page_count(raw))}
+    reader_evidence['prekill']=settle_reader('prekill')
+    # NO HOME, navigation, UI dump or fixture call between final native pixels and death.
+    reader_evidence['force_stop_started_monotonic']=time.monotonic()
+    shell('am force-stop '+PKG)
+    if reader_evidence['initial_saved_pair']!=reader_evidence['prekill']['frames'][-1]['pair']:
+        reader_evidence['finding']={'name':'live pre-death reflow observed','initial':reader_evidence['initial_saved_pair'],'stable':reader_evidence['prekill']['frames'][-1]['pair'],'status':'open-live-reflow-not-resolved-by-native-durability'}
+        result.setdefault('findings',[]).append(reader_evidence['finding'])
+    (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     record('second process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
-    tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30);time.sleep(8)
-    record('actual offline reading page survives second process death',page_count()==saved_page,{'saved':saved_page,'restored':page_count()})
+    tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30)
+    reader_evidence['restored']=settle_reader('restored',reader_evidence['prekill']['frames'][-1]['crop'])
+    (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
+    record('actual offline reading page survives second process death',reader_evidence['restored']['frames'][-1]['pair']==reader_evidence['prekill']['frames'][-1]['pair'],reader_evidence)
+    record('exact prekill reader pixels and page survive process death',boundary.compare(reader_evidence['prekill']['frames'][-1],reader_evidence['restored']['frames'][-1]),reader_evidence)
+    # Also retain the R16 background/lifecycle path; neither death arm may drift.
+    reader_evidence['home_prekill']=settle_reader('home_prekill',reader_evidence['prekill']['frames'][-1]['crop'])
+    record('HOME arm begins at identical visible reader position',boundary.compare(reader_evidence['prekill']['frames'][-1],reader_evidence['home_prekill']['frames'][-1]))
+    reader_evidence['home_started_monotonic']=time.monotonic()
+    shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)
+    record('HOME lifecycle process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
+    tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30)
+    reader_evidence['home_restored']=settle_reader('home_restored',reader_evidence['prekill']['frames'][-1]['crop'])
+    (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
+    record('HOME lifecycle exact reader pixels and page survive death',boundary.compare(reader_evidence['home_prekill']['frames'][-1],reader_evidence['home_restored']['frames'][-1]))
     # Do not replace/recreate this OS shortcut. Open the saved Highlights view in the same pin.
     for _ in range(6):shell('input keyevent KEYCODE_BACK');time.sleep(.3)
     record('repeated native root Back never exits','.AppSessionActivity' in top())
@@ -531,7 +583,12 @@ try:
         if len([x for x in r['writes'] if x['path'].endswith('/highlight')])>=2:break
     r=receipt();hs=r['state']['highlights'];ops=[x['offline_id'] for x in r['writes'] if x['path'].endswith('/highlight')]
     record('native retained edits reconnect exactly once',len(hs)==1 and len(ops)>=2 and len(set(ops))==1 and bool(ops[0]),{'highlights':len(hs),'attempts':len(ops),'ids':ops})
-    record('native reading progress survives and syncs',r['state']['entries'][0]['progress']>0,r['state']['entries'][0]['progress'])
+    replay=boundary.replay(r,reader_evidence['prekill']['frames'][-1]['pair'])
+    record('highlight specific lost ACK receipt verified',True,replay)
+    record('native reading progress survives and syncs',replay['actual_progress']==replay['expected_progress'],replay)
+    record('native exact chapter progress destination syncs',True,replay)
+    reader_evidence['replay']=replay
+    (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     (OUT/'synthetic-server-receipt.json').write_text(json.dumps(r,indent=2))
     after_shortcuts=shell('dumpsys shortcut');(OUT/'shortcuts-after.txt').write_text(after_shortcuts)
     record('same native pin identity retained',re.findall(r'id=homeapp-[^,}\s]+',shortcuts_before)==re.findall(r'id=homeapp-[^,}\s]+',after_shortcuts))
