@@ -266,7 +266,7 @@
   // showing both is a duplicate. If Files is ever removed, Wizard Files automatically returns to the launcher.
   const ownerFacingFiles = () => {
     const native = window.WizLauncher?.get?.('nativeLinks');
-    return REMOTE.some(x => x.id === 'files' && x.url) ||
+    return !!window.WosFiles || REMOTE.some(x => x.id === 'files' && x.url) ||
       (Array.isArray(native) && native.some(x => x?.id === 'files' && x.href));
   };
   const internalFilesProvider = a => a?.id === 'wizard-files' && ownerFacingFiles();

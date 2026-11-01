@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 const apps = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
 const kindsJs = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
-async function shell(installed, nativeLinks = []) {
+async function shell(installed, nativeLinks = [], builtInFiles = false) {
   const storage = new Map();
   const window = {
     WizCore: { norm: s => s.toLowerCase() },
@@ -20,6 +20,7 @@ async function shell(installed, nativeLinks = []) {
     },
     dispatchEvent() {},
   };
+  if (builtInFiles) window.WosFiles = {};
   const ctx = {
     window,
     document: { hidden: false, addEventListener() {} },
@@ -69,6 +70,13 @@ test('Wizard Files returns to launchers when no separate Files screen is install
 test('native Files hides Wizard Files while keeping both app records addressable', async () => {
   const { window, APP, groups } = await shell([provider], [nativeFiles]);
   assert.equal(APP.files.href, 'intent://files');
+  assert.equal(APP['wizard-files'].url, '/wizard-files/');
+  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), true);
+  assert.ok(!groups.apps.some(a => a.id === 'wizard-files'));
+});
+
+test('the shared Files surface hides Wizard Files while the provider stays addressable', async () => {
+  const { window, APP, groups } = await shell([provider], [], true);
   assert.equal(APP['wizard-files'].url, '/wizard-files/');
   assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), true);
   assert.ok(!groups.apps.some(a => a.id === 'wizard-files'));
