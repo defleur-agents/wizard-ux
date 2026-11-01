@@ -80,7 +80,7 @@ export default function phone(api) {
   const frameOf = (t, cmd) => ({ t, lv: level, state: modeOf(voice), fl: flash, blink: false, cmd, P: palette(look.colourId) });
 
   /* ---------- size: the orb in the middle of the room between Home's top and the Chats pill; one ring around it ---------- */
-  let W = 0, H = 0, DPR = 1, O = 0, cy = 0, R = 0, stars = [];
+  let W = 0, H = 0, DPR = 1, O = 0, cy = 0, R = 0, R0 = 0, Rmax = 0, stars = [];
   function size() {
     const w = layer.clientWidth, h = layer.clientHeight; if (!w || !h) return false;
     if (w === W && h === H) return true;
@@ -89,12 +89,14 @@ export default function phone(api) {
     const top = Math.min(150, H * .17), pillTop = chats.offsetTop || H - 110, room = Math.max(160, pillTop - top);
     // the sphere is ~60% of its canvas; the ring sits a thumb's width outside it and inside the screen's edges
     O = Math.round(Math.max(150, Math.min(W * .6, room * .6, 260)));
-    R = Math.round(Math.min(O * .3 + SAT / 2 + 22, W / 2 - SAT / 2 - 8, room / 2 - SAT / 2 - 4));
+    // every open app floats (one satellite per desk): the ring widens to fit them, up to the screen's edges
+    Rmax = Math.round(Math.min(W / 2 - SAT / 2 - 8, room / 2 - SAT / 2 - 4));
+    R0 = Math.round(Math.min(O * .3 + SAT / 2 + 22, Rmax)); R = ringFor(sats.length);
     cy = Math.round(top + room / 2);
     layer.style.setProperty('--obp-orb', O + 'px'); layer.style.setProperty('--obp-cy', cy + 'px');
     orbCv.width = orbCv.height = Math.round(O * DPR);
     stars = starsFor(W, H);
-    sizeSky(); placeSats();
+    sizeSky(); paintApps(); placeSats();   // the ring holds as many as this size allows
     return true;
   }
   function sizeSky() {
@@ -121,26 +123,40 @@ export default function phone(api) {
     });
     return { b, count, name: a.name };
   }
+  // more open apps than the ring holds: one +N satellite, the sheet (its Open level lists every open app)
+  function moreSat(a) {
+    const b = el('button', 'ob-sat obp-sat obp-more', { type: 'button', 'aria-label': `${a.more} more open apps`, 'data-app': '+more' });
+    b.append(el('span', 'ob-sat-face obp-more-n', { text: '+' + a.more }));
+    api.listen(b, 'click', () => chrome.open());
+    return { b, count: el('b'), name: a.name };
+  }
   function paintApps() {
-    const apps = orbitApps(api, badgeMap).slice(0, 10);
-    const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|');
+    const every = orbitApps(api), cap = W ? ringCap() : every.length, over = every.length > cap ? every.length - cap + 1 : 0;
+    const apps = over ? [...every.slice(0, cap - 1), { id: '+more', name: `${over} more`, icon: '', more: over }] : every;
+    const sig = apps.map(a => a.id + ':' + a.name + ':' + (a.icon || '').length).join('|') + '|' + (W ? ringCap() : 0);
     if (sig !== appSig) {
       appSig = sig;
       const was = new Map(sats.map(s => [s.id, s]));
       // evenly round the ring from the top, clockwise; fixed places (a satellite never moves under the finger)
-      sats = apps.map((a, i) => { const s = was.get(a.id) || { id: a.id, ...sat(a) }; s.a = -Math.PI / 2 + i / apps.length * Math.PI * 2; return s; });
+      sats = apps.map((a, i) => { const s = was.get(a.id) || { id: a.id, ...(a.more ? moreSat(a) : sat(a)) }; s.a = -Math.PI / 2 + i / apps.length * Math.PI * 2; return s; });
       field.replaceChildren(...sats.map(s => s.b));
       placeSats();
     }
     for (const s of sats) {
+      if (s.id === '+more') continue;
       const a = apps.find(x => x.id === s.id), n = badgeMap[s.id] || 0;
       s.count.textContent = n > 99 ? '99+' : n ? String(n) : ''; s.count.hidden = !n;
       s.b.dataset.run = a?.run ? (a.run.open ? 'open' : 'hidden') : ''; s.b.classList.toggle('is-new', !a?.run);
       s.b.setAttribute('aria-label', 'Open ' + s.name + (n ? ` · ${n} new` : '') + (a?.run ? ' · on a desk' : ''));
     }
   }
+  // the ring's radius for n satellites: the resting one, wider when n needs it (a whole target + 6 px apart), at most Rmax
+  const ringFor = n => Math.round(Math.max(R0, Math.min(Rmax, n * (SAT + 6) / (2 * Math.PI))));
+  // how many fit on the widest ring; more than that: the last place is +N (the sheet, whose Open lists every one)
+  const ringCap = () => Math.max(1, Math.floor(2 * Math.PI * Rmax / (SAT + 6)));
   function placeSats() {
     if (!W) return;
+    R = ringFor(sats.length);
     for (const s of sats) {
       const x = W / 2 + homeX + Math.cos(s.a) * R, y = cy + Math.sin(s.a) * R;   // they ride with the Home desk
       s.b.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;

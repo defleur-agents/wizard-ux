@@ -1170,7 +1170,7 @@
     // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
-    const a = hostedOpenable(d.id); if (a) openApp(a);
+    const a = hostedOpenable(d.id); if (a && openApp(a) !== false && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win, true);   // Get more: the app takes the Store's place
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; Agents frames may ask for an app's sheet. */
@@ -4092,6 +4092,10 @@
     apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
     panelRunning: () => { const run = new Map(); desks.forEach((d, i) => { if (d.home || !d.wins.length) return; const w = W[d.focus] || W[d.wins[0]], id = w && (w.appId || winApp(w).id); if (id && !run.get(id)?.open) run.set(id, { id, open: i === idx, playing: false }); }); return [...run.values()]; },
+    // The Orb and Apps views' app sheet: close an app (every desk showing it), and an App Store page on a desk of its own.
+    closeApp: id => { let n = 0; for (let i = desks.length - 1; i >= 0; i--) { const d = desks[i]; if (!d.home && d.wins.some(x => W[x] && (W[x].appId || winApp(W[x]).id) === id) && closeDesk(i)) n++; } return n > 0; },
+    openStore: id => { const S = APP['app-store']; if (!S?.url) return false; Object.keys(W).filter(x => W[x]?.appId === 'app-store' && deskOf(x) >= 0).forEach(x => closeWin(x, true));
+      const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); return !!openWin({ app: 'frame', appId: 'app-store', url: u.pathname + u.search }); },
     homeHost: () => secOf(HOME),
     orbHost: () => orbWrap,
     // The Apps view's Home grid: one entry per desk (each desk is one app), in desk order, with the app it shows.

@@ -80,7 +80,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'list', 'logo', 'open', 'openDesk', 'search']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'close', 'get', 'inset', 'list', 'logo', 'open', 'openDesk', 'search', 'store']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
@@ -371,11 +371,12 @@ test('Orbs view command take: the orb\'s own state and caption; results instead 
   assert.match(read('web/core/commands.js'), /const isMessageTake = \(kind, typed = false\) => !typed && kind !== 'command';/, 'a tap is still a message');
 });
 
-test('Orbs view satellites are status: running apps (closing only hides; Close quits) and regular apps with a count', () => {
+test('Orbs view satellites are exactly the open apps (= desks, = the Apps view\'s icons; closing only hides; Close quits); nothing floats just for a count', () => {
   const js = read('web/layouts/orb/layout.js'), shared = read('web/layouts/orb/shared.js'), desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
   assert.match(js, /const orbitApps = \(\) => orbitList\(api, badgeMap\);/, 'the shared list (the phone floats the same one)');
   assert.match(shared, /export const regular = a => !a\.system && !a\.dev && !a\.connector && !a\.agent;/);
-  assert.match(shared, /return all\.filter\(a => run\.has\(a\.id\) \? !a\.agent && !a\.connector : regular\(a\) && \(badgeMap\[a\.id\] \|\| 0\) > 0\)/);
+  assert.match(shared, /return api\.panel\.running\(\)\.filter\(r => r\.id && r\.id !== 'wizard' && !seen\.has\(r\.id\) && seen\.add\(r\.id\)\)/, 'one satellite per open app (Chats has its own pill / list)');
+  assert.doesNotMatch(shared.slice(shared.indexOf('export function orbitApps')), /badgeMap/, 'an unread count alone never floats an app that is not open (Miguel, 1 Nov 2026)');
   assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
   assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
   assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && \(panelParks \|\| panelDeskApp\(w\)\) && !quit;/);

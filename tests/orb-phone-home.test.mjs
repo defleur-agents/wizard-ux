@@ -48,7 +48,7 @@ function phoneWorld({ home = true } = {}) {
   const doc = { documentElement: html, body, hidden: false, createElement: t => new El(t), addEventListener() {}, removeEventListener() {} };
   Object.assign(globalThis, { document: doc, getComputedStyle: () => ({ getPropertyValue: n => n === '--ob-look-nebula' ? '#7c5cff, #c26bff, #4cc9ff, #ff6bd6' : '' }), matchMedia: () => ({ matches: false }), devicePixelRatio: 2,
     PointerEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } } });
-  const state = { home, voice: { state: 'idle' }, running: [{ id: 'mail', open: false, playing: false }], badges: { notes: 3, wizard: 4 }, opened: [], lists: [], frames: 0, store: { style: 'plasma', colour: 'nebula' } };
+  const state = { home, voice: { state: 'idle' }, running: [{ id: 'mail', open: false, playing: false }, { id: 'notes', open: false, playing: false }], badges: { notes: 3, wizard: 4 }, opened: [], lists: [], frames: 0, store: { style: 'plasma', colour: 'nebula' } };
   const on = {}, offs = [];
   const apps = [{ id: 'mail', name: 'Mail', icon: '<span class="ic sg-mail"></span>' }, { id: 'notes', name: 'Notes', icon: '' }, { id: 'agents', name: 'Agents', icon: '', agent: true }, { id: 'settings', name: 'Settings', icon: '', system: true }];
   const api = {
@@ -76,7 +76,7 @@ test('phone, Orbs, on Home: the orb fixed in the middle, still satellites to tap
   assert.ok(P.orbWrap.children.some(c => c.className === 'obp-dockc'), 'the dock orb draws in the stock orb\'s own box');
   assert.equal(P.html.dataset.orbScene, 'home'); assert.equal(P.html.dataset.orbAt, 'centre', 'on Home the orb is in the middle');
   assert.ok(layer.classList.contains('is-home')); assert.equal(P.find('obp-orb')[0].dataset.show, 'on');
-  // satellites: exactly the shared list (running apps + regular apps with a count; never agents or system apps)
+  // satellites: exactly the open apps (the shared list: one per desk; a count alone floats nothing)
   const sats = P.find('obp-sat');
   assert.deepEqual(sats.map(b => b.attrs['data-app']).sort(), ['mail', 'notes']);
   assert.equal(sats.find(b => b.attrs['data-app'] === 'mail').dataset.run, 'hidden', 'open on a desk: a quiet dot');
@@ -111,11 +111,36 @@ test('phone, Orbs, on Home: the orb fixed in the middle, still satellites to tap
   assert.equal(P.html.dataset.orbPhone, undefined); assert.equal(P.html.dataset.orbAt, undefined); assert.equal(P.html.dataset.orbScene, undefined);
 });
 
+test('phone, Orbs: every open app floats (one satellite per desk; the ring widens to fit); past the screen\'s room a +N opens the sheet', async () => {
+  for (const n of [14, 30]) {
+    const P = phoneWorld();
+    P.state.running = Array.from({ length: n }, (_, i) => ({ id: 'app' + i, open: false, playing: false }));
+    const { default: phone } = await import(new URL('web/layouts/orb/phone.js', root));
+    const off = phone(P.api);
+    const layer = P.find('obp-layer')[0]; layer.clientWidth = 390; layer.clientHeight = 844;
+    for (const fn of P.find('obp-chats')) fn.offsetTop = 734;
+    P.fire('route'); P.fire('home');
+    const sats = P.find('obp-sat'), ids = sats.map(b => b.attrs['data-app']);
+    const at = b => b.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\)/).slice(1).map(Number);
+    const pts = sats.map(at);
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) assert.ok(Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) >= 48, `satellites never overlap (${n} open)`);
+    assert.ok(pts.every(([x]) => x - 24 >= 0 && x + 24 <= 390), 'inside the screen');
+    if (n === 14) assert.deepEqual(ids, P.state.running.map(r => r.id), 'all 14 open apps float');
+    else {
+      assert.equal(ids.at(-1), '+more', 'too many for the ring: the last place is +N');
+      const more = sats.at(-1), shown = ids.length - 1;
+      assert.equal(more.children[0].textContent, '+' + (n - shown), 'the count of the rest');
+      more.dispatchEvent({ type: 'click' }); assert.ok(P.find('vc-sheet').length === 1, '+N opens the sheet (its Open level lists every one)');
+    }
+    off();
+  }
+});
+
 test('phone: the same stored Style × Colour and drawing code as the desktop, never a second copy; no bar, spin or bolts', () => {
   const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   const ph = strip('web/layouts/orb/phone.js'), lay = read('web/layouts/orb/layout.js');
   assert.match(ph, /import \{ renderer \} from '\.\/styles\.js';/); assert.match(ph, /import \{ lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf \} from '\.\/shared\.js';/);
-  assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /orbitApps\(api, badgeMap\)/);
+  assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /const every = orbitApps\(api\)/, 'the shared list: every open app');
   assert.ok(!/--ob-look-|createRadialGradient|16807/.test(ph), 'no colours or sky of its own');
   assert.match(lay, /if \(api\.env\.shell === 'phone'\) return phone\(api\);\n  if \(api\.env\.shell !== 'desktop'\) return \(\) => \{\};/, 'the desktop path is unchanged below the phone hand-off');
   // the rejected round stays gone: no bottom bar slots, no spin pad or drift, no bolt, no flight between centre and dock

@@ -38,6 +38,7 @@ import { STYLES, RETIRED, renderer, mix } from './styles.js';
 import { assignKeys, keyOf, isLeftAlt, HOLD_MS } from './keys.js';
 import { COLOURS, has, lookOf, palettes, starsFor, paintSky, A, regular, orbitApps as orbitList, glyphOf, colourOf } from './shared.js';
 import phone from './phone.js';
+import { viewChrome } from '../apps/chrome.js';
 
 export default function setup(api) {
   // The phone wears the same scene on Home only (phone.js: same look, sky and satellites; the rest stays the phone's).
@@ -101,7 +102,11 @@ export default function setup(api) {
   api.listen(desksBtn, 'click', () => { api.desk.classic(); });
   pop.append(h1, styleRow, h2, colourRow, desksBtn);
   picker.append(pop, pickBtn);
-  dock.append(hint, picker);
+  // The + beside the search pill (Miguel, 1 Nov 2026): the same sheet as the Apps view's and the phone's (chrome.js):
+  // Open (the satellites; ✕ closes one), Installed (tap opens it in the panel) and Get more (the App Store).
+  const chrome = viewChrome(api, { openIds: () => api.panel.running().map(r => r.id), goOpen: id => api.apps.open(id), inset: 0 });   // the orb never floats over the app panel here
+  const plus = chrome.plus('ob-plus', 'Apps: open, installed, get more');
+  dock.append(plus, hint, picker);
   scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
@@ -683,5 +688,5 @@ export default function setup(api) {
   paint();
   onVoice(voice);
 
-  return () => { running = false; cancel?.(); delete root.dataset.orbScene; for (const v of ['--ob-col-w', '--ob-chat-w', '--ob-beside-left', '--ob-app-w']) root.style.removeProperty(v); };
+  return () => { running = false; cancel?.(); chrome.dispose(); delete root.dataset.orbScene; for (const v of ['--ob-col-w', '--ob-chat-w', '--ob-beside-left', '--ob-app-w']) root.style.removeProperty(v); };
 }

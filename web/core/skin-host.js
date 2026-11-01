@@ -290,6 +290,7 @@
     const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}|${r.home ? 1 : 0}|${r.panel || ''}|${r.panelList ? 1 : 0}|${r.panelApp || ''}`;
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
+    if (frameInset) insetSync();   // the app now in front may have drawn its bottom bar out of sight
   }
 
   /* ---------- layout layer ---------- */
@@ -346,6 +347,74 @@
     })());
     return logos.get(id);
   }
+  /* The App Store's own listing (the Store app's Store-data route, the same index it shows): Apps (type view) that are
+   * not installed yet, for the Orb and Apps views' "Get more" section. Read-only; one read per page, refreshed when the
+   * app registry changes. Installed = the shell's registry (or a reviewed host alias of it, store-status.js). */
+  let storeList = null;
+  if (isDoc) window.addEventListener?.('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:apps-changed') storeList = null; });
+  function storeApps(installedIds) {
+    if (!isDoc || typeof fetch !== 'function') return Promise.resolve([]);
+    if (!storeList) storeList = (async () => {
+      const [{ isUserApp, hostAppId }, apps] = await Promise.all([import(stamp(new URL('store/store-status.js', document.baseURI).href)), (async () => {
+        const out = []; let offset = 0;
+        for (let page = 0; page < 5; page++) {
+          const r = await fetch(new URL(`store-data/wizard/v1/index/search?limit=100&offset=${offset}`, document.baseURI), { credentials: 'same-origin', signal: AbortSignal.timeout(10000) });
+          if (!r.ok) throw new Error('store ' + r.status);
+          const d = await r.json(); out.push(...(Array.isArray(d.apps) ? d.apps : []));
+          if (!Number.isSafeInteger(d.next_offset) || d.next_offset <= offset) break; offset = d.next_offset;
+        }
+        return out;
+      })()]);
+      const ID = /^[a-z0-9][a-z0-9-]{0,63}$/, seen = new Set(), txt = (v, n) => typeof v === 'string' ? v.slice(0, n) : '';
+      return apps.filter(x => x && ID.test(x.id || '') && x.type === 'view' && isUserApp(x) && !seen.has(x.id) && seen.add(x.id))
+        .map(x => Object.freeze({ id: x.id, name: txt(x.name, 60) || x.id, summary: txt(x.summary, 200), host: hostAppId(x) }));
+    })().catch(err => { storeList = null; throw err; });
+    const have = new Set(installedIds || []);
+    return storeList.then(l => l.filter(x => !have.has(x.id) && !have.has(x.host)).map(({ host, ...x }) => Object.freeze(x)));
+  }
+  /* Room a layout's floating orb takes at the bottom of every app window (px): each hosted app document gets it as
+   * --wos-inset-b on its <html> (like the camera's --wos-cutout) and one rule that adds that much room after a kit
+   * scroll area's last item (.wz-scroll), so every list still scrolls clear of the orb. 0 = nothing (stock). */
+  let frameInset = 0;
+  const insetHolders = new Map(), insetSheets = new WeakMap();
+  const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after{content:"";display:block;flex:none;height:var(--wos-inset-b,0px);pointer-events:none}'
+    + '[data-wos-inset-bar]{height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}';
+  function insetFrame(f) {
+    let d = null; try { d = f.contentDocument; } catch (_) { return; }
+    if (!d?.documentElement) return;
+    d.documentElement.style.setProperty('--wos-inset-b', frameInset + 'px');
+    if (frameInset) {
+      // a kit scroll area (most apps) or, when the page itself scrolls, the page: room after the last item; an app's own
+      // bottom tab bar is lifted clear of the orb instead (its background runs on under the orb, like a phone's home bar).
+      // A constructed sheet in the app's own realm (CSSOM, so an app's style-src policy still lets it apply); put back if
+      // the app replaces its adopted sheets.
+      try {
+        // one per document (a frame's window object can outlive its first, blank document)
+        let sh = insetSheets.get(d);
+        if (!sh) { sh = new d.defaultView.CSSStyleSheet(); sh.replaceSync(INSET_CSS); insetSheets.set(d, sh); }
+        if (!d.adoptedStyleSheets.includes(sh)) d.adoptedStyleSheets = [...d.adoptedStyleSheets, sh];
+      } catch (_) {}
+    }
+    const se = d.scrollingElement, doc = !!frameInset && !!se && !d.querySelector('.wz-scroll') && se.scrollHeight > se.clientHeight + 4;
+    if (doc) d.documentElement.classList.add('wos-inset-doc');
+    // a bottom tab bar: a full-width nav / footer along the app's bottom edge (the window then needs no fade of its own)
+    let bar = d.querySelector('[data-wos-inset-bar]');
+    if (frameInset && !bar?.isConnected) {
+      const vw = d.documentElement.clientWidth, vh = d.documentElement.clientHeight;
+      for (let n = vw && vh ? d.elementFromPoint(vw / 2, vh - 3) : null; n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
+        const r = n.getBoundingClientRect();
+        if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
+      }
+    }
+    if (!frameInset) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
+    f.closest('.win')?.classList.toggle('wos-inset-bar', !!frameInset && !!bar?.isConnected);
+  }
+  function insetSync() {
+    frameInset = Math.max(0, ...insetHolders.values());
+    if (isDoc) for (const f of document.querySelectorAll('.win iframe')) insetFrame(f);
+  }
+  // an app fills its page after it loads: look again a little later (once its list is there)
+  if (isDoc) document.addEventListener?.('load', e => { if (!frameInset || e.target?.tagName !== 'IFRAME') return; const f = e.target; insetFrame(f); for (const ms of [1500, 5000]) setTimeout(() => { if (frameInset) insetFrame(f); }, ms); }, true);
   function shellApi(a, base) {
     const live = () => !a.dead && !!shell;
     return {
@@ -389,6 +458,18 @@
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
         openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
+        // Close the app everywhere it is open (its desk goes; the Orb panel quits it). Chats always stays.
+        close: id => live() && typeof id === 'string' && id && id !== 'wizard' ? !!shell.closeApp?.(id) : false,
+        /* Not installed yet: the App Store's Apps this Wizard lacks ([{ id, name, summary }], a Promise), and get(id),
+         * which opens that app's page in the App Store window (its own Get; once installed it opens right away). */
+        store: () => live() ? storeApps(shell.apps?.()?.map(x => x.id) || []) : Promise.resolve([]),
+        get: id => live() && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) ? !!shell.openStore?.(id) : false,
+        // Room the layout's floating orb takes at the bottom of app windows (px); released on teardown.
+        inset(px) {
+          if (!live()) return () => {};
+          insetHolders.set(a, Math.max(0, Math.min(240, +px || 0))); insetSync();
+          const off = () => { insetHolders.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
+        },
         all: () => { if (live()) shell.openPicker?.(); },
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
         search: () => { if (live()) shell.openPalette?.(); },

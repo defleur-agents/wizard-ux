@@ -62,15 +62,16 @@ export function paintSky(sx, { W, H, gx, cy, t, lv, P, stars }) {
   sx.globalAlpha = 1;
 }
 
-/* Satellites are ambient status, not a launcher (Miguel, v7): only (a) apps running (api.panel.running(): the shell's
- * own list of what is open, shown or kept out of sight) and (b) regular apps with an unread count float. Agents,
- * connectors, agent apps, system and in-development apps never float for a count (the shell's own kinds:
- * core/app-kinds.js); everything stays one search away. Nothing running and nothing new: just the orb.
- * The desktop and the phone both float exactly this list (each shell's adapter says what is running). */
+/* Satellites are exactly the open apps (Miguel, 1 Nov 2026: open = everything with a desk, one to one with the Apps
+ * view's icons and the desks): api.panel.running(), the shell's own list of what is open (each shell's adapter reads
+ * its desks), in desk order; Chats is not a satellite (it has its own pill / docked list). Nothing open: just the orb.
+ * Installed apps that are not open and the App Store live behind the + (layouts/apps/chrome.js). The desktop and the
+ * phone both float exactly this list. */
 export const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
-export function orbitApps(api, badgeMap) {
-  const all = api.apps.list(), run = new Map(api.panel.running().map(r => [r.id, r]));
-  return all.filter(a => run.has(a.id) ? !a.agent && !a.connector : regular(a) && (badgeMap[a.id] || 0) > 0).map(a => ({ ...a, run: run.get(a.id) || null }));
+export function orbitApps(api) {
+  const meta = new Map(api.apps.list().map(a => [a.id, a])), names = new Map((api.desks?.list?.() || []).map(d => [d.id, d.name])), seen = new Set();
+  return api.panel.running().filter(r => r.id && r.id !== 'wizard' && !seen.has(r.id) && seen.add(r.id))
+    .map(r => ({ ...(meta.get(r.id) || { id: r.id, name: names.get(r.id) || r.id, icon: '' }), run: r }));
 }
 
 /* An app's mark when it has no logo: its designed glyph (the sigil in its icon), else one guessed from its name, in its

@@ -93,7 +93,7 @@ export default function desktop(api) {
     const home = !!api.route().home;
     root.dataset.appsDesk = home ? 'home' : 'desk';
     pad.hidden = !home;
-    if (!home) chrome.close();
+    if (!home && !chrome.closing) chrome.close();
   }
   api.on('route', paint); api.on('render', paint); api.on('home', paint);
   paint();
