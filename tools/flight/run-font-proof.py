@@ -2,7 +2,7 @@
 """Bounded parent-only Forum browser job; --preflight-only NEVER starts a browser.
 Reuse existing synthetic TLS fixture; no Docker/APK/VM/install/live writes.
 """
-import argparse,hashlib,json,os,selectors,shutil,signal,subprocess,sys,time,traceback
+import argparse,base64,hashlib,json,os,selectors,shutil,signal,subprocess,sys,time,traceback
 from pathlib import Path
 R=Path(__file__).resolve().parent
 P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--preflight-only',action='store_true');A=P.parse_args()
@@ -11,7 +11,7 @@ NODE='/srv/work/node22/bin/node'
 PW='/srv/work/provider-signin-browser/node_modules/playwright'
 CHROME='/home/james/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome'
 sha=lambda p:hashlib.sha256(Path(p).read_bytes()).hexdigest()
-ENV={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','PLAYWRIGHT_DIR':PW,'PLAYWRIGHT_BROWSERS_PATH':'/home/james/.cache/ms-playwright','QA_CHROME':CHROME,'QA_MANIFEST':str(R/'source-manifest.json'),'TMPDIR':str(R/'tmp')}
+ENV={**os.environ,'PYTHONDONTWRITEBYTECODE':'1','PW_TEST_SCREENSHOT_NO_FONTS_READY':'1','PLAYWRIGHT_DIR':PW,'PLAYWRIGHT_BROWSERS_PATH':'/home/james/.cache/ms-playwright','QA_CHROME':CHROME,'QA_MANIFEST':str(R/'source-manifest.json'),'TMPDIR':str(R/'tmp')}
 
 def integrity():
  assert sha(R/'source-manifest.json')==A.manifest_sha,'manifest hash differs'
@@ -24,6 +24,15 @@ def integrity():
  assert M['old_commit']=='a800c16c81b520150ec72721eb79613b242169e8'
  assert M['candidate_commit']=='e45fea79102a66093a50fb8405340327d13b7364'
  assert json.loads((Path(PW)/'package.json').read_text())['version']=='1.64.1'
+ # Screenshot-only wait suppression is supported by the pinned installed PW.
+ core=Path(PW).parent/'playwright-core/lib/coreBundle.js'
+ assert 'if (!process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY)' in core.read_text()
+ assert b'ignore-certificate-errors-spki-list' in Path(CHROME).read_bytes()
+ # Recompute leaf SPKI from the hash-bound synthetic cert, never assume context
+ # ignoreHTTPSErrors grants SW trust, and never trust a foreign certificate.
+ pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=10)
+ der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=10).stdout
+ assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  assert os.access(CHROME,os.X_OK) and sha(CHROME)==M['toolchain']['chrome_sha256'],'pinned Chrome differs'
  for name,row in M['toolchain']['files'].items():assert sha(name)==row,'pinned toolchain differs: '+name
  r=subprocess.run([NODE,'-e','const p=require(process.env.PLAYWRIGHT_DIR);console.log(JSON.stringify({version:require(process.env.PLAYWRIGHT_DIR+"/package.json").version,executable:p.chromium.executablePath()}))'],env=ENV,text=True,capture_output=True,timeout=15,check=True)
