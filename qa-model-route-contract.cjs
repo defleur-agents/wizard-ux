@@ -14,7 +14,7 @@ function boot() {
   ['s1',{id:'s1',model:'claude-opus-5-5',provider:'anthropic'}],
   ['private',{id:'private',model:'glm-5-3',provider:'tinfoil'}],
  ]), store = new Map(), calls = [], bodies = [];
- let delayLock = null, badAck = false, admissionFail = false, runRuntime = {model:'claude-opus-5-5',provider:'anthropic'};
+ let delayLock = null, badAck = false, admissionFail = false, runRuntime = {model:'claude-opus-5-5',provider:'anthropic',model_lock:'confirmed'};
  const timers = [];
  const context = { console, URL, Blob, AbortSignal, AbortController, crypto: require('crypto').webcrypto, Date, Map, Set, Promise,
   document:{documentElement:{dataset:{}},addEventListener(){}},
@@ -31,7 +31,12 @@ function boot() {
     if(delayLock)await delayLock;
     return response(200,{runtime:{...payload,provider:badAck?'wrong-provider':payload.provider,model_lock:'accepted',selection_version:(payload.selection_version||0)+1}});
    }
-   if(/\/v1\/runs\/[^/]+$/.test(url)&&method==='GET')return response(200,{runtime:runRuntime,status:'running'});
+   if(/\/v1\/runs\/[^/]+$/.test(url)&&method==='GET') {
+    const run_id=url.split('/').at(-1);
+    // These four synthetic active runs belong to s1. Unknown/foreign runs are not fabricated.
+    assert(['old-opus','wrong-active','unconfirmed-active','glm-active'].includes(run_id));
+    return response(200,{run_id,session_id:'s1',runtime:{...runRuntime},status:'running'});
+   }
    if(url.endsWith('/steer'))return response(200,{accepted:true,status:'accepted',run_id:url.split('/').at(-2)});
    if(url.endsWith('/api/sessions'))return response(201,{session:{id:payload.id}});
    if(url.endsWith('/files/upload'))return response(201,{file:{id:'synthetic-audio',filename:'voice.webm'}});
