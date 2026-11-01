@@ -435,7 +435,7 @@
     if (!it.model || !it.provider) throw new HttpError(409, 'No confirmed model route · choose a model before retrying');
     if (it.body) {
       const frozen = JSON.parse(it.body);
-      if (frozen.model !== it.model || frozen.provider !== it.provider || frozen.session_id !== it.sessionId || (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
+      if (frozen.model !== it.model || frozen.provider !== it.provider || frozen.session_id !== it.sessionId || (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true || frozen.selection_version !== it.selection_version)
         throw new HttpError(409, 'Stored route does not match this message · original message kept');
     }
     // When local writes fail, server audio custody comes before slower transcription.
@@ -463,6 +463,16 @@
     const input = it.reply && window.WosChat?.reply ? window.WosChat.reply.attach(words, it.reply) : words;
     // Freeze an exact-run steer separately from new-run admission. This endpoint has NO
     // durable idempotency ledger: persist intent before dispatch and never replay ambiguity.
+    if (it.steerRunId && !it.steerBody && it.steerDispatch !== 'started') {
+      try {
+        const active = await (await call(`/wizard/hermes/v1/runs/${encodeURIComponent(it.steerRunId)}` + aq)).json();
+        if (!['running','waiting_for_approval'].includes(active.status) || active.runtime?.model_lock !== 'confirmed'
+          || !window.WosModels?.matchesRuntime(active.runtime, it)) { delete it.steerRunId; await put(it); }
+      } catch (e) {
+        if (![404,409,410].includes(e.status)) throw e;
+        delete it.steerRunId; await put(it);
+      }
+    }
     if (it.steerRunId) {
       if (it.steerDispatch === 'started') { it.state = 'unconfirmed'; it.error = unconfirmed; await put(it); return; }
       if (!it.steerBody) {
@@ -472,7 +482,7 @@
       }
       const frozen = JSON.parse(it.steerBody);
       if (it.steerTarget !== it.steerRunId || frozen.model !== it.model || frozen.provider !== it.provider ||
-          (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true)
+          (frozen.agent || '') !== (it.agent || '') || frozen.require_model_lock !== true || frozen.selection_version !== it.selection_version)
         throw new HttpError(409, 'Stored steer route changed · original kept');
       // Refuse to mutate without a durable dispatch journal, even if audio was uploaded.
       halt(it);
