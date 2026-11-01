@@ -9,15 +9,16 @@
  * shows that picture as a rounded tile (`<i class="sglogo">`) in every one of these places instead of a sigil.
  * Which sigil an app gets otherwise: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
- * silhouette, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
- * in the same box, so a fallback is never bigger, squarer or more opaque than a designed sigil.
+ * silhouette, then the house glyph that matches what its id and name say (Mail → mail, Home Assistant → home), else
+ * the plain app mark, on a colour picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
+ * fallback is never bigger, squarer or more opaque than a designed sigil.
  * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
  */
 (() => {
   'use strict';
-  const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "card", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "dollar", "eye", "files", "gauge", "globe", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "notes", "pages", "pin", "profile", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
-  const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"wizard-tinfoil":["shield","#A1C0CF"],"wizard-cloudflare":["cloud","#FFA245"],"wizard-shopping":["bag","#FFA15C"],"sniper":["scope","#FB99B2"],"card-benefits":["card","#65D86D"],"money":["dollar","#75D291"],"profiles":["profile","#C1AAFF"],"defleur-video":["clip","#94B1FF"],"notes":["notes","#FF94BD"],"wizard-notes":["notes","#FF94BD"],"morning":["coffee","#FF9F71"],"wizard-files":["files","#56C8FE"],"photos":["image","#68BCFF"],"troubleshooter":["wrench","#7CCCC2"],"wizard-ux":["wizard","#A9AEED"],"agents":["agents","#9BB1F5"]};
+  const NAMES = new Set([...["android", "apps", "bag", "bell", "bolt", "burst", "calendar", "card", "chats", "cine", "clip", "cloud", "coffee", "console", "day", "dollar", "eye", "files", "gauge", "globe", "heart", "home", "hub", "iching", "image", "inbox", "letter", "link", "mail", "meditate", "mic", "month", "music", "notes", "pages", "pin", "profile", "projects", "recall", "scope", "search", "secret", "shield", "side", "signal", "social", "spark", "track", "usuals", "wave", "week", "wisdom", "wizard", "wrench"], 'hat', 'hat-private', 'agents']);
+  const HOUSE = {"calendar":["calendar","#FE98AB"],"mizel":["mic","#FE9C8C"],"shopping":["bag","#FFA15C"],"wisdom":["wisdom","#FEC25D"],"cinequeue":["cine","#E9CF06"],"trackhunt":["track","#ABE355"],"android-apps":["android","#50DA79"],"topics":["eye","#0ED8BB"],"messenger":["chats","#00D6CF"],"wizard-signal":["signal","#0AD3E3"],"meditation":["meditate","#12CFF6"],"files":["files","#56C8FE"],"wizard-search":["search","#81B7FF"],"projects":["projects","#A0AEFE"],"wizard":["hat","#C1AAFF"],"social":["social","#EF90FE"],"wizard-music":["music","#FF8FD3"],"iching":["iching","#E5C9A3"],"console":["console","#A9B6C4"],"legacy-wizard":["wizard","#BDB5D8"],"v-day":["day","#FF9F6D"],"v-week":["week","#D6A0FE"],"v-month":["month","#99B5E8"],"v-inbox":["inbox","#11DBA2"],"usuals":["usuals","#FE9E79"],"side-button":["side","#C1B1E1"],"maps":["pin","#CDDA2D"],"app-store":["apps","#ABA9FE"],"system":["gauge","#83C9CC"],"notifications":["bell","#FEC076"],"morning-report":["coffee","#FF9F71"],"wizard-calendar":["calendar","#FE98AB"],"secret-drop":["secret","#05D6CE"],"browser":["globe","#11CFF9"],"transcriber":["wave","#F98CF1"],"wizard-chatgpt":["spark","#06DC92"],"wizard-claude":["burst","#FF9C89"],"wizard-agent-service":["hub","#88B9EC"],"wizard-tinfoil":["shield","#A1C0CF"],"wizard-cloudflare":["cloud","#FFA245"],"wizard-shopping":["bag","#FFA15C"],"sniper":["scope","#FB99B2"],"card-benefits":["card","#65D86D"],"money":["dollar","#75D291"],"profiles":["profile","#C1AAFF"],"defleur-video":["clip","#94B1FF"],"notes":["notes","#FF94BD"],"wizard-notes":["notes","#FF94BD"],"morning":["coffee","#FF9F71"],"wizard-files":["files","#56C8FE"],"photos":["image","#68BCFF"],"troubleshooter":["wrench","#7CCCC2"],"wizard-ux":["wizard","#A9AEED"],"agents":["agents","#9BB1F5"],"wizard-mail":["mail","#09D0F0"],"wizard-microsoft":["mail","#7ABEE6"],"wizard-google":["mail","#77CEB8"],"smart-home":["home","#0FD6CB"],"wizard-health":["heart","#FE99A6"],"wizard-apple-health":["heart","#FA99B4"],"wizard-whoop":["heart","#DFACA8"],"wizard-oura":["heart","#B9B4E5"],"wizard-garmin":["heart","#81C6E2"],"wizard-polar":["heart","#E3A6C2"],"wizard-coros":["heart","#E8AA94"],"wizard-fitbit":["heart","#85CCB3"],"wizard-withings":["heart","#8DC7CA"],"wizard-youtube-music":["music","#FB99B2"],"wizard-monarch":["dollar","#C7D69B"],"wizard-simplefin":["dollar","#92C8B9"],"wizard-brightdata":["globe","#83BCE2"],"wizard-twitterapi":["social","#84C7D3"],"backup":["cloud","#6CC9EA"],"contacts":["social","#FF8BE5"],"carlos-crm-demo":["social","#C2AFE7"],"maverick-command":["console","#EAAB78"],"pr-board":["projects","#8DCBA9"],"setup":["wrench","#9EB5DB"]};
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries({"movies":"cinequeue","food":"usuals","meditate":"meditation"})) HOUSE[id] = HOUSE[old];
   const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
@@ -37,7 +38,8 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
-    const s = sigilOf(a), logo = logoOf(a);
+    // A designed sigil (house entry or a named glyph) always wins over a picture, so every surface shows one family.
+    const s = sigilOf(a), logo = s.guessed || s.img ? logoOf(a) : '';
     return logo ? { ...s, logo } : s;
   }
   function sigilOf(a) {
@@ -47,11 +49,39 @@
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
     // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
     if (!img && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
-    return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?', ...(img ? { img } : {}) };
+    const letter = String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?';
+    if (img) return { glyph: '', color: col || pick(a.id || a.name), letter, img };
+    // Never a bare letter: the house glyph that says what the app does, read from its id and name ('wizard-mail',
+    // 'Home Assistant', 'Apple Health'), else the plain app mark. `letter` stays for callers that want an initial.
+    return { glyph: guess(a), color: col || pick(a.id || a.name), letter, guessed: true };
+  }
+  // Specific before general: the first row with a word in the app's id or name that starts with one of its stems wins.
+  const GUESS = [
+    ['mail', 'mail|gmail|email|outlook|microsoft|google|inbox'], ['calendar', 'calendar|schedul|agenda|booking'],
+    ['social', 'contact|people|crm|friend|twitter|social|reddit|feed'], ['profile', 'profile|account|identity'],
+    ['cloud', 'backup|restore|snapshot|cloud|drive|storage'], ['home', 'home|house|assistant|light|thermostat'],
+    ['heart', 'health|fit|whoop|oura|garmin|polar|coros|withings|sleep|workout|heart|monitor|status'],
+    ['music', 'music|spotify|youtube|song|radio|audio|podcast'], ['card', 'card|credit'],
+    ['dollar', 'money|bank|financ|budget|monarch|simplefin|plaid|teller|wallet|pay|invoice|tax'],
+    ['cine', 'movie|film|cine|netflix|watch'], ['clip', 'video|clip|edit'], ['image', 'camera|photo|image|gallery|picture'],
+    ['chats', 'chat|message|messenger|sms|telegram|whatsapp|line(?: |$)|discord|slack'], ['side', 'phone|call|dial'],
+    ['pin', 'map|grab|uber|ride|taxi|travel|trip|place|location'], ['bag', 'shop|store|market|buy|lazada|amazon|food|eat|meal|restaurant|order'],
+    ['search', 'search|find|lookup'],
+    ['globe', 'browser|chrome|safari|firefox|web|data|bright|scrap|internet'], ['notes', 'note|journal|obsidian|doc|writ'],
+    ['files', 'file|folder'], ['projects', 'board|pr(?: |$)|project|kanban|task|todo|issue|pipeline'],
+    ['console', 'command|console|terminal|shell|ssh|code|dev'], ['coffee', 'news|report|brief|morning|digest'],
+    ['bell', 'notif|alert|remind'], ['secret', 'secret|password|vault|key'], ['wave', 'record|voice|transcri|speech'],
+    ['wrench', 'setting|setup|config|troubleshoot|repair|fix|tool'], ['notes', 'book|read|learn|librar'],
+    ['spark', 'ai(?: |$)|gpt|claude|llm|model|agent|bot'],
+  ].map(([g, stems]) => [g, new RegExp(`(?:^| )(?:${stems})`)]);
+  function guess(a) {
+    const words = `${a.id || ''} ${a.name || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    const row = GUESS.find(([g, re]) => NAMES.has(g) && re.test(words));
+    return row ? row[0] : 'apps';
   }
   // Fallback marks are masks too, never painted text or an <img>: whatever a skin paints into `.sgi` (a gradient,
   // its ink colour, a filter) lands only inside the shape, at the same box, so no app can show up as a square slab.
-  //   letter → a disc with the app's initial cut out of it (house style: one silhouette, one bite)
+  //   letter → a disc with an initial cut out of it, only for named() callers passing a character (apps never get one)
   //   img    → the app's own same-origin icon file, used as the silhouette
   const LETTER = ch => "url('data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><mask id="m"><rect width="512" height="512" fill="#fff"/><text x="256" y="256" dy=".35em" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="196" fill="#000">${esc(ch)}</text></mask><circle cx="256" cy="256" r="164" mask="url(#m)"/></svg>`).replace(/'/g, '%27') + "')";
   function named(glyph, color) {
@@ -66,10 +96,10 @@
     a = a || {};
     const s = of(a), b = brand(a);
     if (s.logo) return `<i class="sglogo" aria-hidden="true" style="--logo:url('${esc(s.logo)}')"></i>`;
-    if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
+    if (b) return named(s.glyph || 'apps').replace('class="sgi', `class="sgi${b}`);
     if (s.glyph) return named(s.glyph);
     if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;
-    return named(s.letter);
+    return named(s.glyph || 'apps');
   }
   // A whole icon box: <tag class="cls sgt" style="--c:…">glyph extra</tag>. Apps from the registry carry
   // sgc/sgh already; anything else (a window's fallback, a command row) is worked out here.

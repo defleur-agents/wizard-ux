@@ -52,15 +52,23 @@ test('real products carry their brand mark; a skin opts in, every other skin kee
   assert.match(read('web/core/sigils.css'), /\.sgi\.sgb-cloudflare/);
 });
 
-test('an app with no sigil gets a masked disc with its initial cut out, never painted text', () => {
+test('an app with no sigil never shows a letter: it gets the house glyph its id and name call for', () => {
   const S = sigil();
-  for (const a of [{ id: 'zz-unknown', name: 'Zebra' }, { id: 'x', name: '' }, { id: 'q', name: '<b>"Quote"' }, { id: 'e', name: 'émile' }]) {
-    const h = S.html(a);
-    assert.match(h, /^<i class="sgi sgl" aria-hidden="true" style="--sg:url\(&#39;data:image\/svg\+xml,/, h);
-    assert.doesNotMatch(h, /<(?!i |\/i>)/, 'no extra markup injected: ' + h);
-    const s = S.of(a);
-    assert.match(s.color, /^#[0-9A-F]{6}$/i);
+  const want = {
+    'wizard-mail|Mail': 'mail', 'smart-home|Home Assistant': 'home', 'wizard-health|Health': 'heart', 'wizard-microsoft|Microsoft': 'mail',
+    'wizard-monarch|Monarch': 'dollar', 'wizard-simplefin|SimpleFIN': 'dollar', 'wizard-brightdata|Bright Data': 'globe', 'backup|Backup': 'cloud',
+    'contacts|Contacts': 'social', 'carlos-crm-demo|Carlos CRM (demo)': 'social', 'maverick-command|Maverick Command': 'console',
+    'pr-board|PR board': 'projects', 'setup|Setup': 'wrench', 'camera|Camera': 'image', 'messages|Messages': 'chats', 'spotify|Spotify': 'music',
+    'telegram|Telegram': 'chats', 'line|LINE': 'chats', 'grab|Grab': 'pin', 'chrome|Chrome': 'globe', 'settings|Settings': 'wrench',
+    'wizard-twitterapi|TwitterAPI.io': 'social', 'wizard-youtube-music|YouTube Music': 'music', 'zz-unknown|Zebra': 'apps', 'x|': 'apps',
+    'private-thing|Private thing': 'apps', 'pipeline-tool|Pipeline': 'projects',
+  };
+  for (const [key, glyph] of Object.entries(want)) {
+    const [id, name] = key.split('|'), h = S.html({ id, name, icon: name.charAt(0) || '?' });
+    assert.equal(h, `<i class="sgi sg-${glyph}" aria-hidden="true"></i>`, key);
+    assert.match(S.of({ id, name }).color, /^#[0-9A-F]{6}$/i);
   }
+  for (const a of [{ id: 'q', name: '<b>"Quote"' }, { id: 'e', name: 'émile' }]) assert.doesNotMatch(S.html(a), /sgl|<(?!i |\/i>)/, a.id);
   // the hue is stable per id, so the same app keeps the same colour everywhere
   assert.equal(S.of({ id: 'zz-unknown' }).color, S.of({ id: 'zz-unknown', name: 'Other' }).color);
 });
