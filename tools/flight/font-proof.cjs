@@ -109,17 +109,43 @@ async function warm(){
  await reader(o.p);await settled(o.p);for(let i=0;i<4;i++)await turn(o.p);
  const s=await snapshot(o.p,'warm-reference');metrics(s);assert.equal(s.page,5,'warm position chosen by four real page turns');return {...o,reference:s};
 }
+// EXTEND the interceptor only: deliver real release assets, not a Node TLS fetch.
+function pinnedFont(url){
+ const u=new URL(url),base=new URL(BASE),file=u.pathname.split('/').at(-1);
+ assert(['old','candidate'].includes(ARM),'font source arm allowlist');
+ assert(base.protocol==='https:'&&base.hostname==='localhost','font fixture loopback only');
+ assert.equal(u.origin,base.origin,'font request origin equals fixture');
+ assert(['fraunces.woff2','fraunces-italic.woff2','newsreader.woff2','newsreader-italic.woff2'].includes(file),'font filename allowlist');
+ assert.equal(base.pathname,'/wisdom/','installed fixture app path');
+ assert.equal(url,base.origin+base.pathname+'wisdom-art/f/'+file,'exact installed font URL; no traversal/query/credentials');
+ const source='static/wisdom-art/f/'+file,member=manifest.members[ARM+'/'+source],hash=manifest.fonts[file];
+ assert(/^[a-f0-9]{64}$/.test(hash),'required pinned font hash');
+ assert(member&&member.sha256===hash&&member.source_commit===manifest[ARM+'_commit']&&member.source_path===source,'font member bound to exact release source');
+ const root=path.join(__dirname,ARM),target=path.join(root,source);
+ assert.equal(fs.realpathSync(root),root,'canonical staged release root');
+ assert.equal(fs.realpathSync(target),target,'no font symlink/path escape');
+ assert(fs.lstatSync(target).isFile(),'regular release font file');
+ const body=fs.readFileSync(target);assert.equal(sha(body),hash,'release font bytes equal manifest pin');
+ return {file,sha256:hash,body};
+}
+async function deliverFont(route,fontGate,deliveries,errors){
+ try{
+  const {file,sha256,body}=pinnedFont(route.request().url());
+  const row={file,sha256,source:'hash-pinned release asset bytes',heldAt:Date.now(),released:false};deliveries.push(row);
+  await fontGate;await route.fulfill({status:200,contentType:'font/woff2',body});
+  row.released=true;row.releasedAt=Date.now();
+ }catch(e){
+  errors.push({message:e.message,stack:e.stack});save();
+  try{await route.abort('failed')}catch(abort){errors.push({message:abort.message,phase:'abort'});save()}
+ }
+}
 async function delayed(name,fraction,action,warmRef){
  const o=await open(name,{fraction});let releaseAPI,releaseFonts;
- const apiGate=new Promise(r=>releaseAPI=r),fontGate=new Promise(r=>releaseFonts=r),deliveries=[];
+ const apiGate=new Promise(r=>releaseAPI=r),fontGate=new Promise(r=>releaseFonts=r),deliveries=[],routeErrors=[];
+ report.cases[name]={status:'failed',routeErrors};save();
  let apiHeld=0,fontsReleased=false;
  await o.ctx.route('**/api/wisdom',async route=>{if(route.request().method()!=='GET')return route.fallback();apiHeld++;await apiGate;return route.continue()});
- await o.ctx.route('**/wisdom-art/f/*.woff2',async route=>{
-  const response=await route.fetch(),bytes=await response.body(),file=new URL(route.request().url()).pathname.split('/').at(-1),hash=sha(bytes);
-  const row={file,sha256:hash,heldAt:Date.now(),released:false};deliveries.push(row);
-  assert.equal(hash,manifest.fonts[file],'real response equals pinned source font asset');await fontGate;
-  row.released=true;row.releasedAt=Date.now();return route.fulfill({response,body:bytes});
- });
+ await o.ctx.route('**/wisdom-art/f/*.woff2',route=>deliverFont(route,fontGate,deliveries,routeErrors));
  try{
   await o.p.goto(BASE+'#/read/flight-chapter',{waitUntil:'domcontentloaded'});
   await o.p.waitForFunction(()=>window.__fontQA?.firstResolved&&document.fonts.status==='loaded'&&!document.querySelector('.wb-reader'));
@@ -137,10 +163,10 @@ async function delayed(name,fraction,action,warmRef){
    removed=await o.p.evaluate(()=>{__fontQA.removedMutations.length=0;return {connected:__fontQA.removed.isConnected,count:__fontQA.removed.querySelector('.wb-count').textContent}});assert.equal(removed.connected,false);
   }
   fontsReleased=true;releaseFonts();await settled(o.p);
-  const final=await snapshot(o.p,name+'-final'),evidence={before,pending,turned,removed,final,deliveries};
+  const final=await snapshot(o.p,name+'-final'),evidence={before,pending,turned,removed,final,deliveries,routeErrors};
   // Persist diagnostic evidence BEFORE any regression assertion.
   report.cases[name]={status:'failed',...evidence};save();
-  metrics(final);
+  assert.equal(routeErrors.length,0,'no intercepted font delivery errors');metrics(final);
   if(action==='turn'){
    const anchor=turned.firstVisible.offset;
    const target=await warmRef.p.evaluate(off=>{const r=document.querySelector('.wb-reader'),flow=r.querySelector('.wb-flow'),stage=r.querySelector('.wb-stage'),walker=document.createTreeWalker(flow,NodeFilter.SHOW_TEXT),lead=r.querySelectorAll('.wb-track>.wb-slide:not(.wb-end)').length;let n,pos=0;while((n=walker.nextNode())){if(pos+n.length>off){const rg=document.createRange();rg.setStart(n,off-pos);rg.setEnd(n,off-pos+1);return lead+Math.floor((rg.getBoundingClientRect().left-flow.getBoundingClientRect().left+1)/stage.clientWidth)+1;}pos+=n.length;}throw Error('anchor outside same body')},anchor);
