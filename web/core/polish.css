@@ -98,6 +98,8 @@ html[data-shell="desktop"] .wx-banners { left: 50%; right: auto; transform: tran
 .wx-off-sub { margin: 0 0 var(--wz-space-3, 12px); color: var(--wz-text-secondary); font-size: var(--wz-text-sm); line-height: 1.45; }
 .wx-off-card .wz-list + .wx-off-sub { margin-top: var(--wz-space-3, 12px); color: var(--wz-text); }
 .wx-off-card .wz-actions > .wz-button { flex: 1; }
-/* Phone: keep the checks below the safe area, far above the orb. Only the opaque card takes hits; the
+/* Phone: keep the checks below the status bar and pill, far above the orb. Only the opaque card takes hits; the
  * rest of the shell, especially the dock, remains visible and tappable. Small landscapes scroll the card. */
-html:not([data-shell="desktop"]) .wx-off { place-items: start center; padding-top: calc(env(safe-area-inset-top, 0px) + var(--wz-space-4, 16px)); }
+/* The Android WebView reports env(safe-area-inset-top) as 0, so use the shell's own --sb/--safe-t (what the pill uses)
+ * and sit just under the pill, never over the status bar. */
+html:not([data-shell="desktop"]) .wx-off { place-items: start center; padding-top: calc(var(--sb, 0px) + var(--safe-t, env(safe-area-inset-top, 0px)) + 44px); }
