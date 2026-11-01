@@ -17,7 +17,7 @@ def integrity():
   assert target.stat().st_mode&0o777==int(row['mode'],8),'member mode drift: '+name
  for root in ('ux','wisdom','qa','historical'):
   actual={str(p.relative_to(R)) for p in (R/root).rglob('*') if p.is_file() or p.is_symlink()};assert actual=={n for n in M['members'] if n.startswith(root+'/')},'complete source closure '+root
- for root in ('ux','wisdom'):
+ for root in ('ux','wisdom','qa','historical'):
   assert len([k for k in M['members'] if k.startswith(root+'/')])==M['counts'][root]
  for name,digest in M['toolchain']['files'].items():assert sha(name)==digest,'toolchain drift '+name
  historical=json.loads((R/'historical/r8-evidence-index.json').read_text());assert len(historical['files'])==2291,'historical R8 inventory count'
@@ -36,9 +36,12 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
  regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
- for name in ('runner.py','qa/fixture.py','qa/static-guards.py'):compile((R/name).read_text(),str(R/name),'exec')
+ # Recompute policy from frozen source, never trust a served manifest/cache list.
+ import runpy
+ assert M['bytePolicy']==runpy.run_path(str(R/'qa/byte-policy.py'))['from_sources'](R),'byte policy/source generation drift'
+ for name in ('runner.py','qa/fixture.py','qa/static-guards.py','qa/byte-policy.py'):compile((R/name).read_text(),str(R/name),'exec')
  guard=subprocess.run([sys.executable,R/'qa/static-guards.py',R],env=ENV,capture_output=True,text=True,timeout=10);assert guard.returncode==0,guard.stdout+guard.stderr
  free=shutil.disk_usage(R).free;assert free>=3*1024**3,'3GiB execution free floor'
  return {'integrity':'verified','members':len(M['members']),'sourceCounts':M['counts'],'expectedCases':[c[0] for c in CASES],'caseBudgetSeconds':sum(c[3] for c in CASES),'browsersStarted':0,'fixturesStarted':0,'freeBytes':free,'playwright':resolved,'staticGuards':json.loads(guard.stdout),'seamRegressions':regression.stdout}
@@ -90,19 +93,25 @@ def cleanup():
  remains=processes();return {'selectedPids':list(selected),'remainingPids':list(remains),'verified':not remains}
 def interrupted(*_):raise KeyboardInterrupt('parent-admitted browser packet terminated')
 signal.signal(signal.SIGTERM,interrupted);signal.signal(signal.SIGINT,interrupted)
-def case(identity,phase,width,cap):
+def case(identity,phase,width,cap,probe=False):
  global fixture,child
  out=OUT/identity;out.mkdir();deadline=min(overall,time.monotonic()+cap)
- row={'status':'incomplete','phase':phase,'width':width,'capSeconds':cap};report['cases'][identity]=row;save()
+ row={'status':'incomplete','phase':phase,'width':width,'capSeconds':cap}
+ if probe:report['observerProbe']=row
+ else:report['cases'][identity]=row
+ save()
  with (out/'fixture.log').open('w') as fl,(out/'browser.log').open('w') as bl:
   try:
    fixture=subprocess.Popen([sys.executable,R/'qa/fixture.py','--wisdom-source',R/'wisdom','--web',R/'ux/web','--cert',R/'rig-server.pem','--key',R/'rig-server.key'],cwd=R,env={**ENV,'QA_LOST_HIGHLIGHT':'1' if phase=='functional' else '0'},stdout=subprocess.PIPE,stderr=fl,text=True,start_new_session=True)
    with selectors.DefaultSelector() as sel:
     sel.register(fixture.stdout,selectors.EVENT_READ);assert sel.select(timeout=min(12,deadline-time.monotonic())),'fixture readiness timeout';line=fixture.stdout.readline();assert line,'fixture exited before readiness';info=json.loads(line)
    (out/'fixture.json').write_text(json.dumps(info,indent=2));assert info['synthetic'] and info['url'].startswith('https://localhost:') and info['url'].endswith('/wizard-os-home/?app-session=wisdom')
-   child=subprocess.Popen([NODE,R/'qa/browser.cjs'],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
+   child=subprocess.Popen([NODE,R/'qa'/('observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
    try:rc=child.wait(timeout=max(1,deadline-time.monotonic()-5))
    except subprocess.TimeoutExpired:row['timeout']=True;raise RuntimeError('externally bounded browser case timeout')
+   if probe:
+    r=json.loads((out/'observer-probe.json').read_text());assert rc==0 and r['status']=='pass' and [x['mode'] for x in r['reports']]==['good','empty','wrong','stale','plain-empty'],'independent byte observer protocol gate'
+    row.update(status='pass',report=str((out/'observer-probe.json').relative_to(R)),sha256=sha(out/'observer-probe.json'));return
    row['exitCode']=rc;r=json.loads((out/'report.json').read_text());assert rc==0 and r['status']=='pass',str(r.get('error','browser failed'))
    assert r['sourceManifest']==A.manifest_sha and r['sources']==M['sources'] and r['phase']==phase and r['viewport']==width
    required={'functional':['onlineCatalogFontsArt','offlineColdEntry','offlineReader','offlineWritesDurable','strictCommitTelemetry','secondProcessDeathRetained','siblingWorkerPreserved','exactlyOnceReplay','quotaInlineAfterDomReplacement'],'presentation':['liveSkins','hostBack','standaloneFallback'],'strict-quota':['quietFailure'],'strict-unsupported':['quietFailure'],'boot-read-fail':['bootFailure'],'boot-strict-unsupported':['bootFailure'],'boot-open-unsupported':['bootFailure'],'isolation':['nonWisdomIsolation']}[phase]
@@ -123,6 +132,8 @@ def case(identity,phase,width,cap):
    save()
 try:
  save()
+ case('observer-probe','observer-probe',390,70,probe=True)
+ assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
  for entry in CASES:
   if time.monotonic()>=overall:report['cases'][entry[0]]={'status':'not-run-budget-exhausted'};save();continue
   case(*entry)

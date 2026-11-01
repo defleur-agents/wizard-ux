@@ -41,6 +41,18 @@ class H(server.Handler):
   self._qa_call=None
   path=unquote(urlsplit(self.path).path)
   self.reads.append({'path':path})
+  if path=='/__fixture__/blank':return self.send(200,b'<!doctype html><title>Empty profile byte observer</title>','text/html')
+  if path=='/__observer__/':return self.send(200,b'<!doctype html><title>Synthetic observer negative</title>','text/html')
+  if path=='/wisdom/__observer__.js':
+   mode=urlsplit(self.path).query
+   data=b'' if mode=='plain-empty' else b'wrong bytes' if mode=='wrong' else b'actual source bytes'
+   return self.send(200,data,'application/javascript')
+  if path=='/__observer__/sw.js':
+   mode=urlsplit(self.path).query
+   assert mode in ('good','empty','wrong','stale')
+   script="self.addEventListener('install',e=>e.waitUntil((async()=>{const r=await fetch('/wisdom/__observer__.js?MODE');const c=await caches.open('CACHE');await c.put('/wisdom/__observer__.js?MODE',VALUE);await self.skipWaiting()})()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));"
+   script=script.replace('MODE',mode).replace('CACHE','observer-shell-old' if mode=='stale' else 'observer-shell-current').replace('VALUE',"new Response('',{status:200,headers:{'content-length':'19','content-type':'application/javascript'}})" if mode=='empty' else 'r')
+   return self.send(200,script.encode(),'application/javascript')
   if path=='/__fixture__/receipt':
    with server.db() as c:
     state=wisdom.state(c);tables={r[0] for r in c.execute('select name from sqlite_master')};count=c.execute('select count(*) from wisdom_offline_receipts').fetchone()[0] if 'wisdom_offline_receipts' in tables else 0;receipt_rows=[dict(r) for r in c.execute('SELECT id,path,digest FROM wisdom_offline_receipts')] if count else []
