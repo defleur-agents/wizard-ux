@@ -33,6 +33,7 @@ async function scenario(browser, origin, desktop, thread, status, skin = 'nebula
       if (status === 200) model.hidden = true;
       return json(status === 200 ? model : {error:'fixture failure'},status).catch(() => {});
     }
+    if (u.pathname.endsWith('/store-data/router/v1/needs/garden')) { await new Promise(resolve=>setTimeout(resolve,5000)); return json({},status).catch(()=>{}); }
     if (u.pathname === '/garden/') return r.fulfill({contentType:'text/html',body:'<!doctype html><title>Garden</title><h1>Garden</h1><p>Sample app, not a shell</p>'});
     if (u.pathname === '/garden/api/status') { statusReads++; return json(model); }
     if (u.pathname === '/wizard/v1/bootstrap') return json({bootstrap:1,settings:{agent:{name:'Wizard'},clock:{timezone:'UTC'}},capabilities:{},endpoints:{apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions'}});
@@ -73,12 +74,12 @@ async function scenario(browser, origin, desktop, thread, status, skin = 'nebula
     check(await card.evaluate(n=>n.closest('[data-sec]').dataset.sec==='ready' && !n.previousElementSibling?.matches('.ch-row')), `${label} pinned in Ready`);
     check(await card.locator('small').innerText()==='Water · Feed', `${label} declared initial subtitle`);
     check(await card.locator('.dots i').count()===3, `${label} progress dots`);
-    // Real delegated open handler must create the app window in the same click task.
-    const opened = await p.evaluate(()=>{const b=document.querySelector('[data-chappopen]');b.click();return !!document.querySelector('iframe[src*="/garden/"]');});
-    check(opened, `${label} open creates app frame synchronously`);
-    await p.waitForTimeout(150);
+    // The open tap must paint in the same task, before its delayed readiness check.
+    const opened = await p.evaluate(()=>{const b=document.querySelector('[data-chappopen]');b.click();return b.classList.contains('opening') && getComputedStyle(b).opacity < 1 || [...document.querySelectorAll('.toast,#toast')].some(n=>n.textContent.includes('Opening Garden'));});
+    check(opened, `${label} open paints feedback synchronously`);
+    await p.waitForSelector('iframe[src*="/garden/"]');await p.waitForTimeout(250);
     check(p.frames().some(f=>f.url().endsWith('/garden/')),`${label} app, not a nested shell`);
-    await p.evaluate(()=>{const a=window.__wux||window.__wos;const w=Object.values(a.wins).find(w=>w.app==='garden');if(w)a.closeWin(w.id);});
+    await p.evaluate(()=>{const a=window.__wux||window.__wos;const w=Object.values(a.wins).find(w=>w.app==='frame'&&w.appId==='garden');if(w)a.closeWin(w.id);if(window.__wos){const c=Object.values(a.wins).find(w=>w.app==='chats');a.goDesk(a.desks.findIndex(d=>d.wins.includes(c.id)));a.focusWin(c.id);}});
     if(status===200 && !desktop) {
       const mutations=await p.evaluate(()=>new Promise(resolve=>{let n=0;const mo=new MutationObserver(m=>n+=m.length);mo.observe(document.querySelector('.ch-list'),{childList:true,subtree:true});setTimeout(()=>{mo.disconnect();resolve(n)},17000)}));
       check(mutations===0,`${label} unchanged list across sessions poll`,String(mutations));
@@ -127,6 +128,7 @@ async function scenario(browser, origin, desktop, thread, status, skin = 'nebula
     } else check(await p.locator('.ch-appcard-w').count() === 0, `${label} successful reconciliation stays hidden`);
     await p.screenshot({path:path.join(out,label.replace(/[^a-z0-9-]/gi,'-')+'.png')});
     check(errors.length === 0, `${label} no page errors`,errors.join(' | '));
+    if(held){await p.evaluate(()=>{const n=document.querySelector('.ch-appcard-w').closest('.ch-scroll');n.dispatchEvent(new TouchEvent('touchend',{bubbles:true,changedTouches:[new Touch({identifier:99,target:n,clientX:10,clientY:10})]}));});await p.waitForTimeout(500);}
     // App state alone controls done, skip and rollover; messages only invalidate a registry-bound read.
     for(const [name,change,want] of [['done',{done:3,hidden:false},0],['hidden',{done:0,hidden:true},0],['rollover',{day:'next-day',done:1,hidden:false},1]]) {
       Object.assign(model,change);await p.evaluate(()=>postMessage({type:'wizard:ready-card',app:'garden'},location.origin));

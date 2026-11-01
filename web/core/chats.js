@@ -423,7 +423,7 @@ window.WizCore.chats = function createChats(H) {
           s.hiding = false;
           if (READY_CARDS.get(id) !== s || !readyApps().some(a => a.id === id)) return;
           for (const { node, parent, next } of removed) if (parent.isConnected && !parent.querySelector(selector)) parent.insertBefore(node, next?.parentNode === parent ? next : null);
-          readySet(s, prev); toast('!', `Couldn’t hide ${a.ready_card.title} · try again`, 2400);
+          readySet(s, prev); (H.toastPlain || toast)('!', `Couldn’t hide ${a.ready_card.title} · try again`, 2400);
         });
     }, 0));
   }
@@ -2883,7 +2883,7 @@ window.WizCore.chats = function createChats(H) {
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
     const appHide = e.target.closest('[data-chapphide]'); if (appHide) { readyHide(appHide.dataset.chapphide); return true; }
-    const appOpen = e.target.closest('[data-chappopen]'); if (appOpen) { H.openApp?.(appOpen.dataset.chappopen, e.target); return true; }
+    const appOpen = e.target.closest('[data-chappopen]'); if (appOpen) { if (!H.openApp?.(appOpen.dataset.chappopen, e.target)) toast('!', 'Couldn’t open app · try again', 2400); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;

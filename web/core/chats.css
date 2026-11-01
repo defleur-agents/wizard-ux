@@ -738,6 +738,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 /* App-declared progress cards, pinned in Ready; geometry shared by every app. */
 .ch-appcard { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
   border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
+.ch-appcard.opening { opacity: .55; transform: scale(.98); }
 .ch-appcard:active { transform: scale(.99); }
 .ch-appcard-w { position: relative; margin: 4px 0 10px; }
 .ch-appcard-w > .ch-appcard { margin: 0; padding-right: 52px; }

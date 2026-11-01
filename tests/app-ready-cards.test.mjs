@@ -57,6 +57,13 @@ test('registry paths are relative, bounded, confined to same-origin app; no cach
  for(const url of ['//evil/','https://other/garden/','/garden/?x=1'])assert.equal(c.readyCard({...a,url}),null);
  assert.match(apps,/trusted && readyCard\(a\)/);assert.match(apps,/WizCore\.readyCards = \(\) => REMOTE\.filter/);
 });
+test('both shell hosts expose generic app opening with same-frame shared feedback',()=>{
+ const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8'),desktop=readFileSync(new URL('../web/desktop/desktop.js',import.meta.url),'utf8');
+ assert.match(phone,/openApp: \(id, srcEl\) => \{[^\n]+openingStart\(a,[^\n]+requestAnimationFrame/);
+ assert.match(desktop,/openApp: id => \{[^\n]+toast\('↗', `Opening \$\{a.name\}`[^\n]+requestAnimationFrame/);
+ assert.match(phone,/toastPlain: \(icon, text, ms\) => toast\(icon, esc\(text\), ms\)/);
+ assert.match(src,/\(H\.toastPlain \|\| toast\)\('!'/);
+});
 test('generic clicks reuse same-frame H.openApp with Chats source; no app-specific status knowledge',()=>{
  assert.match(src,/H\.openApp\?\.\(appOpen\.dataset\.chappopen, e\.target\)/);assert.ok(src.indexOf("closest('[data-chapphide]')")<src.indexOf("closest('[data-chappopen]')"));
  const block=src.slice(src.indexOf('  const READY_CARDS'),src.indexOf('  // The agent\'s status line'));

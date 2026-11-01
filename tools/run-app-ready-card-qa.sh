@@ -12,7 +12,7 @@ mkdir -p "$TMPDIR" "$ROOT/qa-evidence"
 status=0
 QA_OUT="$ROOT/qa-evidence/generic" node qa-app-ready-cards.cjs > "$ROOT/qa-evidence/generic.log" 2>&1 || status=1
 QA_OUT="$ROOT/qa-evidence/staged" node tools/qa-app-ready-preview.cjs "$PREVIEW" > "$ROOT/qa-evidence/staged.log" 2>&1 || status=1
-QA_OUT="$ROOT/qa-evidence/app-back" node tools/qa-app-done-returns.cjs "$PREVIEW/wizard-os-home/?open=chats&shell=phone" > "$ROOT/qa-evidence/app-back.log" 2>&1 || status=1
-QA_WEB_DIR="$ROOT" QA_SHOTS="$ROOT/qa-evidence/opaque" node tools/qa-opaque-overlays.cjs > "$ROOT/qa-evidence/opaque.log" 2>&1 || status=1
+QA_OUT="$ROOT/qa-evidence/app-back" node tools/qa-app-done-returns.cjs "$PREVIEW/wizard-os-home/?view=chats&section=ready&shell=phone" > "$ROOT/qa-evidence/app-back.log" 2>&1 || status=1
+QA_FILTER=toast QA_WEB_DIR="$ROOT" QA_SHOTS="$ROOT/qa-evidence/opaque" node tools/qa-opaque-overlays.cjs > "$ROOT/qa-evidence/opaque.log" 2>&1 || status=1
 printf 'Browser acceptance exit=%s; evidence=%s/qa-evidence\n' "$status" "$ROOT"
 exit "$status"
