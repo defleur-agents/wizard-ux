@@ -40,6 +40,21 @@ async function harness(t, { missing = false, shell = 'phone', timeZone = 'Europe
   };
   return { ...h, s, fixture, opened, notices, mount, act, input };
 }
+for (const ok of [true, false]) test(`confirmed delete paints before a stalled backend, with rollback=${!ok}`, async t => {
+  const h = await harness(t); h.view.focus('schedules');
+  let release; const original = h.s.fetch;
+  h.s.fetch = (url, opts) => opts?.method === 'DELETE' ? new Promise(r => { release = () => r({ ok, status: ok ? 200 : 500, json: async () => ({ error: 'fixture delete failed' }) }); }) : original(url, opts);
+  h.act('delete', 'morning'); assert.match(h.root.innerHTML, /role="alertdialog"/);
+  h.act('confirm-delete', 'morning');
+  assert.doesNotMatch(h.root.innerHTML, /role="alertdialog"|data-sc-id="morning"/);
+  await h.s.WosSchedules.load(); assert.doesNotMatch(h.root.innerHTML, /data-sc-id="morning"/, 'stale read cannot restore a pending delete');
+  if (ok) h.fixture.handle('/wizard/v1/schedules/morning', 'DELETE', {});
+  release();
+  await settle(() => ok ? !h.root.innerHTML.includes('disabled') : h.root.innerHTML.includes('fixture delete failed'));
+  assert.equal(h.root.innerHTML.includes('data-sc-id="morning"'), !ok);
+  assert.equal(h.root.innerHTML.includes('role="alertdialog"'), !ok);
+  if (!ok) assert.ok(h.notices.some(n => n[0] === '!'));
+});
 test('one registration is loaded by both entrypoints; colours only use Appearance tokens', () => {
   for (const f of ['web/index.html', 'web/desktop.html']) assert.match(read(f), /core\/schedules\.js/);
   const css = read('web/core/settings.css').split('/* Shared approved')[0];
@@ -132,7 +147,7 @@ test('failed saves keep the draft and escaped server error; live re-render and s
 test('Delete requires confirm; Cancel and Back do not mutate', async t => {
   const h = await harness(t); h.view.focus('schedules'); h.act('delete', 'morning'); assert.match(h.root.innerHTML, /role="alertdialog"/);
   h.act('close'); assert.equal(h.fixture.jobs.length, 2); h.act('delete', 'morning'); h.view.back(); assert.equal(h.fixture.jobs.length, 2);
-  h.act('delete', 'morning'); h.act('confirm-delete', 'morning'); await settle(() => !h.root.innerHTML.includes('data-sc-row="morning"'));
+  h.act('delete', 'morning'); h.act('confirm-delete', 'morning'); await settle(() => !h.root.innerHTML.includes('disabled') && h.fixture.calls.some(c => c.method === 'DELETE') && h.fixture.calls.at(-1).method === 'GET');
   assert.equal(h.fixture.calls.filter(c => c.method === 'DELETE').length, 1); assert.equal(h.fixture.calls.at(-1).method, 'GET');
 });
 test('a delayed sheet autofocus never steals focus from a field already reached', async t => {
