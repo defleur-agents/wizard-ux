@@ -4,7 +4,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
+// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
+const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
+const read = f => ungate(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
 const js = read('web/core/skins.js');
 
 test('Mizel offers Landscapes Dark and Landscapes Light, both from the one Landscapes package', () => {
@@ -25,7 +27,8 @@ test('the Landscapes package and Miguel\'s shell rules cover both palettes', () 
   const css = read('web/skins/landscapes/skin.css');
   assert.doesNotMatch(css, /data-skin="landscapes"\]/, 'shared rules use ^="landscapes"');
   assert.match(css, /html\[data-skin="landscapes-light"\]:is\(\[data-shell="desktop"\], :not\(\[data-shell="desktop"\]\)\) \.msg\.u \.bub \{ background: rgba\(0, 0, 0, \.07\)/);
-  for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.match(read(f), /'landscapes', 'landscapes-light'/, f);
+  // Skins are colours only (James, Miguel, 1 Nov 2026): no shell file asks which skin is worn to pick a layout.
+  for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /'landscapes', 'landscapes-light'/, f);
   assert.doesNotMatch(read('web/desktop/desktop.css'), /data-skin="landscapes"\]/);
 });
 

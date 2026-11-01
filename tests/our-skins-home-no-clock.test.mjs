@@ -2,7 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-const read = f => fs.readFileSync(new URL(f, import.meta.url), 'utf8');
+// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
+const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
+const read = f => ungate(fs.readFileSync(new URL(f, import.meta.url), 'utf8'));
 
 test('our skins hide the Home date and clock', () => {
   assert.match(read('../web/skins/obsidian/skin.css'), /html\[data-skin\^="obsidian"\] :is\(\.home-date, \.home-time\) \{ display: none; \}/);

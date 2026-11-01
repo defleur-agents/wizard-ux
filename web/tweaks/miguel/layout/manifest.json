@@ -1,0 +1,11 @@
+{
+  "id": "miguel/layout",
+  "name": "Miguel's layout",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Chats by status with Ready at the thumb, compact rows, edge-to-edge phone apps, symmetric dock, Home dots and tiles, apps by kind"
+}

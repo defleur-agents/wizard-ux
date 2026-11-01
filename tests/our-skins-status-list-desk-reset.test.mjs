@@ -13,7 +13,7 @@ function layoutFor(skin, stored) {
   const start = src.indexOf("  const LAYOUT_KEY = 'wos.chats.layout.v1';");
   const end = src.indexOf('  const archiveAfterDays');
   assert.ok(start > 0 && end > start, 'chatLayout block found');
-  const ctx = { document: { documentElement: { dataset: { skin } } }, localStorage: { getItem: () => stored } };
+  const ctx = { document: { documentElement: { dataset: { skin, tweaks: OURS.includes(skin) ? 'miguel/layout' : '' } } }, localStorage: { getItem: () => stored } };
   vm.createContext(ctx);
   return vm.runInContext(src.slice(start, end) + '; chatLayout()', ctx);
 }
@@ -33,14 +33,14 @@ test("James's skins keep the stored layout and the By day default", () => {
 test('our skins drop the Layout picker and the Yesterday filter', () => {
   const src = read('../web/core/chats.js');
   assert.match(src, /\$\{ourSkin\(\) \? '' : `<h5>Layout<\/h5>/);
-  assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(k === 'yesterday' && \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\]/);
+  assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(k === 'yesterday' && \(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('miguel\/layout'\)/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });
 
 test('on our skins, leaving a desk returns its Chats window to the session list', () => {
   const src = read('../web/app.js');
   const go = src.slice(src.indexOf('  function goDesk(n, silent) {'), src.indexOf('  function announce(html) {'));
-  assert.match(go, /if \(moved && from && \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\]\.includes\(document\.documentElement\.dataset\.skin \|\| ''\)\) for \(const id of from\.wins\) \{ const w = W\[id\]; if \(w\?\.app === 'chats' && w\.thread && !to\.wins\.includes\(id\) && !openedFrom\(to, id\)\) chatsBack\(w\); \}/);
+  assert.match(go, /if \(moved && from && \(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('miguel\/layout'\)\) for \(const id of from\.wins\) \{ const w = W\[id\]; if \(w\?\.app === 'chats' && w\.thread && !to\.wins\.includes\(id\) && !openedFrom\(to, id\)\) chatsBack\(w\); \}/);
   // A link opened from the chat (its own desk, or a bound review view) must not throw the chat back to the list.
   assert.match(src, /const openedFrom = \(desk, chatId\) => !!desk && desk\.wins\.some\(x => W\[x\]\?\.from\?\.win === chatId \|\| W\[x\]\?\.bound === chatId\);/);
 });

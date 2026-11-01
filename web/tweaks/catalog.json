@@ -8,6 +8,7 @@
     "miguel"
   ],
   "tweaks": [
+    "miguel/layout",
     "miguel/swipe-strip",
     "miguel/send-and-go",
     "miguel/model-pills",
