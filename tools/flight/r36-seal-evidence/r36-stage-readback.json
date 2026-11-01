@@ -1,0 +1,19 @@
+{
+  "manifest_sha256": "8d1fddad2420a80071043cbc375ad61b3b4978ced4cdf96b1d3a1047540ee8b3",
+  "spec": {
+    "argv": [
+      "python3",
+      "-B",
+      "/srv/work/wisdom-r36-native-candidate-a1ac47d0-v1/run-native-r36.py",
+      "--manifest-sha",
+      "8d1fddad2420a80071043cbc375ad61b3b4978ced4cdf96b1d3a1047540ee8b3"
+    ],
+    "cwd": "/srv/work/wisdom-r36-native-candidate-a1ac47d0-v1",
+    "host": "forum",
+    "key": "wisdom-r36-native-candidate-a1ac47d0-8d1fddad2420",
+    "lane": "heavy",
+    "timeout_seconds": 2600
+  },
+  "evidence_absent": true,
+  "runs_absent": true
+}

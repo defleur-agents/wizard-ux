@@ -1,0 +1,69 @@
+............................................
+----------------------------------------------------------------------
+Ran 44 tests in 0.116s
+
+OK
+{
+  "kind": "source-only-synthetic-layout-model-not-native",
+  "results": [
+    {
+      "name": "ordered-rebuild-keeps-dom-and-fraction",
+      "status": "passed"
+    },
+    {
+      "name": "zero-stage-no-teardown",
+      "status": "passed"
+    },
+    {
+      "name": "frozen-reader-no-teardown",
+      "status": "passed"
+    }
+  ]
+}
+{
+  "kind": "source-only-no-native-or-browser",
+  "results": [
+    {
+      "name": "late-face-after-ready-moves-sentinel-and-count",
+      "status": "passed"
+    },
+    {
+      "name": "post-layout-ready-waits-for-used-face",
+      "status": "passed"
+    },
+    {
+      "name": "anchor-retains-full-precision-compatible-fraction",
+      "status": "passed"
+    },
+    {
+      "name": "stale-ready-cannot-relayout-another-reader",
+      "status": "passed"
+    },
+    {
+      "name": "stale-generation-cannot-relayout-same-reader",
+      "status": "passed"
+    },
+    {
+      "name": "unchanged-font-geometry-does-not-dismiss-selection",
+      "status": "passed"
+    },
+    {
+      "name": "failed-font-load-refits-fallback-without-polling",
+      "status": "passed"
+    },
+    {
+      "name": "detached-or-frozen-reader-is-untouched",
+      "status": "passed"
+    },
+    {
+      "name": "explicit-page-turn-still-updates-before-fonts-resolve",
+      "status": "passed"
+    },
+    {
+      "name": "incompatible-resize-anchor-still-owns-reading-line",
+      "status": "passed"
+    }
+  ]
+}
+PASS no offline popups anywhere; quota rejected; quiet inline failure
+PASS quota before route; actual render mounts and repaints quiet inline notice

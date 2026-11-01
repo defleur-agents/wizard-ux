@@ -1,0 +1,1 @@
+{"status": "verified-source-only", "members": 6200, "budget": {"build": 180, "cleanup": 120, "normal": 2200, "prepost": 100}, "runtimes_started": 0, "nativeAcceptance": false, "releaseAllowed": false, "liveParityAcceptance": false, "visualAcceptance": false, "ordinaryPathAcceptance": false}

@@ -1,0 +1,18 @@
+{
+  "kind": "source-only-synthetic-layout-model-not-native",
+  "results": [
+    {
+      "name": "ordered-rebuild-keeps-dom-and-fraction",
+      "status": "failed",
+      "error": "Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n-   'display:none',\n-   'flush-hidden',\n    'cssText',\n    'measure'\n  ]"
+    },
+    {
+      "name": "zero-stage-no-teardown",
+      "status": "passed"
+    },
+    {
+      "name": "frozen-reader-no-teardown",
+      "status": "passed"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+test_budget (__main__.Packet.test_budget) ... ok
+test_early_exit_no_idle_wait (__main__.Packet.test_early_exit_no_idle_wait) ... ok
+test_exact_driver (__main__.Packet.test_exact_driver) ... ok
+test_image_alias (__main__.Packet.test_image_alias) ... ok
+test_missing_member (__main__.Packet.test_missing_member) ... ok
+test_timeout_stack_and_owned_cleanup (__main__.Packet.test_timeout_stack_and_owned_cleanup) ... ok
+test_wrong_base (__main__.Packet.test_wrong_base) ... ok
+test_wrong_candidate (__main__.Packet.test_wrong_candidate) ... ok
+test_wrong_control_hash (__main__.Packet.test_wrong_control_hash) ... ok
+test_wrong_manifest (__main__.Packet.test_wrong_manifest) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.951s
+
+OK
