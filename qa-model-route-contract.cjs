@@ -185,7 +185,7 @@ async function dispatch(b,o,state='sent',count=1) {
   });
   await check('old already-frozen unpinned request stays unsent',async()=>{
    const it={id:'legacy',kind:'reply',sessionId:'private',state:'queued',createdAt:Date.now(),attempts:0,text:'synthetic old',model:'glm-5-3',provider:'custom:tinfoil-operator',body:JSON.stringify({session_id:'private',input:'synthetic old'})};
-   const before=b.bodies.length;b.c.WosOutbox._items.set(it.id,it);await b.c.WosOutbox.pump();observed(b,it,before,'failed',0);assert.match(it.error,/Stored route does not match/);
+   const before=b.bodies.length;b.c.WosOutbox._items.set(it.id,it);await b.c.WosOutbox.pump();await settled(b,it.id);observed(b,it,before,'failed',0);assert.match(it.error,/Stored route does not match/);
   });
  } finally {b.close()}
  if(process.env.QA_CASE)assert.equal(pass,1,'exactly one requested case executed');
