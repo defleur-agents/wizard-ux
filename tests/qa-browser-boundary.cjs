@@ -17,13 +17,21 @@ const report = { candidate: true, nativeProven: false, realStoreInstallProven: f
 const check = (value, name) => { assert.ok(value, name); report.checks.push(name); };
 (async () => {
   const { createWizardServer } = await import(pathToFileURL(path.join(serviceRoot, 'server/service.mjs')));
+  const { createAgentRegistry } = await import(pathToFileURL(path.join(serviceRoot, 'server/agents.mjs')));
   const { createHermesFixture } = await import(pathToFileURL(path.join(serviceRoot, 'server/fixture.mjs')));
   const hermes = createHermesFixture({ expectedKey: 'boundary-fixture-only' });
   const hp = await listen(hermes);
   const home = path.join(out, 'synthetic-home'); fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(path.join(home, 'apps.json'), JSON.stringify({ schema: 1, apps: [{ id: 'boundary-fixture', name: 'Boundary fixture', status: 'running', view: { url: '/fixture-app/' } }] }));
+  const mainHome = path.join(home, 'synthetic-main'); fs.mkdirSync(mainHome, { recursive: true });
+  const runtime = { apply: async () => ({}), stop: async () => ({}), start: async () => ({}) };
+  const registry = createAgentRegistry({ agentsDir: path.join(home, 'agents'), mainHome, runtime,
+    localModels: ['synthetic-model'], fetchImpl: async () => new Response(JSON.stringify({ data: [], has_more: false })) });
+  const priv = (await registry.create({ label: 'Synthetic sealed notebook', model: { provider: 'tinfoil', model: 'glm-5-3' }, permissions: { preset: 'private' } })).agent;
+  fs.mkdirSync(path.join(registry.stateHome(priv.id), 'wiki'), { recursive: true });
+  fs.writeFileSync(path.join(registry.stateHome(priv.id), 'wiki/index.md'), 'SYNTHETIC-PRIVATE-NOTEBOOK-CANARY');
   const service = createWizardServer({ upstreamOrigin: `http://127.0.0.1:${hp}`, hermesKey: 'boundary-fixture-only', requireAccess: false,
-    browserBoundary: { enabled: true, token }, wizardOsHome: home,
+    browserBoundary: { enabled: true, token }, ownerPrivateNotes: true, hermesHome: mainHome, agentRuntime: runtime, wizardOsHome: home,
     appsJsonPath: path.join(home, 'apps.json'), settingsPath: path.join(home, 'settings.json'),
     launcherPath: path.join(home, 'launcher.json'), agentBridge: false, followThrough: false, joinedDelegation: 'off' });
   const serviceTrace = [];
@@ -45,6 +53,10 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
         try { p.html = await (await fetch('/wizard-os-home/desktop.html')).text(); } catch (_) { p.htmlDenied = true; }
         try { await fetch('/wizard/v1/setup/seen', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (_) { p.mutationDenied = true; }
         try { await fetch('/wizard/v1/setup/seen', { method: 'POST', body: '{}', mode: 'no-cors' }); p.simplePostAttempted = true; } catch (_) { p.simplePostAttempted = true; }
+        for (const [name, url] of Object.entries({ privateList: '/wizard/v1/agent-notes', privateRead: '/wizard/v1/agent-notes/synthetic-sealed-notebook/read?path=index.md', privateSearch: '/wizard/v1/agent-notes/synthetic-sealed-notebook/search?q=canary', settings: '/wizard/v1/settings', store: '/wizard/v1/store' })) {
+          try { p[name] = await (await fetch(url)).text(); } catch (_) { p[name + 'Denied'] = true; }
+        }
+        try { await fetch('/wizard/hermes/v1/runs', { method: 'POST', body: JSON.stringify({ input: 'HOSTILE-SYNTHETIC-ONLY' }), mode: 'no-cors' }); } catch (_) {}
         p.nativeAbsent = !window.WizardOSNative && !window.WizardOSDevice && !window.WizardNative && !window.webkit?.messageHandlers?.wizardNative;
         return p;
       };
@@ -81,12 +93,16 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     check(await page.locator('iframe[src*="/fixture-app/"]').getAttribute('sandbox') === 'allow-scripts allow-forms allow-downloads', 'real shell render sandboxes app without same-origin/top-navigation/popups');
     const probe = await app.evaluate(() => window.probe());
     report.hostileProbe = probe;
-    for (const field of ['parentDenied', 'storageDenied', 'chatsDenied', 'htmlDenied', 'mutationDenied', 'nativeAbsent']) check(probe[field] === true, `hostile frame: ${field}`);
+    for (const field of ['parentDenied', 'storageDenied', 'chatsDenied', 'htmlDenied', 'mutationDenied', 'nativeAbsent', 'privateListDenied', 'privateReadDenied', 'privateSearchDenied', 'settingsDenied', 'storeDenied']) check(probe[field] === true, `hostile frame: ${field}`);
     // CORS exceptions alone do not prove refusal: a server can mutate and then
     // return an unreadable 200. Confirm the real server's completed responses.
     report.hostileServiceTrace = serviceTrace.filter(r => r.origin === 'null');
-    check(report.hostileServiceTrace.some(r => r.method === 'GET' && r.path === '/wizard/hermes/api/sessions' && r.status === 401 && !r.hasShellToken), 'server-side 401 proves hostile chat read refusal, not merely CORS');
-    check(report.hostileServiceTrace.some(r => r.method === 'POST' && r.path === '/wizard/v1/setup/seen' && r.status === 401 && !r.hasShellToken), 'server-side 401 proves simple hostile mutation refused before route');
+    check(report.hostileServiceTrace.some(r => r.method === 'GET' && r.path === '/wizard/hermes/api/sessions' && [401, 403].includes(r.status) && !r.hasShellToken), 'server-side denial proves hostile chat read refusal, not merely CORS');
+    check(report.hostileServiceTrace.some(r => r.method === 'POST' && r.path === '/wizard/v1/setup/seen' && [401, 403].includes(r.status) && !r.hasShellToken), 'server-side denial proves simple hostile mutation refused before route');
+    for (const route of ['/wizard/v1/agent-notes', '/wizard/v1/agent-notes/synthetic-sealed-notebook/read', '/wizard/v1/agent-notes/synthetic-sealed-notebook/search', '/wizard/v1/settings', '/wizard/v1/store', '/wizard/hermes/v1/runs']) {
+      check(serviceTrace.some(r => r.path === route && [401, 403].includes(r.status) && !r.hasShellToken), 'server-side hostile denial: ' + route);
+    }
+    check(await page.evaluate(async () => (await (await fetch('/wizard/v1/agent-notes/synthetic-sealed-notebook/read?path=index.md')).json()).text) === 'SYNTHETIC-PRIVATE-NOTEBOOK-CANARY', 'owner shell reads synthetic private canary with shell possession');
     await app.locator('button').click();
     check(await app.locator('#state').textContent() === 'Nested', 'nested app view opened');
     await page.evaluate(() => dispatchEvent(new CustomEvent('wizard:back')));
