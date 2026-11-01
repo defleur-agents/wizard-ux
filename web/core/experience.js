@@ -155,9 +155,7 @@
       if (next && (next.id !== who || !Array.isArray(next.tweaks) || next.tweaks.some(id => !ID.test(id) || !catalog.tweaks.includes(id)) || (next.off !== undefined && (!Array.isArray(next.off) || next.off.some(id => !next.tweaks.includes(id)))))) throw new Error('This skin’s tweaks could not be read');
       owner = who; set = next;
       if (Array.isArray(state.carry)) {
-        // Orb radial is new and OFF: a legacy list cannot imply an opt-in to a package it never knew.
-        // Keep main's independent mix/recipe switches; do not import live's per-skin off-list migration.
-        const mix = {}; for (const id of next?.tweaks || []) { const on = id === 'wizard/orb-radial' ? presetOn(id) : !state.carry.includes(id); if (on !== presetOn(id)) mix[id] = on; }
+        const mix = {}; for (const id of next?.tweaks || []) { const on = !state.carry.includes(id); if (on !== presetOn(id)) mix[id] = on; }
         state.mix = mix; delete state.carry; Store.write(state);
       }
       // Flatten once: what the old set turned on becomes the owner's own switches; from now on everything starts off.

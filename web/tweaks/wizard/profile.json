@@ -5,12 +5,10 @@
   "tweaks": [
     "wizard/two-orbs",
     "wizard/app-borders",
-    "wizard/unified-inbox",
-    "wizard/orb-radial"
+    "wizard/unified-inbox"
   ],
   "off": [
     "wizard/two-orbs",
-    "wizard/app-borders",
-    "wizard/orb-radial"
+    "wizard/app-borders"
   ]
 }
