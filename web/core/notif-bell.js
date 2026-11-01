@@ -238,12 +238,40 @@
   addEventListener('storage', e => { if (e && e.key === ROUTE_KEY) { ROUTES = readJson(ROUTE_KEY, {}); rerouted(); loadItems(); } });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
+  const nameOf = id => { const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
   /* The list Settings › Notifications shows: Notifications (when installed), then every app with a feed, by name. */
   function routes() {
     const out = [];
-    if (installed()) { const n = appName('notifications'); out.push({ id: 'notifications', name: n === 'notifications' ? 'Notifications' : n, route: route('notifications'), chats: inChats('notifications') }); }
+    if (installed()) out.push({ id: 'notifications', name: nameOf('notifications'), route: route('notifications'), chats: inChats('notifications') });
     for (const id of feedList().sort((a, b) => appName(a).localeCompare(appName(b)))) out.push({ id, name: appName(id), route: route(id), chats: inChats(id) });
     return out;
   }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, route, setRoute, inChats, routes, discover, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+
+  /* THE Badge | Chats picker (Miguel, 1 Nov 2026: "one simple design everywhere"). Settings › Notifications and every
+   * notification opened in Chats render this one function, and both write the one saved route above, so a change in
+   * either place shows in the other at once (`wizard:notify-route`). Badge wears a badge dot, Chats a chat bubble. */
+  const ROUTE_ICON = {
+    badge: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>',
+    chats: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5z"/></svg>',
+  };
+  const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  function picker(id, { name, off = false } = {}) {
+    id = String(id || ''); const nm = name || nameOf(id), cur = off ? 'badge' : route(id);
+    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
+  }
+  /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
+   * Undo, which puts the app back on Chats. `toast` is the shell's toast(icon, text, ms); the button is added here. */
+  function movedToast(id, toast, ms = 5000) {
+    id = String(id || ''); const back = route(id) === 'badge' ? 'chats' : 'badge';
+    const text = `${nameOf(id)} moved to ${back === 'chats' ? 'badges' : 'Chats'} · `;
+    try { toast?.('●', '', ms); } catch (e) {}
+    const t = document.getElementById?.('toast'); if (!t) return null;
+    const spans = t.querySelectorAll('span'); const tx = spans[spans.length - 1];
+    if (tx) tx.textContent = text; else t.append(document.createTextNode(text));
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'wos-undo'; b.dataset.wosUndo = id; b.textContent = 'Undo';
+    b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); setRoute(id, back); t.classList.remove('show', 'on'); });
+    t.append(b);
+    return b;
+  }
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, route, setRoute, inChats, routes, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();

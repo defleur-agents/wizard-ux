@@ -559,7 +559,8 @@
   /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
    * Notifications and every installed app that has an inbox feed (only those can put items in Chats); every other app
    * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */
-  const routeSeg = (r, off) => `<div class="st-seg st-nr-seg" role="radiogroup" aria-label="Where ${esc(r.name)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${esc(r.id)}" data-notify-to="${to}" aria-checked="${r.route === to}" ${to === 'chats' && off ? 'disabled' : ''}>${label}</button>`).join('')}</div>`;
+  // The picker itself is WosBell.picker: the same one sits on every notification opened in Chats.
+  const routeSeg = (r, off) => window.WosBell.picker(r.id, { name: r.name, off });
   register({ id: 'notification-routing', page: 'notifications', aliases: ['notifications', 'notification-routing'],
     subtitle: () => { const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
     enter: () => { window.WosBell?.discover?.(); },
