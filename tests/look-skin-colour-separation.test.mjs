@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 const source = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
 
-function look(shell) {
+function look(shell, ownSkins = false) {
   const picked = [], familyPicked = [], last = { wizard: 'grove', mizel: 'obsidian-light' };
   const S = {
     current: 'nebula',
@@ -19,16 +19,22 @@ function look(shell) {
   };
   const s = { console, URL, setTimeout, CSS: { escape: String }, navigator: { userAgent: 'Desktop' },
     document: { activeElement: null }, location: { host: 'example.test' }, WizCore: {}, WosSkin: S };
+  if (ownSkins) {
+    s.WosMySkin = { recipes: [], active: null, on() {}, create(draft) { this.created = JSON.parse(JSON.stringify(draft)); } };
+    s.WosExperience = { installedReady: true, installed: async () => [{ id: 'sample', name: 'Sample tweak' }], defaults: async () => ({ sample: true }), state: { tweaks: [] } };
+  }
   s.window = s;
   vm.runInNewContext(source, s);
+  const handlers = {};
   const root = { innerHTML: '', scrollTop: 0, dataset: {}, classList: { add() {} }, contains: () => false,
-    querySelector: () => null, querySelectorAll: () => [], addEventListener() {}, removeEventListener() {} };
+    querySelector: () => null, querySelectorAll: () => [], addEventListener: (name, fn) => { handlers[name] = fn; }, removeEventListener() {} };
   const view = s.WosSettings.mount(root, { shell, live: { ok: true } });
   view.focus('look');
   const act = (attr, value) => view.dispatch({ closest: selector => selector === '[data-settings-feature]'
     ? { dataset: { settingsFeature: 'look' } }
     : selector === `[${attr}]` ? { dataset: { [attr.slice(5).replace(/-([a-z])/g, (_, c) => c.toUpperCase())]: value } } : null });
-  return { S, root, view, act, picked, familyPicked };
+  const input = (attr, value) => handlers.input({ target: { value, matches: selector => selector === `[${attr}]`, closest: () => ({ dataset: { settingsFeature: 'look' } }) } });
+  return { S, root, view, act, input, s, picked, familyPicked };
 }
 
 for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and colour as separate working controls`, async () => {
@@ -54,5 +60,35 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and co
   assert.equal(h.S.current, 'grove');
   h.act('data-skinfamily', 'mizel'); await Promise.resolve(); await Promise.resolve();
   assert.equal(h.S.current, 'obsidian', 'family round-trip remembers the chosen colour');
+  h.view.destroy();
+});
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base skin and Colour independent without resetting name or tweaks`, async () => {
+  const h = look(shell, true);
+  h.S.set('grove');
+  h.act('data-newskin', '');
+  for (let tick = 0; tick < 10 && h.view.context.skinDraft.loading; tick++) await Promise.resolve();
+  assert.equal(h.view.context.skinDraft.loading, false);
+  assert.match(h.root.innerHTML, /Base skin<select data-skin-base>/);
+  assert.match(h.root.innerHTML, /<h4>Colour<\/h4>/);
+  assert.match(h.root.innerHTML, /data-skinpick="grove" aria-pressed="true"/, 'starts from worn colour');
+  h.input('data-skin-name', 'Quiet morning');
+  h.act('data-draft-tweak', 'sample');
+  h.input('data-skin-base', 'mizel');
+  assert.match(h.root.innerHTML, /value="mizel" selected/);
+  assert.match(h.root.innerHTML, /data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.doesNotMatch(h.root.innerHTML, /data-skinpick="grove"/);
+  h.act('data-skinpick', 'obsidian');
+  assert.equal(h.S.current, 'grove', 'draft choices do not change the worn skin');
+  assert.equal(h.view.context.skinDraft.name, 'Quiet morning');
+  assert.equal(h.view.context.skinDraft.tweaks.sample, false, 'changing family or colour preserves edited switches');
+  h.act('data-skin-create', '');
+  assert.equal(h.s.WosMySkin.created.base, 'obsidian');
+  assert.equal(h.s.WosMySkin.created.name, 'Quiet morning');
+  assert.equal(h.s.WosMySkin.created.tweaks.sample, false);
+  h.act('data-newskin', '');
+  assert.equal(h.view.back(), true, 'Back leaves New skin, not Wizard');
+  assert.equal(h.view.context.skinDraft, null);
+  assert.match(h.root.innerHTML, /aria-label="Skins"/);
   h.view.destroy();
 });
