@@ -187,7 +187,8 @@
   }
 
   const M = {
-    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), uncertain: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
+    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), uncertain: (() => { try { return new Map(JSON.parse(localStorage.getItem('wos.model-picker-attempts.v1') || '[]')); } catch { return new Map(); } })(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
+    savePickerAttempts() { if (typeof localStorage !== 'undefined') localStorage.setItem('wos.model-picker-attempts.v1', JSON.stringify([...M.uncertain])); },
     // The picker refetches on open when its list is older than this, so a just-added sign-in shows up right away.
     FRESH_MS: 15e3,
     stale() { return !M.ready || Date.now() - M.at > M.FRESH_MS; },
@@ -252,25 +253,37 @@
       const id = agent || (sid && window.WizLive?.agentOf?.(sid)) || '';
       return id && AG.isOther(id) ? AG.get(id) || { id, missing: true } : null;
     },
+    selectionKey(sid, agent) { return JSON.stringify([M.agentFor(sid, agent || '')?.id || 'hermes', sid]); },
+    row(sid, agent) {
+      const live = window.WizLive, scope = agent || live?.agentOf?.(sid) || 'hermes';
+      if (scope !== 'hermes') return live?.agentSessions?.[scope]?.find(s => s.id === sid) || (() => { const s = live?.session(sid); return s && (s.agent || live?.agentOf?.(sid)) === scope ? s : null; })();
+      return live?.sessions?.find(s => s.id === sid) || (() => { const s = live?.session(sid); return s && !s.agent && !live?.agentOf?.(sid) ? s : null; })();
+    },
+    isPending(sid, agent) { return M.pending.has(M.selectionKey(sid, agent)); },
     agentRoute(a, sid, choice) {
       if (!a || a.missing) return null;
-      const s = sid && window.WizLive?.session(sid);
+      const s = sid && M.row(sid, a.id);
       const AG = window.WosAgents;
       // A choice counts only when it was made for THIS agent (its picker, its saved take). A main-agent route that
       // rode along with an orb or voice pick is not a choice: Philosopher ran on the main default, Opus, because Opus
       // happens to be in its allowed list (James, 23 Oct: "I asked you to send it to Fable"). The agent's default wins.
       const picked = choice && choice.agent === a.id ? choice.model || choice.value || '' : '';
-      const want = picked || (sid && M.selections.get(sid)?.model) || s?.model || '';
+      const want = picked || (sid && M.selections.get(M.selectionKey(sid, a.id))?.model) || s?.selection?.model || s?.model || '';
+      if (want && !AG.allows(a, want)) throw new Error('This agent cannot use the selected model · message kept');
       return AG.route(a, want);
     },
     currentRoute(sid, choice, agent) {
       // A choice from the picker's Private group names its agent: it routes there, never to the main catalogue.
       const ag = M.agentFor(sid, agent || choice?.agent || '');
-      if (ag) return M.agentRoute(ag, sid, choice);
-      const s = sid && window.WizLive?.session(sid);
-      const cached = sid && M.selections.get(sid);
+      const scope = agent || ag?.id || 'hermes';
+      const s = sid && M.row(sid, scope);
+      const cached = sid && M.selections.get(M.selectionKey(sid, scope));
       const live = s?.selection || (s?.model ? { model: s.model, provider: s.provider, version: s.modelLockAt } : null);
       const confirmed = cached && (!live || Number(cached.version) > Number(live.version || 0)) ? cached : live;
+      if (ag) {
+        const own = M.agentRoute(ag, sid, choice?.agent === ag.id ? choice : confirmed ? { ...confirmed, agent: ag.id } : null);
+        return own && { ...own, selection_version: Number((choice?.agent === ag.id ? choice.selection_version : confirmed?.selection_version ?? confirmed?.version)) || 0 };
+      }
       const route = choice?.model ? choice : confirmed || M.defaultOption();
       if (!route) return null;
       const model = route.model || route.value;
@@ -286,9 +299,10 @@
       return { model, provider, selection_version: Number(route.selection_version ?? route.version) || 0 };
     },
     snapshot(sid, choice, agent) {
-      if (sid && M.pending.has(sid)) throw new Error('Model change is still saving · send after it finishes');
-      if (sid && (M.uncertain.has(sid) || window.WizLive?.session(sid)?.selection?.state === 'pending')) throw new Error('Model choice is not confirmed · choose it again; message kept');
       const ag = M.agentFor(sid, agent || choice?.agent || '');
+      const key = M.selectionKey(sid, agent || ag?.id || 'hermes');
+      if (sid && M.pending.has(key)) throw new Error('Model change is still saving · send after it finishes');
+      if (sid && (M.uncertain.has(key) || M.row(sid, agent || ag?.id || 'hermes')?.selection?.state === 'pending')) throw new Error('Model choice is not confirmed · choose it again; message kept');
       if (ag?.missing) throw new Error('Agent unavailable · open Agents and check it is running');
       return M.currentRoute(sid, choice, agent || choice?.agent || '');
     },
@@ -311,17 +325,22 @@
     },
     matchesRuntime(runtime, route) {
       if (runtime?.model !== route.model) return false;
+      if (route.agent && runtime.model_lock === 'confirmed' && runtime.wizard_selection?.agent === route.agent
+        && runtime.wizard_selection.model === route.model && runtime.wizard_selection.provider === route.provider) return true;
       if (runtime.provider === route.provider) return true;
       return runtime.provider === 'custom' && route.provider.startsWith('custom:') && runtime.requested?.provider === route.provider;
     },
     reconcile(sessions) {
       for (const s of sessions) {
-        const selected = M.selections.get(s.id);
+        const key = M.selectionKey(s.id, s.agent || 'hermes');
+        const selected = M.selections.get(key);
         const choice = s.selection || (s.model ? { model: s.model, provider: s.provider, version: s.modelLockAt || 0 } : null);
         if (!choice || (selected && Number(choice.version) < Number(selected.version))) continue;
         // Keep the highest server-confirmed revision: a delayed list cannot undo a picker ack.
-        M.selections.set(s.id, { ...choice, selection_version: choice.version });
-        if (choice.state === 'confirmed') M.uncertain.delete(s.id);
+        M.selections.set(key, { ...choice, selection_version: choice.version });
+        if (choice.state === 'confirmed' && (!M.uncertain.get(key) || choice.request_id === M.uncertain.get(key).id)) {
+          M.uncertain.delete(key); M.savePickerAttempts();
+        }
       }
     },
     async resolveRoute(snapshot) {
@@ -348,31 +367,36 @@
       if (isTinfoil(provider) && !M.tinfoilReady()) throw new Error('Set up Tinfoil in its connection app before choosing it');
       return { model: route.model, provider, selection_version: Number(route.selection_version) || 0 };
     },
-    setThreadModel(sid, o) {
-      if (M.pending.has(sid)) return Promise.reject(new Error('A model change is already saving'));
+    setThreadModel(sid, o, agent) {
+      const ag = M.agentFor(sid, agent || o.agent || ''), scope = agent || ag?.id || 'hermes', key = M.selectionKey(sid, scope);
+      if (M.pending.has(key)) return Promise.reject(new Error('A model change is already saving'));
       const task = (async () => {
-        const ag = M.agentFor(sid);
         const route = await M.resolveRoute(ag ? { model: o.value, provider: o.provider, agent: ag.id } : { model: o.value, provider: o.provider });
-        const previous = M.currentRoute(sid);
-        const prior = M.uncertain.get(sid);
-        const attempt = prior && prior.model === route.model && prior.provider === route.provider ? prior : { ...route, id: crypto.randomUUID() };
-        const body = { ...route, require_model_lock: true, selection_version: previous?.selection_version || 0, selection_request_id: attempt.id };
-        M.uncertain.set(sid, attempt);
+        const previous = M.currentRoute(sid, null, scope);
+        const prior = M.uncertain.get(key);
+        if (prior && (prior.model !== route.model || prior.provider !== route.provider)) throw new Error('Previous model choice is not confirmed · choose that same model again first; message kept');
+        const attempt = prior || { ...route, id: crypto.randomUUID(), version: previous?.selection_version || 0 };
+        const body = { ...route, require_model_lock: true, selection_version: attempt.version, selection_request_id: attempt.id };
+        M.uncertain.set(key, attempt); M.savePickerAttempts();
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model${ag ? `?agent=${encodeURIComponent(ag.id)}` : ''}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) {
           const failure = await r.json().catch(() => ({}));
+          if (r.status === 409 && failure.selection?.state === 'confirmed') {
+            M.selections.set(key, failure.selection); M.uncertain.delete(key); M.savePickerAttempts();
+          }
           throw Object.assign(new Error(failure.error?.message || `Model not changed (${r.status}) · message kept`), { status: r.status });
         }
         const ack = await r.json();
-        // An agent's own Hermes names its provider its own way (e.g. custom); the model is what must match.
-        if (!['accepted', 'confirmed'].includes(ack.runtime?.model_lock) || ack.runtime?.model !== route.model || (!ag && !M.matchesRuntime(ack.runtime, route)))
+        // Both main and routed adapters acknowledge the exact deliberate display route.
+        if (!['accepted', 'confirmed'].includes(ack.runtime?.model_lock) || !M.matchesRuntime(ack.runtime, route)
+          || !Number.isSafeInteger(ack.runtime.selection_version) || ack.runtime.selection_version < 1)
           throw new Error('Wizard did not confirm the selected model');
-        M.selections.set(sid, { model: route.model, provider: route.provider, version: Number(ack.runtime.selection_version) || 0 });
-        M.uncertain.delete(sid);
+        M.selections.set(key, { model: route.model, provider: route.provider, version: ack.runtime.selection_version, state: 'confirmed' });
+        M.uncertain.delete(key); M.savePickerAttempts();
         return { model: route.model, provider: route.provider };
       })();
-      M.pending.set(sid, task);
-      return task.finally(() => M.pending.delete(sid));
+      M.pending.set(key, task);
+      return task.finally(() => M.pending.delete(key));
     },
     /* Unified Chats: the owner's private agents' models, for the picker's Private group (oldest agent first, the
      * same order the Agent Service routes by). Each option names its agent; picking one routes the chat there. */
