@@ -8,11 +8,16 @@ import { readFileSync } from 'node:fs';
 const apps = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
 const kindsJs = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
-async function shell(installed) {
+async function shell(installed, nativeLinks = []) {
   const storage = new Map();
   const window = {
     WizCore: { norm: s => s.toLowerCase() },
     WizConfig: { endpoint: () => '/apps' },
+    WizLauncher: {
+      ready: Promise.resolve(),
+      get: key => key === 'nativeLinks' ? nativeLinks : [],
+      onChange() {},
+    },
     dispatchEvent() {},
   };
   const ctx = {
@@ -43,6 +48,9 @@ const provider = {
   id: 'wizard-files', name: 'Wizard Files', url: '/wizard-files/', source: 'apps.json',
   type: 'service', category: 'system', provides: ['files'],
 };
+const nativeFiles = {
+  id: 'files', name: 'Files', href: 'intent://files', colors: ['#3fe0ff', '#3f6bff'],
+};
 
 test('owner-facing Files hides Wizard Files from launchers without disabling it', async () => {
   const { window, APP, groups } = await shell([files, provider]);
@@ -56,4 +64,12 @@ test('Wizard Files returns to launchers when no separate Files screen is install
   const { window, APP, groups } = await shell([provider]);
   assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), false);
   assert.ok(groups.apps.some(a => a.id === 'wizard-files'));
+});
+
+test('native Files hides Wizard Files while keeping both app records addressable', async () => {
+  const { window, APP, groups } = await shell([provider], [nativeFiles]);
+  assert.equal(APP.files.href, 'intent://files');
+  assert.equal(APP['wizard-files'].url, '/wizard-files/');
+  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), true);
+  assert.ok(!groups.apps.some(a => a.id === 'wizard-files'));
 });
