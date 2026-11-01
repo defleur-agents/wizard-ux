@@ -135,7 +135,7 @@
   }
   function wizard(data, authorize, { requireTrusted = false } = {}) {
     const p = valid(data);
-    return open({stay:true, requireTrusted, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
+    return open({stay:true, requireTrusted, durable:requireTrusted, text:p.text, title:p.title, items:p.files.map((f,n) => ({name:f.name || `attachment-${n+1}`, mime:f.type, bytes:f.size, blob:f}))}, authorize);
   }
   document.addEventListener('keydown', e => {
     if (!active) return;

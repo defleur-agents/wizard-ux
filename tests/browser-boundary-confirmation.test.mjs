@@ -55,9 +55,9 @@ test('navigation during upload prevents send and an old completion cannot close 
   const f=sheet();let alive=true, complete;
   f.host.chats.uploadFile=()=>new Promise(r=>complete=r);
   const p=f.api.wizard({files:[new File(['x'],'fixture.ogg')]},()=>alive,{requireTrusted:true});
-  const sending=f.click(true);await sending;alive=false;assert.equal(await p,'sent');
+  const sending=f.click(true);await sending;alive=false;
   const next=f.api.wizard({text:'new synthetic'},()=>true,{requireTrusted:true});
-  complete({id:'old-upload'});for(let n=0;n<12;n++)await Promise.resolve();assert.equal(f.api.busy,true);assert.equal(f.sends.length,0);
+  complete({id:'old-upload'});for(let n=0;n<12;n++)await Promise.resolve();assert.equal(await p,'denied');assert.equal(f.api.busy,true);assert.equal(f.sends.length,0);
   [...f.timers.values()][0]();assert.equal(await next,'denied');
 });
 test('boundary-off sheet retains existing click behaviour',async()=>{
