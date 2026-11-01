@@ -306,7 +306,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     const fallbackShot=path.join(out,'fixture-standalone-dark.png');await standalone.screenshot({path:fallbackShot});report.screenshots.push(fallbackShot);
     check(new Set(report.screenshots.filter(s=>/fixture-(?:list|drafts)-(?:nebula|sepia)\.png$|fixture-standalone-dark\.png$/.test(s))).size===5,'all five stage-2 acceptance screenshots retained');
     await darkContext.close();
-    check(!report.serviceTrace.some(r=>/\/runs(?:[/?]|$)/.test(r.url) && r.method==='POST' && r.status<400),'browser proof never sends a run to an owner agent');
+    check(report.serviceTrace.length>0 && report.serviceTrace.every(r=>typeof r.path==='string' && Number.isInteger(r.status)) && !report.serviceTrace.some(r=>/\/runs(?:[/?]|$)/.test(r.path) && r.method==='POST' && r.status<400),'browser proof never sends a run to an owner agent');
     await context.close();
     fs.writeFileSync(path.join(out, 'result.json'), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
