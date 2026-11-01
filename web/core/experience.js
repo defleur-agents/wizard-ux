@@ -63,6 +63,14 @@
       Store.write(state); localStorage.setItem('wos.pin-buttons.migrated.v1', 'true');
     }
   } catch (_) {}
+  // New default-off profile package: old saved off lists are complete choices, not defaults.
+  // Add it once; explicit recipe true is untouched and later owner enables survive reload.
+  try {
+    if (!localStorage.getItem('wos.orb-radial.migrated.v1')) {
+      for (const [who, ids] of Object.entries(state.off)) if (Array.isArray(ids) && !ids.includes('wizard/orb-radial')) state.off[who] = [...ids, 'wizard/orb-radial'];
+      Store.write(state); localStorage.setItem('wos.orb-radial.migrated.v1', 'true');
+    }
+  } catch (_) {}
   const recipe = () => window.WosMySkin?.active;
   // Release-wide defaults are independent of skin. Saved offs and recipe choices keep their meaning across renames.
   const canonical = id => catalog?.aliases?.[id] || id;
