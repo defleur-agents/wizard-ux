@@ -143,6 +143,7 @@
     save: () => save(),
     layout: id => applyLayout(deskOf(id)),
     toast: (...a) => toast(...a),
+    toastPlain: (icon, text, ms) => toast(icon, esc(text), ms),
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
     visible: () => desks[idx].wins,
@@ -162,7 +163,7 @@
     // A private-origin link in a message opens in a window on this desk: the shell never navigates away.
     openLink: (url, title) => openLinkDesk(url, null),
     // An installed app opened from a Chats row/card remembers this window, so Back (or the app's own done/dismiss) lands here.
-    openApp: (id, srcEl) => { const a = hostedOpenable(id); if (!a) return false; const srcId = srcEl?.closest?.('.win')?.dataset.win; return openApp(a, {}, srcId && W[srcId] ? { from: fromOf(srcId) } : {}); },
+    openApp: (id, srcEl) => { const a = hostedOpenable(id); if (!a) return false; const srcId = srcEl?.closest?.('.win')?.dataset.win; const opts = srcId && W[srcId] ? { from: fromOf(srcId) } : {}; openingStart(a, srcEl?.closest?.('[data-chappopen]') || srcEl); requestAnimationFrame(() => { try { openApp(a, {}, opts); } catch (_) { openingEnd(a.id); toast('!', `Couldn’t open ${esc(a.name)} · try again`, 2400); } }); return true; },
     overlay: open => { if (open) { closeMenu(); armBack(); } },
     vib: ms => vib(ms),
     threadShown: (wid, el) => threadShown(wid, el),
