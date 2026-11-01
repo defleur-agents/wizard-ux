@@ -82,9 +82,13 @@ def package(m):
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--manifest-sha',required=True);p.add_argument('--verify-only',action='store_true');a=p.parse_args();m=verify(a.manifest_sha)
- current=inspect(m['control_image']);assert current['Id']==m['control_image']
- control=read(R/'control-image-identity.json');assert current['RootFS']==control['rootfs'] and current['Config']['Labels']==control['labels']
- assert sha(m['control_archive'])==control['tar_sha256']
+ control=read(R/'control-image-identity.json');assert sha(m['control_archive'])==control['tar_sha256']
+ # Read the sealed archive config without loading/building/starting any image.
+ with tarfile.open(m['control_archive']) as archive:
+  index=json.load(archive.extractfile('manifest.json'));assert len(index)==1
+  config_bytes=archive.extractfile(index[0]['Config']).read();config=json.loads(config_bytes)
+  assert 'sha256:'+hashlib.sha256(config_bytes).hexdigest()==m['control_image']
+  assert config['rootfs']['diff_ids']==control['rootfs']['Layers'] and config['config']['Labels']==control['labels']
  # Exact renderer/toolchain checks are metadata only; no emulator is started.
  sys.path.insert(0,str(R/'template'));import renderer_r14
  observed=renderer_r14.preflight('/srv/work/android-sdk');pinned=read(R/'template/proof/renderer-preflight-r14.json')
@@ -99,6 +103,8 @@ def main():
  assert shutil.disk_usage(R).free>=200*1024**3
  (R/'evidence').mkdir();(R/'runs').mkdir();report=dict(status='failed',manifest_sha256=a.manifest_sha,**FALSE)
  try:
+  with (R/'evidence/control-image-load.log').open('w') as log:run(['docker','load','-i',m['control_archive']],stdout=log,stderr=sp.STDOUT,timeout=90)
+  loaded=inspect(m['control_image']);assert loaded['RootFS']==control['rootfs'] and loaded['Config']['Labels']==control['labels']
   root,c,rc=arm('control-normal',False,m)
   b=read(root/'evidence/native/reader-boundary.json');assert b['prekill']['frames'][-1]['pair']==[5,13] and b['restored']['frames'][-1]['pair']==[5,15] and rc!=0,'STOP: native normal control did not reproduce exact old failure'
   report['control_normal']='exact-5/13-to-5/15-reproduced'
