@@ -75,6 +75,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         // Real owner navigation: desktop Home, phone a dock desk (not the orb).
         await page.locator(phone ? '#dock [data-goto]' : '#logo').first().click();
       }
+      async function openPill() { await page.locator('[data-wxoffopen]').first().click(); }
       async function modal() {
         try { await page.waitForSelector('#wxOffline:not([hidden])', { timeout: 8000 }); }
         catch (e) {
@@ -96,7 +97,9 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         const start = Date.now(); await page.waitForTimeout(20000); await pillOnly();
         assert.ok(Date.now() - start >= 20000);
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-idle-20s.png`) });
-        await navigate(); await modal();
+        await navigate(); await page.waitForTimeout(800); await pillOnly(); // navigating during an outage must not open anything
+        const pillBox = await page.locator('[data-wxoffopen]').first().boundingBox();
+        await openPill(); await modal();
         await page.locator('[data-wxoffcheck]:not([disabled])').waitFor();
         if (phone) await page.waitForTimeout(700); // desk transition
         const geometry = await page.evaluate(phone => {
@@ -107,7 +110,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         }, phone);
         assert.ok(geometry.orbHit, `${shell} ${skin} orb/mic remains the hit target: ${JSON.stringify(geometry)}`);
         assert.equal(geometry.dialogModal, 'false');
-        if (phone) { assert.ok(geometry.card.y < 60); assert.ok(geometry.card.bottom < geometry.orb.top); }
+        if (phone) { assert.ok(geometry.card.y >= pillBox.y + pillBox.height - 2, `card sits under the pill, clear of the status bar: ${JSON.stringify([geometry.card, pillBox])}`); assert.ok(geometry.card.bottom < geometry.orb.top); }
         assert.ok(/^(rgb\([^/]*\)|color\(srgb [^/]*\))$/.test(geometry.bg), `opaque kit panel (no alpha channel): ${geometry.bg}`);
         // Pixel opacity proof: the same interior panel pixels over a loud backdrop and a blank one.
         const clip = { x: geometry.card.x + 20, y: geometry.card.y + 20, width: 8, height: 8 };
@@ -129,14 +132,14 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
           await page.waitForFunction(() => (window.__wos || window.__wux).voice === 'idle');
         }
         await navigate(); await pillOnly();
-        await recover(); await fail(); await navigate(); await modal();
+        await recover(); await fail(); await openPill(); await modal();
         await page.locator('[data-wxoffx]').click(); await navigate(); await pillOnly();
         // Exercise the real request deadline: ping succeeds, only the health body is delayed beyond 4 seconds.
-        await recover(); slowStatus = true; await fail(); await navigate(); await modal();
+        await recover(); slowStatus = true; await fail(); await openPill(); await modal();
         await page.waitForFunction(() => document.querySelector('#wxOffline')?.textContent.includes('Busy · answering slowly'), null, { timeout: 15000 });
         assert.ok(await page.locator('#wxOffline').textContent().then(s => s.includes('busy and answering slowly')));
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-busy.png`) });
-        results.push({ shell, skin, geometry, idleOutageMs: Date.now() - start, liveReads, blockedWrites, assets, checks: ['idle-20s-pill-only', 'owner-navigation-opens', 'orb-elementFromPoint', 'orb-tap-starts-real-fake-mic', 'capture-hides-checks', 'capture-navigation-suppressed', 'dismissal-stays-pill', 'recovery', 'status-deadline-busy-slow-row'] });
+        results.push({ shell, skin, geometry, idleOutageMs: Date.now() - start, liveReads, blockedWrites, assets, checks: ['idle-20s-pill-only', 'navigation-never-opens','pill-tap-opens-under-status-bar', 'orb-elementFromPoint', 'orb-tap-starts-real-fake-mic', 'capture-hides-checks', 'capture-navigation-suppressed', 'dismissal-stays-pill', 'recovery', 'status-deadline-busy-slow-row'] });
       }
       assert.deepEqual(errors, []);
       await recover(); await ctx.close();
