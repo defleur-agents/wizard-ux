@@ -11,7 +11,7 @@ function moduleFixture(saved, host = {}) {
   const create=vm.runInNewContext(read('web/core/orb-switcher.js').replace('export default function createOrbSwitcher','function createOrbSwitcher')+'\n;createOrbSwitcher;',context);
   return {create:()=>create(adapter),window,listeners,storage};
 }
-test('lazy radial module initializes real defaults and tears down its only global listener',()=>{
+test('lazy radial module initializes real defaults and tears down its global listeners',()=>{
   const f=moduleFixture(),o=f.create();
   assert.equal(f.window.WosOrbSwitcher,o);assert.equal(o.active(),true);assert.equal(o.get().quickTakes,false);
   assert.equal(o.get().pins.length,0);assert.equal(o.get().holdMs,300);assert.equal(f.listeners.size,2);
@@ -74,6 +74,7 @@ test('pinned app releases use shared placement, never a cached desk; empty and s
  const s=read('web/core/orb-switcher.js'),app=read('web/app.js');
  assert.match(s,/w\?\.kind === 'app'\) out = \{ kind: 'open', id: w\.item\.id \}/);
  assert.doesNotMatch(s,/kind: 'desk'|showOpen|Show open apps/);
+ assert.match(s,/Hold the orb for pinned apps/);
  assert.match(s,/Pinned apps fill the radial\. Open desktops stay on swipe up\./);assert.match(s,/Pin apps in Customize/);
  assert.match(app,/else if \(out.kind === 'open'\) \{ const a = APP\[out.id\]; if \(a\) openApp\(a\); \}/);
 });

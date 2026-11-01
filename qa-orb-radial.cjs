@@ -165,7 +165,7 @@ async function cancelTake(p) { await p.evaluate(() => window.__wos.cancelVoice(t
     const voice=g.find(w=>w.kind==='voice'),custom=g.find(w=>w.kind==='custom');
     ok(voice.ring===0&&voice.k===0&&custom.ring===1&&custom.k===8,skin+': near voice rightmost inner, Customize far-left outer');
     ok(g.every(w=>w.r1<=138&&arcAtMid(w)>=40),skin+': compact 138 px and >=40 px mid-arc targets');
-    await shot(p,'orb-radial-pins-'+skin);await release(p);await sleep(300);
+    await sleep(650);await shot(p,'orb-radial-pins-'+skin);await release(p);await sleep(300);
   }
   // Capacity, both voice positions, pin order and real hit-testing, with no filler slots.
   const thirteen=['wizard','wizard-calendar','notes','stories','wisdom','wizard-music','wizard-search','topics','files-qa','home','pages','setup','troubleshooter'];
