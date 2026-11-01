@@ -1232,7 +1232,11 @@
   }
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
+  // With workspace sync on, desk order is shared by every device: moving a desk here would reshuffle the owner's
+  // desktop too (Miguel, 1 Nov 2026: Backup and Calendar kept jumping to desktops 1 and 2). The app opens where it is.
+  const sharedDeskOrder = () => { const s = window.WosWorkspaceSync?.current; return !!s && s.on && s.ok !== null; };
   function bringBeside(id) {
+    if (sharedDeskOrder()) return;
     const from = deskOf(id); if (from < 0 || from === idx) return;
     const t = insertPos(); if (from === t) return;
     if (desks[from].wins.length === 1) {
