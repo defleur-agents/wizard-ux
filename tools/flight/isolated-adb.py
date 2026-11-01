@@ -11,6 +11,10 @@ if any(x in args for x in ('kill-server','start-server','-P','-H','-L')):raise S
 args=['127.0.0.1:6169' if x=='emulator-6168' else x for x in args]
 argv=[str(Path(os.environ['ANDROID_SDK_ROOT'])/'platform-tools/adb'),'-H','127.0.0.1','-P','5147',*args]
 start=time.time()
-r=subprocess.run(argv,capture_output=True,timeout=30,env={**os.environ,'ADB_SERVER_SOCKET':'tcp:127.0.0.1:5147'})
+try:
+ r=subprocess.run(argv,capture_output=True,timeout=30,env={**os.environ,'ADB_SERVER_SOCKET':'tcp:127.0.0.1:5147'})
+except subprocess.TimeoutExpired as e:
+ with (out/'emulator-adb-commands.jsonl').open('a') as f:f.write(json.dumps({'original':sys.argv[1:],'argv':argv,'started':start,'finished':time.time(),'returncode':None,'timeout':30,'stdout':(e.stdout or b'').decode(errors='replace'),'stderr':(e.stderr or b'').decode(errors='replace')})+'\n')
+ raise SystemExit(124)
 with (out/'emulator-adb-commands.jsonl').open('a') as f:f.write(json.dumps({'original':sys.argv[1:],'argv':argv,'started':start,'finished':time.time(),'returncode':r.returncode,'stdout':r.stdout.decode(errors='replace'),'stderr':r.stderr.decode(errors='replace')})+'\n')
 sys.stdout.buffer.write(r.stdout);sys.stderr.buffer.write(r.stderr);raise SystemExit(r.returncode)

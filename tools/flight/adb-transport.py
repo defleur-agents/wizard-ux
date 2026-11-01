@@ -111,7 +111,14 @@ class Transport:
             self.recover();r=self.command(*args,timeout=timeout)
         assert r.returncode==0,(args,r.stderr.decode(errors='replace'))
         return r.stdout
+    def ports_closed(self):
+        for port in (6168,6169):
+            try:
+                with socket.create_connection(('127.0.0.1',port),timeout=.2):return False
+            except OSError:pass
+        return True
     def close(self):
+        monitor_alive=hasattr(self,'thread') and self.thread.is_alive()
         self.stop.set()
         if hasattr(self,'thread'):self.thread.join(timeout=25)
         for proc in (self.logcat,self.server):
@@ -119,4 +126,4 @@ class Transport:
                 proc.terminate()
                 try:proc.wait(timeout=10)
                 except sp.TimeoutExpired:proc.kill();proc.wait(timeout=5)
-        return {'adb_server_stopped':self.server is None or self.server.poll() is not None,'adb_server_returncode':self.server.poll() if self.server else None,'logcat_returncode':self.logcat.poll() if self.logcat else None,'recoveries':self.recoveries}
+        return {'adb_server_stopped':self.server is None or self.server.poll() is not None,'adb_server_returncode':self.server.poll() if self.server else None,'logcat_returncode':self.logcat.poll() if self.logcat else None,'monitor_alive_at_cleanup':monitor_alive,'emulator_ports_closed':self.ports_closed(),'recoveries':self.recoveries}

@@ -475,6 +475,7 @@ except Exception as e:
     if emulator: capture('FAIL')
 finally:
     result['emulator_pre_cleanup_returncode']=emulator.poll() if emulator else None
+    result['logcat_alive_before_cleanup']=transport.logcat is not None and transport.logcat.poll() is None
     if emulator:
         try:(OUT/'logcat.txt').write_text(a('logcat','-d','-t','5000',ok=False))
         except Exception:pass

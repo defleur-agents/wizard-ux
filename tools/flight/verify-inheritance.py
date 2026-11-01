@@ -64,7 +64,8 @@ def verify_native(root,manifest):
  assert n['apk']=={k:manifest['apk'][k] for k in ('sha256','version','versionCode')}
  assert n['checks'] and n['passed']==n['total']==len(n['checks']) and all(c['pass'] is True for c in n['checks'])
  assert len([c for c in n['checks'] if c['name'].startswith('Connect transport stability ')])==20
- for field in ('emulator_stopped','fixture_stopped','adb_server_stopped'):assert n['cleanup'][field] is True
+ for field in ('emulator_stopped','fixture_stopped','adb_server_stopped','monitor_alive_at_cleanup','emulator_ports_closed'):assert n['cleanup'][field] is True
+ assert n['logcat_alive_before_cleanup'] is True
  assert n['emulator_pre_cleanup_returncode'] is None,'emulator died before cleanup'
  assert (root/'evidence/native/transport-monitor.jsonl').stat().st_size>0
  assert list((root/'evidence/native').glob('continuous-logcat-*.txt'))
