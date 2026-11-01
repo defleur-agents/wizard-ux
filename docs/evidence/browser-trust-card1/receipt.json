@@ -1,0 +1,175 @@
+{
+  "tool": "tools/qa-browser-notifications-admission.cjs",
+  "heads": {
+    "wizard-ux": "032b7e09ef3f95cb4d428e258f65d99818724600",
+    "wizard-agent-service": "74f6e017f97211fe6cf81f3b6f9e24a0d4af587d",
+    "wizard-app-manager": "0b92cbf3034603b88d1839dc1646bf79f1245020",
+    "oscarhenrycollins/notifications": "e6df99a8f63e19dcd8b1e7ac4c652b9041536c5c"
+  },
+  "host": "local runtime (Forum not reachable); nginx replaced by Node stand-in applying packaging/browser-boundary-document.conf.template",
+  "passed": true,
+  "checks": [
+    "WAM: installed declaration alone is not admissible",
+    "WAM: owner grant recorded for this installation and source",
+    "WAM: owner route publishes a same-origin view path",
+    "Notifications view is an opaque sandboxed frame (no allow-same-origin)",
+    "data.call notifications.list renders real Notifications front items",
+    "binding created by the shell with possession (server trace)",
+    "same-frame tap feedback on Mark read",
+    "Notifications backend persisted the mark (inbox.json readback)",
+    "Notifications API readback: only the requested item changed",
+    "durable outcome receipt written by the Service",
+    "data.call list readback shows the item read",
+    "frame cannot call unknown operations or forge a principal",
+    "direct frame adapter call refused server-side (trace, not CORS)",
+    "direct frame binding creation refused server-side",
+    "text-bearing panels fully opaque on nebula",
+    "Appearance v1 hosted on nebula",
+    "text-bearing panels fully opaque on grove",
+    "Appearance v1 hosted on grove",
+    "Back stays in the shell",
+    "open binding revoked after WAM grant change (no save claimed)",
+    "revoked mark refused by the server (403 in trace)",
+    "revoked mark never reached the Notifications backend",
+    "fresh binding: list still granted, mark_read not granted",
+    "uninstalled app refused at the server",
+    "standalone view has an opaque dark fallback and no data authority",
+    "standalone view gets no data without the shell"
+  ],
+  "wam_commands": [
+    "install notifications --repo oscarhenrycollins/notifications --port 36085",
+    "grant notifications notifications.list notifications.mark_read",
+    "revoke notifications notifications.mark_read",
+    "uninstall notifications"
+  ],
+  "afterRevoke": "Not saved (revoked)",
+  "afterUninstall": "Unavailable: not_allowed",
+  "browserFacts": {
+    "schema": 1,
+    "installation_id": "inst-f9d5b294ff44f7078da32cec69ce1a9f",
+    "source_id": "standard:oscarhenrycollins/notifications",
+    "commit": "cccccccccccccccccccccccccccccccccccccccc",
+    "contract": {
+      "version": 1,
+      "isolation": "opaque",
+      "operations": [
+        "notifications.list",
+        "notifications.mark_read",
+        "state.local"
+      ],
+      "state": {
+        "schema_version": 1,
+        "persistent_bytes": 65536
+      }
+    },
+    "granted": [
+      "notifications.list",
+      "notifications.mark_read"
+    ],
+    "grant_revision": 1,
+    "admissible": true,
+    "upstream": "http://127.0.0.1:36085",
+    "reason": null,
+    "contract_digest": "89414bfaa882e446f38f8cc82192459a317eddd85ba198bec66fffef98386838",
+    "permission_revision": "p-b020cf2cc7f8f1f551173f74"
+  },
+  "adapterTrace": [
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/bindings",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 403,
+      "origin": "null",
+      "hasShellToken": false
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/bindings",
+      "status": 403,
+      "origin": "null",
+      "hasShellToken": false
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 403,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/revoke",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/bindings",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 200,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 403,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    },
+    {
+      "method": "POST",
+      "path": "/wizard/v1/browser-adapters/call",
+      "status": 403,
+      "origin": "http://127.0.0.1:46287",
+      "hasShellToken": true
+    }
+  ],
+  "pageErrors": [
+    "Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+    "Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+    "Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+    "Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag."
+  ],
+  "screenshots": [
+    "notifications-nebula.png",
+    "notifications-grove.png",
+    "notifications-standalone-dark.png"
+  ],
+  "screenshots_inspected": "by Oscar, all three",
+  "release_ready": false
+}
