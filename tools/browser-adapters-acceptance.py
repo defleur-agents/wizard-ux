@@ -15,6 +15,10 @@ assert sha(mp) == a.manifest_sha256, 'manifest drift'
 m = json.loads(mp.read_text())
 assert mp.parent.is_relative_to(Path(m['env']['WIZARD_WORK_ROOT']).resolve()), 'configured scratch root required'
 assert Path(m['env']['TMPDIR']).parent.is_dir(), 'prepare TMPDIR parent before admission'
+# Service parity fixtures add this suffix to TMPDIR. Keep the immutable source
+# and evidence roots descriptive, but the actual runtime path comfortably short.
+socket_sample = Path(m['env']['TMPDIR'])/'parity-XXXXXX/os/agents/parity-agent/gateway/ingress.sock'
+assert len(os.fsencode(socket_sample)) < 100, 'synthetic ingress socket path too long: '+str(socket_sample)
 for fresh in [mp.parent/'evidence', mp.parent/'synthetic-home', Path(m['env']['TMPDIR'])]:
     assert not fresh.exists(), 'stage already consumed: '+str(fresh)
 assert sha(__file__) == m['runner_sha256'], 'runner drift'

@@ -115,6 +115,7 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, serviceWorkers: 'block' });
     context.on('close',()=>event('context.close'));
     page = await context.newPage(); page.on('pageerror', e => report.errors.push(e.message));
+    await require('./qa-browser-onboarding.cjs')(page, token, report);
     page.on('crash',()=>event('page.crash'));page.on('close',()=>event('page.close'));
     page.on('framedetached',f=>event('frame.detached',{url:f.url()}));
     page.on('framenavigated',f=>event('frame.navigated',{url:f.url(),main:f===page.mainFrame()}));
@@ -292,6 +293,9 @@ const check = (value, name) => { assert.ok(value, name); report.checks.push(name
     }
     await page.evaluate(()=>localStorage.setItem('fixture-drafts.legacy.v1',JSON.stringify({version:1,text:'Synthetic old-state rollback'})));
     await page.reload();await page.waitForFunction(()=>window.WizBrowserBoundary?.enabled&&window.wizardUX);
+    await page.waitForFunction(()=>window.WosWelcome?.log.some(s=>s.startsWith('boot:')));
+    check(await page.evaluate(()=>localStorage.getItem('wos.welcome.v1')==='done' && !WosWelcome.active),'reload preserves established-owner onboarding state without welcome overlay');
+    check(report.onboardingFixture.providerReads>0 && report.onboardingFixture.setupReads>0,'reload reads synthetic provider and setup fixtures through token-bearing shell requests');
     drafts=await openFixture('fixture-drafts');await drafts.waitForFunction(()=>!document.querySelector('#draft').disabled);
     check(await drafts.locator('#draft').inputValue()==='Synthetic newer autosaved draft','browser reload plus old legacy rollback preserves newer durable draft');
     await drafts.locator('#recover').click();
