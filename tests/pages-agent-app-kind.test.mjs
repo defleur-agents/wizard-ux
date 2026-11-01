@@ -33,12 +33,23 @@ async function boot() {
   vm.runInNewContext(kindsJs, context);
   await window.WizCore.appsLoaded();
   const { APPS, APP } = window.WizCore.apps('mobile');
-  return { page: APP.pages, groups: window.WosAppKinds.kinds(APPS, APP) };
+  return { page: APP.pages, groups: window.WosAppKinds.kinds(APPS, APP), opens: window.WosAppKinds.opensScreen(APP.pages) };
 }
 
 test('Pages is explicitly grouped with Agent apps and excluded from Apps', async () => {
-  const { page, groups } = await boot();
+  const { page, groups, opens } = await boot();
   assert.equal(page.agentApp, true);
+  assert.equal(page.screen, true);
+  assert.equal(opens, true);
   assert.equal(groups.apps.some(app => app.id === 'pages'), false);
   assert.equal(groups.wiz.some(app => app.id === 'pages'), true);
+});
+
+test('Pages stays directly openable from both shell pickers', () => {
+  const kinds = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
+  const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  assert.match(kinds, /const opensScreen = a =>/);
+  assert.match(phone, /const kindTile = a => AK\.opensScreen\(a\)/);
+  assert.match(desktop, /run: o => AK\.opensScreen\(a\) \? openApp\(a, o\)/);
 });

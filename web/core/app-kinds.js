@@ -22,6 +22,8 @@
   // Built-in utilities can opt into the agent shelf without pretending they are installed backend services. Pages is
   // opened through agent-created page links, so its library is useful but not a main owner app.
   const isAgentApp = a => !!a && (a.agentApp === true || inChats(a));
+  // Most Wizard-kind agent apps are screenless and open settings. An explicit screen keeps a built-in utility openable.
+  const opensScreen = a => !!a && (a.screen === true || a.kind !== 'wizard' || !!a.url);
   const byName = (x, y) => (isSystem(y) - isSystem(x)) || x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
   // Section labels and the App Store section each "+ Get" tile opens (store/store.js KINDS ids).
   const LABELS = Object.freeze({ apps: 'Apps', wiz: 'Agent apps', agents: 'Agents', conns: 'Connectors' });
@@ -40,5 +42,5 @@
     return { apps, dev, agents, builder: APP.agents || null, wiz: back.filter(a => !isConnector(a)).sort(byName), conns: [...conns, ...back.filter(isConnector)].sort(byName) };
   }
   const sysFirst = list => [...list.filter(isSystem), ...list.filter(a => !isSystem(a))];
-  window.WosAppKinds = Object.freeze({ inChats, isAgentApp, isSystem, isConnector, inDev, byName, kinds, sysFirst, LABELS, GET, storeUrl });
+  window.WosAppKinds = Object.freeze({ inChats, isAgentApp, opensScreen, isSystem, isConnector, inDev, byName, kinds, sysFirst, LABELS, GET, storeUrl });
 })();
