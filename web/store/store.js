@@ -10,7 +10,6 @@ await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
-import {installRelease} from './store-install.js';
 await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {adoptAppearance} from './store-appearance.js';
