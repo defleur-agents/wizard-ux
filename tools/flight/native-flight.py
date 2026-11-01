@@ -282,10 +282,18 @@ try:
     record('hardware KVM accessible', os.access('/dev/kvm', os.R_OK|os.W_OK))
     sdk_prepare()
     # SDK-documented explicit pair outside shared ADB's default scan range.
-    emulator = sp.Popen([str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-ports','6168,6169',
+    # Official workaround for Chromium graphics incompatibility; host-only.
+    # https://developer.android.com/studio/run/emulator-troubleshooting#cannot-open
+    # Keep every R9 argument unchanged except this one documented feature disable.
+    (OUT/'emulator-help-feature.txt').write_text(run([SDK/'emulator/emulator','-help-feature']))
+    emulator_argv = [str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-ports','6168,6169',
         '-no-direct-adb','-adb-path',str(wrapper),
         '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','swiftshader',
-        '-memory','4096','-cores','4'], env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
+        '-memory','4096','-cores','4','-feature','-Vulkan']
+    result['graphics']={'gpu':'swiftshader','feature_override':['-feature','-Vulkan'],
+        'argv':emulator_argv,'scope':'emulator functional acceptance; not physical GPU proof'}
+    (OUT/'emulator-argv.json').write_text(json.dumps(emulator_argv,indent=2))
+    emulator = sp.Popen(emulator_argv, env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
     transport.attach(emulator)
     until(lambda:a('get-state',ok=False).strip()=='device',180)
     transport.start_logcat()
@@ -475,6 +483,15 @@ except Exception as e:
     if emulator: capture('FAIL')
 finally:
     result['emulator_pre_cleanup_returncode']=emulator.poll() if emulator else None
+    rc=result['emulator_pre_cleanup_returncode']
+    result['host_failure_classification']=('emulator-host-SIGSEGV-not-guest-app-crash' if rc == -signal.SIGSEGV else
+        'emulator-host-exited-before-cleanup' if rc is not None else 'no-premature-emulator-exit')
+    if rc is not None:result['status']='failed'
+    try:
+        text=(OUT/'emulator.log').read_text(errors='replace')
+        (OUT/'graphics-backend.txt').write_text('\n'.join(line for line in text.splitlines()
+            if re.search(r'vulkan|swiftshader|gfxstream|renderer|opengl|feature',line,re.I))+'\n')
+    except Exception as e:(OUT/'graphics-backend.error').write_text(repr(e))
     result['logcat_alive_before_cleanup']=transport.logcat is not None and transport.logcat.poll() is None
     if emulator:
         try:(OUT/'logcat.txt').write_text(a('logcat','-d','-t','5000',ok=False))
