@@ -1,0 +1,13 @@
+{
+  "key": "wisdom-r32-layout-ec5-fd7-1cae0add74eb",
+  "host": "forum",
+  "lane": "light",
+  "cwd": "/srv/work/wisdom-layout-r32-ec5-fd7-v1",
+  "argv": [
+    "python3",
+    "/srv/work/wisdom-layout-r32-ec5-fd7-v1/run-r32.py",
+    "--manifest-sha",
+    "1cae0add74ebb06e7a8ba71ae4573e739ce7eb0cbf71c2a71d3ae394fa023ea0"
+  ],
+  "timeout_seconds": 480
+}

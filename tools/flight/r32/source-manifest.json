@@ -1,0 +1,3551 @@
+{
+  "fixture_tls": {
+    "certificate_sha256": "9061a5d0c4a840c45a3eac67d33c2f7426bdf65a439209518770bc8d9952afb1",
+    "leaf_spki_sha256": "rmzan4Emamq1RQL18mvIJzMDrGKIiz3N3vqR+O1XZbU=",
+    "scope": "isolated synthetic loopback fixture only"
+  },
+  "fonts": {
+    "fraunces-italic.woff2": "13cd664e0f8bff7116e6aa798e59720e31ef389b682c76f4e813f4e7c7413bc3",
+    "fraunces.woff2": "170a928c701ef00e4b91105f870dd2c764b9ddb0c725cda6e71de576a8e72a00",
+    "newsreader-italic.woff2": "2bf0dbb1a4a052fffcc447bdab56b12049ee804a8a0d1ee04f5e76a6ab89166a",
+    "newsreader.woff2": "6e4f2958c3a7c4a80acde4e5a679abe7e01bc1e30b92be3c7a8b696ef401d101"
+  },
+  "host": "fd7e3de99cddbc3452b6e775bd49363fc4608f9e",
+  "host_cache_shell": [
+    "app-session.html",
+    "core/agents.js",
+    "core/app-reading-position.js",
+    "core/app-route.js",
+    "core/app-services.js",
+    "core/appearance-host.css",
+    "core/appearance-host.js",
+    "core/apps.js",
+    "core/base.css",
+    "core/bridge.js",
+    "core/config.js",
+    "core/core.js",
+    "core/home-screen-apps.css",
+    "core/home-screen-policy.js",
+    "core/links.css",
+    "core/links.js",
+    "core/offline-apps.js",
+    "core/offline-kit.js",
+    "core/offline-session.js",
+    "core/offline-sw.js",
+    "core/sigils.js",
+    "core/single-app-session.js",
+    "core/skin-frame.css",
+    "core/skin-frame.js",
+    "core/skins.css",
+    "core/skins.js",
+    "core/skins/Cormorant-300-italic.woff2",
+    "core/skins/Cormorant-500-italic.woff2",
+    "core/skins/Fraunces-300-normal.woff2",
+    "core/skins/Fraunces-600-normal.woff2",
+    "core/skins/JetBrainsMono-200-normal.woff2",
+    "core/skins/JetBrainsMono-500-normal.woff2",
+    "core/skins/Jost-200-normal.woff2",
+    "core/skins/Jost-400-normal.woff2",
+    "skins/landscapes/preview-dark.webp",
+    "skins/landscapes/preview.webp",
+    "styles.css"
+  ],
+  "members": {
+    "HANDOFF-R32-LAYOUT-PROOF.md": {
+      "bytes": 4821,
+      "mode": "0o400",
+      "sha256": "9640cf78d95d3a9ac459a9442e9571a401b03f687f4d7daf25dc68aa8f5ebaf9"
+    },
+    "R31-HANDOFF.md": {
+      "bytes": 7046,
+      "mode": "0o400",
+      "sha256": "b0f72edccfddb865c8be791413f52868f6c1d35c5cd4010675453a18fdc5cf48"
+    },
+    "app-session-r32.cjs": {
+      "bytes": 28826,
+      "mode": "0o400",
+      "sha256": "b0aa1e3f3f6457d30ce74d2ed40ab10095fa318d5d3d9c96a26fd13f99a766a9"
+    },
+    "fixture.py": {
+      "bytes": 6683,
+      "mode": "0o400",
+      "sha256": "eeda6c31ff36e5221f441007263ffd7a83913ceaeea143ae9991c96e58cc9482"
+    },
+    "layout-trace.cjs": {
+      "bytes": 4516,
+      "mode": "0o400",
+      "sha256": "aaa4b3ead7ae710d0175d8ed66de1de9f3d1204a9a9408a19960d6a807cce4b9"
+    },
+    "rig-ca.pem": {
+      "bytes": 1188,
+      "mode": "0o400",
+      "sha256": "ce2e4d3c2d36111316bbc763a2d773de8a2805b9fbace73bc543b09142e625b0"
+    },
+    "rig-server.key": {
+      "bytes": 1704,
+      "mode": "0o400",
+      "sha256": "e1efed246faa4d7054cc7508751ab04e671eea64dc80d6e59f69157b676b4c22"
+    },
+    "rig-server.pem": {
+      "bytes": 1208,
+      "mode": "0o400",
+      "sha256": "9061a5d0c4a840c45a3eac67d33c2f7426bdf65a439209518770bc8d9952afb1"
+    },
+    "run-r32.py": {
+      "bytes": 8875,
+      "mode": "0o400",
+      "sha256": "337cdc5f6d8f00847bd0c9cc88bd0684fbfb973aaaa46646939e9b60ac24467f"
+    },
+    "source/ux/web/agents/agents.css": {
+      "bytes": 15324,
+      "mode": "0o400",
+      "sha256": "67521f0185bae3fda19ac037afe5e2ffc5b5ab57c2fe9c1391a4f508fa291a5a"
+    },
+    "source/ux/web/agents/agents.js": {
+      "bytes": 41310,
+      "mode": "0o400",
+      "sha256": "e382b9c3d3b43d83a3c54133f237e37b263edd6808ff795cbbd6e67e317d267b"
+    },
+    "source/ux/web/agents/boot.js": {
+      "bytes": 178,
+      "mode": "0o400",
+      "sha256": "31bf4af7674e9839b77c6a0986ebe8fd24e571d736a5d5530fdcbd0c33e1613c"
+    },
+    "source/ux/web/agents/index.html": {
+      "bytes": 761,
+      "mode": "0o400",
+      "sha256": "2e4fb6f53dfcb9094cf612d3fa779b493703238e7442799122c726506070c3a1"
+    },
+    "source/ux/web/app-session.html": {
+      "bytes": 1699,
+      "mode": "0o400",
+      "sha256": "4ce6c74a6ab23b42878e2a64a147ad743d0369db05db7b9808daabc7c5c3cc1d"
+    },
+    "source/ux/web/app.js": {
+      "bytes": 323991,
+      "mode": "0o400",
+      "sha256": "27a9704898bd7cb528cbc890c7a48d1e372a5925654f5e397b1e146b3f131cbe"
+    },
+    "source/ux/web/apple-touch-icon.png": {
+      "bytes": 30310,
+      "mode": "0o400",
+      "sha256": "aba1dd08f8ca7f56a41e06f4dcce42405f3197b919f3f2852184221ae5e1da38"
+    },
+    "source/ux/web/assist/everywhere.html": {
+      "bytes": 4995,
+      "mode": "0o400",
+      "sha256": "6920c521f45a22de19a60ac636986a2392740189739ad42548d5e1a9131160fd"
+    },
+    "source/ux/web/assist/everywhere.js": {
+      "bytes": 4499,
+      "mode": "0o400",
+      "sha256": "c5dbbcc0157b51cddb7476dd8378d0c0e23528094035ecd600542e14c77eaba9"
+    },
+    "source/ux/web/assist/orb-size.js": {
+      "bytes": 173,
+      "mode": "0o400",
+      "sha256": "7c78205822335581dfb5aff4768c83b9da2a311c6724987b000cd2b700281da8"
+    },
+    "source/ux/web/brand/apps/chatgpt.svg": {
+      "bytes": 1614,
+      "mode": "0o400",
+      "sha256": "ac46c3bff6429e1186bf7b567f9f634b2e2d1cc63daca6a11cb5e86ee53d678e"
+    },
+    "source/ux/web/brand/apps/claude.svg": {
+      "bytes": 1968,
+      "mode": "0o400",
+      "sha256": "b4876737e6ee235545aa6c3c5dd11b98f81c956feee10bdfeddef75f48393a29"
+    },
+    "source/ux/web/brand/apps/cloudflare.svg": {
+      "bytes": 759,
+      "mode": "0o400",
+      "sha256": "7d0d4b0f022f626d7ab0ae1e08b0cab63b72adb696af76f59ce8a31f3a0717d6"
+    },
+    "source/ux/web/brand/apps/hermes.svg": {
+      "bytes": 80461,
+      "mode": "0o400",
+      "sha256": "ac0a3250bf4c97732c27738a12c6d5aced1c5499d533ce96f1f006fce4983d02"
+    },
+    "source/ux/web/brand/apps/tinfoil.svg": {
+      "bytes": 311,
+      "mode": "0o400",
+      "sha256": "929e5456b250c7d4509d99d57047a879e63ab4cb7b7fa51d64415941a40781e3"
+    },
+    "source/ux/web/brand/wizard-mark-agents-back.png": {
+      "bytes": 50929,
+      "mode": "0o400",
+      "sha256": "a5b56824dc46da64995a44ed33b32215778f7e00bc562378a73b7ca4e328b75b"
+    },
+    "source/ux/web/brand/wizard-mark-agents-front.png": {
+      "bytes": 42743,
+      "mode": "0o400",
+      "sha256": "d2e1d8cf428876524ae736686d446593d4ab5583246a6f8a828b9f535256e690"
+    },
+    "source/ux/web/brand/wizard-mark-private.png": {
+      "bytes": 46910,
+      "mode": "0o400",
+      "sha256": "c1dcf0f44f9a701003229a7d30c8a57dba1ed2f30890dafa423f7575cc095b22"
+    },
+    "source/ux/web/brand/wizard-mark-purple.png": {
+      "bytes": 45485,
+      "mode": "0o400",
+      "sha256": "39d00522f07c5e6e07c5caaebbde7921741dbe2a244269c7e214c3990f83caa0"
+    },
+    "source/ux/web/brand/wizard-mark-white.png": {
+      "bytes": 45318,
+      "mode": "0o400",
+      "sha256": "05e6cfe39615fa5ca4a04131c94ac9691939cfb428f389565e9ed052e3aac09a"
+    },
+    "source/ux/web/core/agents.js": {
+      "bytes": 20022,
+      "mode": "0o400",
+      "sha256": "d16222e3a36017d668b2ce0bcf0c80e8b46cd5f08f3fea7ccbde5c7cac417b34"
+    },
+    "source/ux/web/core/android-relay.js": {
+      "bytes": 5749,
+      "mode": "0o400",
+      "sha256": "d3edc9996b91f6780c60f65f5424ce78e8cc28d048a15bd8b7818697efd5d158"
+    },
+    "source/ux/web/core/app-capture.js": {
+      "bytes": 79463,
+      "mode": "0o400",
+      "sha256": "353ef40d6e1e0f527a7b46ebfe1db58201b3c4831e291499ee6012b2cccaba68"
+    },
+    "source/ux/web/core/app-client.js": {
+      "bytes": 38445,
+      "mode": "0o400",
+      "sha256": "a13a328cdef0b37f0aedba637091907fde1150724248b8e18b74a30832965a5a"
+    },
+    "source/ux/web/core/app-identity.js": {
+      "bytes": 3767,
+      "mode": "0o400",
+      "sha256": "13f4eb72687c41a9b5c81309ef1d979962b010651ba55ee04b7ee73940a0018d"
+    },
+    "source/ux/web/core/app-kinds.js": {
+      "bytes": 3996,
+      "mode": "0o400",
+      "sha256": "f03f8fa8e0874813ca624732abc1a980b817e779a4041e19b498f2f828c781e7"
+    },
+    "source/ux/web/core/app-reading-position.js": {
+      "bytes": 10783,
+      "mode": "0o400",
+      "sha256": "a64e5c4566c093761a05832b322e24132c24cd2adb0b121fdb68ed09b17faf02"
+    },
+    "source/ux/web/core/app-route.css": {
+      "bytes": 5335,
+      "mode": "0o400",
+      "sha256": "28c93f93fcbed483bb2fabe7b1bc2bf073ec4f0b28af6dbb4dd31d9abd0da510"
+    },
+    "source/ux/web/core/app-route.js": {
+      "bytes": 11935,
+      "mode": "0o400",
+      "sha256": "90625a2f7ff92fb429205cdeb9a689103cdab3c5661475e4a36596252d0d149e"
+    },
+    "source/ux/web/core/app-services.js": {
+      "bytes": 58921,
+      "mode": "0o400",
+      "sha256": "e9d17b03bd99a43cfa601e6cac5a86ce0ace6c67d0bb6f38c45248201f0407ed"
+    },
+    "source/ux/web/core/app-setup.css": {
+      "bytes": 5492,
+      "mode": "0o400",
+      "sha256": "cb721456e34ac5ae5212578e58ad96fe6b6df7705020e732007feb77bbdba758"
+    },
+    "source/ux/web/core/app-setup.js": {
+      "bytes": 18059,
+      "mode": "0o400",
+      "sha256": "a7d31ea02dc43c86087c8c69bffc54c9f6ac7a3a521beb1fb1b8bc19816017b1"
+    },
+    "source/ux/web/core/app-versions.js": {
+      "bytes": 9460,
+      "mode": "0o400",
+      "sha256": "99db70ee61d574f10fc509c2d83f54310f15c635146a6f861ff27e8db8a16da4"
+    },
+    "source/ux/web/core/app-voice.js": {
+      "bytes": 1756,
+      "mode": "0o400",
+      "sha256": "628ffe2218ee09dd3c18f85183e1b757f8acd83f2cc5b7f704e6e69d9a1f8fe6"
+    },
+    "source/ux/web/core/appearance-host.css": {
+      "bytes": 897,
+      "mode": "0o400",
+      "sha256": "2eced95602ff997d37f43a29b8cf038a240fe3c32c7945265cb94a527fd44a58"
+    },
+    "source/ux/web/core/appearance-host.js": {
+      "bytes": 8786,
+      "mode": "0o400",
+      "sha256": "29084c4c645ae7bb81c9026668147310396539a009c45fe463a8b566a23f76d1"
+    },
+    "source/ux/web/core/apps.js": {
+      "bytes": 22637,
+      "mode": "0o400",
+      "sha256": "ed52e82c4fed5da06a3852b991bfac4f70cb584dacbf0a552a12ffc4e89e9d07"
+    },
+    "source/ux/web/core/attach-chip.css": {
+      "bytes": 3031,
+      "mode": "0o400",
+      "sha256": "4972c643a4adc67158a229995cd08c29ca220fa445704f4eba6eb67dfc76b628"
+    },
+    "source/ux/web/core/attach-chip.js": {
+      "bytes": 4162,
+      "mode": "0o400",
+      "sha256": "12b1e95f691fde4f6866e3cc5d201e4e944b21c776bb6789412a6c702da97665"
+    },
+    "source/ux/web/core/background-audio-legacy.js": {
+      "bytes": 541,
+      "mode": "0o400",
+      "sha256": "3cd6c38cfafe321f161de4013f4da9effefde971d1abb6530d0d3e54113f8471"
+    },
+    "source/ux/web/core/background-audio.js": {
+      "bytes": 6692,
+      "mode": "0o400",
+      "sha256": "14d3250e0c5ff6574ca84c6954dda63f2f49859102cf2c54fac18804050103a1"
+    },
+    "source/ux/web/core/base.css": {
+      "bytes": 1886,
+      "mode": "0o400",
+      "sha256": "ec390fb5552de9e3445353b070e990c08e7d2fcf7e4c8df84ea1860d8bd986fa"
+    },
+    "source/ux/web/core/bound-view.js": {
+      "bytes": 4502,
+      "mode": "0o400",
+      "sha256": "1d4845b7351400a979b18d3968630ce8eb9319d63331430734da37f418a5e9a2"
+    },
+    "source/ux/web/core/brand.css": {
+      "bytes": 578,
+      "mode": "0o400",
+      "sha256": "c3b6f2e9d26cd29a45e77dbf7f02125aebdd36734f98b39ca4a0831ed20b81b7"
+    },
+    "source/ux/web/core/brand.js": {
+      "bytes": 505,
+      "mode": "0o400",
+      "sha256": "3e9f82bffe06351432d2048940b889b47eb24723894d006bf4a106d1d5cecd05"
+    },
+    "source/ux/web/core/bridge.js": {
+      "bytes": 7117,
+      "mode": "0o400",
+      "sha256": "1037cc2691cd027cd000b21d8313b97cc486d0347ab1f86fafe6e0d2b0496525"
+    },
+    "source/ux/web/core/cancelled.js": {
+      "bytes": 15051,
+      "mode": "0o400",
+      "sha256": "5bc44ecd3e4f3ebc9938407249a2e0f9e8d22633bebfa6e26c8c232d01af42f4"
+    },
+    "source/ux/web/core/capture-tools.js": {
+      "bytes": 4414,
+      "mode": "0o400",
+      "sha256": "cf4f647f2a2bf879edfc052c8871016c5d50b8f3f9a08aec57135ccb89e5f733"
+    },
+    "source/ux/web/core/chat-errors.js": {
+      "bytes": 4859,
+      "mode": "0o400",
+      "sha256": "aa1986deb5b4049b8df2c9a84303f3585610f5a983a5185fee736dff593117ec"
+    },
+    "source/ux/web/core/chat-kit.js": {
+      "bytes": 69959,
+      "mode": "0o400",
+      "sha256": "c54f07972173debde03e24425c4860cbddf2b315df5d88eaf2e17e26ab22e5ff"
+    },
+    "source/ux/web/core/chat-models.js": {
+      "bytes": 38574,
+      "mode": "0o400",
+      "sha256": "428a1e8007bcba46adbd489ff4b17c973759ae38b9dbaa3e90f0312a13645850"
+    },
+    "source/ux/web/core/chat-pins.js": {
+      "bytes": 7747,
+      "mode": "0o400",
+      "sha256": "a4ac37cdc688549e2138d588a5f6a04b3c998880113dba2ec3fa1d58a3e297fb"
+    },
+    "source/ux/web/core/chat-power.css": {
+      "bytes": 15108,
+      "mode": "0o400",
+      "sha256": "565dc60ec4b39e5bb209c4886cb5f56266b0f0afd6486c38981f8e74a0210f42"
+    },
+    "source/ux/web/core/chat-power.js": {
+      "bytes": 55573,
+      "mode": "0o400",
+      "sha256": "8755a6f220c97f340921e5110473e49c1fa1b5fe413b5bd24307117805cc3cea"
+    },
+    "source/ux/web/core/chat-search.js": {
+      "bytes": 15363,
+      "mode": "0o400",
+      "sha256": "caa79d70dc77c898387176319d5408da98c8193a67db3d1d6708ef0903097975"
+    },
+    "source/ux/web/core/chat-topic-emojis-data.LICENSE.txt": {
+      "bytes": 1473,
+      "mode": "0o400",
+      "sha256": "567b6ddbaea17d813396a43b718f7ac28a03a742f3eb567246ff58691e5a31d4"
+    },
+    "source/ux/web/core/chat-topic-emojis-data.js": {
+      "bytes": 147005,
+      "mode": "0o400",
+      "sha256": "243ca31182ee53387879072a8cb79029139f3b950d7f71ea68bdc355d6140f8a"
+    },
+    "source/ux/web/core/chat-topic-emojis.js": {
+      "bytes": 4921,
+      "mode": "0o400",
+      "sha256": "a99bc8b1bef99eb04d234da906e4c08ad94a1a4032b5012ac0b7f543891a8df2"
+    },
+    "source/ux/web/core/chat-work.js": {
+      "bytes": 10012,
+      "mode": "0o400",
+      "sha256": "6b043664bbe8cd3fa059684aff709df0da3c3ac701490d0aec7214d78d27e93d"
+    },
+    "source/ux/web/core/chats-fixture-view.js": {
+      "bytes": 1981,
+      "mode": "0o400",
+      "sha256": "452f1df0dd0eff154ec863c001b668b778d4998235efcf4737e3c9c8a84a8139"
+    },
+    "source/ux/web/core/chats-view.css": {
+      "bytes": 1598,
+      "mode": "0o400",
+      "sha256": "e6dde7f915b4b9e61c8f9b16ce03aefbacc1390f7580289c7885cf1739d7f899"
+    },
+    "source/ux/web/core/chats-view.js": {
+      "bytes": 9561,
+      "mode": "0o400",
+      "sha256": "d700981fe0f2060d66f0ad903ee467184626f435f1794a78e4cc944e7ca2c445"
+    },
+    "source/ux/web/core/chats.css": {
+      "bytes": 88208,
+      "mode": "0o400",
+      "sha256": "8690d2b742cb69ea7b1ad64079c12b0ead889b52ce186c406801213ad90d2bbe"
+    },
+    "source/ux/web/core/chats.js": {
+      "bytes": 273198,
+      "mode": "0o400",
+      "sha256": "27c6f1859202dd07753ceed0f8a48a13334af92bca2b11858a24dc300f6259ea"
+    },
+    "source/ux/web/core/commands.js": {
+      "bytes": 7822,
+      "mode": "0o400",
+      "sha256": "5238bc812b41529ac3376b4b2b9982cf935944c26ba67e5cca2b7318627e8a70"
+    },
+    "source/ux/web/core/companion-legacy.js": {
+      "bytes": 2232,
+      "mode": "0o400",
+      "sha256": "a3d1d55510dc474c1bc8bb22ab6ad9598d16201968e304ab0eb839f9c94acde1"
+    },
+    "source/ux/web/core/companion-pane.js": {
+      "bytes": 6264,
+      "mode": "0o400",
+      "sha256": "0eeff4caeff4b498b1a3357ae896b9afea335bf2d56ef9cca2b02e55a06785ce"
+    },
+    "source/ux/web/core/composer-input.js": {
+      "bytes": 6802,
+      "mode": "0o400",
+      "sha256": "157b4fa3dd5ff67ed6640903325c12e18db15e34a680af515de9ab90fb6c55e5"
+    },
+    "source/ux/web/core/config.js": {
+      "bytes": 14303,
+      "mode": "0o400",
+      "sha256": "7922d5ae000e8b8419882024ae328c053aab99ac723d2f0109f3104fc60649c2"
+    },
+    "source/ux/web/core/context-menu.css": {
+      "bytes": 825,
+      "mode": "0o400",
+      "sha256": "0f6ac801da7e3de55af8c27e0ae8ce07fb591e14a7772b34ce520b9f5cf1899c"
+    },
+    "source/ux/web/core/context-menu.js": {
+      "bytes": 3090,
+      "mode": "0o400",
+      "sha256": "df02ce9de4cd91028168376cc495db462dd7c32027319be2493fcc2bcfe03aee"
+    },
+    "source/ux/web/core/core.js": {
+      "bytes": 2389,
+      "mode": "0o400",
+      "sha256": "37f21a86575b48231e191fc7bb2daf144e3ee71c4e2ec3659b54797658415e72"
+    },
+    "source/ux/web/core/deeplink.js": {
+      "bytes": 6978,
+      "mode": "0o400",
+      "sha256": "3289f1e62675f130a596f02302487b6fd80eb334622360a87973d711f41cbc04"
+    },
+    "source/ux/web/core/desks.css": {
+      "bytes": 17340,
+      "mode": "0o400",
+      "sha256": "cf41f071522c532375490abdcfbb86497fe023eafcd53e983651770376149781"
+    },
+    "source/ux/web/core/device-orb.js": {
+      "bytes": 2335,
+      "mode": "0o400",
+      "sha256": "4d5b07178efa91a6a89d6b2a515f32a8dc315ae7de30843aa76fb6d8f8f386d9"
+    },
+    "source/ux/web/core/device-port.js": {
+      "bytes": 2083,
+      "mode": "0o400",
+      "sha256": "031cedb94ed67e173a472856b3faed5ba37abc5f000ce168bf8c40b50d1097fc"
+    },
+    "source/ux/web/core/device-recording.js": {
+      "bytes": 11453,
+      "mode": "0o400",
+      "sha256": "c9fc0ee1eab2a5d24722dc60d00e5ad85677d0550c424e72730f4b2d10bc38ff"
+    },
+    "source/ux/web/core/dom-morph.js": {
+      "bytes": 4185,
+      "mode": "0o400",
+      "sha256": "287e9e760b65f37cd3230c2d9f0d3083102ac576e1333247ea2a38ed17f49a8b"
+    },
+    "source/ux/web/core/edge-peek.js": {
+      "bytes": 3191,
+      "mode": "0o400",
+      "sha256": "fd2ef49a20ba40fa4e4475574c939159d518dcb64b20b22ed015c646daaae491"
+    },
+    "source/ux/web/core/experience.js": {
+      "bytes": 15032,
+      "mode": "0o400",
+      "sha256": "fcef5ff8bbe67c7322932f4ac2ba1bfae9b5bf0cfb4c39eb26088ceb6e9bec7e"
+    },
+    "source/ux/web/core/features.js": {
+      "bytes": 1224,
+      "mode": "0o400",
+      "sha256": "ef7a0aebf7de6219b8a86dd602c7a1cb2a09550bbfabcf9a58b886e0cbe0abe1"
+    },
+    "source/ux/web/core/files.js": {
+      "bytes": 6079,
+      "mode": "0o400",
+      "sha256": "f48fc97dc66345c3470e5db9ee1099670f9d281013d57f4e087d63d85bf8683f"
+    },
+    "source/ux/web/core/focused-field.js": {
+      "bytes": 7772,
+      "mode": "0o400",
+      "sha256": "77a966fc119ab90a976f0831e2f22c08e70a7e5cf10bef4405cd5830bdc9de95"
+    },
+    "source/ux/web/core/home-screen-apps.css": {
+      "bytes": 3335,
+      "mode": "0o400",
+      "sha256": "bfa52d1340bcd349021bf0788846058c94a371fea1fefa4e81ba8da3e1864a6e"
+    },
+    "source/ux/web/core/home-screen-apps.js": {
+      "bytes": 13856,
+      "mode": "0o400",
+      "sha256": "8ccf1607d2ad62064c94fdb2427817feedd970de4ed5579cb3e247d0369e0a33"
+    },
+    "source/ux/web/core/home-screen-policy.js": {
+      "bytes": 5851,
+      "mode": "0o400",
+      "sha256": "bcff219c0d8bfe7413e1ee0281e22a444d2770123a9f1c6e0a465cb652daf5c9"
+    },
+    "source/ux/web/core/home-surfaces.css": {
+      "bytes": 1278,
+      "mode": "0o400",
+      "sha256": "21b2fed58065c9d5f064130918074c74227ec7f820027b1da1aafbedf326144d"
+    },
+    "source/ux/web/core/incognito-chat.js": {
+      "bytes": 9515,
+      "mode": "0o400",
+      "sha256": "c23d2833c56fa5bd356e3299f07961abd87a1f7d45e07ed40b6085c216017f87"
+    },
+    "source/ux/web/core/launcher-defaults.js": {
+      "bytes": 2296,
+      "mode": "0o400",
+      "sha256": "23da57169e94e72e2eb8a0131533dd403abdb0962bf1d6ded006b6cd8aec871c"
+    },
+    "source/ux/web/core/launcher.js": {
+      "bytes": 3083,
+      "mode": "0o400",
+      "sha256": "7284d2f26f5a6579a6ef6c51fffce04e877c9adc4f3f15304a04449ec2bf19b3"
+    },
+    "source/ux/web/core/links.css": {
+      "bytes": 4460,
+      "mode": "0o400",
+      "sha256": "96f26994c46bab803ff682486b9a88da3d28c86537d0e634a6a44cc7a839daf0"
+    },
+    "source/ux/web/core/links.js": {
+      "bytes": 27194,
+      "mode": "0o400",
+      "sha256": "df58093f0a2449fae209a92ccb4b7cd12094bd3993791973d3ac319536edeaee"
+    },
+    "source/ux/web/core/mic.js": {
+      "bytes": 6199,
+      "mode": "0o400",
+      "sha256": "76916b415f6930d3cc14a9be53a3ce3f9cba6cddb943b14c4f6cbbc83fdeee7c"
+    },
+    "source/ux/web/core/my-skin.js": {
+      "bytes": 21190,
+      "mode": "0o400",
+      "sha256": "1e126c284a2e6a480deb8aba1e7f727c50b96bae757036221f6fd49025b19ee6"
+    },
+    "source/ux/web/core/notif-bell.js": {
+      "bytes": 7088,
+      "mode": "0o400",
+      "sha256": "5f6710a09f020222d59c666038bb421aab605fa38443d07923fc3ba967341aee"
+    },
+    "source/ux/web/core/offline-apps.js": {
+      "bytes": 629,
+      "mode": "0o400",
+      "sha256": "d41e55d1593965a95ce2bdf00416ba8530e20ed57b76f19bb236c1b6e6b8d653"
+    },
+    "source/ux/web/core/offline-kit.js": {
+      "bytes": 14888,
+      "mode": "0o400",
+      "sha256": "35526377fab59d110c2b72a47a96cb86b9929ec069281aeeedb92aae5038f9f1"
+    },
+    "source/ux/web/core/offline-session-config.js": {
+      "bytes": 1679,
+      "mode": "0o400",
+      "sha256": "f519a0b3e96a813336e53f3531f56f79cc3a91f6cecc3307aafaa362ef04a059"
+    },
+    "source/ux/web/core/offline-session.js": {
+      "bytes": 1313,
+      "mode": "0o400",
+      "sha256": "6e0031a5806bce495aa226b0f6e75f6880f8e270b0738a68b2d622d48cd97fd6"
+    },
+    "source/ux/web/core/offline-sw.js": {
+      "bytes": 4656,
+      "mode": "0o400",
+      "sha256": "15e519da811e31930e8ddfc2347d7b95904cffd5862121ad5e8439a68746a3a5"
+    },
+    "source/ux/web/core/orb-handoff.js": {
+      "bytes": 5072,
+      "mode": "0o400",
+      "sha256": "bf87a69a03f46e8e37d3e9f8469d2ac751920c52498f82e98833e0a1684946f6"
+    },
+    "source/ux/web/core/orb-switcher.js": {
+      "bytes": 23907,
+      "mode": "0o400",
+      "sha256": "fc534f67f3ba460bacd8bbcbcd7c00bdb086c7116adfc212b23854f91afff83c"
+    },
+    "source/ux/web/core/os-updates.js": {
+      "bytes": 16191,
+      "mode": "0o400",
+      "sha256": "4048dea517abffb3d3276b1c03f7b01cddb1bd627ecb3fe032ed7ddbc3cd8584"
+    },
+    "source/ux/web/core/own-views.css": {
+      "bytes": 1121,
+      "mode": "0o400",
+      "sha256": "70ad2b452104599be096c38110da18d290af0849ee973d1e497461914841b999"
+    },
+    "source/ux/web/core/own-views.js": {
+      "bytes": 8522,
+      "mode": "0o400",
+      "sha256": "ebef2f8de597c70aa60d681679aea87845c16b0589b2661eb8988ae6bff66bcf"
+    },
+    "source/ux/web/core/pages.css": {
+      "bytes": 2881,
+      "mode": "0o400",
+      "sha256": "81f8d0dca42673cdd7db90a65237338214ebc74211874c712b6599cd72a7aa9c"
+    },
+    "source/ux/web/core/pages.js": {
+      "bytes": 13986,
+      "mode": "0o400",
+      "sha256": "a1fadf059af85a71bc24393892ed3cfa9d855c2c649f5ae08e16dbc3062587d8"
+    },
+    "source/ux/web/core/phone-connect.css": {
+      "bytes": 4697,
+      "mode": "0o400",
+      "sha256": "5b49cb03b0701114e0b4477106b82c96acdb395d7511738aea65cef9723319ba"
+    },
+    "source/ux/web/core/phone-connect.js": {
+      "bytes": 24962,
+      "mode": "0o400",
+      "sha256": "8ec7e615e541280d0e1d0a40bf500a710b247745c865c561e24becb96863dba9"
+    },
+    "source/ux/web/core/photos-relay.js": {
+      "bytes": 5098,
+      "mode": "0o400",
+      "sha256": "6234ff2674b8bb2db5522443e373dc06c50c6e07098c18ebc0ec79d3969d4767"
+    },
+    "source/ux/web/core/polish.css": {
+      "bytes": 11055,
+      "mode": "0o400",
+      "sha256": "bae4a2d69ca9d6d7f81b9776cf3fda89bb99af9d3ef50ba4cc205deaec010c35"
+    },
+    "source/ux/web/core/reach.js": {
+      "bytes": 11128,
+      "mode": "0o400",
+      "sha256": "25e793b38bb957f484ffc68924d0794277f2e053e301332e488fdb64a0d1d7af"
+    },
+    "source/ux/web/core/resources.css": {
+      "bytes": 10738,
+      "mode": "0o400",
+      "sha256": "4ca655bb73c3a8c0cd43b2d7b3a9ead0463a233f8e0661efb768f71043d7a5ea"
+    },
+    "source/ux/web/core/resources.js": {
+      "bytes": 45867,
+      "mode": "0o400",
+      "sha256": "f95e33f28a7ab21005ef6e0b6792e160616e7eb8cefb803f0ca9887a6ae3cb4f"
+    },
+    "source/ux/web/core/scenery.js": {
+      "bytes": 8093,
+      "mode": "0o400",
+      "sha256": "6c0f5c9a28df2cc0901acdb8037a0dddf75ac8a8aa2e46910770272b275aedf5"
+    },
+    "source/ux/web/core/scheduled-reminders.css": {
+      "bytes": 6639,
+      "mode": "0o400",
+      "sha256": "d9ea81c4fcfbc2c5d8f025a56f05689b9762f6237a81c7db82d13d3d96f4ba8a"
+    },
+    "source/ux/web/core/scheduled-reminders.js": {
+      "bytes": 26697,
+      "mode": "0o400",
+      "sha256": "27899e69902dce7cef2d5ef207d1ed0da341ed5dd8a51ac80c8edd7632f89d98"
+    },
+    "source/ux/web/core/schedules.js": {
+      "bytes": 15539,
+      "mode": "0o400",
+      "sha256": "c362724a4978a5913d0f281f2a8912f05333a9522f6e7d4d2d79e9c652cd3f80"
+    },
+    "source/ux/web/core/screen-capture.js": {
+      "bytes": 5207,
+      "mode": "0o400",
+      "sha256": "547447127d329b372dfeed9db4884a2a285c42567f554adb0d39fdc8f4191e35"
+    },
+    "source/ux/web/core/screen-text.js": {
+      "bytes": 5072,
+      "mode": "0o400",
+      "sha256": "9deb284697f4716cb9be876ca0322b57f8178db2013a347a78b610ee2c6491f7"
+    },
+    "source/ux/web/core/sel-menu.css": {
+      "bytes": 1962,
+      "mode": "0o400",
+      "sha256": "3525c0e3025a8c9c60032b610072384a65406cdbbf7f71fdcc0202db94d4aa36"
+    },
+    "source/ux/web/core/sel-menu.js": {
+      "bytes": 15138,
+      "mode": "0o400",
+      "sha256": "12fd10b0dad7530e4b1c2dfe2ce8dd2b1213838c7a5ee9e77a5e57befc1a4017"
+    },
+    "source/ux/web/core/settings.css": {
+      "bytes": 26912,
+      "mode": "0o400",
+      "sha256": "d83fc9f39030aaee862d6846f13afbfa0d88ad727ba291fb1c65fc5da37b6f50"
+    },
+    "source/ux/web/core/settings.js": {
+      "bytes": 75060,
+      "mode": "0o400",
+      "sha256": "33b85b644b972c975f2d5684d5715db6ece57634826ed876a171cb6845b773d4"
+    },
+    "source/ux/web/core/setup-launch.js": {
+      "bytes": 6524,
+      "mode": "0o400",
+      "sha256": "826359ac44e1397840a1dd4a3201ff60666114459e2b5f26e3f24905b3fbbcb1"
+    },
+    "source/ux/web/core/share-sheet.css": {
+      "bytes": 5305,
+      "mode": "0o400",
+      "sha256": "f4de2e5ddaed50dc2d3f54d7b2113c9debc56e0fcb250ef15c46189c2737030f"
+    },
+    "source/ux/web/core/share-sheet.js": {
+      "bytes": 18903,
+      "mode": "0o400",
+      "sha256": "8f68cb7d61bd8defaf7d5d1158aa86847a471159f8f592b7b73c8e571e44660a"
+    },
+    "source/ux/web/core/share-wizard.css": {
+      "bytes": 8208,
+      "mode": "0o400",
+      "sha256": "0cff297761efd229d64eba4fbd4dc5fef3eb17ad1007b3e8b4987be6c2c66c28"
+    },
+    "source/ux/web/core/share-wizard.js": {
+      "bytes": 18508,
+      "mode": "0o400",
+      "sha256": "277310457c49b270e84e9a7cb6e515ec436ce8156f750949a4829195a91fa0f8"
+    },
+    "source/ux/web/core/sheetback.js": {
+      "bytes": 1472,
+      "mode": "0o400",
+      "sha256": "95ee2b227acaaf5157e3bc9c30419ce0b3ae10e0a4622bebf564080acac08853"
+    },
+    "source/ux/web/core/shell.js": {
+      "bytes": 2786,
+      "mode": "0o400",
+      "sha256": "d1c78a49e13fe16eebf29ade45da814b4ae8770dfcd228c88b9764dd120ce849"
+    },
+    "source/ux/web/core/sigils.css": {
+      "bytes": 41515,
+      "mode": "0o400",
+      "sha256": "85783fe3fa1834cdc868959a8dce4f86e8620d905c80185f9d1bd8c59a9c5ca1"
+    },
+    "source/ux/web/core/sigils.js": {
+      "bytes": 8723,
+      "mode": "0o400",
+      "sha256": "c80f383d760c2c68880e97f79ffecbbe7b90eae6a3feff753115b2bc370ec83e"
+    },
+    "source/ux/web/core/single-app-session.js": {
+      "bytes": 10049,
+      "mode": "0o400",
+      "sha256": "fd9e34378b17008d4d8a41f92984cbcdb9775e310771019e3611f8d3fc9c9854"
+    },
+    "source/ux/web/core/skin-frame.css": {
+      "bytes": 5989,
+      "mode": "0o400",
+      "sha256": "edd5df0b6e567bfe02733c5cf730e41b0088e9c8a7f74d68c44751c936bc4cc4"
+    },
+    "source/ux/web/core/skin-frame.js": {
+      "bytes": 2912,
+      "mode": "0o400",
+      "sha256": "3ce67b19d6fe8ec07d73162f371183702b6c85613d28a86aea02f5de49d456a1"
+    },
+    "source/ux/web/core/skin-host.js": {
+      "bytes": 52816,
+      "mode": "0o400",
+      "sha256": "e70da25ed5e0e1f3c70c570b5f3f851cbf02d75a4bacf94602d7fec010fd5930"
+    },
+    "source/ux/web/core/skins.css": {
+      "bytes": 21900,
+      "mode": "0o400",
+      "sha256": "7ea62ecd1a2ed6f0742b8d279f57fcbec71426864890dc05471299aba504493a"
+    },
+    "source/ux/web/core/skins.js": {
+      "bytes": 40082,
+      "mode": "0o400",
+      "sha256": "275cdd5b8175a416417fe406725b74421c697838ffae86e5f97c769a502879d5"
+    },
+    "source/ux/web/core/skins/Cormorant-300-italic.woff2": {
+      "bytes": 38140,
+      "mode": "0o400",
+      "sha256": "6083e8c70461baccba95129ff8c91624f81b7d29a806a18b5d5916eaa44f03c3"
+    },
+    "source/ux/web/core/skins/Cormorant-500-italic.woff2": {
+      "bytes": 38140,
+      "mode": "0o400",
+      "sha256": "6083e8c70461baccba95129ff8c91624f81b7d29a806a18b5d5916eaa44f03c3"
+    },
+    "source/ux/web/core/skins/Fraunces-300-normal.woff2": {
+      "bytes": 36620,
+      "mode": "0o400",
+      "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9"
+    },
+    "source/ux/web/core/skins/Fraunces-600-normal.woff2": {
+      "bytes": 36620,
+      "mode": "0o400",
+      "sha256": "7f9d191d999336d3b9790afa72e1358e50a13b06d4f289341e92a311967a80f9"
+    },
+    "source/ux/web/core/skins/JetBrainsMono-200-normal.woff2": {
+      "bytes": 40404,
+      "mode": "0o400",
+      "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+    },
+    "source/ux/web/core/skins/JetBrainsMono-500-normal.woff2": {
+      "bytes": 40404,
+      "mode": "0o400",
+      "sha256": "18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e"
+    },
+    "source/ux/web/core/skins/Jost-200-normal.woff2": {
+      "bytes": 26576,
+      "mode": "0o400",
+      "sha256": "7726a5cd6f3c0e876c028ea2a643d45f7aad4b0f164b70966c669f4a4668f4b9"
+    },
+    "source/ux/web/core/skins/Jost-400-normal.woff2": {
+      "bytes": 26576,
+      "mode": "0o400",
+      "sha256": "7726a5cd6f3c0e876c028ea2a643d45f7aad4b0f164b70966c669f4a4668f4b9"
+    },
+    "source/ux/web/core/skins/macos/00-10-9.webp": {
+      "bytes": 184304,
+      "mode": "0o400",
+      "sha256": "1a696b42d48e4e10aec3ca6bf9211302ba6668ad3d801b46befb346aa1cfe639"
+    },
+    "source/ux/web/core/skins/macos/01-10-10.webp": {
+      "bytes": 263992,
+      "mode": "0o400",
+      "sha256": "262b5032c9bdcae39abc410e394af319e53b4d352ac9d8a96647ac32329fb8f3"
+    },
+    "source/ux/web/core/skins/macos/02-10-11.webp": {
+      "bytes": 298334,
+      "mode": "0o400",
+      "sha256": "78ed737786e73585c42946d764eea18e929347b088e7d51723ac25aef4a080f3"
+    },
+    "source/ux/web/core/skins/macos/03-10-12.webp": {
+      "bytes": 349554,
+      "mode": "0o400",
+      "sha256": "d380a60b90678f9078a11b2c39debcf4297a21e3efbcabcebe81887a6f7ffca9"
+    },
+    "source/ux/web/core/skins/macos/04-10-13.webp": {
+      "bytes": 432730,
+      "mode": "0o400",
+      "sha256": "b17127582052937b9818a971b1815883ffad27e163f24e2e23fcde7496089d43"
+    },
+    "source/ux/web/core/skins/macos/05-10-14-day.webp": {
+      "bytes": 35492,
+      "mode": "0o400",
+      "sha256": "2c498aa50ff87c125a4f5f1258975215eb31cebba9758f56b274b79bd1be274d"
+    },
+    "source/ux/web/core/skins/macos/06-10-14-night.webp": {
+      "bytes": 23624,
+      "mode": "0o400",
+      "sha256": "922b67c60c4ab003e400cc7db0a7238e0c1ad1e8d467d84b89a7054d1acbc04a"
+    },
+    "source/ux/web/core/skins/macos/07-10-15-day.webp": {
+      "bytes": 236948,
+      "mode": "0o400",
+      "sha256": "1915bbf4bb34d6690f8693e104a945c391692e1eaa58b8536ca20f3360b6dd26"
+    },
+    "source/ux/web/core/skins/macos/08-10-15-night.webp": {
+      "bytes": 171530,
+      "mode": "0o400",
+      "sha256": "fc4057d3f6a7f0ffdb824fcb716219fdc98b203bdd77b3c728d1cbef1ff1248a"
+    },
+    "source/ux/web/core/skins/macos/09-11-big-sur-day.webp": {
+      "bytes": 460666,
+      "mode": "0o400",
+      "sha256": "d9516f46049ffe53b705b9e34c5fd8ebc19b1b7f63e0467295c260db6432dc1e"
+    },
+    "source/ux/web/core/skins/macos/10-11-big-sur-night.webp": {
+      "bytes": 164622,
+      "mode": "0o400",
+      "sha256": "c8e042bceaa82366119afc5c5f5770888d63621f04cd5858377c784df3b4f6bb"
+    },
+    "source/ux/web/core/skins/macos/11-26-tahoe-beach-dawn.webp": {
+      "bytes": 73830,
+      "mode": "0o400",
+      "sha256": "57e343e236111fc8e2458a028b8ffb7da397403a4cf2244a499a46c3e22d5349"
+    },
+    "source/ux/web/core/skins/macos/12-26-tahoe-beach-day.webp": {
+      "bytes": 154190,
+      "mode": "0o400",
+      "sha256": "c0d785f53952829e6f8d9496f44128d735c3db54008f03b725994a23200e8e33"
+    },
+    "source/ux/web/core/skins/macos/13-26-tahoe-beach-dusk.webp": {
+      "bytes": 86554,
+      "mode": "0o400",
+      "sha256": "8fee0c4a9e6e3b7cf57c3eeebc256672f78d312a9382e7e9c6dcc2832dc6ad80"
+    },
+    "source/ux/web/core/skins/macos/14-26-tahoe-beach-night.webp": {
+      "bytes": 34782,
+      "mode": "0o400",
+      "sha256": "cee38bcd0a1320fefc8dcc121b730a5799959069943333714a04b18bbdab77b2"
+    },
+    "source/ux/web/core/skins/macos/15-27-golden-gate-bridge.webp": {
+      "bytes": 170974,
+      "mode": "0o400",
+      "sha256": "f44182da193f225af7f3e922ad9ab45587af80cade31ed5bf7fb36cc6d917ded"
+    },
+    "source/ux/web/core/slots.json": {
+      "bytes": 583,
+      "mode": "0o400",
+      "sha256": "ac7e5d6c811bfec70b1d1349e3d7db6802c16036ee53b4d46544e64d6f4fab7b"
+    },
+    "source/ux/web/core/status.js": {
+      "bytes": 23272,
+      "mode": "0o400",
+      "sha256": "941156682dfaef5b4416a4129bad7a85070915231ce8dc422f8717fdce707549"
+    },
+    "source/ux/web/core/swipe-intent.js": {
+      "bytes": 1521,
+      "mode": "0o400",
+      "sha256": "f471c2cb2894e3f2bcbd44d3c2cb43f6818fd89a64c85919efbca519f320ccc1"
+    },
+    "source/ux/web/core/thread-swipe-back.js": {
+      "bytes": 3490,
+      "mode": "0o400",
+      "sha256": "5dfcdc1ba3066b2a75031de19f36e7f6b7be4251f32e98807544e79126a89881"
+    },
+    "source/ux/web/core/tour.css": {
+      "bytes": 13510,
+      "mode": "0o400",
+      "sha256": "131451dc3b2341035d0b41342aabdfe130d49429cc9e6a3b8282931f31e14be6"
+    },
+    "source/ux/web/core/tour.js": {
+      "bytes": 24541,
+      "mode": "0o400",
+      "sha256": "00a9f50436c657b92d6b983d542db899b97c863b3f1cc25f880310f76dbe8cdc"
+    },
+    "source/ux/web/core/update-banner.css": {
+      "bytes": 13116,
+      "mode": "0o400",
+      "sha256": "3e843613f88dada7e8e6730ca1877483aa491f5045c9afadb009578a6699bd86"
+    },
+    "source/ux/web/core/uploads.js": {
+      "bytes": 16750,
+      "mode": "0o400",
+      "sha256": "d1152646780913c5d10cff4a57781945e1d36c77812486987daf53ef38c6414a"
+    },
+    "source/ux/web/core/usage.js": {
+      "bytes": 9520,
+      "mode": "0o400",
+      "sha256": "4af128d96917270f0388e053b89e7f0027ee8e9e1123af0c2067635c4646fad1"
+    },
+    "source/ux/web/core/views.css": {
+      "bytes": 730,
+      "mode": "0o400",
+      "sha256": "1cdf71b8a6bc919901c7a3b35189a68fed1e1a259e4f46411ce67694fc105314"
+    },
+    "source/ux/web/core/voice-legacy.js": {
+      "bytes": 10990,
+      "mode": "0o400",
+      "sha256": "680edf1bc1c8523c9c77e22c1bf62edb52b1cde36324493c157add70806fead3"
+    },
+    "source/ux/web/core/voice-status.js": {
+      "bytes": 3264,
+      "mode": "0o400",
+      "sha256": "6eda28af1d230577ede6d0e37d67fc5ce6ec97f425018d67d702e32ee2ca6195"
+    },
+    "source/ux/web/core/voice.js": {
+      "bytes": 9274,
+      "mode": "0o400",
+      "sha256": "e902b3c94e3a616bf4a44865fba6907ab1f40af3fd5d1659a99ba0bd7822b31b"
+    },
+    "source/ux/web/core/web-update.js": {
+      "bytes": 15059,
+      "mode": "0o400",
+      "sha256": "89f286726d81aa10a9983600574a17d288b27d7f62f4956e2913cec7e5ba2018"
+    },
+    "source/ux/web/core/welcome.css": {
+      "bytes": 5134,
+      "mode": "0o400",
+      "sha256": "7b44843431fa29a17a16dca70ff51b0843b370714870bc5316dea9cf374c9b90"
+    },
+    "source/ux/web/core/welcome.js": {
+      "bytes": 25061,
+      "mode": "0o400",
+      "sha256": "a6ebc7e53f9ea703ad14876072b01971cd389ed957fbecdce17fc1f04869ac35"
+    },
+    "source/ux/web/core/workspace-navigation.js": {
+      "bytes": 2351,
+      "mode": "0o400",
+      "sha256": "ff8fd998a4bf329bd67fbd4b1c567c07eeea7de071b533ede4aaa5ea79938934"
+    },
+    "source/ux/web/core/workspace-sync.js": {
+      "bytes": 20897,
+      "mode": "0o400",
+      "sha256": "604223ce3583f4bff662b15ee0b5d3c422583e58c7ecf3aa309613b0b617b7f6"
+    },
+    "source/ux/web/desktop.html": {
+      "bytes": 11583,
+      "mode": "0o400",
+      "sha256": "00cd2a3e364665ed7c63f4ef17d11bcf6187eecc84fef6b50c4a06369177b760"
+    },
+    "source/ux/web/desktop/desktop.css": {
+      "bytes": 46108,
+      "mode": "0o400",
+      "sha256": "ab6f5189168b73551328238576735e3d5a848a9740c159c922736e372abf2620"
+    },
+    "source/ux/web/desktop/desktop.js": {
+      "bytes": 205594,
+      "mode": "0o400",
+      "sha256": "07fbf2e9ec12bb9fa7e6a682533f5a20fedec9fa6f112a626dfdaaa563bf0727"
+    },
+    "source/ux/web/device.js": {
+      "bytes": 30087,
+      "mode": "0o400",
+      "sha256": "8eaf7290c7303595951c8b2bc08f2be71de51b245c19feeda5d19903c1000d77"
+    },
+    "source/ux/web/favicon.ico": {
+      "bytes": 7514,
+      "mode": "0o400",
+      "sha256": "3d234a59b2f297e4dff4b17111ad9da794efbd9bab5171ceb40afc5fb84e306a"
+    },
+    "source/ux/web/icon-192.png": {
+      "bytes": 32101,
+      "mode": "0o400",
+      "sha256": "e204bf847f4ad7bfe6addb750dd28336863ee577d258f54aa3b143a9e703f302"
+    },
+    "source/ux/web/icon-512.png": {
+      "bytes": 199621,
+      "mode": "0o400",
+      "sha256": "228489a32e0c6e0d7e668e7cbe752fbfd6bfc9c8de23b45552325ab23bc91481"
+    },
+    "source/ux/web/index.html": {
+      "bytes": 11934,
+      "mode": "0o400",
+      "sha256": "9507a97d3c558599f40e2e13a987d69b05849216041e3c206abe4ab5c7e03b26"
+    },
+    "source/ux/web/install-icons/android-apps-180.png": {
+      "bytes": 3605,
+      "mode": "0o400",
+      "sha256": "af4c04bbd386f87a299ab2949dcbd19eeef705b5895a2714d6027f9d09cbeb46"
+    },
+    "source/ux/web/install-icons/android-apps-192.png": {
+      "bytes": 3852,
+      "mode": "0o400",
+      "sha256": "a8eb889c3e418a4b88093f8d64e158fca7c5351a3f2734e6fcec949274df8186"
+    },
+    "source/ux/web/install-icons/android-apps.png": {
+      "bytes": 14375,
+      "mode": "0o400",
+      "sha256": "d94bcbf1d746f0aac9a9a8db596e48319e894fa91265bbc49c3f5f5ac518f9b3"
+    },
+    "source/ux/web/install-icons/app-store-180.png": {
+      "bytes": 3298,
+      "mode": "0o400",
+      "sha256": "65886f4b93f9ec38c500b6f5bdd5178e154c0bdb4c64b4814eb8d5efaed262f0"
+    },
+    "source/ux/web/install-icons/app-store-192.png": {
+      "bytes": 3464,
+      "mode": "0o400",
+      "sha256": "3abfba951a833a1de7e2dd243d6a4ff4874a08602f5c660cfd63621ee7cdfa45"
+    },
+    "source/ux/web/install-icons/app-store.png": {
+      "bytes": 12721,
+      "mode": "0o400",
+      "sha256": "dcb33298aa904c61e67f9f586e14bc8849eecbf5af404d1d3b75952779a78895"
+    },
+    "source/ux/web/install-icons/browser-180.png": {
+      "bytes": 4307,
+      "mode": "0o400",
+      "sha256": "1728d58a6aa4c893074288c0c546a1e02f7a5fc96490bb97315e87d9832b7e8d"
+    },
+    "source/ux/web/install-icons/browser-192.png": {
+      "bytes": 4472,
+      "mode": "0o400",
+      "sha256": "5071b605410995d06684157508900c75957648af952772e33bc02fefb7e9ff00"
+    },
+    "source/ux/web/install-icons/browser.png": {
+      "bytes": 15815,
+      "mode": "0o400",
+      "sha256": "00466daab728797aa2ba187e4c07721f2556733f6a3ce8b37edb914fde25de0c"
+    },
+    "source/ux/web/install-icons/calendar-180.png": {
+      "bytes": 3402,
+      "mode": "0o400",
+      "sha256": "2e73c8b63189ba5875682c6fd276cd375511a3e35e1c10b06a676a1d2773e4ea"
+    },
+    "source/ux/web/install-icons/calendar-192.png": {
+      "bytes": 3741,
+      "mode": "0o400",
+      "sha256": "7e1716c435b9ba0b7b955d396aa74943f818408d9fa69b32571748d01f2150de"
+    },
+    "source/ux/web/install-icons/calendar.png": {
+      "bytes": 13172,
+      "mode": "0o400",
+      "sha256": "fe14e31e874f7b0c26532f7c20bfd379a554d074aa8d2d66cf2f7406bcbe7b1d"
+    },
+    "source/ux/web/install-icons/card-benefits-180.png": {
+      "bytes": 2345,
+      "mode": "0o400",
+      "sha256": "871a6ece221002c52d90ed0ac8f646caed83332bae6f73de8c5f4991d147106c"
+    },
+    "source/ux/web/install-icons/card-benefits-192.png": {
+      "bytes": 2529,
+      "mode": "0o400",
+      "sha256": "823a80682239c73b85e045275d70bb30041b78ec691f0622b12ecfd73dc42faa"
+    },
+    "source/ux/web/install-icons/card-benefits.png": {
+      "bytes": 9739,
+      "mode": "0o400",
+      "sha256": "976ce2f716a5c91344b60e65da013b7f7909487cdbc74d815f41316ec5c6ab23"
+    },
+    "source/ux/web/install-icons/cinequeue-180.png": {
+      "bytes": 3769,
+      "mode": "0o400",
+      "sha256": "ea5110d66b2ffb03fb6c8779bafc98db4a9b1ebe4772008ec4a2cb30d91029f2"
+    },
+    "source/ux/web/install-icons/cinequeue-192.png": {
+      "bytes": 4131,
+      "mode": "0o400",
+      "sha256": "0a8cb5e6a70e8c958816d00fda5d45e131703f9dc7a253cbf2ab33ea36c01217"
+    },
+    "source/ux/web/install-icons/cinequeue.png": {
+      "bytes": 14854,
+      "mode": "0o400",
+      "sha256": "acc4737999d6bf6581b64324beb39a7ef7faf998b8f05efb9139eeea85185dce"
+    },
+    "source/ux/web/install-icons/console-180.png": {
+      "bytes": 3246,
+      "mode": "0o400",
+      "sha256": "963a56b1ff52868ec9185fe69b1ea022a4ef17e56dd430fd789e591364c54a51"
+    },
+    "source/ux/web/install-icons/console-192.png": {
+      "bytes": 3433,
+      "mode": "0o400",
+      "sha256": "97555442a3610de09a9113dc8a1927563ae8271c468e2faec2a03e96dafb787e"
+    },
+    "source/ux/web/install-icons/console.png": {
+      "bytes": 12767,
+      "mode": "0o400",
+      "sha256": "e07cee8b3cff45d4fe0c150a1b3b6b318e3869cc97184546769d6e2707c0385a"
+    },
+    "source/ux/web/install-icons/defleur-video-180.png": {
+      "bytes": 2853,
+      "mode": "0o400",
+      "sha256": "840648cb04e8d87fe66ae01a84b212d9aef38216f90356d735d3066102c1cb87"
+    },
+    "source/ux/web/install-icons/defleur-video-192.png": {
+      "bytes": 2933,
+      "mode": "0o400",
+      "sha256": "3d96d3e9e9ff04012aa73e813184de10ebca478db17d085111d79d7bacce2cd3"
+    },
+    "source/ux/web/install-icons/defleur-video.png": {
+      "bytes": 11438,
+      "mode": "0o400",
+      "sha256": "043d8304373fa555996572927b6b76cfd3209f6d926e5cc8e83c74468c1667c9"
+    },
+    "source/ux/web/install-icons/files-180.png": {
+      "bytes": 2462,
+      "mode": "0o400",
+      "sha256": "5878dcfec63c8c237aa038665b8ef2b05f6287078653b99b056a9596043973f7"
+    },
+    "source/ux/web/install-icons/files-192.png": {
+      "bytes": 2723,
+      "mode": "0o400",
+      "sha256": "0996339fabec887165cabf09c19c553fff4ab0cca5f66a33309140cf3117acc7"
+    },
+    "source/ux/web/install-icons/files.png": {
+      "bytes": 10084,
+      "mode": "0o400",
+      "sha256": "6c1656237ec5b5c0a11cd325f2e14724b666d2df5afd0ebef868e5b7e7bd8d55"
+    },
+    "source/ux/web/install-icons/iching-180.png": {
+      "bytes": 3959,
+      "mode": "0o400",
+      "sha256": "e88e54c6dfc23e2287aa455fe946625b01c452de8b6281bb1a34f2cfe04622b2"
+    },
+    "source/ux/web/install-icons/iching-192.png": {
+      "bytes": 4086,
+      "mode": "0o400",
+      "sha256": "9350ba7457c400766caa0ec7439b87c8a1484f36f514680e3b6b4f36ca92c0e5"
+    },
+    "source/ux/web/install-icons/iching.png": {
+      "bytes": 15108,
+      "mode": "0o400",
+      "sha256": "7723c0eea336329fb8170bcadb9f306cc780656ced1736a1492add8b87a77a7f"
+    },
+    "source/ux/web/install-icons/legacy-wizard-180.png": {
+      "bytes": 3175,
+      "mode": "0o400",
+      "sha256": "416633f24def7d265c30eb6affe161725b4f384935a146f30ea24d1a8211888e"
+    },
+    "source/ux/web/install-icons/legacy-wizard-192.png": {
+      "bytes": 3352,
+      "mode": "0o400",
+      "sha256": "6d08581561c33db29b1175f020596441836e4973f1df30ca6c5ecc87a6e21e3d"
+    },
+    "source/ux/web/install-icons/legacy-wizard.png": {
+      "bytes": 12506,
+      "mode": "0o400",
+      "sha256": "33cf67a17b8568c1fdfc38bf3dfbfbf36536b386cfe419a52ed287a7ba1ba11a"
+    },
+    "source/ux/web/install-icons/maps-180.png": {
+      "bytes": 3710,
+      "mode": "0o400",
+      "sha256": "626f8641998c032b16f2331ed55a8c36cb32b105b83a9e0fa9ffa1858b37164e"
+    },
+    "source/ux/web/install-icons/maps-192.png": {
+      "bytes": 3919,
+      "mode": "0o400",
+      "sha256": "c4e594d1f7edd25f13cdac249dbacc35948a9c400f127fa0ceacde2dfd60672d"
+    },
+    "source/ux/web/install-icons/maps.png": {
+      "bytes": 14607,
+      "mode": "0o400",
+      "sha256": "ab4d57c5298e52860e82c33c77ef7c96267908dbd13d9e6085768d0ab54d961c"
+    },
+    "source/ux/web/install-icons/meditation-180.png": {
+      "bytes": 3506,
+      "mode": "0o400",
+      "sha256": "70a9094f861188de9e5fb2076e7d33cbad3725dc60f404a3e85a2bc8cee9d3a3"
+    },
+    "source/ux/web/install-icons/meditation-192.png": {
+      "bytes": 3707,
+      "mode": "0o400",
+      "sha256": "23f846d94680311b39a0754e65a4f05b995763c3f336000e37544f6381d19835"
+    },
+    "source/ux/web/install-icons/meditation.png": {
+      "bytes": 13698,
+      "mode": "0o400",
+      "sha256": "f87080946eb14f2c1fb82ba72a8cf0d3d8a5b36974a79107e3ff299cc87824b3"
+    },
+    "source/ux/web/install-icons/messenger-180.png": {
+      "bytes": 3400,
+      "mode": "0o400",
+      "sha256": "dbad302383d105c9c7534ed70cec92cadc7b93a46014c7c812c7af1bb92382aa"
+    },
+    "source/ux/web/install-icons/messenger-192.png": {
+      "bytes": 3663,
+      "mode": "0o400",
+      "sha256": "79f7b09d2b59d9c85ee82794db27a532b1c6c704d1f92471f7ff90cbf7a6fab3"
+    },
+    "source/ux/web/install-icons/messenger.png": {
+      "bytes": 13772,
+      "mode": "0o400",
+      "sha256": "0d2762d218fcf9b0c0d7768e4d9067f77d8bcea93c9dc4feef22b60ed7727a99"
+    },
+    "source/ux/web/install-icons/mizel-180.png": {
+      "bytes": 4472,
+      "mode": "0o400",
+      "sha256": "cbf7272a6c4202683ef60af929a920df6a19b811da475592bc3107ca2961fe8b"
+    },
+    "source/ux/web/install-icons/mizel-192.png": {
+      "bytes": 4842,
+      "mode": "0o400",
+      "sha256": "8b4436d41a9a44f5bae9f90624c5a1cf79d38b4f70b1a22741180304a3be1d03"
+    },
+    "source/ux/web/install-icons/mizel.png": {
+      "bytes": 17263,
+      "mode": "0o400",
+      "sha256": "18aa48a2870380f1a7335f95a05fb089d073ebbdc88fb6b6ff3537c105e06a40"
+    },
+    "source/ux/web/install-icons/money-180.png": {
+      "bytes": 4970,
+      "mode": "0o400",
+      "sha256": "d9387513fa468045fa901f9d77f90a3cb88b6b14c16efb2000592ab8703b915b"
+    },
+    "source/ux/web/install-icons/money-192.png": {
+      "bytes": 5356,
+      "mode": "0o400",
+      "sha256": "2521955e42d834aae30d88b397ba2a17e3cea622f0ce0c6ccb2546e015ce0c42"
+    },
+    "source/ux/web/install-icons/money.png": {
+      "bytes": 18930,
+      "mode": "0o400",
+      "sha256": "058390792cba6bf688feeed6068c62d7dcdd46e122e519def530d37699ca00fb"
+    },
+    "source/ux/web/install-icons/morning-180.png": {
+      "bytes": 3688,
+      "mode": "0o400",
+      "sha256": "345e373e53fd0ed06329cbc679ee9d1feb56fb3928f1429f81c845406bbbd01d"
+    },
+    "source/ux/web/install-icons/morning-192.png": {
+      "bytes": 3987,
+      "mode": "0o400",
+      "sha256": "b11b66d8e6f89542e4c418743c74234591e7fddbf449a043779ccbc9d703f8a9"
+    },
+    "source/ux/web/install-icons/morning-report-180.png": {
+      "bytes": 3688,
+      "mode": "0o400",
+      "sha256": "345e373e53fd0ed06329cbc679ee9d1feb56fb3928f1429f81c845406bbbd01d"
+    },
+    "source/ux/web/install-icons/morning-report-192.png": {
+      "bytes": 3987,
+      "mode": "0o400",
+      "sha256": "b11b66d8e6f89542e4c418743c74234591e7fddbf449a043779ccbc9d703f8a9"
+    },
+    "source/ux/web/install-icons/morning-report.png": {
+      "bytes": 14541,
+      "mode": "0o400",
+      "sha256": "4c91665ee37c5f49444ff46f6fe5894238ef58c3e83977b79e8dfc7eebc60878"
+    },
+    "source/ux/web/install-icons/morning.png": {
+      "bytes": 14541,
+      "mode": "0o400",
+      "sha256": "4c91665ee37c5f49444ff46f6fe5894238ef58c3e83977b79e8dfc7eebc60878"
+    },
+    "source/ux/web/install-icons/notes-180.png": {
+      "bytes": 2877,
+      "mode": "0o400",
+      "sha256": "2b1950f6663164701b6da7682987807b12d6f95d638c0fe2b4d95823c25ed20b"
+    },
+    "source/ux/web/install-icons/notes-192.png": {
+      "bytes": 2967,
+      "mode": "0o400",
+      "sha256": "36cb173a8a1407ec9320ddf7dc1c4b8b1baf237a4c3688290a955cde434b12c3"
+    },
+    "source/ux/web/install-icons/notes.png": {
+      "bytes": 11396,
+      "mode": "0o400",
+      "sha256": "b09a99a1d9da80b09c53cea8be1359e07a002230b2491e4b58e0f1a02cf64e8e"
+    },
+    "source/ux/web/install-icons/notifications-180.png": {
+      "bytes": 2857,
+      "mode": "0o400",
+      "sha256": "185f697a304280733096fd7d449b631acd82eb75569d5d81d2128f6ea3d69b8e"
+    },
+    "source/ux/web/install-icons/notifications-192.png": {
+      "bytes": 3022,
+      "mode": "0o400",
+      "sha256": "73fa5ea5c6754398789dd00a89535579ec5c527a079754ad7d1ca4428853113b"
+    },
+    "source/ux/web/install-icons/notifications.png": {
+      "bytes": 11447,
+      "mode": "0o400",
+      "sha256": "53a8a442647499a8dd7ffee19822c8b36f5f220ad26a6968d458c12ccd1c1669"
+    },
+    "source/ux/web/install-icons/photos-180.png": {
+      "bytes": 3474,
+      "mode": "0o400",
+      "sha256": "16369230ab31f172a286aa29d2b534fc4ccf8141b4c2fd1fceaa8ef4b7324068"
+    },
+    "source/ux/web/install-icons/photos-192.png": {
+      "bytes": 3782,
+      "mode": "0o400",
+      "sha256": "52b28255045069f351b53f4b9fccb3a35e27debd719909fa444364b23bccb482"
+    },
+    "source/ux/web/install-icons/photos.png": {
+      "bytes": 13782,
+      "mode": "0o400",
+      "sha256": "65f997b0f3c18ea10ecd300c46b415cafe5dadeb4548f26aa413e0259e02a92c"
+    },
+    "source/ux/web/install-icons/profiles-180.png": {
+      "bytes": 4204,
+      "mode": "0o400",
+      "sha256": "0bd7e0722f7ae25e73db44c9292435fdd8a5594864783804c951767edf38c789"
+    },
+    "source/ux/web/install-icons/profiles-192.png": {
+      "bytes": 4477,
+      "mode": "0o400",
+      "sha256": "37630d62b309ab6083ddfa002f5e32165c98689bbe45549180dcead8183644ac"
+    },
+    "source/ux/web/install-icons/profiles.png": {
+      "bytes": 16329,
+      "mode": "0o400",
+      "sha256": "615ed6d9e645d757867f220bc28584cbe47ba7fbf4069dd88afc913feeb3dc43"
+    },
+    "source/ux/web/install-icons/projects-180.png": {
+      "bytes": 3191,
+      "mode": "0o400",
+      "sha256": "2939a2ac804477b08a5dec92ba1c11ff6a5424c4e644e3c1043287b78c361b59"
+    },
+    "source/ux/web/install-icons/projects-192.png": {
+      "bytes": 3431,
+      "mode": "0o400",
+      "sha256": "5b657c43175241feb3882c0144c0843b3d6950c30a69eb323716a39d5d15d2fb"
+    },
+    "source/ux/web/install-icons/projects.png": {
+      "bytes": 13041,
+      "mode": "0o400",
+      "sha256": "4660a94409f38659c7536c9e7711e54eef9b56d2dbdb5893a4d50eb319e9e52b"
+    },
+    "source/ux/web/install-icons/secret-drop-180.png": {
+      "bytes": 3460,
+      "mode": "0o400",
+      "sha256": "edc13ea3324d8cf7ec71748a35ca776680c3be11ef80b1c300b4947a9f78f2f6"
+    },
+    "source/ux/web/install-icons/secret-drop-192.png": {
+      "bytes": 3724,
+      "mode": "0o400",
+      "sha256": "c7f8dcb2430a0c55cd65ec75314887842fc762af5d32226df9582b6ed6280958"
+    },
+    "source/ux/web/install-icons/secret-drop.png": {
+      "bytes": 13634,
+      "mode": "0o400",
+      "sha256": "504cedc9cf63af6cc36bc866216ea5ad611462986cad575e5ccf5dbc7c1dbfca"
+    },
+    "source/ux/web/install-icons/shopping-180.png": {
+      "bytes": 3591,
+      "mode": "0o400",
+      "sha256": "cb283ac26ec65fcde03b658ae26471322f46c9ab4f04745207e8a9b6323e9095"
+    },
+    "source/ux/web/install-icons/shopping-192.png": {
+      "bytes": 3877,
+      "mode": "0o400",
+      "sha256": "6b83ca42b6b6b0817c2494041d6a6399cdbb7a23a6c98af7c2f45e2107f90bb8"
+    },
+    "source/ux/web/install-icons/shopping.png": {
+      "bytes": 13813,
+      "mode": "0o400",
+      "sha256": "55a8513e460030dd7f132b0f83bcc8d67e362b86c8a184d47702f0d3e1b653b0"
+    },
+    "source/ux/web/install-icons/side-button-180.png": {
+      "bytes": 3203,
+      "mode": "0o400",
+      "sha256": "5a2b66dcdd3e16cd3ccc557c2ead4a7569294caba24da14683fa3e903cecbb0e"
+    },
+    "source/ux/web/install-icons/side-button-192.png": {
+      "bytes": 3418,
+      "mode": "0o400",
+      "sha256": "3fe091e5a399137e2ce5d058750b1985862bf5f767074a77a3c64fbf4609c023"
+    },
+    "source/ux/web/install-icons/side-button.png": {
+      "bytes": 12085,
+      "mode": "0o400",
+      "sha256": "9c2b35e9169e93ee1ed3da3682f712871a3b986c08e942eda5e037eba532f6cb"
+    },
+    "source/ux/web/install-icons/smart-home-180.png": {
+      "bytes": 3289,
+      "mode": "0o400",
+      "sha256": "168e90ad03a4742cac9da5cc56a404b93710e57e7484dae1e8f0b9e3906f376f"
+    },
+    "source/ux/web/install-icons/smart-home-192.png": {
+      "bytes": 3595,
+      "mode": "0o400",
+      "sha256": "e96567df7bba6cb473187425f6ecb81260f23af2156d3827abf8ae94cceedeff"
+    },
+    "source/ux/web/install-icons/smart-home.png": {
+      "bytes": 13161,
+      "mode": "0o400",
+      "sha256": "874c2c9fea270b9dbcc9f5f84b0a11d534980f13e9693a4cd78724c3ba1eb5b4"
+    },
+    "source/ux/web/install-icons/sniper-180.png": {
+      "bytes": 4904,
+      "mode": "0o400",
+      "sha256": "e83b08f2c9923544cbcea65e2115de1f39f693f51cdceba838ac5e8a36b8fe0a"
+    },
+    "source/ux/web/install-icons/sniper-192.png": {
+      "bytes": 5133,
+      "mode": "0o400",
+      "sha256": "2f36d3dd15431043c78182c4b1c9759737ca83c4a0df6859eb1a607599dd1f5a"
+    },
+    "source/ux/web/install-icons/sniper.png": {
+      "bytes": 18076,
+      "mode": "0o400",
+      "sha256": "75339cfafa9e5c8d74994b626a0851918135ebe9e4543cca477a8cf6dae2beb2"
+    },
+    "source/ux/web/install-icons/social-180.png": {
+      "bytes": 3790,
+      "mode": "0o400",
+      "sha256": "e4e15094ca36099156d6d9c7f2fc9fe5a114702b3c8d44a20a9b6525d47ced8f"
+    },
+    "source/ux/web/install-icons/social-192.png": {
+      "bytes": 4015,
+      "mode": "0o400",
+      "sha256": "4eff5ad3f8d128b87b6b2d939db2b9e5552636a23c223deadddacc173ec63f0a"
+    },
+    "source/ux/web/install-icons/social.png": {
+      "bytes": 14964,
+      "mode": "0o400",
+      "sha256": "ae00fcd065802d7653d41161e5d4667bf494db3a74e06340ff7be89b0dbbd3c0"
+    },
+    "source/ux/web/install-icons/system-180.png": {
+      "bytes": 4317,
+      "mode": "0o400",
+      "sha256": "a095683298d9e8cc56921f9d412506cef7be4df443265053e144dcee54e0f0f9"
+    },
+    "source/ux/web/install-icons/system-192.png": {
+      "bytes": 4596,
+      "mode": "0o400",
+      "sha256": "4de5e5a0ce2ab255a2de513f49579bbd646037f4c92ba4e98a9e95f73bf3bc90"
+    },
+    "source/ux/web/install-icons/system.png": {
+      "bytes": 16677,
+      "mode": "0o400",
+      "sha256": "22c9da103a3f7abe4d3590d7359677e4021553bc93205ab35bcf6f963168c55e"
+    },
+    "source/ux/web/install-icons/topics-180.png": {
+      "bytes": 4534,
+      "mode": "0o400",
+      "sha256": "33f7b70bd886e30216502044d377b462e49ad6e4d9cf36081662b02390ccc4e8"
+    },
+    "source/ux/web/install-icons/topics-192.png": {
+      "bytes": 4736,
+      "mode": "0o400",
+      "sha256": "4c3cf27cdeec12de0268a3eb4cf929cb6a258e3db155c8a4598e436af832320f"
+    },
+    "source/ux/web/install-icons/topics.png": {
+      "bytes": 17232,
+      "mode": "0o400",
+      "sha256": "7d46d2f2915467088d18119a0779b75f2433c845213d8138ddcb5b5e02d3020c"
+    },
+    "source/ux/web/install-icons/trackhunt-180.png": {
+      "bytes": 5310,
+      "mode": "0o400",
+      "sha256": "8c6bdf4640bddefc4296a473bdd0c68b3966b9fd456e2ad74ce428e1bb7a954a"
+    },
+    "source/ux/web/install-icons/trackhunt-192.png": {
+      "bytes": 5582,
+      "mode": "0o400",
+      "sha256": "2035a7ed47a70da4b087904dfec68e27c39ff6cb710f29759f17fece8e98f49f"
+    },
+    "source/ux/web/install-icons/trackhunt.png": {
+      "bytes": 19712,
+      "mode": "0o400",
+      "sha256": "11041e5754e448b776596e5051d093743f7169098b91e1a82450df98034bb90d"
+    },
+    "source/ux/web/install-icons/transcriber-180.png": {
+      "bytes": 2947,
+      "mode": "0o400",
+      "sha256": "992541b032ed250b10acbf973357864c91b0430b72656cda18f0699d8f2e8ce9"
+    },
+    "source/ux/web/install-icons/transcriber-192.png": {
+      "bytes": 3074,
+      "mode": "0o400",
+      "sha256": "a30f73fd1e9f1d5b13f4229d5d979596d6d08b0d90725d09d0446ef3e74d4ad6"
+    },
+    "source/ux/web/install-icons/transcriber.png": {
+      "bytes": 11691,
+      "mode": "0o400",
+      "sha256": "b98e76a4eaccb8539056858bf3f9d39378cb0283c46e3255b5a8c5563653fac5"
+    },
+    "source/ux/web/install-icons/troubleshooter-180.png": {
+      "bytes": 3489,
+      "mode": "0o400",
+      "sha256": "36e7c0a8c35512ed98472356d78b0f051ec1f073eff0ad22149838fde91a2ae4"
+    },
+    "source/ux/web/install-icons/troubleshooter-192.png": {
+      "bytes": 3674,
+      "mode": "0o400",
+      "sha256": "35f325d32345fe8e3e0228080f829095b4eac01a0f11917ba84ba1201962743e"
+    },
+    "source/ux/web/install-icons/troubleshooter.png": {
+      "bytes": 13320,
+      "mode": "0o400",
+      "sha256": "10f858dc997dcd4be3c023199db8cba7332bad124971e876c7744228a66df5b6"
+    },
+    "source/ux/web/install-icons/usuals-180.png": {
+      "bytes": 4208,
+      "mode": "0o400",
+      "sha256": "2208789d50dcc5392f4684f1ba5e6113ea949a19aaec1b84c777c59e2fdf986d"
+    },
+    "source/ux/web/install-icons/usuals-192.png": {
+      "bytes": 4531,
+      "mode": "0o400",
+      "sha256": "89317dcc6302d93771fd93686867b31c89cf16a1f402788e463608664b9e2a27"
+    },
+    "source/ux/web/install-icons/usuals.png": {
+      "bytes": 16527,
+      "mode": "0o400",
+      "sha256": "4840f5cca289db5e7441c2217bfd66f4623fda3ebf09da542ab898175ebb4e28"
+    },
+    "source/ux/web/install-icons/v-day-180.png": {
+      "bytes": 2838,
+      "mode": "0o400",
+      "sha256": "fedd2128e2e91cc93eb477c2755a7bc64f94b655830b83561ba47102593af8eb"
+    },
+    "source/ux/web/install-icons/v-day-192.png": {
+      "bytes": 3028,
+      "mode": "0o400",
+      "sha256": "f74f16a755c9b3c1e79f9920af701b429bb543e9749ba096229c736ee5ac6e84"
+    },
+    "source/ux/web/install-icons/v-day.png": {
+      "bytes": 11986,
+      "mode": "0o400",
+      "sha256": "eff4b9e0960425bafee627f3cb1082c6c6d657224983e17ce78542864f9e61c2"
+    },
+    "source/ux/web/install-icons/v-inbox-180.png": {
+      "bytes": 3231,
+      "mode": "0o400",
+      "sha256": "df645924ee708f889703652cb312b60fdcd84d3094f7d56845b84da9d7db182e"
+    },
+    "source/ux/web/install-icons/v-inbox-192.png": {
+      "bytes": 3480,
+      "mode": "0o400",
+      "sha256": "d78e2991be8b9fc811991ef7416cf399f0a07178c3ff93d7ba5c5f4b6c813c39"
+    },
+    "source/ux/web/install-icons/v-inbox.png": {
+      "bytes": 12847,
+      "mode": "0o400",
+      "sha256": "ae66915d43a10d888a6d42b269f13bd294db10888bf46a2efad5cedf32e85fbb"
+    },
+    "source/ux/web/install-icons/v-month-180.png": {
+      "bytes": 3995,
+      "mode": "0o400",
+      "sha256": "5c042d8e81797ff812e51b2759a774a9e2f914b0aec2854ad673f05315730b27"
+    },
+    "source/ux/web/install-icons/v-month-192.png": {
+      "bytes": 4269,
+      "mode": "0o400",
+      "sha256": "f3d4f0e5d1b42bf9475d6f7d8e9b08098459a3ff8bea1714cccaeb165065ba25"
+    },
+    "source/ux/web/install-icons/v-month.png": {
+      "bytes": 15726,
+      "mode": "0o400",
+      "sha256": "15986e4846f386780990e65ea3ddfb68876ad3b2150f93a85bfec762ece8706c"
+    },
+    "source/ux/web/install-icons/v-week-180.png": {
+      "bytes": 5567,
+      "mode": "0o400",
+      "sha256": "3c96d5396407786d848d4b2a16d0045615563198157808e056bfac7a07dbf277"
+    },
+    "source/ux/web/install-icons/v-week-192.png": {
+      "bytes": 5815,
+      "mode": "0o400",
+      "sha256": "dc42913cdadaf79527482cb4d604716896f53e3f97fe6ac74928a0fd0bf61c17"
+    },
+    "source/ux/web/install-icons/v-week.png": {
+      "bytes": 20342,
+      "mode": "0o400",
+      "sha256": "f23e63f6a6158369714d76be252bdb2c8013ca0614492fe1be23f2da9fef5b54"
+    },
+    "source/ux/web/install-icons/wisdom-180.png": {
+      "bytes": 3583,
+      "mode": "0o400",
+      "sha256": "bb21b4f990c5546708626a4c053ef50a1be86ed989d01aee5d7371cc336ca5a4"
+    },
+    "source/ux/web/install-icons/wisdom-192.png": {
+      "bytes": 3841,
+      "mode": "0o400",
+      "sha256": "3c49bba8bda05780a209a4c56ba91aa873e2dfc49b6bba6258fbb185a4f04f90"
+    },
+    "source/ux/web/install-icons/wisdom.png": {
+      "bytes": 13955,
+      "mode": "0o400",
+      "sha256": "e1b21ee7d8c42c916ba36e669739d10ee08e7e41442b6a26644543c2fa6bf225"
+    },
+    "source/ux/web/install-icons/wizard-agent-service-180.png": {
+      "bytes": 3825,
+      "mode": "0o400",
+      "sha256": "74b50a413456eb708484005a727046c4db4dfc5ff965ee6955a4fed662b215c4"
+    },
+    "source/ux/web/install-icons/wizard-agent-service-192.png": {
+      "bytes": 4235,
+      "mode": "0o400",
+      "sha256": "f6db3ccc0ccaa72b6634fbdfc6a9daa476ff1329693156a68e245e34f764a33b"
+    },
+    "source/ux/web/install-icons/wizard-agent-service.png": {
+      "bytes": 15051,
+      "mode": "0o400",
+      "sha256": "3559e31787111e3a57f7bc7ed4bdc9a8f08b9321653113173c989a33db42b22e"
+    },
+    "source/ux/web/install-icons/wizard-calendar-180.png": {
+      "bytes": 3402,
+      "mode": "0o400",
+      "sha256": "2e73c8b63189ba5875682c6fd276cd375511a3e35e1c10b06a676a1d2773e4ea"
+    },
+    "source/ux/web/install-icons/wizard-calendar-192.png": {
+      "bytes": 3741,
+      "mode": "0o400",
+      "sha256": "7e1716c435b9ba0b7b955d396aa74943f818408d9fa69b32571748d01f2150de"
+    },
+    "source/ux/web/install-icons/wizard-calendar.png": {
+      "bytes": 13172,
+      "mode": "0o400",
+      "sha256": "fe14e31e874f7b0c26532f7c20bfd379a554d074aa8d2d66cf2f7406bcbe7b1d"
+    },
+    "source/ux/web/install-icons/wizard-chatgpt-180.png": {
+      "bytes": 4289,
+      "mode": "0o400",
+      "sha256": "a13f0582609463ee5b7dce928bdb7f98ae891e6d89f023b6cb9fdada4458c4e8"
+    },
+    "source/ux/web/install-icons/wizard-chatgpt-192.png": {
+      "bytes": 4529,
+      "mode": "0o400",
+      "sha256": "efd19449257966ca9b37ed209f699773644b2ecc1b58c0f2282e379851abc71f"
+    },
+    "source/ux/web/install-icons/wizard-chatgpt.png": {
+      "bytes": 16720,
+      "mode": "0o400",
+      "sha256": "bbdb2b0d940444aa0422e76ef448d03b135c0035eafadf7326bb2ac55fd480ef"
+    },
+    "source/ux/web/install-icons/wizard-claude-180.png": {
+      "bytes": 3673,
+      "mode": "0o400",
+      "sha256": "9b514bba35dc8e67dfda48a34f562318d8ad01740eec94eeb87ccaeaae9e5263"
+    },
+    "source/ux/web/install-icons/wizard-claude-192.png": {
+      "bytes": 3756,
+      "mode": "0o400",
+      "sha256": "e958c133d3b0d3b17b8d146a302916f874e2349a80d725aff12cdd58bf8ed803"
+    },
+    "source/ux/web/install-icons/wizard-claude.png": {
+      "bytes": 14259,
+      "mode": "0o400",
+      "sha256": "5afa6330c7b4f89e72e4c615fd67befefd579229f4639326364f2ebd4c4c9d45"
+    },
+    "source/ux/web/install-icons/wizard-cloudflare-180.png": {
+      "bytes": 2932,
+      "mode": "0o400",
+      "sha256": "ef9499ccface3daa87cb476545b6d5250a952d39e0d11d1991f9b36ffccc0130"
+    },
+    "source/ux/web/install-icons/wizard-cloudflare-192.png": {
+      "bytes": 3131,
+      "mode": "0o400",
+      "sha256": "5c8182f84376b1a842dd31859d906f2748606e89c3f2e860db7f23fcfee1f509"
+    },
+    "source/ux/web/install-icons/wizard-cloudflare.png": {
+      "bytes": 12113,
+      "mode": "0o400",
+      "sha256": "4417b25f7f337fa038871428219bc4cab36eea1af45569bd56da2d05ba448978"
+    },
+    "source/ux/web/install-icons/wizard-files-180.png": {
+      "bytes": 2462,
+      "mode": "0o400",
+      "sha256": "5878dcfec63c8c237aa038665b8ef2b05f6287078653b99b056a9596043973f7"
+    },
+    "source/ux/web/install-icons/wizard-files-192.png": {
+      "bytes": 2723,
+      "mode": "0o400",
+      "sha256": "0996339fabec887165cabf09c19c553fff4ab0cca5f66a33309140cf3117acc7"
+    },
+    "source/ux/web/install-icons/wizard-files.png": {
+      "bytes": 10084,
+      "mode": "0o400",
+      "sha256": "6c1656237ec5b5c0a11cd325f2e14724b666d2df5afd0ebef868e5b7e7bd8d55"
+    },
+    "source/ux/web/install-icons/wizard-monarch-180.png": {
+      "bytes": 3877,
+      "mode": "0o400",
+      "sha256": "f1db9c0615ab6f2a5a2559a2418fbfab22fcdd5f8cda0b4112fadbdae15e73ba"
+    },
+    "source/ux/web/install-icons/wizard-monarch-192.png": {
+      "bytes": 4211,
+      "mode": "0o400",
+      "sha256": "1134dcd1de755054d74a801239a301244b0260478054465979d05fd1d17f54fd"
+    },
+    "source/ux/web/install-icons/wizard-monarch.png": {
+      "bytes": 14799,
+      "mode": "0o400",
+      "sha256": "d1399648a2216cbee9549682a3a3c4e7142ca075955b40983857cea34f43ae2d"
+    },
+    "source/ux/web/install-icons/wizard-music-180.png": {
+      "bytes": 3253,
+      "mode": "0o400",
+      "sha256": "66159789f735103ce1b0a62852c441e0ee8272b9c1208bba5dd4c3a4b94281d1"
+    },
+    "source/ux/web/install-icons/wizard-music-192.png": {
+      "bytes": 3377,
+      "mode": "0o400",
+      "sha256": "1a2cb1785967f837bdbf728673a8edef3fcc6ceed3a347d7b33c6687b1872d11"
+    },
+    "source/ux/web/install-icons/wizard-music.png": {
+      "bytes": 12636,
+      "mode": "0o400",
+      "sha256": "a8b6d63731060843b4ac69446a87b39fe5af1a388a9c69c664e0775954c16767"
+    },
+    "source/ux/web/install-icons/wizard-notes-180.png": {
+      "bytes": 2877,
+      "mode": "0o400",
+      "sha256": "2b1950f6663164701b6da7682987807b12d6f95d638c0fe2b4d95823c25ed20b"
+    },
+    "source/ux/web/install-icons/wizard-notes-192.png": {
+      "bytes": 2967,
+      "mode": "0o400",
+      "sha256": "36cb173a8a1407ec9320ddf7dc1c4b8b1baf237a4c3688290a955cde434b12c3"
+    },
+    "source/ux/web/install-icons/wizard-notes.png": {
+      "bytes": 11396,
+      "mode": "0o400",
+      "sha256": "b09a99a1d9da80b09c53cea8be1359e07a002230b2491e4b58e0f1a02cf64e8e"
+    },
+    "source/ux/web/install-icons/wizard-search-180.png": {
+      "bytes": 3891,
+      "mode": "0o400",
+      "sha256": "65c77042f4a90ff12188384dd444142b9e60a95712acefa054adb2111db7a3e6"
+    },
+    "source/ux/web/install-icons/wizard-search-192.png": {
+      "bytes": 4103,
+      "mode": "0o400",
+      "sha256": "fdb5773f9dae8b66000eb6c5c0e17702a72f80073c3e684ac5619721e98656ec"
+    },
+    "source/ux/web/install-icons/wizard-search.png": {
+      "bytes": 15018,
+      "mode": "0o400",
+      "sha256": "6883152cafacb6190b3f5da26dfce9b7e2ac0fcb93eb8ad6932ce6dfe23463ae"
+    },
+    "source/ux/web/install-icons/wizard-shopping-180.png": {
+      "bytes": 3591,
+      "mode": "0o400",
+      "sha256": "cb283ac26ec65fcde03b658ae26471322f46c9ab4f04745207e8a9b6323e9095"
+    },
+    "source/ux/web/install-icons/wizard-shopping-192.png": {
+      "bytes": 3877,
+      "mode": "0o400",
+      "sha256": "6b83ca42b6b6b0817c2494041d6a6399cdbb7a23a6c98af7c2f45e2107f90bb8"
+    },
+    "source/ux/web/install-icons/wizard-shopping.png": {
+      "bytes": 13813,
+      "mode": "0o400",
+      "sha256": "55a8513e460030dd7f132b0f83bcc8d67e362b86c8a184d47702f0d3e1b653b0"
+    },
+    "source/ux/web/install-icons/wizard-signal-180.png": {
+      "bytes": 5145,
+      "mode": "0o400",
+      "sha256": "9b41dddc3d6ad29b9907853f81404c722614ef01d9f6b034b21f4546834412fe"
+    },
+    "source/ux/web/install-icons/wizard-signal-192.png": {
+      "bytes": 5511,
+      "mode": "0o400",
+      "sha256": "497ff7315926c913075405febdc0c863c30cffb99727160a8006a8229c10df4f"
+    },
+    "source/ux/web/install-icons/wizard-signal.png": {
+      "bytes": 19392,
+      "mode": "0o400",
+      "sha256": "b6c4a9de8934a9380eaa5d9b9aebcb22f353b2338a09c6a29575d9dcb54e6322"
+    },
+    "source/ux/web/install-icons/wizard-simplefin-180.png": {
+      "bytes": 4420,
+      "mode": "0o400",
+      "sha256": "6461be223b8d47d61acdd2abfaf2e4a0bf88c4b17d7024021419b8de70af2d7d"
+    },
+    "source/ux/web/install-icons/wizard-simplefin-192.png": {
+      "bytes": 4745,
+      "mode": "0o400",
+      "sha256": "2797caff2bf4a1e141ff215dfc4d2f87c02f5576bccb87eb6b6edff45f264b80"
+    },
+    "source/ux/web/install-icons/wizard-simplefin.png": {
+      "bytes": 16642,
+      "mode": "0o400",
+      "sha256": "1651ddf46acc21df543149b19b7a439c537fc204c086cea0e100c7e405337266"
+    },
+    "source/ux/web/install-icons/wizard-tinfoil-180.png": {
+      "bytes": 3529,
+      "mode": "0o400",
+      "sha256": "666f4eab5dee95262f23f68e620bfbde11e8f39390afb75299447c799ff199c3"
+    },
+    "source/ux/web/install-icons/wizard-tinfoil-192.png": {
+      "bytes": 3836,
+      "mode": "0o400",
+      "sha256": "13f1f6c76d319448a54aa7079b8a18ced62b42bc9be715c434edbd6ff1c649cb"
+    },
+    "source/ux/web/install-icons/wizard-tinfoil.png": {
+      "bytes": 14180,
+      "mode": "0o400",
+      "sha256": "e86e79702f58a9ff161f17e67e863ba4095d90d7ceab17be067713527c813482"
+    },
+    "source/ux/web/install-icons/wizard-ux-180.png": {
+      "bytes": 3131,
+      "mode": "0o400",
+      "sha256": "2672d8fe220e9669195be5d95e663ed6d70d61088114c7d9340710f43c091836"
+    },
+    "source/ux/web/install-icons/wizard-ux-192.png": {
+      "bytes": 3360,
+      "mode": "0o400",
+      "sha256": "9313ebdc72be73c71ce6ab9915011aded4a351c32e5cd657ca16b8c32f17f5a5"
+    },
+    "source/ux/web/install-icons/wizard-ux.png": {
+      "bytes": 12476,
+      "mode": "0o400",
+      "sha256": "fc22f4d6a198cd1c5d31d6cb89acfd53996b00e2133e9b3ba7b18217b457b00f"
+    },
+    "source/ux/web/install-icons/wizard-youtube-music-180.png": {
+      "bytes": 3862,
+      "mode": "0o400",
+      "sha256": "31d8e1b6c20b7c7649623061c32c83e63ff5499779be8ea34a68d4deb5e39f33"
+    },
+    "source/ux/web/install-icons/wizard-youtube-music-192.png": {
+      "bytes": 4239,
+      "mode": "0o400",
+      "sha256": "14c461eaa0aac4c0e924fcca0767c11d37fd6c7f809a2d012e951ce74764e603"
+    },
+    "source/ux/web/install-icons/wizard-youtube-music.png": {
+      "bytes": 14801,
+      "mode": "0o400",
+      "sha256": "b8a79ebc0a9b1ee003cb935714536c5cd38653a173a76fcd4a08595bd4e7622d"
+    },
+    "source/ux/web/install.css": {
+      "bytes": 1169,
+      "mode": "0o400",
+      "sha256": "fe43717b58f0a2eabaafce7de60b24c4517750c38988af56ea54bafec9494592"
+    },
+    "source/ux/web/install.html": {
+      "bytes": 1349,
+      "mode": "0o400",
+      "sha256": "43b3d27b2612b8df10e5e02857f4a0cca3169241bea0f7b11d55ed36a3c9ad0b"
+    },
+    "source/ux/web/install.js": {
+      "bytes": 3575,
+      "mode": "0o400",
+      "sha256": "47e33aadfa773c7dca701f6188d9114fa6975c2af4954eafe7c7fddaa22af588"
+    },
+    "source/ux/web/kit/README.md": {
+      "bytes": 1825,
+      "mode": "0o400",
+      "sha256": "65bcaeabb6b54436e179e78c92f118cf7c85aada22a07f9c73a4d6cbe8b901c8"
+    },
+    "source/ux/web/kit/controls.css": {
+      "bytes": 3411,
+      "mode": "0o400",
+      "sha256": "dd3f01c7c9f02f19a5d9f342c7a33b11ada5e029c8c54f9d7d34f81eada2caa9"
+    },
+    "source/ux/web/kit/shell-tokens.css": {
+      "bytes": 1714,
+      "mode": "0o400",
+      "sha256": "7a646df6a033334bc9901247a407bafcc028674f8c182a3945411954e114bd2c"
+    },
+    "source/ux/web/kit/wizard-sheet.js": {
+      "bytes": 2758,
+      "mode": "0o400",
+      "sha256": "6062134676fda28ec09419bc14e962b77dce905a0d57b0882d9ec960f67ea167"
+    },
+    "source/ux/web/kit/wizard-tokens.css": {
+      "bytes": 10194,
+      "mode": "0o400",
+      "sha256": "44f0ce329aac5ac647ec35c1e8998ef9efb5259fc107366d38554aa5c305c00a"
+    },
+    "source/ux/web/kit/wizard-ui.css": {
+      "bytes": 14185,
+      "mode": "0o400",
+      "sha256": "610696f6abbacb5d203521be86fbe017437c7099d6cb6f1fe3e737304f344f44"
+    },
+    "source/ux/web/layouts/two-orb/layout.css": {
+      "bytes": 15221,
+      "mode": "0o400",
+      "sha256": "738d7ad8af9ae6f7cb0cb5376af53b83ccd23ef7448828283c059d518ba4fd12"
+    },
+    "source/ux/web/layouts/two-orb/layout.js": {
+      "bytes": 13752,
+      "mode": "0o400",
+      "sha256": "11e0dbde773700425cef1266ed8c8fea01733f490384f2c52e49f97fccbd5f51"
+    },
+    "source/ux/web/live.js": {
+      "bytes": 114825,
+      "mode": "0o400",
+      "sha256": "aed11eb07b7855c1eba200140598dd2bef2d823f9dd3c6a048b600d415e9c119"
+    },
+    "source/ux/web/manifest.webmanifest": {
+      "bytes": 616,
+      "mode": "0o400",
+      "sha256": "e3df3c9edf6fa9e706874d5736ad748d4eda4ffde934670dbc4f82766ffbdc6a"
+    },
+    "source/ux/web/motion/README.md": {
+      "bytes": 3699,
+      "mode": "0o400",
+      "sha256": "5639aa5bf17a5d8e8928fdbace6a98b73b8464c95083717a01e5c74d2406b1c5"
+    },
+    "source/ux/web/motion/demo.js": {
+      "bytes": 2547,
+      "mode": "0o400",
+      "sha256": "b8a92efab45c73e891f9d09650e8ea6098c44c30f4a1cdd450da155f10030899"
+    },
+    "source/ux/web/motion/index.html": {
+      "bytes": 3637,
+      "mode": "0o400",
+      "sha256": "42a21e847160491fb44e288394fa9a3c346ac2e1c34c0f33cd3f85e1a0922c8e"
+    },
+    "source/ux/web/motion/wizard-motion.css": {
+      "bytes": 7758,
+      "mode": "0o400",
+      "sha256": "8c95e8d023dc5184ba52ec2295f424a96029dcd4a0deaa9afc47365e14e4ff90"
+    },
+    "source/ux/web/motion/wizard-motion.js": {
+      "bytes": 11818,
+      "mode": "0o400",
+      "sha256": "29e158f8bdc6216e9355d03dbbec5c45ee2735d598d476a280adfae25176a4a9"
+    },
+    "source/ux/web/orb.js": {
+      "bytes": 13652,
+      "mode": "0o400",
+      "sha256": "0ec05cc4887c8832268b16934b9bc43e19e4bc2404daa33a0139906ec4bcb646"
+    },
+    "source/ux/web/outbox.js": {
+      "bytes": 66832,
+      "mode": "0o400",
+      "sha256": "9a1eed20e0aa3feb16f5df8edb8c373951582959302b65765d807925314b838b"
+    },
+    "source/ux/web/pwa-install.js": {
+      "bytes": 6499,
+      "mode": "0o400",
+      "sha256": "52295214d680996f219b0e319ec9f9cdda805e83de0db970e6338bbb7aa2885d"
+    },
+    "source/ux/web/robert-listening-galaxy.png": {
+      "bytes": 148990,
+      "mode": "0o400",
+      "sha256": "9ccb6cb42cf037ab6114fc8d0107a4e34e55e98e9ac8095b630cb616bfa92cf7"
+    },
+    "source/ux/web/robert-thread-orb.png": {
+      "bytes": 75580,
+      "mode": "0o400",
+      "sha256": "2c8b74e1d7b08747d68464c6cb0332a8e1d9912911dd22eb12c1ca17ef2b118b"
+    },
+    "source/ux/web/setup/index.html": {
+      "bytes": 1685,
+      "mode": "0o400",
+      "sha256": "75bded3d453d961660a26c8d8210b38f73a56a846958e6bf5f1860c07b8d8d67"
+    },
+    "source/ux/web/setup/provenance.json": {
+      "bytes": 1519,
+      "mode": "0o400",
+      "sha256": "e3981d0e99ffa81f1594611eff9a74a12be5613828f73dcebb3c6056e881e65f"
+    },
+    "source/ux/web/setup/recommended.js": {
+      "bytes": 4466,
+      "mode": "0o400",
+      "sha256": "06fafd4f8a4d61d376c99bd780089ce9ddc161b7a9238bb10c79d55780faa6de"
+    },
+    "source/ux/web/setup/setup.css": {
+      "bytes": 10601,
+      "mode": "0o400",
+      "sha256": "29539b8eecca710b24be6f5131b7a4d61734dded5540bdf9c9bd8abddd021723"
+    },
+    "source/ux/web/setup/setup.js": {
+      "bytes": 13072,
+      "mode": "0o400",
+      "sha256": "91090e39f3f95fff9ec64caf14346fdc23b963a93e9adc10ab28cceb8262fed0"
+    },
+    "source/ux/web/setup/vendor/LICENSE-qrcode-generator": {
+      "bytes": 1071,
+      "mode": "0o400",
+      "sha256": "3a850fa5f08101db6f40676c2786e10bd2cd5fff7b12ffdf1e0c434d4e49d90c"
+    },
+    "source/ux/web/setup/vendor/qrcode.js": {
+      "bytes": 56694,
+      "mode": "0o400",
+      "sha256": "79ec86f82856005b1c887905cfccfcfbec3821ca61c7fd5a952faa5f778f791c"
+    },
+    "source/ux/web/skins/README.md": {
+      "bytes": 13629,
+      "mode": "0o400",
+      "sha256": "b3b62dc7284db9b1c8cac6bebddce0832b4b834eb779eb31bdf50840cd462779"
+    },
+    "source/ux/web/skins/landscapes/preview-dark.webp": {
+      "bytes": 2726,
+      "mode": "0o400",
+      "sha256": "6cd69fe6f98b3fe1077453f854bfbd5760a466c2b9b0ba28f7c53abf597f36a1"
+    },
+    "source/ux/web/skins/landscapes/preview.webp": {
+      "bytes": 6172,
+      "mode": "0o400",
+      "sha256": "3f401978c4d8d5ccb6ec66047ace48bc019f599ef8285c8cdc08df04e7063393"
+    },
+    "source/ux/web/skins/landscapes/skin.css": {
+      "bytes": 132252,
+      "mode": "0o400",
+      "sha256": "15432bc8ecdd877c38bfbb440fa25537145b66992365dca0d3c7c33304ddd4ee"
+    },
+    "source/ux/web/skins/landscapes/skin.js": {
+      "bytes": 813,
+      "mode": "0o400",
+      "sha256": "db34c9b15029fc73e8688960a82ec25176c82c47ed33c0f9a71a10b44ed4ad39"
+    },
+    "source/ux/web/skins/novairecito/orb-landscape.jpg": {
+      "bytes": 37219,
+      "mode": "0o400",
+      "sha256": "fd5e3a513a3e723ea0c1fd5a27dd207aa86727fee2a8321a51a0a2b3792fe0cd"
+    },
+    "source/ux/web/skins/novairecito/orb-landscape.mp4": {
+      "bytes": 1139339,
+      "mode": "0o400",
+      "sha256": "66cbcc0feae012935beb528277f767516ea40a3ab8d0adb145771ece1bcefc5d"
+    },
+    "source/ux/web/skins/novairecito/orb-portrait.jpg": {
+      "bytes": 37196,
+      "mode": "0o400",
+      "sha256": "0442e9c29094172a1bd192ffbb2f969b60b28552f3fd7414e94b87e42d899030"
+    },
+    "source/ux/web/skins/novairecito/orb-portrait.mp4": {
+      "bytes": 1127268,
+      "mode": "0o400",
+      "sha256": "a2fcf5edd11cf5e28fe7cb4916fd2062eea6894e9a2e53d7f86c59ee85448dc5"
+    },
+    "source/ux/web/skins/novairecito/skin.css": {
+      "bytes": 4214,
+      "mode": "0o400",
+      "sha256": "e8231f0a217cd8769d727e430d6147fcce228f9f8ae708adcec66761598520ff"
+    },
+    "source/ux/web/skins/novairecito/skin.js": {
+      "bytes": 4702,
+      "mode": "0o400",
+      "sha256": "ea9ed511e6b556cb759d1367a23a652de26ffd9ff9ee721624d0f9d2746dbc74"
+    },
+    "source/ux/web/skins/obsidian/intro.js": {
+      "bytes": 7781,
+      "mode": "0o400",
+      "sha256": "fe8e66c27ee136be53ae34e82f3c85ad367c64b0ce47b353a96c51d8384a4176"
+    },
+    "source/ux/web/skins/obsidian/skin.css": {
+      "bytes": 110308,
+      "mode": "0o400",
+      "sha256": "3c886ad0a70bbe3868d62fa50e159a8b5a56c2e9b4773540621cc3a0702d9547"
+    },
+    "source/ux/web/skins/obsidian/skin.js": {
+      "bytes": 801,
+      "mode": "0o400",
+      "sha256": "c9603264c4bb97bdb6274b70dd8761e7de53daafe7f2e283f4452be1ac7b47f5"
+    },
+    "source/ux/web/skins/sepia/skin.css": {
+      "bytes": 5242,
+      "mode": "0o400",
+      "sha256": "01bd4d3f79c17d2b804fc229485007a30b5e2a8591701806585d3e6f80865c6a"
+    },
+    "source/ux/web/store/LICENSE": {
+      "bytes": 35149,
+      "mode": "0o400",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    "source/ux/web/store/boot.js": {
+      "bytes": 192,
+      "mode": "0o400",
+      "sha256": "b100227fe30756b4aebd09fc7ee312df63c819e051128bdc847d501b0ffc4f1a"
+    },
+    "source/ux/web/store/index.html": {
+      "bytes": 1868,
+      "mode": "0o400",
+      "sha256": "3c369a6b8ddf84b47005c98538f8a4f6acf1a7172918d7038d79d388bc2052ac"
+    },
+    "source/ux/web/store/install-link.js": {
+      "bytes": 2365,
+      "mode": "0o400",
+      "sha256": "42a1bb057aabe617b76b0ffc2d6584484d91e99d0c3cbc0690425e7272377d94"
+    },
+    "source/ux/web/store/provenance.json": {
+      "bytes": 2112,
+      "mode": "0o400",
+      "sha256": "d50ee1c941cb03e910244f5adb04301d0e3acc6c9d7a8706a3f5c3b160f00ac3"
+    },
+    "source/ux/web/store/store-appearance.js": {
+      "bytes": 1938,
+      "mode": "0o400",
+      "sha256": "28a89520e63685199af2934a766436eba12f1a8213c0a1789eecaf3e3825c7dd"
+    },
+    "source/ux/web/store/store-install-result.js": {
+      "bytes": 590,
+      "mode": "0o400",
+      "sha256": "e827948791a0f6b97a4c98f8518f02e86a7103964fbbae10d4e0c81252ea885c"
+    },
+    "source/ux/web/store/store-install.js": {
+      "bytes": 1636,
+      "mode": "0o400",
+      "sha256": "94f662ea9902dbc89004bd74ff8a6eefc4d392df8777371cae08eca5ae2ac46f"
+    },
+    "source/ux/web/store/store-remove.js": {
+      "bytes": 5849,
+      "mode": "0o400",
+      "sha256": "2c39bd78b1e5a5de658aa58cf504822cc9333c2b1e0b97afa8d1b2bcd3dd75c5"
+    },
+    "source/ux/web/store/store-router.js": {
+      "bytes": 8196,
+      "mode": "0o400",
+      "sha256": "6ef849542d2897665a4c28d1600bbe2cb1df75909c0a1d955a611a2334c4f9c1"
+    },
+    "source/ux/web/store/store-source.js": {
+      "bytes": 1655,
+      "mode": "0o400",
+      "sha256": "57eab7f0403d507b4bb2cd5a82b042d9f8e47ce6b8e017d14ef9b04ac889648d"
+    },
+    "source/ux/web/store/store-status.js": {
+      "bytes": 6811,
+      "mode": "0o400",
+      "sha256": "bcc6bc38c08ba55e638ebd177d3cd509b485a9b948094039ca6e0be930717931"
+    },
+    "source/ux/web/store/store.css": {
+      "bytes": 16252,
+      "mode": "0o400",
+      "sha256": "c8e61d9072889e55db725c3d91bfe519898d1e63ec9c37f06b4b41e8e09ab827"
+    },
+    "source/ux/web/store/store.js": {
+      "bytes": 42315,
+      "mode": "0o400",
+      "sha256": "a31c6bff5a3bed054b963473a8712c5ceb55ff2268e54c6ef8361dd39a2fb1ca"
+    },
+    "source/ux/web/styles.css": {
+      "bytes": 85503,
+      "mode": "0o400",
+      "sha256": "d943fa56ff8c181790bda9ee818694eeca4b443931f46557413d8b4a305ae01a"
+    },
+    "source/ux/web/sw.js": {
+      "bytes": 7604,
+      "mode": "0o400",
+      "sha256": "38688a101a49800f11c6d32661216a20d8bb07112291361f2c715f553936f627"
+    },
+    "source/ux/web/tweaks/catalog.json": {
+      "bytes": 709,
+      "mode": "0o400",
+      "sha256": "a655e6c243504e8d8f11a5b12d410ecbd23fca1cf56c5f803015487bf0edcccd"
+    },
+    "source/ux/web/tweaks/miguel/arrange-download/contract.mjs": {
+      "bytes": 411,
+      "mode": "0o400",
+      "sha256": "a24be76bc138ec57966f43a9a5ad4e7d840142d010063d6175064a51f31182fb"
+    },
+    "source/ux/web/tweaks/miguel/arrange-download/manifest.json": {
+      "bytes": 303,
+      "mode": "0o400",
+      "sha256": "b7de60232378497b5424d6202e7b983f311bef811a305d0abfd40b04699a93ce"
+    },
+    "source/ux/web/tweaks/miguel/arrange-download/tweak.css": {
+      "bytes": 2177,
+      "mode": "0o400",
+      "sha256": "c8e2497fcabae2b2c6736dd4397b02eec31e8a7e3a0978f531bd87237e8fcefe"
+    },
+    "source/ux/web/tweaks/miguel/arrange-download/tweak.js": {
+      "bytes": 218,
+      "mode": "0o400",
+      "sha256": "b323ffabad49c2daff95080ac8b131764b3db9facca7609ef2b53f5cc25219df"
+    },
+    "source/ux/web/tweaks/miguel/hidden-pin/contract.mjs": {
+      "bytes": 230,
+      "mode": "0o400",
+      "sha256": "d4fc9bf341310bcf61f5ed6beac5307260741b5834a270e553ef592f4bcab142"
+    },
+    "source/ux/web/tweaks/miguel/hidden-pin/manifest.json": {
+      "bytes": 217,
+      "mode": "0o400",
+      "sha256": "415419ac46a4bf012e401c83f61d81536e140591e33e982ad0f6afb00eaafea9"
+    },
+    "source/ux/web/tweaks/miguel/hidden-pin/tweak.css": {
+      "bytes": 551,
+      "mode": "0o400",
+      "sha256": "90898efc6abf9b322485c29b280279b46a8d11f3b74c6b037b7c48313eadceb3"
+    },
+    "source/ux/web/tweaks/miguel/hidden-pin/tweak.js": {
+      "bytes": 127,
+      "mode": "0o400",
+      "sha256": "71e91e4853e02ea006ea840a63b1ed0a07a8d524a23d762686c6ea43d13f9b42"
+    },
+    "source/ux/web/tweaks/miguel/machines-home/contract.mjs": {
+      "bytes": 489,
+      "mode": "0o400",
+      "sha256": "0b0570f249fceba7942e14a1ec8fa1cc579d1dd24ff330aa424adfa0558409bd"
+    },
+    "source/ux/web/tweaks/miguel/machines-home/manifest.json": {
+      "bytes": 422,
+      "mode": "0o400",
+      "sha256": "56c43c407342df74747be9bc58d033c5cddc407f3db4c7e6e758646234a9a055"
+    },
+    "source/ux/web/tweaks/miguel/machines-home/tweak.css": {
+      "bytes": 62980,
+      "mode": "0o400",
+      "sha256": "0e548e2e097769f690e5bdb64c0d1fb2bc2112fe0ee73d8e43c090e4f8554663"
+    },
+    "source/ux/web/tweaks/miguel/machines-home/tweak.js": {
+      "bytes": 76821,
+      "mode": "0o400",
+      "sha256": "c4f4db3963697098051346fb321420abdaf0a7c9cb13c8157537275895c3879f"
+    },
+    "source/ux/web/tweaks/miguel/model-pills/contract.mjs": {
+      "bytes": 521,
+      "mode": "0o400",
+      "sha256": "5a556d5a826801a6d4da819555b34d5a1be761f4cc5c2e50bfa563874fcaf742"
+    },
+    "source/ux/web/tweaks/miguel/model-pills/manifest.json": {
+      "bytes": 301,
+      "mode": "0o400",
+      "sha256": "10e6aea8fba0683c4989f82b96d6e18c6be946c759e003f0546ac9a7daee32b1"
+    },
+    "source/ux/web/tweaks/miguel/model-pills/tweak.css": {
+      "bytes": 102,
+      "mode": "0o400",
+      "sha256": "a594be6063cccb3e3924328a7c4b49b8d48cbcf615a4bc56686335e6687600e3"
+    },
+    "source/ux/web/tweaks/miguel/model-pills/tweak.js": {
+      "bytes": 749,
+      "mode": "0o400",
+      "sha256": "f8a09194eaefe9efe195f8084a1d0492742a5f59493cc4b735f4efeb01a81c12"
+    },
+    "source/ux/web/tweaks/miguel/profile.json": {
+      "bytes": 407,
+      "mode": "0o400",
+      "sha256": "986222e59b4edc7a3b44766eaf0fe105df4f310c96059a3116908133eef65f39"
+    },
+    "source/ux/web/tweaks/miguel/refresh-button/contract.mjs": {
+      "bytes": 336,
+      "mode": "0o400",
+      "sha256": "50d5dbc0143234e6a6d285b36e6bf18a0e9559c07b53ccac41a7e0e30701faf2"
+    },
+    "source/ux/web/tweaks/miguel/refresh-button/manifest.json": {
+      "bytes": 316,
+      "mode": "0o400",
+      "sha256": "e6456b5411720fd8780737201e63db075797925fb4ea4c81b14cdbb5e882e463"
+    },
+    "source/ux/web/tweaks/miguel/refresh-button/tweak.css": {
+      "bytes": 702,
+      "mode": "0o400",
+      "sha256": "77da0c3b8afec31b19d1ea73253742fe89da19674f315daf63eb644e47a74d6c"
+    },
+    "source/ux/web/tweaks/miguel/refresh-button/tweak.js": {
+      "bytes": 198,
+      "mode": "0o400",
+      "sha256": "fe4c146edba1b208d5da98fa38ebf0d37f6541ec953ef2c3bce7f38e92d22612"
+    },
+    "source/ux/web/tweaks/miguel/send-and-go/contract.mjs": {
+      "bytes": 235,
+      "mode": "0o400",
+      "sha256": "2db84d8982f052c46ae27691597807ff245edb4024f712ebf994d87146c0e1cf"
+    },
+    "source/ux/web/tweaks/miguel/send-and-go/manifest.json": {
+      "bytes": 215,
+      "mode": "0o400",
+      "sha256": "793aa11b0fe0eef6595945528e319d71b3f22cb4adeaa887abfe4bb6ffc5d344"
+    },
+    "source/ux/web/tweaks/miguel/send-and-go/tweak.css": {
+      "bytes": 34,
+      "mode": "0o400",
+      "sha256": "775eda07355c10edf59cf09e7c8e171e7b01f23dae7ea501e19ad25068997495"
+    },
+    "source/ux/web/tweaks/miguel/send-and-go/tweak.js": {
+      "bytes": 204,
+      "mode": "0o400",
+      "sha256": "3a1a5cbdaf6bd576362ed54bd96999765cc47a433a498b5effc2f3feeeaa97ea"
+    },
+    "source/ux/web/tweaks/miguel/snooze-someday/contract.mjs": {
+      "bytes": 389,
+      "mode": "0o400",
+      "sha256": "66f4d0fe15cc88da2d182eda25027d1de6f30caada186b24764715d3e6ad0c8a"
+    },
+    "source/ux/web/tweaks/miguel/snooze-someday/manifest.json": {
+      "bytes": 333,
+      "mode": "0o400",
+      "sha256": "5d898120b8a714146aa736c59f120d96d0fecdee248a5735bf0e153f56388228"
+    },
+    "source/ux/web/tweaks/miguel/snooze-someday/tweak.css": {
+      "bytes": 558,
+      "mode": "0o400",
+      "sha256": "6672c328928dffcbcb4022a578de0b13352444ba6b8ca37858113ccb75f38565"
+    },
+    "source/ux/web/tweaks/miguel/snooze-someday/tweak.js": {
+      "bytes": 394,
+      "mode": "0o400",
+      "sha256": "c00d86b466846c3a8f9047602f6708a5f72cd33a69ed69cb48f1cf8f53db1176"
+    },
+    "source/ux/web/tweaks/miguel/swipe-strip/contract.mjs": {
+      "bytes": 210,
+      "mode": "0o400",
+      "sha256": "800beca9012d5214dbb3067126fdc78cd05bbc5701981334f90ccceb026c6cb2"
+    },
+    "source/ux/web/tweaks/miguel/swipe-strip/manifest.json": {
+      "bytes": 225,
+      "mode": "0o400",
+      "sha256": "bcb98cb080ee0a640f607055bddeea1b80cfb19423ee043e633e38a3e26453e1"
+    },
+    "source/ux/web/tweaks/miguel/swipe-strip/tweak.css": {
+      "bytes": 34,
+      "mode": "0o400",
+      "sha256": "775eda07355c10edf59cf09e7c8e171e7b01f23dae7ea501e19ad25068997495"
+    },
+    "source/ux/web/tweaks/miguel/swipe-strip/tweak.js": {
+      "bytes": 1827,
+      "mode": "0o400",
+      "sha256": "ae67d1786d5be0c3233c9de1df9d9477ccd9ac24773ccbda825098a654aed813"
+    },
+    "source/ux/web/tweaks/novaire/profile.json": {
+      "bytes": 82,
+      "mode": "0o400",
+      "sha256": "749d316726548632bfcb2854dac46508ab59a538c95079b506695b796fca8512"
+    },
+    "source/ux/web/tweaks/wizard/app-borders/contract.mjs": {
+      "bytes": 237,
+      "mode": "0o400",
+      "sha256": "32bad8435b1d07bf46c87bac80faa8a0bdbe83c0d372172b956008254376dd1d"
+    },
+    "source/ux/web/tweaks/wizard/app-borders/manifest.json": {
+      "bytes": 194,
+      "mode": "0o400",
+      "sha256": "42aef2027a78d35974f0b9c765af1c89a672eb6ad762345b314e205e829c2d8b"
+    },
+    "source/ux/web/tweaks/wizard/app-borders/tweak.css": {
+      "bytes": 56,
+      "mode": "0o400",
+      "sha256": "1c6550783a6759f253787a51991b083af4cf953cccd4ab5c5d60079e3e5a0cdb"
+    },
+    "source/ux/web/tweaks/wizard/app-borders/tweak.js": {
+      "bytes": 155,
+      "mode": "0o400",
+      "sha256": "a76184b1154779c8435d574a79a7204e032d4665278e159b11739d818cad018e"
+    },
+    "source/ux/web/tweaks/wizard/orb-radial/contract.mjs": {
+      "bytes": 284,
+      "mode": "0o400",
+      "sha256": "57e7adec04e9e3da5e4896598e40aba51038845215905a967b798ccc80432841"
+    },
+    "source/ux/web/tweaks/wizard/orb-radial/manifest.json": {
+      "bytes": 342,
+      "mode": "0o400",
+      "sha256": "dc0f169816daceceb2c54f6b1f39bf209fce2b239360eade9b8bb11ac1b31999"
+    },
+    "source/ux/web/tweaks/wizard/orb-radial/tweak.css": {
+      "bytes": 12609,
+      "mode": "0o400",
+      "sha256": "3637e7d06aa14b4fee461f72dd7180ff572591cffdce2d45726eb3269f6db20f"
+    },
+    "source/ux/web/tweaks/wizard/orb-radial/tweak.js": {
+      "bytes": 145,
+      "mode": "0o400",
+      "sha256": "93ed37a221eeb7285ec02953f0e8336ceeb2ac912b51b13c5ad0a09e25d80bfa"
+    },
+    "source/ux/web/tweaks/wizard/pin-buttons/contract.mjs": {
+      "bytes": 231,
+      "mode": "0o400",
+      "sha256": "a549c0dacfb8848b66e09e0d9bd96deb0c4c436fe914f125eba556bc309c2055"
+    },
+    "source/ux/web/tweaks/wizard/pin-buttons/manifest.json": {
+      "bytes": 219,
+      "mode": "0o400",
+      "sha256": "6c550b1f7c21735dd4038525fbb32ee1a0d4b8d3fa3f815f9bb7c8302f798a6b"
+    },
+    "source/ux/web/tweaks/wizard/pin-buttons/tweak.css": {
+      "bytes": 437,
+      "mode": "0o400",
+      "sha256": "d4506a27129e49d7c3c49208b462226480a91fe80757f80e27c7cc57ae3391da"
+    },
+    "source/ux/web/tweaks/wizard/pin-buttons/tweak.js": {
+      "bytes": 127,
+      "mode": "0o400",
+      "sha256": "71e91e4853e02ea006ea840a63b1ed0a07a8d524a23d762686c6ea43d13f9b42"
+    },
+    "source/ux/web/tweaks/wizard/profile.json": {
+      "bytes": 244,
+      "mode": "0o400",
+      "sha256": "edf7158f84a3d58e77de0e29580414deba9a3c81ae8fff2e7f071f88897cd899"
+    },
+    "source/ux/web/tweaks/wizard/two-orbs/contract.mjs": {
+      "bytes": 252,
+      "mode": "0o400",
+      "sha256": "2d65a0dacdec69e3db9b8d9c12ef3f03cd5237b6c91ded4988e0358855c2061a"
+    },
+    "source/ux/web/tweaks/wizard/two-orbs/manifest.json": {
+      "bytes": 238,
+      "mode": "0o400",
+      "sha256": "c569249d92abf04c4dbf043c4e49d6785e5326d5377243dcf1a0c10150c8761d"
+    },
+    "source/ux/web/tweaks/wizard/two-orbs/tweak.css": {
+      "bytes": 552,
+      "mode": "0o400",
+      "sha256": "a01018cbf4dfed2218c8c495eb232a5896e7c18ee429f4e431654262fb379b1d"
+    },
+    "source/ux/web/tweaks/wizard/two-orbs/tweak.js": {
+      "bytes": 160,
+      "mode": "0o400",
+      "sha256": "cd8a01920049cbe087141d4440a170aac7f72e651c9282abf8180d2339e582d7"
+    },
+    "source/ux/web/tweaks/wizard/unified-inbox/contract.mjs": {
+      "bytes": 3169,
+      "mode": "0o400",
+      "sha256": "b41b1d93719a5c1a0c6ad7d11d8517d1a95b43b06153e9f16effb174bc111b27"
+    },
+    "source/ux/web/tweaks/wizard/unified-inbox/manifest.json": {
+      "bytes": 437,
+      "mode": "0o400",
+      "sha256": "e049c0d23ce6cc3b30cd99181779a0cc97a7f6804628f2531e0427f657a1f3dd"
+    },
+    "source/ux/web/tweaks/wizard/unified-inbox/tweak.css": {
+      "bytes": 4361,
+      "mode": "0o400",
+      "sha256": "d5fe64edebec74659d781897187e0a92f164286b048a431d419e5defc5cb2af5"
+    },
+    "source/ux/web/tweaks/wizard/unified-inbox/tweak.js": {
+      "bytes": 5132,
+      "mode": "0o400",
+      "sha256": "cd50ba122c61a84ff8c876e20380da63e55381cb89d0f4e8d50fd8525f341edd"
+    },
+    "source/wisdom/.github/workflows/image.yml": {
+      "bytes": 693,
+      "mode": "0o400",
+      "sha256": "4bee76e867e649d6c7cc4d29cc1627673a63e64d629ec08fc04885435c40bebe"
+    },
+    "source/wisdom/.github/workflows/reuse-check.yml": {
+      "bytes": 304,
+      "mode": "0o400",
+      "sha256": "584aa1d98183cd05d80386a964956a6cca6180a974188ac08aa439f15d32d09f"
+    },
+    "source/wisdom/.gitignore": {
+      "bytes": 65,
+      "mode": "0o400",
+      "sha256": "6df97fc0cfd0a379e8acec78143ed31f9b6d2e543acc2f67707f15452dc70b84"
+    },
+    "source/wisdom/ASK-AI-PLAN.md": {
+      "bytes": 4557,
+      "mode": "0o400",
+      "sha256": "cdddddd505e547000fe985d35ed01c91c412c645dc50073e5595b4e66df74c9f"
+    },
+    "source/wisdom/COMPONENTS.md": {
+      "bytes": 827,
+      "mode": "0o400",
+      "sha256": "6f823e5aadc9ac940f7b9ff7021273ca8ec8547a9924e381bc5361f45bcd103f"
+    },
+    "source/wisdom/Dockerfile": {
+      "bytes": 1799,
+      "mode": "0o400",
+      "sha256": "f10a23b3c0cf50b9ebfe279d8748be9422cf93cd24dd569b30b5eec9ecad718b"
+    },
+    "source/wisdom/LICENSE": {
+      "bytes": 1293,
+      "mode": "0o400",
+      "sha256": "e9a6b9a5da33696b900142743bb91620a9df2e0a745c781d3edf9071803d4510"
+    },
+    "source/wisdom/README.md": {
+      "bytes": 4712,
+      "mode": "0o400",
+      "sha256": "cea4b53dbb6b8a73f0221f78ce54b266e36ad9ca9b86322f882e681d6bd6add9"
+    },
+    "source/wisdom/SOURCE-RECEIPT.json": {
+      "bytes": 3817,
+      "mode": "0o400",
+      "sha256": "85698d17ccead74066fbf6a2746e68eae7acef900eb1b66c2a85380c4378ec53"
+    },
+    "source/wisdom/authoring/collection-rules.md": {
+      "bytes": 12083,
+      "mode": "0o400",
+      "sha256": "f913252c20f6d67ebf5ad21cfcdd87b06a36d28b22559ef9442d1e12b6dbf323"
+    },
+    "source/wisdom/authoring/form-prompts.json": {
+      "bytes": 2455,
+      "mode": "0o400",
+      "sha256": "86e27733d9ba4304c28cd713f25bdc2931e875012db8721fb34d6e88ae18700f"
+    },
+    "source/wisdom/authoring/prompt.md": {
+      "bytes": 2336,
+      "mode": "0o400",
+      "sha256": "633f07aa6959500f7dada8759669926d4b4cf0dc5d814660f8e3e9640cf230e5"
+    },
+    "source/wisdom/authoring/workflow.json": {
+      "bytes": 566,
+      "mode": "0o400",
+      "sha256": "c79e40c8ecc98a636a8b05e67e15cfd40be136a6fbdd56807db2da5ceeffb8f6"
+    },
+    "source/wisdom/authoring_admission.py": {
+      "bytes": 14750,
+      "mode": "0o400",
+      "sha256": "26b9f2d26266e81204ad72869aad117ee3668559ce7d29d13206270b07ab459a"
+    },
+    "source/wisdom/authoring_contract.py": {
+      "bytes": 12242,
+      "mode": "0o400",
+      "sha256": "b7aeba1ab3fbbe3a233edb44b937483e3b6d55246d0562edcbbb79c58ff5f3c7"
+    },
+    "source/wisdom/authoring_toolkit.py": {
+      "bytes": 3583,
+      "mode": "0o400",
+      "sha256": "465a507990843fd35420978f3344913470036e5ad065a47c91d12ae8e7f08d80"
+    },
+    "source/wisdom/collection_export.py": {
+      "bytes": 8348,
+      "mode": "0o400",
+      "sha256": "a8ae34c222ce2c8e899c933eacd076f7a0b02b26711450a9ab48d8aeb91ad199"
+    },
+    "source/wisdom/collection_revision.py": {
+      "bytes": 12082,
+      "mode": "0o400",
+      "sha256": "8f982638825372755343c2f20b1181914c65abf49c3a68fd0e56dc40fa76426e"
+    },
+    "source/wisdom/discussions.py": {
+      "bytes": 27104,
+      "mode": "0o400",
+      "sha256": "e37924bc0c4d6d4d7bd95dd2031809d8db88d950460aba5cda4c683ee4eca9a3"
+    },
+    "source/wisdom/docs/OFFLINE.md": {
+      "bytes": 3261,
+      "mode": "0o400",
+      "sha256": "f405bc3e13d7f7b9130854efa0842995bc7936e91c158f801b6b7b037fd46782"
+    },
+    "source/wisdom/docs/authoring/COLLECTION-RULES.md": {
+      "bytes": 5603,
+      "mode": "0o400",
+      "sha256": "4a16e43e43863856d3b0aa0fde9462154cdfe375b92e5baaed719797254db69a"
+    },
+    "source/wisdom/docs/authoring/PERSONALIZATION.md": {
+      "bytes": 15333,
+      "mode": "0o400",
+      "sha256": "6621b9c61d9b37c15af69a234efc1e7bd9e4b507ffaba49337f8682d82672330"
+    },
+    "source/wisdom/docs/authoring/PINNED-WORKFLOW.md": {
+      "bytes": 19621,
+      "mode": "0o400",
+      "sha256": "02eb9b1fcf4a555e8cbebe8c8d62a7ff7922c7765b7574d5b829bac0e6ddc79e"
+    },
+    "source/wisdom/docs/authoring/README.md": {
+      "bytes": 6022,
+      "mode": "0o400",
+      "sha256": "0f9cfb0efe201ff78e1e9421e6b15da28119e3ef52e1be13a0c79962dced3c93"
+    },
+    "source/wisdom/docs/authoring/SHARED-THINKERS.md": {
+      "bytes": 2713,
+      "mode": "0o400",
+      "sha256": "fbbe681bb7aa6644d18bc790f7a5016047eeaf7bcfda83475909f3abba6bc04c"
+    },
+    "source/wisdom/docs/collection-discovery.md": {
+      "bytes": 3322,
+      "mode": "0o400",
+      "sha256": "b9a3d689c33365f3879dca658022067f3d6e672e0255189c4e564c90456921fc"
+    },
+    "source/wisdom/docs/connection-router.md": {
+      "bytes": 3098,
+      "mode": "0o400",
+      "sha256": "60fffe21fafaa8ba70242a14a0cca8f1a4791fa54ae50c465078f3892dedd51c"
+    },
+    "source/wisdom/docs/cross-page-highlights.md": {
+      "bytes": 3462,
+      "mode": "0o400",
+      "sha256": "3507cea9613f1b3dc5169413fa3d0758a67d5ed32dc4250f391dd55d182617d2"
+    },
+    "source/wisdom/docs/discussion-routing.md": {
+      "bytes": 482,
+      "mode": "0o400",
+      "sha256": "5e6a43ecbe2879776a89fe18892a8dc1006e55a6ba0fecd51a273c0b2d7e3573"
+    },
+    "source/wisdom/docs/discussions.md": {
+      "bytes": 7665,
+      "mode": "0o400",
+      "sha256": "f4788b11c342a53b2b50a14ea514c29acc183cdc43f075421b813deb3cf948c4"
+    },
+    "source/wisdom/docs/epigraph-attribution.md": {
+      "bytes": 1363,
+      "mode": "0o400",
+      "sha256": "6898bc27fb4e3ecda5a4ff2888b21ec87de79a38debcd40901301dff44b450df"
+    },
+    "source/wisdom/docs/highlight-history.md": {
+      "bytes": 5260,
+      "mode": "0o400",
+      "sha256": "bc1144cdee7c31d58ef37fbc009367392348913f2b99d05d46a13bb76ad3c06f"
+    },
+    "source/wisdom/docs/home-continue.md": {
+      "bytes": 2803,
+      "mode": "0o400",
+      "sha256": "538e50763a8327f081a3abc574853389c2203a0b617b235a3790072d636d0bc3"
+    },
+    "source/wisdom/docs/immediate-discussion-recovery.md": {
+      "bytes": 7630,
+      "mode": "0o400",
+      "sha256": "dec31725427abd8ab3c7aa6ece53e9e115fb22fb863f7ef433a18a6a40f16366"
+    },
+    "source/wisdom/docs/library-shelves.md": {
+      "bytes": 7054,
+      "mode": "0o400",
+      "sha256": "5b5aecc28b8afb7978ea8fbbefa5cc34d85d4a9ecb1e68ebdac7d282eb89c5c0"
+    },
+    "source/wisdom/docs/lookup.md": {
+      "bytes": 7192,
+      "mode": "0o400",
+      "sha256": "d4b5c2272792d8b29ec4cc77b0bad4d86c0a827bfba89dac36f3a660d6313394"
+    },
+    "source/wisdom/docs/notes.md": {
+      "bytes": 2111,
+      "mode": "0o400",
+      "sha256": "4d03b73b4aef86ca783ec6e7b297cba0d353270944c9019e68b233f31591eedb"
+    },
+    "source/wisdom/docs/pinned-reading-durability.md": {
+      "bytes": 1365,
+      "mode": "0o400",
+      "sha256": "04579adc4d252d791a81a0febaa9f9fe0f7cbb65954776a8e48fe1538929be43"
+    },
+    "source/wisdom/docs/quiet-offline-status.md": {
+      "bytes": 2488,
+      "mode": "0o400",
+      "sha256": "2fc6fce6285b5091a326ab08f097c9b371e55f5d6e56ebf059ddaab05aee84bc"
+    },
+    "source/wisdom/library.py": {
+      "bytes": 23165,
+      "mode": "0o400",
+      "sha256": "f43f18ceeac6f90898714af96e7d1d61f6c31e927c44db153cba1947ecf749b1"
+    },
+    "source/wisdom/lookup.py": {
+      "bytes": 8471,
+      "mode": "0o400",
+      "sha256": "e040b3edd91c7902b797a00079525b17bbdc9842bf196e1e92409b3131f7c838"
+    },
+    "source/wisdom/mcp_api.py": {
+      "bytes": 8994,
+      "mode": "0o400",
+      "sha256": "e76f881d632eaa73cdb78626370f00dcb465ec54c77f31685a7762f4829f616b"
+    },
+    "source/wisdom/model_router.py": {
+      "bytes": 5578,
+      "mode": "0o400",
+      "sha256": "fc9022faf4b843bbfb5bdd3aafb1c9ffeee52c0ca183aa3befd9c0828770938a"
+    },
+    "source/wisdom/openapi.json": {
+      "bytes": 24184,
+      "mode": "0o400",
+      "sha256": "87b1718a89be512a4bf99eade1e16939bb62cf6393f88810ab064a5f80e7adbc"
+    },
+    "source/wisdom/qa/READER-FONT-SETTLEMENT.md": {
+      "bytes": 2973,
+      "mode": "0o400",
+      "sha256": "1e918ca5f65c7282c367c105c634cd74b0fe3ffdc8207fbb56b6c95ea0762f37"
+    },
+    "source/wisdom/qa/authoring_fixture.py": {
+      "bytes": 4492,
+      "mode": "0o400",
+      "sha256": "72fc2c6c1bcd7248d0871bd859110402841680749e5df6e2a1b44ff4ff072be6"
+    },
+    "source/wisdom/qa/browser_chapter_end.cjs": {
+      "bytes": 8820,
+      "mode": "0o400",
+      "sha256": "35b0d99bbd37be5405b3fdf36eac65e7b52f2c76eaebf412b21d4048df6671bc"
+    },
+    "source/wisdom/qa/browser_collection_hero_room.cjs": {
+      "bytes": 3990,
+      "mode": "0o400",
+      "sha256": "c4a6f704f7f1516f841f63c042a16d144194292ab4e30fc6f4dadc93b5fbc647"
+    },
+    "source/wisdom/qa/browser_collection_start.cjs": {
+      "bytes": 4434,
+      "mode": "0o400",
+      "sha256": "2335d5d38b8da6166e598ad0433721dbb28c796c72c60ca1a06228346256fbb0"
+    },
+    "source/wisdom/qa/browser_continue.cjs": {
+      "bytes": 6397,
+      "mode": "0o400",
+      "sha256": "6da8d85271ffc632356a91822dd6c10c3a6175b540fbacbf25084cf492e7c0d6"
+    },
+    "source/wisdom/qa/browser_copy_popups.cjs": {
+      "bytes": 6575,
+      "mode": "0o400",
+      "sha256": "6596680ac4990732e9036914768e831edba597e31949e25e588a83c794ce3f2e"
+    },
+    "source/wisdom/qa/browser_cross_page.cjs": {
+      "bytes": 12866,
+      "mode": "0o400",
+      "sha256": "1c07fc5b83e05579fd861d38211d17f3093bf952fce2cb4e441eb26af15b6cbe"
+    },
+    "source/wisdom/qa/browser_desktop_minimal.cjs": {
+      "bytes": 4271,
+      "mode": "0o400",
+      "sha256": "3544b98293e190c8bd4cf5e7cf1b9d78635d851f5cc8b3270b5d5ab0865bc420"
+    },
+    "source/wisdom/qa/browser_desktop_mouse.cjs": {
+      "bytes": 9059,
+      "mode": "0o400",
+      "sha256": "7c08471de85911393ae1c1ea462a26943ebcd27e78c08f558783d9c53967d7c1"
+    },
+    "source/wisdom/qa/browser_epigraph.cjs": {
+      "bytes": 8257,
+      "mode": "0o400",
+      "sha256": "774b18c8d3c01db680225927834c9b438b4182f65d93b6247d7f1e43b7dd7470"
+    },
+    "source/wisdom/qa/browser_epigraph_author.cjs": {
+      "bytes": 3813,
+      "mode": "0o400",
+      "sha256": "34bc84a0ac5bc5926df3c2993a121418ae107023d76dbaa6924f9cbc4634eff6"
+    },
+    "source/wisdom/qa/browser_epigraph_fixture.py": {
+      "bytes": 2279,
+      "mode": "0o400",
+      "sha256": "2e7f541564c51dee8570886166594bfe106596eedf135a31fc3b2bd7677ae4f3"
+    },
+    "source/wisdom/qa/browser_fixture.py": {
+      "bytes": 2133,
+      "mode": "0o400",
+      "sha256": "b3eba71f8b0cd0e5327ad90d809641b41cc00bc7b9348679149db74b83f4b3d9"
+    },
+    "source/wisdom/qa/browser_gloss_dropcap.cjs": {
+      "bytes": 6751,
+      "mode": "0o400",
+      "sha256": "8c6e9dea16bfc519df3762f8ee1ea1841b744ebdc3de94e32fd684ba268e1fb2"
+    },
+    "source/wisdom/qa/browser_gloss_fixture.py": {
+      "bytes": 2169,
+      "mode": "0o400",
+      "sha256": "afb5f19d8d0e6bb9522ef00f3887eb76825a917e21d0fb3d70ced7bbc4e9a4e3"
+    },
+    "source/wisdom/qa/browser_go_deeper_live.cjs": {
+      "bytes": 4327,
+      "mode": "0o400",
+      "sha256": "2c6b7c9f2d2737b2d07a3f6376d21ba876fe5b3049bfd9d3cc3c4a4258d3b44f"
+    },
+    "source/wisdom/qa/browser_history.cjs": {
+      "bytes": 7311,
+      "mode": "0o400",
+      "sha256": "37b49f59a9351c87538f9dcd9771562f879b485eb7c9a8efc8c17f4fc7fb5ec9"
+    },
+    "source/wisdom/qa/browser_history_fixture.py": {
+      "bytes": 3139,
+      "mode": "0o400",
+      "sha256": "9cb3ff2335f6bf76728a8725fb39897d78a308910cfefa78979a5f88bde7dfeb"
+    },
+    "source/wisdom/qa/browser_home.cjs": {
+      "bytes": 8190,
+      "mode": "0o400",
+      "sha256": "d5bd87ea388bd92b7bdf578415fa6e5becd77d68003afa3ff93ba669dc89bbd7"
+    },
+    "source/wisdom/qa/browser_lookup.cjs": {
+      "bytes": 5906,
+      "mode": "0o400",
+      "sha256": "23570741b366fbc271f8ff3c9a73e1c3d9c2c9be36d061fbde20045d51a72f14"
+    },
+    "source/wisdom/qa/browser_lookup_fixture.py": {
+      "bytes": 4029,
+      "mode": "0o400",
+      "sha256": "e79af24e6fa6ae2da2c970c01e624af28e8f862bc3eda59e1b1e3a7bb324bd5c"
+    },
+    "source/wisdom/qa/browser_notes.cjs": {
+      "bytes": 10198,
+      "mode": "0o400",
+      "sha256": "6a6d19edcf7be5a7f66cf6760bb49d3c76966f07080b3a19da878cd33db5afd5"
+    },
+    "source/wisdom/qa/browser_opener.cjs": {
+      "bytes": 7381,
+      "mode": "0o400",
+      "sha256": "e019498058b882f6b546cb8128e965b5c9f4ae9508feece88f553fc650a68823"
+    },
+    "source/wisdom/qa/browser_ratings.cjs": {
+      "bytes": 5176,
+      "mode": "0o400",
+      "sha256": "3e235e7023306a0c76148707c29c846b646e0f7e70cc88a72cf5c984a36a9ac5"
+    },
+    "source/wisdom/qa/browser_ratings_live.cjs": {
+      "bytes": 3041,
+      "mode": "0o400",
+      "sha256": "35f91e4d9af8ce8ab02170c89e6daece62ad56acdbf26e97dbdf6a74f583d9e0"
+    },
+    "source/wisdom/qa/browser_resize_line.cjs": {
+      "bytes": 5381,
+      "mode": "0o400",
+      "sha256": "377ada6e1237cddaa75a05492d89ec0df5159768cc120a6e6e3409c04eb581ed"
+    },
+    "source/wisdom/qa/browser_resume.cjs": {
+      "bytes": 6812,
+      "mode": "0o400",
+      "sha256": "b17fe576147fd482ff9aaf1ff1bca80a253e6e6e58325776a0aa45a4ac79c8c5"
+    },
+    "source/wisdom/qa/browser_scope.cjs": {
+      "bytes": 5513,
+      "mode": "0o400",
+      "sha256": "b146297c26ba2db742bf616344a185a100307c5510d59093eebfe0c429da40f8"
+    },
+    "source/wisdom/qa/browser_stale.cjs": {
+      "bytes": 6299,
+      "mode": "0o400",
+      "sha256": "aa42a40cbaf3b12bf0f47fff394c141e8ca1d3108fecae4f5362a5dc545dce1a"
+    },
+    "source/wisdom/qa/browser_swipe_anywhere.cjs": {
+      "bytes": 8931,
+      "mode": "0o400",
+      "sha256": "f1e960bfdafc3b6de01f8f6b3b06c6542bafe2ec723f2d8b3efe9ff64c26f937"
+    },
+    "source/wisdom/qa/discussions-appearance.spec.cjs": {
+      "bytes": 5939,
+      "mode": "0o400",
+      "sha256": "3508e3ea7f15e7e33b565129984cfe6e9b38967438ba17dd8ad964ffda49597f"
+    },
+    "source/wisdom/qa/discussions-chat-preview.cjs": {
+      "bytes": 6770,
+      "mode": "0o400",
+      "sha256": "4ffdb3b7b2b248b14950aba71b4eb9d5bfdc375da54dbabb3ac565585b21516d"
+    },
+    "source/wisdom/qa/discussions-live.cjs": {
+      "bytes": 7478,
+      "mode": "0o400",
+      "sha256": "0285e011fc9a654422137b6ac31a374b74cc1ddde113f1edd792b65d6ee846d5"
+    },
+    "source/wisdom/qa/discussions-recovery.spec.cjs": {
+      "bytes": 23580,
+      "mode": "0o400",
+      "sha256": "126abde2e94316c6200d6b0303dce77f1291a3e60d9ccd539078d2c07f5dd2cf"
+    },
+    "source/wisdom/qa/discussions-ui.spec.cjs": {
+      "bytes": 15589,
+      "mode": "0o400",
+      "sha256": "41e07bed3a9880ed5bef76436825b4c2a9021e1ce9e9f3ed4da9116734b13e74"
+    },
+    "source/wisdom/qa/discussions_recovery_fixture.py": {
+      "bytes": 3914,
+      "mode": "0o400",
+      "sha256": "bed0492e54aac46fc716a42d5b320df3d5c7f21df67fc63bfad9047063102f1c"
+    },
+    "source/wisdom/qa/flight-adapter.test.cjs": {
+      "bytes": 1871,
+      "mode": "0o400",
+      "sha256": "5e07c32abcdfdc2f9af804079e3fcbc486e1241f4b41086d297f85b800d04049"
+    },
+    "source/wisdom/qa/flight-render-failure.test.cjs": {
+      "bytes": 2161,
+      "mode": "0o400",
+      "sha256": "9ad7b0e3f045e6e7572b4d3272c0c751e736400c7c922140918a631138a421b2"
+    },
+    "source/wisdom/qa/go_deeper_model.cjs": {
+      "bytes": 3083,
+      "mode": "0o400",
+      "sha256": "9ecb9e65dd6f1ad2a06ef7c4f7f42e1f19ebe3a855aa57c267200a929a025a2c"
+    },
+    "source/wisdom/qa/hero-compare.cjs": {
+      "bytes": 2430,
+      "mode": "0o400",
+      "sha256": "c95a3fdc0e1a19b9c8068d51b6505edc7ad7a91148c06440e72695821375cff3"
+    },
+    "source/wisdom/qa/home_model.cjs": {
+      "bytes": 5656,
+      "mode": "0o400",
+      "sha256": "a5bd81eb0870e9eda80b17a87a75838e0a8673556ab97a0c8bd587aae9ffefcf"
+    },
+    "source/wisdom/qa/hosted/SOURCE-REVIEW.md": {
+      "bytes": 5198,
+      "mode": "0o400",
+      "sha256": "dec89f5fe7e0108240aed5e2bff8a423caa091e39420fe90da345aa61c7160ff"
+    },
+    "source/wisdom/qa/hosted/installed-route.cjs": {
+      "bytes": 19680,
+      "mode": "0o400",
+      "sha256": "3e0ecada6adcf0a6006bae85329d4de35840e4772e5212454da8f9754580a35f"
+    },
+    "source/wisdom/qa/hosted/run-hosted.py": {
+      "bytes": 4326,
+      "mode": "0o400",
+      "sha256": "8d06a27664687fda3871c1212c389758b15255c369342e458f37c33366a0cfc6"
+    },
+    "source/wisdom/qa/hosted/stage-native.py": {
+      "bytes": 8325,
+      "mode": "0o400",
+      "sha256": "aec309702db53b26a670d6e58f06725cd7b80f1bf5cf79378b6bf4b9c9c979c1"
+    },
+    "source/wisdom/qa/lookup-contract.cjs": {
+      "bytes": 8630,
+      "mode": "0o400",
+      "sha256": "25a51d28616e39c2f3577cc164e1312f451893bc887a92b8f588fb1e67c28fc4"
+    },
+    "source/wisdom/qa/offline-acceptance.cjs": {
+      "bytes": 18234,
+      "mode": "0o400",
+      "sha256": "d4c81bf2ce9decffb44c3719bc7587212557e953b61cb41292ec5e504d9d6e79"
+    },
+    "source/wisdom/qa/offline-kit-source.json": {
+      "bytes": 295,
+      "mode": "0o400",
+      "sha256": "e648993dcee9ed63566f0e651faa91d148fdcf0b540c1e71b50ee47725208c93"
+    },
+    "source/wisdom/qa/offline-shared-shell.json": {
+      "bytes": 221,
+      "mode": "0o400",
+      "sha256": "89c030fbcf80976f0f84a0a34bfd6c904e43491ae36790b56a34ec1e09d7bea0"
+    },
+    "source/wisdom/qa/offline-status.cjs": {
+      "bytes": 3782,
+      "mode": "0o400",
+      "sha256": "502ceae0d3a4aea808911a476ebf9ec776c1a6394b15101ca31cb18818fd85bd"
+    },
+    "source/wisdom/qa/offline_fixture.py": {
+      "bytes": 2544,
+      "mode": "0o400",
+      "sha256": "668325b4f362b37c2a1332dbdc172f554f3be154f85437fa9bea982603ffe4bc"
+    },
+    "source/wisdom/qa/offline_regressions.py": {
+      "bytes": 1883,
+      "mode": "0o400",
+      "sha256": "bfb9e01ea036720a6a7035bebe35f8ab9f7cee0899cfa93e419f1bb4039738dc"
+    },
+    "source/wisdom/qa/package_discussion_candidate.py": {
+      "bytes": 3739,
+      "mode": "0o400",
+      "sha256": "42509f0a411719ba03e20ea43b29934db3e761bfd6c33475532b27d160ac557f"
+    },
+    "source/wisdom/qa/prove_pinned_revision.py": {
+      "bytes": 2691,
+      "mode": "0o400",
+      "sha256": "9c009cd96eaa6d236cc9db138a01eb3594a93640f39dcad9ac13b817b680acd2"
+    },
+    "source/wisdom/qa/reader-font-pagination.test.cjs": {
+      "bytes": 6101,
+      "mode": "0o400",
+      "sha256": "8021e2d877a35aa4cf6dff8a0f298215f43f0c6e78d3cbde0a3fc58578f6d271"
+    },
+    "source/wisdom/qa/reader_back.cjs": {
+      "bytes": 1539,
+      "mode": "0o400",
+      "sha256": "fdb0579d1db2d382abbe0eb5dfa8d473f6f84dd74e076da289526a4018429929"
+    },
+    "source/wisdom/qa/reading-progress.spec.cjs": {
+      "bytes": 5734,
+      "mode": "0o400",
+      "sha256": "138c654141873fa14ecd2556c01a529085f15ac54ae8cba774512e7825655179"
+    },
+    "source/wisdom/qa/router-sheet-preview.cjs": {
+      "bytes": 6025,
+      "mode": "0o400",
+      "sha256": "cc812aa51e3f46057f6f5bac307fa2be120a7fe8d9e7bc32b3d86bd3f240e6f7"
+    },
+    "source/wisdom/qa/run_discussion_recovery.py": {
+      "bytes": 9808,
+      "mode": "0o400",
+      "sha256": "6ad72624ad8e9ca14b6502edfc49948d90b2e59cf957f37bf2a0feef2193571d"
+    },
+    "source/wisdom/qa/test_author_collection.py": {
+      "bytes": 9588,
+      "mode": "0o400",
+      "sha256": "729fc6c1be2e79b3a94077c89da5e12239e83d90204a2d4e8a4eb9be8b610970"
+    },
+    "source/wisdom/qa/test_authoring_admission.py": {
+      "bytes": 13683,
+      "mode": "0o400",
+      "sha256": "0a8b26f8254b9124a92a540129791ec09d84995bbb822a1e18fc4a8563085972"
+    },
+    "source/wisdom/qa/test_collection_home.py": {
+      "bytes": 923,
+      "mode": "0o400",
+      "sha256": "af7482b1ac138699ea4351a80f39306419e2a25023c3572f7c11ff98e01f1d86"
+    },
+    "source/wisdom/qa/test_collection_rules.py": {
+      "bytes": 9280,
+      "mode": "0o400",
+      "sha256": "75cafea722d3c583b2b4a3ddc0e8f0859a64bc98d8968d36e6c9ce4ab89669dc"
+    },
+    "source/wisdom/qa/test_discussion_broker.py": {
+      "bytes": 12910,
+      "mode": "0o400",
+      "sha256": "d59b2c0e11a4b43a15c820ffc44fda6cc98399890db709042e19b78c2434ed84"
+    },
+    "source/wisdom/qa/test_discussion_chats_thread.py": {
+      "bytes": 12028,
+      "mode": "0o400",
+      "sha256": "20c1d4a9427792d261e4a90a60978eee1e37230b0c810469d23bc7694e4ee1e3"
+    },
+    "source/wisdom/qa/test_discussions.py": {
+      "bytes": 10240,
+      "mode": "0o400",
+      "sha256": "b7e37c1388ef7b57647d9526a1cfd97554f0dd747df23880096c50e2c2cda814"
+    },
+    "source/wisdom/qa/test_done_progress.py": {
+      "bytes": 987,
+      "mode": "0o400",
+      "sha256": "c9a83c0eb572dc8a19925e0a94e718aae51ecc6f4717dceb6b4eb9805ed3430d"
+    },
+    "source/wisdom/qa/test_glossary.py": {
+      "bytes": 4672,
+      "mode": "0o400",
+      "sha256": "bd528e2aab33ca4e31a8155c1ad097c6eb9f5a036121556731bdb85ff4e07609"
+    },
+    "source/wisdom/qa/test_library_scope.py": {
+      "bytes": 14552,
+      "mode": "0o400",
+      "sha256": "7fb8234d267148ab14f9dd17c7fa4cc155a0ee3e8bfbaf0112389aa9cb9b2d39"
+    },
+    "source/wisdom/qa/test_lookup.py": {
+      "bytes": 14225,
+      "mode": "0o400",
+      "sha256": "0aef7da9ab1d0f2ae7529e6d7c0d001f2aca202cd52b9d810fd1f43763c6221f"
+    },
+    "source/wisdom/qa/test_model_router.py": {
+      "bytes": 7429,
+      "mode": "0o400",
+      "sha256": "b859de7e4b5424139e841da364481e51c37d1dd5791cc88ea5a0a7c7f5235cad"
+    },
+    "source/wisdom/qa/test_notes.py": {
+      "bytes": 5336,
+      "mode": "0o400",
+      "sha256": "49130516bffebdd1428ddca8a7fcee3417163f430adf39d27361aef3c80e113b"
+    },
+    "source/wisdom/qa/test_offline.py": {
+      "bytes": 5685,
+      "mode": "0o400",
+      "sha256": "a72686d7cad2aac1277dd6847dae1f4615c491f4be892858fbd878e907a7fab3"
+    },
+    "source/wisdom/qa/test_one_word_commands.py": {
+      "bytes": 1022,
+      "mode": "0o400",
+      "sha256": "4b8bea35de4586b988a61e78d43c2719a42af2d4f72b22441f268b94cb66a029"
+    },
+    "source/wisdom/qa/test_pinned_revision.py": {
+      "bytes": 26007,
+      "mode": "0o400",
+      "sha256": "d000459f73dbabe7e90d7c9a9daceafbd9de1226316f092fc1bb1e64e440e81a"
+    },
+    "source/wisdom/qa/test_portable.py": {
+      "bytes": 13890,
+      "mode": "0o400",
+      "sha256": "93c36fe7e00ead629a3510a8f524d9164d6c0778ca7e2c644a3822f46f90e04b"
+    },
+    "source/wisdom/qa/test_receipt_evidence.py": {
+      "bytes": 17786,
+      "mode": "0o400",
+      "sha256": "fd5d203bfd2534c2086157ed52412375b615fb12244d0f7d4050fef05b06591a"
+    },
+    "source/wisdom/qa/test_release_gates.py": {
+      "bytes": 8016,
+      "mode": "0o400",
+      "sha256": "305a8d0106a04d586b5513ce1cd14a09a4b7e12da9a2fa9092a506be467faf7d"
+    },
+    "source/wisdom/qa/test_release_version.py": {
+      "bytes": 2096,
+      "mode": "0o400",
+      "sha256": "0d487972e7e04b122c9b8c104f0fa5635123bf5351a559b387f145dd93149631"
+    },
+    "source/wisdom/qa/test_shared_thinkers.py": {
+      "bytes": 8014,
+      "mode": "0o400",
+      "sha256": "9ea3f2b12edabb9fd6f6f15cea40672972d22fa5573b39f73d3bdbf3c7d541e8"
+    },
+    "source/wisdom/qa/test_ship_blockers.py": {
+      "bytes": 16212,
+      "mode": "0o400",
+      "sha256": "f0a425a5c3c868c45a728c6040fd87119a9e2a5427549941e523b94ab0ac07f5"
+    },
+    "source/wisdom/qa/test_starter.py": {
+      "bytes": 4565,
+      "mode": "0o400",
+      "sha256": "ee9b91639282ceea8dc4309fe4c32f61b3f00ebd8976ac2fa02e7885922dccbb"
+    },
+    "source/wisdom/qa/test_starter_generic.py": {
+      "bytes": 1299,
+      "mode": "0o400",
+      "sha256": "4f95117bad7845f69ae68255648776821ad07e16ce84833d27ac6bf062839529"
+    },
+    "source/wisdom/runtipi/config.json": {
+      "bytes": 1587,
+      "mode": "0o400",
+      "sha256": "a1f027b7691548b9fc43763549d04cc4c644ddfa915cca20213df2f5dbe84e46"
+    },
+    "source/wisdom/runtipi/docker-compose.yml": {
+      "bytes": 964,
+      "mode": "0o400",
+      "sha256": "33ad34fa4f7bdf42f94a2b63d808b4cfdb6f60975573db569e2360dba3a8750e"
+    },
+    "source/wisdom/server.py": {
+      "bytes": 29879,
+      "mode": "0o400",
+      "sha256": "e43f5f9d6b90b164f1f929797212d576a7a7c53b7437a785a7d7d42ad59d5505"
+    },
+    "source/wisdom/skill/SKILL.md": {
+      "bytes": 15415,
+      "mode": "0o400",
+      "sha256": "32209bd18727d97430f8e75c107d9b8dbe22f457ada99843022984cf46064692"
+    },
+    "source/wisdom/start.py": {
+      "bytes": 1054,
+      "mode": "0o400",
+      "sha256": "25e5a8f1116738c16f12acf501b0249b4e9cb0a0a96fb538cff4fd74ea309b37"
+    },
+    "source/wisdom/starter.py": {
+      "bytes": 1929,
+      "mode": "0o400",
+      "sha256": "d336ba493418be0518fce7317e81ddb2bba2ec9d480c0713e6ec5a1e9b833b90"
+    },
+    "source/wisdom/starter/around-every-circle.zip": {
+      "bytes": 853108,
+      "mode": "0o400",
+      "sha256": "1b98161091aa4db024dd17b556e7ef39efcbcc338ef197ae44957d0741918566"
+    },
+    "source/wisdom/starter/black-mirror.zip": {
+      "bytes": 1773022,
+      "mode": "0o400",
+      "sha256": "e44ea927222abb0a3c9b5d204239ff65b4b7e9cba2920d6bab15c53ed8e08f91"
+    },
+    "source/wisdom/starter/steve-jobs.zip": {
+      "bytes": 1355854,
+      "mode": "0o400",
+      "sha256": "f263d9fa53cf8fdfc0d39a9d4e2b25e24dd8d0414278f6b83325f188fbe316b6"
+    },
+    "source/wisdom/starter/tao-te-ching.zip": {
+      "bytes": 3509741,
+      "mode": "0o400",
+      "sha256": "9b25343f801533925a2bde84703d476d10f40726cea57a9373ddd9bc6a8d098a"
+    },
+    "source/wisdom/static/app.css": {
+      "bytes": 969,
+      "mode": "0o400",
+      "sha256": "9c9c310b61f60bb8c53a0b54af167d319406e7dcb2b7e4352a243e5c74679cc2"
+    },
+    "source/wisdom/static/app.js": {
+      "bytes": 6319,
+      "mode": "0o400",
+      "sha256": "9fca65dea47e03fb4e3375c692bf28079ec9ef4f1ab1dfd14908d7b65ba31919"
+    },
+    "source/wisdom/static/base.css": {
+      "bytes": 14913,
+      "mode": "0o400",
+      "sha256": "3c673eec5e7ab4c133b46e8f9e9c30e73c796dfe90e7306db59d8157fed7377f"
+    },
+    "source/wisdom/static/collections.css": {
+      "bytes": 11014,
+      "mode": "0o400",
+      "sha256": "aea865b5a77d6b5b4107e729b768260e2d9493392aadbfe426158d404d12c74d"
+    },
+    "source/wisdom/static/discussions.css": {
+      "bytes": 11866,
+      "mode": "0o400",
+      "sha256": "be9e0189ffeca3ab1bb25751fc841454751d2cadfd0b96e6c4a9289e482844a9"
+    },
+    "source/wisdom/static/discussions.js": {
+      "bytes": 39380,
+      "mode": "0o400",
+      "sha256": "dca84898c3c931b4401cb30ccd572847e13ec55e8c5a1c8217732ef3dd9cb8c1"
+    },
+    "source/wisdom/static/icon-192.png": {
+      "bytes": 3540,
+      "mode": "0o400",
+      "sha256": "bb4f6d9e6acfe381cb54f70a98efcf24dd328c364cacb02907a6d1999087d719"
+    },
+    "source/wisdom/static/icon-512.png": {
+      "bytes": 10498,
+      "mode": "0o400",
+      "sha256": "fd047493de775fe85f1eadfc0d6e6278ff0de50f4b4b1714bb9cc0667c28f6f2"
+    },
+    "source/wisdom/static/icon.svg": {
+      "bytes": 302,
+      "mode": "0o400",
+      "sha256": "f6b4bc1e1f70e8171623417292ab9aee505896869e248ee72d796174be2f05aa"
+    },
+    "source/wisdom/static/index.html": {
+      "bytes": 1215,
+      "mode": "0o400",
+      "sha256": "5e51551c060a9ecdf6697d2bdafe52622584e83ff68516e64e44fe980bf71c0a"
+    },
+    "source/wisdom/static/manage.css": {
+      "bytes": 2746,
+      "mode": "0o400",
+      "sha256": "afa285b2bd199bde3bf81e64f80a5330eb19d300b004f998e9e6b9008f1fa222"
+    },
+    "source/wisdom/static/manage.js": {
+      "bytes": 11650,
+      "mode": "0o400",
+      "sha256": "3913d28acc35c557663be4b1d8bda174d38c70fb7ed4fd025c6f47019d760128"
+    },
+    "source/wisdom/static/manifest.webmanifest": {
+      "bytes": 340,
+      "mode": "0o400",
+      "sha256": "99befad43f29ab3064aeb62ffb6898d833e6cb524a756ee8cf2a0e86f037c397"
+    },
+    "source/wisdom/static/offline-kit.js": {
+      "bytes": 12438,
+      "mode": "0o400",
+      "sha256": "c2f33226ceeaf620964ed04397fcdd75b560119a84919c5fbb0b3289f3739080"
+    },
+    "source/wisdom/static/offline-sw.js": {
+      "bytes": 3373,
+      "mode": "0o400",
+      "sha256": "03cc44f686a0cf3a71e060d1c1088e5508304a53fac7cd4c432997ce1d33687a"
+    },
+    "source/wisdom/static/offline.js": {
+      "bytes": 9106,
+      "mode": "0o400",
+      "sha256": "90d45f25355970d35c4f8209feaaef71936aa8ba739ff0746b02108c50c25d12"
+    },
+    "source/wisdom/static/sw.js": {
+      "bytes": 937,
+      "mode": "0o400",
+      "sha256": "8f05f9362f2454d4be18799f6c2a86134290cb165a0bde6036684e8b49995acc"
+    },
+    "source/wisdom/static/wisdom-art/f/OFL-fraunces.txt": {
+      "bytes": 4391,
+      "mode": "0o400",
+      "sha256": "bdf4c22802eaf804f998195871c6b8938aac2ac14b2d78a8bd66a6f1eced833b"
+    },
+    "source/wisdom/static/wisdom-art/f/OFL-newsreader.txt": {
+      "bytes": 4394,
+      "mode": "0o400",
+      "sha256": "fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8"
+    },
+    "source/wisdom/static/wisdom-art/f/fraunces-italic.woff2": {
+      "bytes": 42372,
+      "mode": "0o400",
+      "sha256": "13cd664e0f8bff7116e6aa798e59720e31ef389b682c76f4e813f4e7c7413bc3"
+    },
+    "source/wisdom/static/wisdom-art/f/fraunces.woff2": {
+      "bytes": 35120,
+      "mode": "0o400",
+      "sha256": "170a928c701ef00e4b91105f870dd2c764b9ddb0c725cda6e71de576a8e72a00"
+    },
+    "source/wisdom/static/wisdom-art/f/newsreader-italic.woff2": {
+      "bytes": 63292,
+      "mode": "0o400",
+      "sha256": "2bf0dbb1a4a052fffcc447bdab56b12049ee804a8a0d1ee04f5e76a6ab89166a"
+    },
+    "source/wisdom/static/wisdom-art/f/newsreader.woff2": {
+      "bytes": 132000,
+      "mode": "0o400",
+      "sha256": "6e4f2958c3a7c4a80acde4e5a679abe7e01bc1e30b92be3c7a8b696ef401d101"
+    },
+    "source/wisdom/static/wisdom.css": {
+      "bytes": 48661,
+      "mode": "0o400",
+      "sha256": "b1783a4fedeb457466858ba76e72a054b1018760d2c6e0119f73ef055f8945c2"
+    },
+    "source/wisdom/static/wisdom.js": {
+      "bytes": 111496,
+      "mode": "0o400",
+      "sha256": "54c9812d1d73dfe8e0b500034fd84040d10ec577a433afd4bb700ee104dff2b1"
+    },
+    "source/wisdom/static/wizard-appearance.css": {
+      "bytes": 8228,
+      "mode": "0o400",
+      "sha256": "8d0e37ff2629de3d6577bb7d6e32e1a551d37d78b5561cd43202fa8e6cbc2413"
+    },
+    "source/wisdom/static/wizard-appearance.js": {
+      "bytes": 3321,
+      "mode": "0o400",
+      "sha256": "cb14e0aa22760958c66970abf06555c9e20ea3345d72041c8d432f7fae39bf33"
+    },
+    "source/wisdom/tools/author_chapter.py": {
+      "bytes": 12634,
+      "mode": "0o400",
+      "sha256": "d35eb9917beb6d36d07d6f838645193968ed599fd43c3ddae4309e6740fe82f2"
+    },
+    "source/wisdom/tools/author_collection.py": {
+      "bytes": 21495,
+      "mode": "0o400",
+      "sha256": "1168db1055b81f39993846b65b49bd9be3497009e23ea26eb6979153494290d9"
+    },
+    "source/wisdom/tools/check_view.py": {
+      "bytes": 312,
+      "mode": "0o400",
+      "sha256": "ef14692f1a7e87138ea2e84ded3e5c8116d123e976d605836a0d7d9e2ef88939"
+    },
+    "source/wisdom/tools/discussion_broker.py": {
+      "bytes": 15659,
+      "mode": "0o400",
+      "sha256": "05022240f0ea56f8f15b1cf1bff902ed2f388cdd6dfe3102fabcbcb634e6f868"
+    },
+    "source/wisdom/tools/offline_shell.py": {
+      "bytes": 1484,
+      "mode": "0o400",
+      "sha256": "c3403a562cb3895d453f74f1e7b235f2a78279095d32fbfd9d93b245c0affb3d"
+    },
+    "source/wisdom/wisdom.py": {
+      "bytes": 24584,
+      "mode": "0o400",
+      "sha256": "a673ccfc4d8a031b2ff23c38fe7152d7b1708fd5d98b53b5eacd3e4ab01d0fc0"
+    },
+    "source/wisdom/wizard.md": {
+      "bytes": 2377,
+      "mode": "0o400",
+      "sha256": "4c074142f2a6c4be45c936897cc3fcfeee02a4115f0a4fd81000a1419bfe43bb"
+    },
+    "test-integrity.py": {
+      "bytes": 1010,
+      "mode": "0o400",
+      "sha256": "98ae8cdd77acf68078c6cae0ad6b2ffd2a4d1dd75cff0a6003571688e74ba2c9"
+    },
+    "test-r32.cjs": {
+      "bytes": 3326,
+      "mode": "0o400",
+      "sha256": "02487a4060c12e7d5bda1110903f8f4806be3ba92887327bb3f1acf4b13dd6c8"
+    },
+    "test-source.cjs": {
+      "bytes": 2003,
+      "mode": "0o400",
+      "sha256": "b25aeeaeadacfe41e1b044f74014f5cdb9811ba6559a9f706fdbefd704a12b0f"
+    }
+  },
+  "nativeAcceptance": false,
+  "nativeDiagnosticSHA": "49d6a4abd85b217ef97eb732d5fd3204da13ba778d4f0d081df07ebf243c6f70",
+  "nativeLogSHA": "977c2c87d4ce900af1495369a558c36f8bae0baa80928840a283e9be5ff84702",
+  "product": "ec5c5f1df4165383113e534f1f773f7c5305e154",
+  "productJSsha256": "54c9812d1d73dfe8e0b500034fd84040d10ec577a433afd4bb700ee104dff2b1",
+  "product_counts": {
+    "source/ux": 474,
+    "source/wisdom": 172
+  },
+  "r31ManifestSHA": "b128d0fe65485d411c070813f8430e113693b879fef61e2bacbd36a4571d32dc",
+  "releaseAllowed": false,
+  "sourceClosure": {
+    "source/ux": {
+      "commit": "fd7e3de99cddbc3452b6e775bd49363fc4608f9e",
+      "files": 474,
+      "gitArchiveSHA": "b43569590916447bdc24d63f636e9ccb4f3218cbeac05f92c777244afa53e510"
+    },
+    "source/wisdom": {
+      "commit": "ec5c5f1df4165383113e534f1f773f7c5305e154",
+      "files": 172,
+      "gitArchiveSHA": "fbdb2d1fe5d40e968b56fa1e91638f937993ffcb4e5e4b668c84c4189ea91ed6"
+    }
+  },
+  "toolchain": {
+    "chrome_sha256": "377a9fc07b495c3b8d0ab8ec1fdfd153641759f9756fea34d8dfce4de82f5025",
+    "files": {
+      "/srv/work/node22/bin/node": "1bec56ef7cfa9a76f3e0b7c0a87f220eb73f23102b9c0b4c7529a3f7c3ce7c31",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/LICENSE": "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/NOTICE": "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/README.md": "d16ff7f8e38fa1fc954f695ad551cdc118d9c9bdd5f3d83203901f4c317d7d7e",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/ThirdPartyNotices.txt": "a549d329bad8806fe279f0ecae0fc0270dec7e7c2dc8ec10f90e394f7c32b144",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/install_media_pack.ps1": "bc20f049badf021e3a53bdb4156603caa5ef482c9a9a251f927605e676a44171",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/install_webkit_wsl.ps1": "bc61beda37a808eef27d39ce684baa792f6d17737a25a432b1a84d3b591ab815",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_beta_linux.sh": "dc8c22b9dde76583cece2857575b88094299615f3136a3c598149710c45dee3a",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_beta_mac.sh": "a92eaeb4ebcf5633a4e9c981481e14c80764fc81b6fcbc0565398e50ff319433",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_beta_win.ps1": "b6d9e44742feafb98d5edc56fa20042949973cf30d141a1c5b4fb384096967c5",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_stable_linux.sh": "dc72ab3567a4ce43bd8353d4ecf41f1d9c03e870169367cd3ed9043aabf67dd1",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_stable_mac.sh": "bb43a96c192a6cc81524ade0264686fff7809c019a89f7db0a9849635879c3be",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_chrome_stable_win.ps1": "3d96c4e2f4ebbb3fad44cf3ba58d9cf90af1c9fb3073e3b27d45a74cf005515b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_beta_linux.sh": "10b26f35dbc2000b94edf1172d803a29c5873a4eb8d523afbc687997b642767e",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_beta_mac.sh": "0036d738bc90d686100d81f328ba0003bf07863f5500b792c8da391d149750fa",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_beta_win.ps1": "b173c378a59f0cc38033cee702de1f44f09276c9b2270d1a650ebe66ee312433",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_dev_linux.sh": "00e4947e7a4f8339c6db09c87976d808583c07f9179e4aa7694d88614b82fe95",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_dev_mac.sh": "6f899e3b311f742c24ca37ff9e32298e8290514ffc14bf588cc51556a29da4c0",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_dev_win.ps1": "46f7f98c81cb0abe687d7f4a5afea9b897a38d2a6dd6f6662fbd847f7a22bd51",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_stable_linux.sh": "ec0a31a5f09c565e108473a1850895a4458ab00c713ac1de3aa2001912e4668f",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_stable_mac.sh": "3af1e893527ff2257aa2dbc3b259a053b92f45c3eadb13e38eba46e87902655d",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/bin/reinstall_msedge_stable_win.ps1": "40bb5fcbfcebbbe2ce43c6e736e7c5deefc5be03b6e9c6914423c06ec1f591be",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/browsers.json": "2cfd419f71ac6475d81e1301fa86c34cf2a2a6bae2a0da4b5a2b18310216b6bf",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/cli.js": "7c46f799363eee3e0bb7a7d7c870a92316a1601bf6fda780b656df4209542aa9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/index.d.ts": "7a8ec10b0834eb7183e4bfcd929838ac77583828e343211bb73676d1e47f6f01",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/index.js": "a58fb2cec4293e7dcf73c58a179898a4f3986666451a19da4e731fa3af63265b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/index.mjs": "3d36e2132d3c8b62397d23f0bb4177336aaee503203ae2a2c90fbeb5bf3317dd",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/bootstrap.js": "39dd64cc9472275d1b25c170fefa2a98353bcca598b741788faac2e6e15fc737",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/coreBundle.js": "829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/entry/cliDaemon.js": "062f256fb29a7bf91793a014b9c3f1f9cf2dc6b12e40a8a2ebba88a630ae16a0",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/entry/dashboardApp.js": "209962c6eaeef11629f226d6a2ab33ec7a2480754242b6e19590a9e6eb71d126",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/entry/mcp.js": "cc87dc0020cb41caebbf04f50e42bc7835b033a6d80e9c3f0a3d0b3dbdf341c7",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/entry/oopBrowserDownload.js": "87567cdbd67dd2f50bb232d47d3784701ece7c81e39c0287bb7d1b466b68cf06",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/package.js": "9f938e1d44a0dd231b1660ca62f7dae964859b79cbdc370b8542c5d375ca3c05",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/server/chromium/appIcon.png": "6ba994f05c5cf18e22d9b6bef9898fbdec6ad4d4d77f5187d0609cb42d72d01e",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/server/electron/loader.js": "ade9159c9691597140bb2658b85f5055ff3fa7bc5c0e2b6d5532f9fbd46dfdaa",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/serverRegistry.js": "38025f08f335705b099b9f188bf45b5908a56a722825fe895b1e90f56d5595b6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/serverRegistry.js.LICENSE": "3098a6efcbc11752cbdf6075fa65480f5470f78c8d981fab9c0796dc9a41cefe",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/channelSessions.js": "6b9c613e87340f48ad7182addd7495a8ff3fbe55feb1bbd0ce04f59f1552e126",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/cli.js": "3f9694e461ef0d6ebab068fdf3da98e1f3bce7cd4d2c32e667f2d0fb218c6472",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/help.json": "922b302fdf697f32c37d9ac4de453c98f89f8edfc15b1d310fad347107a12bf1",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/minimist.js": "9430489ebc06fd02231dccfe844516f743e812a9ac4fe8e6748a67718738851c",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/output.js": "de5701d6dba77b3c77471c3e81ad901dfd1a9122d38f25f5c06fa1356dc002b6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/program.js": "c22d2d11c862df198228d9612e6bf6d42d86079d0445f151f0efa9a26d034189",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/registry.js": "4976cd5b2b3a25572cc1a4b5f055a756dacd4cc1b19d48987ee3253428e759b8",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/cli-client/session.js": "8c3f9aff3fab537771cb560e1bad3e417e16b3315b7a3dc10a305faeca3f6024",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/dashboard/appIcon.png": "38037bcf18c7f9b950da2e1a2d8800d38fb27637ccda293d38368a3704b67f18",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/SKILL.md": "49bebc4b652d58860e91d6478fa446645e349ba8556667cc02702645d7ffde0b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/element-attributes.md": "bf19aa4671e0a50a0fefa9c790f39124e803060eefe395042b723c29fcb7faa2",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/playwright-tests.md": "c5b0719fef2cfdff50bd744051b2f9afc119775db4b48e9b2882c1cf3886797c",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/pr-attachments.md": "24b118e74598be72e73e24fe223d295b9099c85b1860a7c8f6e5690c9038fa2a",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/request-mocking.md": "54e801c9663fc2b6d68ceb058cb1c360724c2499f42acc7852a68e83e5b5f37c",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/running-code.md": "3029569ed6ddaeffc0b87badde967efdc2973b1677f078830098146eb3b78ebe",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/session-management.md": "a4f16271f95d3eec7bc56e659d8adbb8f6ad7d603a6fa15efdcdd071a50c6ce3",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/storage-state.md": "9ac47f9ae4a1aedcd2077f8ac9ab1ba6bee1962cb83ff51adcd36fb6d83b5ec6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/test-generation.md": "27ecb11ef647999bd7486695bb1aacc3682097e6bb5742804cb6c8769c2b5364",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/tracing.md": "ef73e71bee792e341df9cd4f60529c929ade48b538ac76e033f4f20843e8dbda",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-cli/references/video-recording.md": "1c800b897824cb54394c34265d8ebffdbb530adfc8d612c5d798b667a1799f48",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/SKILL.md": "60f57b31767d562c30cc5332081418c2945f4d9c998efa6e09191333654dd429",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/references/gallery-spec.md": "0ca25dde6112eb379f56eb618585b64dc2dfd13c2f7f956ac7eabbd76a68912b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/references/migration.md": "bc3a336f7970bb7455fa5a38f937e45b35fb0c18d6c3b9f37916a4ff757b7acc",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/references/react.md": "54af9cc1cdb6d4ccdb8e811c0abb29b960d5c9304f4df7d1dcf9b8df3f973102",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/references/typing.md": "c511025b5c9b02d7f49034a5613c8b478193bf60c90ea6dddb3faf9c6985c82b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-component-testing/references/vue.md": "d1b129f126c700702a3c00ad8eb6c86898bc941c29a656c1191eb7230650bf8b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/skills/playwright-trace/SKILL.md": "c76d28244c05a6474f6030213127cd62253208b06430ea2378576f0669db2c9a",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/utils/extension.js": "404ae19e57a7c7c5ed3e6ecf9df26a3fcf95867250732f954823078ccb879e63",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/tools/utils/socketConnection.js": "973c2bea70a1f1445f4673f99e9fa351e50a2ec9fd93d7381b2c41bb4de764dd",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/utilsBundle.js": "75f1431ea7ee00b2b291a0a72d4fa1c07ae04d999f21a00cd03b8f454a5840fc",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/utilsBundle.js.LICENSE": "1362b7f413c08083af537384162ab69a323d019fe26e0a2cd78536fafd6b9cbf",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/codeMirrorModule--QdMvsKi.css": "20be824a82832b62cc04642d31da3c609fd280b23f1cdcb1e622c4f40aac5ab8",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/codeMirrorModule-CQ8RZGBm.js": "56b9c6a50c09dfac28eea5ec3e76c8ae85a26009b20ebac9928959cf3c3312bb",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/codicon-DCmgc-ay.ttf": "0f1d5219934e96e83b8db162d60b4d8c09b5de1e7d38031cbafe4a3c0f2889c9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/firefox-1bWoP6pv.svg": "3f3742d1e78c0db6c2d3531250f70c30675ee5310de32fa89befaf738c54efd0",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/firefox-beta-k3eOH_eK.svg": "7eab5ffdc25903ba33a7202f7fffa1999f119c7be45a39e9e703c118904f917a",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/firefox-nightly-Cp5nfeDT.svg": "f311c074b0fa999fcd6b73441301fb54ee87a48ff3bf05f318647928110476da",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/index-AwgwcYie.css": "82d06f291a7d0860e1b1e1803ab6f2e49c637541779a37168652e10b062b67f9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/index-hRvO4yU2.js": "3a05ed0b026442a1459952df25b9a836d4fa1a917838cf6f9357daefc0e42285",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/assets/safari-na3_-uQk.svg": "80fd72ca5eb8545f1981277b31f4f92951d469d4efebd078e4086b676fe517dc",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/index.html": "202903aad66040604bc1a0c85615dda4bfc7e6f4a4674e60d9eda4d44f6faea7",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/dashboard/playwright-logo.svg": "511524a1c145819303a18fb71870a4307c3e740f9e9722f7686a2b42b0995b6c",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/htmlReport/index.html": "ce7c098020a0eb9ce10edd416245ea6da50dfeaab18dfd0a2176979d22643be6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/htmlReport/report.css": "d98a244bf950333ade383b109e97d396f970f650b20f2e5ef5ecc2740205dff7",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/htmlReport/report.js": "0ecf5329ce34f0b809753392b8715521c30eeb46e24f7749d2537c06aa5bcea4",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/assets/codeMirrorModule--QdMvsKi.css": "20be824a82832b62cc04642d31da3c609fd280b23f1cdcb1e622c4f40aac5ab8",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/assets/codeMirrorModule-DK72OMRi.js": "44cc2e8413f941b4ce136fae229ce375a0bfe15e9f1172dc0deb0230791149f4",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/assets/codicon-DCmgc-ay.ttf": "0f1d5219934e96e83b8db162d60b4d8c09b5de1e7d38031cbafe4a3c0f2889c9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/assets/index-BZpYJZ-P.css": "cc24563b96f286614b88f74da413e9984de263227971c4cdfabe1f73be095514",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/assets/index-Cn0mmDuv.js": "b57add9e1086d2b7058a66f77a1c19ba8bfbcf1f76831565e7662892c68d601a",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/index.html": "8338faa7d5856d725400a1c1aa37541bf45ad0e9ca0391b05d622118a47d5bc0",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/recorder/playwright-logo.svg": "6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/assets/codeMirrorModule-BEB2e8M3.js": "0da75d228abc1d8b940aa04ec086570dace7b2e7b2ccc5f4bc16f05e79bdb7d7",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/assets/defaultSettingsView-D-g2vrvf.js": "554bdef910d18e763118f1221667b809edafba46e29e3f8de4b9dcf21c6b7d79",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/assets/urlMatch-L3liM589.js": "1bc6321e32d11c31a452bc75896f0b344e6153321854d9f1658818be7f845c16",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/assets/xtermModule-B794rD2Z.js": "7f3c6bda9e7b6327740dff3b946c68a52027357ef2b14b1ea373aa614cbb7977",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/codeMirrorModule.-QdMvsKi.css": "20be824a82832b62cc04642d31da3c609fd280b23f1cdcb1e622c4f40aac5ab8",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/codicon.DCmgc-ay.ttf": "0f1d5219934e96e83b8db162d60b4d8c09b5de1e7d38031cbafe4a3c0f2889c9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/defaultSettingsView.C8BeHuxd.css": "278101b68ab48ee6323a6afbf4e0e629324e10e96902a62a0875643a1bba3d94",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/index.B_TqY17P.css": "08a212fcacae1866f44f065654afcc4c7d03409c68c74b3315c5bda17a0ca003",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/index.html": "4c168083713c6868f577f492f3d50eecdfbf6235e0b0af421796b7ddd9013bd6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/index.oNry3Hjv.js": "87f339e5e169f67633a91e17d9c8f65afb8de66d9b88a4167c79da78f562518d",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/manifest.webmanifest": "d8540500603a32a39fe7e5a0375dc0f9ebafd11118e06a846db7efc608223ab9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/playwright-logo.svg": "6b0a4367bdeab10995bc239278f04c68c10e48adbec15e799e01909a0d66dcb9",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/snapshot.B_Jk1wbt.js": "d4d09e05451d107d8e1a6bbd041405fe518b9fd2833890e4ebaaad83b7f554f5",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/snapshot.html": "c608c8899c95c5a74d3f556e20146c3d852b9df85ae2854c659a7cc773c9b727",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/sw.bundle.js": "d1d6fec6687eb3fd93a8990bd9daa3951422695afffae2382f97f10811cf1c30",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/uiMode.CYwC_gH1.js": "c920eaa161f65b6c0dd431a642c4bdf2e6262ae51335c02d155b187f48c0296c",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/uiMode.CyMfwkXJ.css": "fb403cf0b07007bc1d771e29737f7408924da300e2fab8b289a3ef2e8fc08d7b",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/uiMode.html": "6de2f5db7f7532c30e8b1381752a1daf23facbdef6bea130cef0cfa5a003eb22",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/vite/traceViewer/xtermModule.kHJ-D0s7.css": "0dd60056134e6a2994a86b59a1e9789b9f04e92924da109aef8c923acaf08ce5",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/webp_codec.LICENSE": "995c7ee35aceb7666829b7a501ca89c0864e12b493c1174b155774ab1e03d831",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/webp_codec.wasm": "164cd9583a3e4d081f767d3b41ff0a730443dc7535fcc5caff83561463384b79",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/lib/xdg-open": "7d759d54f0d4ce1beeb34ee62c587985b5042374e8de237b0dcb8cd47aa698cf",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/package.json": "8aa1c9863fa8dea324e674254158cdc79440f4124ef2d84d38053013541cb7d6",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/types/protocol.d.ts": "ccd722dea5eca655cf111348ec27a38a376d467407c4cc763d31514550d04d5d",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/types/structs.d.ts": "c9b9179b7291c8562eb0fb781219ddbdcf36149ebd7bd355e5b4a553d6b60b81",
+      "/srv/work/provider-signin-browser/node_modules/playwright-core/types/types.d.ts": "c458c9da21dde7732dd440f4f2f861ec66ef89813955a591157ec30e4a90186e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/LICENSE": "45873d00a0dd243596deb4aa23b2493b3d1f0671921bf2538ea431d7380220eb",
+      "/srv/work/provider-signin-browser/node_modules/playwright/NOTICE": "6d602191187b35b9b01d2cffa01c8469c2c8d9de8a96f1bf868e0f264f51c81d",
+      "/srv/work/provider-signin-browser/node_modules/playwright/README.md": "8d2a2d9027d5d6ae2c8080c6c9752624528c5605398f87da730e18442c7e9a84",
+      "/srv/work/provider-signin-browser/node_modules/playwright/ThirdPartyNotices.txt": "b17ac0bd6f4b8207e440639cc8e0ba1bf1d9eaf9b12236764ab93b346c7abd8e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/cli.js": "5e79302a6aad7d835d92d5ae6b4244c91cf61b28e94d7917279090e6c231f7a1",
+      "/srv/work/provider-signin-browser/node_modules/playwright/index.d.ts": "b07f64ff6ec710998a62b07377fbda0ab4c313ba1f0055bfe9faa22cffedd47c",
+      "/srv/work/provider-signin-browser/node_modules/playwright/index.js": "4e98f65f0a9d9bcab8cffc0c5cfdd87fd3f5b0be74fc494ff166a466b204cd44",
+      "/srv/work/provider-signin-browser/node_modules/playwright/index.mjs": "a0f5715ea22354f922791a9c53dc012d5d5c067ff9cc4cd35ffb7cd272071a9f",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/agentParser.js": "a2f630c1c2c9eafa0a3ca9cdbeaa26e74801615bc572e3fce226acb662ceb0eb",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/copilot-setup-steps.yml": "7483c252e2225d90cf7b66b461772a9e16e189cd45f689f48519872571e1a345",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/generateAgents.js": "3bae7bde1d05c0fbaaa1a82ce7a39732ff52904de575fe88e69c391a6c41478e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-coverage.prompt.md": "8e8a32e98c7069c8af29a088a91999c81dafbeb09a144b143ebe888b48b94355",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-generate.prompt.md": "6031c3eacf1e55d527a0397066b64d134d9f925fd7286bcc78646e714611da10",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-generator.agent.md": "3ba34ef877c6d8c1d0fb70975d96062b33c0ba138a8bbe9eb837585d31ffb045",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-heal.prompt.md": "19f2bea9648ddac89b90b40a3f87b50c276d416677f8bb2fbcdac894cdb6946b",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-healer.agent.md": "b3e1d85219df5ead7e3ef0dc69959b0263cc16e885f71d5b64bafdf97e6f9215",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-plan.prompt.md": "6ce2c51b356b4e89ac1e3c2b8b3ff0a390c7b518c1d4d24f019f9eb179cd6669",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/agents/playwright-test-planner.agent.md": "bf4baa68205aa04c4512a80bcc6a5362d3aaa76ae9165f05a9d5a29e1d34c0fd",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/cli/reportActions.js": "4eeceedf9588d69a153f018aa548e00b73e5f61cb39bb05f0fc87c06131af2b3",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/cli/testActions.js": "f1c4f6dee0b5689036d65868365e2010622845d8d93831612e91ce1ec437fbc9",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/common/index.js": "763942536de84a031a24c86dbfe8be1a971382ad1d66ffcef1201e77cd05d5ea",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/common/index.js.txt": "6e2fff989e20149e274d404060fc49302f6683ec44753937d59cf0942c54be8b",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/errorContext.js": "ffc1843cebb3e90e1674c07ee2607a4a63152eff609e5f9865bbb2f9eb02e9a1",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/globals.js": "f5922eb1fb6051900157492eb9c218e62d07378eed135bca4b2f173ed1184d1c",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/index.js": "90336f507074874af66f1d681d4fd7727f5946d1f37a3621d748caa3a8ae0485",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/isomorphic.js": "3d61508f951aa9518adb4bf6594d61dfd1099c95a1a4f0af809a58ccebc59025",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/isomorphic.js.txt": "36c16ae5721dfe8ac2555e84d26b5895b7ca113e7304bd3735a16d56b5a71b3c",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/loader/loaderProcessEntry.js": "45681332f4178770c204b33e5b8dcbba940baf3bc6fc86506bab24027cb513f3",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/loader/loaderProcessEntry.js.txt": "0fc4ad550d17a23e9f1cbc78f646e57461f4feb22253dd5220034ef44091005c",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/matchers/expect.js": "0e5d49c2c2b2fb2a20f60726153cb0bd109d0124394029035f43497a82b05eed",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/matchers/expect.js.LICENSE": "78b2f60563d28cb3f9ea17e4cdc0657681e641e2f72766771d9e2da9ca94c065",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/matchers/expect.js.txt": "af183b7b922f04f770c21e5f63fcd139f3b49b73411d509da261babcddcbbb9a",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/browserBackend.js": "703f307d1c3e746291b625f886af3d3d28fc0a868b8b2a66173a75bd895ccddc",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/generatorTools.js": "3c53feaeb9fc2ff728f334cb31f9b7211e65b20c692c7585459c3c97bdd13a12",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/plannerTools.js": "715abc888d9ea30b532b75c6f09aa34101ab15c1eeb959c50cf9dedcf3a459ac",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/seed.js": "f36f7fb76d4ed33225e80be208cccc9757d363a9d1527cf560736c0f1e5edd31",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/streams.js": "8affc240a6a90ee2dbdedcde9927018efe426ec0d390bcd1ee4f0464e75adc0f",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/testBackend.js": "dcd8d09366617f13213ce544efb5fe47df5a87258ae93545d4d0738623f43ad1",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/testContext.js": "74ff4273ea12e6353d4860c9452387b643d7d8899fbd4951389ba94d18df5e37",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/testTool.js": "2a8f17d0a61ccb8a4ca9c52a3255d624deca989c0b06281d579629c664f8cc8e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/mcp/test/testTools.js": "14710b5f34246005d974762b83a2a50e5cc17130af841cd3bc447811d69c6af7",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/package.js": "544a18417ea51dd4c8a9f3dbc4e2b47e46c80f452e0cd23d55e9b3680bc6241e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/program.js": "2b30a16dad83631a0783f7863ac1ce0ff78bcd27869f8a1059ac2595d21580b0",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/runner/index.js": "2cb242134ba364714f289100dbfc02fc496d74bde24274490556395e57109fdb",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/runner/index.js.txt": "c9f56a2b5e0cda6d95b269af05648b3d6018fc45d45d9233d11cf1f62cab6c8d",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/babelBundle.js": "cd656ca6a9857b3efbbb7e015a2fa3abd4bc0e88956661cc9b14d9d7f142f093",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/babelBundle.js.LICENSE": "2018f402988d0cff56531005b77bce7c2816a34d0c157ecb510043abd41b1ad3",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/babelBundle.js.txt": "378bb160b7c981551aba70a5f50c404fcd3cd11d27eaa344d0b00872513ab81d",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/esmLoader.js": "57039f70e2f357e7c7bce4a40aebf543b0ecad77958e0a0a923f2f180f82cd61",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/esmLoader.js.LICENSE": "3cec0c446526a449e4613b0defee0adb585f88f1d7fdba919421226d69be078e",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/transform/esmLoader.js.txt": "6cf67693d4aa70088d6368f5b0c7ba8df51374e941f147df88f8a5da9d051b36",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/util.js": "874c55495773da8c5a2ec46551c2265937bf08446231c09a8b5966e8bea2b1f7",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/worker/workerProcessEntry.js": "b7ae55d578fb3a2a6bd4d9acc0abf93146ae1d9062330bbc0e3f82acbff751b8",
+      "/srv/work/provider-signin-browser/node_modules/playwright/lib/worker/workerProcessEntry.js.txt": "7b4f3a6e64023f52319739dd1026636d0e769edecf1eccd4b7f03bf8a4b54865",
+      "/srv/work/provider-signin-browser/node_modules/playwright/package.json": "313d23ce667d93962d3a1ab4be80908cefe840e4d9e48f1cd5863b91f65e8e39",
+      "/srv/work/provider-signin-browser/node_modules/playwright/test.d.ts": "3f00324f263189b385c3a9383b1f4dae6237697bcf0801f96aa35c340512d79c",
+      "/srv/work/provider-signin-browser/node_modules/playwright/test.js": "b97fa53a6ab864f51c9c48b5e4647d0acae45ba2948c5d78e38bfeb56755d974",
+      "/srv/work/provider-signin-browser/node_modules/playwright/test.mjs": "1deb265617d0e87b6d05bf8b3d5bf73cd4b788665c249c609a01b94ceff2eea1",
+      "/srv/work/provider-signin-browser/node_modules/playwright/types/test.d.ts": "7e2cbb3666ddd7b5c45240f28deb693e134eacb9ddffe037bd0af64beafc843b",
+      "/srv/work/provider-signin-browser/node_modules/playwright/types/testReporter.d.ts": "0304f69294f8221b82ec6b4c75511dd6d824f04b1a0999409c79931cd33219e3"
+    },
+    "node_version": "v22.22.0",
+    "python_version": "3.13.5"
+  }
+}
