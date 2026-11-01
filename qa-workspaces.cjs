@@ -2,7 +2,7 @@
 // QA_PLAYWRIGHT=<module> node qa-workspaces.cjs; QA_OUT=<evidence directory>.
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
-const ROOT = process.env.QA_WEB_DIR || __dirname, ORIGIN = 'http://wizard-switcher.test';
+const ROOT = process.env.QA_WEB_DIR || __dirname, ORIGIN = 'http://127.0.0.1:19486';
 const OUT = process.env.QA_OUT || path.join(ROOT, 'evidence/wizard-switcher');
 fs.mkdirSync(OUT, { recursive: true });
 let pass = 0, fail = 0;
@@ -35,6 +35,8 @@ async function boot(browser, { width, skin = 'nebula', native = true, standalone
       return route.fulfill({ body: '', contentType: 'application/javascript' });
     }
     if (/\/api\/system\/devices$/.test(u.pathname)) return route.fulfill({ json: registry });
+    if (u.pathname === '/wizard/hermes/api/model/options') return route.fulfill({ json: { provider: 'qa-fixture', model: 'qa-model', providers: [{ slug: 'qa-fixture', authenticated: true, models: ['qa-model'] }] } });
+    if (u.pathname === '/wizard/v1/setup') return route.fulfill({ json: { first_run: false } });
     if (/\/ui-preferences$/.test(u.pathname)) return route.fulfill({ json: { pinnedChats: [], spaces: [], migrations: { 'launcher.v1': true } } });
     if (u.pathname === '/wizard/v1/bootstrap') return route.fulfill({ json: { bootstrap: 1, settings: { owner: { name: 'Fixture owner' }, agent: { name: 'Fixture Wizard' }, clock: { timezone: 'UTC' }, voice: {} }, endpoints: { apps: '/wizard/v1/apps', sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs' }, capabilities: { files: true } } });
     if (/\/api\/sessions$/.test(u.pathname)) return route.fulfill({ json: { data: [thread], has_more: false, total: 1 } });
@@ -43,8 +45,12 @@ async function boot(browser, { width, skin = 'nebula', native = true, standalone
     if (/\/v1\/apps$/.test(u.pathname)) return route.fulfill({ json: { apps: [] } });
     return route.fulfill({ json: {} });
   });
-  await ctx.addInitScript(({ skin, native, items, standalone }) => {
+  await ctx.addInitScript(({ skin, native, items, standalone, phone }) => {
     for (const k of ['wos.coached', 'wos.tour.v1', 'wos.tour.done', 'wos.voiceTipSeen']) localStorage.setItem(k, 'true');
+    localStorage.setItem('wos.welcome.v1', 'done');
+    // The synthetic bridge uses the WebKit transport on both shells. Real
+    // WebKit implies Mac, so explicitly select the phone fixture when intended.
+    localStorage.setItem('wux.shell', phone ? 'phone' : 'desktop');
     localStorage.setItem('wos.skin.composition.v1', JSON.stringify({ version: 1, extends: skin })); localStorage.setItem('wos.skin', skin); localStorage.setItem('wos.layout', 'classic');
     localStorage.setItem('wos.workspaces.v1', JSON.stringify([{ id: 'saved', name: 'Saved computer', url: 'http://saved.test', kind: 'remote' }]));
     // Empty saved mix explicitly keeps collaborator Home off in stock screenshots.
@@ -63,13 +69,15 @@ async function boot(browser, { width, skin = 'nebula', native = true, standalone
         queueMicrotask(() => reply({ ok: true }));
       } } } };
     }
-  }, { skin, native, items, standalone });
+  }, { skin, native, items, standalone, phone });
   const p = await ctx.newPage(); p.on('pageerror', e => errors.push(String(e)));
   await p.goto(ORIGIN + (standalone ? '/standalone.html' : '/wizard-os-home/'), { waitUntil: 'load' });
   await p.waitForFunction(() => !!window.WizWorkspaces);
   await p.evaluate(() => WizWorkspaces.list());
   if (!standalone) {
     await p.waitForFunction(() => !!window.__wux || !!window.__wos);
+    await p.waitForFunction(() => window.WosWelcome?.log.some(s => s.startsWith('boot:') || s === 'deeplink'));
+    ok(await p.evaluate(() => !window.WosWelcome.active && !document.querySelector('#wosWelcome')), `${width}-${skin}: configured fixture has no Welcome overlay`);
     if (phone) await p.evaluate(() => window.__wos.goDesk(0, true)); else await p.locator('#logo').click();
     await p.waitForFunction(() => { const b = document.querySelector('.wz-workspaces-control'); return b && !b.hidden; });
     await p.waitForFunction(() => !document.querySelector('.mz-intro'));
@@ -90,9 +98,13 @@ async function hit(p, selector) {
 async function opaque(b, label) {
   const panel = b.p.locator('.wz-workspaces-panel');
   await b.p.evaluate(() => { const d = document.createElement('div'); d.id = 'qa-loud'; d.style.cssText = 'position:fixed;inset:0;z-index:9999;background:repeating-linear-gradient(45deg,red 0 7px,lime 7px 14px);color:blue;font:900 40px sans-serif;pointer-events:none'; d.textContent = 'LOUD BACKGROUND TEXT '.repeat(300); document.body.append(d); });
-  const loud = await panel.screenshot({ path: path.join(OUT, label + '-opaque-loud.png') });
+  const bounds = await panel.boundingBox();
+  // Rounded corner pixels deliberately show the backdrop. Compare only the
+  // painted interior, not those transparent pixels outside the panel's shape.
+  const clip = { x: bounds.x + 12, y: bounds.y + 12, width: bounds.width - 24, height: bounds.height - 24 };
+  const loud = await b.p.screenshot({ clip, path: path.join(OUT, label + '-opaque-loud.png') });
   await b.p.evaluate(() => document.querySelector('#qa-loud').remove());
-  const empty = await panel.screenshot({ path: path.join(OUT, label + '-opaque-empty.png') });
+  const empty = await b.p.screenshot({ clip, path: path.join(OUT, label + '-opaque-empty.png') });
   ok(loud.equals(empty), label + ': opaque panel identical over loud text and empty background');
 }
 async function checks(b, label) {
@@ -132,7 +144,8 @@ async function checks(b, label) {
     await p.locator('.ch-thread').first().waitFor({ state: 'visible' });
     await p.evaluate(() => __wos.onBack());
     await p.locator('.wz-workspaces-control.in-chats').waitFor({ state: 'visible' });
-    const h = await hit(p, '.wz-workspaces-control.in-chats'); ok(h.hits && h.onScreen, label + ': phone Chats header control hit-test');
+    await p.waitForFunction(() => { const el = document.querySelector('.wz-workspaces-control.in-chats'), r = el?.getBoundingClientRect(); return r && r.left >= 0 && r.right <= innerWidth && el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2)); });
+    const h = await hit(p, '.wz-workspaces-control.in-chats'); ok(h.hits && h.onScreen, label + ': phone Chats header control hit-test', JSON.stringify(h));
   } else {
     await p.evaluate(() => __wux.openThread('qa-thread'));
     await p.locator('.pane-main .ch-thread').first().waitFor({ state: 'visible' });
@@ -141,10 +154,13 @@ async function checks(b, label) {
   await open(b); await p.screenshot({ path: path.join(OUT, label + '-chats-menu.png') });
   await p.evaluate(() => {
     const row = document.querySelector('[data-workspace-id="mac"]');
+    // Registered after the product's target listener: inspect synchronously
+    // in the same dispatch, not a capture microtask (which may run before it).
+    let start = 0;
+    row.addEventListener('click', () => { start = performance.now(); }, { capture: true, once: true });
     row.addEventListener('click', () => {
-      const start = performance.now();
-      queueMicrotask(() => { window.__tapProof = { ms: performance.now() - start, active: WizWorkspaces.snapshot().active, pending: WizWorkspaces.snapshot().pending, busy: row.getAttribute('aria-busy'), checked: row.getAttribute('aria-checked'), closed: !document.querySelector('.wz-workspaces-panel') }; });
-    }, { capture: true, once: true });
+      window.__tapProof = { ms: performance.now() - start, active: WizWorkspaces.snapshot().active, pending: WizWorkspaces.snapshot().pending, busy: row.getAttribute('aria-busy'), checked: row.getAttribute('aria-checked'), closed: !document.querySelector('.wz-workspaces-panel') };
+    }, { once: true });
   });
   const row = p.locator('[data-workspace-id="mac"]'); b.phone ? await row.tap() : await row.click();
   const proof = await p.evaluate(() => window.__tapProof);
