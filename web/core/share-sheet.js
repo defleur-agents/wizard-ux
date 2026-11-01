@@ -180,6 +180,8 @@
     return true;
   }
 
+  // Same 31/code-point hash as Messenger; retain the share sheet's original 360-hue identity.
+  const hue = n => { let h = 0; for (const ch of String(n).trim()) h = (h * 31 + ch.codePointAt(0)) >>> 0; return h % 360; };
   const initials = n => (String(n).trim().split(/\s+/).slice(0, 2).map(w => [...w][0] || '').join('') || '?').toUpperCase();
   function appTile(appId) {
     const a = appMeta(appId) || { id: appId, name: appId };
@@ -205,7 +207,7 @@
     el.innerHTML = `<div class="shs-b">
       <div class="shs-t">Share</div>
       ${preview ? `<div class="shs-preview">${thumbnail ? `<img class="shs-thumb" src="${esc(thumbnail)}" alt="Image to share">` : ''}<div class="shs-prev">${esc(preview)}</div></div>` : ''}
-      ${ppl.length ? `<div class="shs-sub">People</div><div class="shs-row" data-shs-people>${ppl.map(p => `<button type="button" class="shs-person" data-shs-app="messenger" data-shs-target="${esc(p.id)}" aria-label="${esc(p.name)} in Messenger"><span class="shs-ic">${esc(initials(p.name))}</span><span class="shs-nm">${esc(p.name)}</span></button>`).join('')}</div>` : ''}
+      ${ppl.length ? `<div class="shs-sub">People</div><div class="shs-row" data-shs-people>${ppl.map(p => `<button type="button" class="shs-person" data-shs-app="messenger" data-shs-target="${esc(p.id)}" aria-label="${esc(p.name)} in Messenger"><span class="shs-av" style="--h:${hue(p.name)}">${esc(initials(p.name))}<span class="shs-badge" aria-hidden="true">${appTile('messenger').icon}</span></span><span class="shs-nm">${esc(p.name)}</span></button>`).join('')}</div>` : ''}
       ${agents.length ? `<div class="shs-sub">Agents</div><div class="shs-row" data-shs-agents>${agents.map(agentTile).join('')}</div>` : ''}
       ${list.length ? `<div class="shs-sub">Apps</div><div class="shs-row" data-shs-apps>${list.map(id => { const t = appTile(id); return `<button type="button" class="shs-app" data-shs-app="${esc(id)}">${t.icon}<span class="shs-nm">${esc(t.name)}</span></button>`; }).join('')}</div>` : ''}
       <button type="button" class="shs-other" data-shs-other><span class="shs-oi" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/></svg></span>Other apps…</button>
