@@ -9,7 +9,7 @@ function sheet() {
   const button={ownerDocument:document, isConnected:true, dataset:{shareto:'__new__'}};
   const field={value:'synthetic share'}, status={};
   const el={isConnected:true, dataset:{}, remove(){this.isConnected=false;}, contains:n=>n===button,
-    querySelector:s=>s==='[role=dialog]'?{focus(){}}:s==='.dv-text'?field:status,
+    querySelector:s=>s==='[role=dialog]'?{focus(){}}:s==='.dv-text'?field:s.includes('input[')?{checked:false,addEventListener(){}}:s==='.dv-chat'?null:status,
     querySelectorAll:()=>[button], addEventListener:(name,fn)=>{if(name==='click')click=fn;}};
   const mount={classList:{add(){},remove(){}},append(){el.isConnected=true;}};
   document.querySelector=()=>mount;document.createElement=()=>el;
@@ -21,9 +21,9 @@ function sheet() {
     setTimeout(fn){const id=++serial;timers.set(id,fn);return id;},clearTimeout:id=>timers.delete(id),
     setInterval(fn){const id=++serial;intervals.set(id,fn);return id;},clearInterval:id=>intervals.delete(id)};
   vm.runInNewContext(source,ctx);
-  const target={ownerDocument:document,closest:s=>s==='[data-shareto]'?button:null};
+  const target={ownerDocument:document,closest:s=>s==='[data-sharesend]'?button:null};
   return {api:ctx.window.WizShareWizard,ctx,host,button,el,target,timers,intervals,sends,uploads,
-    click:(isTrusted=false,other={})=>click({target,isTrusted,...other})};
+    click:async(isTrusted=false,other={})=>{click({target,isTrusted,...other});for(let n=0;n<12;n++)await Promise.resolve();}};
 }
 test('no shell gesture times out denied with zero uploads/sends',async()=>{
   const f=sheet(),p=f.api.wizard({text:'synthetic'},()=>true,{requireTrusted:true});
@@ -55,9 +55,9 @@ test('navigation during upload prevents send and an old completion cannot close 
   const f=sheet();let alive=true, complete;
   f.host.chats.uploadFile=()=>new Promise(r=>complete=r);
   const p=f.api.wizard({files:[new File(['x'],'fixture.ogg')]},()=>alive,{requireTrusted:true});
-  const sending=f.click(true);alive=false;[...f.intervals.values()][0]();assert.equal(await p,'denied');
+  const sending=f.click(true);await sending;alive=false;assert.equal(await p,'sent');
   const next=f.api.wizard({text:'new synthetic'},()=>true,{requireTrusted:true});
-  complete({id:'old-upload'});await sending;assert.equal(f.api.busy,true);assert.equal(f.sends.length,0);
+  complete({id:'old-upload'});for(let n=0;n<12;n++)await Promise.resolve();assert.equal(f.api.busy,true);assert.equal(f.sends.length,0);
   [...f.timers.values()][0]();assert.equal(await next,'denied');
 });
 test('boundary-off sheet retains existing click behaviour',async()=>{

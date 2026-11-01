@@ -13,11 +13,17 @@
   try { if (parent === window && !window.WizardAppIdentity) { const s = document.createElement('script'); s.src = '/wizard-os-home/core/app-identity.js'; (document.head || document.documentElement).appendChild(s); } } catch (_) {}
   const ORIGIN = location.origin, VERSION = 1, overlays = [], handlers = [], themes = new Set(), updates = new Set();
   let service = null, transportReady = false, currentTheme = null, updateAvailable = null, rootWatcher = null, guarded = false, exitUntil = 0, requestId = 0;
-  const requests = new Map();
-  let toolHandler = null;
+  const requests = new Map(), companionMessages = new Set();
+  let toolHandler = null, orbHandler = null;
   const guardPush = history.pushState.bind(history);
   let guardBase = null, standaloneIsRoot = null;
-  let conversation = null;
+  let conversation = null, commandHandler = null;
+  const commands = Object.freeze({ register(handler) {
+    if (typeof handler?.claims !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Commands need claims and receive');
+    if (commandHandler) throw new Error('Commands already registered');
+    const registered = commandHandler = Object.freeze({claims:handler.claims,receive:handler.receive});
+    return () => { if (commandHandler === registered) commandHandler = null; };
+  } });
   const voiceInput = Object.freeze({ register(handler) {
     if (typeof handler?.snapshot !== 'function' || typeof handler?.receive !== 'function') throw new TypeError('Voice input needs snapshot and receive');
     if (conversation) throw new Error('Voice input already registered');
@@ -26,6 +32,7 @@
     return () => { if (conversation === registered) conversation = null; };
   } });
   const conversationClient = Object.freeze({
+    get voiceCommands() { return commandHandler; },
     get voiceInput() { return conversation; },
     get conversation() { return conversation; },
     back, alive: () => true,
@@ -55,6 +62,49 @@
       if (can) { const did = h.back(); if (typeof did !== 'boolean') throw new TypeError('back must return a synchronous boolean'); return did; }
     }
     return false;
+  }
+  // Tapping outside a modal is Back (James, 28 Oct 2026). Capture before app/kit
+  // click handlers: a drag out, or the lifting finger that opened a menu, is not a tap.
+  // cancel is the native Escape path, including apps that preventDefault and close themselves.
+  if (typeof MutationObserver !== 'undefined') {
+    const presses = new WeakMap();
+    const changed = records => {
+      for (const r of records) {
+        if (r.type === 'attributes' && r.target.tagName === 'DIALOG') presses.delete(r.target);
+        for (const n of r.addedNodes || []) {
+          if (n.tagName === 'DIALOG') presses.delete(n);
+          n.querySelectorAll?.('dialog').forEach(d => presses.delete(d));
+        }
+      }
+    };
+    const observer = new MutationObserver(changed);
+    observer.observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['open'] });
+    const modal = e => {
+      changed(observer.takeRecords()); // showModal + pointerdown may happen in one task
+      const d = e.target.closest?.('dialog');
+      return d?.open && d.matches(':modal') && !d.hasAttribute('data-wz-no-outside-close') ? d : null;
+    };
+    const outside = (d, e) => {
+      const r = d.getBoundingClientRect();
+      return e.target === d && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom);
+    };
+    addEventListener('pointerdown', e => {
+      const d = modal(e); if (d) presses.set(d, { outside: outside(d, e) });
+    }, true);
+    addEventListener('pointercancel', e => { const d = modal(e); if (d) presses.delete(d); }, true);
+    // A real tap on a <label> makes the browser forward a second click (no pointerdown) to its control.
+    const forwarded = new WeakMap();
+    addEventListener('click', e => {
+      const d = modal(e); if (!d || e.detail === 0) return; // keyboard/AT activation is never swallowed
+      if (forwarded.get(d) === e.target) { forwarded.delete(d); return; }
+      const press = presses.get(d); presses.delete(d);
+      const control = press && !outside(d, e) ? e.target.closest?.('label')?.control : null;
+      if (control && d.contains(control)) forwarded.set(d, control); else forwarded.delete(d);
+      if (!press || outside(d, e)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        if (press?.outside && outside(d, e) && d.dispatchEvent(new Event('cancel', { cancelable: true }))) d.close();
+      }
+    }, true);
   }
   // Composer input (paste files/text, drop, Enter policy): the shell's one implementation, core/composer-input.js,
   // the same code Chats uses. Loaded on first use; a bind made before it lands is queued, unbind is synchronous.
@@ -242,11 +292,13 @@
   addEventListener('message', e => {
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
+    if (d.type === 'wizard:app:companion' && d.version === VERSION) notify(companionMessages, { from: d.from, data: d.data });
     if (d.type === 'wizard:app:reply' && d.version === VERSION && requests.has(d.id)) {
       const pending = requests.get(d.id); clearTimeout(pending.timer); requests.delete(d.id);
       if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
     }
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
+    if (d.type === 'wizard:app:orb' && d.version === VERSION && orbHandler) { try { orbHandler(); } catch (err) { console.warn('WizardApp orb', err); } }
     if (d.type === 'wizard:app:tool' && d.version === VERSION && toolHandler && typeof d.id === 'string') { try { toolHandler({ id: d.id, value: typeof d.value === 'string' ? d.value : undefined }); } catch (err) { console.warn('WizardApp tool', err); } }
     if (d.type === 'wizard:app:update' && d.version === VERSION) { updateAvailable = d.available; notify(updates, updateAvailable); }
     if (d.type === 'wizard:app:share' && d.version === VERSION) pullShares();
@@ -348,8 +400,27 @@
       stayBack(); if (!exitUntil) pushStandaloneGuard();
     });
   }
+  function shellOp(op, args) {
+    if (service?.shell) return Promise.resolve().then(() => service.shell[op](args));
+    if (transportReady) return request('shell.' + op, args);
+    return Promise.reject(new Error('Companion panes need the Wizard workspace host'));
+  }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    identity: Object.freeze({
+      info: () => framed ? request('identity.info') : Promise.resolve({ unavailable: true }),
+      sign: event => framed ? request('identity.sign', { event }, 190000) : Promise.resolve({ unavailable: true }),
+      nip44_encrypt: args => framed ? request('identity.nip44_encrypt', args, 190000) : Promise.resolve({ unavailable: true }),
+      nip44_decrypt: args => framed ? request('identity.nip44_decrypt', args, 190000) : Promise.resolve({ unavailable: true }),
+    }),
+    shell: Object.freeze({
+      openCompanion: opts => shellOp('openCompanion', opts),
+      closeCompanion: () => shellOp('closeCompanion'),
+      postCompanion: data => shellOp('postCompanion', data),
+      focusApp: () => shellOp('focusApp'),
+      toast: (icon, message) => service?.shell?.toast(icon, message) || false,
+      onCompanionMessage: fn => listen(companionMessages, fn),
+    }),
     voiceInput, conversation: voiceInput, // backwards-compatible name, identical receiver/authority
     back: Object.freeze({ register, push, useHistory }),
     view: Object.freeze({ isVisible: () => !document.hidden && (!framed || service?.view?.isVisible() === true) }),
@@ -365,11 +436,44 @@
       const it = Array.isArray(items) ? items[Math.max(0, Math.floor(+index) || 0)] : null;
       if (!it?.url) return false; window.open(String(it.url), '_blank', 'noopener'); return true;
     } }),
-    voice: Object.freeze({ transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : (window.WizBoundaryClient?.ready || transportReady) ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
+    device: Object.freeze({ legacy: Object.freeze({
+      available(method) { return !!service?.device?.legacy?.available(method); },
+      call(method, args = []) { if (!service?.device?.legacy) throw new Error('Legacy device unavailable'); return service.device.legacy.call(method, args); },
+    }), backgroundAudio: Object.freeze({
+      request(method, params = {}) {
+        if (!service?.device?.backgroundAudio) return Promise.reject(new Error('Background audio unavailable'));
+        return service.device.backgroundAudio.request(method, params);
+      },
+    }) }),
+    voice: Object.freeze({ commands, stripAddress: text => service ? service.voice.stripAddress(text) : String(text || ''), transcribe: (file, opts = {}) => service?.voice ? service.voice.transcribe(file, opts) : (window.WizBoundaryClient?.ready || transportReady) ? request('voice.transcribe', { file, language: opts.language }, 180000) : Promise.resolve({ unavailable: true }) }),
     share: Object.freeze({ get wizard() { return service?.share?.wizard ? data => service.share.wizard(data) : (window.WizBoundaryClient?.ready || transportReady) ? data => request('share.wizard', data, 600000) : undefined; }, text: data => service ? service.share.text(data) : transportReady ? sharedResult(request('share.text', data)) : fallbackText(data), file: (file, opts) => service ? service.share.file(file, opts) : transportReady ? sharedResult(request('share.file', { file, options: opts })) : fallbackFile(file, opts),
       receive: receiveShares, targets: shareTargets, check: () => pullShares() }),
     titlebar: Object.freeze({ set: (tools, onTool) => { toolHandler = typeof onTool === 'function' ? onTool : null; return service ? Promise.resolve(service.titlebar.set(tools)) : transportReady ? request('titlebar.set', { tools }).then(v => v === true, () => false) : Promise.resolve(false); },
       shown: () => { try { return !!service?.titlebar.shown(); } catch (_) { return false; } } }),
+    /* The agent orb as this app's main button (two-orb layout): claim({ icon, label }, onTap) puts the icon on the orb
+     * in this app's colour while the app is in front; tap runs onTap, hold still picks an agent. Resolves true when
+     * the host shows it (the app then hides its own button), false when there is no orb to claim. */
+    orb: Object.freeze({
+      claim: (spec, onTap) => { orbHandler = typeof onTap === 'function' ? onTap : null; return service?.orb ? Promise.resolve(service.orb.set(spec)) : transportReady ? request('orb.set', { spec }).then(v => v === true, () => false) : Promise.resolve(false); },
+      release: () => { orbHandler = null; return service?.orb ? Promise.resolve(service.orb.set(null)) : transportReady ? request('orb.set', { spec: null }).then(() => true, () => false) : Promise.resolve(false); },
+      shown: () => { try { return !!service?.orb?.shown(); } catch (_) { return false; } },
+    }),
+    /* Lower Wizard Music while this app plays something short (a voice note); duck(false) restores it. */
+    audio: Object.freeze({ duck: on => service?.audio ? Promise.resolve(service.audio.duck(!!on)).then(v => v === true, () => false) : transportReady ? request('audio.duck', { on: !!on }).then(v => v === true, () => false) : Promise.resolve(false) }),
+    /* Fingerprint vault (Wizard OS Android app): keep one small secret for this app on the phone, behind the
+     * fingerprint. has() -> {available, saved}; seal(secret, title) and open(title) show the fingerprint prompt;
+     * errors carry .code (cancelled, unavailable, not_saved, invalidated, busy, failed). */
+    vault: Object.freeze((() => {
+      const call = (op, args) => service?.vault ? service.vault[op.slice(6)](...(op === 'vault.seal' ? [args.secret, args.title] : [args?.title]))
+        : transportReady ? request(op, args, 130000).catch(e => { throw Object.assign(new Error(String(e.message).replace(/^vault:/, '')), { code: String(e.message).startsWith('vault:') ? String(e.message).slice(6) : 'unavailable' }); })
+        : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' }));
+      return {
+        has: () => call('vault.has').catch(() => ({ available: false, saved: false })),
+        seal: (secret, title) => call('vault.seal', { secret, title }),
+        open: title => call('vault.open', { title }).then(r => r.secret),
+        forget: () => call('vault.forget'),
+      };
+    })()),
     badge: Object.freeze({ set: n => service ? service.badge.set(n) : transportReady ? request('badge.set', { n }).then(() => true, () => false) : Promise.resolve(false) }),
     attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),
@@ -377,6 +481,7 @@
     capture: Object.freeze({ start: async opts => { if (['auto', 'command'].includes(opts?.kind)) throw new Error('Capture kind is reserved for Wizard voice; use audio/meeting and task metadata'); if (service) return service.capture.start(opts); if (framed) throw new Error('Shared capture needs the verified synchronous host connection'); const resource=captureModule(); return opts?.resumeId && resource.resume ? resource.resume(standaloneId(),opts.resumeId,opts) : resource.start(standaloneId(), opts); },
       prepare: opts => { if(service) return service.capture.prepare(opts); if(framed) throw new Error('Capture preparation needs the verified host connection'); return captureModule().prepare(standaloneId(),opts); },
       capabilities: opts => { if(service) return service.capture.capabilities(opts); if(framed) return {}; return captureModule().capabilities(opts); },
+      attach: () => { if(service) return service.capture.attach(); if(framed) throw new Error('Capture recovery needs the verified host connection'); return captureModule().attach(standaloneId()); },
       current: () => { if(service) return service.capture.current(); if(framed) return null; return captureModule().current(standaloneId()); },
       pending: async () => service ? service.capture.pending() : transportReady ? request('capture.pending') : captureModule().pending(standaloneId()), ack: async id => service ? service.capture.ack(id) : transportReady ? request('capture.ack', { id }) : captureModule().ack(standaloneId(), id) }),
   });

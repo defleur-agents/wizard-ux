@@ -27,7 +27,7 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
   };
   // Bound views and review peeks belong to the chat that opened them; device-only apps stay on their device.
-  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs;
+  const syncable = w => !!w && APPS.has(w.app) && !window.WosFeatures?.retired(w) && !w.bound && !w.from && !w.servicesAs && !w.preview;
   function pick(w) {
     const o = { id: w.id, app: w.app };
     for (const k of FIELDS) { const v = w[k]; if (v != null && v !== '' && !(k === 'thread' && v === '__new__')) o[k] = v; }
@@ -37,16 +37,36 @@
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const looseSig = d => d.wins.map(w => [w.app, w.appId || '', w.agent || ''].join('|')).sort().join('&');
 
-  /* Three-way merge: start from the box's desks, replay what this device changed since `base`. */
+  /* Three-way merge: start from the box's desks, replay what this device changed since `base`.
+   * Closing wins over edits: a window or desk closed on one device stays closed when the other device only changed
+   * something inside it (its page, thread or title). Only windows opened since `base` keep a closed desk alive, so a
+   * close never needs doing twice. */
+  const ids = d => new Set((d?.wins || []).map(w => w.id));
+  function mergeDesk(b, mine, theirs) {
+    const inBase = ids(b), inTheirs = ids(theirs), inMine = ids(mine);
+    const baseWin = new Map(b.wins.map(w => [w.id, w])), theirWin = new Map(theirs.wins.map(w => [w.id, w]));
+    const wins = mine.wins
+      .filter(w => !inBase.has(w.id) || inTheirs.has(w.id))                     // closed there stays closed
+      .map(w => (inBase.has(w.id) && same(baseWin.get(w.id), w) ? theirWin.get(w.id) : w)); // their edit unless mine
+    for (const w of theirs.wins) if (!inBase.has(w.id) && !inMine.has(w.id)) wins.push(w); // opened there
+    return { ...theirs, wins };
+  }
   function merge(base, local, remote) {
     const B = new Map(base.desks.map(d => [d.id, d])), L = new Map(local.desks.map(d => [d.id, d]));
     const out = remote.desks.map(d => ({ ...d }));
     const at = id => out.findIndex(d => d.id === id);
-    for (const [id, d] of B) { const j = at(id); if (!L.has(id) && j >= 0 && same(out[j], d)) out.splice(j, 1); } // closed here, untouched there
+    for (const [id, d] of B) { // closed here: gone, unless the other device opened something new on it meanwhile
+      const j = at(id); if (L.has(id) || j < 0) continue;
+      const fresh = out[j].wins.filter(w => !ids(d).has(w.id));
+      if (fresh.length) out[j] = { ...out[j], wins: fresh }; else out.splice(j, 1);
+    }
     local.desks.forEach((d, i) => {
       const b = B.get(d.id), j = at(d.id);
       if (!b) { if (j < 0) out.splice(Math.min(i, out.length), 0, d); }                         // opened here
-      else if (!same(b, d)) { if (j >= 0) out[j] = d; else out.splice(Math.min(i, out.length), 0, d); } // edited here
+      else if (!same(b, d)) {                                                                    // edited here
+        if (j >= 0) out[j] = mergeDesk(b, d, out[j]);
+        else { const fresh = d.wins.filter(w => !ids(b).has(w.id)); if (fresh.length) out.splice(Math.min(i, out.length), 0, { ...d, wins: fresh }); }
+      }
     });
     // Desks reordered here: shared desks follow this device's order, the others keep their places.
     const order = ids => ids.filter(id => L.has(id) && B.has(id));
@@ -55,6 +75,10 @@
       const moved = slots.map(i => out[i]).sort((a, b) => local.desks.findIndex(d => d.id === a.id) - local.desks.findIndex(d => d.id === b.id));
       slots.forEach((i, k) => { out[i] = moved[k]; });
     }
+    // A window changed here keeps this device's change wherever it now lives (the other device may have moved it).
+    const all = s => new Map(s.desks.flatMap(d => d.wins.map(w => [w.id, w])));
+    const baseAll = all(base), localAll = all(local);
+    for (const d of out) d.wins = d.wins.map(w => { const l = localAll.get(w.id), b = baseAll.get(w.id); return l && b && !same(l, b) ? l : w; });
     // A window lives on one desk: where this device put it wins, otherwise its first desk.
     const mine = new Map(); local.desks.forEach(d => d.wins.forEach(w => mine.set(w.id, d.id)));
     const home = id => mine.has(id) && out.some(d => d.id === mine.get(id) && d.wins.some(w => w.id === id)) ? mine.get(id) : null;
@@ -98,10 +122,16 @@
 
   function label(shell) {
     const ua = navigator.userAgent || '';
-    const what = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux|X11/.test(ua) ? 'Linux' : 'device';
+    let what = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Mac/.test(ua) ? 'Mac' : /Windows/.test(ua) ? 'Windows' : /Linux|X11/.test(ua) ? 'Linux' : 'device';
+    if (what === 'Android') {
+      // WebView includes the model; reduced browser UAs expose only "K". Never label two phones just Android.
+      const model = (ua.match(/Android[^;)]*;\s*([^;)]+)/)?.[1] || '').split(/\s+Build\//)[0].trim();
+      let id = ls.get('wos.wsync.device', '');
+      if (!id) { id = Math.random().toString(36).slice(2, 8); ls.set('wos.wsync.device', id); }
+      what = model && !/^(K|wv)$/i.test(model) ? model.slice(0, 45) : `Android ${id}`;
+    }
     return shell === 'desktop' ? `${what} desktop` : what;
   }
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   function create({ shell, read, apply, title }) {
     const name = label(shell);
@@ -124,8 +154,8 @@
       finally { applying = false; }
       lastLocal = now(); persist();
     }
-    async function req(method, path, body) {
-      const r = await fetch(API + path, { method, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+    async function req(method, path, body, signal) {
+      const r = await fetch(API + path, { method, signal, cache: 'no-store', credentials: 'same-origin', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
       const j = await r.json().catch(() => null);
       if (r.status === 404 && !(j && 'rev' in j)) { const e = new Error('absent'); e.absent = true; throw e; }
       if (j?.state) {
@@ -176,21 +206,49 @@
       if (!dirty) { put(j.state); return; }
       pending = merge(lastLocal, local, j.state); put(pending); unsent(); schedule();
     }
+    // One reader per client. A foreground/online event interrupts its hidden wait, backoff or suspended fetch;
+    // starting a second loop here would race the first one and could apply an older snapshot after a save.
+    let poll = null, wakeWait = null;
+    function pause(ms) {
+      return new Promise(resolve => {
+        const done = () => { clearTimeout(t); if (wakeWait === done) wakeWait = null; resolve(); };
+        const t = setTimeout(done, ms); wakeWait = done;
+      });
+    }
+    function wake() {
+      if (!alive || off() || document.hidden) return;
+      ok = null; // the next GET must be an immediate read, not another 25-second long-poll
+      if (poll) { poll.woken = true; poll.abort(); }
+      wakeWait?.();
+      if (st.base && lastLocal && !same(now(), lastLocal)) schedule();
+    }
     async function loop() {
       let fails = 0;
       while (alive) {
-        if (off()) { await sleep(5000); continue; }
+        if (off()) { await pause(5000); continue; }
+        const controller = new AbortController(), baseline = st;
+        poll = controller;
+        const deadline = setTimeout(() => controller.abort(), 35000);
         try {
           const wait = document.hidden || !st.base || ok !== true ? 0 : 25; // answer at once until in sync, then long-poll
-          const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`);
+          const { status, j } = await req('GET', `?since=${st.base ? st.rev : -1}&wait=${wait}`, undefined, controller.signal);
+          if (!alive || controller.woken || off()) continue;
           if (status !== 200 || !j || !Array.isArray(j.state?.desks)) throw new Error('state ' + status);
-          if (!busy && (j.rev !== st.rev || !st.base)) arrive(j); else take(j);
+          // Revisions can be reused after restore/reset. Validate the snapshot too, including the first read of a
+          // saved checkpoint. Ignore a read overtaken by this client's PUT instead of rolling its baseline back.
+          if (!busy && st === baseline) {
+            if (j.rev !== st.rev || !st.base || !same(j.state, st.base)) arrive(j); else take(j);
+          }
           if (ok !== true) { ok = true; } emit(); fails = 0;
-          if (document.hidden) await sleep(15000);
+          if (document.hidden) await pause(15000);
         } catch (e) {
+          if (!alive) break;
+          if (controller.woken) continue;
           if (e.absent) { ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
           ok = false; emit(); fails++;
-          await sleep(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
+          await pause(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
+        } finally {
+          clearTimeout(deadline); if (poll === controller) poll = null;
         }
       }
     }
@@ -202,12 +260,20 @@
       finally { applying = false; }
       closed = closed.filter(x => x !== c); schedule(); emit(); return true;
     }
-    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null, last: null }; lastLocal = null; persist(); } emit(); }
-    addEventListener('pagehide', () => { if (timer) { clearTimeout(timer); push(); } });
-    setTimeout(loop, 300);
+    function setOff(v) { ls.set(OFF, !!v); if (!v) { st = { rev: -1, base: null, last: null }; lastLocal = null; persist(); wake(); } emit(); }
+    const flush = () => { if (timer) { clearTimeout(timer); push(); } };
+    addEventListener('pagehide', flush);
+    for (const type of ['pageshow', 'focus', 'online']) addEventListener(type, wake);
+    for (const type of ['visibilitychange', 'resume']) document.addEventListener?.(type, wake);
+    const start = setTimeout(loop, 300);
     if (st.base && lastLocal && !same(now(), lastLocal)) setTimeout(schedule, 0); // offline edits from before a reload
     const api = {
-      changed, reopen, setOff, title, stop() { alive = false; },
+      changed, reopen, setOff, title, stop() {
+        alive = false; clearTimeout(start); clearTimeout(timer); poll?.abort(); wakeWait?.();
+        window.removeEventListener?.('pagehide', flush);
+        for (const type of ['pageshow', 'focus', 'online']) window.removeEventListener?.(type, wake);
+        for (const type of ['visibilitychange', 'resume']) document.removeEventListener?.(type, wake);
+      },
       get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
     };
     window.WosWorkspaceSync.current = api;

@@ -31,8 +31,29 @@
   const SUBSCRIPTIONS = ['openai-codex', SUB];
   // Connection metadata only: native subscriptions belong to Hermes' Anthropic pool,
   // not the legacy Claude Code login. An unavailable connector leaves legacy intact.
-  const hasNativeClaude = connection => arr(obj(connection).accounts).some(a =>
-    a.id !== 'legacy-claude-code' && a.source !== 'legacy-claude-code' && a.status === 'ready');
+  const nativeClaudeAccounts = connection => arr(obj(connection).accounts).filter(a =>
+    a && a.id !== 'legacy-claude-code' && a.source !== 'legacy-claude-code');
+  // A quota-limited grant is still installed in Hermes' pool. Dropping its route
+  // from the picker would silently steer the owner onto the single-login legacy route.
+  const hasNativeClaude = connection => nativeClaudeAccounts(connection).some(a =>
+    ['ready', 'ok', 'exhausted', 'rate_limited'].includes(a.status));
+  const accountAtLimit = a => {
+    if (!a || !['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) return false;
+    if (['exhausted', 'rate_limited'].includes(a.status)) return true;
+    const usage = obj(a.usage);
+    const fetched = Date.parse(usage.fetchedAt);
+    if (!Number.isFinite(fetched) || Math.abs(Date.now() - fetched) > 15 * 60e3) return false;
+    return arr(usage.limits).some(limit =>
+      (limit.id === 'session:session' || limit.id === 'weekly_all:weekly') &&
+      Number(limit.usedPercent) >= 100 && Number(limit.remainingPercent) <= 0);
+  };
+  const claudeLimitNote = connection => {
+    const accounts = arr(obj(connection).accounts);
+    // The connector can say connected/ok even when a fresh usage meter is full.
+    // A model-specific allowance may remain, so never claim all Claude models are out.
+    return accounts.length && accounts.every(accountAtLimit)
+      ? 'Every listed Claude account reports a limit. Changing accounts alone may not restore this model; another model may still be available.' : '';
+  };
   const CLAUDE_ORDER = ['fable', 'opus', 'sonnet', 'haiku'];
   const GPT_ORDER = ['astra', 'sol', 'terra', 'luna', 'codex-spark'];
   // The models closest to the thumb in the compact model menu (James 18 Oct 2026). Everything else is one tap away.
@@ -40,7 +61,7 @@
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes']);
+  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
@@ -116,6 +137,11 @@
       // The configured route is authoritative even when a static catalogue lags.
       if (curModel && currentSlug === defProvider && !unique.some(o => o.value === curModel && o.provider === defProvider))
         unique.unshift({ value: curModel, provider: currentSlug, isGlobalDefault: true, name: claudeName(curModel, pslug) || friendly(curModel), description: pname });
+      // A default on the legacy Claude Code login (one subscription, no rotation) moves to the ready
+      // Hermes pool's same model, so new chats don't lock onto an exhausted login. Explicit thread picks stay.
+      const legacy = nativeClaude && unique.find(o => o.isGlobalDefault && o.provider === SUB && claudeFamily(o.value, SUB));
+      const pooled = legacy && unique.find(o => o.nativeClaude && o.provider === 'anthropic' && versionKey(o.value) === versionKey(legacy.value));
+      if (pooled) { legacy.isGlobalDefault = false; pooled.isGlobalDefault = true; }
       return curModel ? unique.sort((a, b) => Number(!!b.isGlobalDefault) - Number(!!a.isGlobalDefault)) : unique;
     }
     const raw = Array.isArray(payload) ? payload : arr(root.options).length ? arr(root.options) : arr(root.models);
@@ -161,21 +187,47 @@
   }
 
   const M = {
-    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null,
+    options: [], providers: [], tinfoil: null, selections: new Map(), pending: new Map(), ready: false, error: '', at: 0, loading: null, claudeDown: false, claudeLimit: '',
+    // The picker refetches on open when its list is older than this, so a just-added sign-in shows up right away.
+    FRESH_MS: 15e3,
+    stale() { return !M.ready || Date.now() - M.at > M.FRESH_MS; },
+    claudeNote() { return `${M.claudeDown ? '<p class="ch-sheet-n mwarn" role="status">Claude app not answering · Claude models may be missing</p>' : ''}${M.claudeLimit ? `<p class="ch-sheet-n mwarn" role="status">${esc(M.claudeLimit)}</p>` : ''}`; },
     load(force) {
       if (M.loading) return M.loading;
       if (!force && M.ready && Date.now() - M.at < 5 * 60e3) return Promise.resolve(M.options);
       // The app owns the upstream key. Hermes' local bearer is not proof that a key is saved.
       const connection = fetch('/wizard-tinfoil/api/status', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
         .then(r => r.ok ? r.json() : null).catch(() => null);
+      // A Claude app that hangs or errors is "not answering", which is different from "no Claude app" (404 or the
+      // host's HTML fallback): only the first gets a line in the picker, so a broken app never looks like no subscription.
       const claude = fetch('/wizard-claude/api/accounts', { cache: 'no-store', credentials: 'same-origin', signal: AbortSignal.timeout(4000) })
-        .then(r => r.ok ? r.json() : null).catch(() => null);
+        .then(r => { M.claudeDown = r.status >= 500; return r.ok ? r.json() : null; })
+        .catch(e => { M.claudeDown = /abort|timeout/i.test(String(e?.name || '')) || e instanceof TypeError; return null; });
       M.loading = fetch('/wizard/hermes/api/model/options', { cache: 'no-store', credentials: 'same-origin' })
         .then(r => { if (!r.ok) throw new Error(`Models unavailable (${r.status})`); return r.json(); })
-        .then(async j => { M.tinfoil = await connection; M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(await claude)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); return M.options; })
+        .then(async j => { M.tinfoil = await connection; const accounts = await claude; M.claudeLimit = claudeLimitNote(accounts); M.providers = arr(obj(j).providers); M.options = normalize(j, hasNativeClaude(accounts)).filter(o => !isTinfoil(o.provider) || M.tinfoilReady()); M.ready = true; M.error = ''; M.at = Date.now(); M.recheckPlaceholder(); return M.options; })
         .catch(e => { M.error = String(e.message || e); return M.options; })
         .finally(() => { M.loading = null; });
       return M.loading;
+    },
+    /* Hermes answers with an offline placeholder catalogue while a ChatGPT sign-in is renewing or the pool just switched
+     * accounts (no live answer yet). It omits account-gated models (Astra) and the newest tier (6.1 Sol), so the switch
+     * greyed Astra and showed an older Sol for the full 5-minute cache. A signed-in ChatGPT list without Astra is
+     * rechecked a few times soon after; listeners on `wos:models` repaint when the real catalogue arrives. Bounded,
+     * so a plan without Astra settles after the last try. */
+    placeholderTries: 0, PLACEHOLDER_RETRY_MS: [8e3, 30e3, 90e3], placeholderTimer: 0,
+    codexPlaceholder() {
+      const p = M.providers.find(x => str(obj(x).slug) === 'openai-codex');
+      return !!p && p.authenticated === true && arr(p.models).length > 0 && !arr(p.models).some(m => gptFamily(typeof m === 'string' ? m : str(obj(m).id, obj(m).value), 'openai-codex') === 'gpt:astra');
+    },
+    recheckPlaceholder() {
+      if (!M.codexPlaceholder()) { M.placeholderTries = 0; return; }
+      const wait = M.PLACEHOLDER_RETRY_MS[M.placeholderTries]; if (wait === undefined || M.placeholderTimer) return;
+      M.placeholderTries += 1;
+      M.placeholderTimer = setTimeout(() => {
+        M.placeholderTimer = 0; const before = JSON.stringify(M.options.map(o => [o.provider, o.value]));
+        M.load(true).then(() => { if (JSON.stringify(M.options.map(o => [o.provider, o.value])) !== before) window.dispatchEvent?.(new Event('wos:models')); });
+      }, wait);
     },
     normalize, hasNativeClaude, visibleChoices, PRIMARY, family, privateName, isPrivateRoute: isTinfoil, ours,
     tinfoilReady() { return M.tinfoil?.provider === 'tinfoil' && M.tinfoil?.credentialStored === true; },
@@ -186,7 +238,7 @@
     short(model, provider) {
       if (!model) return '';
       if (isTinfoil(provider)) { const n = privateName(model); return [n.name, n.version].filter(Boolean).join(' '); }
-      const f = claudeFamily(model, provider || (/^claude-/.test(model) ? 'anthropic' : ''));
+      const f = claudeFamily(model, /^claude-/i.test(model) ? 'anthropic' : provider);
       if (f) return cap(f);
       const o = M.find(model, provider);
       return (o ? o.name : friendly(model)).replace(/^Claude /, '').split(' · ')[0];
@@ -335,7 +387,7 @@
         + privList.map((o, k) => { const i = main.length + k; return `<button type="button" class="mrow priv${isCur(o) ? ' on' : ''}" data-mpick="${i}" data-mprivate="${esc(o.agent)}" aria-pressed="${isCur(o)}"><span class="mn"><b>${lock}${esc(o.name)}</b><small>${esc([o.description, o.isGlobalDefault ? 'Default' : ''].filter(Boolean).join(' · '))}</small></span>${isCur(o) ? '<i class="mck" aria-hidden="true">✓</i>' : ''}</button>`; }).join('')
         + `<p class="msheet-gn">${esc(privNote)}</p></div>` : '';
       return { list, html: `<div class="ch-sheet ch-msheet" role="dialog" aria-label="${esc(head)}"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(title ? `${head} · ${title}` : head)}</div>
-        <div class="msheet-list">${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
+        <div class="msheet-list">${own ? '' : M.claudeNote()}${rows}${!own && !privList.length && ours() && !M.options.some(o => isTinfoil(o.provider)) ? '<a class="mrow more" href="/wizard-tinfoil/" target="_blank" rel="noopener">Set up Tinfoil</a>' : ''}${!own && M.ready && !all && M.options.length > main.length ? `<button type="button" class="mrow more" data-mall>More models · ${M.options.length}</button>` : ''}${privRows}</div>
         <p class="ch-sheet-n">${esc(note)}</p></div></div>` };
     },
     /* The compact model menu opened from the label in the message box: a small card over the right side.
@@ -366,25 +418,25 @@
       // The section you're in sits at the bottom, by your thumb; the other section is right above it.
       const mainSec = sec(own ? agent.label : 'Models', mainRows), privSec = sec('Private agent', privRows, ' priv');
       const body = !M.ready && !primary.length && !own ? `<p class="ch-sheet-n">${M.error ? esc(M.error) : 'Loading models…'}</p>`
-        : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec);
+        : (moreRows ? sec('More models', moreRows) : moreBtn) + (curPriv ? mainSec + privSec : privSec + mainSec) + (own ? '' : M.claudeNote());
       return { list, html: `<div class="ch-sheet ch-mpop" role="dialog" aria-label="${mode === 'new' ? 'Model for this new chat' : 'Model for this thread'}"><div class="ch-sheet-b"><div class="msheet-list">${body}</div></div></div>` };
     },
     /* A failed thread: what happened, on which model, and the ways out (Retry · Choose another model · Dismiss). */
-    failureHtml({ s, busy, canRetry }) {
+    failureHtml({ s, busy, retryLabel, canRetry }) {
       const model = s.model ? M.name(s.model, s.provider) : '';
       // The provider's sign-in expired: Retry can't fix that, the provider's connection app can.
       const rc = s.reconnect;
-      if (rc) {
-        const open = rc.installed ? `Open ${rc.name}` : `Get ${rc.name}`;
-        const what = s.safeError || `${rc.name} is signed out. ${open} to reconnect, then tap Retry.`;
-        return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">Signed out · ${esc(rc.name)}</span>
-        <p>${esc(what)}</p>
-        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-installed="${rc.installed ? '1' : '0'}">${esc(open)}</button><button type="button" class="ghost" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+      if (rc && s.queueReason !== 'provider_access' && busy !== 'retry') {
+        const target = M.short(s.model, s.provider) || model || rc.name;
+        return `<section class="ch-fail diagnosed" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${esc(rc.name)} sign-in expired</span>
+        <p>This message is saved. Sign in to ${esc(rc.name)} and it will send to ${esc(target)} on its own.</p>
+        <div class="ch-fail-b"><button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}">Sign in to ${esc(rc.name)}</button></div></section>`;
       }
-      const what = s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';
-      return `<section class="ch-fail" role="alert" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>
-        <p>${esc(what)} Retry sends it again${model ? ' on the same model' : ''}, or pick another model. Dismiss clears the error and keeps the thread.</p>
-        <div class="ch-fail-b"><button type="button" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
+      const waiting = s.status === 'queued' && s.queueReason === 'provider_access';
+      const what = waiting ? s.safeError || 'The selected AI provider could not start this request.' : s.status === 'interrupted' ? 'The last request was interrupted before it finished.' : 'The last request didn’t finish.';
+      return `<section class="ch-fail" role="alert" aria-busy="${!!busy}" data-chfail="${esc(s.id)}"><span class="lb">${s.status === 'interrupted' ? 'Interrupted' : 'Needs retry'}${model ? ` · ${esc(model)}` : ''}</span>
+        <p${busy === 'retry' ? ' role="status"' : ''}>${busy === 'retry' ? esc(retryLabel || 'Retrying…') : `${esc(what)} ${waiting ? 'Your original message and files are saved. You can choose another model and retry now, or wait: it will retry automatically on the same provider when access returns. ' : ''}Retry sends it again${model ? ' on the same model' : ''}, or pick another model. Dismiss clears the error and keeps the thread.`}</p>
+        <div class="ch-fail-b">${waiting && rc ? `<button type="button" data-chreconnect="${esc(rc.appId)}" data-recovery-run="${esc(rc.runId || '')}" ${busy ? 'disabled' : ''}>Sign in to ${esc(rc.name)}</button>` : ''}<button type="button" data-chretry ${busy || !canRetry ? 'disabled' : ''}>${busy === 'retry' ? 'Retrying…' : 'Retry'}</button><button type="button" data-chretrymodel ${busy || !canRetry ? 'disabled' : ''}>Choose another model</button><button type="button" class="ghost" data-chdismiss ${busy ? 'disabled' : ''}>${busy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}</button></div></section>`;
     },
   };
   window.WosModels = M;

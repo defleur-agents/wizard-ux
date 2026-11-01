@@ -69,6 +69,10 @@ def glyph(name, desc, scale=1.0, dy=0):
         G[name] = dict(fn=fn, desc=desc, scale=scale, dy=dy); return fn
     return deco
 
+@glyph('pages', 'A folded page with a reading line cut through it: what your agent makes.')
+def g_pages():
+    return D(P('M146 88H300L384 172V424H146Z'), P('M300 88V172H384Z'), rrect(190, 244, 150, 26, 8))
+
 @glyph('wizard', 'The mother mark: the hat, with its door joined to the ground line.')
 def g_wizard():
     return D(hat(), P("M226 412 V346 A30 30 0 0 1 286 346 V412 Z"))
@@ -389,6 +393,16 @@ def g_notes():
     body = poly((x0 + nx * h, y0 + ny * h), (bx + nx * h, by + ny * h), (bx - nx * h, by - ny * h), (x0 - nx * h, y0 - ny * h))
     tip = poly((bx + nx * h, by + ny * h), (x1, y1), (bx - nx * h, by - ny * h))
     return D(page, U(body, tip))
+
+@glyph('profile', 'A disc with a wizard cut out, hat over a bust running off the edge: who you are, as friends see you.')
+def g_profile():
+    disc = circle(256, 256, 176)
+    # Three big shapes so it still reads at 24 px: the hat, one bust (head and shoulders joined), and a wide band
+    # of disc between them. The shoulders run past the disc, so it is a person, never a pawn on a base.
+    hat_ = U(hat_at(256, 200, 106), rrect(170, 184, 172, 30, 15))   # tip stays inside the disc
+    bust = U(circle(256, 284, 46), P("M118 480 C124 372 188 326 256 326 C324 326 388 372 394 480 Z"))
+    bust = D(bust, rrect(140, 150, 232, 92, 0))      # flat-topped head: the hat sits on it across a clear gap
+    return D(disc, U(hat_, bust))
 
 # ---------- normalise + emit ----------
 def fmt(p):

@@ -30,6 +30,39 @@ test('closing a desk here closes it on the box; a desk changed elsewhere meanwhi
   assert.deepEqual(plain(S.merge(base, { desks: [D('a', chats('w1'))] }, remote)).desks.map(d => d.id), ['a', 'b']);
 });
 
+test('a desk closed on one device stays closed when the other device only changed what it shows', () => {
+  const base = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/' })] };
+  // Elsewhere: b closed. Here: b's app moved to another page (not yet sent). Before: b came back, needing a second close.
+  const local = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/#/budget' })] };
+  assert.deepEqual(plain(S.merge(base, local, { desks: [D('a', chats('w1'))] })).desks.map(d => d.id), ['a']);
+  // Mirror: closed here while the other device changed the page inside it.
+  const remote = { desks: [D('a', chats('w1')), D('b', { ...app('w2', 'money'), url: '/money/#/budget' })] };
+  assert.deepEqual(plain(S.merge(base, { desks: [D('a', chats('w1'))] }, remote)).desks.map(d => d.id), ['a']);
+  // A window opened on that desk here since the close is new work, so it is kept (on its own).
+  const added = { desks: [D('a', chats('w1')), D('b', app('w2', 'money'), app('w5', 'files'))] };
+  assert.deepEqual(plain(S.merge(base, added, { desks: [D('a', chats('w1'))] })).desks.map(d => [d.id, d.wins.map(w => w.id)]), [['a', ['w1']], ['b', ['w5']]]);
+});
+
+test('a window closed on one device stays closed when the other device edited its desk', () => {
+  const base = { desks: [D('a', chats('w1'), app('w2', 'cinequeue'))] };
+  const remote = { desks: [D('a', chats('w1'))] };                                          // Movies closed there
+  const local = { desks: [D('a', { ...chats('w1'), thread: 't1' }, app('w2', 'cinequeue'))] }; // chat opened a thread here
+  const out = plain(S.merge(base, local, remote));
+  assert.deepEqual(out.desks, [D('a', { ...chats('w1'), thread: 't1' })]);
+  // And a window the other device opened on the same desk meanwhile is kept.
+  const remote2 = { desks: [D('a', chats('w1'), app('w2', 'cinequeue'), app('w3', 'files'))] };
+  assert.deepEqual(plain(S.merge(base, local, remote2)).desks[0].wins.map(w => w.id), ['w1', 'w2', 'w3']);
+});
+
+test('a window moved to another desk elsewhere while edited here keeps the move and the edit', () => {
+  const base = { desks: [D('a', chats('w1'), app('w2', 'money')), D('b', app('w3', 'files'))] };
+  const remote = { desks: [D('a', chats('w1')), D('b', app('w3', 'files'), app('w2', 'money'))] }; // w2 moved to b there
+  const local = { desks: [D('a', chats('w1'), { ...app('w2', 'money'), url: '/money/#/budget' }), D('b', app('w3', 'files'))] }; // w2 page changed here
+  const out = plain(S.merge(base, local, remote));
+  assert.deepEqual(out.desks.map(d => [d.id, d.wins.map(w => w.id)]), [['a', ['w1']], ['b', ['w3', 'w2']]]);
+  assert.equal(out.desks[1].wins[1].url, '/money/#/budget');
+});
+
 test('a window moved to another desk here is not duplicated', () => {
   const base = { desks: [D('a', chats('w1'), app('w2', 'files')), D('b', app('w3', 'wisdom'))] };
   const local = { desks: [D('a', chats('w1')), D('b', app('w3', 'wisdom'), app('w2', 'files'))] };
@@ -58,16 +91,19 @@ test('reconcile keeps local window objects and layout, adds new desks, closes re
 });
 
 // Client sync loop against a fake box: per-shell checkpoints and offline edits that survive a reload.
-function client(store, box, shell, desks) {
-  const sb = { console, JSON, Map, Set, Math, Date, Promise, Error, Event: class {}, document: { hidden: false },
-    navigator: { userAgent: 'iPhone' }, addEventListener() {}, dispatchEvent() {}, setTimeout: (f, ms) => (ms > 1000 ? 0 : setTimeout(f, 0)), clearTimeout,
+function client(store, box, shell, desks, options = {}) {
+  const events = new Map();
+  const listen = (type, fn) => { if (!events.has(type)) events.set(type, new Set()); events.get(type).add(fn); };
+  const unlisten = (type, fn) => events.get(type)?.delete(fn);
+  const sb = { console, JSON, Map, Set, Math, Date, Promise, Error, AbortController, Event: class {}, document: { hidden: false, addEventListener: listen, removeEventListener: unlisten },
+    navigator: { userAgent: options.ua || 'iPhone' }, addEventListener: listen, removeEventListener: unlisten, dispatchEvent() {}, setTimeout: (f, ms) => (ms > 1000 ? 0 : setTimeout(f, 0)), clearTimeout,
     localStorage: { getItem: k => store.has(k) ? store.get(k) : null, setItem: (k, v) => store.set(k, String(v)) },
     fetch: async (url, o = {}) => box.handle(url, o) };
   vm.runInNewContext(features, { window: sb });
   sb.window = sb; vm.runInNewContext(src, sb);
   const st = { desks };
   const api = sb.WosWorkspaceSync.create({ shell, read: () => st, apply: (s) => { if (s) st.desks = s.desks.map(d => ({ id: d.id, wins: d.wins })); } });
-  return { api, st };
+  return { api, st, document: sb.document, event: type => { for (const fn of events.get(type) || []) fn(); } };
 }
 function fakeBox() {
   const box = { rev: 0, state: { desks: [] }, online: true, puts: 0,
@@ -113,4 +149,95 @@ test('an edit made offline survives a reload and is pushed when the box answers'
   await settle(() => box.state.desks.some(d => d.id === 'b')); await tick(100); two.api.stop();
   assert.deepEqual(plain(box.state.desks.map(d => d.id)).sort(), ['a', 'b', 'c']);
   assert.deepEqual(plain(two.st.desks.map(d => d.id)).sort(), ['a', 'b', 'c']);
+});
+
+
+test('two phones share open apps after the second phone resumes from its hidden wait', async () => {
+  const box = fakeBox(), a = client(new Map(), box, 'phone', [D('chats', chats('chat'))]), b = client(new Map(), box, 'phone', []);
+  try {
+    await settle(() => b.st.desks.some(d => d.id === 'chats'));
+    b.document.hidden = true;
+    // A response received while hidden enters the 15s wait (held indefinitely by this test's clock).
+    await tick(60);
+    a.st.desks.push(D('notes', app('note', 'notes'))); a.api.changed();
+    await settle(() => box.state.desks.some(d => d.id === 'notes'));
+    assert.equal(b.st.desks.some(d => d.id === 'notes'), false);
+    b.document.hidden = false; b.event('visibilitychange');
+    await tick(80);
+    assert.equal(b.st.desks.some(d => d.id === 'notes'), true, 'resume must not wait for the hidden-page timer');
+  } finally { a.api.stop(); b.api.stop(); }
+});
+
+test('two phones share open apps even when a restored box reuses the checkpoint revision', async () => {
+  const box = fakeBox(); box.rev = 12; box.state = { desks: [D('notes', app('note', 'notes'))] };
+  const stale = { desks: [D('old', app('old-win', 'files'))] };
+  const store = new Map([['wos.wsync.v2.phone', JSON.stringify({ rev: 12, base: stale, last: stale })]]);
+  const phone = client(store, box, 'phone', stale.desks);
+  try {
+    await tick(80);
+    assert.deepEqual(plain(phone.st), box.state, 'same revision is not proof of the same saved state');
+    assert.equal(box.puts, 0, 'an unchanged stale checkpoint must not overwrite the restored box');
+  } finally { phone.api.stop(); }
+});
+
+test('resume aborts a suspended poll and online interrupts retry backoff without adding readers', async () => {
+  const box = fakeBox(), handle = box.handle;
+  let active = 0, peak = 0, aborted = 0;
+  box.handle = (url, o) => {
+    if (/wait=[1-9]/.test(url) && o.method !== 'PUT') {
+      active++; peak = Math.max(peak, active);
+      return new Promise((resolve, reject) => o.signal.addEventListener('abort', () => { active--; aborted++; reject(new Error('aborted')); }, { once: true }));
+    }
+    return handle(url, o);
+  };
+  const phone = client(new Map(), box, 'phone', []);
+  try {
+    await settle(() => active === 1);
+    box.rev++; box.state = { desks: [D('notes', app('note', 'notes'))] };
+    phone.event('resume'); phone.event('focus'); phone.event('pageshow');
+    await tick(80);
+    assert.equal(phone.st.desks[0]?.id, 'notes'); assert.equal(aborted, 1); assert.equal(peak, 1);
+    box.online = false; phone.event('online'); await tick(60);
+    assert.equal(phone.api.ok, false);
+    box.online = true; box.rev++; box.state = { desks: [D('files', app('file', 'files'))] };
+    phone.event('online'); await tick(80);
+    assert.equal(phone.st.desks[0]?.id, 'files', 'online cancels the failure backoff');
+  } finally { phone.api.stop(); }
+  assert.equal(active, 0);
+});
+
+test('a delayed GET cannot roll back the baseline of a completed local PUT', async () => {
+  const box = fakeBox(), handle = box.handle;
+  let release;
+  box.handle = (url, o) => {
+    if (/wait=[1-9]/.test(url) && o.method !== 'PUT') {
+      const snapshot = plain(box.snap());
+      return new Promise((resolve, reject) => {
+        release = () => resolve({ status: 200, json: async () => snapshot });
+        o.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      });
+    }
+    return handle(url, o);
+  };
+  const phone = client(new Map(), box, 'phone', []);
+  try {
+    await settle(() => !!release);
+    phone.st.desks.push(D('notes', app('note', 'notes'))); phone.api.changed();
+    await settle(() => box.rev === 1);
+    const afterPut = phone.api.rev; release(); await tick(60);
+    assert.equal(phone.api.rev, afterPut);
+    assert.equal(phone.st.desks[0]?.id, 'notes');
+  } finally { phone.api.stop(); }
+});
+
+test('Android phone names include the model or a stable per-device short name', () => {
+  const box = fakeBox();
+  for (const model of ['Pixel 10 Pro XL', 'SM-S938B']) {
+    const p = client(new Map(), box, 'phone', [], { ua: `Mozilla/5.0 (Linux; Android 16; ${model} Build/BP2A; wv)` });
+    assert.equal(p.api.name, model); p.api.stop();
+  }
+  const store = new Map(), ua = 'Mozilla/5.0 (Linux; Android 10; K)';
+  const one = client(store, box, 'phone', [], { ua }); const name = one.api.name; one.api.stop();
+  const two = client(store, box, 'phone', [], { ua });
+  assert.match(name, /^Android [a-z0-9]{6}$/); assert.equal(two.api.name, name); two.api.stop();
 });

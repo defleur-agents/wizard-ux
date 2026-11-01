@@ -30,6 +30,9 @@
     const c = document.createElement('canvas'); c.width = c.height = 192;
     const ctx = c.getContext('2d'), sigil = window.WizSigil.of(a.sigil || a);
     ctx.fillStyle = '#110d1b'; ctx.fillRect(0,0,192,192);
+    if (sigil.logo) {   // the app's own logo: the home-screen icon is that picture
+      try { const image = new Image(); image.src = sigil.logo; await image.decode(); const k = Math.max(192 / image.naturalWidth, 192 / image.naturalHeight), w = image.naturalWidth * k, h = image.naturalHeight * k; ctx.drawImage(image, (192 - w) / 2, (192 - h) / 2, w, h); return c.toDataURL('image/png'); } catch (_) {}
+    }
     const glyph = header.querySelector('.sgi');
     const mask = glyph && getComputedStyle(glyph).getPropertyValue('--sg').trim();
     const match = mask?.match(/^url\(["']?(data:image\/svg\+xml[^"')]+)["']?\)$/);
@@ -58,7 +61,7 @@
       if (e.target.dataset?.installLink !== undefined) return;
       if (!freshPress && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); return; }
       freshPress = false;
-      if (e.target === overlay && !pending) close();
+      if (e.target === overlay) window.WizHomeScreenApps.back();
     }, true);
     if (!port()) {
       // offer/attach validate the registered frontend with the shared same-origin policy.
@@ -104,12 +107,17 @@
     };
   }
   const pinnable = a => !!a && a.kind === 'wizard' && !!a.url && window.WizHomeScreenPolicy.validId(a.id) && !window.WizHomeScreenPolicy.isShell(a.url) && window.WizHomeScreenPolicy.within(a.url,a.url);
-  let refreshing = false, rerun = false;
-  async function refreshPinned() {
+  let refreshing = false, rerun = false, resumePending = false, lastSig = '';
+  // Registry echoes must not redraw shortcuts. Resume is different: Android may have
+  // changed its pinned set, and an old/silent APK must be allowed to retry.
+  const signature = list => JSON.stringify(list.map(a => [a.id, a.url,
+    window.WizHomeScreenPolicy.displayName(a), window.WizSigil.of(a.sigil || a),
+    window.WizSigil.box('span','',a)]));
+  async function refreshPinned(force = false) {
     // Browser/desktop and old APKs stay inert. One bounded query before rendering any icons.
     // A registry update mid-pass marks the pass dirty and reruns it with the new apps afterwards.
     if (!port()) return;
-    if (refreshing) { rerun = true; return; }
+    if (refreshing) { rerun = true; resumePending ||= force; return; }
     refreshing = true; rerun = false;
     try {
       bindPort();
@@ -117,6 +125,12 @@
       if (!port()) return;
       const apps = Object.values(window.WizCore?.apps('mobile')?.APP || {}).filter(pinnable);
       const candidates = [...new Map(apps.map(a => [a.id,a])).values()].slice(0,128);
+      const sig = signature(candidates);
+      // Reading/building the registry can announce that same registry synchronously.
+      // Its state is already in this snapshot; only later updates need another pass.
+      rerun = resumePending;
+      if (!force && sig === lastSig) return;
+      lastSig = sig;
       if (!candidates.length) return;
       const r = await request('pinned', { id:'' }, { candidates:candidates.map(a => a.id) });
       if (r.status !== 'pinned-list' || !Array.isArray(r.appIds) || r.appIds.length > 128) return;
@@ -136,7 +150,10 @@
         finally { header?.remove(); }
       }
     } catch (_) { /* unavailable registry, bridge, decode or old-APK timeout: silent no-op */ }
-    finally { refreshing = false; if (rerun) void refreshPinned(); }
+    finally {
+      refreshing = false;
+      if (rerun) { const force = resumePending; resumePending = false; void refreshPinned(force); }
+    }
   }
   // scripts load after the app registry; appsLoaded waits for installed apps on first shell load.
   void refreshPinned();
@@ -168,7 +185,7 @@
     document.addEventListener('visibilitychange', () => { if (hold) block(); cancel(); });
   }
   addEventListener('wos-native-resume', async () => {
-    void refreshPinned();
+    void refreshPinned(true);
     if (!pending || !active) return;
     const a = active, r = await request('status',a);
     if (active !== a) return;
@@ -176,5 +193,5 @@
     if (r.status === 'pinned') { paint('confirmed'); setTimeout(() => { if (active === a) close(); },1200); }
     else close(); // OS cancellation is silent; dispatch isn't success.
   });
-  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; if (!pending) close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
+  window.WizHomeScreenApps = Object.freeze({ attach, offer, canOffer: a => pinnable(a), back() { if (!overlay) return false; close(); return true; }, get state() { return { open:!!overlay, appId:active?.id || '', pending }; } });
 })();

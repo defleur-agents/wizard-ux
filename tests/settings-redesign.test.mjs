@@ -72,6 +72,24 @@ test('page Back returns to root, then leaves closing to the shell; confirm Back 
   assert.match(h.root.innerHTML, /role="alertdialog"/); assert.equal(h.view.back(), true); assert.equal(h.view.page, 'chats');
   assert.equal(h.view.back(), true); assert.equal(h.view.page, ''); assert.equal(h.view.back(), false); assert.equal(h.posts.length, 0);
 });
+test('tap outside closes Settings confirmations like Back without leaving the owning page', () => {
+  for (const shell of ['phone','desktop']) {
+    const h = harness({shell});
+    const outside = {classList:{contains: c => c === 'st-confirm-scrim'},closest:()=>null};
+    h.view.focus('chats-default'); h.act('data-chats-choice','mizel-chats');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'chats'); assert.equal(h.posts.length,0);
+    const own={id:'mine',name:'Quiet',base:'nebula',tweaks:{}};
+    h.s.WosMySkin={recipes:[own],active:own,state:{script:{}}};
+    h.view.focus('look'); h.act('data-ownskin-remove','mine');
+    assert.match(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.dispatch(outside),true);
+    assert.doesNotMatch(h.root.innerHTML,/role="alertdialog"/);
+    assert.equal(h.view.page,'appearance'); assert.equal(h.posts.length,0);
+  }
+});
 test('chooser confirms before POST, reads the exact slot, refreshes registry and rerenders only after confirmation', async () => {
   const h = harness(); h.view.focus('chats-default');
   assert.match(h.root.innerHTML, /Wizard Chats \(built in\)/); assert.match(h.root.innerHTML, /Mizel Chats/);
@@ -79,7 +97,9 @@ test('chooser confirms before POST, reads the exact slot, refreshes registry and
   h.act('data-chats-confirm'); await tick();
   assert.equal(h.posts.length, 1); assert.equal(h.posts[0].url, '/wizard-os-home/store-install/_slots/chats');
   assert.equal(h.posts[0].body, '{"default":"mizel-chats"}'); assert.equal(h.posts[0].credentials, 'same-origin');
-  assert.deepEqual(h.reads, ['/wizard-os-home/store-install/_slots/chats']); assert.deepEqual(h.changed, ['mizel-chats']);
+  // Phones & devices and Connections ask whether they are available on their own.
+  assert.deepEqual(h.reads.filter(url => url !== '/wizard/v1/setup/phone' && url !== '/wizard-os-home/store-install/_connections/'), ['/wizard-os-home/store-install/_slots/chats']);
+  assert.deepEqual(h.changed, ['mizel-chats']);
   assert.match(h.root.innerHTML, /aria-checked="true" data-chats-choice="mizel-chats"/);
 });
 test('chooser failure keeps old selected provider and toasts the server error', async () => {
@@ -101,15 +121,14 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.doesNotMatch(source, /recommendation\(|suggestionHtml|data-chats-dismiss/);
   assert.equal(h.posts.length, 0);
 });
-test('Look: family tiles lead, only the worn family colours render, and Layout is gone', () => {
+test('Look: every color in one grid whoever made it, no skin tiles, and Layout is gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
-  assert.match(html, /data-skinfamily="wizard"[^]*data-skinfamily="mizel" aria-pressed="true"/);
-  assert.match(html, /<h4>Colours<\/h4>[^]*aria-label="Mizel colours"[^]*data-skinpick="obsidian-light"/);
-  assert.doesNotMatch(html, /data-skinpick="nebula"|data-layout-row|data-layoutpick|<b>Layout<\/b>/);
+  assert.doesNotMatch(html, /data-skinfamily/);
+  assert.match(html, /<h4>Skin<\/h4>[^]*aria-label="All skins"[^]*data-skinpick="nebula"[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
-  assert.match(h.root.innerHTML, /aria-label="Wizard colours"[^]*data-skinpick="nebula"/);
-  assert.doesNotMatch(h.root.innerHTML, /data-skinpick="obsidian-light"/);
+  assert.match(h.root.innerHTML, /data-skinpick="nebula" aria-pressed="true"[^]*data-skinpick="obsidian-light" aria-pressed="false"/);
 });
 test('index: one update card on top when there is something to do, nothing otherwise; desktop does not repeat it beside About', () => {
   const h = harness();
@@ -155,7 +174,7 @@ test('New skin is last; nested Back returns to Look on both shells, never leaves
     h.s.WosMySkin = { recipes: [], state: { empty: true, script: {} } };
     h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
     h.view.focus('look');
-    assert.match(h.root.innerHTML, /data-skinfamily="mizel"[^]*data-newskin[^]*\+ New skin/);
+    assert.match(h.root.innerHTML, /data-skinpick="obsidian-light"[^]*<h4>Your skins<\/h4>[^]*data-newskin[^]*\+ New skin/);
     h.act('data-newskin'); await tick();
     assert.match(h.root.innerHTML, /data-newskin-sheet/);
     assert.match(h.root.innerHTML, /aria-label="Back to Look"/);
@@ -185,7 +204,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet colours"/);
+  assert.match(h.root.innerHTML,/aria-label="Quiet skins"/);
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');
@@ -226,4 +245,29 @@ test('Resources falls back to AI usage where the shared bars are not there', () 
   h.s.WosUsage = { html: () => '<p>usage</p>', loading: true, snap: {}, at: Date.now(), load: async () => {} };
   h.view.focus('usage');
   assert.match(h.root.innerHTML, /<h3 tabindex="-1">AI usage<\/h3>[^]*<p>usage<\/p>/);
+});
+test('Wizard ID row shows backup status from the first render, without opening the sheet', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); return { npub: 'npub1x', name: 'James', backed_up: false }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'one status read, never identity.setup');
+  assert.match(h.root.innerHTML, /James · Not backed up/);
+  h.view.render(true); await tick();
+  assert.deepEqual(calls, ['identity.info'], 'fetched once, not on every render');
+});
+test('Wizard ID row retries the status read after a failed one', async () => {
+  const calls = [];
+  const h = harness({ android: true });
+  h.s.wizardDevicePort = {};
+  let fail = true;
+  h.s.WizCore.bridge = { call: async m => { calls.push(m); if (fail) throw new Error('bridge not ready'); return { npub: 'npub1x', name: 'James', backed_up: true }; } };
+  h.view.focus('wizard-id'); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info']);
+  fail = false;
+  h.view.render(true); await tick(); await tick();
+  assert.deepEqual(calls, ['identity.info', 'identity.info'], 'a failed read is retried on the next render');
+  h.view.render(true); await tick(); await tick();
+  assert.match(h.root.innerHTML, /James · Backed up/);
 });

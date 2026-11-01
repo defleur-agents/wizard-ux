@@ -17,7 +17,7 @@
 (function () {
   'use strict';
   const ERR_LIMIT = 3, ERR_WINDOW = 60000;
-  const EVENTS = ['route', 'render', 'voice', 'sent'];
+  const EVENTS = ['route', 'render', 'voice', 'sent', 'beside', 'home'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
    * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
@@ -43,7 +43,7 @@
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
   const builtinDefs = new Map(), builtins = new Map();
-  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set() }, errs: [], dead: false, teardown: null });
+  const record = (id, label = id) => ({ id, label, offs: new Set(), frames: new Set(), claims: new Set(), mounts: new Set(), taps: new Set(), levels: new Set(), orbs: new Set(), on: { route: new Set(), render: new Set(), voice: new Set(), sent: new Set(), beside: new Set(), home: new Set() }, errs: [], dead: false, teardown: null });
 
   const skinOf = id => (typeof window !== 'undefined' && window.WosSkin && window.WosSkin.pkgOf) ? window.WosSkin.pkgOf(id) : null;
   const dirOf = (id, pkg) => (pkg && pkg.dir) || id;
@@ -86,6 +86,7 @@
     if (a.errs.length >= ERR_LIMIT) {
       const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error'); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
+      if (a.id === 'my-skin') personalFailed(a.label, e, false); // the toast above already named the file
     }
   }
   const nameOf = id => ((typeof window !== 'undefined' && window.WosSkin?.list?.find(s => s.id === id)) || {}).name || id;
@@ -169,6 +170,11 @@
         dictate: () => !!need().dictate(),
         cancel: () => need().voiceCancel?.(),
       }),
+      /* The app in front may claim the agent orb as its main button (WizardApp.orb.claim). */
+      app: Object.freeze({
+        orb: () => shell?.appOrb ? shell.appOrb() : null,
+        tap: () => !!shell?.appOrbTap?.(),
+      }),
       orb: Object.freeze({
         /* The dock orb's idle tap: fn() returns true to replace the shell's own talk. */
         onTap(fn) { const g = guard(a, 'orb.onTap', fn); a.taps.add(g); taps.add(g); return () => { a.taps.delete(g); taps.delete(g); }; },
@@ -209,7 +215,7 @@
     for (const g of a.levels) levels.delete(g); a.levels.clear();
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
-    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear();
+    a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear(); a.on.home.clear();
     for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
     a.claims.clear();
   }
@@ -240,8 +246,17 @@
   }
   function routeOf() {
     const r = shell ? shell.route() : { view: 'desk', thread: null, desk: 0 };
-    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null });
+    return Object.freeze({ view: r.view, thread: r.thread || null, desk: r.desk | 0, app: r.app || null, agent: r.agent || null, beside: Math.sign(r.beside | 0) });
   }
+  /* The view bound beside a chat thread (app.js syncPeek): 1 = it leans in on the right of the thread, -1 = on that
+   * view, its thread leans in on the left, 0 = none. Its own event, so route listeners never see extra calls. */
+  let lastBeside = 0;
+  function emitBeside() {
+    const side = shell ? routeOf().beside : 0;
+    if (side === lastBeside) return; lastBeside = side;
+    if (layers().length) emit('beside', Object.freeze({ side }));
+  }
+  if (isDoc) window.addEventListener?.('wizard:app-orb', () => { if (layers().length) emit('render', Object.freeze({ part: 'app-orb', el: null })); });
   function emitRoute() {
     if (!layers().length || !shell) return;
     const r = routeOf(), k = `${r.view}|${r.thread || ''}|${r.desk}|${r.app || ''}|${r.agent || ''}`;
@@ -287,19 +302,31 @@
 
   /* My skin supplies hashed bytes, never a service URL. Check consent again after waiting for the
    * package; generations cancel stale/revoked loads. Blob import executes only the verified bytes. */
-  async function loadPersonal(bytes, allowed) {
+  // A broken owner script switches itself off and names its file (spec SKINS_AND_VIEWS §2): the error is kept
+  // for Settings, the owner hears it once, and wos:personal-error lets My skin revoke the approval so the next
+  // load starts with the script off.
+  let personalError = null;
+  function personalFailed(file, e, notify = true) {
+    const message = String((e && (e.message || e)) || 'error').split('\n')[0].slice(0, 160);
+    personalError = { file, message };
+    try { console.warn('[%s] turned off:', file, e); } catch (_) {}
+    if (notify) try { shell && shell.toast(`${file} turned off · ${message}`); } catch (_) {}
+    try { window.dispatchEvent?.(new CustomEvent('wos:personal-error', { detail: { ...personalError } })); } catch (_) {}
+  }
+  async function loadPersonal(bytes, allowed, file = 'Skins/My skin/skin.js') {
     const seq = ++personalSeq;
-    dispose(personal, 'replace');
+    dispose(personal, 'replace'); personalError = null;
     let pending; do { pending = packageReady; await pending; } while (pending !== packageReady);
     if (seq !== personalSeq || !shell || disabled.has('my-skin') || !allowed()) return false;
     const href = URL.createObjectURL(new Blob([bytes], { type: 'application/javascript' }));
     let mod;
     try { mod = await importer(href); }
-    catch (e) { try { console.warn('[Skins/My skin/skin.js] import failed:', e); } catch (_) {} return false; }
+    catch (e) { if (seq === personalSeq) personalFailed(file, e); return false; }
     finally { URL.revokeObjectURL(href); }
-    if (seq !== personalSeq || !allowed() || typeof mod?.default !== 'function') return false;
-    const a = record('my-skin', 'Skins/My skin/skin.js'); personal = a;
-    try { a.teardown = mod.default(makeApi(a)); } catch (e) { fault(a, 'setup', e); }
+    if (seq !== personalSeq || !allowed()) return false;
+    if (typeof mod?.default !== 'function') { personalFailed(file, new Error('no export default function setup(api)')); return false; }
+    const a = record('my-skin', file); personal = a;
+    try { a.teardown = mod.default(makeApi(a)); } catch (e) { dispose(a, 'error'); personalFailed(file, e); return false; }
     lastRoute = ''; emitRoute();
     return personal === a;
   }
@@ -322,17 +349,36 @@
   }
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
-  const tweaks = new Map(), interceptors = new Map();
+  const homeHtml = new WeakMap();   // Home element -> the markup paintHome last wrote
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
-  const bounded = async promise => {
+  /* Tweaks paint once, not twice: the ids this device last wore are listed on <html> and their stylesheets are in <head>
+   * (render-blocking) from the first frame, so stock Home never flashes before a package's own view. A package that
+   * does not come back drops out of the list. Reapplying adds the new <link> before the old one goes (no unstyled gap). */
+  const EXPECT_KEY = 'wos.tweaks.expect';
+  const BOOT_GUESS_MS = 20000;
+  let tweaksAsked = false;  // set once the experience asks for the real list; until then the boot preload is a guess
+  const expected = new Set(), preCss = new Map();   // ids still loading; id -> <link> added ahead of the package
+  function tweakCss(id) {
+    if (!isDoc) return null;
+    let l = preCss.get(id); if (l) return l;
+    l = document.createElement('link'); l.rel = 'stylesheet'; l.href = tweakUrl(id, 'tweak.css'); l.setAttribute('blocking', 'render');
+    document.head.append(l); preCss.set(id, l); return l;
+  }
+  // Wait (briefly) for a package's stylesheet before its setup runs, so its view never shows unstyled.
+  const cssReady = l => !l || l.sheet !== null || typeof l.addEventListener !== 'function' ? Promise.resolve() : new Promise(done => {
+    const t = setTimeout(done, 1500), end = () => { clearTimeout(t); done(); };
+    l.addEventListener('load', end, { once: true }); l.addEventListener('error', end, { once: true });
+  });
+  const bounded = async (promise, ms = 8000) => {
     let timer;
-    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), 8000); })]); }
+    try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Package timed out')), ms); })]); }
     finally { clearTimeout(timer); }
   };
   function paintTweaks() {
-    if (isDoc) document.documentElement.dataset.tweaks = [...tweaks].filter(([, a]) => !a.dead).map(([id]) => id).join(' ');
+    if (isDoc) document.documentElement.dataset.tweaks = [...new Set([...[...tweaks].filter(([, a]) => !a.dead).map(([id]) => id), ...expected])].join(' ');
     window.WosResources?.sync();
   }
   function tweakApi(a, manifest, trusted) {
@@ -341,8 +387,26 @@
       if (type === 'render' && !caps.has('layout')) throw new Error('render requires layout');
       if (type === 'sent' && (!caps.has('nav') || !trusted)) throw new Error('sent requires trusted navigation');
       if (type === 'voice' && !caps.has('layout')) throw new Error('voice requires layout');
+      if (type === 'beside' && !caps.has('layout')) throw new Error('beside requires layout');
+      if (type === 'home' && !caps.has('layout')) throw new Error('home requires layout');
       return base.on(type, payload => fn(type === 'render' ? Object.freeze({ part: payload.part }) : payload));
     }, toast: base.toast, storage: base.storage };
+    // Trusted packages that replace each other (catalog oneOf) can share one store, so a look-only skin change keeps
+    // the owner's choices: manifest `storage: "<name>"` keys it as `wos.skin.shared:<name>.*` instead of by package id.
+    if (trusted && typeof manifest.storage === 'string' && /^[a-z0-9-]{1,40}$/.test(manifest.storage)) {
+      const ns = 'wos.skin.shared:' + manifest.storage + '.';
+      api.storage = Object.freeze({
+        get(key) { try {
+          let v = localStorage.getItem(ns + key);
+          // Before the shared store existed each package kept its own copy: take this package's, else any package of the
+          // same name ("<author>/<storage>"), so switching skins after an upgrade keeps the owner's choices.
+          if (v == null) v = localStorage.getItem(`wos.skin.${a.id}.${key}`);
+          if (v == null) for (let i = 0; i < localStorage.length && v == null; i++) { const k = localStorage.key(i); if (k && /^wos\.skin\.[a-z0-9-]+\//.test(k) && k.endsWith(`/${manifest.storage}.${key}`)) v = localStorage.getItem(k); }
+          return v == null ? null : JSON.parse(v);
+        } catch (_) { return null; } },
+        set(key, value) { try { localStorage.setItem(ns + key, JSON.stringify(value)); } catch (_) {} },
+      });
+    }
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
@@ -358,6 +422,14 @@
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
+      // A package's own overlay joins the shell's Back order (phone Back / browser Back / desktop Esc): the newest
+      // open one closes first. push(close) while it is open; the returned release (or teardown) takes it out.
+      api.back = Object.freeze({ push(close) {
+        if (a.dead || typeof close !== 'function') return () => {};
+        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      } });
       const slot = name => {
         if (!slotContract?.slots[name]) return null;
         const selector = `[data-slot="${name}"]`;
@@ -393,7 +465,24 @@
         const handler = context => Promise.resolve().then(() => !a.dead && fn(Object.freeze({ ...context }))).catch(e => base.toast(e.message));
         interceptors.set(a.id, { action, handler }); a.offs.add(() => interceptors.delete(a.id));
       },
-      snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId }); },
+      snoozeSomeday: sessionId => { if (!trusted || a.dead) throw new Error('Trusted navigation required'); return window.WosBoomerang.someday({ sessionId, restore: true }); },
+      // Ask the agent from a package view: a new chat carrying { title, message } as a quoted reply card (the shell's
+      // contextDraft path). `words` lands as an unsent draft for the owner to check and send; { send: true } sends at
+      // once. Trusted only; the key is namespaced so it can't pose as another app.
+      ask(id, item = {}, words = '', opts = {}) {
+        if (!trusted || a.dead) throw new Error('Trusted navigation required');
+        const key = 'home:' + String(id || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100);
+        if (key === 'home:' || typeof shell?.contextDraft !== 'function') return false;
+        const w = String(words || '').slice(0, 1000), send = opts?.send === true;
+        return !!shell.contextDraft(key, { title: String(item.title || '').slice(0, 300), message: String(item.message || '').slice(0, 4000) }, send ? w : '', send ? '' : w);
+      },
+      // Snooze = lowest priority, bottom of Ready (live.js / chats.js read host.snoozeOrder). Released on teardown.
+      snoozeOrder(order) {
+        if (!trusted || a.dead) throw new Error('Trusted navigation required');
+        if (order !== 'last') throw new Error('Unknown order');
+        if (snoozeLast.has(a.id)) return;
+        snoozeLast.add(a.id); a.offs.add(() => { if (snoozeLast.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); });
+      },
     });
     // A layout+navigation package may borrow the shell's overview renderer/input adapter.
     // No DOM or package IDs cross this boundary; the handle is released on every teardown.
@@ -404,51 +493,166 @@
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
+    // A layout+navigation package may ask the shell for ↻ in every window bar and (pull:false) drop Chats pull-to-refresh.
+    // The shell owns the button and the refresh; the handle is released on every teardown.
+    if (caps.has('layout') && caps.has('nav')) api.windowRefresh = Object.freeze({ use(options = {}) {
+      if (a.dead) return () => {};
+      if (typeof options.pull !== 'boolean') throw new Error('Invalid window refresh mode');
+      const release = shell?.windowRefresh?.use?.(Object.freeze({ pull: options.pull })) || (() => {});
+      let released = false; const off = () => { if (!released) { released = true; release(); } };
+      a.offs.add(off); return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
         return a.dead ? [] : options.map(m => Object.freeze({ id: m.value, provider: m.provider, agent: m.agent || '', label: m.name, disabled: !!m.disabled }));
-      } });
+      },
+      // The Wizard's default model (what a new chat starts on), or null while it is still loading.
+      default: () => { if (a.dead) return null; const o = window.WosModels?.defaultOption?.(); return o ? Object.freeze({ id: String(o.value || ''), provider: String(o.provider || '') }) : null; } });
       api.thread = Object.freeze({ model: choice => a.dead ? null : shell?.model?.(choice, () => !a.dead) });
     }
     if (caps.has('data.read')) api.data = Object.freeze({ read: Object.freeze({ resources: Object.freeze({
       snapshot: () => structuredClone(window.WosResources?.state || {}), refresh: () => window.WosResources?.sync(),
-    }) }) });
+      // A reading kept on screen outside Home or Settings (the desktop top bar) keeps the feed polling while it shows.
+      live: el => { if (!a.dead && el?.nodeType === 1) window.WosResources?.watch?.(el); },
+      // resources.js announces each finished poll ('wos:resources'); the handle dies with the package.
+      watch(fn) {
+        if (a.dead || typeof fn !== 'function' || typeof window.addEventListener !== 'function') return () => {};
+        const g = guard(a, 'resources.watch', () => fn(structuredClone(window.WosResources?.state || {})));
+        window.addEventListener('wos:resources', g);
+        const off = () => { window.removeEventListener('wos:resources', g); a.offs.delete(off); };
+        a.offs.add(off); return off;
+      },
+    }),
+    // Trusted packages only: Ready / Working counts as Home shows them, and opening those same lists.
+    ...(trusted ? { sessions: Object.freeze({
+      counts: () => { if (a.dead) return null; const c = shell?.sessions?.(); return c ? Object.freeze({ working: c.working | 0, ready: c.ready | 0 }) : null; },
+      open: kind => { if (!a.dead && (kind === 'working' || kind === 'ready')) shell?.openSessions?.(kind); },
+    }) } : {}),
+    // Trusted packages only: one same-origin GET of an installed app's read API (/<app>/api/<path>), JSON back.
+    // No method, header, body or other origin crosses this boundary; null on any failure or after teardown.
+    ...(trusted ? { app: async (id, path) => {
+      if (a.dead || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(String(id)) || !/^[a-z0-9][a-z0-9/_-]{0,80}$/.test(String(path))) return null;
+      try {
+        const r = await bounded(fetch(new URL(`/${id}/api/${path}`, document.baseURI).href, { method: 'GET', cache: 'no-store', credentials: 'same-origin', redirect: 'error' }));
+        if (!r.ok || !/json/.test(r.headers?.get?.('content-type') || 'application/json')) return null;
+        const j = await r.json(); return a.dead ? null : structuredClone(j);
+      } catch (_) { return null; }
+    } } : {}),
+    }) });
+    // Trusted packages may show the Notifications inbox (core/notif-bell.js) in Chats: watch unread items, mark one
+    // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
+    // boundary and every handle dies with the package.
+    // Settings sections: a trusted package fills a System page of Settings (Your network, AI, Network & security,
+    // Storage & backups) with its own live node, and can open Settings at one of those pages. Released on teardown.
+    if (caps.has('settings')) api.settings = Object.freeze({
+      section(id, page, node, opts = {}) {
+        if (!trusted || a.dead) throw new Error('Trusted settings required');
+        if (!['overview', 'ai', 'network', 'storage'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
+        const W = window.WosSettings; if (!W?.register) return () => {};
+        const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
+        const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
+        const off = W.register({ id: fid, page, ...(subtitle ? { subtitle } : {}), html: () => '<div class="st-tweak" data-st-tweak></div>',
+          painted: (ctx, el) => { const slot = el?.firstElementChild; if (slot && node.parentNode !== slot) slot.append(node); window.WosResources?.watch?.(node); },
+          deferRefresh: () => node.contains?.(document.activeElement) });
+        let done = false; const release = () => { if (!done) { done = true; off(); node.remove?.(); } };
+        a.offs.add(release); return release;
+      },
+      open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
+      refresh: () => { if (!a.dead) window.WosSettings?.refresh?.(); },
+    });
+    if (caps.has('inbox')) api.inbox = Object.freeze({
+      watch(fn) {
+        if (a.dead || typeof fn !== 'function' || !window.WosBell?.watch) return () => {};
+        const g = guard(a, 'inbox.watch', fn);
+        const off = window.WosBell.watch(items => { if (!a.dead) g(items); });
+        a.offs.add(off); return off;
+      },
+      done: id => a.dead || !window.WosBell?.mark ? Promise.resolve(false) : window.WosBell.mark([String(id)], { archived: true, read: true }),
+      // read / archived only (snoozed = read and kept; restored = neither).
+      set(id, marks = {}) {
+        const m = Object.fromEntries(['read', 'archived'].filter(k => typeof marks[k] === 'boolean').map(k => [k, marks[k]]));
+        return a.dead || !Object.keys(m).length || !window.WosBell?.mark ? Promise.resolve(false) : window.WosBell.mark([String(id)], m);
+      },
+      // A notification opened from the list shows in the chat window as a one-message thread; its Done / Snooze /
+      // Restore buttons (and keys) call act(action, id). Held while the package lives (chats.js reads host.inboxThreads).
+      // `list: true` also lists them in Ready as rows like any chat (time, priority and subject order); a tap on one
+      // calls act('open', id).
+      threads(handlers = {}) {
+        if (a.dead || typeof handlers.act !== 'function') return () => {};
+        inboxThreads.set(a.id, { act: guard(a, 'inbox.act', handlers.act), list: handlers.list === true });
+        const off = () => { if (inboxThreads.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); };
+        a.offs.add(off); window.dispatchEvent?.(new Event('wos:prefs')); return off;
+      },
+      reply(id, words = '') {
+        if (a.dead) return false;
+        const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
+        return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
+      },
+    });
     return Object.freeze(api);
   }
   async function loadTweaks(entries, contract, { teamAuthors = [], trustedAuthors = [] } = {}) {
-    const seq = ++tweakSeq; slotContract = contract;
+    const seq = ++tweakSeq; slotContract = contract; tweaksAsked = true;
+    const want = entries.filter(safeTweakId);
+    for (const [id, l] of preCss) if (!want.includes(id)) { l.remove(); preCss.delete(id); }
+    for (const id of want) tweakCss(id);
+    expected.clear(); for (const id of want) expected.add(id);
     for (const a of [...tweaks.values()]) dispose(a, 'replace');
     tweaks.clear(); paintTweaks();
     if (!shell) return false;
-    for (const id of entries) {
+    // Fetch every package at once (a slow network pays one wait, not one per package), and give a package that timed
+    // out a second, longer try before turning it off: a slow wifi must not silently drop half of an owner's tweaks.
+    const fetchPkg = async (id, ms) => {
+      const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
+      if (!response.ok) throw new Error('Manifest unavailable');
+      const m = await response.json();
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings'].includes(c))) throw new Error('Invalid manifest');
+      if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
+      const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
+      if (typeof mod.default !== 'function') throw new Error('Missing setup');
+      return { m, mod };
+    };
+    const pkgs = new Map(want.map(id => [id, fetchPkg(id, 8000).catch(e => /timed out/i.test(e.message) ? fetchPkg(id, 30000) : Promise.reject(e))]));
+    for (const p of pkgs.values()) p.catch(() => {});
+    let slow = false;
+    for (const id of want) {
       if (seq !== tweakSeq) return false;
-      if (!safeTweakId(id)) continue;
       try {
-        const response = await bounded(fetch(tweakUrl(id, 'manifest.json'), { cache: 'no-store' }));
-        if (!response.ok) throw new Error('Manifest unavailable');
-        const m = await response.json();
-        if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read'].includes(c))) throw new Error('Invalid manifest');
-        if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
-        const mod = await bounded(importer(tweakUrl(id, 'tweak.js')));
+        const { m, mod } = await pkgs.get(id);
         if (seq !== tweakSeq) return false;
-        if (typeof mod.default !== 'function') throw new Error('Missing setup');
-        const a = record(id, m.name || id); tweaks.set(id, a);
         // CSS is optional; missing CSS is harmless. All package assets are same-origin build artifacts.
-        const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = tweakUrl(id, 'tweak.css'); document.head.append(link); a.offs.add(() => link.remove());
+        const link = tweakCss(id); await cssReady(link);
+        if (seq !== tweakSeq) return false;
+        const a = record(id, m.name || id); tweaks.set(id, a);
+        preCss.delete(id); if (link) a.offs.add(() => link.remove());
         paintTweaks();
         try {
           a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
           if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
         } catch (e) { dispose(a, 'error'); throw e; }
-      } catch (e) { shell?.toast?.(`${id} turned off · ${e.message}`); }
+      } catch (e) {
+        if (seq !== tweakSeq) return false;
+        if (/timed out/i.test(e.message)) slow = true;
+        expected.delete(id); const l = preCss.get(id); if (l) { l.remove(); preCss.delete(id); } paintTweaks(); shell?.toast?.(`${id} turned off · ${e.message}`);
+      }
     }
+    // A run cut short by the network keeps the full list for next time, so the next load still paints them at once.
+    if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
+    expected.clear();
+    try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
 
   const host = {
     loadTweaks, emit,
     get tweakState() { return [...tweaks.keys()]; },
+    /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
+    get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
+    /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
+    get inboxThreads() { return inboxThreads.size > 0; },
+    get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
+    inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; },
     action(name, context) { for (const { action, handler } of interceptors.values()) if (action === name) { void handler(context); return true; } return false; },
     /* core/skins.js: picker landed near a skin (preview or commit). Stylesheet only. */
     preview(id) { ensureCss(id); },
@@ -470,11 +674,43 @@
     builtin(name, setup, { when = 'touch', label = name } = {}) { if (typeof setup !== 'function' || builtinDefs.has(name)) return false; builtinDefs.set(name, { setup, when, label }); return startBuiltin(name) || !shell; },
     get builtinState() { return [...builtins.keys()]; },
     stopPersonal() { personalSeq++; dispose(personal, 'off'); },
-    get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
+    get personalState() { return { ready: !!shell, active: !!personal, disabled: disabled.has('my-skin'), error: personalError ? { ...personalError } : null, listeners: personal?.offs.size || 0, handlers: personal ? personal.on.route.size + personal.on.render.size : 0 }; },
+    /* app.js backStep / desktop.js escStep: close the newest package overlay. True when one closed. */
+    back() { const e = overlays.pop(); if (!e) return false; e.close(); return true; },
+    /* app.js / desktop.js: repaint a Home. Nodes a tweak mounted at the home-main slot move to the new markup
+     * (no remount, no flash) and layout tweaks hear api.on('home'). Without a mount this is plain innerHTML. */
+    paintHome(el, html) {
+      if (!el) return;
+      const sel = '[data-slot="home-main"]';
+      // A package view is mounted and the markup is the same as last time: leave the DOM alone, so the view is not
+      // detached and re-attached (which restarts its motion and looks like a reload). When only the live resource
+      // readings changed, update just that block in place.
+      if (el.querySelector?.(sel)?.childNodes?.length && homeHtml.has(el)) {
+        const prev = homeHtml.get(el);
+        if (prev === html) { if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({})); return; }
+        const LIVE = ['[data-home-resources]', '.home-time', '.home-date', '.constellation'];
+        const parts = h => { const t = document.createElement('template'); if (typeof t.content?.querySelector !== 'function') return null;
+          t.innerHTML = h; const inner = LIVE.map(q => { const r = t.content.querySelector(q), v = r ? r.innerHTML : null; if (r) r.innerHTML = ''; return v; }); return [t.innerHTML, inner]; };
+        const a = parts(prev), b = parts(html), live = LIVE.map(q => el.querySelector(q));
+        if (a && b && a[0] === b[0] && b[1].every((v, i) => (v == null) === !live[i])) {
+          b[1].forEach((v, i) => { if (live[i] && live[i].innerHTML !== v) live[i].innerHTML = v; }); homeHtml.set(el, html);
+          if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({}));
+          return;
+        }
+      }
+      homeHtml.set(el, html);
+      const kept = [...(el.querySelector?.(sel)?.childNodes || [])];
+      el.innerHTML = html;
+      const slot = kept.length ? el.querySelector?.(sel) : null;
+      if (slot) slot.append(...kept);
+      if (layers().some(l => l.on.home.size)) emit('home', Object.freeze({}));
+    },
     /* chats.js: a chats window repainted part ('thread' | 'list'). */
     rendered(part, el) { if (!layers().length) return; emit('render', Object.freeze({ part, el })); emitRoute(); },
     /* app.js: desk or focus changed. */
     changed() { emitRoute(); },
+    /* app.js syncPeek: the bound view beside a thread appeared, moved or went away. */
+    beside() { emitBeside(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */
     claimed: pointerId => claims.has(pointerId),
     release,
@@ -486,6 +722,10 @@
     // The stored skin's stylesheet now, in <head>, so it paints with the first frame (no flash).
     const id = window.WosSkin && window.WosSkin.current;
     if (id) { ensureCss(id); committedId = id; }
+    // The tweaks this device wore last time: listed and styled from the first frame (loadTweaks settles the real list).
+    try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
+    // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
+    if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
     // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
     try {
       const q = new URLSearchParams(location.search).get('layout');
