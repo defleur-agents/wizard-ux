@@ -210,15 +210,6 @@
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
     chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
-    // Quick button: turn on every tweak by this author; if all are on already, turn them off.
-    async chooseAuthor(who) {
-      if (!WHO.test(who) || !catalog) return;
-      // shell views are one at a time: the quick button leaves them as they are
-      const ids = catalog.tweaks.filter(id => id.startsWith(who + '/') && !globalIds().includes(id) && !viewOf(id)); if (!ids.length) return;
-      const own = recipe(), on = !ids.every(id => enabled(id, own));
-      for (const id of ids) await setOne(id, on);
-      return apply();
-    },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)

@@ -37,13 +37,13 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   // a tap on a Look row, as the click handler passes it to the Look feature
   const on = (attr, dataset) => view.dispatch({ classList: { contains: () => false }, closest: sel => sel === '[data-settings-feature]' ? { dataset: { settingsFeature: 'look' } } : sel === attr ? { dataset } : null });
   const tap = id => on('[data-tweak-toggle]', { tweakToggle: id });
-  const quick = who => on('[data-tweakauthor]', { tweakauthor: who });
   const views = () => active.filter(id => VIEWS.includes(id));
-  return { s, root, view, tap, quick, storage, views, active: () => [...active], loads, E: s.WosExperience };
+  return { s, root, view, tap, storage, views, active: () => [...active], loads, E: s.WosExperience };
 }
 // the switches as rendered: [id, name, on]
 const switches = html => [...html.matchAll(/data-tweak-toggle="([^"]+)" role="switch" aria-checked="(true|false)"[^>]*><span class="st-tx"><b>([^<]+)<\/b>/g)].map(m => [m[1], m[3], m[2] === 'true']);
-const viewSwitches = html => switches(html).filter(([id]) => VIEWS.includes(id));
+// the list is A to Z by name (Apps before Orb); compare in VIEWS order
+const viewSwitches = html => switches(html).filter(([id]) => VIEWS.includes(id)).sort((a, b) => VIEWS.indexOf(a[0]) - VIEWS.indexOf(b[0]));
 const look = async b => { b.view.focus('look'); await tick(); return b.root.innerHTML; };
 
 for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Miguel's Tweaks list has both shell views as plain switches, off`, async () => {
@@ -51,9 +51,9 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Mig
   const html = await look(b);
   assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'the Settings row is gone');
   assert.deepEqual(viewSwitches(html), [['miguel/orb-shell', 'Different shell view - Orb', false], ['miguel/apps-home', 'Different shell view - Apps', false]]);
-  const group = html.match(/<div class="tw-author" role="group" aria-label="Miguel’s tweaks">[^]*?(?=<div class="tw-author"|$)/)?.[0] || '';
-  assert.match(group, /data-tweak-toggle="miguel\/orb-shell"/, 'listed under Miguel');
-  assert.match(group, /data-tweak-toggle="miguel\/apps-home"/);
+  // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
+  assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
+  for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">by (Miguel|miguel)<`), id + ' labelled by Miguel');
   assert.deepEqual(b.views(), [], 'a fresh device wears no view (Desks)');
 });
 
@@ -80,21 +80,17 @@ test('turning one on turns the other off; off again = Desks; one tweak reload pe
   await again.E.toggle('miguel/orb-shell'); assert.deepEqual(again.views(), ['miguel/orb-shell']);
 });
 
-test('the author quick button never turns both on and leaves the worn view as it is', async () => {
+test('no author quick button: every tweak is its own switch and other switches leave the worn view alone', async () => {
   const b = box(); await b.E.refresh();
-  const mig = JSON.parse(read('web/tweaks/catalog.json')).tweaks.filter(id => id.startsWith('miguel/') && !VIEWS.includes(id));
-  b.quick('miguel'); await tick();
-  assert.deepEqual(b.views(), [], 'from Desks: no view switched on');
-  assert.ok(mig.every(id => b.active().includes(id)), 'every other of his tweaks on');
-  let html = await look(b);
-  assert.match(html, /data-tweakauthor="miguel" role="switch" aria-checked="true"/, 'reads as all on (views are one at a time)');
-  b.quick('miguel'); await tick(); assert.ok(!b.active().some(id => id.startsWith('miguel/')), 'tapped again: all of his off');
-  b.tap('miguel/apps-home'); await tick(); b.quick('miguel'); await tick();
+  assert.equal(b.E.chooseAuthor, undefined, 'the author mix is gone');
+  const others = JSON.parse(read('web/tweaks/catalog.json')).tweaks.filter(id => id.startsWith('miguel/') && !VIEWS.includes(id)).slice(0, 3);
+  b.tap('miguel/apps-home'); await tick();
+  for (const id of others) { b.tap(id); await tick(); }
   assert.deepEqual(b.views(), ['miguel/apps-home'], 'Apps kept, Orb not added');
-  b.quick('miguel'); await tick();
+  assert.ok(others.every(id => b.active().includes(id)), 'each switch turned on just itself');
+  for (const id of others) { b.tap(id); await tick(); }
   assert.deepEqual(b.views(), ['miguel/apps-home'], 'off again: the view is left alone too');
-  html = await look(b);
-  assert.deepEqual(viewSwitches(html).map(v => v[2]), [false, true]);
+  assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [false, true]);
 });
 
 test('a device that stores both on wears only the first in catalog order (Orb), and the switches agree', async () => {
