@@ -385,8 +385,9 @@
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(sid)}/model${ag ? `?agent=${encodeURIComponent(ag.id)}` : ''}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         if (!r.ok) {
           const failure = await r.json().catch(() => ({}));
-          if (r.status === 409 && failure.selection?.state === 'confirmed') {
-            M.selections.set(key, failure.selection); M.uncertain.delete(key); M.savePickerAttempts();
+          if (r.status === 409 && (failure.selection?.state === 'confirmed' || failure.error?.code === 'model_selection_not_applied')) {
+            if (failure.selection) M.selections.set(key, failure.selection);
+            M.uncertain.delete(key); M.savePickerAttempts();
           }
           throw Object.assign(new Error(failure.error?.message || `Model not changed (${r.status}) · message kept`), { status: r.status });
         }

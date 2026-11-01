@@ -71,6 +71,12 @@ test('lost picker acknowledgement reload retries the original request and CAS, n
   assert.equal(replay.selection_request_id, first.selection_request_id); assert.equal(replay.selection_version, 7);
   assert.equal(reloaded.M.snapshot('synthetic').model, B.model);
 });
+test('proven pre-execution picker refusal restores confirmed previous choice without sending', async () => {
+  const { M } = fixture(async () => new Response(JSON.stringify({ error: { code: 'model_selection_not_applied' }, selection: { ...A, version: 7, state: 'confirmed' } }), { status: 409 }));
+  await assert.rejects(M.setThreadModel('synthetic', { value: B.model, provider: B.provider }));
+  assert.equal(M.snapshot('synthetic').model, A.model); assert.equal(M.snapshot('synthetic').provider, A.provider);
+  assert.equal(M.snapshot('synthetic').selection_version, 7); assert.equal(M.uncertain.size, 0);
+});
 test('model-only acknowledgement without a deliberate revision remains fail-closed', async () => {
   const { M } = fixture(async () => new Response(JSON.stringify({ runtime: { ...B, model_lock: 'accepted' } })));
   await assert.rejects(M.setThreadModel('synthetic', { value: B.model, provider: B.provider }), /did not confirm/);
