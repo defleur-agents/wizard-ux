@@ -157,6 +157,13 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-seg button { min-height: 48px; padding: 8px 12px; border: 0; border-radius: 14px; background: transparent; color: var(--wz-text-secondary); font-size:var(--wz-text-lg); font-weight: 600; touch-action: manipulation; }
 .st-seg button[aria-checked="true"] { background: var(--wz-accent); color: var(--wz-base); font-weight: 700; }
 .st-seg button:disabled { opacity: .6; }
+/* Settings › Notifications: one line per app, its name on the left and Badge | Chats on the right. */
+.st-nr { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-nr .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-nr .st-tx b { font-size: var(--wz-text-lg); font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-nr .st-tx small { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
+.st-nr .st-nr-seg { flex: none; width: 184px; }
+.st-nr .st-nr-seg button { min-height: 44px; padding: 6px 10px; font-size: var(--wz-font-size); }
 /* Look: the skin picker sits flat on the page under a plain heading. */
 .st-root .sk-row { padding: 0; margin: 0 0 8px; }
 .st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }

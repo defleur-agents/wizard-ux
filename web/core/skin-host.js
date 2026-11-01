@@ -795,7 +795,19 @@
       reply(id, words = '') {
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
-        return !!shell.contextDraft('notifications:' + it.id, { title: it.title, message: it.message }, String(words || ''));
+        // An app's item rides with its app name, so the agent knows where it came from (and which app tools to use).
+        const title = it.app ? `${it.appName || it.app}: ${it.title || 'Item'}` : it.title;
+        const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
+        return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
+      },
+      // An app's item (an app set to Chats in Settings › Notifications): open that app, at the item when it says where.
+      open(id) {
+        if (a.dead) return false;
+        const it = window.WosBell?.item?.(id); if (!it?.app || typeof window.WizOpenApp !== 'function') return false;
+        if (!it.open) return !!window.WizOpenApp(it.app);
+        let base = ''; try { base = (window.WizCore?.apps?.('mobile')?.APPS || []).find(x => x.id === it.app)?.url || ''; } catch (_) {}
+        try { const u = new URL(it.open, new URL(base || `/${it.app}/`, location.origin)); if (u.origin === location.origin && window.WizOpenApp(it.app, u.pathname + u.search + u.hash)) return true; } catch (_) {}
+        return !!window.WizOpenApp(it.app);
       },
     });
     return Object.freeze(api);

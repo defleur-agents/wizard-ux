@@ -20,6 +20,8 @@
     { id: 'storage', title: 'Storage & backups', group: 'System', available: filled('storage') },
     { id: 'appearance', title: 'Appearance', group: 'Preferences' },
     { id: 'chats', title: 'Chats & app screens' },
+    // Where each app's notifications go: a badge on its icon, or Chats (core/notif-bell.js routes; one place each).
+    { id: 'notifications', title: 'Notifications', available: () => typeof window.WosBell?.routes === 'function' },
     { id: 'voice', title: 'Voice & typing' },
     // Phones over Tailscale (Phone Setup). Hidden on a Wizard without Phone Setup or for a non-owner.
     // Hidden only for a non-owner; a Wizard without phone access shows the shared "not available yet" note.
@@ -568,6 +570,29 @@
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
   register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
+  /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
+   * Notifications and every installed app that has an inbox feed (only those can put items in Chats); every other app
+   * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */
+  const routeSeg = (r, off) => `<div class="st-seg st-nr-seg" role="radiogroup" aria-label="Where ${esc(r.name)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${esc(r.id)}" data-notify-to="${to}" aria-checked="${r.route === to}" ${to === 'chats' && off ? 'disabled' : ''}>${label}</button>`).join('')}</div>`;
+  register({ id: 'notification-routing', page: 'notifications', aliases: ['notifications', 'notification-routing'],
+    subtitle: () => { const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
+    enter: () => { window.WosBell?.discover?.(); },
+    html() {
+      const B = window.WosBell, list = B?.routes?.() || [], off = !B?.chatsAvailable;
+      if (!B?.routes) return '';
+      void B.discover?.();
+      const rows = list.map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats'}</small></span>${routeSeg(off ? { ...r, route: 'badge' } : r, off)}</div>`).join('');
+      const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. Turn on Notifications in Chats to choose Chats:</p>${settingRow('wizard/unified-inbox')}` : '';
+      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a <b>Badge</b> on its icon, or a thread in <b>Chats</b> that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. Saved on this device.</p></div>`;
+    },
+    act(ctx, el) {
+      const b = el.closest('[data-notify-route]');
+      if (!b) return settingAct(ctx, el);
+      if (b.disabled) return true;
+      window.WosBell?.setRoute?.(b.dataset.notifyRoute, b.dataset.notifyTo);
+      ctx.render?.(); ctx.root?.querySelector?.(`[data-notify-route="${CSS.escape(b.dataset.notifyRoute)}"][data-notify-to="${CSS.escape(b.dataset.notifyTo)}"]`)?.focus?.({ preventScroll: true });
+      return true;
+    } });
   register({ id: 'chats-default', page: 'chats', aliases: ['chats-default'], html(ctx) {
     const host = chatsHost(), apps = host?.installed() || [{ id: 'wizard-chats' }], current = host?.defaultId() || 'wizard-chats';
     apps.sort((a, b) => (b.id === 'wizard-chats') - (a.id === 'wizard-chats'));
@@ -712,8 +737,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
