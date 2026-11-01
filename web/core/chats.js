@@ -2265,6 +2265,12 @@ window.WizCore.chats = function createChats(H) {
     const recent = turns.slice(-6), us = recent.filter(t => t.u).map(t => t.u).concat(recent.flatMap(t => t.steers || []));
     const files = (p.files || []).filter(f => f && f.id);
     const sameFiles = u => files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
+    // A steer the agent took in mid-run is not always a user row in the transcript: a context compaction during the
+    // run folds it into its summary (James, 1 Nov 2026: the voice note sat below the reply that answered it). Once a
+    // final answer newer than the send is on screen, an accepted steer has been read; queued steers still wait for
+    // their own run and keep matching by words.
+    if (p.state === 'sent' && p.steered && !p.steerQueued && isFinite(p.sentAt)
+        && turns.some(t => t.a && t.a.final && !t.a.failed && isFinite(t.a.at) && t.a.at > p.sentAt + 10e3)) return true;
     if (p.state === 'sent') return us.some(u => (files.length && files.some(f => (u.files || []).some(x => x.id === f.id))) || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
     if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
     const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
