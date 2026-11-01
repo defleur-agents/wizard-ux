@@ -294,8 +294,9 @@
     const selector = attr ? `[data-${attr}="${CSS.escape(el.getAttribute('data-' + attr))}"]` : '';
     ctx.lookError = ''; ctx.lookPending = { el, selector }; paintLookPending(ctx);
     const finish = () => { ctx.lookPending = null; ctx.render?.(); };
-    const fail = e => {
-      rollback(); ctx.lookError = e.message || 'Could not change appearance. Try again.';
+    const fail = async e => {
+      ctx.lookError = e.message || 'Could not change appearance. Try again.';
+      try { await rollback(); } catch (restore) { ctx.lookError += '. Could not restore the previous skin: ' + restore.message; }
       finish(); ctx.toast?.('!', ctx.lookError, 3000);
     };
     const pending = ctx.lookPending;
@@ -407,8 +408,21 @@
     }
     const remove = el.closest('[data-ownskin-remove]');
     if (remove) { ctx.skinRemove = M.recipes.find(s => s.id === remove.dataset.ownskinRemove); ctx.render(); ctx.root.querySelector('[data-skin-remove-cancel]')?.focus(); return true; }
+    const previous = { palette: S.current, own: M?.active?.id || null };
+    const restorePick = async () => {
+      let restored = false;
+      if ((M?.active?.id || null) !== previous.own) {
+        if (previous.own) await M.wear(previous.own); else if (M?.active) await M.leave();
+        restored = true;
+      }
+      if (S.current !== previous.palette) {
+        if (M?.active) await M.update({ base: previous.palette }); else S.set(previous.palette);
+        restored = true;
+      }
+      if (restored) { await window.WosExperience?.refresh?.(); await skinSettled(); }
+    };
     const own = el.closest('[data-ownskin]');
-    if (own) { lookAction(ctx, own, async () => { await M.wear(own.dataset.ownskin); await skinSettled(); }); return true; }
+    if (own) { lookAction(ctx, own, async () => { await M.wear(own.dataset.ownskin); await skinSettled(); }, () => {}, restorePick); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { lookAction(ctx, tweak, async () => { await window.WosExperience.toggle(tweak.dataset.tweakToggle); await skinSettled(); }); return true; }
     const quick = el.closest('[data-tweakauthor]');
@@ -416,15 +430,14 @@
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const family = el.closest('[data-skinfamily]');
-    const previous = S.current;
     if (family) {
-      lookAction(ctx, family, async () => { if (M?.active) await M.leave(); S.setFamily(family.dataset.skinfamily); await skinSettled(); }, () => ctx.haptic?.(8), () => { if (S.current !== previous) S.set(previous); }); return true;
+      lookAction(ctx, family, async () => { if (M?.active) await M.leave(); S.setFamily(family.dataset.skinfamily); await skinSettled(); }, () => ctx.haptic?.(8), restorePick); return true;
     }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     lookAction(ctx, b, async () => {
       if (M?.active) await M.update({ base: b.dataset.skinpick }); else S.set(b.dataset.skinpick);
       await skinSettled();
-    }, () => { for (const m of mounts) m.render(); ctx.haptic?.(8); }, () => { if (S.current !== previous) S.set(previous); }); return true;
+    }, () => { for (const m of mounts) m.render(); ctx.haptic?.(8); }, restorePick); return true;
   } });
   // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
   const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);

@@ -18,7 +18,7 @@ function experience(skin) {
     WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = ids; } },
     addEventListener() {}, dispatchEvent() {} };
   const storage = new Map();
-  vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal,
+  vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, setTimeout() {},
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   return { E: window.WosExperience, active: () => Array.from(active), window };
@@ -49,6 +49,18 @@ test('#778/#779/#789: author All switches stay skin-scoped and never turn Miguel
   assert.ok(f.active().includes('miguel/model-pills') && f.active().includes('miguel/hidden-pin'));
   f.window.WosSkin.current = 'nebula'; await f.E.chooseSkin();
   assert.ok(!f.active().some(id => id.startsWith('miguel/')), 'switching back to James drops Miguel');
+});
+
+test('failed tweak apply restores per-skin choices (including shared ideas) and rejects for the pending receipt', async () => {
+  for (const op of ['toggle', 'all']) {
+    const f = experience('obsidian'); await f.E.refresh();
+    const before = JSON.stringify(f.E.state.tweaks);
+    const load = f.window.WosSkinHost.loadTweaks; let fail = true;
+    f.window.WosSkinHost.loadTweaks = async (...args) => { if (fail) { fail = false; throw Error('Package load failed'); } return load(...args); };
+    await assert.rejects(op === 'toggle' ? f.E.toggle('wizard/pin-buttons') : f.E.chooseAuthor('miguel'), /Package load failed/);
+    assert.equal(JSON.stringify(f.E.state.tweaks), before, 'original switch selection is restored');
+    assert.equal(f.E.state.busy, false);
+  }
 });
 
 test('worn owner authors list carries shared tweaks and never labels house choices James', async () => {

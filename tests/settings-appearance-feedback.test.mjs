@@ -57,7 +57,7 @@ for (const attribute of ['data-skinfamily', 'data-skinpick', 'data-ownskin', 'da
     f.click(); f.frame(); f.frame(); await tick(); f.reject(Error('Owner connection needed')); await tick(); await tick();
     assert.equal(f.s.WosSkin.current, 'nebula'); assert.equal(f.view.context.lookPending, null);
     assert.equal(f.node().attrs['aria-busy'], undefined); assert.equal(f.node().disabled, false);
-    assert.match(f.root.innerHTML, /role="alert">Owner connection needed/); assert.equal(f.notices.at(-1)[1], 'Owner connection needed');
+    assert.match(f.root.innerHTML, /role="alert">Owner connection needed/); assert.match(f.notices.at(-1)[1], /^Owner connection needed/);
   });
 }
 test('tweak groups use only the worn set owner, including carried shared tweaks; house never says James', async () => {

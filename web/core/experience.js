@@ -103,6 +103,28 @@
     const off = new Set(offFor(owner)); on ? off.delete(id) : off.add(id);
     state.off[owner] = [...off]; Store.write(state);
   }
+  async function changeChoices(choices) {
+    const before = copy(state), own = recipe();
+    const previous = own && Object.fromEntries(Object.keys(choices).map(id => [id, enabled(id, own)]));
+    let saved = false;
+    try {
+      // One box write: All cannot stop halfway through a recipe.
+      if (own) {
+        await window.WosMySkin.update({ tweaks: choices }); saved = true;
+        const off = new Set(state.defaultsOff || []);
+        for (const [id, on] of Object.entries(choices)) if (globalIds().includes(id)) on ? off.delete(id) : off.add(id);
+        state.defaultsOff = [...off]; Store.write(state);
+      } else for (const [id, on] of Object.entries(choices)) await setOne(id, on);
+      await apply(); if (error) throw new Error(error);
+    } catch (e) {
+      state = before; Store.write(state);
+      let restoreError = '';
+      if (saved) try { await window.WosMySkin.update({ tweaks: previous }); } catch (restore) { restoreError = restore.message; }
+      await apply();
+      if (restoreError) throw new Error(`${e.message}. Could not restore the previous choices: ${restoreError}`);
+      throw e;
+    }
+  }
   const profileReads = new Map();
   function profile(who) {
     if (!profileReads.has(who)) {
@@ -165,10 +187,7 @@
       if (!mine.length) return;
       const on = !mine.every(t => t.on);
       const ids = [...new Set(mine.flatMap(t => groupOf(t.id) || [t.id]))];
-      // A box-backed recipe is one write, never a half-changed All switch if a later request fails.
-      if (recipe()) await window.WosMySkin.update({ tweaks: Object.fromEntries(ids.map(id => [id, on])) });
-      else for (const id of ids) await setOne(id, on);
-      return apply();
+      return changeChoices(Object.fromEntries(ids.map(id => [id, on])));
     },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
@@ -179,9 +198,8 @@
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
-      if (item.on) await setOne(id, false);
-      else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);
-      return apply();
+      const choices = item.on ? { [id]: false } : Object.fromEntries((groupOf(id) || [id]).filter(m => m === id || explicitOff(m)).map(m => [m, true]));
+      return changeChoices(choices);
     },
   };
   window.WosExperience = experience;
