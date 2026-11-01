@@ -61,6 +61,16 @@ class H(server.Handler):
   path=unquote(urlsplit(self.path).path)
   self.reads.append({'path':path})
   if path=='/__fixture__/blank':return self.send(200,b'<!doctype html><title>Empty profile byte observer</title>','text/html')
+  if path=='/__consumer__/sw.js':
+   source=(a.web/'core/offline-sw.js').read_text();start=source.index('  async function networkFirst(');end=source.index("  self.addEventListener('install'",start)
+   # Exact actual function, no invented pass-through implementation.
+   script="const names={shell:'consumer-canary-shell'};const c={navigation:{fallback:'./'}};const url=x=>new URL(x,self.registration.scope).href;\n"+source[start:end]+"\nself.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>e.respondWith(networkFirst(e.request,'shell')));"
+   return self.send(200,script.encode(),'application/javascript')
+  if path=='/__consumer__/':return self.send(200,b'<!doctype html><title>Owned consumer canary</title>','text/html')
+  if path=='/__consumer__/asset':
+   if urlsplit(self.path).query=='neverfinish':
+    self.send_response(200);self.send_header('Content-Type','application/javascript');self.send_header('Cache-Control','no-store');self.send_header('Content-Length','19');self.send_header('X-QA-Write-Id','consumer-neverfinish');self.end_headers();self.wfile.write(b'/* ');self.wfile.flush();time.sleep(8);return
+   return self.send(200,b'/* actual source */','application/javascript',{'X-QA-Write-Id':'consumer-good'})
   if path=='/__cdp__/sw.js':
    return self.send(200,b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('message',e=>e.waitUntil(fetch('/__cdp__/asset?'+e.data).then(r=>r.arrayBuffer()).catch(()=>{})));",'application/javascript')
   if path=='/__cdp__/asset':

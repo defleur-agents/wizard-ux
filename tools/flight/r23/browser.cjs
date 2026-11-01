@@ -8,7 +8,7 @@ const M=JSON.parse(fs.readFileSync(process.env.QA_SOURCE_MANIFEST));
 const sourceTuple=M.sources;
 let assetObserver,rawObserver;const servedAssets={},assetResponses=[],assetFailures=[];
 const URL0=process.env.QA_URL,OUT=process.env.QA_OUT,WIDTH=+(process.env.QA_WIDTH||390),BASELINE=process.env.QA_BASELINE==='1';
-const result={kind:'fresh-exact-head-browser',viewport:WIDTH,phase:process.env.QA_PHASE,checks:{},status:'failed',sourceManifest:process.env.QA_MANIFEST_SHA,sources:sourceTuple,nativeAcceptance:false,releaseAllowed:false};
+const result={kind:'read-only-stream-diagnostic',diagnosticOnly:true,review_required:true,freshIsolationAcceptance:false,freshBrowserAcceptance:false,viewport:WIDTH,phase:process.env.QA_PHASE,checks:{},status:'failed',sourceManifest:process.env.QA_MANIFEST_SHA,sources:sourceTuple,nativeAcceptance:false,releaseAllowed:false};
 // Exact-source-bound test observer. Never writes/upgrades the app database or
 // changes product exports. These are actual rows, not status.pending (a count).
 function installReadOnlyOutbox(){window.__qaReadOutbox=()=>new Promise((resolve,reject)=>{const r=indexedDB.open('wisdom-offline-v1',1);r.onupgradeneeded=()=>{r.transaction.abort();reject(Error('Expected existing Wisdom database'))};r.onerror=()=>reject(r.error);r.onsuccess=()=>{const db=r.result;const tx=db.transaction('outbox','readonly');const q=tx.objectStore('outbox').getAll();let rows;q.onsuccess=()=>rows=q.result;tx.oncomplete=()=>{db.close();resolve(rows)};tx.onerror=tx.onabort=()=>{db.close();reject(tx.error)}}})}

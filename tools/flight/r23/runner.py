@@ -48,7 +48,7 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','ownership.test.cjs','raw-cdp-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','ownership.test.cjs','raw-cdp-probe.cjs','stream-diagnostic.cjs','stream-diagnostic.test.cjs','consumer-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
  regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
  # Recompute policy from frozen source, never trust a served manifest/cache list.
  import runpy
@@ -58,15 +58,17 @@ def integrity():
  free=shutil.disk_usage(R).free;assert free>=3*1024**3,'3GiB execution free floor'
  return {'integrity':'verified','members':len(M['members']),'sourceCounts':M['counts'],'expectedCases':[c[0] for c in SELECTED],'caseBudgetSeconds':sum(c[3] for c in SELECTED),'browsersStarted':0,'fixturesStarted':0,'freeBytes':free,'playwright':resolved,'staticGuards':json.loads(guard.stdout),'seamRegressions':regression.stdout}
 preflight=integrity()
+streamtests=subprocess.run([NODE,R/'qa/stream-diagnostic.test.cjs'],env=ENV,capture_output=True,text=True,timeout=20);assert streamtests.returncode==0,streamtests.stdout+streamtests.stderr
+preflight['streamRegressions']=streamtests.stdout
 if A.verify_only:print(json.dumps(preflight));sys.exit(0)
 # This packet has no submission path; only the owning parent admits the sealed argv.
 assert os.environ.get('WIZARD_WORKER_LANE')=='light','parent-admitted Forum light lane required'
 OUT=R/'evidence';assert not OUT.exists(),'one-use immutable stage; preserve previous evidence';OUT.mkdir()
 TMP=Path('/srv/work/wr24-'+A.manifest_sha[:12]);assert not TMP.exists(),'fresh short owned TMPDIR required';TMP.mkdir(mode=0o700)
 ENV.update(TMPDIR=str(TMP),QA_R23_OWNED_ROOT=str(OUT))
-report={'status':'incomplete','manifest_sha256':A.manifest_sha,'sources':M['sources'],'preflight':preflight,'cases':{},'historical':M['historical'],'releaseAllowed':False,'nativeAcceptance':False,'liveParityAcceptance':False,'visualReview':'PARENT_MUST_INSPECT_REAL_PNGS','freshBrowserAcceptance':False}
+report={'status':'incomplete','manifest_sha256':A.manifest_sha,'sources':M['sources'],'preflight':preflight,'cases':{},'historical':M['historical'],'releaseAllowed':False,'nativeAcceptance':False,'liveParityAcceptance':False,'visualReview':'PARENT_MUST_INSPECT_REAL_PNGS','freshBrowserAcceptance':False,'review_required':True,'freshIsolationAcceptance':False,'diagnosticOnly':True}
 report.update(scope='isolation-only' if A.isolation_only else 'remaining-three-only' if A.remaining_only else 'all-ten',currentCaseAcceptance=False,freshRemainingBrowserAcceptance=False,historicalBrowserPasses=M.get('r29SourceEquivalence' if A.isolation_only else 'r28SourceEquivalence',{}).get('priorPassReports',{}),historicalPassesAreFresh=False)
-fixture=child=None;overall=time.monotonic()+(65 if A.diagnostic_only else 210 if A.isolation_only else 830)
+fixture=child=None;overall=time.monotonic()+(210 if A.isolation_only else 830)
 class DiagnosticDone(Exception):pass
 
 def save():(OUT/'acceptance.json').write_text(json.dumps(report,indent=2)+'\n')
@@ -120,9 +122,12 @@ def case(identity,phase,width,cap,probe: bool | str=False):
    with selectors.DefaultSelector() as sel:
     sel.register(fixture.stdout,selectors.EVENT_READ);assert sel.select(timeout=min(12,deadline-time.monotonic())),'fixture readiness timeout';line=fixture.stdout.readline();assert line,'fixture exited before readiness';info=json.loads(line)
    (out/'fixture.json').write_text(json.dumps(info,indent=2));assert info['synthetic'] and info['url'].startswith('https://localhost:') and info['url'].endswith('/wizard-os-home/?app-session=wisdom')
-   child=subprocess.Popen([NODE,R/'qa'/('raw-cdp-probe.cjs' if probe=='cdp' else 'observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
+   child=subprocess.Popen([NODE,R/'qa'/('consumer-probe.cjs' if probe=='consumer' else 'raw-cdp-probe.cjs' if probe=='cdp' else 'observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
    try:rc=child.wait(timeout=max(1,deadline-time.monotonic()-5))
    except subprocess.TimeoutExpired:row['timeout']=True;raise RuntimeError('externally bounded browser case timeout')
+   if probe=='consumer':
+    r=json.loads((out/'consumer-probe.json').read_text());assert rc==0 and r['status']=='pass' and r['unfinishedRefused'] and r['goodStreamValid']
+    row.update(status='pass',report=str((out/'consumer-probe.json').relative_to(R)),sha256=sha(out/'consumer-probe.json'));return
    if probe=='cdp':
     r=json.loads((out/'raw-cdp-probe.json').read_text());assert rc==0 and r['status']=='pass' and [x['actual'] for x in r['reports']]==['RAW-PASS','RAW-UNFINISHED']
     row.update(status='pass',report=str((out/'raw-cdp-probe.json').relative_to(R)),sha256=sha(out/'raw-cdp-probe.json'));return
@@ -150,11 +155,12 @@ def case(identity,phase,width,cap,probe: bool | str=False):
 try:
  save()
  if A.isolation_only:
-  case('raw-cdp-probe','raw-cdp-probe',390,60,probe='cdp')
-  if A.diagnostic_only:raise DiagnosticDone()
-  assert report['rawCDPProbe']['status']=='pass' and report['rawCDPProbe']['cleanup']['verified'],'raw CDP probe failed; no isolation admission'
- case('observer-probe','observer-probe',390,70,probe=True)
- assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
+  # Frozen actual protocol passes inherited by exact hash, never rerun.
+  report['inheritedProtocolPasses']=M['r34Diagnostic']['inheritedProtocolPasses']
+  case('consumer-probe','consumer-probe',390,60,probe='consumer')
+  assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'new stream canary failed; no isolation admission'
+ else:
+  raise RuntimeError('R34 permits selected isolation diagnostic only')
  for entry in CASES:
   if entry not in SELECTED:continue
   if time.monotonic()>=overall:report['cases'][entry[0]]={'status':'not-run-budget-exhausted'};save();continue
@@ -169,6 +175,7 @@ try:
 except DiagnosticDone:report.update(status='diagnostic-only-'+report['rawCDPProbe']['status'],scope='raw-canary-diagnostic-only',diagnosticOnly=True)
 except BaseException as e:report.update(status='failed',errorType=type(e).__name__,error=str(e));(OUT/'runner-failure.txt').write_text(traceback.format_exc())
 finally:
+ report.update(review_required=True,releaseAllowed=False,freshIsolationAcceptance=False,currentCaseAcceptance=False,freshBrowserAcceptance=False,freshRemainingBrowserAcceptance=False,diagnosticOnly=True)
  report['cleanup']=cleanup();report['artifacts']={str(p.relative_to(R)):{'sha256':sha(p),'bytes':p.stat().st_size} for p in OUT.rglob('*') if p.is_file() and p.name!='acceptance.json' and 'profile' not in p.relative_to(OUT).parts};save()
 print(json.dumps({'status':report['status'],'cases':{k:v['status'] for k,v in report['cases'].items()},'cleanup':report['cleanup'],'receipt':str(OUT/'acceptance.json')}))
 sys.exit(0 if report['currentCaseAcceptance'] and report['cleanup']['verified'] else 1)
