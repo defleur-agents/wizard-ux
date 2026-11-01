@@ -325,7 +325,7 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
 
 
 test('a merged tweak keeps the device\'s switch: Defer and Done on means the model switch (with them) is on', async () => {
-  const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: { 'miguel/switch-row-actions': true }, defaultsMigrated: true, machinesHomeMoved: true })]]);
+  const storage = new Map([['wos.skin', 'landscapes'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix: { 'miguel/switch-row-actions': true }, defaultsMigrated: true, machinesHomeMoved: true, miguelLayoutMoved: true })]]);
   let active = [];
   const window = { WosSkin: { current: 'landscapes', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
   vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });

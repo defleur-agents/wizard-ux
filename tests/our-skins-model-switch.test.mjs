@@ -53,8 +53,8 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
 
 test("Miguel's skins default the chat list to compact; an explicit Filter choice still wins", () => {
   const cj = read('web/core/chats.js');
-  assert.match(cj, /const OUR_SKINS = \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\];/);
-  assert.match(cj, /return v == null \? OUR_SKINS\.includes\(document\.documentElement\.dataset\.skin \|\| ''\) : v === '1';/);
+  assert.match(cj, /const ourSkin = \(\) => \(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('miguel\/layout'\);/);
+  assert.match(cj, /return v == null \? ourSkin\(\) : v === '1';/);
 });
 
 test('the model switch folds into one chip (current model + ⋯ opening the menu) when squeezed, in every Miguel skin', () => {

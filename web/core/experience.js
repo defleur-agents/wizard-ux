@@ -177,6 +177,13 @@
         if (ran && mixOf('miguel/machines-home') === undefined && Object.entries(state.mix || {}).some(([id, on]) => on === true && id.startsWith('miguel/'))) state.mix = { ...state.mix, 'miguel/machines-home': true };
         state.machinesHomeMoved = true; Store.write(state);
       }
+      // 1 Nov 2026 (James, Miguel): Dark, Light and Landscapes are colours only; the layout they used to bring is the
+      // miguel/layout tweak. A device wearing one of them with Miguel's tweaks on keeps that layout, once.
+      if (!state.miguelLayoutMoved) {
+        let skin = ''; try { skin = document.documentElement?.dataset?.skin || localStorage.getItem('wos.skin') || ''; } catch (_) {}
+        if (!who && /^(obsidian|landscapes)/.test(skin) && mixOf('miguel/layout') === undefined && !globalOff('miguel/layout') && Object.entries(state.mix || {}).some(([id, on]) => on === true && id.startsWith('miguel/'))) state.mix = { ...state.mix, 'miguel/layout': true };
+        state.miguelLayoutMoved = true; Store.write(state);
+      }
       const own = recipe();
       // Every installed tweak is offered, whoever wrote it; the preset only sets which start on.
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];

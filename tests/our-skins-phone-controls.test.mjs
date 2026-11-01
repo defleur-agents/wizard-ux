@@ -6,7 +6,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
+const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
+const read = p => ungate(readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
 const obsidian = read('web/skins/obsidian/skin.css');
 const landscapes = read('web/skins/landscapes/skin.css');
 const rule = (css, sel) => {
