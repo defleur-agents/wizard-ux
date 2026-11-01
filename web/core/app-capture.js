@@ -804,9 +804,15 @@
   }
   // The abandoned start settled after all. It never touches `active` (a newer take may own the mic): it returns
   // a lock it acquired late, cancels a fresh native take nobody is waiting for, and leaves a resumed take recoverable.
-  function lateStart(s, resuming) {
+  function lateStart(s, resuming, error) {
     cleanup(s); s.unlock?.(); s.unlock = null;
-    if (!s.engine) return;
+    if (!s.engine) {
+      // A definitive late rejection created no take. Remove only that empty reservation;
+      // unknown native outcomes retain custody until the bridge can establish ownership.
+      const quiet = (() => { try { return JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null') === null; } catch (_) { return false; } })();
+      if (!resuming && !s.row.nativeId && (quiet || ['busy','permission_denied','mic_permission','mic_busy','native_busy'].includes(error?.code))) void remove(s.row.id).catch(() => {});
+      return;
+    }
     if (resuming) { safeCall(s.engine.detach); return; }
     Promise.resolve().then(() => s.engine.cancel?.()).then(() => remove(s.row.id)).catch(() => {});
   }
@@ -821,7 +827,7 @@
       if (typeof opts[opt] === 'function') observe(s,key,opts[opt]);
     if (prepared) { preparations.delete(prepared.id); s.ctx = prepared.ctx; s.displayPromise = prepared.display?.catch(e => { emit(s,'warn','Computer audio was not captured: ' + e.message); return null; }); }
     s.readyPromise = new Promise(resolve => { s.readyResolve = resolve; });
-    s.instant = !opts.resumeId && opts.kind !== 'meeting' && !opts.pcm && !opts.systemAudio && opts.mime !== 'audio/wav';
+    s.instant = !opts.resumeId && ['audio','song'].includes(opts.kind || 'audio') && !opts.pcm && !opts.systemAudio && opts.mime !== 'audio/wav';
     active = s; if (s.instant) s.recoveryYield = yieldRecovery(); changed();
     // Bounded start (James's phone, 31 Oct 2026): a start that never settles must not hold the microphone. Before
     // this bound a hung store/recovery/permission/native await kept `active` set, so every app read the mic as busy
@@ -835,7 +841,7 @@
         if (s.phase !== 'starting' || s.engine || s.settled) return;
         reject(abandonStart(s, !!opts.resumeId));
       }, ms); };
-      arm(START_BOUND_MS);
+      if (s.instant) arm(START_BOUND_MS); // meetings, PCM and resume keep their established protocol
     });
     const run = startRun(s, appId, opts, meta, prepared);
     run.catch(() => {}); // after a timeout nobody awaits the late outcome; startRun cleans it up itself
@@ -924,7 +930,7 @@
       if (opts.maxMs) s.maxTimer = setTimeout(() => { void finish(s).catch(() => {}); }, Math.min(opts.maxMs, 2147483647));
       return session(s);
     } catch (e) {
-      if (s.timedOut) { lateStart(s, !!opts.resumeId); throw e; }
+      if (s.timedOut) { lateStart(s, !!opts.resumeId, e); throw e; }
       s.settled = true;
       // An established recorder must not be deleted on a storage failure. Preserve
       // its owner and expose retryable Stop instead of starting another physical mic.
@@ -972,7 +978,7 @@
     await ready;
     let unlock, lease;
     try {
-      unlock = await acquire();
+      unlock = await acquire(true);
       lease = {unlock, cancelled:false}; recoveryLease = lease;
       await recoverLocked(lease);
       for (const row of await rows()) {
@@ -992,7 +998,8 @@
       }
     } catch (e) { if (!['busy','recovery_yielded'].includes(e.code)) throw e; }
     finally { if (recoveryLease === lease) recoveryLease = null; unlock?.(); }
-    return Promise.all((await rows()).filter(r => r.appId === appId && ['pending','recoverable'].includes(r.status)).map(result));
+    // Busy/yielded recovery is not a settled take. Never offer a live orphan for upload/ack.
+    return Promise.all((await rows()).filter(r => r.appId === appId && r.status === 'pending').map(result));
   }
   async function pending(appId) {
     validate(appId, {}); await ready; await recover();
