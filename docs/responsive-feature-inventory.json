@@ -1,5 +1,17 @@
 {
   "coreModules": {
+    "core/offline-apps.js": {
+      "loadedBy": ["phone"],
+      "note": "Reviewed capability table shared by the worker and phone pinned-session adapter; registers no workspace feature"
+    },
+    "core/offline-session-config.js": {
+      "loadedBy": [],
+      "note": "Generated worker manifest from tools/build-offline-session.py; exact dependency bytes checked by --check"
+    },
+    "core/offline-session.js": {
+      "loadedBy": ["phone"],
+      "note": "Phone pinned-session readiness adapter; its mode/opt-in guard makes ordinary workspace startup inert"
+    },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -680,6 +692,16 @@
     }
   },
   "exceptions": {
+    "core/offline-apps.js": {
+      "classification": "adapter",
+      "shell": "phone",
+      "reason": "Pinned app-session capability table used by the phone/native index route; does not mount a general-purpose workspace feature."
+    },
+    "core/offline-session.js": {
+      "classification": "adapter",
+      "shell": "phone",
+      "reason": "Pinned-session service-worker readiness adapter returns before registration unless WizHomeScreenPolicy.mode and the reviewed app offline opt-in are true."
+    },
     "pwa-install.js": {
       "shell": "phone",
       "classification": "native",

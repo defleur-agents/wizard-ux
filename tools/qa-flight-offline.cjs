@@ -20,16 +20,23 @@ async function cacheReady(f,p){await f.evaluate(async()=>{await WisdomOffline.st
  let f=await frame(p);await contract(f);await f.locator('.wb-home').waitFor();await cacheReady(f,p);
  result.checks.actualRegisteredIframe=await p.evaluate(()=>({id:WizHomeScreenPolicy.id,offline:WizOfflineApps.allows('wisdom','/wisdom/'),back:typeof window.__wosNativeBack}));assert.deepEqual(result.checks.actualRegisteredIframe,{id:'wisdom',offline:true,back:'function'});
  if(process.env.QA_SMOKE==='1'){assert(Array.isArray(await f.evaluate(()=>__qaReadOutbox())));await chapter(f);const rendered=await f.evaluate(async()=>{await document.fonts.ready;const s=await WisdomOffline.projected(),c=s.collections[0],e=s.entries[0];return {reader:document.querySelector('.wb-reader')?.dataset.read,classes:['.wb-stage','.wb-flow','.wb-count'].map(x=>!!document.querySelector(x)),body:e.body,edition:e.body_sha256,sections:c.sections,thinkers:c.thinkers,numbers:c.numbers,art:e.art}});assert.equal(rendered.reader,'flight-chapter');assert(rendered.classes.every(Boolean)&&rendered.body.includes('Quiet attention')&&rendered.edition&&rendered.sections?.[0]?.entries.includes('flight-chapter')&&rendered.thinkers.includes('flight-author')&&rendered.art);result.checks.renderedContract=rendered;result.status='pass';return;}
+ const phase=process.env.QA_PHASE||'functional';
+ if(phase==='back'){
+  await chapter(f);await f.getByRole('button',{name:'Chapter discussions',exact:true}).click();await f.locator('.wd-panel').waitFor();await p.evaluate(()=>window.__wosNativeBack());await f.locator('.wd-panel').waitFor({state:'hidden'});await p.evaluate(()=>window.__wosNativeBack());await f.waitForFunction(()=>!document.querySelector('.wb-reader')&&location.hash.includes('/collection/'));for(let i=0;i<6;i++)await p.evaluate(()=>window.__wosNativeBack());assert(new URL(p.url()).searchParams.get('app-session')==='wisdom');result.checks.nestedAndRootBack=true;result.status='pass';return;
+ }
+ if(phase==='appearance'){
  const tokens=[];
  await chapter(f);await f.getByRole('button',{name:'Chapter discussions',exact:true}).click();await f.locator('.wd-panel').waitFor();
  for(const skin of ['obsidian','obsidian-light']){
-  await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForTimeout(350);
-  const t=await f.evaluate(()=>({bg:getComputedStyle(document.documentElement).getPropertyValue('--wz-bg').trim(),surface:getComputedStyle(document.documentElement).getPropertyValue('--wz-surface').trim()}));assert(t.bg&&t.surface,'Appearance v1 shared tokens');tokens.push(t.bg);
+  await p.evaluate(s=>WosSkin.set(s),skin);await f.waitForFunction(s=>window.WizardTheme?.connected&&WizardTheme.current?.skin===s,skin);
+  const t=await f.evaluate(()=>({bg:getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim(),surface:getComputedStyle(document.documentElement).getPropertyValue('--wz-surface').trim()}));assert(t.bg&&t.surface,'Appearance v1 shared tokens');tokens.push(t.bg);
   const opaque=await f.locator('.wd-panel').evaluate(el=>{const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');x.fillStyle=getComputedStyle(el).backgroundColor;x.fillRect(0,0,1,1);return x.getImageData(0,0,1,1).data[3]===255});assert(opaque,'text-bearing discussion panel must be fully opaque');
   await p.screenshot({path:path.join(OUT,`skin-${skin}.png`),fullPage:true});
  }
  assert.notEqual(tokens[0],tokens[1],'live skin change reaches real registered iframe');result.checks.skins=['obsidian','obsidian-light'];result.checks.opaqueTextPanels=true;
- await p.evaluate(()=>window.__wosNativeBack());await f.locator('.wd-panel').waitFor({state:'hidden'});await f.evaluate(()=>Wisdom.navigate(''));
+ result.status='pass';return;
+ }
+ await chapter(f);
  await p.evaluate(async()=>{for(const k of ['sibling-pin-sentinel','wos-shell-v1']){const c=await caches.open(k);await c.put(new URL('flight-cache-sentinel',location.href),new Response('keep'))}});
  await context.setOffline(true);await f.evaluate(()=>window.dispatchEvent(new Event('offline')));await quiet(f);await context.close();context=null;
  p=await open(true);await p.goto(URL0,{waitUntil:'domcontentloaded'});f=await frame(p);await quiet(f);await chapter(f);await p.screenshot({path:path.join(OUT,'offline-cold-chapter.png')});
@@ -42,7 +49,6 @@ async function cacheReady(f,p){await f.evaluate(async()=>{await WisdomOffline.st
  const failure=await f.evaluate(async()=>{const old=IDBObjectStore.prototype.add;IDBObjectStore.prototype.add=function(){throw new DOMException('Synthetic quota failure','QuotaExceededError')};try{await api('wisdom/reaction',{kind:'entry',id:'flight-chapter',field:'progress',value:67});return 'claimed-saved'}catch{return 'rejected'}finally{IDBObjectStore.prototype.add=old}});assert.equal(failure,'rejected');assert(!(await f.evaluate(()=>document.querySelector('#toast.show'))));result.checks.quotaFailureNeverClaimsSaved=true;
  await f.evaluate(()=>Wisdom.navigate('/shelf/private'));await f.waitForFunction(()=>document.querySelector('[data-offline-failures]')?.textContent.includes('could not be saved'));await quiet(f);assert.equal(await f.locator('[data-offline-failures]').evaluate(el=>getComputedStyle(el).position),'static');await p.screenshot({path:path.join(OUT,'quota-failure-inline-only.png')});await chapter(f);
  await p.evaluate(async()=>{for(const k of ['sibling-pin-sentinel','wos-shell-v1'])assertSentinel: {const c=await caches.open(k);if(!await c.match(new URL('flight-cache-sentinel',location.href)))throw Error('sibling/workspace cache lost: '+k)}});result.checks.siblingWorkspaceCachesPreserved=true;
- await p.evaluate(()=>window.__wosNativeBack());await f.waitForFunction(()=>!document.querySelector('.wb-reader')&&location.hash.includes('/collection/'));for(let i=0;i<6;i++)await p.evaluate(()=>window.__wosNativeBack());assert(new URL(p.url()).searchParams.get('app-session')==='wisdom');result.checks.nestedAndRootBack=true;
  await context.setOffline(false);await f.evaluate(()=>window.dispatchEvent(new Event('online')));
  // The fixture deliberately loses the first committed highlight ACK. Retry the SAME durable operation.
  for(let i=0;i<5;i++){await f.evaluate(()=>WisdomOffline.flush());if(await f.evaluate(async()=>(await __qaReadOutbox()).length===0))break;await f.waitForTimeout(200)}

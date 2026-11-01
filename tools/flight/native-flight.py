@@ -77,6 +77,21 @@ def until(fn, seconds=60):
         time.sleep(1)
     raise TimeoutError(str(last))
 
+def readiness(name, command, predicate, seconds=60):
+    # Persist every actual API35 response; a timeout names its predicate, not False.
+    last = ''
+    def probe():
+        nonlocal last
+        last = shell(command, ok=False, timeout=15)
+        (OUT / ('ready-' + name + '.txt')).write_text(last)
+        return predicate(last)
+    try:
+        until(probe, seconds)
+    except Exception:
+        record('native readiness: ' + name, False, {'command':command,'last':last[-3000:]})
+        raise
+    record('native readiness: ' + name, True, {'command':command,'last':last[-3000:]})
+
 ui_serial = 0
 
 def raw_screen(name):
@@ -222,15 +237,20 @@ try:
         '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','swiftshader',
         '-memory','4096','-cores','4'], env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
     until(lambda:a('get-state',ok=False).strip()=='device',180)
-    until(lambda:shell('getprop sys.boot_completed',ok=False).strip()=='1',240)
+    record('native readiness: adb transport', True)
+    readiness('boot-completed', 'getprop sys.boot_completed', lambda s:s.strip()=='1', 240)
     shell('input keyevent KEYCODE_WAKEUP; wm dismiss-keyguard')
-    until(lambda:'RUNNING_UNLOCKED' in shell('dumpsys user',ok=False),60)
-    until(lambda:shell('getprop init.svc.zygote',ok=False).strip()=='running' and bool(shell('pidof system_server',ok=False).strip()) and 'mCurrentFocus=' in shell('dumpsys window windows',ok=False),60)
+    readiness('user-unlocked', 'cmd user is-user-unlocked 0', lambda s:s.strip()=='true')
+    readiness('zygote-running', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
+    readiness('system-server', 'pidof system_server', lambda s:bool(re.fullmatch(r'[0-9]+(?:\s+[0-9]+)*',s.strip())))
+    # R4 full dumpsys window captured this real field; the windows subcommand did not.
+    readiness('focused-window', 'dumpsys window', lambda s:bool(re.search(r'mCurrentFocus=Window\{[^}]+\}',s)))
     for setting in ['window_animation_scale','transition_animation_scale','animator_duration_scale']:
         shell('settings put global '+setting+' 0')
     record('boot unlocked API35 input/window services ready',shell('getprop ro.build.version.sdk').strip()=='35')
     cert, key = tls_prepare()
-    until(lambda:'RUNNING_UNLOCKED' in shell('dumpsys user',ok=False) and shell('getprop init.svc.zygote',ok=False).strip()=='running',60)
+    readiness('post-tls-user-unlocked', 'cmd user is-user-unlocked 0', lambda s:s.strip()=='true')
+    readiness('post-tls-zygote', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
     diagnostics('boot-ready')
     # No device traffic may leave this disposable rig: loopback + adb reverse only.
     # Apply before installing/starting the release APK, including its background jobs.

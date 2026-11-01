@@ -50,7 +50,7 @@ def stop_fixture():
   except subprocess.TimeoutExpired:fixture.kill();fixture.wait(timeout=10)
   fixture=None
 
-def browser_case(name,width,baseline=False,smoke=False):
+def browser_case(name,width,baseline=False,smoke=False,phase='functional'):
  global fixture
  out=OUT/name;out.mkdir();err=(out/'fixture.log').open('w')
  source=R/('baseline-wisdom' if baseline else 'wisdom')
@@ -58,7 +58,7 @@ def browser_case(name,width,baseline=False,smoke=False):
  try:
   sel=selectors.DefaultSelector();sel.register(fixture.stdout,selectors.EVENT_READ);assert sel.select(timeout=40),'fixture readiness timeout'
   line=fixture.stdout.readline();assert line,'fixture exited before readiness; see '+str(err.name);info=json.loads(line);(out/'fixture.json').write_text(json.dumps(info,indent=2));sel.close()
-  env={**ENV,'QA_URL':info['url'],'QA_OUT':str(out),'QA_WIDTH':str(width),'QA_BASELINE':'1' if baseline else '0','QA_SMOKE':'1' if smoke else '0'}
+  env={**ENV,'QA_URL':info['url'],'QA_OUT':str(out),'QA_WIDTH':str(width),'QA_BASELINE':'1' if baseline else '0','QA_SMOKE':'1' if smoke else '0','QA_PHASE':phase}
   rc=run([NODE,R/'ux/tools/qa-flight-offline.cjs'],env=env,timeout=240,log=out/'browser.log',ok=False).returncode
   report=json.loads((out/'acceptance.json').read_text())
   if baseline:assert rc!=0 and report['checks'].get('ASSERT_REACHED')=='no offline popups anywhere' and report['checks'].get('baselinePopup',{}).get('visible') and (out/'expected-popup.png').is_file() and 'no offline popups anywhere' in report['error']['message'],'baseline must reach the assertion with actual popup evidence, not infrastructure'
@@ -111,6 +111,10 @@ try:
  phase('baseline',lambda:browser_case('before-live-red',390,True))
  phase('phone',lambda:browser_case('phone',390))
  phase('desktop',lambda:browser_case('desktop',1280))
+ # Independent fresh fixtures: appearance/Back cannot mask cold offline evidence.
+ for width,label in [(390,'phone'),(1280,'desktop')]:
+  for check in ['appearance','back']:
+   phase(label+'_'+check,lambda width=width,label=label,check=check:browser_case(label+'-'+check,width,phase=check))
  def native_case():
   rc=run([sys.executable,R/'native-flight.py'],timeout=1000,log=OUT/'native.log',ok=False).returncode
   native=json.loads((OUT/'native/acceptance.json').read_text())

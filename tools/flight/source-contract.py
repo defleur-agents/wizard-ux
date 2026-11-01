@@ -40,6 +40,15 @@ for marker in ["col['sections']","col['numbers']","col['thinkers']","e['body_sha
 shell=text(u,'web/app.js'); connect=text(u,'android/app/src/main/java/ai/wizards/os/ConnectActivity.java'); index=text(u,'web/index.html')
 for marker in ['Wizard orb.', 'Apps and views']:assert marker in index
 for marker in ['WizHomeScreenApps?.attach(launcher','appHold !== false','data-ovdl','Add ${esc(window.WizHomeScreenPolicy','overviewMode().appAction']:assert marker in shell,marker
+# Derive tokens from the real imported Appearance client, never invented wz-bg.
+client=text(w,'static/wizard-appearance.js')
+names=ast.literal_eval(re.search(r"const NAMES = (\[[^;]+\]);",client)[1])
+reads=set(re.findall(r"getPropertyValue\(['\"](--wz-[^'\"]+)['\"]\)",qa))
+assert reads and reads<={'--wz-'+n for n in names},reads
+assert "WosSkin.set(s)" in qa and "WizardTheme.current?.skin===s" in qa
+native=text(u,'tools/flight/native-flight.py')
+assert "'dumpsys window windows'" not in native
+assert "'cmd user is-user-unlocked 0'" in native and "'dumpsys window'" in native
 assert 'Connect' in connect and 'EditText' in connect and 'connect' in connect
 for file in (u/'tools/flight').glob('*.py'):ast.parse(file.read_text(),filename=str(file))
 result={'kind':'read-only source AST contract; no rendered QA claim','selectors':{k:owners[k] for k in sorted(selectors)},'readerClasses':sorted(expected),'fixture':'synthetic catalog; server source normalizes render fields','files':{str(x.relative_to(u) if x.is_relative_to(u) else 'wisdom/'+str(x.relative_to(w))):hashlib.sha256(x.read_bytes()).hexdigest() for x in [u/'tools/qa-flight-offline.cjs',u/'tools/qa-flight-offline-fixture.py',u/'tools/flight/native-flight.py',w/'static/wisdom.js',w/'static/offline.js',w/'wisdom.py']}}
