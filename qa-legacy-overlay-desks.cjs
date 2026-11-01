@@ -6,8 +6,14 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const { boot, ready, T, slide, orbXY, sleep, runs } = require('./qa-orb-radial.cjs');
 const fixture = JSON.parse(fs.readFileSync(process.env.QA_OWNER_FIXTURE, 'utf8'));
 const broken = process.env.QA_EXPECT_BROKEN === '1', shots = process.env.QA_SHOTS;
+const assert = require('node:assert/strict');
+const {provePanelOpaque} = require('./tools/qa-panel-opacity.cjs');
+const {checks:expectedChecks} = require('./tools/qa-legacy-overlay-contract.cjs');
+const diagnostic=process.env.QA_OPACITY_DIAGNOSTIC==='1';
+const checked=[];
 let passed = 0;
-function check(value, name, detail) { if (!value) throw new Error(name + ': ' + JSON.stringify(detail)); passed++; console.log('PASS', name); }
+function check(value, name, detail) { if (!value) throw new Error(name + ': ' + JSON.stringify(detail)); checked.push(name);passed++; console.log('PASS', name); }
+function complete(){assert.deepEqual(checked,expectedChecks(broken,diagnostic),'all semantic acceptance obligations completed');console.log('CHECKS',JSON.stringify(checked));console.log(`COMPLETE ${passed} passed, 0 failed`);}
 const copy = value => JSON.parse(JSON.stringify(value));
 async function setup(ctx, data, css, writes) {
   const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -54,7 +60,7 @@ async function shot(p, name) {
       check(s.css===fixture.css,'all original My skin rules preserved byte-for-byte',s.css.length);
     }
     check(p.errs.length===0,'saved-state scenario has zero page errors',p.errs); await ctx.close();
-    if (broken) { console.log(`COMPLETE ${passed} passed, 0 failed`); return; }
+    if (broken) { complete(); return; }
     // Independent fresh profiles with restored box state, radial OFF/ON and optional two-orbs.
     for (const enabled of [false,true]) for (const two of [false,true]) {
       const data=copy(fixture.skins);data.active='My skin';const writes=[];
@@ -79,12 +85,14 @@ async function shot(p, name) {
         await p.waitForFunction(()=>!__wos.sheet&&!document.querySelector('#settings.open'));
         await sleep(650);
         await swipe(p);let s=await state(p);check(s.pill&&!s.apps&&s.skin===skin&&s.active==='My skin',`${skin} radial:${enabled} two-orbs:${two}: actual Look -> Miguel selector`,s);
-        const fill=await p.locator('#overview .ov-sheet').evaluate(e=>({background:getComputedStyle(e).backgroundColor,blur:getComputedStyle(e).backdropFilter,radius:getComputedStyle(e).borderRadius}));
-        check(!/rgba\([^)]*,\s*0\./.test(fill.background)&&fill.blur==='none'&&parseFloat(fill.radius)>20,'Miguel pill has opaque shared panel and rounded identity',fill);
-        // Pixel proof: remove only the scrim, then put loud text behind the selector sheet.
-        const sheet=p.locator('#overview .ov-sheet'), before=await sheet.screenshot();
-        await p.evaluate(()=>{const n=document.createElement('div');n.id='qa-loud';n.style='position:fixed;inset:0;z-index:1;color:red;background:lime;font-size:48px;pointer-events:none';n.textContent='LOUD TEXT '.repeat(100);document.getElementById('device').append(n);});
-        const after=await sheet.screenshot();check(before.equals(after),'selector panel pixels unchanged over loud text');await p.evaluate(()=>document.getElementById('qa-loud').remove());
+        const fill=await p.locator('#overview .ov-sheet').evaluate(e=>{const s=getComputedStyle(e),c=document.createElement('canvas');c.width=c.height=1;const ctx=c.getContext('2d');ctx.fillStyle=s.backgroundColor;ctx.fillRect(0,0,1,1);return {background:s.backgroundColor,alpha:ctx.getImageData(0,0,1,1).data[3],blur:s.backdropFilter,radius:s.borderRadius,opacity:s.opacity};});
+        check(fill.alpha===255&&fill.opacity==='1'&&fill.blur==='none'&&parseFloat(fill.radius)>20,'Miguel pill has opaque shared panel and rounded identity',fill);
+        // Compare decoded background-interior RGBA, never rounded bounding-box corners.
+        // Same-state controls, exact same physical ROI, loud-layer stacking/paint proof,
+        // and deliberately translucent positive control are mandatory, with retained PNGs.
+        const proof=await provePanelOpaque(p,{shots,name:`${skin}-radial-${enabled}-two-${two}`,legacyProbe:diagnostic});
+        check(proof.complete&&proof.changed.mismatches===0,'selector panel pixels unchanged over loud text',proof.changed);
+        if(diagnostic){assert.equal(p.errs.length,0);await ctx.close();complete();return;}
         if(!two)await shot(p,`fixed-${skin}-radial-${enabled}`);await close(p);
       }
       await p.reload({waitUntil:'load'});await ready(p,enabled);await p.waitForFunction(()=>WosMySkin.state.loaded);await swipe(p);
@@ -101,6 +109,6 @@ async function shot(p, name) {
       check(s.apps&&!s.pill&&data.active===null,'explicit leave is durable opt-out; no automatic resurrection',s);
       check(p.errs.length===0,'restored profile has zero page errors',p.errs);await ctx.close();
     }
-    check(runs().length===0,'no agent runs or new sessions',runs()); console.log(`COMPLETE ${passed} passed, 0 failed`);
+    check(runs().length===0,'no agent runs or new sessions',runs()); complete();
   } finally {await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
