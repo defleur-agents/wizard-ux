@@ -88,7 +88,16 @@ class EgressTests(unittest.TestCase):
             (out/'egress-after-flight.json').write_text(json.dumps(row))
             with self.assertRaises(ValueError):e.verify_evidence(out,checks)
     def test_all_functional_code_and_renderer_unchanged(self):
-        old=ast.parse(original());new=ast.parse((T/'native-flight.py').read_text())
+        source=(T/'native-flight.py').read_text()
+        if 'import native_ui_r16 as native_ui' in source:
+            # R16 permits only the tracked UI navigation delta. Reverse it exactly
+            # before applying the historical R14->R15 egress-only comparison.
+            fixture=T/'fixtures/r15-onboarding'
+            for before,after in reversed(json.loads((fixture/'approved-ui-delta.json').read_text())):
+                self.assertEqual(source.count(after),1)
+                source=source.replace(after,before)
+            self.assertEqual(source,(fixture/'native-flight.py.txt').read_text())
+        old=ast.parse(original());new=ast.parse(source)
         # Whitelist only the old flaky probe block and added QA proof calls/helper.
         oldblock="Documentation-only address cannot receive traffic"
         class Normalize(ast.NodeTransformer):

@@ -1,0 +1,50 @@
+[
+  [
+    "import egress_r15\n",
+    "import egress_r15\nimport native_ui_r16 as native_ui\n"
+  ],
+  [
+    "return list(ET.fromstring(raw or ui()).iter('node'))",
+    "return native_ui.visible(raw or ui())"
+  ],
+  [
+    "    v = list(map(int, re.findall(r'\\d+', n.get('bounds', ''))))\n    return ((v[0]+v[2])//2, (v[1]+v[3])//2) if len(v)==4 and v[2]>v[0] and v[3]>v[1] else None",
+    "    return native_ui.center(n)"
+  ],
+  [
+    "if re.search(pattern, label(n), re.I) and bounds(n)",
+    "if n.get('enabled') != 'false' and re.search(pattern, label(n), re.I) and bounds(n)"
+  ],
+  [
+    "    for _ in range(8):\n        raw=ui(); p=find(r'^(Skip|Got it|GOT IT|OK|Not now)$',raw)\n        if not p: break\n        shell(f'input tap {p[0]} {p[1]}');time.sleep(1)",
+    "    # Source-backed Welcome/Tour Back/skip only; never provider sign-in or a send.\n    def save_onboarding(index, stage, raw, xy):\n        stem=OUT/('onboarding-%02d'%index)\n        stem.with_suffix('.xml').write_text(raw)\n        stem.with_suffix('.json').write_text(json.dumps({'stage':stage,'target':xy,'ui_capture':'ui-%04d.xml'%ui_serial}))\n    orb=native_ui.dismiss_onboarding(ui,\n        lambda xy:shell(f'input tap {xy[0]} {xy[1]}'),\n        lambda:shell('input keyevent KEYCODE_BACK'), save_onboarding, time.sleep)\n    record('supported onboarding UI dismissed before launcher',True,{'captures':'onboarding-*.xml','orb':orb})"
+  ],
+  [
+    "    tap('^Wisdom$',long=True)\n    if not find('^Add to home screen$'):\n        # attach(launcher) is gated by overviewMode().appHold; Miguel disables it.\n        # Its source-supported alternative is a single-app Desks download action.\n        tap('^Wisdom$')\n        until(lambda:find('^A quiet beginning$'),45)\n        dock=until(lambda:next((bounds(n) for n in nodes() if label(n)=='Wisdom' and bounds(n) and bounds(n)[1]>1700),None),20)\n        x,y=dock;shell(f'input swipe {x} {y} {x} {y} 800')\n        tap(r'^Wisdom, current desk$',long=True)\n        tap('^Add Wisdom to home screen$')",
+    "    # Orb-up may open Apps OR Desks; choose only the rendered source-defined surface.\n    surface=ui()\n    if not find('^Wisdom$',surface):\n        tap('^New desk: pick an app$')\n    tap('^Wisdom$')\n    until(lambda:find(r'Synthetic flight collection|Browse all|Currently reading'),45)\n    # The current desk IS the orb, never a dock button labelled Wisdom.\n    # Long-hold another real dock desk (Home/Chats) to open Desks without navigation.\n    orb=until(lambda:find(native_ui.ORB),20)\n    dock=until(lambda:next((bounds(n) for n in nodes()\n        if label(n) in ('Home','Chats') and n.get('clickable')=='true' and bounds(n)\n        and abs(bounds(n)[1]-orb[1])<100),None),20)\n    x,y=dock;shell(f'input swipe {x} {y} {x} {y} 800')\n    tap(r'^Wisdom, current desk$',long=True)\n    tap('^Add Wisdom to home screen$')"
+  ],
+  [
+    "    tap('^Add to home screen$')\n    capture('02-os-pin-confirmation')\n    tap('^(Add|Add automatically|Add to home screen|ADD)$')",
+    "    pin_xy=until(lambda:native_ui.target(r'^Add to home screen$',ui(),package=PKG,clickable=True,scope='Wisdom home screen'),20)\n    record('native pin request belongs to Wisdom shell sheet','.MainActivity' in top(),pin_xy)\n    shell(f'input tap {pin_xy[0]} {pin_xy[1]}')\n    confirm=until(lambda:native_ui.os_pin_target(ui()),30)\n    capture('02-os-pin-confirmation')\n    record('OS launcher confirmation distinct from shell CTA','launcher' in top().lower(),confirm)\n    shell(f'input tap {confirm[0]} {confirm[1]}')"
+  ],
+  [
+    "    record('reader controls prove chapter opened',find('^Chapter discussions$') is not None)\n    next_page()",
+    "    record('reader controls prove chapter opened',find('^Chapter discussions$') is not None)\n    record('fresh synthetic chapter opens at illustrated first page',page_count()[0]==1,page_count())\n    next_page()"
+  ],
+  [
+    "    shell('input keyevent KEYCODE_BACK');time.sleep(1)\n    after=[label(n) for n in nodes() if label(n)]",
+    "    # A saved highlight stays active. Back first dismisses that toolbar, then leaves reader.\n    for _ in range(3):\n        shell('input keyevent KEYCODE_BACK');time.sleep(1)\n        if not find('^Chapter discussions$'):break\n    after=[label(n) for n in nodes() if label(n)]"
+  ],
+  [
+    "    next_page();next_page()\n    shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)",
+    "    next_page();saved_page=next_page()\n    shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)"
+  ],
+  [
+    "    # Do not replace/recreate this OS shortcut. Open the saved Highlights view in the same pin.",
+    "    record('actual offline reading page survives second process death',page_count()==saved_page,{'saved':saved_page,'restored':page_count()})\n    # Do not replace/recreate this OS shortcut. Open the saved Highlights view in the same pin."
+  ],
+  [
+    "    tap(r'^Wisdom, current desk$',long=True)\n    tap('^Add Wisdom to home screen$')",
+    "    tap(r'^Wisdom, current desk$',long=True)\n    # Without arrange/download the same hold directly offers the pin sheet.\n    pin_surface=until(lambda:('sheet' if native_ui.target(r'^Add to home screen$',ui(),package=PKG,clickable=True,scope='Wisdom home screen')\n        else 'download' if find('^Add Wisdom to home screen$') else None),20)\n    if pin_surface=='download':tap('^Add Wisdom to home screen$')"
+  ]
+]

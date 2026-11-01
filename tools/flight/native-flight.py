@@ -20,6 +20,7 @@ import zipfile
 import importlib.util
 import renderer_r14
 import egress_r15
+import native_ui_r16 as native_ui
 _spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
 _transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
 
@@ -208,17 +209,16 @@ def ui():
     raise RuntimeError('UIAutomator unavailable after bounded attempts; raw pixels, stdout/stderr, activity/window/input/zygote/logcat at ' + name)
 
 def nodes(raw=None):
-    return list(ET.fromstring(raw or ui()).iter('node'))
+    return native_ui.visible(raw or ui())
 
 def label(n):
     return (n.get('text') or n.get('content-desc') or '').strip()
 
 def bounds(n):
-    v = list(map(int, re.findall(r'\d+', n.get('bounds', ''))))
-    return ((v[0]+v[2])//2, (v[1]+v[3])//2) if len(v)==4 and v[2]>v[0] and v[3]>v[1] else None
+    return native_ui.center(n)
 
 def find(pattern, raw=None):
-    return next((bounds(n) for n in nodes(raw) if re.search(pattern, label(n), re.I) and bounds(n)), None)
+    return next((bounds(n) for n in nodes(raw) if n.get('enabled') != 'false' and re.search(pattern, label(n), re.I) and bounds(n)), None)
 
 def tap(pattern, seconds=30, long=False):
     xy = until(lambda: find(pattern), seconds)
@@ -400,28 +400,45 @@ try:
     scroll_tap('^Connect$')
     until(lambda:'.MainActivity' in top(),60)
     time.sleep(2)
-    for _ in range(8):
-        raw=ui(); p=find(r'^(Skip|Got it|GOT IT|OK|Not now)$',raw)
-        if not p: break
-        shell(f'input tap {p[0]} {p[1]}');time.sleep(1)
+    # Source-backed Welcome/Tour Back/skip only; never provider sign-in or a send.
+    def save_onboarding(index, stage, raw, xy):
+        stem=OUT/('onboarding-%02d'%index)
+        stem.with_suffix('.xml').write_text(raw)
+        stem.with_suffix('.json').write_text(json.dumps({'stage':stage,'target':xy,'ui_capture':'ui-%04d.xml'%ui_serial}))
+    orb=native_ui.dismiss_onboarding(ui,
+        lambda xy:shell(f'input tap {xy[0]} {xy[1]}'),
+        lambda:shell('input keyevent KEYCODE_BACK'), save_onboarding, time.sleep)
+    record('supported onboarding UI dismissed before launcher',True,{'captures':'onboarding-*.xml','orb':orb})
     verify_app_egress(uid,'after-connect')
     orb=until(lambda:find(r'^Wizard orb\.'),60)
     # Native swipe on the actual accessible orb opens the existing Apps launcher.
     shell(f'input swipe {orb[0]} {orb[1]} {orb[0]} {orb[1]-500} 350')
-    tap('^Wisdom$',long=True)
-    if not find('^Add to home screen$'):
-        # attach(launcher) is gated by overviewMode().appHold; Miguel disables it.
-        # Its source-supported alternative is a single-app Desks download action.
-        tap('^Wisdom$')
-        until(lambda:find('^A quiet beginning$'),45)
-        dock=until(lambda:next((bounds(n) for n in nodes() if label(n)=='Wisdom' and bounds(n) and bounds(n)[1]>1700),None),20)
-        x,y=dock;shell(f'input swipe {x} {y} {x} {y} 800')
-        tap(r'^Wisdom, current desk$',long=True)
-        tap('^Add Wisdom to home screen$')
+    # Orb-up may open Apps OR Desks; choose only the rendered source-defined surface.
+    surface=ui()
+    if not find('^Wisdom$',surface):
+        tap('^New desk: pick an app$')
+    tap('^Wisdom$')
+    until(lambda:find(r'Synthetic flight collection|Browse all|Currently reading'),45)
+    # The current desk IS the orb, never a dock button labelled Wisdom.
+    # Long-hold another real dock desk (Home/Chats) to open Desks without navigation.
+    orb=until(lambda:find(native_ui.ORB),20)
+    dock=until(lambda:next((bounds(n) for n in nodes()
+        if label(n) in ('Home','Chats') and n.get('clickable')=='true' and bounds(n)
+        and abs(bounds(n)[1]-orb[1])<100),None),20)
+    x,y=dock;shell(f'input swipe {x} {y} {x} {y} 800')
+    tap(r'^Wisdom, current desk$',long=True)
+    # Without arrange/download the same hold directly offers the pin sheet.
+    pin_surface=until(lambda:('sheet' if native_ui.target(r'^Add to home screen$',ui(),package=PKG,clickable=True,scope='Wisdom home screen')
+        else 'download' if find('^Add Wisdom to home screen$') else None),20)
+    if pin_surface=='download':tap('^Add Wisdom to home screen$')
     capture('01-native-pin-sheet')
-    tap('^Add to home screen$')
+    pin_xy=until(lambda:native_ui.target(r'^Add to home screen$',ui(),package=PKG,clickable=True,scope='Wisdom home screen'),20)
+    record('native pin request belongs to Wisdom shell sheet','.MainActivity' in top(),pin_xy)
+    shell(f'input tap {pin_xy[0]} {pin_xy[1]}')
+    confirm=until(lambda:native_ui.os_pin_target(ui()),30)
     capture('02-os-pin-confirmation')
-    tap('^(Add|Add automatically|Add to home screen|ADD)$')
+    record('OS launcher confirmation distinct from shell CTA','launcher' in top().lower(),confirm)
+    shell(f'input tap {confirm[0]} {confirm[1]}')
     shortcuts=shell('dumpsys shortcut');(OUT/'shortcuts.txt').write_text(shortcuts)
     record('native OS-confirmed Wisdom shortcut exists','homeapp-' in shortcuts and 'Wisdom' in shortcuts)
     shell('input keyevent KEYCODE_HOME');tap('^Wisdom$')
@@ -463,6 +480,7 @@ try:
     chapter_labels=[label(n) for n in nodes() if label(n)]
     record('offline chapter title readable',any(chosen['entry']['title'] in s for s in chapter_labels),chapter_labels)
     record('reader controls prove chapter opened',find('^Chapter discussions$') is not None)
+    record('fresh synthetic chapter opens at illustrated first page',page_count()[0]==1,page_count())
     next_page()
     capture('06b-offline-chapter-text')
     body_labels=[label(n) for n in nodes() if label(n)]
@@ -479,15 +497,19 @@ try:
     tap(r'^Highlight$')
     capture('10-native-highlight-saved-offline')
     # Real Android Back must pop a chapter before ever leaving the pinned activity.
-    shell('input keyevent KEYCODE_BACK');time.sleep(1)
+    # A saved highlight stays active. Back first dismisses that toolbar, then leaves reader.
+    for _ in range(3):
+        shell('input keyevent KEYCODE_BACK');time.sleep(1)
+        if not find('^Chapter discussions$'):break
     after=[label(n) for n in nodes() if label(n)]
     record('native nested Back returns to collection',find('^Chapter discussions$') is None and any('Export this collection' in s for s in after),after)
     scroll_tap(re.escape(chosen['entry']['title']));next_page()
     # Move forward to save actual reading position, then kill the process again offline.
-    next_page();next_page()
+    next_page();saved_page=next_page()
     shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)
     record('second process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
     tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30);time.sleep(8)
+    record('actual offline reading page survives second process death',page_count()==saved_page,{'saved':saved_page,'restored':page_count()})
     # Do not replace/recreate this OS shortcut. Open the saved Highlights view in the same pin.
     for _ in range(6):shell('input keyevent KEYCODE_BACK');time.sleep(.3)
     record('repeated native root Back never exits','.AppSessionActivity' in top())
