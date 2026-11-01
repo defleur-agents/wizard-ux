@@ -21,8 +21,12 @@ test('lazy radial module initializes real defaults and tears down its only globa
 test('radial saved configuration survives reload and preserves compact geometry',()=>{
   const f=moduleFixture({pins:['home','calendar'],voiceSlot:'far',holdMs:450,quickTakes:true}),o=f.create();
   assert.equal(o.get().pins.join(','),'home,calendar');assert.equal(o.get().voiceSlot,'far');assert.equal(o.get().holdMs,450);assert.equal(o.get().quickTakes,true);
-  const slots=o._assign([{id:'voice',voice:true},{id:'calendar',desk:1},{id:'customize',customize:true}],'near');
-  assert.equal(slots.find(s=>s.it?.voice).ring,0);assert.equal(slots.find(s=>s.it?.customize).ring,1);
+  // Voice and Customize are fixed slots, not app items; open desks fill the inner ring.
+  const slots=o._assign([{id:'calendar',desk:1,open:true}],'near');
+  assert.equal(slots.length,3);
+  assert.equal(slots.find(s=>s.kind==='voice').ring,0);
+  assert.equal(slots.find(s=>s.kind==='custom').ring,1);
+  assert.equal(slots.find(s=>s.item?.id==='calendar').ring,0);
   assert.ok(slots.every(s=>s.r1<=138));o.dispose();
 });
 test('entrypoint never loads radial module or CSS; only trusted enabled tweak requests its code',()=>{
