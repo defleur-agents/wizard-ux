@@ -404,6 +404,10 @@
       ],
       "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
+    "core/orb-switcher.js": {
+      "loadedBy": [],
+      "note": "Lazy opt-in Orb radial tweak via the phone skin-host orb adapter; neither entrypoint imports it and desktop does not mount the touch radial."
+    },
     "core/os-updates.js": {
       "loadedBy": [
         "phone",
