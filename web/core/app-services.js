@@ -82,9 +82,9 @@
   // App badge: an installed app's own unread count on its desk mark / bar badge (same slot Notifications uses).
   // Keyed by the verified frame's app id, so an app can only badge itself; shell-owned counts are not writable.
   const SHELL_COUNTS = new Set(['wizard', 'notifications']);
-  function setBadge(appId, n) {
+  function setBadge(appId, n, plus) {
     if (SHELL_COUNTS.has(appId) || String(appId).startsWith('agent:')) throw fault('Badge unavailable');
-    n = Number(n); window.WizCore?.workspaceNav?.setCount(appId, Number.isFinite(n) ? Math.min(999, Math.max(0, Math.floor(n))) : 0);
+    n = Number(n); window.WizCore?.workspaceNav?.setCount(appId, Number.isFinite(n) ? Math.min(999, Math.max(0, Math.floor(n))) : 0, plus === true);
   }
   /* Title-bar tools: a hosted app may put a few controls (older/newer, a picker, a same-app link) into its own
    * window bar instead of drawing a toolbar of its own, so its content keeps the screen. The shell renders them
@@ -277,7 +277,7 @@
         focusApp() { check(); return window.WizCompanionPane?.focusApp(st.frame) === true || window.WizOpenApp?.(st.appId) === true; },
         toast(icon, message) { check(); if (typeof icon !== 'string' || typeof message !== 'string') return false; const shell = window.__wos || window.__wux; shell?.toast?.(icon.slice(0, 20), message.slice(0, 2000), 2600); return !!shell?.toast; },
       }),
-      badge: Object.freeze({ set(n) { check(); setBadge(st.appId, n); st.badged = true; return true; } }),
+      badge: Object.freeze({ set(n, o) { check(); setBadge(st.appId, n, !!(o && o.more === true)); st.badged = true; return true; } }),
       orb: Object.freeze({ set(spec) { check(); return setOrb(st, spec); }, shown() { check(); return orbShown(st.frame); } }),
       // Lower Wizard Music while this app plays a short sound; duck(false) restores it. Resolves true when ducked.
       audio: Object.freeze({ duck(on) { check(); return window.WizBackgroundAudio?.duck ? window.WizBackgroundAudio.duck(st, !!on) : Promise.resolve(false); } }),

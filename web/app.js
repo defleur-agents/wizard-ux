@@ -2049,12 +2049,12 @@
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
     // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
-    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
     paintOrbBadge();
   }
   function paintOrbBadge() {
     const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
-    $('#orbBadge').textContent = n ? N.fmt(n) : ''; $('#orbBadge').hidden = !n;
+    $('#orbBadge').textContent = n ? N.fmt(n, N.deskMore?.(desks[idx], W, winApp)) : ''; $('#orbBadge').hidden = !n;
   }
   addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
   // One place reacts to live changes: reads anywhere, new replies, finished runs.

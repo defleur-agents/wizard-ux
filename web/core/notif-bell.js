@@ -84,7 +84,7 @@
    * not a feed) counts as "no feed", asked again after 30 min; an app that was restarting is asked again in 2 min. */
   const FEED_KEY = 'wos.inbox.feeds.v2', MARK_KEY = 'wos.inbox.appmarks.v1', NO_AGAIN = 30 * 60e3, RETRY = 2 * 60e3;
   const FEED_SKIP = new Set(['notifications', 'wizard', 'wizard-agent-service', 'wizard-connection-router', 'wizard-ux', 'setup', 'side-button', 'pages', 'app-store', 'agents', 'troubleshooter']);
-  const FD = { known: null, last: {}, marks: null, retry: {}, probing: null, ready: null };
+  const FD = { known: null, last: {}, marks: null, retry: {}, probing: null, ready: null, more: {} };
   const known = () => FD.known || (FD.known = readJson(FEED_KEY, {}));
   const saveKnown = () => writeJson(FEED_KEY, known());
   const hash = t => { let a = 0x811c9dc5, b = 0x01000193; for (const c of String(t)) { const k = c.codePointAt(0); a = Math.imul(a ^ k, 16777619) >>> 0; b = Math.imul(b ^ k, 2246822519) >>> 0; } return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0'); };
@@ -103,7 +103,8 @@
     if (!r.ok) { if ([404, 405, 410].includes(r.status)) return null; throw new Error('feed ' + r.status); }
     if (!/json/.test(r.headers?.get?.('content-type') || '')) return null;
     const d = await r.json();
-    return d && d.inbox === 1 && Array.isArray(d.items) ? d.items : null;
+    if (!(d && d.inbox === 1 && Array.isArray(d.items))) return null;
+    FD.more[id] = d.more === true || d.items.length > 50; return d.items;
   }
   function fromFeed(app, raw) {
     const key = str(raw && raw.key, 200); if (!key) return null;
@@ -182,6 +183,8 @@
   }
   function inboxChanged() { window.dispatchEvent(new CustomEvent('wizard:notifications')); }
   // Same rows as Chats Ready, including quiet/snoozed ones, never completed ones. Apps set to Chats count here too.
+  // Chats shows "50+" when an app routed here lists only its newest items (Mail: the newest 50 unread).
+  const readyMore = () => !!window.WosSkinHost?.inboxList && Object.keys(FD.more).some(id => FD.more[id] && inChats(id));
   const readyCount = () => window.WosSkinHost?.inboxList ? IN.items.filter(i => !i.archived).length : 0;
   async function mark(ids, marks) {
     ids = (ids || []).map(String).filter(Boolean); if (!ids.length) return false;
@@ -273,5 +276,5 @@
     t.append(b);
     return b;
   }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, route, setRoute, inChats, routes, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, routes, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
