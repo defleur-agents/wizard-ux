@@ -502,6 +502,21 @@
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
+    // The orb hold is shell-owned (pointer capture + voice custody); raw gesture.claim cannot
+    // replace it safely. A trusted layout+nav tweak borrows this lazy, reversible adapter.
+    if (trusted && caps.has('layout') && caps.has('nav')) api.orb = Object.freeze({ switcher() {
+      if (a.dead || base.env.shell !== 'phone' || !shell?.orbSwitcher) return () => {};
+      let stopped = false, instance = null;
+      const off = () => { if (stopped) return; stopped = true; instance?.dispose(); a.offs.delete(off); };
+      a.offs.add(off);
+      const href = stamp(new URL('core/orb-switcher.js', document.baseURI).href); requested.push(href);
+      importer(href).then(mod => {
+        if (stopped || a.dead) return;
+        instance = mod.default(shell.orbSwitcher);
+        window.WosSettings?.refresh?.();
+      }).catch(e => { if (!stopped && !a.dead) { off(); fault(a, 'orb.switcher', e); } });
+      return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];

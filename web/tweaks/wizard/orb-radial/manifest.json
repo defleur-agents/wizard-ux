@@ -1,0 +1,12 @@
+{
+  "id": "wizard/orb-radial",
+  "author": "wizard",
+  "name": "Orb radial",
+  "description": "Hold the dock orb to switch desktops and pinned apps. Slide to the microphone for a voice command. Off keeps the usual hold-command gesture.",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "nav"
+  ]
+}
