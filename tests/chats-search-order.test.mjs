@@ -48,9 +48,9 @@ function visual(html, { status, skin = '', desktop = false }) {
   const flex = cascade(text, chain, 'display', 'block') === 'flex';
   const direction = cascade(text, chain, 'flex-direction', 'column');
   assert.equal(direction, 'column', 'the tested layouts must use the actual column flow');
-  const nodes = [...html.matchAll(/<(?:section|div) class="([^"]*)" (data-sec|data-chbs)="([^"]+)"/g)].map((m, i) => {
+  const nodes = [...html.matchAll(/<(?:section|div) class="([^"]*)" (data-sec|data-chbs|data-search-results)="([^"]+)"/g)].map((m, i) => {
     const node = { tag: m[2] === 'data-sec' ? 'section' : 'div', classes: m[1].split(' '), attrs: { [m[2]]: m[3] } };
-    return { id: m[2] === 'data-sec' ? m[3] : 'footer', dom: i, order: flex ? Number(cascade(text, [...chain, node], 'order', '0')) : 0 };
+    return { id: m[2] === 'data-sec' ? m[3] : m[2] === 'data-search-results' ? 'flat' : 'footer', dom: i, order: flex ? Number(cascade(text, [...chain, node], 'order', '0')) : 0 };
   });
   return nodes.sort((a, b) => a.order - b.order || a.dom - b.dom).map(x => x.id);
 }
@@ -59,9 +59,11 @@ for (const status of [false, true]) for (const skin of ['', 'obsidian', 'landsca
   test(`${label}: completed message-search footer stays after every result, including Archive`, () => {
     const html = listFixture({ status, query: 'match' }).render();
     const order = visual(html, { status, skin, desktop });
-    assert.ok(order.includes('archive') && order.includes('ready'), 'fixture must contain both live and archived hits');
-    assert.equal(order.at(-2), 'archive', order.join(' → '));
-    assert.equal(order.at(-1), 'footer', order.join(' → '));
+    assert.doesNotMatch(html, /ch-sec-h|<section/);
+    assert.match(html, /data-chopen="archive"/);
+    assert.match(html, /data-chopen="ready"/);
+    assert.equal((html.match(/ch-search-status/g) || []).length, 7);
+    assert.deepEqual(order, ['flat', 'footer'], order.join(' → '));
   });
   test(`${label}: outside search the original Archive/Working/Ready ordering is retained`, () => {
     const html = listFixture({ status, footer: false }).render();
@@ -73,23 +75,20 @@ for (const status of [false, true]) for (const skin of ['', 'obsidian', 'landsca
     else if (status || skin) assert.equal(order[1], 'working');
   });
 }
-test('actual search collapse is temporary, independent of saved sections and other list windows', () => {
-  const a = listFixture({ query: 'match' }), b = listFixture({ query: 'match' });
-  assert.match(a.render(), /ch-sec open ch-sec-last/);
-  assert.doesNotMatch(a.toggle('archive'), /data-chopen="archive"/);
-  assert.match(b.render(), /data-chopen="archive"/);
+test('search ignores saved section collapse without mutating it; clearing restores the saved list', () => {
+  const a = listFixture({ query: 'match' });
+  assert.match(a.render(), /data-chopen="archive"/);
+  assert.doesNotMatch(a.render(), /data-sectoggle|data-sec="pinned"/);
   assert.equal(a.writes.length, 0);
-  assert.doesNotMatch(a.render(''), /data-chopen="archive"/); // saved Archive was closed
-  assert.equal(a.state.sOpen, null);
+  assert.doesNotMatch(a.render(''), /data-chopen="archive"/);
+  a.toggle('archive');
+  assert.equal(a.writes.length, 1);
+  assert.match(a.render(), /data-chopen="archive"/);
   assert.match(a.render('match'), /data-chopen="archive"/);
-  assert.match(a.toggle('ready'), /ch-sec ch-sec-last|ch-sec open ch-sec-last/);
-  assert.doesNotMatch(a.render(), /data-chopen="ready"/);
-  assert.equal(a.writes.length, 0);
-  a.render(''); a.toggle('archive');
-  assert.equal(a.writes.length, 1, 'outside-search toggles still persist');
+  assert.equal(a.writes.length, 1);
 });
 test('actual renderer keeps active search progress before sections in document order', () => {
   const html = listFixture({ query: 'match', busy: true }).render();
-  assert.ok(html.indexOf('data-chbs="busy"') < html.indexOf('<section'));
-  assert.equal(sectionKeys(html).at(-1), 'archive');
+  assert.ok(html.indexOf('data-chbs="busy"') < html.indexOf('ch-search-results'));
+  assert.deepEqual(sectionKeys(html), []);
 });

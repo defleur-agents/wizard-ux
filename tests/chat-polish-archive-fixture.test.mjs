@@ -68,6 +68,9 @@ test('Archive browser checks drive the real shell route entry and inspect the fo
   assert.match(checks, /getBoundingClientRect/);
   assert.match(checks, /data-chbs="done"/);
   assert.match(checks, /sections\.v1/);
+  assert.match(checks, /search is flat with no section headers/);
+  assert.match(checks, /every result carries a status chip/);
+  assert.doesNotMatch(checks, /Archive alone collapses|Archive expands again/);
   assert.match(checks, /archiveFetch/);
   assert.match(checks, /W\.archiveFetch\.length = 0/);
   assert.match(checks, /W\.offline = false; W\.down = false; W\.voice = 'ok'/);

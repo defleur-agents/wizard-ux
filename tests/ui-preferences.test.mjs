@@ -55,8 +55,8 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   const day = ['errors', 'working', 'ready', 'yesterday', 'pastWeek', 'deferred', 'archive'];
   const status = ['errors', 'working', 'ready', 'deferred', 'archive'];
   for (const query of ['', 'match']) {
-    assert.deepEqual(sectionKeys(listFixture({ query }).render()), day, `By day sections, query=${query}`);
-    assert.deepEqual(sectionKeys(listFixture({ status: true, query }).render()), status, `By status sections, query=${query}`);
+    assert.deepEqual(sectionKeys(listFixture({ query }).render()), query ? [] : day, `By day sections only outside search, query=${query}`);
+    assert.deepEqual(sectionKeys(listFixture({ status: true, query }).render()), query ? [] : status, `By status sections only outside search, query=${query}`);
   }
   assert.match(chats, /data-chlayout=/);
 });

@@ -117,7 +117,26 @@
       if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }
     }
   }
+  // Match quality is a small time bonus, never a separate bucket: a week-old title cannot bury today's body hit.
+  const HOUR = 60 * 60 * 1000;
+  const SEARCH_TIME_BONUS = Object.freeze({ titleWordPrefix: 36 * HOUR, titleContains: 18 * HOUR, previewContains: 6 * HOUR, extraTitleWord: 6 * HOUR });
+  function rank(rows, query, cardAt) {
+    const ws = [...new Set(words(query))], q = ws.join(' ');
+    return rows.map((row, index) => {
+      const title = String(row.title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const preview = String(row.preview || '').toLowerCase().replace(/\s+/g, ' ').trim();
+      const titleWords = title.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
+      const matched = ws.filter(w => title.includes(w)).length;
+      const bonus = !ws.length ? 0 : (ws.every(w => titleWords.some(t => t.startsWith(w))) ? SEARCH_TIME_BONUS.titleWordPrefix
+        : title.includes(q) ? SEARCH_TIME_BONUS.titleContains : preview.includes(q) ? SEARCH_TIME_BONUS.previewContains : 0)
+        + Math.max(0, matched - 1) * SEARCH_TIME_BONUS.extraTitleWord;
+      // Use live.js's exact newestFirst clock, including its special request clock for active/error rows.
+      const parsed = Date.parse(cardAt(row)), at = Number.isFinite(parsed) ? parsed : 0;
+      return { row, index, at, score: at + bonus };
+    }).sort((a, b) => b.score - a.score || b.at - a.at || a.index - b.index).map(x => x.row);
+  }
   C.chatSearch = {
+    rank, SEARCH_TIME_BONUS,
     query(wid, q, onUpdate, agent = '') {
       const ws = words(q);
       if (!ws.length || ws.join(' ').length < 1) { cancel(wid); return null; }
