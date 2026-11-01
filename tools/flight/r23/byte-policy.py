@@ -4,7 +4,7 @@ from urllib.parse import urljoin
 
 def from_sources(root):
  def config(path,marker):return json.JSONDecoder().raw_decode((root/path).read_text().split(marker,1)[1].lstrip())[0]
- host=config('ux/web/core/offline-session-config.js','self.WOS_SW_CONFIG =')
+ host=config('ux/web/core/offline-session-config.js','self.WIZ_OFFLINE_CONFIG =')
  app=config('wisdom/static/sw.js','self.WIZ_OFFLINE_CONFIG =')
  host_cache='wizard-os-home-shell-'+host['version'];app_cache=app['prefix']+'shell-'+app['version']
  required=[{'url':urljoin('/wizard-os-home/',p),'cache':host_cache} for p in host['shell']]+[{'url':urljoin('/wisdom/',p),'cache':app_cache} for p in app['shell']]
