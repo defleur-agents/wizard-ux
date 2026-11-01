@@ -1,22 +1,20 @@
-# Orbs view (layout `orb`, tweaks `miguel/orb-shell` + `miguel/orb-switch`)
+# Orbs view (layout `orb`, tweak `miguel/orb-shell`)
 
-Opt-in, off for everyone by default (neither tweak is a catalog `default`, and no migration turns either on). The
-desktop has two equal views, **Desks** and **Orbs**; switching the Orbs view off brings the Desks view straight back (no
-reload). On the phone (experimental) it changes Home only; see **Phone** below (and **Apps view** for the third view).
+Opt-in, off for everyone by default (no view tweak is a catalog `default`, and no migration turns one on). Three equal
+shell views, **Desks** (the stock shell), **Orb** and **Apps**; choosing Desks brings the stock shell straight back (no
+reload). On the phone (experimental) Orb changes Home only; see **Phone** below (and **Apps view** for the third view).
 
-**Try it:** Settings (the gear) › Look › Tweaks › **Miguel** › switch on **Orbs view**. Optionally also
-**Desks | Orb | Apps switch** for a one-click switch in the middle of the bar. (Miguel's one-tap author button turns all of his
-tweaks on, these two included.) Ways back to Desks,
-with or without the switch: the scene's **Look** button › **Back to the Desks view** (`api.desk.classic()`), or the
-gear › Look › Tweaks › Orbs view off.
+**Try it:** Settings (the gear) › Look › **Shell view** › Orb (or Apps). Ways back to Desks: the same row (the gear
+stays in the bar on the desktop and at the top of Home on the phone in every view), or the scene's **Look** button ›
+**Back to the Desks view** (`api.desk.classic()`).
 
-**Desks | Orb | Apps switch** (`miguel/orb-switch`, its own tweak; tweak ids unchanged so devices keep their choice): a segmented control in the middle of the desktop bar,
-in place of the date and time, visible in both modes. It mounts in the core `bar-center` slot (`web/desktop.html`,
-`core/slots.json`): while that slot holds anything the clock steps aside (`desktop.css`), and the slot hides under the
-voice pill like the clock did. One click switches `miguel/orb-shell` for this device through the same tweak mix as
-Settings (`WosExperience.toggle`, via the trusted `api.settings.toggleTweak`, own author only), no reload. The lit side
-follows what the desktop really wears (`html[data-layout]`), so a half-loaded Orb shows Desks and one click mends it.
-Off by default like every tweak; with the Orbs view off it only shows the switch (the Desks view is otherwise unchanged).
+**Shell view** (Settings › Look, between the skin grid and the Tweaks list; 1 Nov 2026, replaced the
+`miguel/orb-switch` bar / phone-Home switch): one segmented control (`st-seg`, like Settings' other choices) with
+Desks plus one option per tweak whose manifest names a `view` (`"view": "Orb"` on `miguel/orb-shell`, `"view": "Apps"`
+on `miguel/apps-home`). Core names no view: `WosExperience.chooseView(id | '')` sets every view tweak in the device mix
+in one pass (one apply), so they stay mutually exclusive, per device, and survive a reload (`wos.skin-tweaks.v1`).
+`WosExperience.toggle` of a view also goes through it, and the per-author quick button leaves views alone. View tweaks
+are not listed again as Tweaks switches. The desktop bar centre is the clock again (`bar-center` stays a core slot).
 
 With both tweaks off the desktop is the stock Desks view: every core hook added for this layout (`panelMode`,
 `bar-center`, `leaveOnSend`, `WosSkinHost.key`, `commandUi`) is a no-op until a layout claims it.
@@ -122,8 +120,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 ## Phone (experimental, 31 Oct 2026)
 
 The same tweak and the same layout: `layout.js` hands the phone shell to `phone.js` (+ `phone.css`, loaded by it), and
-the switch (`miguel/orb-switch`) sits at the top of phone Home (`home-main`, between the which-Wizard menu and the gear,
-on their line). Per device, no reload.
+the view is chosen in Settings › Look › Shell view. Per device, no reload.
 
 - **Home** shows the desktop scene: the same sky, the same orb in the device's stored Style × Colour (no picker on the
   phone yet: Glass · Nebula unless chosen on that device), the same status satellites, and Home's own top (which

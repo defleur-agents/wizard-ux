@@ -185,10 +185,15 @@
       await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
+  /* Shell views (Settings › Look › Shell view): a tweak whose manifest names a `view` wears a whole shell view (its
+   * label, e.g. "Orb"). They are mutually exclusive: choosing one turns every other view off in one pass (one apply,
+   * so the device reloads its tweaks once); choosing none is the stock shell (Desks). Per device, like every tweak. */
+  const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
+  const viewIds = () => [...manifests.keys()].filter(viewOf);
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), on: groupOf(id) ? groupOn(id) : enabled(id) })) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })) });
     },
     installed, defaults, authors,
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
@@ -200,13 +205,23 @@
     // Quick button: turn on every tweak by this author; if all are on already, turn them off.
     async chooseAuthor(who) {
       if (!WHO.test(who) || !catalog) return;
-      const ids = catalog.tweaks.filter(id => id.startsWith(who + '/') && !globalIds().includes(id)); if (!ids.length) return;
+      // shell views are one choice of their own (Shell view), never switched on all together
+      const ids = catalog.tweaks.filter(id => id.startsWith(who + '/') && !globalIds().includes(id) && !viewOf(id)); if (!ids.length) return;
       const own = recipe(), on = !ids.every(id => enabled(id, own));
       for (const id of ids) await setOne(id, on);
       return apply();
     },
+    // The worn shell view: the first view tweak on, else '' (Desks, the stock shell).
+    get view() { const own = recipe(); return viewIds().find(id => enabled(id, own)) || ''; },
+    async chooseView(id) {
+      const views = viewIds(); if (id && !views.includes(id)) return;
+      const own = recipe(); let moved = false;
+      for (const v of views) if (enabled(v, own) !== (v === id)) { await setOne(v, v === id); moved = true; }
+      if (moved) return apply();
+    },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      if (item.view && !item.on) return experience.chooseView(id);  // one shell view at a time
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
       if (item.on) await setOne(id, false);
       else for (const m of groupOf(id) || [id]) if (m === id || explicitOff(m)) await setOne(m, true);

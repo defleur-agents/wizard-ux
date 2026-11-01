@@ -21,7 +21,6 @@
     "miguel/refresh-button",
     "wizard/unified-inbox",
     "miguel/orb-shell",
-    "miguel/orb-switch",
     "miguel/apps-home"
   ],
   "defaults": [

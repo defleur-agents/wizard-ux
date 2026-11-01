@@ -169,7 +169,7 @@ test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb st
   assert.ok(!/fly|FLY|animate\(/.test(ph), 'the orb never flies between the centre and the dock');
 });
 
-test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unless worn; the switch is Desks | Orb | Apps on both shells', async () => {
+test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unless worn; Apps wears on the desktop too', async () => {
   const css = read('web/layouts/apps/layout.css').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const sel of [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(x => !/^(from|to)$/.test(x))) for (const part of sel.split(/,(?![^(]*\))/))
     assert.ok(/^html\[data-shell="(phone|desktop)"\]\[data-layout="apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
@@ -179,8 +179,6 @@ test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unl
   await f.mount('miguel/apps-home'); await settle();
   assert.equal(f.host.layout, 'apps', 'the desktop wears Apps too'); assert.ok(f.doc.head.children.some(l => /layouts\/apps\/layout\.css/.test(l.href || '')));
   await f.clear(); assert.equal(f.host.layout, 'classic'); assert.ok(!f.doc.head.children.some(l => /layouts\//.test(l.href || '')));
-  const sw = read('web/tweaks/miguel/orb-switch/tweak.css');
-  assert.match(sw, /html\[data-shell="desktop"\]\[data-layout="apps"\] \.os-side\.is-apps/);
   // desktop adapter: one entry per desk (empty desks left out; a Chats desk is 'wizard'); + opens on a desk of its own
   const dj = read('web/desktop/desktop.js');
   const fn = dj.match(/deskApps: (\(\) => ws\.map[^\n]*),\n/)[1];
@@ -206,32 +204,8 @@ test('Desks = the stock phone: Apps off releases the layout and its CSS; Apps on
   for (const sel of [...tw.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim())) for (const part of sel.split(/,(?![^(]*\))/)) assert.ok(/^html\[data-layout="apps"\]|^html\[data-shell="(phone|desktop)"\]\[data-layout="apps"\]/.test(part.trim()), `apps-home tweak.css reaches past the Apps view: ${part.trim()}`);
 });
 
-test('the switch: three equal views on each shell, mutually exclusive, asked together; the lit option follows the worn layout', async () => {
-  const f = fixture({ shell: 'phone' });
-  let api;
-  f.host._test.setImporter(async () => ({ default: a => { api = a; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/orb-switch'], f.slots, { teamAuthors: ['miguel'] });
-  const asked = []; f.ctx.window.WosExperience = { toggle: async id => { asked.push(id); } };
-  assert.equal(await api.settings.toggleTweak('miguel/apps-home'), true, 'own author: the switch may switch Apps');
-  await f.clear();
-  // the real switch, with Orbs worn: Apps turns Orbs off and Apps on in the same turn; Desks turns whatever is on off
-  const g = fixture({ shell: 'phone' });
-  const host = g.host;
-  const asks = []; g.ctx.window.WosExperience = { toggle: id => { asks.push(id); return new Promise(r => setTimeout(r, 5)); } };
-  // tweakOn reads the loaded tweaks: pretend Orbs is worn by loading it too
-  await host.loadTweaks(['miguel/orb-switch', 'miguel/orb-shell'], g.slots, { teamAuthors: ['miguel'] }); await settle();
-  const box2 = g.doc.body.querySelector('[data-slot="home-main"]').children.find(n => n.className === 'os-switch');
-  const [desks, orbs, apps] = box2.children;
-  assert.deepEqual(box2.children.map(b => b.attrs['aria-pressed']), ['false', 'true', 'false'], 'Orbs lit');
-  orbs.fire('click'); assert.deepEqual(asks, [], 'the worn view does nothing');
-  apps.fire('click'); assert.deepEqual(asks, ['miguel/orb-shell', 'miguel/apps-home'], 'Orbs off and Apps on, asked together');
-  assert.ok(box2.classList.contains('is-busy')); apps.fire('click'); assert.equal(asks.length, 2, 'one switch at a time');
-  await settle(); asks.length = 0;
-  desks.fire('click'); assert.deepEqual(asks, ['miguel/orb-shell'], 'Desks = every view tweak off');
-  await settle(); await g.clear();
-  const css = read('web/tweaks/miguel/orb-switch/tweak.css');
-  assert.match(css, /html:not\(\[data-shell="desktop"\]\):not\(\[data-layout="orb"\], \[data-layout="apps"\]\) \.home-desk \.os-side\.is-classic,\nhtml:not\(\[data-shell="desktop"\]\)\[data-layout="orb"\] \.home-desk \.os-side\.is-orb,\nhtml:not\(\[data-shell="desktop"\]\)\[data-layout="apps"\] \.home-desk \.os-side\.is-apps \{/, 'lit from html[data-layout]');
-  assert.match(css, /\.home-desk \.os-switch \{[^}]*height: 44px;/, 'thumb-sized');
+test('Apps view: listed under Miguel, never a default, chosen in Settings › Look › Shell view (manifest view: Apps)', async () => {
+  assert.equal(JSON.parse(read('web/tweaks/miguel/apps-home/manifest.json')).view, 'Apps');
   // catalog: listed under Miguel, never a default; not turned on by any migration
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes('miguel/apps-home') && !cat.defaults.includes('miguel/apps-home'));
