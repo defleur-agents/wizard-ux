@@ -6,11 +6,17 @@
   const C = window.WizCore = window.WizCore || {};
   /* Per-app counts (Chats = Ready threads, Notifications = unread, later any app). The badge belongs to the
    * app: each desk mark carries the count of the apps it holds, and the orb shows the desk in view. */
-  const counts = {};
-  function setCount(id, n) {
-    n = Math.max(0, n | 0); if ((counts[id] || 0) === n) return;
+  /* An item counts in one place (Settings › Notifications): an app set to Chats shows no badge of its own, its items
+   * wait in Chats and count in Chats' badge instead. `raw` keeps what the app reported, `counts` what is shown. */
+  const counts = {}, raw = {};
+  const shown = (id, n) => id !== 'wizard' && window.WosBell?.inChats?.(id) ? 0 : n;
+  function apply(id) {
+    const n = shown(id, raw[id] || 0); if ((counts[id] || 0) === n) return;
     counts[id] = n; window.dispatchEvent(new CustomEvent('wizard:app-counts', { detail: { id, n } }));
   }
+  function setCount(id, n) { raw[id] = Math.max(0, n | 0); apply(id); }
+  // A routing choice changed: show every reported count again through it.
+  function rerouted() { for (const id of Object.keys(raw)) apply(id); }
   function deskCount(desk, wins, appOf) {
     if (!desk || desk.home) return 0;
     const seen = new Set(); let n = 0;
@@ -34,5 +40,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, deskCount, fmt, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, rerouted, deskCount, fmt, counts });
 })();
