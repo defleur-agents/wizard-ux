@@ -117,3 +117,9 @@ Reuse:
 AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
 
 Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
+
+## Wisdom flight pin — 1 Nov 2026
+- REUSE #544's scoped pin host, offline-apps allowlist, shared offline-kit and single-app-session Back/Appearance bridge. No Chrome PWA, new cache origin or pin replacement.
+- EXTEND the exact-live workspace worker by composing its fetch ownership with offline-sw; preserve wos-shell-v1 lifecycle and all sibling caches.
+- REUSE existing Android .23/code87 signed artifact; no native changes. EXTEND current Wisdom adapter with #52 quiet failures and finite progress while preserving recovery.
+- NEW only source-bound synthetic flight acceptance runner/fixture; no owner-state writes or models/content changes.
