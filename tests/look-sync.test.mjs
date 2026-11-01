@@ -136,6 +136,21 @@ test('retired tweak ids an old device still stores are never seeded and never ma
   assert.deepEqual(on(old.doc()), ['miguel/layout', 'miguel/swipe-strip']);
 });
 
+test('retired ids on the box never cause a re-apply loop: settle() after each apply is quiet once worn', async () => {
+  // 1 Nov 2026: the box set still had miguel/orb-switch, home-bars, hidden-pin on; every apply raised wos:experience,
+  // settle() compared them with the live-only device set, never matched, and re-applied every tweak ~13 times a second.
+  const known = ['miguel/layout', 'miguel/swipe-strip', 'miguel/apps-home', 'miguel/orb-shell'];
+  const box = pagesBox({ version: 1, skin: null, tweaks: Object.fromEntries(['miguel/layout', 'miguel/apps-home', 'miguel/orb-switch', 'miguel/home-bars', 'miguel/hidden-pin'].map(id => [id, { on: true, at: 0 }])) });
+  const mac = device(box, { known, views: ['miguel/orb-shell', 'miguel/apps-home'], meta: { version: null, synced: true } });
+  await mac.sync.sync();
+  assert.deepEqual(mac.on(), ['miguel/apps-home', 'miguel/layout'], 'only live ids are worn');
+  const n = mac.adopted;
+  for (let i = 0; i < 5; i++) mac.sync.settle(); // what each finished apply() triggers
+  assert.equal(mac.adopted, n, 'no re-apply once the live set is worn');
+  await mac.sync.sync(); assert.equal(mac.adopted, n, 'a later sync re-applies nothing either');
+  assert.equal(box.puts, 0);
+});
+
 test('a change writes the box once (debounced) and other devices pick it up on their next load', async () => {
   const box = pagesBox({ version: 1, skin: null, tweaks: { 'miguel/layout': { on: true, at: 0 } } });
   const pwa = device(box), mac = device(box);

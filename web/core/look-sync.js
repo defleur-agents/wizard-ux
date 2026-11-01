@@ -66,6 +66,9 @@
     };
     let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null, known = null;
     const live = id => !known || known.has(id); // retired ids an old device still stores are no choice: never seeded, never counted
+    // What a set switches on here: retired ids on the box are never worn, or this device would never match the box and
+    // re-apply every tweak on every pass (settle() after each apply: a reload storm that flickers the whole shell).
+    const wear = doc => onIds(doc).filter(live);
     const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0;
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
@@ -100,8 +103,8 @@
       applying = true;
       try {
         if (doc.skin && doc.skin.id !== skin.current && skin.has(doc.skin.id)) skin.set(doc.skin.id);
-        const want = onIds(doc);
-        if (!same(want, mixOn(exp.mix))) exp.adopt(Object.fromEntries(want.map(id => [id, true])));
+        const want = wear(doc);
+        if (!same(want, mixOn(exp.mix).filter(live))) exp.adopt(Object.fromEntries(want.map(id => [id, true])));
       } finally { applying = false; }
     }
     // Drop only what this pass delivered; a change made meanwhile stays queued.
@@ -162,8 +165,8 @@
           for (const [id, t] of Object.entries(fixed.tweaks)) if (!same(t, boxDoc.tweaks[id])) meta.pending.tweaks[id] = t;
           boxDoc = fixed; save(); schedule(0);
         }
-        want = onIds(fixed);
-      } else want = onIds(exclusive(local(), views()));
+        want = wear(fixed);
+      } else want = wear(exclusive(local(), views()));
       const mine = local();
       if (!same(want, onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(want.map(id => [id, true]))); } finally { applying = false; } }
     }
