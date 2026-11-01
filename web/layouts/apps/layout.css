@@ -57,8 +57,23 @@ html[data-shell="phone"][data-layout="apps"] .ap-plus .vc-ico { width: 28px; hei
 /* The bar keeps the switch and the AI fuel gauge in its centre and the gear on the right; the desk numbers step aside
  * (the grid is the desks) and so do the voice buttons (the orb floats at the bottom). */
 html[data-shell="desktop"][data-layout="apps"] #bar :is(#logo, #wsList, #searchBtn, #micBtn, #generalVoice, #commandBtn, #dictateBtn, #status, #keysBtn, .mh-root.is-wiz, .mh-bi, .mh-bar-sep) { display: none !important; }
-/* Windows end above the orb's row, so the floating orb never sits on a window's own buttons. */
+/* Windows end above the orb's row, so the floating orb never sits on a window's own buttons (Chats' composer)… */
 html[data-shell="desktop"][data-layout="apps"] #stage > .wsp { bottom: 76px; }
+/* …except an app alone on its desk (one app per desk), which is full screen like the phone's (Miguel, 1 Nov 2026): it
+ * fills the whole stage edge to edge (the 8 px tiling gap falls outside), no title bar (close it from the + sheet, ⌥W;
+ * a drag up on the orb or ⌥` goes Home), the orb floats over it and it fades out toward the bottom; the shell gives the
+ * app room under its last item (api.apps.inset) or lifts its own bottom tab bar clear of the orb (.wos-inset-bar). */
+html[data-shell="desktop"][data-layout="apps"] { --desktop-window-max-width: 100000px; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:has(> .win:not(.gone) iframe[data-own-app]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]) { border-radius: 0; border-color: transparent; box-shadow: none; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]) > .wbar { display: none; }
+html[data-shell="desktop"][data-layout="apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 140px; z-index: 4; pointer-events: none;
+  background: linear-gradient(to top, var(--bg) 8px, color-mix(in srgb, var(--bg) 92%, transparent) 56px, color-mix(in srgb, var(--bg) 55%, transparent) 98px, transparent 100%);
+}
+html[data-shell="desktop"][data-layout="apps"][data-skin^="landscapes"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
+  height: 120px; background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) 76px, transparent 100%);
+}
 /* Home is the launchpad: the stock Home's content (and an empty desk's) steps aside for the grid. */
 html[data-shell="desktop"][data-layout="apps"] #desktopHome > * { display: none !important; }
 html[data-shell="desktop"][data-layout="apps"] #desktopHome:focus { outline: none; }
@@ -110,6 +125,8 @@ html[data-shell="desktop"][data-layout="apps"] .apd-label {
 html[data-shell="desktop"][data-layout="apps"] .apd-row { position: absolute; left: 50%; bottom: 8px; width: 60px; height: 60px; margin-left: -30px; pointer-events: none; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orb { position: absolute; inset: 0; pointer-events: none; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orbc { position: absolute; inset: -38%; width: 176%; height: 176%; display: block; pointer-events: none; transition: transform 180ms ease; }
+/* the orb floats over app windows now: only its round glow shows (the canvas corners never read as a square) */
+html[data-shell="desktop"][data-layout="apps"] .apd-orbc { -webkit-mask-image: radial-gradient(closest-side, currentColor 72%, transparent); mask-image: radial-gradient(closest-side, currentColor 72%, transparent); }
 html[data-shell="desktop"][data-layout="apps"] .apd-orbfb { position: absolute; inset: 4%; width: 92%; height: 92%; border-radius: 50%; pointer-events: none; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orbfb[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="apps"] .apd-orb.is-pressed .apd-orbc { transform: scale(.94); }

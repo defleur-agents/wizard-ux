@@ -152,6 +152,44 @@ test('the + sheet lists the stock picker\'s apps minus Chats and every app alrea
   off();
 });
 
+test('the + sheet is three levels in one flow: Open (✕ closes it), Installed (tap opens it), Get more (the App Store; tap = its Store page); one search filters all three', async () => {
+  const { openApps, matches, FLOAT_INSET } = await import(new URL('web/layouts/apps/chrome.js', root));
+  assert.deepEqual(openApps([{ id: 'mail', name: 'Mail' }], [{ id: 'wizard', name: 'Chats' }, { id: 'mail', name: 'x' }, { id: 'pr', name: 'PR board' }, { id: 'mail', name: 'x' }]).map(a => a.name), ['Mail', 'PR board'], 'one per open app, desk order, never Chats');
+  assert.ok(matches({ name: 'Movies' }, 'mov') && matches({ name: 'X', summary: 'watch queue' }, 'queue') && !matches({ name: 'Mail' }, 'zz') && matches({ name: 'Mail' }, ''));
+  assert.ok(FLOAT_INSET.phone >= 90 && FLOAT_INSET.desktop >= 76, 'room under the last item clears the floating orb');
+  const P = appsWorld();
+  const closed = [], got = [], insets = [];
+  let storeDone; const storeP = new Promise(r => { storeDone = r; });
+  Object.assign(P.api.apps, { close: id => { closed.push(id); P.state.desks = P.state.desks.filter(d => d.id !== id); return true; }, store: () => storeP, get: id => { got.push(id); return true; }, inset: px => { insets.push(px); return () => insets.push('off'); } });
+  P.api.after = (ms, fn) => { fn(); return () => {}; };
+  const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
+  const off = setup(P.api);
+  assert.deepEqual(insets, [96], 'the view asks the shell for room under hosted apps\' last item');
+  P.find('ap-plus')[0].dispatchEvent({ type: 'click' });
+  const heads = () => P.find('vc-sec-h').map(h => h.children[0].textContent);
+  assert.deepEqual(heads(), ['Open', 'Installed', 'Get more'], 'the three levels, in order');
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['mail', 'music', 'files'], 'level 1: every app with a desk (= the icons)');
+  assert.deepEqual(P.find('vc-app').map(b => b.attrs['data-app']), ['notes', 'maps'], 'level 2: installed, not open');
+  assert.ok(P.find('vc-empty').some(e => /App Store/.test(e.textContent)), 'level 3 loads from the App Store');
+  storeDone([{ id: 'movies', name: 'Movies', summary: 'Your watch queue' }, { id: 'health', name: 'Health', summary: '' }]); await settle();
+  assert.deepEqual(P.find('vc-get').map(b => b.attrs['data-store']), ['movies', 'health'], 'level 3: in the App Store, not installed');
+  // ✕ on an open app closes it: its desk goes and it is back under Installed
+  P.find('vc-close')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(closed, ['mail']);
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['music', 'files']);
+  assert.deepEqual(P.find('vc-app').map(b => b.attrs['data-app']), ['mail', 'notes', 'maps'], 'a closed app goes back to Installed');
+  // one search filters all three
+  const q = P.find('vc-q')[0]; q.value = 'mo'; q.dispatchEvent({ type: 'input' });
+  assert.deepEqual([P.find('vc-open').length, P.find('vc-app').length, P.find('vc-get').map(b => b.attrs['data-store'])], [0, 0, ['movies']]);
+  // a Store app opens its own Store page (its Get), and the sheet closes
+  P.find('vc-get')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(got, ['movies']); assert.equal(P.find('vc-sheet').length, 0);
+  // the open tile goes to that app's desk
+  P.find('ap-plus')[0].dispatchEvent({ type: 'click' }); P.find('vc-hit')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(P.state.openedDesk, ['music']);
+  off(); assert.deepEqual(insets, [96, 'off'], 'Desks: no room asked any more');
+});
+
 test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb stays where it is; no Back: the orb swipes up = Home', async () => {
   const P = appsWorld();
   const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
@@ -228,4 +266,25 @@ test('the phone adapter lists one entry per desk (Home and empty desks left out)
   assert.match(host, /Object\.freeze\(\{ id: 'apps', name: 'Apps',/);
   assert.match(host, /if \(\(layoutId === 'orb' \|\| layoutId === 'apps'\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored Apps layout goes back to Desks');
   assert.ok(!/Math\.random/.test(read('web/layouts/apps/layout.js')));
+});
+
+test('three levels on both shells: close an app (its desk goes), an App Store page on its own desk (Get there), the app opens in the Store\'s place once installed; full-screen room for hosted apps', () => {
+  const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js'), store = read('web/store/store.js'), status = read('web/store/store-status.js');
+  for (const [name, src] of [['phone', app], ['desktop', desk]]) {
+    assert.match(src, /closeApp: id => \{/, `${name}: closeApp adapter`);
+    assert.match(src, /openStore: id => \{ const S = APP\['app-store'\]; if \(!S\?\.url\) return false;/, `${name}: openStore opens the Store app itself (never a second store)`);
+    assert.match(src, /u\.searchParams\.set\('app', id\); u\.searchParams\.set\('open', '1'\);/, `${name}: the Store page of that app, open once installed`);
+    assert.match(src, /d\.replace === true && w\.appId === 'app-store'\) closeWin\(host\.dataset\.win/, `${name}: only the Store's own frame may hand its place to the new app`);
+  }
+  assert.match(store, /get\('open'\) === '1' && openId\(a\)\) parent\.postMessage\(\{ type: 'wizard:open-app', id: openId\(a\), replace: true \}, location\.origin\);/, 'the Store opens it right after a successful Get (no needs sheet)');
+  assert.match(status, /export const hostAppId = a => HOST_ALIASES\[a\?\.id\]\?\.id \|\| a\?\.id \|\| '';/);
+  assert.match(host, /x\.type === 'view' && isUserApp\(x\)/, 'Get more lists the Store\'s Apps only');
+  assert.match(host, /store-data\/wizard\/v1\/index\/search\?limit=100/, 'the Store\'s own listing route');
+  assert.match(host, /new d\.defaultView\.CSSStyleSheet\(\)/, 'room under the last item via CSSOM (passes an app\'s style-src)');
+  assert.match(host, /insetSheets\.get\(d\)/, 'one sheet per document, not per window (a frame\'s window outlives its blank first document)');
+  const chrome = read('web/layouts/apps/chrome.css'), lay = read('web/layouts/apps/layout.css');
+  assert.match(chrome, /\.tiles\[data-n="1"\]:not\(\.has-full\):has\(> \.win\.solo\.app-frame\) \{ top: 0; left: 0; right: 0; bottom: 0; \}/, 'phone: an app alone on its desk is edge to edge');
+  assert.match(chrome, /> \.win\.solo\.app-frame:not\(\.wos-inset-bar\)::after \{/, 'phone: the fade, except over an app\'s own bottom bar');
+  assert.match(lay, /#stage > \.wsp \{ bottom: 76px; \}/, 'desktop Apps: Chats and tiled windows still end above the orb');
+  assert.match(lay, /:has\(> \.win:not\(\.gone\) iframe\[data-own-app\]\):not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) \{ inset: -8px; \}/, 'desktop Apps: an app alone on its desk is full screen');
 });

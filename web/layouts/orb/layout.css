@@ -165,6 +165,15 @@ html[data-shell="desktop"][data-layout="orb"] .ob-search {
 }
 html[data-shell="desktop"][data-layout="orb"] .ob-search:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink2); border-color: var(--ob-line2); }
 html[data-shell="desktop"][data-layout="orb"] .ob-search:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+/* the + (layouts/apps/chrome.js): Open · Installed · Get more, the same sheet as the Apps view's */
+html[data-shell="desktop"][data-layout="orb"] .ob-plus {
+  width: 36px; height: 36px; padding: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; flex: none;
+  border: 1px solid var(--ob-line); background: var(--ob-glass); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  color: var(--ob-ink3); opacity: .72; transition: opacity 200ms, border-color 200ms, color 200ms;
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-plus:is(:hover, :focus-visible) { opacity: 1; color: var(--ob-ink2); border-color: var(--ob-line2); }
+html[data-shell="desktop"][data-layout="orb"] .ob-plus:focus-visible { outline: 2px solid var(--ob-ink3); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="orb"] .ob-plus .vc-ico { width: 18px; height: 18px; }
 html[data-shell="desktop"][data-layout="orb"] .ob-search svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; flex: none; }
 html[data-shell="desktop"][data-layout="orb"] .ob-search-l { min-width: 9em; text-align: left; }
 html[data-shell="desktop"][data-layout="orb"] .ob-search i { font-style: normal; opacity: .5; }

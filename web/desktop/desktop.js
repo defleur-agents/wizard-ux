@@ -416,7 +416,7 @@
     // Setup may have just installed it: apps-changed is asynchronous. Wait for the registry, not a guessed delay.
     if (!hostedOpenable(d.id)) await window.WizCore.refreshApps?.();
     if (!host.isConnected || W[host.dataset.win] !== w) return;
-    const a = hostedOpenable(d.id); if (a) openApp(a);
+    const a = hostedOpenable(d.id); if (a && openApp(a) !== false && d.replace === true && w.appId === 'app-store') closeWin(host.dataset.win);   // Get more: the app takes the Store's place
   });
   /* App → agent binding: an app's settings sheet (core/app-route.js). Its Agents button opens the Agents app
    * at that agent; Agents frames may ask for an app's sheet. */
@@ -2919,6 +2919,12 @@
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
     openAppDesk: id => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
       if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
+    // The Orb and Apps views' app sheet: close an app (its desks; the Orb panel quits it), and an App Store page on a
+    // desk of its own (the Store window opened before goes; the page's Get opens the app right after it installs).
+    closeApp: id => { if (globalThis.WosSkinHost?.panelMode) return panelQuit(id); const home = homeOpen; let n = 0; for (let i = ws.length - 1; i >= 0; i--) if (ws[i].wins.some(x => W[x]?.appId === id) && closeDesktop(i)) n++; if (home && !homeOpen) goHome(); return n > 0; },   // closed from Home (the + sheet): stay Home
+    openStore: id => { const S = APP['app-store']; if (!S?.url) return false; Object.keys(W).filter(x => W[x]?.appId === 'app-store').forEach(x => closeWin(x));
+      const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); const obj = { app: 'frame', appId: 'app-store', url: u.pathname + u.search };
+      if (!globalThis.WosSkinHost?.panelMode && ws[cur].wins.length) { ws.push(freshDesk()); newWin(obj, { ws: ws.length - 1 }); goWs(ws.length - 1); return true; } newWin(obj); return true; },
     openPicker: () => openPicker(),
     openPalette: () => palToggle('all'),   // ⌥Space / ⌘K search & launch
     home: () => goHome(),
