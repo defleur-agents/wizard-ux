@@ -8,19 +8,15 @@
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sky {
   position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: -1; pointer-events: none; background: var(--ob-sky);
 }
-/* ---------- the orb and its satellites: over the desks, under the dock and every sheet ---------- */
-/* No stacking context of their own (no z-index, opacity or transform on the layer and the field), so each satellite
- * sits in front of the orb or behind it by its depth. */
+/* ---------- the orb, its satellites and the Chats pill: over the desks, under every sheet ---------- */
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer,
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-field { position: absolute; inset: 0; pointer-events: none; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb {
   --obp-orb: 240px;
   position: absolute; left: 50%; top: var(--obp-cy, 50%); width: var(--obp-orb); height: var(--obp-orb);
-  margin: calc(var(--obp-orb) / -2) 0 0 calc(var(--obp-orb) / -2); z-index: 5; transform-origin: 50% 50%; visibility: hidden; pointer-events: none;
+  margin: calc(var(--obp-orb) / -2) 0 0 calc(var(--obp-orb) / -2); z-index: 5; visibility: hidden; pointer-events: none;
 }
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb:is([data-show="on"], [data-show="fly"]) { visibility: visible; }
-/* in flight it passes over the dock, onto (or out of) the dock orb */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb[data-show="fly"] { z-index: 51; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb[data-show="on"] { visibility: visible; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbc { width: 100%; height: 100%; display: block; transition: transform 180ms ease; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb.is-pressed .obp-orbc { transform: scale(.96); }
 /* The hit area is the sphere itself (about 60% of the canvas), never its halo. */
@@ -31,16 +27,18 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbbtn {
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orb:not([data-show="on"]) .obp-orbbtn { pointer-events: none; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbbtn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
 
-/* ---------- satellites: each app's own mark, clean-cut on the sky (positions, depth and drift from phone.js) ---------- */
+/* ---------- satellites: each app's own mark, clean-cut on the sky (still places on one ring, from phone.js) ---------- */
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat {
-  position: absolute; left: 0; top: 0; width: 40px; height: 40px; margin: -20px 0 0 -20px; padding: 0; border: 0; border-radius: 11px;
-  display: grid; place-items: center; z-index: 4; will-change: transform; pointer-events: auto; background: none; color: inherit; -webkit-tap-highlight-color: transparent;
-  transition: visibility 0s;
+  position: absolute; left: 0; top: 0; width: 48px; height: 48px; margin: -24px 0 0 -24px; padding: 0; border: 0; border-radius: 14px;
+  display: grid; place-items: center; z-index: 6; pointer-events: auto; background: none; color: inherit; -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; transition: visibility 0s;
 }
-/* off Home they fade out with it (their depth opacity is inline; this wins while hidden) */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer:not(.is-home) .obp-sat { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: opacity 250ms ease, visibility 0s linear 250ms; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:active .ob-sat-face { transform: scale(.92); }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
+/* off Home they fade out with it */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer:not(.is-home) :is(.obp-sat, .obp-chats) { opacity: 0 !important; visibility: hidden; pointer-events: none; transition: opacity 200ms ease, visibility 0s linear 200ms; }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-face {
-  width: 36px; height: 36px; display: grid; place-items: center; pointer-events: none;
+  width: 40px; height: 40px; display: grid; place-items: center; pointer-events: none; transition: transform 120ms ease;
   filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 10px color-mix(in srgb, var(--c) 35%, transparent));
 }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .sgi { width: 40px; height: 40px; flex: none; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 82%, var(--ob-white)) !important; }
@@ -65,8 +63,25 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-dockc {
   position: absolute; inset: -38%; width: 176%; height: 176%; z-index: 1; pointer-events: none; display: none;
 }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-dockc[data-show="on"] { display: block; }
-/* while the orb is up in the middle of Home the dock's orb slot is empty (no sigil either) */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone][data-orb-at="centre"] #orbWrap .orb-app { opacity: 0 !important; }
-/* back on Home: they fade in with the scene (from nothing to their depth) while the orb grows into place */
-html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home .obp-sat { animation: obp-in 250ms ease; }
+/* Home has no bottom bar: the orb in the middle is the orb and the Chats pill sits where the dock was. Everywhere else
+ * the stock dock is back as it is. The dock orb keeps taking the presses the centre orb hands it (dispatched, no hit). */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone][data-orb-scene="home"] #dock { opacity: 0; pointer-events: none; transition: opacity 160ms ease; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone][data-orb-scene="home"] #dock * { pointer-events: none !important; }
+
+/* ---------- the Chats pill: one big thumb target under the orb, with the Ready count ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats {
+  position: absolute; left: 0; right: 0; bottom: calc(var(--safe-b, 0px) + 22px); margin: 0 auto; width: max-content; min-width: 200px; max-width: calc(100% - 48px);
+  height: 56px; padding: 0 26px; box-sizing: border-box; border: 0; border-radius: 28px; z-index: 6; pointer-events: auto;
+  display: flex; align-items: center; justify-content: center; gap: 12px;
+  background: var(--ob-glass); box-shadow: inset 0 0 0 1px var(--ob-line2), 0 10px 30px var(--ob-core);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  color: var(--ob-ink); font: 600 calc(var(--wz-text-sm, 0.8125rem) * 1.3) / 1 var(--wz-font-ui); letter-spacing: .01em;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background 140ms ease, transform 120ms ease;
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats:active { background: var(--ob-glass-solid); }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ob-ink2); }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats-n { color: var(--ob-amber); font-variant-numeric: tabular-nums; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-chats-n[hidden] { display: none; }
+/* back on Home: they fade in with the scene */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-layer.is-home :is(.obp-sat, .obp-chats) { animation: obp-in 200ms ease; }
 @keyframes obp-in { from { opacity: 0; } }

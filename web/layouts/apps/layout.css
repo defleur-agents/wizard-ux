@@ -1,0 +1,50 @@
+/* Apps view (layouts/apps/layout.js): the phone's Home as a standard home screen, one app icon per desk. Loaded only
+ * while the phone wears the Apps layout (html[data-layout="apps"]); every rule is scoped to the phone shell. Colours are
+ * the wearing tweak's skin-layer tokens (--ap-*: miguel/apps-home tweak.css). */
+
+/* Home: only its top stays (which Wizard, the switch, the AI fuel gauge, the gear): the tweak.css hides the rest from
+ * the first frame; the grid takes its place. */
+
+/* ---------- the grid: four columns, under Home's top and above the dock, inside the safe areas ---------- */
+/* Lives in the Home desk's section (it slides with Home). Vertical scroll only when there are more desks than fit;
+ * sideways swipes stay the desk strip's (touch-action: pan-y). */
+html[data-shell="phone"][data-layout="apps"] .ap-grid {
+  position: absolute; z-index: 1; left: max(var(--safe-l, 0px), 10px); right: max(var(--safe-r, 0px), 10px);
+  top: calc(var(--safe-t, 0px) + 128px); bottom: calc(var(--safe-b, 0px) + 100px);
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start;
+  row-gap: 18px; column-gap: 4px; padding: 4px 4px 12px; box-sizing: border-box;
+  overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; scrollbar-width: none;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-grid::-webkit-scrollbar { display: none; }
+
+/* ---------- one icon: tile, count, name (a 72 x 90 target) ---------- */
+html[data-shell="phone"][data-layout="apps"] .ap-icon {
+  --c: var(--wz-accent, var(--ink));   /* the app's own colour comes inline from its mark */
+  position: relative; min-width: 0; min-height: 90px; padding: 4px 0 2px; margin: 0; border: 0; background: none;
+  display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer;
+  color: var(--ap-label); -webkit-tap-highlight-color: transparent; touch-action: pan-y; -webkit-touch-callout: none; user-select: none;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-tile {
+  width: 62px; height: 62px; flex: none; border-radius: 16px; overflow: hidden; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--c) 26%, var(--ap-tile)); box-shadow: inset 0 0 0 1px var(--ap-tile-line), var(--ap-tile-shadow);
+  transition: transform 120ms ease;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-icon.is-logo .ap-tile { background: var(--ap-tile-logo); }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:active .ap-tile { transform: scale(.92); }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:focus-visible { outline: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-icon:focus-visible .ap-tile { box-shadow: 0 0 0 2px var(--ap-label); }
+/* the dock's own mark for the app (its sigil in its colour), sized for a home-screen tile */
+html[data-shell="phone"][data-layout="apps"] .ap-tile .ap-mark { width: 38px; height: 38px; opacity: 1; }
+html[data-shell="phone"][data-layout="apps"] .ap-tile .ap-mark .dn { display: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-shell="phone"][data-layout="apps"] .ap-badge {
+  position: absolute; top: 0; left: calc(50% + 20px); min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 11px;
+  display: grid; place-items: center; pointer-events: none;
+  background: var(--ap-badge); color: var(--ap-badge-ink); box-shadow: 0 0 0 2px var(--ap-badge-ring);
+  font: 700 calc(var(--wz-text-sm, 0.8125rem) * .9) / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums;
+}
+html[data-shell="phone"][data-layout="apps"] .ap-badge[hidden] { display: none; }
+html[data-shell="phone"][data-layout="apps"] .ap-label {
+  max-width: 100%; padding: 0 2px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font: 500 calc(var(--wz-text-sm, 0.8125rem) * .92) / 1.2 var(--wz-font-ui); color: var(--ap-label); text-shadow: var(--ap-label-shadow);
+}

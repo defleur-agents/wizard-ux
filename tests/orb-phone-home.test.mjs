@@ -1,8 +1,10 @@
-// Orbs view on the phone (Miguel, 31 Oct 2026; experimental): the miguel/orb-shell tweak now also wears the Orb layout
-// on the phone, where it only changes Home. Guards:
+// Orbs view on the phone (Miguel, 31 Oct 2026; simplified 1 Nov 2026): the miguel/orb-shell tweak also wears the Orb
+// layout on the phone, where it only changes Home. Guards:
 //   - phone, Orbs, on Home: the desktop's orb scene (the same sky, the same Style × Colour, the same satellite list,
-//     shared.js) with the orb centred; the dock orb wears the same look; off Home (a thread, an app, another desk) or
-//     during a take the orb is back in the dock;
+//     shared.js) with the orb FIXED in the middle (a take included: it never jumps to the dock and back), the
+//     satellites plain still buttons on one ring clear of the orb, one big Chats pill with the Ready count; no
+//     bottom bar, no spin, no bolts (Miguel found the three-slot bar version impossible to use);
+//   - off Home the stock phone (its dock orb wears the same look);
 //   - Desks (the tweak off) restores the stock phone Home exactly: every node goes, the flags that hide the stock orb go;
 //   - the desktop is untouched: its layout code never reaches the phone part, phone CSS can't match the desktop.
 import test from 'node:test';
@@ -45,7 +47,7 @@ function phoneWorld({ home = true } = {}) {
   const doc = { documentElement: html, body, hidden: false, createElement: t => new El(t), addEventListener() {}, removeEventListener() {} };
   Object.assign(globalThis, { document: doc, getComputedStyle: () => ({ getPropertyValue: n => n === '--ob-look-nebula' ? '#7c5cff, #c26bff, #4cc9ff, #ff6bd6' : '' }), matchMedia: () => ({ matches: false }), devicePixelRatio: 2,
     PointerEvent: class { constructor(type, init) { Object.assign(this, init, { type }); } } });
-  const state = { home, voice: { state: 'idle' }, running: [{ id: 'mail', open: false, playing: false }], badges: { notes: 3 }, opened: [], frames: 0, store: { style: 'plasma', colour: 'nebula' } };
+  const state = { home, voice: { state: 'idle' }, running: [{ id: 'mail', open: false, playing: false }], badges: { notes: 3, wizard: 4 }, opened: [], lists: [], frames: 0, store: { style: 'plasma', colour: 'nebula' } };
   const on = {}, offs = [];
   const apps = [{ id: 'mail', name: 'Mail', icon: '<span class="ic sg-mail"></span>' }, { id: 'notes', name: 'Notes', icon: '' }, { id: 'agents', name: 'Agents', icon: '', agent: true }, { id: 'settings', name: 'Settings', icon: '', system: true }];
   const api = {
@@ -56,14 +58,14 @@ function phoneWorld({ home = true } = {}) {
     voice: { state: () => state.voice, tap() {} }, orb: { onLevel() {} },
     storage: { get: k => state.store[k] ?? null, set: (k, v) => { state.store[k] = v; } },
     apps: { list: () => apps.map(a => ({ ...a })), badges: () => ({ ...state.badges }), logo: () => Promise.resolve(null), open: id => state.opened.push(id) },
-    panel: { running: () => state.running },
+    panel: { running: () => state.running }, sessions: { openList: k => state.lists.push(k) },
     phone: { home: () => homeSec, orb: () => orbWrap },
   };
   const fire = t => { for (const fn of on[t] || []) fn({ ...state.voice }); };
   return { html, device, homeSec, orbWrap, api, state, fire, find: cls => { const all = []; const walk = n => { for (const c of n.children) { if (String(c.className).split(' ').includes(cls)) all.push(c); walk(c); } }; walk(html); return all; } };
 }
 
-test('phone, Orbs, on Home: the desktop orb scene (shared sky, look and satellites), the orb centred, the dock orb in the same look', async () => {
+test('phone, Orbs, on Home: the orb fixed in the middle, still satellites to tap, one Chats pill; the stock phone elsewhere', async () => {
   const P = phoneWorld();
   const { default: phone } = await import(new URL('web/layouts/orb/phone.js', root));
   const off = phone(P.api);
@@ -71,38 +73,54 @@ test('phone, Orbs, on Home: the desktop orb scene (shared sky, look and satellit
   assert.equal(P.homeSec.children[0].className, 'obp-sky', 'the sky lives in the Home desk (it slides with the desks)');
   const layer = P.find('obp-layer')[0]; assert.ok(layer && layer.parentNode === P.device, 'the orb layer over the desks');
   assert.ok(P.orbWrap.children.some(c => c.className === 'obp-dockc'), 'the dock orb draws in the stock orb\'s own box');
-  assert.equal(P.html.dataset.orbScene, 'home'); assert.equal(P.html.dataset.orbAt, 'centre', 'on Home the orb is up in the middle');
-  assert.ok(layer.classList.contains('is-home'));
+  assert.equal(P.html.dataset.orbScene, 'home'); assert.equal(P.html.dataset.orbAt, 'centre', 'on Home the orb is in the middle');
+  assert.ok(layer.classList.contains('is-home')); assert.equal(P.find('obp-orb')[0].dataset.show, 'on');
   // satellites: exactly the shared list (running apps + regular apps with a count; never agents or system apps)
-  assert.deepEqual(P.find('obp-sat').map(b => b.attrs['data-app']).sort(), ['mail', 'notes']);
-  assert.equal(P.find('obp-sat').find(b => b.attrs['data-app'] === 'mail').dataset.run, 'hidden', 'open on a desk: a quiet dot');
+  const sats = P.find('obp-sat');
+  assert.deepEqual(sats.map(b => b.attrs['data-app']).sort(), ['mail', 'notes']);
+  assert.equal(sats.find(b => b.attrs['data-app'] === 'mail').dataset.run, 'hidden', 'open on a desk: a quiet dot');
+  // still, on one ring around the orb, clear of the sphere (its hit area is 60% of the canvas) by a whole target
+  const O = parseFloat(layer.style['--obp-orb']), cy = parseFloat(layer.style['--obp-cy']);
+  const at = b => b.style.transform.match(/translate\(([-\d.]+)px, ([-\d.]+)px\)/).slice(1).map(Number);
+  const before = sats.map(at);
+  for (const [x, y] of before) assert.ok(Math.hypot(x - 195, y - cy) >= O * .3 + 24, 'a satellite never sits on the orb');
+  assert.ok(before.every(([x]) => x - 24 >= 0 && x + 24 <= 390), 'inside the screen');
+  P.fire('route'); P.fire('home'); assert.deepEqual(sats.map(at), before, 'they never move by themselves');
+  sats.find(b => b.attrs['data-app'] === 'notes').dispatchEvent({ type: 'click' }); assert.deepEqual(P.state.opened, ['notes'], 'tap = open that app');
+  // the Chats pill: Ready count, opens the stock Chats list
+  const pill = P.find('obp-chats')[0]; assert.ok(pill, 'one Chats pill');
+  assert.equal(pill.attrs['aria-label'], 'Chats, 4 ready'); assert.equal(P.find('obp-chats-n')[0].textContent, '4 ready');
+  pill.dispatchEvent({ type: 'click' }); assert.deepEqual(P.state.lists, ['ready']);
   // a press on the centre orb is the dock orb's own gesture (same pointer, same place)
   const btn = P.find('obp-orbbtn')[0];
   btn.dispatchEvent({ type: 'pointerdown', pointerId: 7, isPrimary: true, clientX: 195, clientY: 420, button: 0, buttons: 1, preventDefault() {} });
   const handed = P.orbWrap.dispatched?.find(e => e.type === 'pointerdown');
   assert.ok(handed && handed.pointerId === 7 && handed.clientY === 420 && handed.isPrimary, 'handed to the dock orb with the same pointer');
-  // a thread / an app / another desk: back into the dock
+  // a take started on Home stays in the middle (no jump to the dock and back)
+  P.state.voice = { state: 'listen' }; P.fire('voice'); assert.equal(P.html.dataset.orbAt, 'centre');
+  P.state.voice = { state: 'idle' }; P.fire('voice'); assert.equal(P.html.dataset.orbAt, 'centre');
+  // a thread / an app / another desk: the stock phone (its dock orb in the same look)
   P.state.home = false; P.fire('route');
   assert.equal(P.html.dataset.orbAt, 'dock'); assert.equal(P.html.dataset.orbScene, 'desk'); assert.ok(!layer.classList.contains('is-home'));
-  // Home again: up in the middle; a take starts: down into the dock where its controls are
+  assert.equal(P.find('obp-dockc')[0].dataset.show, 'on'); assert.equal(P.find('obp-orb')[0].dataset.show, '');
   P.state.home = true; P.fire('route'); assert.equal(P.html.dataset.orbAt, 'centre');
-  P.state.voice = { state: 'listen' }; P.fire('voice'); assert.equal(P.html.dataset.orbAt, 'dock');
-  P.state.voice = { state: 'idle' }; P.fire('voice'); assert.equal(P.html.dataset.orbAt, 'centre');
   // Desks: everything it put anywhere goes, so the stock Home and the stock dock orb are exactly back
   off(); for (const n of [...P.find('obp-layer'), ...P.find('obp-sky')]) n.remove();   // api.mount nodes go with the layer (skin-host)
   assert.equal(P.find('obp-sky').length + P.find('obp-dockc').length, 0);
   assert.equal(P.html.dataset.orbPhone, undefined); assert.equal(P.html.dataset.orbAt, undefined); assert.equal(P.html.dataset.orbScene, undefined);
 });
 
-test('phone: the same stored Style × Colour and drawing code as the desktop, never a second copy', () => {
+test('phone: the same stored Style × Colour and drawing code as the desktop, never a second copy; no bar, spin or bolts', () => {
   const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   const ph = strip('web/layouts/orb/phone.js'), lay = read('web/layouts/orb/layout.js');
   assert.match(ph, /import \{ renderer \} from '\.\/styles\.js';/); assert.match(ph, /import \{ lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf \} from '\.\/shared\.js';/);
   assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /orbitApps\(api, badgeMap\)/);
   assert.ok(!/--ob-look-|createRadialGradient|16807/.test(ph), 'no colours or sky of its own');
   assert.match(lay, /if \(api\.env\.shell === 'phone'\) return phone\(api\);\n  if \(api\.env\.shell !== 'desktop'\) return \(\) => \{\};/, 'the desktop path is unchanged below the phone hand-off');
-  // calm, quick motion (~250 ms, eased, no bounce); the stock gestures stay on the dock orb
-  assert.match(ph, /const FLY = 250;/); assert.match(ph, /cubic-bezier\(\.3, \.7, \.2, 1\)/); assert.ok(!/cubic-bezier\([^)]*-|[^.\d]1\.[1-9]\d*\)/.test(ph.match(/cubic-bezier\([^)]*\)/g).join(' ')), 'no overshoot');
+  // the rejected round stays gone: no bottom bar slots, no spin pad or drift, no bolt, no flight between centre and dock
+  assert.ok(!/boltPainter|bolt\(|obp-spin|obp-slot|dotsL|dotsR|recent|phase|s\.a \+=|dockMatrix|FLY/.test(ph), 'no bar, spin, drift, bolt or flight');
+  assert.ok(!/Math\.random/.test(ph));
+  // the stock gestures stay on the dock orb
   assert.match(ph, /host\.dispatchEvent\(new PointerEvent\('pointerdown', init\)\)/);
 });
 
@@ -118,6 +136,12 @@ test('phone CSS can only match the phone wearing the scene; the desktop and Desk
   }
   // Desks gives back the stock Home: only the Orbs layout hides anything there
   assert.match(tw, /html\[data-shell="phone"\]\[data-layout="orb"\] \.home-desk \.home > :not\(\[data-slot="home-main"\], \.home-tools\) \{ display: none !important; \}/);
+  // Home has no bottom bar (the stock dock steps aside there only), big targets: 48 px satellites, a 56 px Chats pill
+  const raw = read('web/layouts/orb/phone.css');
+  assert.match(raw, /\[data-orb-phone\]\[data-orb-scene="home"\] #dock \{ opacity: 0; pointer-events: none;/);
+  assert.match(raw, /\.obp-sat \{\n  position: absolute; left: 0; top: 0; width: 48px; height: 48px;/);
+  assert.match(raw, /\.obp-chats \{[^}]*height: 56px;[^}]*bottom: calc\(var\(--safe-b, 0px\) \+ 22px\)|\.obp-chats \{[^}]*bottom: calc\(var\(--safe-b, 0px\) \+ 22px\)[^}]*height: 56px;/);
+  assert.ok(!/data-show="fly"|obp-slot|obp-spin/.test(raw));
   // the desktop layout CSS stays desktop-only (tests/orb-layout.test.mjs checks every selector)
   assert.ok(!read('web/layouts/orb/layout.css').includes('data-shell="phone"'));
 });
