@@ -325,23 +325,14 @@
    * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
    * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
   const emptyHomes = new Set();   // layouts that asked for desktop.js closeWin to go Home when a desk empties
-  /* An installed app's own logo, from the Store-data adapter's read-only route (store-data/logo/<id>: the logo the
-   * App Index lists for that app). The template / Runtipi placeholder pictures mean "no logo" (by sha256, the same
-   * list as tools/store-app-logos.mjs), so those apps keep their sigil. One read per app per page; a local blob URL. */
-  const LOGO_PLACEHOLDERS = new Set(['59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6', '41191af41f7a8e159a11abde437db1ad1f8776fd5388ef806cde74dbef1b9a7e']);
-  const logos = new Map();
+  /* An installed app's own logo: exactly the picture every other app-icon place shows (WizSigil.of(app).logo over the
+   * box's list of installed logos; placeholders already excluded, a designed sigil wins), so a layout never draws a different
+   * logo for the same app than the Desks view. A same-origin URL carrying the image's hash; null when it has none. */
   function appLogo(id) {
-    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id) || !isDoc || typeof fetch !== 'function') return Promise.resolve(null);
-    if (!logos.has(id)) logos.set(id, (async () => {
-      try {
-        const r = await fetch(new URL(`store-data/logo/${id}`, document.baseURI), { signal: AbortSignal.timeout(8000) });
-        if (!r.ok || !/^image\/(png|jpeg|gif|webp|svg\+xml)$/.test((r.headers.get('content-type') || '').split(';')[0].trim())) return null;
-        const blob = await r.blob(); if (!blob.size || blob.size > 1024 * 1024) return null;
-        const sum = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join('');
-        return LOGO_PLACEHOLDERS.has(sum) ? null : URL.createObjectURL(blob);
-      } catch (_) { logos.delete(id); return null; }
-    })());
-    return logos.get(id);
+    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return Promise.resolve(null);
+    // WizSigil decides: an app with a designed sigil keeps it even when it ships a picture.
+    const u = (typeof window !== 'undefined' && (window.WizSigil ? window.WizSigil.of({ id }).logo : window.WizCore?.appLogo?.(id))) || '';
+    return Promise.resolve(/^\/wizard-os-home\/store-data\/app-logo\/[a-z0-9][a-z0-9-]{0,63}\?v=[0-9a-f]{16}$/.test(u) ? u : null);
   }
   function shellApi(a, base) {
     const live = () => !a.dead && !!shell;

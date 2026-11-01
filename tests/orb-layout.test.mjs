@@ -262,17 +262,17 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.ok(prof.tweaks.includes('miguel/orb-shell') && prof.off.includes('miguel/orb-shell'), 'listed under Miguel, off by default');
 });
 
-test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never fetch', async () => {
+test('apps.logo: the same installed logo the Desks view shows (WizCore.appLogo), nothing fetched, bad ids refused', async () => {
   const D = desk(); const asked = [];
-  const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-  D.ctx.fetch = async url => { asked.push(String(url)); return { ok: true, headers: { get: () => 'image/png' }, blob: async () => ({ size: png.length, arrayBuffer: async () => png.buffer }) }; };
-  D.ctx.crypto = globalThis.crypto; D.ctx.AbortSignal = AbortSignal; D.ctx.Uint8Array = Uint8Array; D.ctx.URL.createObjectURL = () => 'blob:logo';
+  D.ctx.fetch = async url => { asked.push(String(url)); throw new Error('no fetch'); };
+  const url = '/wizard-os-home/store-data/app-logo/files?v=0123456789abcdef';
+  D.ctx.WizCore = { ...(D.ctx.WizCore || {}), appLogo: id => ({ files: url, evil: 'https://evil.example/x.png' }[id] || '') };
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
-  assert.equal(await D.api.apps.logo('files'), 'blob:logo');
-  assert.equal(await D.api.apps.logo('files'), 'blob:logo'); assert.equal(asked.length, 1, 'one read per app per page');
-  assert.match(asked[0], /\/wizard-os-home\/store-data\/logo\/files$/);
-  assert.equal(await D.api.apps.logo('../x'), null); assert.equal(asked.length, 1);
-  assert.ok(read('web/core/skin-host.js').includes("'59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6'"), 'the template logo means no logo');
+  assert.equal(await D.api.apps.logo('files'), url);
+  assert.equal(await D.api.apps.logo('mail'), null, 'no logo: the layout draws the shared sigil');
+  assert.equal(await D.api.apps.logo('evil'), null, 'only the box\'s own logo route');
+  assert.equal(await D.api.apps.logo('../x'), null);
+  assert.equal(asked.length, 0, 'one source for every view: no separate Store logo read');
   D.host.setLayout('classic'); await settle();
 });
 
