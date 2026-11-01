@@ -19,11 +19,14 @@ def integrity():
   p=R/name;assert p.is_file() and not p.is_symlink() and sha(p)==row['sha256'],'staged member drift: '+name
   assert p.stat().st_mode&0o777==int(row['mode'],8),'staged member mode drift: '+name
  prior=M['prior_evidence_r2'];prior_root=Path(prior['stage'])/'evidence'
+ assert sha(Path(prior['stage'])/'source-manifest.json')==prior['source_manifest_sha256'],'prior R2 manifest drift'
  inventory=json.loads((R/'prior-r2-evidence.json').read_text())
- actual={str(p.relative_to(prior_root)) for p in prior_root.rglob('*') if p.is_file()}
+ actual={str(p.relative_to(prior_root)) for p in prior_root.rglob('*') if p.is_file() or p.is_symlink()}
  assert actual==set(inventory),'prior R2 evidence closure drift'
  for name,row in inventory.items():
-  p=prior_root/name;assert not p.is_symlink() and sha(p)==row['sha256'] and p.stat().st_size==row['bytes'],'prior R2 evidence drift: '+name
+  p=prior_root/name
+  if 'symlink' in row:assert p.is_symlink() and os.readlink(p)==row['symlink'],'prior R2 link drift: '+name
+  else:assert not p.is_symlink() and sha(p)==row['sha256'] and p.stat().st_size==row['bytes'],'prior R2 evidence drift: '+name
  for root in ['old','candidate','web']:
   actual={str(p.relative_to(R)) for p in (R/root).rglob('*') if p.is_file() or p.is_symlink()}
   expected={n for n in M['members'] if n.startswith(root+'/')};assert actual==expected,'source closure differs: '+root
