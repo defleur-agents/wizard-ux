@@ -666,7 +666,7 @@ window.WizCore.chats = function createChats(H) {
   function newDrafts() {
     const all = KIT.drafts.all();
     return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
-      .filter(d => d.text.trim() || d.files.length || d.reply).sort((a, b) => b.at - a.at); // reply drafts stay listed: James could not read them while they flashed (31 Oct 2026)
+      .filter(d => d.text.trim() || d.files.length || (d.reply && !untouchedNotif(d))).sort((a, b) => b.at - a.at);
   }
   function draftRow(d, cur) {
     const t = d.text.trim().replace(/\s+/g, ' ');
@@ -734,15 +734,25 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
+  // An opened notification with nothing typed and nothing attached is a thread being read, not an unsent message
+  // (James, 1 Nov 2026: "this isn't a draft"). It never becomes a saved draft; opening the notification again
+  // rebuilds it from the notification itself.
+  function untouchedNotif(d) { return !!d && !(d.text || '').trim() && !(d.files || []).length && /^notifications:/.test(d.reply?.key || ''); }
   function rotateNew(resume) {
     const all = KIT.drafts.all(), cur = all.new;
     if (resume === 'new') return true;
     const resumed = resume ? all[resume] : null;
     if (resume && !resumed) return false;
-    if (cur && ((cur.text || '').trim() || (cur.files || []).length || cur.reply)) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
+    if (cur && ((cur.text || '').trim() || (cur.files || []).length || (cur.reply && !untouchedNotif(cur)))) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
     if (resumed) { all.new = { ...resumed, at: Date.now() }; delete all[resume]; } else delete all.new;
     try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); return true; } catch (e) { return false; }
   }
+  // Saved slots left behind by earlier opens of notifications go once; the open 'new' slot is left alone.
+  (function dropOpenedNotifications() {
+    const all = KIT.drafts.all(); let n = 0;
+    for (const k of Object.keys(all)) if (k !== 'new' && SAVED_NEW.test(k) && untouchedNotif(KIT.drafts.get(k))) { delete all[k]; n++; }
+    if (n) try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); } catch (e) {}
+  })();
   function openNewDraft(wid, resume) {
     const w = W[wid]; if (!w) return;
     if (w.thread) saveDraft(wid);
