@@ -63,3 +63,16 @@ Use `QA_OUT` for screenshots/results and run browsers on the Linux worker.
 Review question: does Morning look and behave exactly as before—pinned progress,
 same-frame open/×, gone when done/skipped and back at the next app-owned day?
 The preview is read-only except its disposable sample hide and sandbox skin choice.
+
+### Staging evidence
+
+- Staged Ready: `https://wizard.tailc0f369.ts.net:9478/wizard-os-home/?view=chats&section=ready&shell=phone` (seven-day preview).
+- Focused Node checks: 62 passing across card/registry, instant taps, app Back, inventory, installed-app refresh, Home and reuse tests. Inventory: 13,996 bytes; the existing 14,000-byte guard is unchanged.
+- Full-shell generic QA: 135 passing; seven delayed dismiss scenarios remove DOM in the click task (0.6–3.5 ms in the recorded run), before fetch; 500 restores nodes and `!` toast. Includes held desktop/thread, done/hidden/rollover, no-install/no-fetch and a real live skin picker.
+- Staged live-HEAD comparison: 20 passing on Nebula and Landscapes Light. Card geometry, copy, dots and computed styles match. Paired screenshots were visually inspected; PNG byte equality is not claimed (fractional clip position and composited landscape differ).
+- Real staged app Back/Skip/×: 9 passing, zero step writes or agent actions; preview workspace persistence attempts are refused, not forwarded.
+- Shared production toast opacity: 40 checks passing over loud versus blank backgrounds; full-shell rollback screenshots inspected in both skins.
+- Five real apps opened on each staged skin without a nested shell: Morning, Wisdom, Meditate, Profiles and Outline. No page errors in those checks.
+- Forum heavy admission returned `409 heavy admission refused`; the requested bounded local-browser fallback was used. Full unrelated suites were not rerun; their supplied baseline failures are not claimed fixed.
+- The live shell HEAD, Morning source and owner launcher are untouched. Their original bytes were backed up before staging; only the staging launcher copy carries the declaration. No merge or PR was opened.
+

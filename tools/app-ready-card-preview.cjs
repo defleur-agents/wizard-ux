@@ -13,7 +13,7 @@ const mime = { '.html': 'text/html', '.js': 'application/javascript', '.css': 't
 const csp = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; media-src 'self' blob:; manifest-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'";
 let refused = 0;
 const entry = JSON.parse(fs.readFileSync(process.env.PREVIEW_APP_ENTRY, 'utf8'));
-const decl = entry.ready_card, sample = {day:'sample-day',done:0,total:4,next_label:'Workout',hidden:false};
+const decl = entry.ready_card, sample = {day:'sample-day',done:0,total:4,next_label:String(decl.subtitle || '').split(' · ')[0],hidden:false};
 const json = (res, value, code=200) => { res.writeHead(code, {'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(value)); };
 const registry = import(require('node:url').pathToFileURL(process.env.PREVIEW_SETTINGS_MODULE).href);
 
@@ -45,7 +45,7 @@ http.createServer((req, res) => {
   if (!['GET', 'HEAD'].includes(req.method)) { refused++; res.writeHead(403, { 'content-type': 'application/json' }); return res.end('{"error":"Read-only preview: writes are disabled"}'); }
   const u = new URL(req.url, 'http://preview');
   if (u.pathname === '/__preview/receipt') { res.setHeader('content-type', 'application/json'); return res.end(JSON.stringify({ sha: process.env.PREVIEW_SHA, readOnly: true, sampleCard:entry.id, sampleHidden:sample.hidden, liveWrites:false, refused })); }
-  if (u.pathname === '/') { res.writeHead(302, { location: '/wizard-os-home/?open=chats' }); return res.end(); }
+  if (u.pathname === '/') { res.writeHead(302, { location: '/wizard-os-home/?view=chats&section=ready' }); return res.end(); }
   if (u.pathname.startsWith('/wizard-os-home/')) {
     let rel; try { rel = decodeURIComponent(u.pathname.slice('/wizard-os-home/'.length)) || 'index.html'; } catch { res.writeHead(400); return res.end(); }
     if (rel.split('/').some(s => s === '..' || s.startsWith('.'))) { res.writeHead(404); return res.end(); }
