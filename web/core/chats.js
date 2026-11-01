@@ -644,18 +644,19 @@ window.WizCore.chats = function createChats(H) {
    * "+" moves unsent words out of it into a saved 'new:<id>' slot, so a new chat always starts empty and
    * older unsent work stays reopenable from here. ---- */
   const SAVED_NEW = /^new(:[a-z0-9]{4,40})?$/;
-  // Is Notifications shown as threads? Known from the package, else from the last answer this phone saw; a phone
-  // that never learned it waits for the package for 15 s of page life rather than flash reply drafts and drop them.
+  // Last-known package state prevents first-paint flashes, but is advisory only. A package that
+  // was removed or failed to load must not hide the owner's reply drafts indefinitely.
   const BOOT_AT = Date.now();
   let inboxWait = 0;
   function inboxLikely() {
+    if (Date.now() - BOOT_AT >= 15000) return false;
     const h = KIT.inboxHint?.get?.();
-    if (h !== null && h !== undefined) return h;
-    if (Date.now() - BOOT_AT < 15000) {
-      if (!inboxWait) inboxWait = setTimeout(() => window.dispatchEvent?.(new Event('wos:prefs')), 15100 - (Date.now() - BOOT_AT));
-      return true;
-    }
-    return false;
+    if (h === false) return false;
+    if (!inboxWait) inboxWait = setTimeout(() => {
+      if (!window.WosSkinHost?.inboxThreads) KIT.inboxHint?.set?.(false);
+      window.dispatchEvent?.(new Event('wos:prefs'));
+    }, 15100 - (Date.now() - BOOT_AT));
+    return true;
   }
   function newDrafts() {
     const all = KIT.drafts.all();
