@@ -1,0 +1,26 @@
+{
+  "status": "ok",
+  "host": "forum",
+  "job": "/srv/work/AndroidBuilds/jobs/20261031T232044Z-d6c80916",
+  "source_revision": "a1e00dafbed3bcadc8fda098a9f9255b4437ce88",
+  "source_manifest_sha256": "b12de645fec188959694e3151f6f684773d03cfcc170c17fb569d2da0d934272",
+  "tasks": [
+    ":app:assembleRelease",
+    ":app:testReleaseUnitTest",
+    ":app:lintRelease"
+  ],
+  "artifacts": [
+    {
+      "path": "android/app/build/outputs/apk/release/app-release.apk",
+      "sha256": "04a188ae173b3a2cd22139256be9fe3158355079949f8b44c4be0eca2f90b767",
+      "bytes": 29115342,
+      "signer_sha256": "3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd",
+      "aapt2": {
+        "package": "ai.wizards.os",
+        "version_code": "87",
+        "version_name": "0.10.23",
+        "application_label": "Wizard OS"
+      }
+    }
+  ]
+}

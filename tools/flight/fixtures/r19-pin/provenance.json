@@ -1,0 +1,34 @@
+{
+  "build_job": "/srv/work/AndroidBuilds/jobs/20261031T232044Z-d6c80916",
+  "build_job_sha256": "26679921f0c0eef39a3753f2e71766e7916ca60189c4dd15cfa6540b277fa019",
+  "build_receipt_sha256": "2cc9a22849e4dc459767723ee3b47b2e0125409717c22a89ffaebc60da7b64bb",
+  "build_revision": "a1e00dafbed3bcadc8fda098a9f9255b4437ce88",
+  "build_source_manifest_sha256": "b12de645fec188959694e3151f6f684773d03cfcc170c17fb569d2da0d934272",
+  "files": {
+    "HomeScreenPolicy.java.txt": {
+      "sha256": "f46bfa65910cf6ecb49d4c65e10da8ecd605fd2f47c58e1a2a2210f32a8e0d11",
+      "source": "/srv/work/AndroidBuilds/jobs/20261031T232044Z-d6c80916/source/android/app/src/main/java/ai/wizards/os/HomeScreenPolicy.java"
+    },
+    "HomeScreenShortcuts.java.txt": {
+      "sha256": "36a41331c4a0c1ce6716ed44d81980ad3eeca02372936e83c223967219bd643f",
+      "source": "/srv/work/AndroidBuilds/jobs/20261031T232044Z-d6c80916/source/android/app/src/main/java/ai/wizards/os/HomeScreenShortcuts.java"
+    },
+    "r17-02-os-pin-confirmation.xml": {
+      "sha256": "199e6b1641f979bc57235bc18263d9607b2ebda3c865cb514a05ace59fae3dff",
+      "source": "/srv/work/wisdom-flight-444ec95b-a800c16c-r17/evidence/native/02-os-pin-confirmation.xml"
+    },
+    "r17-shortcuts.txt": {
+      "sha256": "47afd2ef2062636ac0bdc3f722f7a81a22bd97f07d7d6add502013e5434b2a98",
+      "source": "/srv/work/wisdom-flight-444ec95b-a800c16c-r17/evidence/native/shortcuts.txt"
+    },
+    "r18-02-os-pin-confirmation.xml": {
+      "sha256": "199e6b1641f979bc57235bc18263d9607b2ebda3c865cb514a05ace59fae3dff",
+      "source": "/srv/work/wisdom-flight-6ed4e446-a800c16c-r18/evidence/native/02-os-pin-confirmation.xml"
+    },
+    "r18-shortcuts.txt": {
+      "sha256": "0594d5cf5885c5891f794e7fd3734c968876edc947b7f33507a974d44a763338",
+      "source": "/srv/work/wisdom-flight-6ed4e446-a800c16c-r18/evidence/native/shortcuts.txt"
+    }
+  },
+  "kind": "read-only signed APK build source and historical synthetic OS observations; NOT R19 native acceptance"
+}

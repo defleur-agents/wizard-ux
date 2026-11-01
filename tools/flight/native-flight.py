@@ -21,6 +21,7 @@ import importlib.util
 import renderer_r14
 import egress_r15
 import native_ui_r16 as native_ui
+import pin_contract_r19 as pin_contract
 import reader_boundary_r17 as boundary
 _spec=importlib.util.spec_from_file_location('adb_transport',Path(__file__).with_name('adb-transport.py'))
 _transport=importlib.util.module_from_spec(_spec);_spec.loader.exec_module(_transport)
@@ -300,6 +301,45 @@ def settle_reader(phase,crop=None):
     raise AssertionError('native reader did not settle within eight painted captures: '+phase)
 
 
+
+def pin_observation():
+    # Root only in the fresh job-owned user-0 AVD. Never an owner device.
+    return {'shortcuts':shell('dumpsys shortcut'),
+            'appwidget':shell('dumpsys appwidget'),
+            'preferences':shell('cat /data/user/0/'+PKG+'/shared_prefs/home-screen-pins.xml',ok=False),
+            'activity':top()}
+
+def wait_pin(phase, launcher):
+    def save(index, observed, receipt, ready):
+        stem='pin-'+phase+'-%03d'%index
+        for field in ('shortcuts','appwidget','preferences','activity'):
+            (OUT/(stem+'-'+field+'.txt')).write_text(observed[field])
+        (OUT/(stem+'.json')).write_text(json.dumps({'receipt':receipt,'callback_confirmed':ready,'monotonic':time.monotonic()},indent=2))
+        if ready:
+            (OUT/('shortcuts-'+phase+'.txt')).write_text(observed['shortcuts'])
+            (OUT/('pin-'+phase+'-preferences.xml')).write_text(observed['preferences'])
+            (OUT/('pin-'+phase+'.json')).write_text(json.dumps(receipt,indent=2))
+    return pin_contract.await_persisted(pin_observation,save,ORIGIN,launcher,time.monotonic,time.sleep)
+
+def open_existing_pin():
+    # No request/recreation, am start, shortcut launch command or app UI fallback.
+    raw=ui();stamp='pin-launch-%04d'%ui_serial
+    (OUT/(stamp+'.xml')).write_text(raw);raw_screen(stamp)
+    xy=native_ui.target(r'^Wisdom$',raw,package=pin_route['launcher'],clickable=True)
+    assert xy is not None,'existing actual launcher Wisdom icon missing/ambiguous'
+    shell(f'input tap {xy[0]} {xy[1]}')
+    until(lambda:'.AppSessionActivity' in top(),30)
+    activity=shell('dumpsys activity activities')
+    (OUT/(stamp+'-activities.txt')).write_text(activity)
+    # Bind the clicked existing icon to the complete actual native task URI,
+    # including the origin+app identity and Wisdom metadata, not just class name.
+    expected_uri='wizard-homeapp://'+PKG+'/'+pin_before['id']+'?app=wisdom'
+    intent_lines=[line for line in activity.splitlines() if 'Intent {' in line and 'dat='+expected_uri+' ' in line
+                  and 'cmp=ai.wizards.os/.AppSessionActivity' in line and 'act=android.intent.action.VIEW' in line]
+    assert len(intent_lines)==1,'existing pin exact Wisdom/origin task identity missing or ambiguous'
+    assert '.AppSessionActivity' in top(),'existing pin did not open app-only session'
+
+
 def sdk_prepare():
     # Reuse preflighted SDK/API35; no downloads or old AVD state. Fresh disposable device.
     manager = SDK/'cmdline-tools/latest/bin/avdmanager'
@@ -475,12 +515,17 @@ try:
     shell(f'input tap {pin_xy[0]} {pin_xy[1]}')
     confirm=until(lambda:native_ui.os_pin_target(ui()),30)
     capture('02-os-pin-confirmation')
+    confirmation=(OUT/'02-os-pin-confirmation.xml').read_text()
+    pin_route=pin_contract.route(confirmation,
+        (ROOT/'fixtures/r19-pin/HomeScreenShortcuts.java.txt').read_bytes(),
+        (ROOT/'fixtures/r19-pin/HomeScreenPolicy.java.txt').read_bytes())
+    result['pin_route']=pin_route
     record('OS launcher confirmation distinct from shell CTA','launcher' in top().lower(),confirm)
-    shell(f'input tap {confirm[0]} {confirm[1]}')
-    shortcuts=shell('dumpsys shortcut');(OUT/'shortcuts.txt').write_text(shortcuts)
-    record('native OS-confirmed Wisdom shortcut exists','homeapp-' in shortcuts and 'Wisdom' in shortcuts)
-    shell('input keyevent KEYCODE_HOME');tap('^Wisdom$')
-    until(lambda:'.AppSessionActivity' in top(),30)
+    shell(f'input tap {confirm[0]} {confirm[1]}')  # exactly one OS confirmation
+    pin_before=wait_pin('before',pin_route['launcher'])
+    record('native OS-confirmed Wisdom shortcut exists',True,pin_before)
+    shell('input keyevent KEYCODE_HOME')  # map actual existing icon; never re-request
+    open_existing_pin()
     # Accessibility may omit the transient saving pill. Native offline content below,
     # not a fixed timer or a partial download log, is the final cache-readiness proof.
     until(lambda:find(r'Synthetic flight collection|Browse all'),60)
@@ -490,7 +535,7 @@ try:
     capture('03-online-pinned')
     result['onlineLabels']=[label(n) for n in nodes() if label(n)]
     record('pinned online Wisdom rendered',any(re.search('Browse|Suggested|Currently reading',s) for s in result['onlineLabels']))
-    shortcuts_before=shell('dumpsys shortcut');(OUT/'shortcuts-before.txt').write_text(shortcuts_before)
+    record('confirmed exact pin identity before process deaths',pin_before['id']==pin_contract.identity(ORIGIN),pin_before)
     shell('cmd connectivity airplane-mode enable; svc wifi disable')
     record('Wi-Fi actually disabled','disabled' in shell('cmd wifi status').lower())
     record('airplane mode actually enabled',shell('settings get global airplane_mode_on').strip()=='1')
@@ -500,7 +545,7 @@ try:
     # Removing reverse makes this origin unreachable; keep server state for later reconnect.
     shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG);time.sleep(2)
     record('Wizard process stopped before icon tap',not shell('pidof '+PKG,ok=False).strip())
-    tap('^Wisdom$')
+    open_existing_pin()
     time.sleep(12)
     capture('04-offline-cold-pin')
     labels=[label(n) for n in nodes() if label(n)]
@@ -562,7 +607,7 @@ try:
         result.setdefault('findings',[]).append(reader_evidence['finding'])
     (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     record('second process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
-    tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30)
+    open_existing_pin();until(lambda:'.AppSessionActivity' in top(),30)
     reader_evidence['restored']=settle_reader('restored',reader_evidence['prekill']['frames'][-1]['crop'])
     (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     record('actual offline reading page survives second process death',reader_evidence['restored']['frames'][-1]['pair']==reader_evidence['prekill']['frames'][-1]['pair'],reader_evidence)
@@ -573,7 +618,7 @@ try:
     reader_evidence['home_started_monotonic']=time.monotonic()
     shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)
     record('HOME lifecycle process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
-    tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30)
+    open_existing_pin();until(lambda:'.AppSessionActivity' in top(),30)
     reader_evidence['home_restored']=settle_reader('home_restored',reader_evidence['prekill']['frames'][-1]['crop'])
     (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     record('HOME lifecycle exact reader pixels and page survive death',boundary.compare(reader_evidence['home_prekill']['frames'][-1],reader_evidence['home_restored']['frames'][-1]))
@@ -593,7 +638,7 @@ try:
     # Airplane/transport restoration fires normal online/retry handling. A foreground reload
     # is also real pin behavior and triggers existing flush; never invoke app JS from native QA.
     for attempt in range(3):
-        shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG);tap('^Wisdom$');time.sleep(5)
+        shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG);open_existing_pin();time.sleep(5)
         r=receipt()
         if len([x for x in r['writes'] if x['path'].endswith('/highlight')])>=2:break
     r=receipt();hs=r['state']['highlights'];ops=[x['offline_id'] for x in r['writes'] if x['path'].endswith('/highlight')]
@@ -605,8 +650,8 @@ try:
     reader_evidence['replay']=replay
     (OUT/'reader-boundary.json').write_text(json.dumps(reader_evidence,indent=2))
     (OUT/'synthetic-server-receipt.json').write_text(json.dumps(r,indent=2))
-    after_shortcuts=shell('dumpsys shortcut');(OUT/'shortcuts-after.txt').write_text(after_shortcuts)
-    record('same native pin identity retained',re.findall(r'id=homeapp-[^,}\s]+',shortcuts_before)==re.findall(r'id=homeapp-[^,}\s]+',after_shortcuts))
+    pin_after=wait_pin('after',pin_route['launcher'])
+    record('same native pin identity retained',pin_before==pin_after and pin_contract.verify_evidence(OUT,ORIGIN),{'before':pin_before,'after':pin_after})
     capture('12-reconnected-same-pin')
     record('actual ANGLE Vulkan SwiftShader backend after complete flight', renderer_r14.observe(emulator,OUT,'renderer-complete',SDK)['accepted'])
     verify_app_egress(uid,'after-flight')
@@ -615,7 +660,13 @@ try:
 except Exception as e:
     result['failure']=repr(e)
     print('FAILED',repr(e),flush=True)
-    if emulator: capture('FAIL')
+    if emulator:
+        # Before cleanup: retain both OS services and async callback receipt even on failure.
+        try:
+            observed=pin_observation()
+            for field,text in observed.items():(OUT/('FAIL-pin-'+field+'.txt')).write_text(text)
+        except Exception as diagnostic_error:(OUT/'FAIL-pin-diagnostics.error').write_text(repr(diagnostic_error))
+        capture('FAIL')
 finally:
     result['emulator_pre_cleanup_returncode']=emulator.poll() if emulator else None
     rc=result['emulator_pre_cleanup_returncode']
