@@ -210,7 +210,7 @@ test('Desks = the stock phone: Apps off releases the layout and its CSS; Apps on
   for (const sel of [...tw.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim())) for (const part of sel.split(/,(?![^(]*\))/)) assert.ok(/^html\[data-layout="apps"\]|^html\[data-shell="(phone|desktop)"\]\[data-layout="apps"\]/.test(part.trim()), `apps-home tweak.css reaches past the Apps view: ${part.trim()}`);
 });
 
-test('Apps view: listed under Miguel, never a default, chosen in Settings › Look › Shell view (manifest view: Apps)', async () => {
+test('Apps view: listed under Miguel, never a default, a mutually exclusive shell view (manifest view: Apps)', async () => {
   assert.equal(JSON.parse(read('web/tweaks/miguel/apps-home/manifest.json')).view, 'Apps');
   // catalog: listed under Miguel, never a default; not turned on by any migration
   const cat = JSON.parse(read('web/tweaks/catalog.json'));

@@ -4,17 +4,17 @@ Opt-in, off for everyone by default (no view tweak is a catalog `default`, and n
 shell views, **Desks** (the stock shell), **Orb** and **Apps**; choosing Desks brings the stock shell straight back (no
 reload). On the phone (experimental) Orb changes Home only; see **Phone** below (and **Apps view** for the third view).
 
-**Try it:** Settings (the gear) › Look › **Shell view** › Orb (or Apps). Ways back to Desks: the same row (the gear
-stays in the bar on the desktop and at the top of Home on the phone in every view), or the scene's **Look** button ›
-**Back to the Desks view** (`api.desk.classic()`).
+**Try it:** Settings (the gear) › Look › Tweaks › Miguel's › **Different shell view - Orb** (or **- Apps**). Ways
+back to Desks: switch it off again (the gear stays in the bar on the desktop and at the top of Home on the phone in
+every view), or the scene's **Look** button › **Back to the Desks view** (`api.desk.classic()`).
 
-**Shell view** (Settings › Look, between the skin grid and the Tweaks list; 1 Nov 2026, replaced the
-`miguel/orb-switch` bar / phone-Home switch): one segmented control (`st-seg`, like Settings' other choices) with
-Desks plus one option per tweak whose manifest names a `view` (`"view": "Orb"` on `miguel/orb-shell`, `"view": "Apps"`
-on `miguel/apps-home`). Core names no view: `WosExperience.chooseView(id | '')` sets every view tweak in the device mix
-in one pass (one apply), so they stay mutually exclusive, per device, and survive a reload (`wos.skin-tweaks.v1`).
-`WosExperience.toggle` of a view also goes through it, and the per-author quick button leaves views alone. View tweaks
-are not listed again as Tweaks switches. The desktop bar centre is the clock again (`bar-center` stays a core slot).
+**Two ordinary tweaks, mutually exclusive** (1 Nov 2026, replaced the Settings › Look › Shell view row, which had
+replaced the `miguel/orb-switch` bar / phone-Home switch): each view is a normal switch in Miguel's Tweaks list. A tweak
+whose manifest names a `view` (`"view": "Orb"` on `miguel/orb-shell`, `"view": "Apps"` on `miguel/apps-home`) is one of
+the exclusive views; core names no view. `WosExperience.toggle` of a view switches it on and every other view off in one
+pass (one apply), or every view off (Desks); per device, survives a reload (`wos.skin-tweaks.v1`). The per-author quick
+button leaves views alone, and a device that stores two on wears only the first in catalog order. The desktop bar
+centre is the clock (`bar-center` stays a core slot).
 
 With both tweaks off the desktop is the stock Desks view: every core hook added for this layout (`panelMode`,
 `bar-center`, `leaveOnSend`, `WosSkinHost.key`, `commandUi`) is a no-op until a layout claims it.
@@ -120,7 +120,7 @@ It is a port of the approved concept (Files › Pages › `orb-shell-concept`):
 ## Phone (experimental, 31 Oct 2026)
 
 The same tweak and the same layout: `layout.js` hands the phone shell to `phone.js` (+ `phone.css`, loaded by it), and
-the view is chosen in Settings › Look › Shell view. Per device, no reload.
+the view is switched on in Settings › Look › Tweaks. Per device, no reload.
 
 - **Home** shows the desktop scene: the same sky, the same orb in the device's stored Style × Colour (no picker on the
   phone yet: Glass · Nebula unless chosen on that device), the same status satellites, and Home's own top (which

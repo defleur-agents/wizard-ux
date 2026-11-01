@@ -55,7 +55,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   await E.toggle('miguel/swipe-strip'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/swipe-strip'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
-  // shell views (manifest `view`) are one choice in Settings › Look › Shell view, never part of the quick button
+  // shell views (manifest `view`) are one at a time: the quick button leaves them as they are
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id) && !JSON.parse(read(`web/tweaks/${id}/manifest.json`)).view);
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));

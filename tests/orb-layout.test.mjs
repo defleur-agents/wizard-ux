@@ -280,8 +280,8 @@ test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never 
 });
 
 test('a trusted tweak may switch only its own author\'s tweaks, through the device tweak mix (api.settings.toggleTweak)', async () => {
-  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Orb view');
-  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).view, 'Orb', 'chosen in Settings › Look › Shell view');
+  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).name, 'Different shell view - Orb');
+  assert.equal(JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json')).view, 'Orb', 'one of the mutually exclusive shell views');
   const host = read('web/core/skin-host.js');
   assert.match(host, /toggleTweak\(id\) \{\n\s+if \(!trusted \|\| a\.dead\) throw/);
   assert.match(host, /!id\.startsWith\(a\.id\.split\('\/'\)\[0\] \+ '\/'\)\) return Promise\.resolve\(false\)/, 'own author only');
