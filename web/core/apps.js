@@ -32,6 +32,11 @@
   /* Installed Wizard apps (apps.json) and the owner's own links (launcher.json), from the Agent Service.
    * Cached on the device so the launcher paints instantly; refreshed at start and on focus. */
   const REMOTE_KEY = 'wux.apps.v1';
+  // Retired app ids remain lookup aliases only. Tiles and new windows use the installed canonical id.
+  const APP_ID_ALIASES = window.WizCore.appIdAliases = Object.freeze({
+    cinequeue: 'movies', usuals: 'food', meditation: 'meditate',
+    'outline-streaming-demo': 'outline', 'voice-outline': 'outline', 'wizard-connectors': 'connected-accounts',
+  });
   const DEV_KEY = 'wux.apps.dev.v1';
   let DEV = (() => { try { return new Set(JSON.parse(localStorage.getItem(DEV_KEY) || '[]')); } catch (_) { return new Set(); } })();
   // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
@@ -69,11 +74,13 @@
     ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
-  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
-  // The Agent Service is Wizard itself, not an app the owner manages.
-  const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
+  // Core plumbing has no owner-facing action. Keep it in the installed-app snapshot for the Store and agents, but
+  // never turn a stale or mistaken page declaration into a launcher tile, search result or deep-link target.
+  const SHELL_HIDDEN = new Set(['wizard-agent-service', 'wizard-connection-router']);
+  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
+  const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
-  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).map(a => toTile(a)); } catch (e) { return []; } })();
+  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
   window.WizCore.backendApps = () => BACK.map(a => {
     if (!a.sgh && window.WizSigil) { const g = window.WizSigil.of(a.sigil || a); a.sgc = g.color; a.sgh = window.WizSigil.html(a.sigil || a); }
     return a;
@@ -131,10 +138,10 @@
       // Owner's In development list (launcher.json in_development, James 23 Oct 2026): any app id, built-ins included.
       DEV = new Set(Array.isArray(snapshot.in_development) ? snapshot.in_development.map(String) : []);
       try { localStorage.setItem(DEV_KEY, JSON.stringify([...DEV])); } catch (_) {}
-      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard');
+      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard' && !SHELL_HIDDEN.has(a.id));
       const list = all.filter(a => a.url);
       // Backend-only apps (no page of their own): listed only by skins that show them (Miguel's skins, app.js).
-      const back = all.filter(a => !a.url && !BACK_HIDDEN.has(a.id) && !window.WizCore.isMaintenanceApp?.(a));
+      const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
       BACK = back.map(a => toTile(a));
@@ -189,6 +196,11 @@
       APPS.splice(0, APPS.length, ...list);
       for (const k of Object.keys(APP)) delete APP[k];
       for (const a of APPS) APP[a.id] = a;
+      for (const [old, id] of Object.entries(APP_ID_ALIASES)) {
+        if (!APP[old] && APP[id]) APP[old] = APP[id];
+        // Unrenamed box (only the retired id installed): canonical handoffs such as Android's `food` still resolve.
+        else if (APP[old] && !APP[id]) APP[id] = APP[old];
+      }
       window.dispatchEvent(new CustomEvent('wizard:apps', { detail: { shell, count: APPS.length } }));
     };
 
