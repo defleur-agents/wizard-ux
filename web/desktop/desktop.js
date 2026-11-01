@@ -977,7 +977,7 @@
     window.WosUsage?.load?.(true)?.then?.(() => { if (!usageEl.hidden) paintUsage(); });
     render(); toast('↻', 'Refreshed Home', 900); return true;
   }
-  // ⌥A Reply about this (Oscar, wizard-ux #751): Chats opens beside the app in front with its selected words, or what
+  // ⌥A Reply about this (Oscar, wizard-ux PR 751): Chats opens beside the app in front with its selected words, or what
   // is on screen when nothing is selected, as the draft's quoted reply. Nothing is sent. The one selection menu runs it.
   function replyAbout() {
     const f = focused(), fr = f && f.app === 'frame' && !homeOpen ? winEl(f.id)?.querySelector('iframe') : null;

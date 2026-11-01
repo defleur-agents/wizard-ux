@@ -1,7 +1,8 @@
 /* Wizard OS · the one text selection menu (James, 12 Oct 2026; one menu for every app, 31 Oct 2026)
  *
  * Select words anywhere in Wizard and the shell shows its own small menu above them. This file is the only
- * implementation: Chats, installed apps (Wisdom, Notes…) and any other app document use it. The shell owns the
+ * implementation for ordinary selections in Chats and installed app documents. Apps with drawn selections
+ * can adopt the bridge below; Wisdom retains its existing fallback until it does. The shell owns the
  * pop-up (placement, drag, Back, tap outside, skins); each surface may add its own items.
  *
  *   Shell items (Settings → Text selection menu chooses which show):
@@ -255,7 +256,7 @@
     const KIT = window.WosChat || host()?.chat;
     if (id === 'copy') { const ok = await KIT.copyText(c.text); dismiss(); toast(ok ? '⧉' : '!', ok ? 'Copied' : 'Couldn’t copy', 1400); return; }
     if (id === 'share') {
-      const r = await (c.mine ? KIT.shareText(c.text) : KIT.shareAssistantText(c.text)); dismiss();
+      const r = await (c.src || c.mine ? KIT.shareText(c.text) : KIT.shareAssistantText(c.text)); dismiss();
       if (r === 'copied') toast('⧉', 'Copied · sharing isn’t available here', 1800); else if (r === 'failed') toast('!', 'Couldn’t share', 1800);
       return;
     }
@@ -341,7 +342,7 @@
     if (!Array.isArray(list) || list.length > 6) throw new Error('Use up to 6 selection items');
     return list.map(x => {
       if (!x || !SAFE_ID.test(x.id || '') || typeof x.label !== 'string' || !x.label.trim()) throw new Error('Invalid selection item');
-      return { id: x.id, label: x.label.trim().slice(0, 24), icon: ICON[x.icon] ? x.icon : '' };
+      return { id: x.id, label: x.label.trim().slice(0, 24), icon: Object.hasOwn(ICON, x.icon) ? x.icon : '' };
     });
   }
   // WizardApp.selection.items(list, pick): extra items for ordinary selections in that app.

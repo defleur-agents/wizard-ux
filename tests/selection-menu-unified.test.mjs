@@ -10,8 +10,8 @@ const sel = read('core/sel-menu.js'), services = read('core/app-services.js'), c
 const chats = read('core/chats.js'), desk = read('desktop/desktop.js'), css = read('core/sel-menu.css');
 
 test('floating menu pairs skin text with an opaque skin base, never a fixed dark tint', () => {
-  assert.match(css, /var\(--wz-base, var\(--bg, #05030c\)\)/);
-  assert.match(css, /color: var\(--wz-text, var\(--ink, #efeaff\)\)/);
+  assert.match(css, /var\(--wz-base, var\(--bg\)\)/);
+  assert.match(css, /color: var\(--wz-text, var\(--ink\)\)/);
   assert.doesNotMatch(css, /rgba\(24, 16, 48/);
 });
 
@@ -59,9 +59,23 @@ test('app items are validated data, never app markup, and at most six', () => {
   const ICON = { note: 'x' };
   const fn = vm.runInNewContext(`const ICON = ${JSON.stringify(ICON)};${sel.slice(start, end)}; cleanItems`);
   assert.deepEqual(JSON.parse(JSON.stringify(fn([{ id: 'note', label: ' Note ', icon: 'note' }, { id: 'ask', label: 'Ask AI', icon: '<svg onload=x>' }]))), [{ id: 'note', label: 'Note', icon: 'note' }, { id: 'ask', label: 'Ask AI', icon: '' }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(fn([{ id: 'proto', label: 'Plain', icon: 'constructor' }, { id: 'proto2', label: 'Plain', icon: '__proto__' }]))).map(x => x.icon), ['', ''], 'inherited properties are not icons');
   assert.throws(() => fn([{ id: 'Bad id', label: 'x' }]));
   assert.throws(() => fn(Array.from({ length: 7 }, (_, i) => ({ id: 'a' + i, label: 'x' }))));
   assert.match(sel, /\$\{esc\(it\.label\)\}/, 'labels are escaped');
+});
+
+test('Share attributes only assistant selections to the wizard, not app or user text', async () => {
+  const body = sel.slice(sel.indexOf('  async function run(id)'), sel.indexOf('  function settle(ms)'));
+  for (const [context, expected] of [[{ src: {}, text: 'App words' }, 'plain'], [{ mine: true, text: 'My words' }, 'plain'], [{ mine: false, text: 'Assistant words' }, 'assistant']]) {
+    const calls = [];
+    const run = vm.runInNewContext(`${body}; run`, { cur: context, window: { WosChat: {
+      shareText: text => { calls.push(['plain', text]); return 'shared'; },
+      shareAssistantText: text => { calls.push(['assistant', text]); return 'shared'; },
+    } }, dismiss() {}, hide() {}, toast() {} });
+    await run('share');
+    assert.deepEqual(calls, [[expected, context.text]]);
+  }
 });
 
 test('a list saved before Reply in chat existed gains it once; a newer list stays as chosen', () => {
