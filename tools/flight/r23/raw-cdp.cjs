@@ -17,9 +17,9 @@ exports.verify=(row,raw,member)=>{
 };
 const fingerprint=s=>[s.dev,s.ino,s.size,s.mtimeNs,s.ctimeNs].map(String).join(':');
 exports.prepareProfile=profile=>{
- fs.mkdirSync(profile,{recursive:true,mode:0o700});const canonical=fs.realpathSync(profile),s=fs.statSync(canonical);assert.equal(s.uid,process.getuid(),'owned profile UID');assert.equal(s.mode&0o077,0,'private profile permissions');
+ fs.mkdirSync(profile,{recursive:true,mode:0o700});assert(!fs.lstatSync(profile).isSymbolicLink(),'profile leaf not symlink');const canonical=fs.realpathSync(profile),s=fs.statSync(canonical);assert(s.isDirectory(),'profile directory');assert.equal(s.uid,process.getuid(),'owned profile UID');assert.equal(s.mode&0o077,0,'private profile permissions');
  let previous=null;try{previous=fingerprint(fs.lstatSync(path.join(canonical,'DevToolsActivePort'),{bigint:true}))}catch(e){if(e.code!=='ENOENT')throw e}
- return {canonical,previous,preparedAt:Date.now()};
+ return Object.freeze({canonical,previous,preparedAt:Date.now(),profileDev:s.dev,profileIno:s.ino});
 };
 // Only the already-owned Playwright browser channel supplies the candidate PID.
 // No raw endpoint is contacted to discover its own owner (no circular trust).
@@ -36,7 +36,7 @@ exports.argumentEvidence=args=>{
  let operand=false;const safe=args.map(a=>{assert(typeof a==='string'&&a.length<=65536,'bounded argument');if(operand){operand=false;return a}if(a==='--user-data-dir'||a==='--remote-debugging-port'){operand=true;return a}if(/^--(?:user-data-dir|remote-debugging-port)=/.test(a))return a;return /^--[a-zA-Z0-9-]+(?:=|$)/.test(a)?a.split('=')[0]+'=REDACTED':'REDACTED'});
  return {argc:args.length,arguments:safe};
 };
-exports.captureOwnedProc=(pid,io=fs)=>{
+exports.captureOwnedProc=(pid,io=fs,expectedProfile=null)=>{
  assert(Number.isSafeInteger(pid)&&pid>0,'explicit owned PID');const root='/proc/'+pid,result={pid,errors:[]};
  const read=(key,fn)=>{try{result[key]=fn()}catch(e){result.errors.push({field:key,code:e.code||null,name:e.name})}};
  read('uid',()=>io.statSync(root).uid);
@@ -45,33 +45,79 @@ exports.captureOwnedProc=(pid,io=fs)=>{
  read('comm',()=>io.readFileSync(root+'/comm','utf8').slice(0,256).trim());
  read('exe',()=>io.readlinkSync(root+'/exe'));
  read('stat',()=>{const s=io.readFileSync(root+'/stat','utf8');assert(s.length<=4096);const a=s.slice(s.lastIndexOf(') ')+2).split(' ');return {state:a[0],ppid:a[1],start:a[19]}});
- read('cmdline',()=>{const b=io.readFileSync(root+'/cmdline');assert(b.length<=65536,'bounded cmdline bytes');const text=b.toString('utf8'),args=text.split('\0');if(args.at(-1)==='')args.pop();return {bytes:b.length,sha256:createHash('sha256').update(b).digest('hex'),endsNUL:b.length>0&&b.at(-1)===0,...exports.argumentEvidence(args)}});
+ read('cmdline',()=>{const b=io.readFileSync(root+'/cmdline');assert(b.length<=65536,'bounded cmdline bytes');const text=b.toString('utf8'),args=text.split('\0');if(args.at(-1)==='')args.pop();return {bytes:b.length,sha256:createHash('sha256').update(b).digest('hex'),endsNUL:b.length>0&&b.at(-1)===0,...exports.argumentEvidence(args),...(expectedProfile?{expectedProfileMarkerPresent:args.length===1&&(' '+args[0]+' ').includes(' --user-data-dir='+expectedProfile+' ')}:{})}});
  return result;
 };
+// Chromium's Linux SetProcessTitleFromCommandLine flattens argv without escaping.
+// Never reconstruct original launch arguments from this mutable display string.
+const childProcess=require('node:child_process'),launchRecords=new WeakMap();
+exports.assertPlaywrightBundle=bytes=>{
+ const digest=createHash('sha256').update(bytes).digest('hex');assert.equal(digest,'829521b67ed7be90c7d6d6098ff39f2241562d47e4ad7ccab13710924a56001d','pinned public Playwright launch source');const source=bytes.toString('utf8');
+ for(const text of ['childProcess = __toESM(require("child_process"))','childProcess.spawn(options.command, options.args || [], spawnOptions)','get: () => from[key]'])assert(source.includes(text),'public spawn property remains live');return {sha256:digest,livePublicSpawnGetter:true};
+};
+exports.assertPinnedPlaywright=directory=>exports.assertPlaywrightBundle(fs.readFileSync(path.join(path.dirname(require.resolve('playwright-core/package.json',{paths:[directory]})),'lib/coreBundle.js')));
+let spawnOriginal=null,spawnWrapper=null,armed=null;
+exports.installOwnedLaunchObservation=()=>{
+ if(spawnWrapper&&childProcess.spawn===spawnWrapper)return;
+ assert(!armed,'no overlapping owned launches');spawnOriginal=childProcess.spawn;
+ spawnWrapper=function(command,args,options){
+  const state=armed,snapshot=state&&command===state.executable?Array.from(args||[]):null;
+  const child=Reflect.apply(spawnOriginal,this,arguments);
+  if(state){state.calls++;if(state.observations.length<4)state.observations.push({pid:child.pid||null,commandMatches:command===state.executable,argc:snapshot?.length||0,argvSha256:snapshot?createHash('sha256').update(JSON.stringify(snapshot)).digest('hex'):null});try{
+   assert.equal(command,state.executable,'exact launch executable');assert.equal(state.calls,1,'one observed spawn only');
+   const identity=exports.validateLaunchArguments(snapshot,state.prepared);
+   const proc=exports.captureOwnedProc(child.pid);assert.equal(proc.uid,process.getuid(),'launch UID');assert(proc.stat,'launch stat readable');assert.equal(proc.stat.ppid,String(process.pid),'direct launch parent');
+   state.record={...identity,pid:child.pid,start:proc.stat.start,ppid:proc.stat.ppid,uid:proc.uid,executable:state.executable,observedAt:Date.now()};
+  }catch(e){state.errors.push({name:e.name,reason:'OWNED_SPAWN_IDENTITY_REFUSED'})}}
+  return child;
+ };childProcess.spawn=spawnWrapper;
+};
+exports.validateLaunchArguments=(args,prepared)=>{
+ assert(Array.isArray(args)&&args.length<=1024,'bounded original launch argv');assert(args.every(a=>typeof a==='string'&&a.length<=65536&&!a.includes('\0')),'bounded original arguments');
+ assert(!args.includes('--'),'no argument terminator ambiguity');
+ const exact=(name,value)=>{const found=args.filter(a=>a===name||a.startsWith(name+'='));assert.equal(found.length,1,'one original '+name);assert.equal(found[0],name+'='+value,'exact original '+name)};
+ exact('--user-data-dir',prepared.canonical);exact('--remote-debugging-port','0');exact('--remote-debugging-address','127.0.0.1');
+ assert(!args.some(a=>a==='--type'||a.startsWith('--type=')),'original browser main process');assert(args.filter(a=>a==='--remote-debugging-pipe').length<=1,'one optional owned Playwright pipe');
+ return {canonicalProfile:prepared.canonical,argvSha256:createHash('sha256').update(JSON.stringify(args)).digest('hex'),argc:args.length,debugPort:0,debugAddress:'127.0.0.1'};
+};
+exports.launchOwned=async({prepared,executablePath,out},launch)=>{
+ assert(!armed,'no overlapping owned launches');exports.installOwnedLaunchObservation();
+ const state={prepared,executable:fs.realpathSync(executablePath),calls:0,errors:[],observations:[],launchBeganAt:Date.now()};armed=state;let context,error;
+ try{context=await launch();assert.equal(state.calls,1,'exactly one observed owned spawn');assert.equal(state.errors.length,0,'owned spawn observation refused');assert(state.record,'owned spawn witness required')}
+ catch(e){error=e}
+ finally{armed=null;const intact=childProcess.spawn===spawnWrapper;if(intact)childProcess.spawn=spawnOriginal;else error=error||Error('spawn observer replaced during launch');if(out)fs.writeFileSync(out,JSON.stringify({phase:'original-owned-spawn',expectedExecutable:state.executable,canonicalProfile:prepared.canonical,calls:state.calls,observations:state.observations,record:state.record||null,errors:state.errors,restored:intact,status:error?'refused':'observed'},null,2))}
+ if(error){if(context?.close)await context.close();throw error}
+ const witness=Object.freeze({...state.record,launchBeganAt:state.launchBeganAt});launchRecords.set(witness,witness);return {context,witness};
+};
+exports.verifyLaunchIdentity=({launchWitness,knownOwnedBrowserPID,canonicalProfile},proc,io=fs)=>{
+ const w=io===fs?launchRecords.get(launchWitness):launchWitness;assert(w,'original observed launch witness required');assert.equal(w.pid,knownOwnedBrowserPID,'independent trusted PID equals observed launch PID');assert.equal(w.canonicalProfile,canonicalProfile,'original canonical profile');assert.equal(proc.uid,w.uid,'stable launch UID');assert.equal(proc.uid,process.getuid(),'exact browser UID');assert.equal(proc.exe,w.executable,'exact original executable');assert.equal(proc.stat?.start,w.start,'stable launch starttime');assert.equal(proc.stat?.ppid,w.ppid,'stable parent edge');assert.equal(w.ppid,String(process.pid),'direct owned parent');assert(!['Z','X'].includes(proc.stat?.state),'live owned browser');return w;
+};
 // Injectable filesystem is for browser-free fixtures only; connect always uses fs.
-exports.inspectOwnership=({profile,prepared,knownOwnedBrowserPID,lines,diagnostic},io=fs)=>{
+exports.inspectOwnership=({profile,prepared,knownOwnedBrowserPID,launchWitness,lines,diagnostic},io=fs)=>{
  const pid=knownOwnedBrowserPID;assert(Number.isSafeInteger(pid)&&pid>0,'trusted owned browser PID required');
- diagnostic.proc=exports.captureOwnedProc(pid,io);
+ diagnostic.proc=exports.captureOwnedProc(pid,io,prepared.canonical);
  const root='/proc/'+pid;Object.assign(diagnostic,{pid,pidPath:root,logicalProfile:profile,canonicalProfile:io.realpathSync(profile),port:Number(lines[0]),endpointPath:lines[1],expectedUID:process.getuid(),matchingFDs:[],inspectionErrors:[]});
- assert.equal(diagnostic.canonicalProfile,prepared.canonical,'profile canonical identity unchanged');
- const file=io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true});assert(!file.isSymbolicLink(),'port file not symlink');assert.equal(Number(file.uid),process.getuid(),'port file UID');assert.notEqual(fingerprint(file),prepared.previous,'fresh DevToolsActivePort required');diagnostic.portFileFingerprint=fingerprint(file);
+ diagnostic.launchWitness=launchWitness;const profileStat=io.statSync(diagnostic.canonicalProfile);diagnostic.profileUID=profileStat.uid;diagnostic.profileMode=profileStat.mode&0o777;
+ assert.equal(diagnostic.canonicalProfile,prepared.canonical,'profile canonical identity unchanged');assert.equal(profileStat.uid,process.getuid(),'private profile UID stable');assert.equal(profileStat.mode&0o077,0,'profile remains private');assert.equal(profileStat.dev,prepared.profileDev,'same profile device');assert.equal(profileStat.ino,prepared.profileIno,'same profile inode');assert(!io.lstatSync(profile).isSymbolicLink(),'profile leaf remains non-symlink');
+ exports.verifyLaunchIdentity({launchWitness,knownOwnedBrowserPID,canonicalProfile:diagnostic.canonicalProfile},diagnostic.proc,io);
+ const file=io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true});assert(!file.isSymbolicLink()&&file.isFile(),'regular port file not symlink');assert.equal(Number(file.nlink),1,'single-link port file');assert.equal(Number(file.uid),process.getuid(),'port file UID');assert(Number(file.mtimeNs)/1e6+1>=launchWitness.launchBeganAt,'port file from current launch');assert.notEqual(fingerprint(file),prepared.previous,'fresh DevToolsActivePort required');diagnostic.portFileFingerprint=fingerprint(file);
  const stat=()=>io.readFileSync(root+'/stat','utf8').split(') ')[1].split(' ')[19];diagnostic.start=stat();
- const args=io.readFileSync(root+'/cmdline','utf8').split('\0'),profileArgs=args.filter(a=>a.startsWith('--user-data-dir='));diagnostic.userDataArgs=profileArgs;diagnostic.uid=io.statSync(root).uid;
- assert.equal(diagnostic.uid,process.getuid(),'exact browser UID');assert(!args.some(a=>a.startsWith('--type=')),'browser main process only');assert.equal(profileArgs.length,1,'one browser profile argument');diagnostic.argumentCanonicalProfile=io.realpathSync(profileArgs[0].slice('--user-data-dir='.length));assert.equal(diagnostic.argumentCanonicalProfile,diagnostic.canonicalProfile,'exact canonical browser profile');
+ // /proc cmdline is only display-title evidence, never an original argv parser.
+ diagnostic.uid=diagnostic.proc.uid;diagnostic.argumentCanonicalProfile=launchWitness.canonicalProfile;
  const table=name=>io.readFileSync('/proc/net/'+name,'utf8').trim().split('\n').slice(1).map(l=>l.trim().split(/\s+/)).filter(c=>parseInt(c[1].split(':')[1],16)===Number(lines[0])&&c[3]==='0A');
  const listeners=table('tcp');diagnostic.listeners=listeners;diagnostic.ipv6Listeners=table('tcp6');assert.equal(listeners.length,1,'one owned IPv4 debugger listener');assert.equal(listeners[0][1].split(':')[0],'0100007F','debugger must bind 127.0.0.1 only');assert.equal(diagnostic.ipv6Listeners.length,0,'no IPv6 debugger exposure');assert.equal(Number(listeners[0][7]),process.getuid(),'listener exact UID');diagnostic.inode=listeners[0][9];assert(/^\d+$/.test(diagnostic.inode)&&diagnostic.inode!=='0','listener inode');
  let descriptors;try{descriptors=io.readdirSync(root+'/fd')}catch(e){diagnostic.inspectionErrors.push({path:root+'/fd',code:e.code,message:e.message});throw e}
  for(const fd of descriptors){const p=root+'/fd/'+fd;try{if(io.readlinkSync(p)==='socket:['+diagnostic.inode+']')diagnostic.matchingFDs.push(fd)}catch(e){diagnostic.inspectionErrors.push({path:p,code:e.code,message:e.message})}}
- assert(diagnostic.matchingFDs.length>0,'debugger listener must belong to exact trusted owned profile PID');assert.equal(stat(),diagnostic.start,'browser PID starttime stable');assert.equal(fingerprint(io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true})),diagnostic.portFileFingerprint,'port file stable during inspection');
+ assert(diagnostic.matchingFDs.length>0,'debugger listener must belong to exact trusted owned profile PID');assert.equal(stat(),diagnostic.start,'browser PID starttime stable');diagnostic.finalProc=exports.captureOwnedProc(pid,io);exports.verifyLaunchIdentity({launchWitness,knownOwnedBrowserPID,canonicalProfile:diagnostic.canonicalProfile},diagnostic.finalProc,io);assert.equal(fingerprint(io.lstatSync(path.join(profile,'DevToolsActivePort'),{bigint:true})),diagnostic.portFileFingerprint,'port file stable during inspection');
  return {pid,profile,canonicalProfile:diagnostic.canonicalProfile,start:diagnostic.start,address:'127.0.0.1',port:Number(lines[0]),inode:diagnostic.inode,matchingFDs:diagnostic.matchingFDs};
 };
-exports.connect=async({profile,prepared,knownOwnedBrowserPID,origin,workers,contextId,generationId,out,timeoutMs=8000})=>{
- const portFile=path.join(profile,'DevToolsActivePort'),diagnostic={phase:'preconnect-ownership',rawSocketOpened:false,logicalProfile:profile,knownOwnedBrowserPID};let lines,ownership;
+exports.connect=async({profile,prepared,knownOwnedBrowserPID,launchWitness,origin,workers,contextId,generationId,out,timeoutMs=8000})=>{
+ const portFile=path.join(profile,'DevToolsActivePort'),diagnostic={phase:'preconnect-ownership',rawSocketOpened:false,logicalProfile:profile,knownOwnedBrowserPID,launchWitness};let lines,ownership;
  try{
   diagnostic.proc=exports.captureOwnedProc(knownOwnedBrowserPID);
   for(let i=0;i<100;i++){try{lines=fs.readFileSync(portFile,'utf8').trim().split('\n');break}catch(e){if(e.code!=='ENOENT')throw e;await sleep(20)}}
   assert(lines&&lines.length===2&&/^\d+$/.test(lines[0])&&Number(lines[0])>0&&Number(lines[0])<=65535&&/^\/devtools\/browser\/[a-zA-Z0-9-]+$/.test(lines[1]),'owned DevToolsActivePort');
-  ownership=exports.inspectOwnership({profile,prepared,knownOwnedBrowserPID,lines,diagnostic});diagnostic.status='verified';
+  ownership=exports.inspectOwnership({profile,prepared,knownOwnedBrowserPID,launchWitness,lines,diagnostic});diagnostic.status='verified';
  }catch(e){diagnostic.status='refused';diagnostic.error={message:e.message,code:e.code};throw e}
  finally{fs.writeFileSync(out+'.ownership.json',JSON.stringify(diagnostic,null,2))}
  const socket=new WebSocket('ws://127.0.0.1:'+lines[0]+lines[1]);await new Promise((r,j)=>{const timer=setTimeout(()=>{socket.close();j(Error('owned CDP connection timeout'))},3000);socket.addEventListener('open',()=>{clearTimeout(timer);r()},{once:true});socket.addEventListener('error',e=>{clearTimeout(timer);j(e)},{once:true})});

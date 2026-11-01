@@ -1,5 +1,6 @@
 /* Focused source-bound browser proof; never labelled native. Forum admission only. */
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const raw=require('./raw-cdp.cjs');raw.installOwnedLaunchObservation();raw.assertPinnedPlaywright(process.env.PLAYWRIGHT_DIR);
 const {chromium}=require(process.env.PLAYWRIGHT_DIR);
 const extraModule=require('./extra.cjs');
 const contracts=require('./contracts.cjs');
@@ -28,13 +29,13 @@ async function cacheProof(owned,contextId){
 }
 async function closeContext(){const owned=context,observer=assetObserver;assetObserver=null;context=null;try{if(observer)await observer.drain()}finally{if(rawObserver){await rawObserver.close();rawObserver=null}if(owned&&lifetimes.has(owned))lifetimes.get(owned).active=false;checkpoint('context-close');if(owned)await owned.close();checkpoint('context-closed')}}
 for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>Promise.resolve(context?.close()).finally(()=>process.exit(143)));
-async function open(offline=false,bootFault=null){const raw=require('./raw-cdp.cjs'),prepared=raw.prepareProfile(profile);context=await chromium.launchPersistentContext(profile,{executablePath:process.env.QA_CHROME,headless:true,viewport:{width:WIDTH,height:900},isMobile:WIDTH<600,hasTouch:WIDTH<600,serviceWorkers:'allow',args:['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--disable-background-networking','--ignore-certificate-errors-spki-list='+M.fixture_tls.leaf_spki_sha256]});
+async function open(offline=false,bootFault=null){const prepared=raw.prepareProfile(profile);const launched=await raw.launchOwned({prepared,executablePath:process.env.QA_CHROME,out:path.join(OUT,'original-launch-'+(contextSequence+1)+'.json')},()=>chromium.launchPersistentContext(prepared.canonical,{executablePath:fs.realpathSync(process.env.QA_CHROME),headless:true,viewport:{width:WIDTH,height:900},isMobile:WIDTH<600,hasTouch:WIDTH<600,serviceWorkers:'allow',args:['--remote-debugging-port=0','--remote-debugging-address=127.0.0.1','--disable-background-networking','--ignore-certificate-errors-spki-list='+M.fixture_tls.leaf_spki_sha256]}));context=launched.context;const launchWitness=launched.witness;
  await context.addInitScript(extraModule.observe,{bootFault});
  const owned=context,contextId='context-'+(++contextSequence),origin=new URL(URL0).origin;
  const p=await context.newPage();p.setDefaultTimeout(15000);p.setDefaultNavigationTimeout(20000);
  if(!generation){await p.goto(new URL('/__fixture__/blank',URL0).href);const initial=await p.evaluate(byteEvidence.snapshot);assert.equal(initial.names.length,0,'fresh profile starts with no cache');assert.equal(initial.registrations.length,0,'fresh profile starts with no workers');assert.equal(initial.controller,null);generation={id:require('node:crypto').randomUUID(),origin,initialEmpty:true,initial,manifest:process.env.QA_MANIFEST_SHA,profile};fs.writeFileSync(path.join(OUT,'initial-empty-cache.json'),JSON.stringify(generation,null,2))}
  if(contextSequence>1)await p.goto(new URL('/__fixture__/blank',URL0).href);
- const knownOwnedBrowserPID=await raw.ownedBrowserPID(owned,path.join(OUT,'trusted-browser-'+contextId+'.json'));rawObserver=await raw.connect({profile,prepared,knownOwnedBrowserPID,origin,workers:M.bytePolicy.workers,contextId,generationId:generation.id,out:path.join(OUT,'raw-cdp-'+contextId+'.json')});
+ const knownOwnedBrowserPID=await raw.ownedBrowserPID(owned,path.join(OUT,'trusted-browser-'+contextId+'.json'));rawObserver=await raw.connect({profile,prepared,knownOwnedBrowserPID,launchWitness,origin,workers:M.bytePolicy.workers,contextId,generationId:generation.id,out:path.join(OUT,'raw-cdp-'+contextId+'.json')});
  lifetimes.set(owned,{active:true,generation});assetObserver=contracts.observeAssets({context:owned,origin,members:M.members,served:servedAssets,records:assetResponses,failures:assetFailures,contextId,generationId:generation.id,readProof:()=>cacheProof(owned,contextId),independentCompletion:(row,member)=>rawObserver.completion(row,member),readWrites:async()=>{const r=await owned.request.get(new URL('/__fixture__/receipt',URL0).href,{timeout:5000});return (await r.json()).assetWrites},checkpoint:(phase,details)=>checkpoint(contextId+':'+phase,details)});
  if(offline)await context.setOffline(true);return p;}
 const extras=extraModule.make({fs,path,assert,OUT,result,URL0,WIDTH,open,closeContext,frame,chapter,cacheReady,quiet,getContext:()=>context});

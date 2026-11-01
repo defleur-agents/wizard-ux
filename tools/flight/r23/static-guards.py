@@ -8,7 +8,7 @@ def check(name,ok):
  assert ok,name
  checks[name]=True
 check('source-report-writer-reader-agree',"path.join(OUT,'report.json')" in driver and "out/'report.json'" in runner)
-check('explicit-matching-chrome',"executablePath:process.env.QA_CHROME" in driver)
+check('explicit-matching-chrome',"executablePath:fs.realpathSync(process.env.QA_CHROME)" in driver)
 check('strict-actual-completion-observed',all(s in extra for s in ["actual:tx.durability","tx.addEventListener(event","actual==='strict'","completion==='complete'"]))
 check('wisdom-only-journal-opt-in',"id !== 'wisdom' || !mode" in host and "prefix:'wisdom-'" in host)
 check('same-existing-replica',"prefix+'offline-v1'" in kit and "indexedDB.open('wisdom-offline-v1',1)" in extra)
@@ -45,6 +45,10 @@ check('sealed-observer-before-owned-close',all(x in contracts for x in ["accepti
 check('remaining-fresh-and-historical-separate',all(x in runner for x in ['--remaining-only','priorActualPasses','historicalPassesAreFresh=False',"report['currentCaseAcceptance'] and not (A.remaining_only or A.isolation_only)"]))
 raw=(qa/'raw-cdp.cjs').read_text()
 check('raw-cdp-independent-no-private-playwright-or-pause',all(s in raw for s in ['Network.loadingFinished','Network.getResponseBody','raw.contextId,row.contextId','raw.generationId,row.generationId','exact response write ID','exact source bytes','RAW-UNFINISHED','socket.close()','active=false;save()']) and not any(s in raw for s in ['_connection','_channel','Fetch.enable','Debugger.pause','waitForDebuggerOnStart']))
-check('raw-cdp-exact-owned-loopback-pid',all(s in raw for s in ['DevToolsActivePort','0100007F','no IPv6 debugger exposure','--user-data-dir=','socket:[','ownedBrowserContext','workerBindings','claimed.has']))
+check('raw-cdp-exact-owned-loopback-pid',all(s in raw for s in ['DevToolsActivePort','0100007F','no IPv6 debugger exposure','--user-data-dir','socket:[','ownedBrowserContext','workerBindings','claimed.has']))
 check('isolation-short-parent-packet',all(s in runner for s in ['--isolation-only',"390,60,probe='cdp'",'210 if A.isolation_only else 830','priorActualPasses']) and 70+60+next(c[3] for c in cases if c[0]=='isolation')<210)
+rawprobe=(qa/'raw-cdp-probe.cjs').read_text()
+check('original-spawn-provenance-not-mutable-proctitle',all(s in raw for s in ['Reflect.apply(spawnOriginal,this,arguments)','launchRecords.get(launchWitness)','independent trusted PID equals observed launch PID','same profile inode','same profile device','stable launch starttime','exact original executable','direct owned parent','original canonical profile','public spawn property remains live']) and "filter(a=>a.startsWith('--user-data-dir='))" not in raw)
+check('both-owned-launchers-before-public-playwright-require',all(s.index('raw.installOwnedLaunchObservation()')<s.index('require(process.env.PLAYWRIGHT_DIR)') and 'raw.assertPinnedPlaywright(process.env.PLAYWRIGHT_DIR)' in s and 'raw.launchOwned(' in s and 'raw.connect({profile,prepared,knownOwnedBrowserPID,launchWitness,origin,' in s for s in [driver,rawprobe]))
+check('real-kernel-title-mutation-regression',all(s in (qa/'ownership.test.cjs').read_text() for s in ['process.title=base','real kernel cmdline flattened to one string','old guard really rejects this title','forged witness rejected','never overwrite a foreign stacked wrapper']))
 print(json.dumps({'status':'static-only-pass','checks':len(checks),'cases':len(cases),'budgetSeconds':sum(c[3] for c in cases),'browsersStarted':0,'fixturesStarted':0}))
