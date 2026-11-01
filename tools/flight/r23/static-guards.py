@@ -18,7 +18,7 @@ check('highlight-specific-retry-and-ack',all(s in driver for s in ["ids.length>=
 check('trusted-stage-edge-input',all(s in driver for s in [".wb-stage",".tap({position:","e.isTrusted","e.type==='touchstart'","trusted right edge advances exactly one actual page"]) and 'dispatchEvent(' not in driver.split('const hit=await stage.evaluate',1)[1].split('const chosen=',1)[0])
 check('skin-two-live-same-document',all(s in extra for s in ["['obsidian','obsidian-light','obsidian']","__qaDocumentId","WosSkin.set(s)","--wz-base","--wz-text","naturalWidth"]))
 check('decoded-opaque-panel-raster',all(s in extra for s in ['pixels.compare(loud,empty)','probe.differingBytes>0','raster.equal']))
-check('sibling-actual-worker',"navigator.serviceWorker.register('/sibling-pin/sw.js'" in extra and 'siblingWorkerPreserved' in driver)
+check('sibling-actual-worker',"navigator.serviceWorker.register('/sibling-pin/sw.js'" in extra and 'siblingWorkerPreserved' in extra and 'extras.checkSibling(p)' in driver)
 check('bounded-boots-and-previous-snapshot',all(s in extra for s in ['failed host hydration/strict mode must not hang','previousPresentationUnchanged:true','priorSnapshotReadable:true']))
 check('no-browser-in-verify-branch',runner.index('if A.verify_only:')<runner.index('def case(') and "browsersStarted':0" in runner)
 mod=ast.parse(runner);assignment=next(n for n in mod.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='CASES' for t in n.targets));cases=ast.literal_eval(assignment.value)
