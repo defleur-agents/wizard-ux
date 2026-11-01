@@ -466,7 +466,7 @@
     if (it.steerRunId) {
       if (it.steerDispatch === 'started') { it.state = 'unconfirmed'; it.error = unconfirmed; await put(it); return; }
       if (!it.steerBody) {
-        it.steerBody = JSON.stringify({ input, model: it.model, provider: it.provider, require_model_lock: true,
+        it.steerBody = JSON.stringify({ input, model: it.model, provider: it.provider, selection_version: it.selection_version, require_model_lock: true,
           ...(it.agent ? { agent: it.agent } : {}), ...(fileIds.length ? { wizard_file_ids: fileIds } : {}) });
         it.steerTarget = it.steerRunId;
       }
@@ -531,7 +531,7 @@
       const body = { session_id: it.sessionId, input, ...(it.retryRunId ? { wizard_retry_run_id: it.retryRunId } : {}) };
       if (it.instructions) body.instructions = String(it.instructions).slice(0, 2000);
       if (fileIds.length) body.wizard_file_ids = fileIds;
-      Object.assign(body, { model: it.model, provider: it.provider, require_model_lock: true });
+      Object.assign(body, { model: it.model, provider: it.provider, selection_version: it.selection_version, require_model_lock: true });
       if (it.agent) body.agent = it.agent;
       it.body = JSON.stringify(body); await put(it);
     }
@@ -612,7 +612,7 @@
       kind: o.kind === 'conversation' ? 'conversation' : o.kind === 'reply' ? 'reply' : 'new', conversation: o.conversation || null, sessionId: o.kind === 'conversation' ? '' : o.sessionId || newSessionId(), steerRunId: o.meetingEventId ? '' : o.steerRunId || '',
       text: String(o.text || '').trim(), typed: o.audio && !String(o.text || '').trim() ? String(o.typed || '').trim() : '', instructions: o.instructions || '', files: (o.files || []).map(f => ({ ...f })),
       retryRunId: typeof o.retryRunId === 'string' ? o.retryRunId : '',
-      audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '',
+      audio: o.audio || null, audioType: o.audio?.type || '', model: o.model || '', provider: o.provider || '', selection_version: o.selection_version,
       pendingBlobs: keepPending(o.files), sealKey: o.sealKey || '', nativeId: o.nativeId || '', agent: o.agent || '', wid: o.wid || '', how: o.how || '', intent: o.intent || 'message', deliveryRequested: false, source: o.source || 'chat', title: String(o.text || o.typed || '').slice(0, 60), durable: false,
       // A Notifications Reply: the item, framed after his words only in the message that is delivered (deliver()).
       ...(replyOf(o) ? { reply: replyOf(o) } : {}) };
@@ -763,7 +763,7 @@
       const M = window.WosModels, AG = window.WosAgents;
       const agent0 = o.kind === 'reply' ? (o.agent || window.WizLive?.agentOf?.(o.sessionId) || '') : String(o.agent || '');
       const agent = agent0 && AG?.isOther(agent0) ? agent0 : '';
-      let snapshot = o.model ? { model: o.model, provider: o.provider || '' } : null, routeError;
+      let snapshot = o.model ? { model: o.model, provider: o.provider || '', selection_version: o.selection_version } : null, routeError;
       try { if (!snapshot && o.nativeId) throw new Error('Saved recording model route unavailable · original kept'); snapshot = M?.snapshot(o.kind === 'reply' ? o.sessionId : '', snapshot, agent) || snapshot; }
       catch (e) { routeError = e; }
       await load();
@@ -790,7 +790,7 @@
       try {
         if (routeError) throw routeError;
         if (!M) throw new Error('Model selector unavailable · reload Wizard before sending');
-        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
+        const route = await bounded(() => M.resolveRoute(held && it.model ? { model: it.model, provider: it.provider, selection_version: it.selection_version, ...(it.agent ? { agent: it.agent } : {}) } : snapshot), 15000);
         if (it.model && (route.model !== it.model || (it.provider && route.provider !== it.provider))) throw new Error('Selected route changed · original message kept');
         if (it.cancelled || it.cancelRequested) throw new StopRequested(); // Stop tapped while the route was resolving
         Object.assign(it, route, { state: 'queued' });
