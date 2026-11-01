@@ -26,7 +26,7 @@ test('equal score prefers newer activity, exact ties preserve input order', () =
 });
 test('named bonuses and extra DISTINCT title words', () => {
   assert.equal(B.titleWordPrefix, 36 * HOUR); assert.equal(B.titleContains, 18 * HOUR);
-  assert.equal(B.previewContains, 6 * HOUR); assert.equal(B.extraTitleWord, 6 * HOUR);
+  assert.equal(B.previewContains, 6 * HOUR); assert.equal(B.extraTitleWord, 6 * HOUR); assert.equal(B.bodyOnly, 0);
   const all = row('both', 'Messenger project', 5), partial = row('one', 'Messenger', 0);
   assert.deepEqual(sorted([partial, all], 'messenger project'), ['both', 'one']);
   assert.deepEqual(sorted([row('old', 'messenger', 40), row('new')], 'messenger messenger'), ['new', 'old']);

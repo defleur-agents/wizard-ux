@@ -119,7 +119,7 @@
   }
   // Match quality is a small time bonus, never a separate bucket: a week-old title cannot bury today's body hit.
   const HOUR = 60 * 60 * 1000;
-  const SEARCH_TIME_BONUS = Object.freeze({ titleWordPrefix: 36 * HOUR, titleContains: 18 * HOUR, previewContains: 6 * HOUR, extraTitleWord: 6 * HOUR });
+  const SEARCH_TIME_BONUS = Object.freeze({ titleWordPrefix: 36 * HOUR, titleContains: 18 * HOUR, previewContains: 6 * HOUR, bodyOnly: 0, extraTitleWord: 6 * HOUR });
   function rank(rows, query, cardAt) {
     const ws = [...new Set(words(query))], q = ws.join(' ');
     return rows.map((row, index) => {
@@ -128,7 +128,7 @@
       const titleWords = title.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
       const matched = ws.filter(w => title.includes(w)).length;
       const bonus = !ws.length ? 0 : (ws.every(w => titleWords.some(t => t.startsWith(w))) ? SEARCH_TIME_BONUS.titleWordPrefix
-        : title.includes(q) ? SEARCH_TIME_BONUS.titleContains : preview.includes(q) ? SEARCH_TIME_BONUS.previewContains : 0)
+        : title.includes(q) ? SEARCH_TIME_BONUS.titleContains : preview.includes(q) ? SEARCH_TIME_BONUS.previewContains : SEARCH_TIME_BONUS.bodyOnly)
         + Math.max(0, matched - 1) * SEARCH_TIME_BONUS.extraTitleWord;
       // Use live.js's exact newestFirst clock, including its special request clock for active/error rows.
       const parsed = Date.parse(cardAt(row)), at = Number.isFinite(parsed) ? parsed : 0;

@@ -1097,7 +1097,7 @@ window.WizCore.chats = function createChats(H) {
     const ranked = n ? BS.rank(hit, n, LIVE.cardAt) : [];
     // Reuse groupWork's classification (including automatic Archive and snooze), not a second status policy.
     const searchLabels = { errors: 'Error', working: 'Working', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
-    const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, searchLabels[k]])) : []);
+    const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, k !== 'archive' && deferredOf(s) && !isWorking(s) ? 'Snoozed' : searchLabels[k]])) : []);
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
