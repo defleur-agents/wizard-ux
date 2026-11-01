@@ -215,7 +215,7 @@ async function archiveRouteChecks(b, desktop) {
         ok(await p.locator(`${root} .ch-sec-h`).count() === 0, `${label}: search is flat with no section headers`, s);
         ok(await p.locator(`${root} .ch-search-status`).count() === s.rows.length, `${label}: every result carries a status chip`, s);
         ok(s.order.every(e => s.footer >= e.bottom - 1), `${label}: completed body-search footer is below every result`, s);
-        ok(s.rows[0] === live && s.rows[1] === old, `${label}: recency sorts live and archived in one list`, s.rows);
+        ok(s.rows[0] === live && s.rows[1] === old, `${label}: equal-relevance results use gentle recency across live and archived`, s.rows);
         ok(await p.evaluate(() => localStorage.getItem('wos.chats.sections.v1')) === before, `${label}: flat search never writes saved section state`);
         await p.fill(search, '');
         ok(await p.locator(`${root} .ch-sec-last`).count() === 0, `${label}: non-search layout has no search-order override`);

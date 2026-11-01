@@ -1076,7 +1076,7 @@ window.WizCore.chats = function createChats(H) {
     // Subscribe before the empty-list branch: notifications can be the only Ready rows.
     const listNotes = !n && !F && !AGID && focus?.kind !== 'space' ? notes() : null;
     const listNotesN = listNotes ? listNotes.awake.length + listNotes.later.length : 0;
-    const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
+    const titleHit = n ? all.filter(s => window.WizCore.chatSearch.relevance(s, n).coverage) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
     // Search is scoped to this window's agent, including routed agents and indexed body-only rows.
     const BS = window.WizCore.chatSearch, queryAt = c.q, searchNav = c.readNav;
@@ -1093,8 +1093,8 @@ window.WizCore.chats = function createChats(H) {
     // decide which rows are eligible first.
     const split = n ? { pinned: [], rest: hit } : PIN.partition(hit, s => !s.archived && !(snoozeLast() && deferredOf(s))), pinnedRows = split.pinned;
     const groups = LIVE.workGroups(split.rest);
-    // SEARCH_TIME_BONUS (chat-search.js): title prefix +36h, contains +18h, preview +6h, extra title word +6h.
-    const ranked = n ? BS.rank(hit, n, LIVE.cardAt) : [];
+    // SEARCH_RELEVANCE (chat-search.js): coverage → relevance × bounded recency; Archive/pins are neutral.
+    const ranked = n ? BS.rank(hit, n, LIVE.cardAt, snips) : [];
     // Reuse groupWork's classification (including automatic Archive and snooze), not a second status policy.
     const searchLabels = { errors: 'Error', working: 'Working', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
     const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, k !== 'archive' && deferredOf(s) && !isWorking(s) ? 'Snoozed' : searchLabels[k]])) : []);

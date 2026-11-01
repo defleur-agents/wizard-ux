@@ -1,4 +1,4 @@
-// Flat recency-first search on both shells, main + routed host-profile agent. Synthetic only; all writes blocked.
+// Flat relevance-aware search on both shells, main + routed host-profile agent. Synthetic only; all writes blocked.
 const fs = require('fs'), path = require('path'), os = require('os');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
@@ -72,10 +72,10 @@ const rowsFor = agent => [
           ok(bodyRequests.includes(agent), `${shell}/${agent}: body search uses the requested agent route`, bodyRequests);
           ok(await page.locator(`${root} .ch-row-wrap.pinned [data-chopen="qa_${agent}_old"]`).count() === 1, `${shell}/${agent}: the oldest fixture really is pinned`);
           ok(s.headers === 0, `${shell}/${agent}: no search section headers`, s.headers);
-          const expected = ['working', 'preview', 'body', 'snoozed', 'error', 'old'].map(k => `qa_${agent}_${k}`);
-          ok(JSON.stringify(s.ids) === JSON.stringify(expected), `${shell}/${agent}: exact recency-plus-bonus rank, pins receive no boost`, s.ids);
+          const expected = ['working', 'snoozed', 'error', 'old', 'preview', 'body'].map(k => `qa_${agent}_${k}`);
+          ok(JSON.stringify(s.ids) === JSON.stringify(expected), `${shell}/${agent}: exact relevance rank, incidental body mention last; pins receive no boost`, s.ids);
           ok(s.tags.length === 6 && s.tags.every(t => ['Working','Ready','Archive','Error','Snoozed'].includes(t)) && s.tags.includes('Archive') && s.tags.includes('Snoozed') && s.tags.includes('Error'), `${shell}/${agent}: every row has its status chip`, s.tags);
-          ok(s.ids.includes(`qa_${agent}_body`) && s.ids.indexOf(`qa_${agent}_body`) < s.ids.indexOf(`qa_${agent}_old`), `${shell}/${agent}: recent archived body hit beats week-old live title-prefix`, s.ids);
+          ok(s.ids.includes(`qa_${agent}_body`) && s.ids.indexOf(`qa_${agent}_body`) > s.ids.indexOf(`qa_${agent}_old`), `${shell}/${agent}: week-old title beats recent incidental archived body hit`, s.ids);
           ok(s.bounds.length > 0 && s.bounds.every((b,i) => b.width > 0 && (!i || b.top >= s.bounds[i-1].bottom - 1)) && s.footer >= Math.max(...s.bounds.map(b => b.bottom)) - 1, `${shell}/${agent}: no overlap, completed footer below rows`, s);
           if (agent === 'hermes') {
             for (const skin of shell === 'phone' ? ['nebula','grove','obsidian','landscapes'] : ['nebula','grove']) {
@@ -85,7 +85,7 @@ const rowsFor = agent => [
               await sleep(900);
               s = await get();
               ok(s.headers === 0 && s.ids.length === 6 && s.footer >= Math.max(...s.bounds.map(b => b.bottom)) - 1, `${shell}/${skin}: flat flow and footer after live skin switch`, s);
-              await page.screenshot({ path: path.join(OUT, `search-flat-${shell}-${skin}.png`) });
+              await page.screenshot({ path: path.join(OUT, `search-rank2-${shell}-${skin}.png`) });
             }
           }
           await page.fill(`${root} [data-chsearch]`, ''); await sleep(400);

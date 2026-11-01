@@ -87,6 +87,15 @@ test('search ignores saved section collapse without mutating it; clearing restor
   assert.match(a.render('match'), /data-chopen="archive"/);
   assert.equal(a.writes.length, 1);
 });
+test('actual renderer ranks all query words across title/preview above newer partial matches', () => {
+  const f = listFixture({ query: 'cloud usage', inputRows: [
+    { id: 'partial', title: 'Cloud', activityAt: '2026-11-01T00:00:00Z', section: 'working' },
+    { id: 'all', title: 'Usage audit', preview: 'cloud costs', activityAt: '2026-10-01T00:00:00Z', section: 'archive' },
+  ], pinned: ['partial'] });
+  const html = f.render();
+  assert.deepEqual([...html.matchAll(/data-chopen="([^"]+)"/g)].map(m => m[1]), ['all', 'partial']);
+  assert.match(html, /ch-search-status">Archive/); assert.doesNotMatch(html, /ch-sec-h/);
+});
 test('actual renderer keeps active search progress before sections in document order', () => {
   const html = listFixture({ query: 'match', busy: true }).render();
   assert.ok(html.indexOf('data-chbs="busy"') < html.indexOf('ch-search-results'));
