@@ -61,6 +61,12 @@ class H(server.Handler):
   path=unquote(urlsplit(self.path).path)
   self.reads.append({'path':path})
   if path=='/__fixture__/blank':return self.send(200,b'<!doctype html><title>Empty profile byte observer</title>','text/html')
+  if path=='/__cdp__/sw.js':
+   return self.send(200,b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('message',e=>e.waitUntil(fetch('/__cdp__/asset?'+e.data).then(r=>r.arrayBuffer()).catch(()=>{})));",'application/javascript')
+  if path=='/__cdp__/asset':
+   if urlsplit(self.path).query=='neverfinish':
+    self.send_response(200);self.send_header('Content-Type','application/javascript');self.send_header('Content-Length','19');self.send_header('X-QA-Write-Id','probe-neverfinish');self.end_headers();self.wfile.write(b'act');self.wfile.flush();time.sleep(8);return
+   return self.send(200,b'actual source bytes','application/javascript',{'X-QA-Write-Id':'probe-good'})
   if path=='/__observer__/':return self.send(200,b'<!doctype html><title>Synthetic observer negative</title>','text/html')
   if path=='/wisdom/__observer__.js':
    mode=urlsplit(self.path).query

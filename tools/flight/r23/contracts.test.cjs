@@ -1,6 +1,7 @@
 'use strict';
 // Browser-free seam regressions; not acceptance output.
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),{EventEmitter}=require('node:events'),{createHash}=require('node:crypto');
+require('./raw-cdp.test.cjs');
 const C=require('./contracts.cjs'),R=path.resolve(process.argv[2]||process.env.QA_REGRESSION_ROOT||'.');
 const hash=b=>createHash('sha256').update(b).digest('hex'),bytes=Buffer.from('actual source bytes');
 const B=require('./byte-evidence.cjs'),origin='https://localhost',url=origin+'/wisdom/app.js',member={bytes:bytes.length,sha256:hash(bytes)},policy={prefixes:['wisdom-shell-'],allowed:['wisdom-shell-current'],workers:[{scope:'/wisdom/',script:'/wisdom/sw.js'}],required:[{url,cache:'wisdom-shell-current'}]},generation={id:'mock',origin,initialEmpty:true};

@@ -11,7 +11,7 @@ exports.assertFallback=x=>{
  assert(x.fonts.some(f=>f.status==='loaded'&&f.family.includes('WB Text')),'real reader font loaded');
  assert(x.art.length&&x.art.every(im=>im.complete&&im.width>0),'standalone real art decoded');
 };
-exports.observeAssets=({context,origin,members,served,records,failures,contextId='mock',generationId='mock',readProof,readWrites,checkpoint=()=>{},closureMs=10000})=>{
+exports.observeAssets=({context,origin,members,served,records,failures,contextId='mock',generationId='mock',readProof,readWrites,independentCompletion,checkpoint=()=>{},closureMs=10000})=>{
  const evidence=require('./byte-evidence.cjs'),tasks=new Set(),pending=[],inflight=new Set(),admitted=new Set(),workerClosures=[];let accepting=true,sealed=false,drainPromise;
  // Cancellation terminates observer continuations, NOT the browser's requests.
  // Every captured inspect settles before owned.close(); late protocol rejections
@@ -32,7 +32,17 @@ exports.observeAssets=({context,origin,members,served,records,failures,contextId
   const documentUrl=()=>{try{return request.frame?.()?.url()||null}catch{return null}};row.documentAtResponse=documentUrl();row.navigationRequest=request.isNavigationRequest?.()||false;
   try{
    row.stage='headers';row.requestHeaders=await guard(request.allHeaders());row.responseHeaders=await guard(r.allHeaders());
-   row.stage='finished';const finished=await guard(r.finished());row.timing=request.timing();assert(!finished,'asset request did not complete: '+String(finished));row.completedAt=Date.now();
+   row.stage='finished';let finished;
+   const pwFinished=guard(r.finished());
+   if(independentCompletion&&row.worker&&row.method==='GET'&&row.status===200){
+    const outcome=await guard(Promise.race([pwFinished.then(value=>({value})),new Promise(resolve=>setTimeout(()=>resolve({unobservable:true}),100))]));
+    if(outcome.unobservable){
+     row.playwrightFinished='UNOBSERVABLE-pending';row.stage='independent-cdp-completion';
+     row.independentCompletion=await guard(independentCompletion(row,members[rel]));
+     row.completedAt=row.independentCompletion.loadingFinished.at;row.completionSource='raw-cdp-loadingFinished+decoded-body-sha256';row.networkBody='UNOBSERVABLE-PW-finished-and-body';row.timing=request.timing();inflight.delete(request);pending.push(row);return;
+    }finished=outcome.value;
+   }else finished=await pwFinished;
+   row.timing=request.timing();assert(!finished,'asset request did not complete: '+String(finished));row.completedAt=Date.now();
    if(row.method==='HEAD'){
     assert.equal(row.status,200,'HEAD success');assert.equal(Number(row.responseHeaders['content-length']),members[rel].bytes,'HEAD expected file length');assert(row.responseHeaders['content-type'],'HEAD MIME header');row.provenance='headers-only-no-body-by-HTTP-contract';return;
    }

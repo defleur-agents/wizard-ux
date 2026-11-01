@@ -3,13 +3,18 @@
 import argparse,base64,hashlib,json,os,selectors,shutil,signal,subprocess,sys,time,traceback
 from pathlib import Path
 R=Path(__file__).resolve().parent
-P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--verify-only',action='store_true');P.add_argument('--remaining-only',action='store_true');A=P.parse_args()
+P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--verify-only',action='store_true');P.add_argument('--remaining-only',action='store_true');P.add_argument('--isolation-only',action='store_true');A=P.parse_args();assert not(A.remaining_only and A.isolation_only)
 sha=lambda p:hashlib.file_digest(open(p,'rb'),'sha256').hexdigest()
 assert sha(R/'source-manifest.json')==A.manifest_sha,'manifest drift'
 M=json.loads((R/'source-manifest.json').read_text());NODE=M['tools']['node'];PW=M['tools']['playwright'];CHROME=M['tools']['chrome']
 CASES=[('functional-mobile','functional',390,145),('functional-desktop','functional',1440,145),('presentation-mobile','presentation',390,65),('presentation-desktop','presentation',1440,65),('strict-quota','strict-quota',390,45),('strict-unsupported','strict-unsupported',390,45),('boot-read-fail','boot-read-fail',390,55),('boot-strict-unsupported','boot-strict-unsupported',390,55),('boot-open-unsupported','boot-open-unsupported',390,45),('isolation','isolation',390,55)]
 assert len(CASES)==10 and len({c[0] for c in CASES})==10
-SELECTED=[c for c in CASES if not A.remaining_only or c[0] in ('presentation-mobile','presentation-desktop','isolation')]
+SELECTED=[c for c in CASES if (c[0]=='isolation' if A.isolation_only else not A.remaining_only or c[0] in ('presentation-mobile','presentation-desktop','isolation'))]
+if A.isolation_only:
+ binding=M['r29SourceEquivalence'];assert binding['productBytesUnchanged'] and binding['priorActualPasses']==9
+ assert set(binding['priorPassReports'])=={c[0] for c in CASES}-{c[0] for c in SELECTED}
+ for row in binding['priorPassReports'].values():
+  old=json.loads((R/row['file']).read_text());assert sha(R/row['file'])==row['sha256'] and old['status']=='pass' and old['sourceManifest']==row['sourceManifest']
 if A.remaining_only:
  binding=M['r28SourceEquivalence'];assert binding['productBytesUnchanged'] and binding['priorActualPasses']==7
  assert set(binding['priorPassReports'])=={c[0] for c in CASES}-{c[0] for c in SELECTED}
@@ -42,7 +47,7 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','raw-cdp-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
  regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
  # Recompute policy from frozen source, never trust a served manifest/cache list.
  import runpy
@@ -59,8 +64,8 @@ OUT=R/'evidence';assert not OUT.exists(),'one-use immutable stage; preserve prev
 TMP=Path('/srv/work/wr24-'+A.manifest_sha[:12]);assert not TMP.exists(),'fresh short owned TMPDIR required';TMP.mkdir(mode=0o700)
 ENV.update(TMPDIR=str(TMP),QA_R23_OWNED_ROOT=str(OUT))
 report={'status':'incomplete','manifest_sha256':A.manifest_sha,'sources':M['sources'],'preflight':preflight,'cases':{},'historical':M['historical'],'releaseAllowed':False,'nativeAcceptance':False,'liveParityAcceptance':False,'visualReview':'PARENT_MUST_INSPECT_REAL_PNGS','freshBrowserAcceptance':False}
-report.update(scope='remaining-three-only' if A.remaining_only else 'all-ten',currentCaseAcceptance=False,freshRemainingBrowserAcceptance=False,historicalBrowserPasses=M.get('r28SourceEquivalence',{}).get('priorPassReports',{}),historicalPassesAreFresh=False)
-fixture=child=None;overall=time.monotonic()+830
+report.update(scope='isolation-only' if A.isolation_only else 'remaining-three-only' if A.remaining_only else 'all-ten',currentCaseAcceptance=False,freshRemainingBrowserAcceptance=False,historicalBrowserPasses=M.get('r29SourceEquivalence' if A.isolation_only else 'r28SourceEquivalence',{}).get('priorPassReports',{}),historicalPassesAreFresh=False)
+fixture=child=None;overall=time.monotonic()+(210 if A.isolation_only else 830)
 
 def save():(OUT/'acceptance.json').write_text(json.dumps(report,indent=2)+'\n')
 def stop(p):
@@ -100,11 +105,11 @@ def cleanup():
  remains=processes();return {'selectedPids':list(selected),'remainingPids':list(remains),'verified':not remains}
 def interrupted(*_):raise KeyboardInterrupt('parent-admitted browser packet terminated')
 signal.signal(signal.SIGTERM,interrupted);signal.signal(signal.SIGINT,interrupted)
-def case(identity,phase,width,cap,probe=False):
+def case(identity,phase,width,cap,probe: bool | str=False):
  global fixture,child
  out=OUT/identity;out.mkdir();deadline=min(overall,time.monotonic()+cap)
  row={'status':'incomplete','phase':phase,'width':width,'capSeconds':cap}
- if probe:report['observerProbe']=row
+ if probe:report['rawCDPProbe' if probe=='cdp' else 'observerProbe']=row
  else:report['cases'][identity]=row
  save()
  with (out/'fixture.log').open('w') as fl,(out/'browser.log').open('w') as bl:
@@ -113,9 +118,12 @@ def case(identity,phase,width,cap,probe=False):
    with selectors.DefaultSelector() as sel:
     sel.register(fixture.stdout,selectors.EVENT_READ);assert sel.select(timeout=min(12,deadline-time.monotonic())),'fixture readiness timeout';line=fixture.stdout.readline();assert line,'fixture exited before readiness';info=json.loads(line)
    (out/'fixture.json').write_text(json.dumps(info,indent=2));assert info['synthetic'] and info['url'].startswith('https://localhost:') and info['url'].endswith('/wizard-os-home/?app-session=wisdom')
-   child=subprocess.Popen([NODE,R/'qa'/('observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
+   child=subprocess.Popen([NODE,R/'qa'/('raw-cdp-probe.cjs' if probe=='cdp' else 'observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
    try:rc=child.wait(timeout=max(1,deadline-time.monotonic()-5))
    except subprocess.TimeoutExpired:row['timeout']=True;raise RuntimeError('externally bounded browser case timeout')
+   if probe=='cdp':
+    r=json.loads((out/'raw-cdp-probe.json').read_text());assert rc==0 and r['status']=='pass' and [x['actual'] for x in r['reports']]==['RAW-PASS','RAW-UNFINISHED']
+    row.update(status='pass',report=str((out/'raw-cdp-probe.json').relative_to(R)),sha256=sha(out/'raw-cdp-probe.json'));return
    if probe:
     r=json.loads((out/'observer-probe.json').read_text());assert rc==0 and r['status']=='pass' and [x['mode'] for x in r['reports']]==['good','empty','wrong','stale','plain-empty'],'independent byte observer protocol gate'
     row.update(status='pass',report=str((out/'observer-probe.json').relative_to(R)),sha256=sha(out/'observer-probe.json'));return
@@ -141,6 +149,9 @@ try:
  save()
  case('observer-probe','observer-probe',390,70,probe=True)
  assert report['observerProbe']['status']=='pass' and report['observerProbe']['cleanup']['verified'],'probe failed; no matrix admission'
+ if A.isolation_only:
+  case('raw-cdp-probe','raw-cdp-probe',390,60,probe='cdp')
+  assert report['rawCDPProbe']['status']=='pass' and report['rawCDPProbe']['cleanup']['verified'],'raw CDP probe failed; no isolation admission'
  for entry in CASES:
   if entry not in SELECTED:continue
   if time.monotonic()>=overall:report['cases'][entry[0]]={'status':'not-run-budget-exhausted'};save();continue
@@ -149,9 +160,9 @@ try:
  assert len(report['cases'])==len(SELECTED) and set(report['cases'])=={c[0] for c in SELECTED}
  report['sourceIntegrityAfter']=integrity()['integrity']
  report['currentCaseAcceptance']=all(c['status']=='pass' for c in report['cases'].values())
- report['freshBrowserAcceptance']=report['currentCaseAcceptance'] and not A.remaining_only
- report['freshRemainingBrowserAcceptance']=report['currentCaseAcceptance'] and A.remaining_only
- report['status']=('passed-fresh-remaining-three-pending-parent-visual-review' if A.remaining_only else 'passed-fresh-browser-pending-parent-visual-review') if report['currentCaseAcceptance'] else 'failed-browser-cases'
+ report['freshBrowserAcceptance']=report['currentCaseAcceptance'] and not (A.remaining_only or A.isolation_only)
+ report['freshRemainingBrowserAcceptance']=report['currentCaseAcceptance'] and (A.remaining_only or A.isolation_only)
+ report['status']=('passed-fresh-isolation-plus-nine-historical' if A.isolation_only else 'passed-fresh-remaining-three-pending-parent-visual-review' if A.remaining_only else 'passed-fresh-browser-pending-parent-visual-review') if report['currentCaseAcceptance'] else 'failed-browser-cases'
 except BaseException as e:report.update(status='failed',errorType=type(e).__name__,error=str(e));(OUT/'runner-failure.txt').write_text(traceback.format_exc())
 finally:
  report['cleanup']=cleanup();report['artifacts']={str(p.relative_to(R)):{'sha256':sha(p),'bytes':p.stat().st_size} for p in OUT.rglob('*') if p.is_file() and p.name!='acceptance.json' and 'profile' not in p.relative_to(OUT).parts};save()
