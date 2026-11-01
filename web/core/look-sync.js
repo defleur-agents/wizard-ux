@@ -64,7 +64,7 @@
       } catch (_) {}
       return { version: null, synced: false, pending: empty() };
     };
-    let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle';
+    let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null;
     const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0;
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
@@ -127,7 +127,7 @@
             if (!w.ok) { doc = w.doc; version = w.version; continue; } // another device saved first: merge onto theirs
             doc = want; version = w.version; sent(pending);
           } else if (doc) sent(pending);
-          if (doc) { meta.version = version; meta.synced = true; adopt(doc); }
+          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(doc); }
           save(); last = 'ok'; break;
         }
         if (last !== 'ok') throw new Error('look busy'); // four other saves in a row: try again later
@@ -149,11 +149,21 @@
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
       meta.pending.skin = { id, at: now() }; save(); schedule();
     }
-    // A stored mix with two views on (an older device, the agent): keep one here too, without writing.
+    // Views are known once the tweaks have loaded. A box copy with two views on (an older client, the agent) is fixed
+    // on the box too (the newest one stays), so a stale view never comes back; a device-only both-on is fixed here.
     function settle() {
-      if (applying || busy) return;
-      const mine = local(), fixed = exclusive(mine, views());
-      if (!same(onIds(fixed), onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(onIds(fixed).map(id => [id, true]))); } finally { applying = false; } }
+      if (applying || busy || !views().length) return;
+      let want;
+      if (boxDoc && !dirty()) {
+        const fixed = exclusive(boxDoc, views());
+        if (!same(fixed, boxDoc)) {
+          for (const [id, t] of Object.entries(fixed.tweaks)) if (!same(t, boxDoc.tweaks[id])) meta.pending.tweaks[id] = t;
+          boxDoc = fixed; save(); schedule(0);
+        }
+        want = onIds(fixed);
+      } else want = onIds(exclusive(local(), views()));
+      const mine = local();
+      if (!same(want, onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(want.map(id => [id, true]))); } finally { applying = false; } }
     }
     return {
       sync, schedule, tweakChoice, skinChoice, settle,

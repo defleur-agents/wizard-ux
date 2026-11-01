@@ -171,6 +171,22 @@ test('views stay exclusive after sync: the newest Orb/Apps choice wins, on the b
   assert.deepEqual(b.on(), c.on()); assert.equal(b.on().filter(id => views.includes(id)).length, 1);
 });
 
+test('a box copy with two views on is fixed on the box (newest stays), so switching the view off means Desks everywhere', async () => {
+  const box = pagesBox({ version: 1, skin: null, tweaks: { 'miguel/orb-shell': { on: true, at: 1 }, 'miguel/apps-home': { on: true, at: 2 }, 'miguel/layout': { on: true, at: 0 } } });
+  // Views are known only once the tweaks have loaded: the first sync wears what is stored, settle() fixes it after.
+  const known = [], a = device(box, { views: known }), b = device(box, { views: known });
+  await a.sync.sync(); await b.sync.sync();
+  assert.deepEqual(a.on(), ['miguel/apps-home', 'miguel/layout', 'miguel/orb-shell'], 'before the tweaks load: as stored');
+  known.push('miguel/orb-shell', 'miguel/apps-home');
+  a.sync.settle(); await a.flush();
+  assert.equal(box.doc().tweaks['miguel/orb-shell'].on, false, 'the box keeps only the newest view');
+  assert.equal(box.puts, 1, 'one write fixes it');
+  assert.deepEqual(a.on(), ['miguel/apps-home', 'miguel/layout']);
+  await b.sync.sync(); assert.deepEqual(b.on(), ['miguel/apps-home', 'miguel/layout']);
+  a.toggle('miguel/apps-home', false); await a.flush();
+  await b.sync.sync(); assert.deepEqual(b.on(), ['miguel/layout'], 'off = Desks on the other device too');
+});
+
 test('offline or failing box: the device keeps its own set, retries, and sends its change when the box is back', async () => {
   const box = pagesBox({ version: 1, skin: null, tweaks: { 'miguel/layout': { on: true, at: 0 } } });
   const mac = device(box, { mix: { 'miguel/layout': true } });
@@ -214,9 +230,27 @@ test('experience.js: switches raise wos:tweak-choice, adopt() wears the shared s
   assert.ok(active.includes('miguel/swipe-strip'));
   await E.adopt({ 'miguel/send-and-go': true });
   assert.equal(events.length, 1, 'adopting raises no choice');
-  assert.deepEqual(clone(E.mix), { 'miguel/send-and-go': true });
-  assert.deepEqual(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix, { 'miguel/send-and-go': true }, 'cached for the next first frame');
+  const onOf = m => Object.keys(m).filter(id => m[id] === true);
+  assert.deepEqual(onOf(clone(E.mix)), ['miguel/send-and-go']);
+  assert.deepEqual(onOf(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), ['miguel/send-and-go'], 'cached for the next first frame');
   assert.ok(active.includes('miguel/send-and-go') && !active.includes('miguel/swipe-strip'));
+});
+
+// Live QA found it: a fresh device (Mac app) adopting Miguel's set ran its one-time machines-home migration and
+// showed a tweak the shared set doesn't have. The adopted set is complete: every catalog tweak is on or off.
+test('experience.js: a fresh device adopting the shared set never adds its own one-time migrations to it', async () => {
+  let active = [];
+  const storage = new Map();
+  const window = { WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' },
+    WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = ids; } },
+    addEventListener() {}, dispatchEvent() {} };
+  vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, CustomEvent, URL, AbortSignal,
+    localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
+    fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+  const E = window.WosExperience;
+  await E.adopt({ 'miguel/swipe-strip': true, 'miguel/send-and-go': true });
+  assert.deepEqual([...active].sort(), ['miguel/send-and-go', 'miguel/swipe-strip', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
+  assert.ok(!active.includes('miguel/machines-home'), 'no migration adds to the shared set');
 });
 
 test('both shells load look sync after experience.js; it lives in the owner\'s Files via the Pages file API', () => {
