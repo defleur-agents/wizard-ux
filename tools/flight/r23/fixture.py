@@ -45,13 +45,18 @@ class H(server.Handler):
   if path=='/__observer__/':return self.send(200,b'<!doctype html><title>Synthetic observer negative</title>','text/html')
   if path=='/wisdom/__observer__.js':
    mode=urlsplit(self.path).query
-   data=b'' if mode=='plain-empty' else b'wrong bytes' if mode=='wrong' else b'actual source bytes'
+   # HTTP Content-Length is ALWAYS generated from these actual bytes by server.send.
+   # Invalid length metadata belongs only to the synthetic cached Response below.
+   data=b'' if mode=='plain-empty' else b'actual source bytes'
    return self.send(200,data,'application/javascript')
   if path=='/__observer__/sw.js':
    mode=urlsplit(self.path).query
    assert mode in ('good','empty','wrong','stale')
-   script="self.addEventListener('install',e=>e.waitUntil((async()=>{const r=await fetch('/wisdom/__observer__.js?MODE');const c=await caches.open('CACHE');await c.put('/wisdom/__observer__.js?MODE',VALUE);await self.skipWaiting()})()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));"
-   script=script.replace('MODE',mode).replace('CACHE','observer-shell-old' if mode=='stale' else 'observer-shell-current').replace('VALUE',"new Response('',{status:200,headers:{'content-length':'19','content-type':'application/javascript'}})" if mode=='empty' else 'r')
+   # Consume the real fetch in EVERY mode before substituting cache-only bytes.
+   # R25 EMPTY abandoned r unread; explicitly remove that unconsumed-body seam.
+   script="self.addEventListener('install',e=>e.waitUntil((async()=>{const r=await fetch('/wisdom/__observer__.js?MODE');const networkBytes=await r.clone().arrayBuffer();if(networkBytes.byteLength!==19)throw Error('fixture network framing');const c=await caches.open('CACHE');await c.put('/wisdom/__observer__.js?MODE',VALUE);await self.skipWaiting()})()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));"
+   value="new Response('',{status:200,headers:{'content-length':'19','content-type':'application/javascript'}})" if mode=='empty' else "new Response('wrong! source bytes',{status:200,headers:{'content-length':'19','content-type':'application/javascript'}})" if mode=='wrong' else 'r'
+   script=script.replace('MODE',mode).replace('CACHE','observer-shell-old' if mode=='stale' else 'observer-shell-current').replace('VALUE',value)
    return self.send(200,script.encode(),'application/javascript')
   if path=='/__fixture__/receipt':
    with server.db() as c:
