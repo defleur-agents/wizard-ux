@@ -2,7 +2,7 @@
 """Source-bound synthetic Wisdom + real shell/core fixture. No owner data/network.
 Runs only on Forum through durable admission. API writes remain in temporary SQLite.
 """
-import argparse,base64,copy,hashlib,json,mimetypes,os,ssl,sys,tempfile,threading
+import argparse,base64,copy,hashlib,json,mimetypes,os,ssl,sys,tempfile,threading,time
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit,unquote
@@ -28,6 +28,9 @@ class H(server.Handler):
  reads=[]
  lost=False
  def send(self,code,data,ctype='application/json',headers=None):
+  if getattr(self,'_qa_call',None) is not None:
+   call=self._qa_call
+   if call is not None:call.update(status=code,handlerReturnedAt=time.time_ns()//1000000)
   # Deliberately lose one ACK *after* the real SQLite transaction commits.
   if os.environ.get('QA_LOST_HIGHLIGHT')=='1' and not H.lost and self.command=='POST' and urlsplit(self.path).path=='/wisdom/api/wisdom/highlight' and code==200:
    H.lost=True
@@ -35,6 +38,7 @@ class H(server.Handler):
    self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
   return super().send(code,data,ctype,headers)
  def do_GET(self):
+  self._qa_call=None
   path=unquote(urlsplit(self.path).path)
   self.reads.append({'path':path})
   if path=='/__fixture__/receipt':
@@ -56,7 +60,7 @@ class H(server.Handler):
   if path=='/sibling-pin/sw.js':
    return self.send(200,b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));",'application/javascript')
   if path=='/sibling-pin/':
-   return self.send(200,b'<html><body><h1 id="sibling-ready">Synthetic sibling</h1></body></html>','text/html')
+   return self.send(200,b'<html><head><script src="/wizard-os-home/core/app-client.js"></script></head><body><h1 id="sibling-ready">Synthetic sibling</h1></body></html>','text/html')
   if path.startswith('/wizard-os-home/'):
    rel=path[len('/wizard-os-home/'):];target=(a.web/(rel or 'index.html')).resolve()
    if not target.is_relative_to(a.web):return self.send(403,{})
@@ -74,7 +78,7 @@ class H(server.Handler):
   path=urlsplit(self.path).path
   if path not in ('/wisdom/api/wisdom/reaction','/wisdom/api/wisdom/highlight'):
    return self.send(503,{'error':'Synthetic acceptance blocks all agent, authoring, lookup and other writes'})
-  self.calls.append({'path':path,'offline_id':self.headers.get('X-Wizard-Offline-Id')})
+  self._qa_call={'path':path,'offline_id':self.headers.get('X-Wizard-Offline-Id'),'method':self.command,'startedAt':time.time_ns()//1000000};self.calls.append(self._qa_call)
   return super().do_POST()
 http=ThreadingHTTPServer(('127.0.0.1',a.port),H)
 if a.cert:

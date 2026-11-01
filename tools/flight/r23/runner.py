@@ -36,17 +36,18 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
  for name in ('runner.py','qa/fixture.py','qa/static-guards.py'):compile((R/name).read_text(),str(R/name),'exec')
  guard=subprocess.run([sys.executable,R/'qa/static-guards.py',R],env=ENV,capture_output=True,text=True,timeout=10);assert guard.returncode==0,guard.stdout+guard.stderr
  free=shutil.disk_usage(R).free;assert free>=3*1024**3,'3GiB execution free floor'
- return {'integrity':'verified','members':len(M['members']),'sourceCounts':M['counts'],'expectedCases':[c[0] for c in CASES],'caseBudgetSeconds':sum(c[3] for c in CASES),'browsersStarted':0,'fixturesStarted':0,'freeBytes':free,'playwright':resolved,'staticGuards':json.loads(guard.stdout)}
+ return {'integrity':'verified','members':len(M['members']),'sourceCounts':M['counts'],'expectedCases':[c[0] for c in CASES],'caseBudgetSeconds':sum(c[3] for c in CASES),'browsersStarted':0,'fixturesStarted':0,'freeBytes':free,'playwright':resolved,'staticGuards':json.loads(guard.stdout),'seamRegressions':regression.stdout}
 preflight=integrity()
 if A.verify_only:print(json.dumps(preflight));sys.exit(0)
 # This packet has no submission path; only the owning parent admits the sealed argv.
 assert os.environ.get('WIZARD_WORKER_LANE')=='light','parent-admitted Forum light lane required'
 OUT=R/'evidence';assert not OUT.exists(),'one-use immutable stage; preserve previous evidence';OUT.mkdir()
-TMP=Path('/srv/work/wr23-'+A.manifest_sha[:12]);assert not TMP.exists(),'fresh short owned TMPDIR required';TMP.mkdir(mode=0o700)
+TMP=Path('/srv/work/wr24-'+A.manifest_sha[:12]);assert not TMP.exists(),'fresh short owned TMPDIR required';TMP.mkdir(mode=0o700)
 ENV.update(TMPDIR=str(TMP),QA_R23_OWNED_ROOT=str(OUT))
 report={'status':'incomplete','manifest_sha256':A.manifest_sha,'sources':M['sources'],'preflight':preflight,'cases':{},'historical':M['historical'],'releaseAllowed':False,'nativeAcceptance':False,'liveParityAcceptance':False,'visualReview':'PARENT_MUST_INSPECT_REAL_PNGS','freshBrowserAcceptance':False}
 fixture=child=None;overall=time.monotonic()+830
