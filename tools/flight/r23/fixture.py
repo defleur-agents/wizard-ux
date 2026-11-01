@@ -2,7 +2,7 @@
 """Source-bound synthetic Wisdom + real shell/core fixture. No owner data/network.
 Runs only on Forum through durable admission. API writes remain in temporary SQLite.
 """
-import argparse,base64,copy,hashlib,json,mimetypes,os,ssl,sys,tempfile,threading,time
+import argparse,base64,copy,hashlib,json,mimetypes,os,ssl,sys,tempfile,threading,time,uuid
 from pathlib import Path
 from http.server import ThreadingHTTPServer
 from urllib.parse import urlsplit,unquote
@@ -27,6 +27,17 @@ class H(server.Handler):
  calls=[]
  reads=[]
  lost=False
+ assetWrites=[]
+ def end_headers(self):
+  super().end_headers()
+  record=getattr(self,'_qa_write',None)
+  if record is not None:
+   target=self.wfile
+   class BodyWriter:
+    def write(_,raw):
+     n=target.write(raw);n=len(raw) if n is None else n;record['body'].extend(raw[:n]);return n
+    def __getattr__(_,name):return getattr(target,name)
+   self.wfile=BodyWriter()
  def send(self,code,data,ctype='application/json',headers=None):
   if getattr(self,'_qa_call',None) is not None:
    call=self._qa_call
@@ -36,9 +47,17 @@ class H(server.Handler):
    H.lost=True
    import socket
    self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
+  # Record actual successful body writes, not intended bytes or headers alone.
+  stock=getattr(self,'_qa_stock',None)
+  if stock and self.command=='GET' and code==200:
+   record={'id':str(uuid.uuid4()),'url':self.path,'method':'GET','path':'ux/web/'+str(stock.relative_to(a.web)),'status':code,'body':bytearray(),'startedAt':time.time_ns()//1000000}
+   headers={**(headers or {}),'X-QA-Write-Id':record['id']};self._qa_write=record;writer=self.wfile
+   try:return super().send(code,data,ctype,headers)
+   finally:
+    self.wfile=writer;self._qa_write=None;raw=bytes(record.pop('body'));record.update(bytes=len(raw),sha256=hashlib.sha256(raw).hexdigest(),completedAt=time.time_ns()//1000000);H.assetWrites.append(record)
   return super().send(code,data,ctype,headers)
  def do_GET(self):
-  self._qa_call=None
+  self._qa_call=None;self._qa_stock=None
   path=unquote(urlsplit(self.path).path)
   self.reads.append({'path':path})
   if path=='/__fixture__/blank':return self.send(200,b'<!doctype html><title>Empty profile byte observer</title>','text/html')
@@ -61,7 +80,7 @@ class H(server.Handler):
   if path=='/__fixture__/receipt':
    with server.db() as c:
     state=wisdom.state(c);tables={r[0] for r in c.execute('select name from sqlite_master')};count=c.execute('select count(*) from wisdom_offline_receipts').fetchone()[0] if 'wisdom_offline_receipts' in tables else 0;receipt_rows=[dict(r) for r in c.execute('SELECT id,path,digest FROM wisdom_offline_receipts')] if count else []
-   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'receipt_rows':receipt_rows,'writes':self.calls,'reads':self.reads})
+   return self.send(200,{'synthetic':True,'state':state,'receipts':count,'receipt_rows':receipt_rows,'writes':self.calls,'reads':self.reads,'assetWrites':self.assetWrites})
   if path.startswith('/wisdom/wisdom-art/f/'):
    font=(a.wisdom_source/'static'/path.removeprefix('/wisdom/')).resolve()
    if font.is_relative_to(a.wisdom_source/'static') and font.is_file():return self.send(200,font.read_bytes(),mimetypes.guess_type(font.name)[0] or 'font/woff2')
@@ -83,7 +102,9 @@ class H(server.Handler):
    if not target.is_relative_to(a.web):return self.send(403,{})
    if target.is_file():
     mime=mimetypes.guess_type(target.name)[0] or 'application/octet-stream';raw=target.read_bytes()
-    return self.send(200,json.loads(raw) if mime=='application/json' else raw,mime)
+    self._qa_stock=target
+    # application/json is valid as bytes; do not parse/re-serialize pinned stock.
+    return self.send(200,raw,'application/json; charset=utf-8' if mime=='application/json' else mime)
    if '.' not in Path(path).name:return self.send(200,{})
    return self.send(404,{})
   if path.startswith('/wizard/') or path in ('/agents','/settings'):

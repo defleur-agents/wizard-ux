@@ -1,4 +1,15 @@
-# Independent browser byte evidence (R25)
+# Independent browser byte evidence (R27)
+
+## Actual R26 findings and narrow R27 repair
+
+R26 actual protocol probe passed GOOD, EMPTY, WRONG, STALE and PLAIN-EMPTY (JSON SHA-256 `d172dec6991c2aaf58ec1c77a58d30879d039ca224247adb600b06b9a7c27b81`). This is real browser proof, not a mock. Its ten main cases all failed and remain historical failures; nine completed their behavioral checks but failed byte acceptance, while isolation reached its saved workspace result and was externally timed out.
+
+The missing host router/install/icon/favicon rows were **not** early snapshots or query mismatch: all three functional cache snapshots lacked these exact URLs. Frozen shared-worker config excludes those four paths, and the legacy workspace worker explicitly rejects fixture `Cache-Control: no-store` responses. R27 does not prefetch, seed, backfill or waive them. Only those four source-proven network-only paths may instead use a completed worker network GET plus a unique response `X-QA-Write-Id` matched to actual successfully written server body bytes, exact full request URL, source size/hash, no-store header, exact active worker, context and fresh cache generation. Network bytes remain UNOBSERVABLE, not a network-body pass. Required/cacheable paths and all protocol negatives still require independent cache validation and cannot use this alternative. Direct client body hashes remain the primary proof wherever observable.
+
+The presentation `588 != 709` mismatch was **JSON**, not an icon or compression: fixture `json.loads(raw)` followed by production `json.dumps` rewrote stock `tweaks/catalog.json` (and other stock JSON). Actual headers had no Content-Encoding. R27 sends pinned JSON bytes unchanged with `application/json; charset=utf-8`; synthetic API JSON and catalog art remain synthetic. No production content encoding was changed.
+
+Isolation saved its behavioral result and `normal-workspace.png`, but no final report. The source-proven unbounded seams were final receipt retrieval (default30s) and `await Promise.all(tasks)` inside a nominal10s loop that never bounded that await. R27 limits receipt5s, races observer work against its existing10s bound, detaches listeners in finally, closes the owned context, and persists exact response stages and closure checkpoints. A stuck operation fails with diagnostics, never silently passes. Exact runtime cause remains pending the real rerun. Late optional cache evidence gets fresh read-only snapshots for at most1s after the normal request drain; permanent absence still fails. No cache-generation, hash, font, worker, native, skin or matrix guard was removed.
+
 
 QA-only. Product UX/reader source is not changed here.
 

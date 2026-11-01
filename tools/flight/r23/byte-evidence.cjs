@@ -17,11 +17,21 @@ exports.validate=({snapshot:s,generation,contextId,origin,members,policy,fonts=[
  const coverage={};
  for(const e of s.entries.filter(e=>policy.allowed.includes(e.cache))){const rel=exports.rel(e.url),m=members[rel];if(!m)continue;assert.equal(e.method,'GET');assert(e.bytes>0||m.bytes===0,'empty cached body '+e.url);assert.equal(e.bytes,m.bytes,'cached size '+e.url);assert.equal(e.sha256,m.sha256,'cached exact-source hash '+e.url);assert.equal(e.type,'basic','non-basic cached response');assert.equal(e.status,200);assert(!e.redirected&&e.matches===1,'ambiguous/redirected cache entry');coverage[e.url]??=[];coverage[e.url].push(e)}
  for(const item of policy.required){const url=new URL(item.url,origin).href;assert(coverage[url]?.some(e=>e.cache===item.cache),'missing generation cache closure '+url)}
- return {generationId:generation.id,contextId,coverage,fonts,fontSources:(policy.fontSources||[]).map(f=>({...f,url:new URL(f.url,origin).href})),scope:'exact new-generation cache bytes; NOT individual worker network-response bytes'};
+ return {generationId:generation.id,contextId,coverage,fonts,fontSources:(policy.fontSources||[]).map(f=>({...f,url:new URL(f.url,origin).href})),networkOnly:(policy.networkOnly||[]).map(x=>({...x,url:new URL(x.url,origin).href,worker:new URL(x.worker,origin).href})),scope:'exact new-generation cache bytes; NOT individual worker network-response bytes'};
 };
 exports.resolve=(row,proof,member)=>{
  assert(row.worker||row.fromServiceWorker,'empty plain-page GET cannot use cache evidence');assert.equal(row.contextId,proof.contextId,'old-context response');assert.equal(row.generationId,proof.generationId,'stale response generation');
  const entries=proof.coverage[row.url];assert(entries?.length,'unobservable GET lacks exact-URL cache evidence '+row.url);for(const e of entries){assert.equal(e.sha256,member.sha256);assert.equal(e.bytes,member.bytes)}
  if(!row.worker&&row.fromServiceWorker&&/\.woff2(?:\?|$)/.test(row.url)){const family=proof.fontSources.find(f=>f.url===row.url)?.family;assert(family,'unmapped SW font URL');assert(proof.fonts.some(f=>f.family.replaceAll('"','').replaceAll("'",'')===family&&f.status==='loaded'),'SW font family not actually loaded '+family);assert(!proof.fonts.some(f=>f.status==='error'),'FontFace error')}
  return {cacheEntries:entries,scope:proof.scope,generationId:proof.generationId,contextId:proof.contextId};
+};
+
+exports.resolveNetworkOnly=(row,proof,member,writes)=>{
+ assert(row.worker&&!row.fromServiceWorker,'server-write alternative requires actual worker network GET');
+ assert.equal(row.contextId,proof.contextId,'old-context response');assert.equal(row.generationId,proof.generationId,'stale response generation');
+ const rule=proof.networkOnly?.find(x=>x.url===row.url&&x.path===row.path&&x.worker===row.worker);assert(rule,'not source-proven network-only URL');
+ assert(/no-store/i.test(row.responseHeaders['cache-control']||''),'source no-store refusal required');assert.equal(row.method,'GET');assert.equal(row.status,200);assert(row.completedAt,'actual response completion required');
+ const id=row.responseHeaders['x-qa-write-id'];assert(id,'missing exact response write identity');const found=writes.filter(x=>x.id===id);assert.equal(found.length,1,'unique actual body write required');const w=found[0];
+ assert.equal(w.url,new URL(row.url).pathname+new URL(row.url).search,'exact full request URL');assert.equal(w.path,row.path);assert.equal(w.method,'GET');assert.equal(w.status,200);assert.equal(w.bytes,member.bytes,'actual server-written byte length');assert.equal(w.sha256,member.sha256,'actual server-written source hash');assert(w.completedAt>=w.startedAt);
+ return {serverWrite:w,sourceRule:rule,contextId:proof.contextId,generationId:proof.generationId,scope:'completed worker GET plus uniquely matched actual server-written bytes; network body remains UNOBSERVABLE; source forbids cache'};
 };
