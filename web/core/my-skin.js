@@ -162,15 +162,20 @@
     }
     if (!r.ok) throw new Error(`Could not save skin on your Wizard (${r.status})`);
     const result = await r.json();
-    // Old boxes omit has_recipe. Resolve just the legacy folder via Files rather
-    // than guessing from its name/default base and misclassifying a named recipe.
+    // Files PATCH creates skin.json even for a tweak-only edit. has_recipe therefore
+    // does not mean a palette was selected: inspect the existing recipe metadata.
+    // Reuse the legacy overlay flag, without inventing a store or binding a folder id.
     if (Array.isArray(result?.skins)) for (const s of result.skins) {
-      if (s.id !== 'My skin' || s.has_recipe !== undefined) continue;
+      if (s.forked_from || s.has_recipe === false || (s.has_recipe === undefined && s.id !== 'My skin')) continue;
       try {
-        const f = await fetch('/wizard/v1/user-files/content?path=Skins%2FMy%20skin%2Fskin.json', { credentials: 'same-origin', cache: 'no-store' });
-        if (f.ok) s.has_recipe = true;
-        else if (f.status === 404 && (await f.json()).error === 'not_found') s.has_recipe = false;
-      } catch (_) {} // Unknown/offline is not evidence of a missing recipe.
+        const file = 'Skins/' + s.id + '/skin.json';
+        const f = await fetch('/wizard/v1/user-files/content?path=' + encodeURIComponent(file), { credentials: 'same-origin', cache: 'no-store' });
+        if (f.ok) {
+          s.has_recipe = true;
+          const meta = await f.json();
+          if (meta && typeof meta === 'object' && !Array.isArray(meta)) s.legacy = !Object.hasOwn(meta, 'base') && Object.hasOwn(meta, 'tweaks');
+        } else if (s.has_recipe === undefined && f.status === 404 && (await f.json()).error === 'not_found') s.has_recipe = false;
+      } catch (_) {} // Unknown/offline is not evidence of missing metadata.
     }
     return result;
   }

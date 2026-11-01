@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
+import { createSkinFixture } from '../tools/qa-legacy-skin-fixture.cjs';
 const source = readFileSync(new URL('../web/core/my-skin.js', import.meta.url), 'utf8');
 const copy = x => JSON.parse(JSON.stringify(x));
 function box() {
@@ -144,6 +145,59 @@ test('old boxes resolve legacy recipe presence through Files, never infer it fro
     assert.equal(b.ctx.WosSkin.current, present === true ? 'nebula' : 'grove');
     b.ctx.WosSkin.set('obsidian-light'); await new Promise(resolve => setTimeout(resolve, 5));
     assert.equal(server.data.active, present === true ? null : 'My skin');
+  }
+});
+
+test('restricted selector fixture models real tweak-only PATCH metadata and rejects unrelated writes', () => {
+  const f = createSkinFixture({ active: 'My skin', skins: [{ id: 'My skin', base: 'nebula', empty: false }] });
+  assert.equal(f.recipe().status, 404);
+  const path = '/wizard/v1/skins/My%20skin';
+  assert.equal(f.handle(path, 'PATCH', { tweaks: { 'wizard/two-orbs': true } }).status, 200);
+  assert.equal(f.data.skins[0].has_recipe, true, 'real PATCH creates a recipe even without a base');
+  assert.deepEqual(f.recipe().body, { name: 'My skin', tweaks: { 'wizard/two-orbs': true } });
+  assert.equal(Object.hasOwn(f.recipe().body, 'base'), false, 'list default must not become explicit base');
+  f.handle(path, 'PATCH', { base: 'grove' });
+  f.handle(path, 'PATCH', { tweaks: { 'wizard/two-orbs': false } });
+  assert.deepEqual(f.recipe().body, { name: 'My skin', base: 'grove', tweaks: { 'wizard/two-orbs': false } });
+  for (const [p, m, v] of [[path, 'DELETE', {}], ['/wizard/v1/skins', 'POST', {}], ['/wizard/v1/skins/Other', 'PATCH', { base: 'grove' }], [path, 'PATCH', { has_recipe: false }], [path, 'PATCH', { base: 'unknown' }], [path, 'PATCH', { tweaks: { 'wizard/orb-radial': true } }], [path, 'PATCH', { tweaks: { 'wizard/two-orbs': 1 } }], ['/wizard/v1/skins/active', 'PUT', { id: 'Other' }]]) {
+    assert.equal(f.handle(p, m, v).status, 403);
+  }
+  assert.equal(f.activeWrites.length, 0); assert.equal(f.recipeWrites.length, 3); assert.equal(f.data.active, 'My skin');
+});
+function strictBox(id = 'My skin', metadata = null) {
+  const f = createSkinFixture({ active: id, skins: [{ id, name: id, base: metadata?.base || 'nebula', empty: false, has_recipe: metadata !== null, tweaks: metadata?.tweaks || {} }] }, { id, metadata });
+  f.fetch = async (url, init = {}) => {
+    let r;
+    if (url.startsWith('/wizard/v1/skins')) r = f.handle(url, init.method || 'GET', init.body ? JSON.parse(init.body) : undefined);
+    else if (url.startsWith('/wizard/v1/user-files/content')) r = f.recipe();
+    else if (url.includes('format=json')) r = { status: 200, body: { script: { exists: false } } };
+    else return { ok: true, status: 200, headers: { get: () => 'text/css' }, text: async () => f.data.active ? ':root{--wos-orb-swipe-up:pill}' : '' };
+    return { ok: r.status === 200, status: r.status, headers: { get: () => 'application/json' }, json: async () => copy(r.body) };
+  };
+  return f;
+}
+test('tweak-only Files recipe preserves legacy overlay through PATCH, palettes and cache-free reload', async () => {
+  const server = strictBox(), b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, true);
+  await b.M.update({ tweaks: { 'wizard/two-orbs': true } });
+  assert.equal(server.data.skins[0].has_recipe, true);
+  assert.equal(b.M.overlay, true, 'saving tweaks must not convert an owner layer into a palette-bound skin');
+  assert.equal(b.ctx.WosSkin.current, 'grove');
+  for (const palette of ['nebula', 'grove']) { b.ctx.WosSkin.set(palette); await b.M.refresh(); assert.equal(server.data.active, 'My skin'); }
+  const fresh = await boot(server, new Map(), 'grove');
+  assert.equal(fresh.M.overlay, true); assert.equal(fresh.ctx.WosSkin.current, 'grove');
+  assert.equal(fresh.M.active.tweaks['wizard/two-orbs'], true);
+  assert.deepEqual(server.activeWrites, []); assert.deepEqual(server.recipeWrites, [{ tweaks: { 'wizard/two-orbs': true } }]);
+  await fresh.M.leave(); const off = await boot(server); assert.equal(off.M.active, null);
+});
+test('tweak-only overlay metadata is id-independent, while explicit bases remain authoritative', async () => {
+  for (const id of ['My skin', 'Renamed owner layer']) {
+    const server = strictBox(id, { name: id, tweaks: { 'wizard/two-orbs': true } });
+    const b = await boot(server, new Map(), 'grove');
+    assert.equal(b.M.overlay, true); assert.equal(b.ctx.WosSkin.current, 'grove');
+    await b.M.update({ base: 'nebula' });
+    assert.equal(b.M.overlay, false); assert.equal(b.ctx.WosSkin.current, 'nebula');
+    b.ctx.WosSkin.set('grove'); await new Promise(resolve => setTimeout(resolve, 5)); assert.equal(server.data.active, null);
   }
 });
 

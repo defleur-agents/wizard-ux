@@ -9,24 +9,28 @@ const broken = process.env.QA_EXPECT_BROKEN === '1', shots = process.env.QA_SHOT
 const assert = require('node:assert/strict');
 const {provePanelOpaque} = require('./tools/qa-panel-opacity.cjs');
 const {checks:expectedChecks} = require('./tools/qa-legacy-overlay-contract.cjs');
+const {createSkinFixture} = require('./tools/qa-legacy-skin-fixture.cjs');
 const diagnostic=process.env.QA_OPACITY_DIAGNOSTIC==='1';
 const checked=[];
 let passed = 0;
 function check(value, name, detail) { if (!value) throw new Error(name + ': ' + JSON.stringify(detail)); checked.push(name);passed++; console.log('PASS', name); }
 function complete(){assert.deepEqual(checked,expectedChecks(broken,diagnostic),'all semantic acceptance obligations completed');console.log('CHECKS',JSON.stringify(checked));console.log(`COMPLETE ${passed} passed, 0 failed`);}
 const copy = value => JSON.parse(JSON.stringify(value));
-async function setup(ctx, data, css, writes) {
+async function setup(ctx, data, css, writes, recipeWrites = [], refused = []) {
   const json = (route, body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+  const fixture = createSkinFixture(data, { activeWrites: writes, recipeWrites, refused });
   await ctx.route('**/wizard/v1/skins**', route => {
     const req = route.request(), u = new URL(req.url());
-    if (u.pathname === '/wizard/v1/skins/active' && req.method() === 'PUT') {
-      const input = req.postDataJSON(); writes.push(input); data.active = input.id; return json(route, data);
-    }
-    if (u.pathname === '/wizard/v1/skins' && req.method() === 'GET') return json(route, data);
-    return json(route, { error: 'qa: unrelated write refused' }, 403);
+    let input; try { input = req.postData() ? req.postDataJSON() : undefined; } catch (_) { refused.push({pathname:u.pathname,method:req.method(),invalidJSON:true});return json(route, { error: 'qa: invalid JSON refused' }, 403); }
+    const result = fixture.handle(u.pathname + u.search, req.method(), input);
+    return json(route, result.body, result.status);
   });
-  await ctx.route('**/wizard/v1/user-files/content?path=Skins%2FMy%20skin%2Fskin.json', r => json(r, { error: 'not_found' }, 404));
+  await ctx.route('**/wizard/v1/user-files/content?path=Skins%2FMy%20skin%2Fskin.json', r => {
+    if (r.request().method() !== 'GET') { refused.push({pathname:new URL(r.request().url()).pathname,method:r.request().method()});return json(r, { error: 'qa: file write refused' }, 403); }
+    const result = fixture.recipe(); return json(r, result.body, result.status);
+  });
   await ctx.route('**/wizard/v1/my-skin*', r => {
+    if (r.request().method() !== 'GET') { refused.push({pathname:new URL(r.request().url()).pathname,method:r.request().method()});return json(r, { error: 'qa: CSS write refused' }, 403); }
     if (new URL(r.request().url()).searchParams.has('format')) return json(r, { path: data.active ? 'Skins/My skin/skin.css' : '', exists: !!data.active, empty: !data.active, script: { exists: false } });
     return r.fulfill({ status: 200, contentType: 'text/css', body: data.active ? css : '' });
   });
@@ -36,6 +40,14 @@ async function swipe(p) {
 }
 const state = p => p.evaluate(() => ({ skin: WosSkin.current, active: WosMySkin.active?.id || null, overlay: WosMySkin.overlay, variable: getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(), pill: !!document.querySelector('#overview.open.ov-pill .ov-close'), apps: document.getElementById('launcher').classList.contains('open'), css: document.getElementById('wosMySkin')?.textContent || '' }));
 async function close(p) { await p.evaluate(() => { __wos.closeOverview(); __wos.closeSheets(); }); await sleep(350); }
+async function look(p) {
+  await p.evaluate(()=>__wos.openSheet('settings'));
+  await p.waitForFunction(()=>__wos.sheet==='settings'&&document.querySelector('#settings.open'));
+  const settings=p.locator('#settings.open #settingsBody');
+  await settings.locator('[data-st-page="appearance"]').click();
+  await p.waitForFunction(()=>document.querySelector('#settingsBody').dataset.settingsPage==='appearance');
+  return settings;
+}
 async function shot(p, name) {
   if (!shots) return; fs.mkdirSync(shots, {recursive:true}); await sleep(700); await p.screenshot({path:path.join(shots,name+'.png')});
 }
@@ -63,19 +75,21 @@ async function shot(p, name) {
     if (broken) { complete(); return; }
     // Independent fresh profiles with restored box state, radial OFF/ON and optional two-orbs.
     for (const enabled of [false,true]) for (const two of [false,true]) {
-      const data=copy(fixture.skins);data.active='My skin';const writes=[];
-      const {ctx,p}=await boot(browser,undefined,{'wos.skin':'grove','wos.tour.v1':'true'},enabled,c=>setup(c,data,fixture.fixed_css,writes));
+      const data=copy(fixture.skins);data.active='My skin';const writes=[],recipeWrites=[],refused=[];
+      const {ctx,p}=await boot(browser,undefined,{'wos.skin':'grove','wos.tour.v1':'true'},enabled,c=>setup(c,data,fixture.fixed_css,writes,recipeWrites,refused));
       await p.waitForFunction(()=>WosMySkin.state.loaded&&WosMySkin.overlay);
       check((await state(p)).skin==='grove','fresh profile retains current palette, never guessed nebula base');
-      if(two){await p.evaluate(()=>WosExperience.toggle('wizard/two-orbs'));await p.waitForFunction(()=>WosSkinHost.tweakState.includes('wizard/two-orbs'));await sleep(700);}
+      if(two){
+        const settings=await look(p);
+        const toggle=settings.locator('[data-tweak-toggle="wizard/two-orbs"]');
+        await toggle.waitFor({state:'visible'});assert.equal(await toggle.getAttribute('aria-checked'),'false');await toggle.click();
+        await p.waitForFunction(()=>WosSkinHost.tweakState.includes('wizard/two-orbs')&&!WosExperience.state.busy&&!document.querySelector('#settingsBody [data-tweak-toggle][disabled]'));
+        check(data.skins.find(s=>s.id==='My skin').has_recipe===true&&(await state(p)).overlay,'real two-orbs control saves tweak-only recipe without binding overlay to a palette');
+        await close(p);await sleep(700);
+      }
       for (const skin of ['nebula','grove']) {
         // Use actual Appearance controls, including family and palette entry points.
-        await p.evaluate(()=>__wos.openSheet('settings'));
-        await p.waitForFunction(()=>__wos.sheet==='settings'&&document.querySelector('#settings.open'));
-        const settings=p.locator('#settings.open #settingsBody');
-        // Settings categories use data-st-page; data-st names feature actions, not routes.
-        await settings.locator('[data-st-page="appearance"]').click();
-        await p.waitForFunction(()=>document.querySelector('#settingsBody').dataset.settingsPage==='appearance');
+        const settings=await look(p);
         await settings.locator('[data-skinfamily="wizard"]').click();
         // Look paints pending before its rAF action. !busy alone can pass before the action starts.
         await p.waitForFunction(()=>!WosExperience.state.busy&&!document.querySelector('#settingsBody [data-skinfamily][disabled], #settingsBody [data-skinfamily][aria-busy="true"]'));
@@ -95,8 +109,10 @@ async function shot(p, name) {
         if(diagnostic){assert.equal(p.errs.length,0);await ctx.close();complete();return;}
         if(!two)await shot(p,`fixed-${skin}-radial-${enabled}`);await close(p);
       }
+      await p.evaluate(()=>{localStorage.removeItem('wos.own-skins.cache.v1');localStorage.removeItem('wos.own-skins.v1');});
       await p.reload({waitUntil:'load'});await ready(p,enabled);await p.waitForFunction(()=>WosMySkin.state.loaded);await swipe(p);
       let s=await state(p);check(s.pill&&!s.apps&&data.active==='My skin'&&s.skin==='grove','reload reads restored CSS and active pointer from box without reseeding',s);await close(p);
+      check(await p.evaluate(two=>WosMySkin.overlay&&WosSkinHost.tweakState.includes('wizard/two-orbs')===two,two),'cache-free reload preserves overlay metadata and actual two-orbs choice');
       // Real thumb hold + tap still use the existing voice/radial handlers.
       let o=await orbXY(p);await T(p,'touchStart',o.x,o.y);await sleep(750);
       if(enabled)check(await p.evaluate(()=>WosOrbSwitcher.isOpen&&WosOrbSwitcher._wedges().every(w=>w.kind==='voice'||w.kind==='custom'||(w.kind==='app'&&WosLauncher.get().pins.includes(w.item.id)))),'long hold remains pins-only radial (no desk wedges)');
@@ -105,8 +121,12 @@ async function shot(p, name) {
       o=await orbXY(p);await T(p,'touchStart',o.x,o.y);await sleep(40);await T(p,'touchEnd');await sleep(500);
       check(await p.evaluate(()=>__wos.voice!=='idle'),'tap remains voice');await p.evaluate(()=>__wos.cancelVoice(true));await sleep(300);
       check(writes.length===0,'skin changes and reload perform no hidden owner active writes',writes);
+      assert.deepEqual(recipeWrites,two?[{tweaks:{'wizard/two-orbs':true}}]:[]);
+      check(refused.length===0,'only explicit two-orbs recipe PATCH occurs; no other recipe writes or refused routes', {recipeWrites,refused});
+      console.log('SKIN_WRITES',JSON.stringify({radial:enabled,two,activeWrites:writes,recipeWrites,refused}));
       await p.evaluate(()=>WosMySkin.leave());await p.reload({waitUntil:'load'});await ready(p,enabled);await swipe(p);s=await state(p);
       check(s.apps&&!s.pill&&data.active===null,'explicit leave is durable opt-out; no automatic resurrection',s);
+      assert.deepEqual(writes,[{id:null}]);assert.deepEqual(recipeWrites,two?[{tweaks:{'wizard/two-orbs':true}}]:[]);assert.deepEqual(refused,[]);
       check(p.errs.length===0,'restored profile has zero page errors',p.errs);await ctx.close();
     }
     check(runs().length===0,'no agent runs or new sessions',runs()); complete();

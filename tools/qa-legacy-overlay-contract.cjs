@@ -10,11 +10,12 @@ function checks(broken=false,diagnostic=false){
   if(broken)return names;
   for(const enabled of [false,true])for(const two of [false,true]){
     names.push('fresh profile retains current palette, never guessed nebula base');
+    if(two)names.push('real two-orbs control saves tweak-only recipe without binding overlay to a palette');
     for(const skin of ['nebula','grove']){
       names.push(`${skin} radial:${enabled} two-orbs:${two}: actual Look -> Miguel selector`,'Miguel pill has opaque shared panel and rounded identity','selector panel pixels unchanged over loud text');
       if(diagnostic)return names;
     }
-    names.push('reload reads restored CSS and active pointer from box without reseeding',enabled?'long hold remains pins-only radial (no desk wedges)':'OFF long hold remains ordinary voice command','tap remains voice','skin changes and reload perform no hidden owner active writes','explicit leave is durable opt-out; no automatic resurrection','restored profile has zero page errors');
+    names.push('reload reads restored CSS and active pointer from box without reseeding','cache-free reload preserves overlay metadata and actual two-orbs choice',enabled?'long hold remains pins-only radial (no desk wedges)':'OFF long hold remains ordinary voice command','tap remains voice','skin changes and reload perform no hidden owner active writes','only explicit two-orbs recipe PATCH occurs; no other recipe writes or refused routes','explicit leave is durable opt-out; no automatic resurrection','restored profile has zero page errors');
   }
   names.push('no agent runs or new sessions');return names;
 }
