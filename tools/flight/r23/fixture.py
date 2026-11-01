@@ -70,7 +70,10 @@ class H(server.Handler):
   if path=='/__consumer__/asset':
    if urlsplit(self.path).query=='neverfinish':
     self.send_response(200);self.send_header('Content-Type','application/javascript');self.send_header('Cache-Control','no-store');self.send_header('Content-Length','19');self.send_header('X-QA-Write-Id','consumer-neverfinish');self.end_headers();self.wfile.write(b'/* ');self.wfile.flush();time.sleep(8);return
-   return self.send(200,b'/* actual source */','application/javascript',{'X-QA-Write-Id':'consumer-good'})
+   mode=urlsplit(self.path).query
+   assert mode in ('good','wrong','empty')
+   data=b'wrong! source bytes' if mode=='wrong' else b'' if mode=='empty' else b'/* actual source */'
+   return self.send(200,data,'application/javascript',{'X-QA-Write-Id':'consumer-'+mode})
   if path=='/__cdp__/sw.js':
    return self.send(200,b"self.addEventListener('install',()=>self.skipWaiting());self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('message',e=>e.waitUntil(fetch('/__cdp__/asset?'+e.data).then(r=>r.arrayBuffer()).catch(()=>{})));",'application/javascript')
   if path=='/__cdp__/asset':

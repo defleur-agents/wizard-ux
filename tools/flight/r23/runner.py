@@ -48,7 +48,7 @@ def integrity():
  pub=subprocess.check_output(['openssl','x509','-in',R/'rig-server.pem','-pubkey','-noout'],timeout=5);der=subprocess.run(['openssl','pkey','-pubin','-outform','DER'],input=pub,capture_output=True,check=True,timeout=5).stdout
  assert base64.b64encode(hashlib.sha256(der).digest()).decode()==M['fixture_tls']['leaf_spki_sha256']
  subprocess.run(['openssl','verify','-CAfile',R/'rig-ca.pem',R/'rig-server.pem'],capture_output=True,check=True,timeout=5)
- for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','ownership.test.cjs','raw-cdp-probe.cjs','stream-diagnostic.cjs','stream-diagnostic.test.cjs','consumer-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
+ for name in ('browser.cjs','extra.cjs','pixels.cjs','contracts.cjs','contracts.test.cjs','byte-evidence.cjs','observer-probe.cjs','raw-cdp.cjs','raw-cdp.test.cjs','ownership.test.cjs','raw-cdp-probe.cjs','stream-diagnostic.cjs','stream-diagnostic.test.cjs','consumer-probe.cjs','page-body-diagnostic.cjs','page-body-diagnostic.test.cjs','consumer-body-probe.cjs'):subprocess.run([NODE,'--check',R/'qa'/name],env=ENV,check=True,timeout=5)
  regression=subprocess.run([NODE,R/'qa/contracts.test.cjs',R],env=ENV,capture_output=True,text=True,timeout=20);assert regression.returncode==0,regression.stdout+regression.stderr
  # Recompute policy from frozen source, never trust a served manifest/cache list.
  import runpy
@@ -60,6 +60,8 @@ def integrity():
 preflight=integrity()
 streamtests=subprocess.run([NODE,R/'qa/stream-diagnostic.test.cjs'],env=ENV,capture_output=True,text=True,timeout=20);assert streamtests.returncode==0,streamtests.stdout+streamtests.stderr
 preflight['streamRegressions']=streamtests.stdout
+bodytests=subprocess.run([NODE,R/'qa/page-body-diagnostic.test.cjs'],env={**ENV,'R34_TRACE':str(R/'historical/r35/r34-consumer-probe.json')},capture_output=True,text=True,timeout=20);assert bodytests.returncode==0,bodytests.stdout+bodytests.stderr
+preflight['pageBodyRegressions']=bodytests.stdout
 if A.verify_only:print(json.dumps(preflight));sys.exit(0)
 # This packet has no submission path; only the owning parent admits the sealed argv.
 assert os.environ.get('WIZARD_WORKER_LANE')=='light','parent-admitted Forum light lane required'
@@ -122,11 +124,11 @@ def case(identity,phase,width,cap,probe: bool | str=False):
    with selectors.DefaultSelector() as sel:
     sel.register(fixture.stdout,selectors.EVENT_READ);assert sel.select(timeout=min(12,deadline-time.monotonic())),'fixture readiness timeout';line=fixture.stdout.readline();assert line,'fixture exited before readiness';info=json.loads(line)
    (out/'fixture.json').write_text(json.dumps(info,indent=2));assert info['synthetic'] and info['url'].startswith('https://localhost:') and info['url'].endswith('/wizard-os-home/?app-session=wisdom')
-   child=subprocess.Popen([NODE,R/'qa'/('consumer-probe.cjs' if probe=='consumer' else 'raw-cdp-probe.cjs' if probe=='cdp' else 'observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
+   child=subprocess.Popen([NODE,R/'qa'/('consumer-body-probe.cjs' if probe=='consumer' else 'raw-cdp-probe.cjs' if probe=='cdp' else 'observer-probe.cjs' if probe else 'browser.cjs')],cwd=R,env={**ENV,'QA_OUT':str(out),'QA_URL':info['url'],'QA_PHASE':phase,'QA_WIDTH':str(width)},stdout=bl,stderr=subprocess.STDOUT,start_new_session=True)
    try:rc=child.wait(timeout=max(1,deadline-time.monotonic()-5))
    except subprocess.TimeoutExpired:row['timeout']=True;raise RuntimeError('externally bounded browser case timeout')
    if probe=='consumer':
-    r=json.loads((out/'consumer-probe.json').read_text());assert rc==0 and r['status']=='pass' and r['unfinishedRefused'] and r['goodStreamValid']
+    r=json.loads((out/'consumer-probe.json').read_text());assert rc==0 and r['status']=='pass' and r['unfinishedRefused'] and r['goodBodyValid'] and [x['mode'] for x in r['results']]==['good','wrong','empty']
     row.update(status='pass',report=str((out/'consumer-probe.json').relative_to(R)),sha256=sha(out/'consumer-probe.json'));return
    if probe=='cdp':
     r=json.loads((out/'raw-cdp-probe.json').read_text());assert rc==0 and r['status']=='pass' and [x['actual'] for x in r['reports']]==['RAW-PASS','RAW-UNFINISHED']
