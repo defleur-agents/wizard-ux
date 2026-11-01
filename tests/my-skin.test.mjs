@@ -155,11 +155,12 @@ test('a late nonempty service overlay announces the migrated own recipe to the t
   assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
   await b.M.refresh(); assert.equal(b.dispatched.filter(e=>e==='wos:own-skin').length,1);
 });
-test('overlay only applies while own skin is worn, including builtin changes outside Settings', async () => {
+test('legacy owner overlay survives palette changes; explicit leave still removes it', async () => {
   const b = await boot({cached:'.dock{opacity:.5}',responses:[{throw:true}]});
   const id = b.M.active.id; b.M.leave(); assert.equal(b.style(),null);
   b.M.wear(id); assert.ok(b.style());
-  b.ctx.WosSkin.set('obsidian-light'); assert.equal(b.M.active,null); assert.equal(b.style(),null);
+  b.ctx.WosSkin.set('obsidian-light'); assert.equal(b.M.active.id,id); assert.ok(b.style());
+  b.M.leave(); assert.equal(b.M.active,null); assert.equal(b.style(),null);
 });
 test('bad names, palettes, duplicates and storage failure never claim a created recipe', async () => {
   const b = await boot();

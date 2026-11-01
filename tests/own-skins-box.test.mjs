@@ -29,13 +29,13 @@ function box() {
   };
   return { data, calls, fetch, set fail(n) { fail = n; }, trash };
 }
-async function boot(server, store = new Map()) {
+async function boot(server, store = new Map(), current = 'nebula') {
   const listeners = {};
   const ctx = { fetch: server.fetch, crypto: webcrypto, Event, URLSearchParams, location: { search: '' },
     localStorage: { getItem: k => store.get(k) || null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); },
     dispatchEvent: e => { for (const fn of listeners[e.type] || []) fn(e); },
-    WosSkin: { current: 'nebula', list: [{ id: 'nebula' }, { id: 'obsidian-light' }], set(id) { this.current = id; ctx.dispatchEvent(new Event('wos:skin')); } },
+    WosSkin: { current, list: [{ id: 'nebula' }, { id: 'grove' }, { id: 'obsidian-light' }], set(id) { this.current = id; ctx.dispatchEvent(new Event('wos:skin')); } },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx); await ctx.WosMySkin.refresh();
   return { M: ctx.WosMySkin, ctx, store };
@@ -107,4 +107,51 @@ test('404/405 old boxes use local fallback quietly; denied/offline writes never 
   const offline = { fetch: async () => { throw new Error('offline'); } }, cached = await boot(offline, b.store);
   assert.equal(cached.M.active.name, 'Cached'); await assert.rejects(cached.M.create({ name: 'Offline', base: 'nebula', tweaks: {} }));
   assert.equal(cached.M.recipes.length, 1);
+});
+
+test("James's legacy Miguel selector overlay survives palette switches, refresh and fresh-client reload", async () => {
+  const server = box(); server.data.active = 'My skin';
+  Object.assign(server.data.skins[0], { empty: false, bytes: 9646, has_recipe: false });
+  const b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, true);
+  assert.equal(b.ctx.WosSkin.current, 'grove', 'default nebula metadata is not an owner-selected base');
+  for (const palette of ['nebula', 'grove', 'obsidian-light']) {
+    b.ctx.WosSkin.set(palette); await b.M.refresh();
+    assert.equal(server.data.active, 'My skin'); assert.equal(b.M.active.id, 'My skin');
+    assert.equal(b.ctx.WosSkin.current, palette);
+  }
+  assert.ok(server.calls.every(c => c.method === 'GET'), 'palette changes must never clear the box active pointer');
+  const again = await boot(server, new Map(), 'grove');
+  assert.equal(again.M.active.id, 'My skin'); assert.equal(again.ctx.WosSkin.current, 'grove');
+  await again.M.leave(); assert.equal(server.data.active, null);
+  const off = await boot(server); assert.equal(off.M.active, null, 'explicit opt-out never resurrects the overlay');
+});
+
+test('old boxes resolve legacy recipe presence through Files, never infer it from a name or missing field', async () => {
+  for (const [status, present] of [[404, false], [200, true], [403, undefined]]) {
+    const server = box(); server.data.active = 'My skin';
+    Object.assign(server.data.skins[0], { empty: false }); delete server.data.skins[0].has_recipe;
+    const fetch = server.fetch; server.fetch = async (url, init) => {
+      if (url.startsWith('/wizard/v1/user-files/content')) {
+        assert.equal(url, '/wizard/v1/user-files/content?path=Skins%2FMy%20skin%2Fskin.json');
+        assert.equal(init.credentials, 'same-origin'); assert.equal(init.cache, 'no-store');
+        return { ok: status === 200, status, json: async () => ({ error: status === 404 ? 'not_found' : 'denied' }) };
+      }
+      return fetch(url, init);
+    };
+    const b = await boot(server, new Map(), 'grove');
+    assert.equal(b.M.overlay, present === false);
+    assert.equal(b.ctx.WosSkin.current, present === true ? 'nebula' : 'grove');
+    b.ctx.WosSkin.set('obsidian-light'); await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(server.data.active, present === true ? null : 'My skin');
+  }
+});
+
+test('a named My skin recipe still selects its base and leaves on an outside built-in change', async () => {
+  const server = box(); server.data.active = 'My skin';
+  Object.assign(server.data.skins[0], { empty: false, has_recipe: true });
+  const b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, false); assert.equal(b.ctx.WosSkin.current, 'nebula');
+  b.ctx.WosSkin.set('grove'); await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(server.data.active, null);
 });
