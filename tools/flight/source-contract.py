@@ -52,7 +52,9 @@ assert 'cmd user is-user-unlocked' not in native and native.count("'dumpsys user
 assert 'Started users state: [0=RUNNING_UNLOCKED]' in native
 assert 'value:17' not in qa and 'chosen-real-page' in qa and 'before-process-close' in qa
 assert "name:'Next page',exact:true" in qa and "'server equals exact final durable reader page'" in qa
-assert "Input.dispatchTouchEvent" in qa and "type:'touchStart'" in qa and "type:'touchMove'" in qa and "type:'touchEnd'" in qa
+assert "stage.tap({position:hit.position})" in qa and 'document.elementFromPoint' in qa and "e.pointerType==='touch'" in qa
+assert 'Input.dispatchTouchEvent' not in qa
+assert 'def installed_application_uid(' in native and 'appId=' in native
 assert "window.WisdomOffline?.renderFailures();" in text(w,'static/app.js')
 assert '--uid-owner {uid}' in native and 'ADB healthy immediately after app egress isolation' in native
 assert "iptables -I OUTPUT 1 ! -o lo" not in native and "'wait-for-device'], env=ENV, timeout=180" not in native

@@ -78,34 +78,35 @@ try:
  result['preflight']={'playwright':'1.64.1','chromium_revision':'1248','kvm':True,'free_disk':shutil.disk_usage(R).free,'mem_available':mem['MemAvailable'],'adb':run([SDK/'platform-tools/adb','version']).stdout,'emulator':run([SDK/'emulator/emulator','-version']).stdout[:600]}
  cert=run([SDK/'build-tools/35.0.0/apksigner','verify','--print-certs',R/'current-release.apk']).stdout
  assert '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd' in cert;assert digest(R/'current-release.apk')==M['apk']['sha256'];(OUT/'apk-signer.txt').write_text(cert)
- # Package from the exact accepted current runtime; no model/backend/content changes.
- base='sha256:c20dac0d0609dcc26e8ee07fefe57b1a3e1bdd8003661dc3be97248eece44823'
- prior=Path('/srv/work/wisdom-flight-6aa0e40e-908f001e-r6')
- previous=json.loads((prior/'evidence/acceptance.json').read_text())['image']
+ # QA-only retry: verify and reuse the unchanged R7 image; NEVER rebuild it.
+ reuse=M['qa_retry']['image_reuse'];prior=Path(reuse['stage'])
+ assert digest(prior/'evidence/acceptance.json')==reuse['acceptance_sha256']
+ previous=json.loads((prior/'evidence/acceptance.json').read_text())
+ expected=previous['image'];assert expected['id']==reuse['id'] and expected['source']==M['wisdom_candidate']
+ assert digest(prior/'source-manifest.json')==M['qa_retry']['prior_manifest_sha256']
+ base=previous['image_build']['base_id']
  base_info=json.loads(run(['docker','image','inspect',base]).stdout)[0]
  assert base_info['Id']==base and base_info['Architecture']=='amd64'
- base_tag='wisdom-flight-r7-live-base:7a423b3'
- run(['docker','tag',base,base_tag])
- assert json.loads(run(['docker','image','inspect',base_tag]).stdout)[0]['Id']==base
  (OUT/'base-image-inspect.json').write_text(json.dumps(base_info,indent=2))
- tag='wisdom-flight-candidate:'+M['wisdom_candidate'][:12]+'-r7'
- run(['docker','build','--pull=false','--network=none','--build-arg','WISDOM_SOURCE='+M['wisdom_candidate'],'-f','Dockerfile.flight','-t',tag,'.'],timeout=300,log=OUT/'image-build.log')
- info=json.loads(run(['docker','image','inspect',tag]).stdout)[0]
- assert info['Id']!=previous['id'] and info['Architecture']=='amd64' and info['Config']['Labels']['org.wizard.source.sha']==M['wisdom_candidate']
- (OUT/'image-inspect.json').write_text(json.dumps(info,indent=2))
- art=R/'artifacts';imageTar=art/'wisdom-candidate-image.tar'
- run(['docker','image','save','-o',imageTar,tag],timeout=300)
- result['image_build']={'base_id':base,'source':M['wisdom_candidate'],'dockerfile_sha256':digest(R/'Dockerfile.flight'),'fresh_build':True}
+ info=json.loads(run(['docker','image','inspect',expected['id']]).stdout)[0]
+ original=json.loads((prior/'evidence/image-inspect.json').read_text())
+ assert info['Id']==expected['id'] and info['Architecture']=='amd64'
+ assert info['RootFS']==original['RootFS']==expected['rootfs'] and info['Config']==original['Config']
+ assert info['Config']['Labels']['org.wizard.source.sha']==M['wisdom_candidate']
+ assert digest(R/'Dockerfile.flight')==previous['image_build']['dockerfile_sha256']
+ imageTar=R/'artifacts/wisdom-candidate-image.tar'
+ assert digest(imageTar)==expected['tar_sha256']==reuse['tar_sha256']
  static={k[len('wisdom/'):]:v['sha256'] for k,v in M['export_members'].items() if k.startswith('wisdom/static/') and v['mode']!='120000'}
+ assert static==expected['assets'],'unchanged full static map differs'
  code='import pathlib,hashlib,json; r=pathlib.Path("/app"); names='+repr(list(static))+';print(json.dumps({n:hashlib.sha256((r/n).read_bytes()).hexdigest() for n in names}))'
  cname='wisdom-flight-proof-'+M['wisdom_candidate'][:12]
  try:
-  actual=json.loads(run(['docker','run','--rm','--name',cname,'--network','none','--entrypoint','python',tag,'-c',code],timeout=60).stdout);assert actual==static,'candidate image static bytes differ'
+  actual=json.loads(run(['docker','run','--rm','--name',cname,'--network','none','--entrypoint','python',expected['id'],'-c',code],timeout=60).stdout);assert actual==static,'candidate image static bytes differ'
  finally:run(['docker','rm','-f',cname],ok=False)
- delta=sorted(k for k in static if static[k]!=previous['assets'].get(k))
- assert delta==['static/app.js'],('unexpected R7 product delta',delta)
- result['image_delta_from_r6']=delta
- result['image']={'id':info['Id'],'tag':tag,'tar_sha256':digest(art/'wisdom-candidate-image.tar'),'source':M['wisdom_candidate'],'assets':static,'rootfs':info['RootFS']}
+ (OUT/'image-inspect.json').write_text(json.dumps(info,indent=2))
+ result['image_build']=previous['image_build']
+ result['image_reuse']={**reuse,'verified_full_static':True,'verified_rootfs_config':True,'rebuilt':False}
+ result['image']=expected
  # A real API/status/cache smoke must pass before the longer flows. After it,
  # browser/baseline failures never hide first-ever native evidence.
  result['checks']['api_smoke']=browser_case('api-smoke',390,smoke=True)

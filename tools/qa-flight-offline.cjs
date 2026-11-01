@@ -45,15 +45,19 @@ async function cacheReady(f,p){await f.evaluate(async()=>{await WisdomOffline.st
  p=await open(true);await p.goto(URL0,{waitUntil:'domcontentloaded'});f=await frame(p);await quiet(f);await chapter(f);await p.screenshot({path:path.join(OUT,'offline-cold-chapter.png')});
  const beforeCollapse=await f.locator('.wb-count').textContent();await f.locator('.wb-stage').evaluate(el=>el.style.width='0px');await f.evaluate(()=>dispatchEvent(new Event('resize')));await f.waitForTimeout(800);assert.equal(await f.locator('.wb-count').textContent(),beforeCollapse);assert((await f.evaluate(()=>__qaReadOutbox())).every(i=>i.body?.field!=='progress'||Number.isFinite(i.body.value)));await f.locator('.wb-stage').evaluate(el=>el.style.width='');await f.evaluate(()=>dispatchEvent(new Event('resize')));result.checks.zeroWidthFiniteProgress=true;
  if(WIDTH<600){
-  // Real touchscreen input, routed through the stage's pointerdown/move/up handlers.
-  // Locator bounds include the iframe offset in the top-level viewport.
-  const b=await f.locator('.wb-stage').boundingBox();assert(b&&b.width>100&&b.height>0);
-  const cdp=await context.newCDPSession(p),y=b.y+b.height*.5,x=b.x+b.width*.8,end=b.x+b.width*.2;
-  const point=x=>[{x,y,id:1,radiusX:1,radiusY:1,force:1}];
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:point(x)});
-  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:point(x+(end-x)*i/8)});await p.waitForTimeout(20)}
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
-  result.checks.pagingGesture={kind:'Chromium touchscreen stream',bounds:b,start:{x,y},end:{x:end,y}};
+  // Locator tap performs the iframe coordinate transform and trusted touch input.
+  assert(!f.isDetached(),'reader frame attached');
+  const stage=f.locator('.wb-stage');await stage.waitFor({state:'visible'});
+  const hit=await stage.evaluate(el=>{const b=el.getBoundingClientRect();for(const fy of [.5,.35,.2,.65]){const x=b.width*.85,y=b.height*fy,t=document.elementFromPoint(b.x+x,b.y+y);if(t&&el.contains(t)&&!t.closest('button,a,input,textarea,select,[role="button"]'))return {position:{x,y},bounds:{x:b.x,y:b.y,width:b.width,height:b.height},target:{tag:t.tagName,className:t.className}}}throw Error('No visible non-control right-edge tap target')});
+  const before=await f.locator('.wb-count').textContent();
+  await stage.evaluate(el=>{window.__qaPagingEvents=[];for(const type of ['pointerdown','pointerup','click'])el.addEventListener(type,e=>window.__qaPagingEvents.push({type:e.type,isTrusted:e.isTrusted,pointerType:e.pointerType,target:{tag:e.target.tagName,className:e.target.className}}),{capture:true})});
+  await stage.tap({position:hit.position});
+  await f.waitForTimeout(350);
+  const after=await f.locator('.wb-count').textContent(),events=await f.evaluate(()=>window.__qaPagingEvents);
+  result.checks.pagingGesture={kind:'trusted Playwright iframe locator touch tap',hit,before,after,events};
+  fs.writeFileSync(path.join(OUT,'paging-input.json'),JSON.stringify(result.checks.pagingGesture,null,2));
+  assert(events.some(e=>e.type==='pointerdown'&&e.isTrusted&&e.pointerType==='touch'),'actual trusted touch reached reader stage');
+  assert.notEqual(after,before,'right-edge touch must turn page before durable-progress wait');
  }else await f.getByRole('button',{name:'Next page',exact:true}).click();
  const chosen=await settledProgress(f,'chosen-real-page');assert(chosen.page>1&&chosen.page<chosen.pages,'real non-cover, non-end reader page');
  const write=await f.evaluate(async()=>{const e=(await WisdomOffline.projected()).entries.find(e=>e.id==='flight-chapter');const text='Quiet attention begins with one thing.';const flow=document.querySelector('.wb-flow');const walker=document.createTreeWalker(flow,NodeFilter.SHOW_TEXT);let rendered='',node;while((node=walker.nextNode())){if(!node.parentElement.closest('script,style'))rendered+=node.nodeValue}const start=rendered.indexOf(text);if(start<0)throw Error('Highlight quote absent from rendered flow');const h=await api('wisdom/highlight',{action:'add',entry_id:e.id,start,end:start+text.length,text,body_sha256:e.body_sha256,note:'Synthetic flight highlight'});return {queued:h.queued,pending:await __qaReadOutbox(),snapshot:await WisdomOffline.projected()}});

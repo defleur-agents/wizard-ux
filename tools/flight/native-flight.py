@@ -18,6 +18,21 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 
+def installed_application_uid(installed, package):
+    """API35 exact-package appId, cross-checked against actual user-0 UID."""
+    blocks = list(re.finditer(r'^  Package \[([^\]]+)\].*$', installed, re.M))
+    selected = [(m, blocks[i+1].start() if i+1<len(blocks) else len(installed))
+                for i,m in enumerate(blocks) if m[1] == package]
+    if len(selected) != 1:raise ValueError('exact installed package missing or ambiguous')
+    match,end = selected[0]
+    app_ids = set(map(int,re.findall(r'^    appId=(\d+)\b',installed[match.end():end],re.M)))
+    uids = set(map(int,re.findall(r'^    uid=(\d+)\b',installed,re.M)))
+    if len(app_ids)!=1 or len(uids)!=1:raise ValueError('actual appId/uid missing or ambiguous')
+    app_id = app_ids.pop(); uid = uids.pop()
+    if app_id < 10000 or app_id >= 100000 or uid != app_id:
+        raise ValueError('user-0 appId/uid mismatch or unsafe UID')
+    return uid
+
 def stop_signal(*_):raise KeyboardInterrupt('admitted native job terminated')
 signal.signal(signal.SIGTERM,stop_signal)
 
@@ -286,10 +301,9 @@ try:
     record('published release installs','Success' in a('install','-r',str(APK),timeout=180))
     installed=shell('dumpsys package '+PKG);(OUT/'installed-package.txt').write_text(installed)
     record('installed exact .23/code87 signed artifact','versionName=0.10.23' in installed and 'versionCode=87' in installed)
-    uid_match=re.search(r'\buserId=(\d+)\b',installed)
-    record('exact installed application UID discovered', bool(uid_match))
-    assert uid_match is not None
-    uid=int(uid_match[1]);record('application UID is not root or shell',uid>=10000)
+    uid=installed_application_uid(installed,PKG)
+    record('exact installed application UID discovered', True, {'package':PKG,'appId':uid,'uid':uid,'androidUser':0})
+    record('application UID is not root or shell',uid>=10000)
     for table in ('iptables','ip6tables'):
         shell(f'{table} -N WISDOM_QA_EGRESS && {table} -A WISDOM_QA_EGRESS ! -o lo -j REJECT && {table} -I OUTPUT 1 -m owner --uid-owner {uid} -j WISDOM_QA_EGRESS')
     policy=shell('iptables -S OUTPUT; iptables -S WISDOM_QA_EGRESS; ip6tables -S OUTPUT; ip6tables -S WISDOM_QA_EGRESS')
