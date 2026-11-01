@@ -7,6 +7,6 @@
     "test:opaque-overlays": "node tools/qa-opaque-overlays.cjs"
   },
   "devDependencies": {
-    "fake-indexeddb": "^6.2.4"
+    "fake-indexeddb": "6.2.4"
   }
 }
