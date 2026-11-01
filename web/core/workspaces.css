@@ -32,4 +32,3 @@ html[data-shell="phone"] .wz-workspaces-control.in-chats { position:static; flex
 .wz-workspaces-footer { display:flex; justify-content:flex-end; gap:12px; margin-top:16px; }
 .wz-workspaces-footer button { min-height:44px; padding:8px 12px; border:1px solid var(--wz-border); border-radius:var(--wz-radius); background:var(--wz-surface); }
 .wz-workspaces-footer button[type="submit"] { background:var(--wz-accent); color:var(--wz-on-accent); }
-html[data-skin="signal"] .wz-workspaces-panel, html[data-skin="signal"] .wz-workspaces-item { border-radius:2px; }
