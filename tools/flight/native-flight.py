@@ -264,25 +264,40 @@ def capture(name):
 
 
 def settle_reader(phase,crop=None):
-    frames=[];last=None;streak=0
-    for index in range(8):
+    frames=[];observations=[];last=None;streak=0;index=0
+    ready_deadline=time.monotonic()+30
+    while len(frames)<8:
         raw=ui()
-        assert find('^Chapter discussions$',raw), 'reader must stay foreground'
-        assert not find(r'^(Highlight|Remove highlight|Add a note|Edit note|Ask AI|Open discussion)$',raw), 'selection toolbar must be closed'
-        stem=phase+'-%02d'%index
+        stem=phase+'-%02d'%index;index+=1
         (OUT/(stem+'.xml')).write_text(raw)
         raw_screen(stem)
-        stamp=time.monotonic()
+        stamp=time.monotonic();activity=top()
+        header=find('^Chapter discussions$',raw)
+        footers=[n for n in nodes(raw) if re.fullmatch(r'\d+\s*/\s*\d+',label(n))]
+        ready=bool(header) and len(footers)==1
+        observation={'xml':stem+'.xml','image':stem+'.png','monotonic':stamp,'activity':activity,'reader_painted':ready}
+        observations.append(observation)
+        state={'frames':frames,'observations':observations}
+        # Persist even unpainted/failed observations before any readiness assertion.
+        (OUT/(phase+'.json')).write_text(json.dumps(state,indent=2))
+        assert PKG in activity and '.AppSessionActivity' in activity, 'reader activity must stay foreground'
+        if not ready:
+            # An Activity can resume before its WebView has painted header/footer.
+            # Once painted, disappearing reader chrome is an unexpected navigation.
+            assert not frames, 'reader must stay foreground after first paint'
+            assert stamp<ready_deadline, 'reader header/footer not ready within 30 seconds'
+            time.sleep(.4)
+            continue
+        assert not find(r'^(Highlight|Remove highlight|Add a note|Edit note|Ask AI|Open discussion)$',raw), 'selection toolbar must be closed'
         frame=boundary.sample(raw,OUT/(stem+'.png'),crop)
         crop=frame['crop'];frame.update(xml=stem+'.xml',monotonic=stamp)
         frames.append(frame)
         key=(frame['pair'],frame['crop'],frame['body_rgb_sha256'])
         streak=streak+1 if key==last else 1;last=key
-        # Save every observed state, not only the successful tail.
-        (OUT/(phase+'.json')).write_text(json.dumps({'frames':frames},indent=2))
-        if streak>=3:return {'frames':frames}
+        (OUT/(phase+'.json')).write_text(json.dumps(state,indent=2))
+        if streak>=3:return state
         time.sleep(.4)
-    raise AssertionError('native reader did not settle within eight captures: '+phase)
+    raise AssertionError('native reader did not settle within eight painted captures: '+phase)
 
 
 def sdk_prepare():
