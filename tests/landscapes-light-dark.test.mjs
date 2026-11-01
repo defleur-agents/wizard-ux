@@ -3,10 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
 
-// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
-const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
-const read = f => ungate(readFileSync(new URL('../' + f, import.meta.url), 'utf8'));
+const read = f => withLayout(f, (readFileSync(new URL('../' + f, import.meta.url), 'utf8')));
 const js = read('web/core/skins.js');
 
 test('Mizel offers Landscapes Dark and Landscapes Light, both from the one Landscapes package', () => {

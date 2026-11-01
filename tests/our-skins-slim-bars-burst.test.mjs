@@ -1,9 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
-const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
-const read=p=>ungate(readFileSync(new URL('../web/'+p,import.meta.url),'utf8'));
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
+const read=p => withLayout(p, (readFileSync(new URL('../web/'+p,import.meta.url),'utf8')));
 test('the update burst runs on every skin',()=>{
  const s=read('core/web-update.js');
  assert.match(s,/if \(why === 'tap'\) \{ burst\(\);/);

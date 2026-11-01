@@ -14,18 +14,27 @@ test('no shell file picks a layout from the worn skin', () => {
   for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/desktop/desktop.js']) assert.match(read(f), /includes\('miguel\/layout'\)/, f);
 });
 
-test("Miguel's skin stylesheets gate their layout on the tweak (chat list order, hidden clock, edge-to-edge phone apps)", () => {
+test("Miguel's layout lives in its tweak, not in his skins, and works with every skin", () => {
+  const tw = read('web/tweaks/miguel/layout/tweak.css');
+  assert.doesNotMatch(tw, /data-skin[\^=\]]/, 'the tweak names no skin');
+  const T = 'html[data-tweaks~="miguel/layout"]';
+  assert.ok(tw.includes(`${T}:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }`), 'phone list order');
+  assert.ok(tw.includes(`${T} :is(.home-date, .home-time) { display: none; }`), 'Home clock');
+  assert.ok(tw.includes(`${T}[data-shell="phone"] .win .wb[data-wact="full"] { display: none; }`), 'full button');
+  assert.ok(tw.includes(`${T} { --safe-b-low: calc(var(--safe-b) * .45); }`), 'spacing tokens travel with it');
   for (const [d, p] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {
     const css = read(`web/skins/${d}/skin.css`);
-    assert.ok(css.includes(`${p}${GATE}:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }`), `${d}: phone list order`);
-    assert.ok(css.includes(`${p}${GATE} :is(.home-date, .home-time) { display: none; }`), `${d}: Home clock`);
-    assert.ok(css.includes(`${p}${GATE}[data-shell="phone"] .win .wb[data-wact="full"] { display: none; }`), `${d}: full button`);
-    // Nothing ungated still reorders the chat list or hides stock Home parts.
-    // Markup only a tweak renders (model switch, Home dots and dials, symmetric dock, For agents row) keeps its own rules.
-    const TWEAK_ONLY = /\.(ms-[\w-]+|nc-vis|nc-ic|nc-zero|forag|fa-[\w-]+|ov-pill|ov-badge|sym\b|mz-[\w-]+|dslot|dnew|rs-[\w-]+)/;
-    const ungated = css.split('\n').filter(l => l.startsWith(p) && !l.includes(GATE) && !l.slice(0, l.indexOf('{')).replace(/\([^()]*\)/g, '').replace(/\([^()]*\)/g, '').split(',').every(s => TWEAK_ONLY.test(s)));
+    assert.ok(!css.includes(':where([data-tweaks~="miguel/layout"])'), `${d}: no half-moved rules`);
+    // Markup only another tweak renders (model switch, dials, dock back) keeps its own rules; nothing else ungated moves things.
+    const OTHER = /\.(ms-[\w-]+|rs-[\w-]+|mz-[\w-]+)/;
+    const ungated = css.split('\n').filter(l => l.startsWith(p) && !l.includes('[data-tweaks~=') && !l.slice(0, l.indexOf('{')).replace(/\([^()]*\)/g, '').replace(/\([^()]*\)/g, '').split(',').every(s => OTHER.test(s)));
     for (const l of ungated) assert.doesNotMatch(l, /\{[^}]*\b(display|order|flex-direction|position)\s*:/, `${d}: ungated layout: ${l.slice(0, 140)}`);
   }
+});
+
+test('switching the layout tweak repaints the dock and Home without a reload', () => {
+  assert.match(read('web/app.js'), /wasLayout = on; try \{ renderDots\(\); renderHome\(\); \}/);
+  assert.match(read('web/desktop/desktop.js'), /wasLayout = on; try \{ render\(\); \}/);
 });
 
 test('the tweak is Miguel\'s, listed for everyone, never a default', () => {
