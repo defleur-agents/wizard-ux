@@ -62,6 +62,8 @@ streamtests=subprocess.run([NODE,R/'qa/stream-diagnostic.test.cjs'],env=ENV,capt
 preflight['streamRegressions']=streamtests.stdout
 bodytests=subprocess.run([NODE,R/'qa/page-body-diagnostic.test.cjs'],env={**ENV,'R34_TRACE':str(R/'historical/r35/r34-consumer-probe.json')},capture_output=True,text=True,timeout=20);assert bodytests.returncode==0,bodytests.stdout+bodytests.stderr
 preflight['pageBodyRegressions']=bodytests.stdout
+scopetests=subprocess.run([NODE,R/'qa/request-scope.test.cjs'],env={**ENV,'R35_TRACE':str(R/'historical/r37/r35-consumer-probe.json')},capture_output=True,text=True,timeout=20);assert scopetests.returncode==0,scopetests.stdout+scopetests.stderr
+preflight['requestScopeRegressions']=scopetests.stdout
 if A.verify_only:print(json.dumps(preflight));sys.exit(0)
 # This packet has no submission path; only the owning parent admits the sealed argv.
 assert os.environ.get('WIZARD_WORKER_LANE')=='light','parent-admitted Forum light lane required'

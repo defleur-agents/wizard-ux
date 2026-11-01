@@ -1,0 +1,19 @@
+# R37 request-scope continuation — SOURCE ONLY, not acceptance
+
+REUSE: R35 actual completed PAGE public Network.getResponseBody and unchanged owned launch/transport. EXTEND: request-scope accounting and refusal metadata only. NEW: none. No UI, product, skin, native helper, browser, CDP endpoint, HTTP fixture or heavy job launched here.
+
+## Findings and limits
+
+Actual R35 heavy_ffab852bdcfa46c39483b161a2c277fb remains FAILED. Parent verified log SHA256 441b29e55753c98653ae8e3c9615cda66a81b972695b21d73e0fb722d18cb7af. GOOD page request3432455.6 returned the exact 19 bytes and SHA256 d1360d00b86f91c43a28dc0e9cc40c7ac89f16496e365df47cd8e0897a272d64; unique inner3432455.7 also finished. Linking failed solely on two global missing-start errors whose IDs were discarded. Body and stream inventories retain the same 20 admitted events; neither retains those two orphan identities. Raw SW ledger has only the two admitted SW rows and no errors. Exact historical orphan cause therefore remains UNPROVED: do not call these about:blank, SW-script, policyUpdated, late-enable, or known foreign events.
+
+Full raw dispatcher read: pageBodies.feed and transcript.feed occur BEFORE the SW-only and same-origin raw-row filters (raw-cdp.cjs event dispatcher). No demonstrated pre-feed worker/origin routing loss. Attach installs its session before Network.enable; previously only acknowledgement time was retained. R37 also records enable command-send time, without asserting that late-enable caused R35.
+
+Demonstrated source defect: feed explicitly discards a foreign-origin request start, then its response/data/finish becomes a global missing-start error. Fixed by exact session+request-keyed, bounded, typed excluded-request identities. They never enter admitted proof rows. Foreign redirects/reuse, cross-context/session mutation, response URL/write-ID ambiguity, unknown orphan events, shared drops and all admitted errors remain fatal. Unknown missing starts are NOT waived. They now retain request/session/target/context/domain-method, received order/time, protocol timestamp, enable interval and safe response headers; URL capture restricted to this origin's synthetic __consumer__/__fixture__ paths. Excluded events count against shared event/json/row caps. Existing link acceptance expression is unchanged.
+
+Source regression reconstructs only the retained R35 20-event timeline using captured row fields; it cannot replay the discarded orphans. This demonstrates that valid retained GOOD pair was not itself invalid. It does NOT turn R35 green or establish runtime R37 support. Original 51 seam, 18 stream and 32 PAGE tests remain; request-scope tests add exclusion lifecycle, unknown same-write refusal, global foreign identity refusal, redirects, cap drops, orphan metadata, different write IDs and dispatcher-order checks.
+
+## Parent-only bounded continuation
+
+Read source-manifest.json, source-verification.json and parent-light-spec.json from the sealed immutable R37 Forum stage; do not derive R35 argv. At most one parent-admitted Forum light job, timeout300 seconds: existing GOOD/WRONG/EMPTY/NEVERFINISH canary, then existing 55-second isolation ONLY IF canary and cleanup pass. No full matrix, alternative provider, private content or native APK. If GOOD API is empty/throws/mismatched/ambiguous, stop NO_FIX_CAPTURE_PATH. If unknown missing starts recur, preserve refusal plus exact metadata and stop before isolation; no blanket waiver or unchanged retry.
+
+All outcome acceptance flags remain false: diagnosticOnly=true, releaseAllowed=false, freshIsolationAcceptance=false, review_required=true. Stream failures stay recorded unchanged, not relabelled. No inner finish synthesized. Nine historical same-product browser reports remain historical, all 2079 product files frozen. Native full-RGB/restoration/reconnect, browser/native/visual/two-skin and release gates remain closed. Source-only prep is not an acceptance pass.

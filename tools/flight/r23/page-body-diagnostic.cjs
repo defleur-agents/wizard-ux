@@ -6,21 +6,36 @@ const flags={diagnosticOnly:true,review_required:true,releaseAllowed:false,fresh
 const identity=r=>JSON.stringify(['contextId','generationId','browserContextId','targetType','targetId','sessionId','requestId'].map(k=>r[k]));
 exports.create=({contextId,generationId,origin,send,limits={}})=>{
  const cap={row:4194304,total:67108864,rows:2000,events:20000,json:100663296,...limits};
- const rows=[],events=[],errors=[],map=new Map(),sessions=new Map();let total=0,drops=0,jsonBytes=0,seq=0,sealed=false;
- const bad=(r,reason)=>{if(r)r.invalid=true;if(errors.length<2000)errors.push({requestId:r?.requestId||null,reason});else drops++};
+ const rows=[],events=[],errors=[],excluded=new Map(),map=new Map(),sessions=new Map();let total=0,drops=0,jsonBytes=0,seq=0,sealed=false,ownedContext;
+ // Missing starts remain fatal. Retain exact identity before refusal; no private/foreign URL capture.
+ const fixtureURL=p=>{const value=p.request?.url||p.response?.url;try{const u=new URL(value);return u.origin===origin&&/^\/(?:__consumer__|__fixture__)\//.test(u.pathname)?{fixtureURL:value.slice(0,2048)}:{}}catch{return {}}};
+ const metadata=(method,p,s)=>({contextId,generationId,...fixtureURL(p),browserContextId:s?.target?.browserContextId??null,targetType:s?.target?.type??null,targetId:s?.target?.targetId??null,sessionId:s?.id??null,requestId:p.requestId??null,method,receiveSequence:seq,receivedMonotonicNs:process.hrtime.bigint().toString(),protocolTimestamp:p.timestamp??null,enabledAt:s?.enabledAt??null,enableSentAt:s?.enableSentAt??null,...(p.response?{status:p.response.status,headers:safeHeaders(p.response.headers)}:{})});
+ const bad=(r,reason,detail={})=>{if(r)r.invalid=true;if(errors.length<2000)errors.push({requestId:r?.requestId||null,reason,...detail});else drops++};
  const log=(method,p,r)=>{const e={receiveSequence:++seq,receivedMonotonicNs:process.hrtime.bigint().toString(),method,requestId:p.requestId,protocolTimestamp:p.timestamp,identity:r?JSON.parse(identity(r)):null};const n=Buffer.byteLength(JSON.stringify(e));if(events.length>=cap.events||jsonBytes+n>cap.json){drops++;bad(r,'event cap');return}jsonBytes+=n;events.push(e)};
  function feed(method,p,s){
   if(sealed||!method.startsWith('Network.'))return;
-  if(!s?.id||!s.target?.targetId||!s.target.browserContextId){bad(null,'missing session identity');return}
-  const binding=JSON.stringify(s.target);if(sessions.has(s.id)&&sessions.get(s.id)!==binding){bad(null,'foreign session target/context');return}sessions.set(s.id,binding);
-  const key=s.id+':'+p.requestId;let r=map.get(key);
+  if(!s?.id||!s.target?.targetId||!s.target.browserContextId){bad(null,'missing session identity',metadata(method,p,s));return}
+  const binding=JSON.stringify(s.target);if((sessions.has(s.id)&&sessions.get(s.id)!==binding)||(ownedContext&&s.target.browserContextId!==ownedContext)){bad(null,'foreign session target/context',metadata(method,p,s));return}sessions.set(s.id,binding);ownedContext??=s.target.browserContextId;
+  const key=s.id+':'+p.requestId;let r=map.get(key),ignored=excluded.get(key);
   if(method==='Network.requestWillBeSent'){
-   let u;try{u=new URL(p.request.url)}catch{bad(null,'invalid URL');return}if(u.origin!==origin)return;
-   if(r){bad(r,'duplicate request or redirect');return}if(rows.length>=cap.rows){drops++;return}
+   // Check reuse BEFORE origin exclusion: a foreign redirect cannot erase an admitted row.
+   if(r||ignored){bad(r,'duplicate request or redirect',metadata(method,p,s));return}
+   let u;try{u=new URL(p.request.url)}catch{bad(null,'invalid URL',metadata(method,p,s));return}
+   if(u.origin!==origin){if(rows.length+excluded.size>=cap.rows){drops++;return}ignored={...metadata(method,p,s),classification:'explicitly-excluded-origin',started:true,finished:false};excluded.set(key,ignored);log(method,p,ignored);return}
+   if(rows.length+excluded.size>=cap.rows){drops++;return}
    r={contextId,generationId,browserContextId:s.target.browserContextId,targetType:s.target.type,targetId:s.target.targetId,sessionId:s.id,requestId:p.requestId,url:p.request.url,method:p.request.method,requestHeaders:safeHeaders(p.request.headers),started:true,finished:false,bodyCalls:0};map.set(key,r);rows.push(r);
    Object.defineProperty(r,'seen',{value:new Set()});
   }
-  if(!r){if(['Network.responseReceived','Network.dataReceived','Network.loadingFinished','Network.loadingFailed'].includes(method))bad(null,'missing request start');return}
+  if(ignored){
+   log(method,p,ignored);
+   if(method==='Network.responseReceived'){
+    let foreign=false;try{foreign=new URL(p.response.url).origin!==origin}catch{}
+    if(!foreign||safeHeaders(p.response.headers)['x-qa-write-id']||ignored.responded||ignored.finished)bad(null,'excluded response scope ambiguity',metadata(method,p,s));ignored.responded=true;
+   }
+   if(['Network.loadingFinished','Network.loadingFailed'].includes(method)){if(ignored.finished)bad(null,'duplicate excluded terminal',metadata(method,p,s));ignored.finished=true}
+   return;
+  }
+  if(!r){if(['Network.responseReceived','Network.dataReceived','Network.loadingFinished','Network.loadingFailed'].includes(method)){log(method,p,{...metadata(method,p,s)});bad(null,'missing request start',metadata(method,p,s))}return}
   log(method,p,r);if(p.timestamp!==undefined&&!Number.isFinite(p.timestamp))bad(r,'invalid protocol timestamp');
   // Raw protocol stamps are observations, NOT a cross-event causal assertion.
   // Ordering is the received event sequence; no tolerance invented from model advice.
@@ -49,7 +64,7 @@ exports.create=({contextId,generationId,origin,send,limits={}})=>{
    Object.defineProperty(r,'task',{value:task});
   }
  }
- const snapshot=()=>({...flags,limits:cap,totalBytes:total,drops,errors,events,rows:rows.map(r=>({...r}))});
+ const snapshot=()=>({...flags,limits:cap,totalBytes:total,drops,errors,events,excludedRequests:[...excluded.values()].map(r=>({...r})),rows:rows.map(r=>({...r}))});
  function link(inner,member){
   const v=snapshot(),matches=v.rows.filter(r=>['page','iframe'].includes(r.targetType)&&['contextId','generationId','browserContextId','url','method','status'].every(k=>r[k]===inner[k])&&r.headers?.['x-qa-write-id']&&r.headers['x-qa-write-id']===inner.headers?.['x-qa-write-id']);
   const inners=v.rows.filter(r=>r.targetType==='service_worker'&&['contextId','generationId','browserContextId','url','method','status','sessionId','requestId','targetId'].every(k=>r[k]===inner[k])&&r.headers?.['x-qa-write-id']===inner.headers?.['x-qa-write-id']);
