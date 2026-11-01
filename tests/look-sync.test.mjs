@@ -42,7 +42,7 @@ function pagesBox(doc = null, { routes = true } = {}) {
 }
 
 // One device: its own storage, skin and tweak mix (what experience.js and skins.js hold), the real look-sync code.
-function device(box, { mix = {}, skin = null, views = [], meta = null, clock } = {}) {
+function device(box, { mix = {}, skin = null, views = [], meta = null, clock, known = null } = {}) {
   const store = new Map(meta ? [['wos.look-sync.v1', JSON.stringify(meta)]] : []);
   const timers = [];
   const d = { mix: { ...mix }, skin, adopted: 0 };
@@ -51,6 +51,7 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock } =
     get mix() { return clone(d.mix); },
     adopt(m) { d.adopted++; d.mix = { ...m }; },
     get state() { return { busy: false, tweaks: views.map(id => ({ id, view: 'v' })) }; },
+    tweakIds: async () => { if (!known) throw new Error('offline'); return known; },
   };
   const S = {
     get chosen() { return d.skin; }, get current() { return d.skin || 'nebula'; },
@@ -117,6 +118,22 @@ test('Mac/PWA race: a device syncing first with a few tweaks does not beat the b
   await mac.sync.sync(); assert.deepEqual(mac.on(), on(box.doc()), 'the Mac follows');
   // Once synced, a device never replaces the box set again, bigger or not.
   const before = box.text; await pwa.sync.sync(); assert.equal(box.text, before);
+});
+
+test('retired tweak ids an old device still stores are never seeded and never make a set look bigger', async () => {
+  const known = ['miguel/layout', 'miguel/swipe-strip', 'miguel/send-and-go', 'miguel/model-pills'];
+  const box = pagesBox();
+  const phone = device(box, { known, mix: { 'miguel/layout': true, 'miguel/orb-switch': true, 'miguel/home-bars': true, 'miguel/hidden-pin': true } });
+  await phone.sync.sync();
+  assert.deepEqual(on(box.doc()), ['miguel/layout'], 'only live tweaks are seeded');
+  const pwa = device(box, { known, mix: { 'miguel/layout': true, 'miguel/swipe-strip': true, 'miguel/send-and-go': true } });
+  await pwa.sync.sync();
+  assert.deepEqual(on(box.doc()), ['miguel/layout', 'miguel/send-and-go', 'miguel/swipe-strip']);
+  // A box seeded by an older shell with retired ids: those do not count against the bigger set either.
+  const old = pagesBox({ version: 1, skin: null, tweaks: Object.fromEntries(['miguel/layout', 'miguel/orb-switch', 'miguel/home-bars', 'miguel/hidden-pin'].map(id => [id, { on: true, at: 0 }])) });
+  const pwa2 = device(old, { known, mix: { 'miguel/layout': true, 'miguel/swipe-strip': true } });
+  await pwa2.sync.sync();
+  assert.deepEqual(on(old.doc()), ['miguel/layout', 'miguel/swipe-strip']);
 });
 
 test('a change writes the box once (debounced) and other devices pick it up on their next load', async () => {

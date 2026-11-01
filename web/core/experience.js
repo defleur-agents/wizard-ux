@@ -211,6 +211,8 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
+    // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
+    async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
     async adopt(mix) {
       catalog ||= await read('tweaks/catalog.json');
