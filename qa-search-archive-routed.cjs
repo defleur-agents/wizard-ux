@@ -24,11 +24,11 @@ const rowsFor = agent => [
     for (const shell of ['phone', 'desktop']) {
       const ctx = await browser.newContext({ viewport: shell === 'phone' ? { width: 412, height: 892 } : { width: 1280, height: 860 }, ...(shell === 'phone' ? { isMobile: true, hasTouch: true } : {}), serviceWorkers: 'block' });
       try {
-        await ctx.addInitScript(() => {
+        await ctx.addInitScript(shell => {
           for (const [k,v] of Object.entries({
             'wos.chats.pinned.v2': JSON.stringify(['qa_hermes_old', 'qa_qa-host_old']), 'wos.chats.pinned.migrated.v1': '1',
-            'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': 'phone', 'wos.chats.layout.v1': 'status', 'wos.chats.archiveAfter.v1': '0' })) localStorage.setItem(k,v);
-        });
+            'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': shell, 'wos.chats.layout.v1': 'status', 'wos.chats.archiveAfter.v1': '0' })) localStorage.setItem(k,v);
+        }, shell);
         await ctx.route('**/*', async route => {
           const req = route.request(), u = new URL(req.url());
           const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
@@ -58,6 +58,7 @@ const rowsFor = agent => [
         const page = await ctx.newPage(); page.on('pageerror', e => errors.push(String(e)));
         await page.goto(`https://wizard.test/wizard-os-home/${shell === 'desktop' ? 'desktop.html' : ''}`, { waitUntil: 'load' });
         await page.waitForFunction(() => (window.__wos || window.__wux) && window.WizCore?.apps);
+        ok(await page.evaluate(shell => shell === 'desktop' ? window.__wux?.shell === 'desktop' && document.documentElement.dataset.shell === 'desktop' : !!window.__wos && !window.__wux, shell), `${shell}: correct shell runtime, not a redirected phone mock`);
         for (const agent of ['hermes', ROUTED]) {
           ok(await page.evaluate(a => WizOpenAgentChats(a), agent), `${shell}/${agent}: shell opens agent Chats`);
           const wid = await page.waitForFunction(a => Object.values((window.__wux || window.__wos).wins).find(w => w.app === 'chats' && w.focus?.kind === 'agent' && w.focus.key === a)?.id, agent).then(h => h.jsonValue());
@@ -67,10 +68,11 @@ const rowsFor = agent => [
           await sleep(700); await page.evaluate(() => document.getElementById('wosWelcome')?.remove());
           await page.fill(`${root} [data-chsearch]`, 'messenger');
           await page.waitForSelector(`${root} [data-chbs="done"]`); await sleep(400);
-          const get = () => page.evaluate(root => { const r = document.querySelector(root), rows = [...r.querySelectorAll('.ch-row')], footer = r.querySelector('[data-chbs="done"]'); return { headers: r.querySelectorAll('.ch-sec-h').length, ids: rows.map(e => e.dataset.chopen), tags: rows.map(e => e.querySelector('.ch-search-status')?.textContent), bounds: rows.map(e => { const b=e.getBoundingClientRect(); return { top:b.top,bottom:b.bottom,width:b.width }; }), footer: footer?.getBoundingClientRect().top }; }, root);
+          // Desktop keeps an inert, hidden list in the split-view main pane; assert only rendered geometry.
+          const get = () => page.evaluate(root => { const r = document.querySelector(root), visible = e => !!(e.getBoundingClientRect().width && e.getBoundingClientRect().height), rows = [...r.querySelectorAll('.ch-row')].filter(visible), footer = [...r.querySelectorAll('[data-chbs="done"]')].find(visible); return { headers: [...r.querySelectorAll('.ch-sec-h')].filter(visible).length, ids: rows.map(e => e.dataset.chopen), tags: rows.map(e => e.querySelector('.ch-search-status')?.textContent), bounds: rows.map(e => { const b=e.getBoundingClientRect(); return { top:b.top,bottom:b.bottom,width:b.width }; }), footer: footer?.getBoundingClientRect().top }; }, root);
           let s = await get();
           ok(bodyRequests.includes(agent), `${shell}/${agent}: body search uses the requested agent route`, bodyRequests);
-          ok(await page.locator(`${root} .ch-row-wrap.pinned [data-chopen="qa_${agent}_old"]`).count() === 1, `${shell}/${agent}: the oldest fixture really is pinned`);
+          ok(await page.locator(`${root} .ch-row-wrap.pinned [data-chopen="qa_${agent}_old"]:visible`).count() === 1, `${shell}/${agent}: the oldest fixture really is pinned`);
           ok(s.headers === 0, `${shell}/${agent}: no search section headers`, s.headers);
           const expected = ['working', 'snoozed', 'error', 'old', 'preview', 'body'].map(k => `qa_${agent}_${k}`);
           ok(JSON.stringify(s.ids) === JSON.stringify(expected), `${shell}/${agent}: exact relevance rank, incidental body mention last; pins receive no boost`, s.ids);
@@ -89,7 +91,7 @@ const rowsFor = agent => [
             }
           }
           await page.fill(`${root} [data-chsearch]`, ''); await sleep(400);
-          const sections = await page.evaluate(root => [...document.querySelectorAll(`${root} .ch-sec[data-sec]`)].map(e => [e.dataset.sec,e.getBoundingClientRect().top]).sort((a,b)=>a[1]-b[1]), root);
+          const sections = await page.evaluate(root => [...document.querySelectorAll(`${root} .ch-sec[data-sec]`)].filter(e => e.getBoundingClientRect().width && e.getBoundingClientRect().height).map(e => [e.dataset.sec,e.getBoundingClientRect().top]).sort((a,b)=>a[1]-b[1]), root);
           ok(sections.length >= 2 && sections[0][0] === 'archive', `${shell}/${agent}: clearing search restores By-status sections with Archive on top`, sections);
         }
       } catch(e) { ok(false, `${shell}: complete search scenario`, String(e.stack)); }
