@@ -62,7 +62,7 @@ test('event access is capability-gated, render payloads have no DOM, stale model
   await f.clear(); assert.equal(await api.thread.model({id:'test-model',provider:'test'}),null); assert.deepEqual(Array.from(await api.models.list()),[]);
 });
 test('a core repaint removes the origin marker: teardown never resurrects stale duplicate actions', async () => {
-  const f=fixture(); await f.mount('miguel/switch-row-actions');
+  const f=fixture(); await f.mount('miguel/model-pills');
   const marker=f.thread.children.find(n=>n.tagName==='comment'); assert.ok(marker); marker.remove();
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);

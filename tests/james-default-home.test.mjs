@@ -21,8 +21,32 @@ function experience(skin) {
   vm.runInNewContext(read('web/core/experience.js'), { window, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal,
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
-  return { E: window.WosExperience, active: () => Array.from(active) };
+  return { E: window.WosExperience, active: () => Array.from(active), window };
 }
+
+test('#778/#779/#789: author All switches stay skin-scoped and never turn Miguel on in default skins', async () => {
+  for (const skin of ['nebula', 'grove', 'tide', 'ember', 'signal']) {
+    const f = experience(skin); await f.E.refresh();
+    assert.equal(f.E.state.error, '');
+    await f.E.chooseAuthor('miguel');
+    assert.ok(!f.active().some(id => id.startsWith('miguel/')), skin + ': no Miguel package after Miguel All');
+    await f.E.chooseAuthor('wizard');
+    assert.ok(!f.active().some(id => id.startsWith('miguel/')), skin + ': James All never enables Miguel');
+    assert.ok(!f.E.state.tweaks.some(t => t.id.endsWith('/home-bars') || t.id.endsWith('/switch-row-actions')));
+  }
+  const f = experience('landscapes'); await f.E.refresh();
+  assert.ok(f.active().includes('miguel/model-pills'));
+  assert.ok(f.active().includes('miguel/hidden-pin'));
+  assert.ok(!f.active().includes('miguel/home-bars'));
+  const globals = f.active().filter(id => catalog.defaults.includes(id));
+  await f.E.chooseAuthor('miguel');
+  assert.ok(!f.active().some(id => id.startsWith('miguel/')));
+  assert.deepEqual(f.active().filter(id => catalog.defaults.includes(id)), globals, 'All does not touch core defaults');
+  await f.E.chooseAuthor('miguel');
+  assert.ok(f.active().includes('miguel/model-pills') && f.active().includes('miguel/hidden-pin'));
+  f.window.WosSkin.current = 'nebula'; await f.E.chooseSkin();
+  assert.ok(!f.active().some(id => id.startsWith('miguel/')), 'switching back to James drops Miguel');
+});
 
 test('James: the default Wizard skins keep the classic Home: no network map, no AI fuel widget', async () => {
   assert.ok(!existsSync(new URL('../web/tweaks/wizard/machines-home', import.meta.url)), 'no stock copy of the network Home');
