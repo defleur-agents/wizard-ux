@@ -64,9 +64,20 @@ async function shot(p, name) {
       if(two){await p.evaluate(()=>WosExperience.toggle('wizard/two-orbs'));await p.waitForFunction(()=>WosSkinHost.tweakState.includes('wizard/two-orbs'));await sleep(700);}
       for (const skin of ['nebula','grove']) {
         // Use actual Appearance controls, including family and palette entry points.
-        await p.evaluate(()=>__wos.openSheet('settings')); await p.locator('[data-st="appearance"]').click();
-        await p.locator('[data-skinfamily="wizard"]').click(); await p.waitForFunction(()=>!WosExperience.state.busy); await sleep(250);
-        await p.locator(`[data-skinpick="${skin}"]`).click(); await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience.state.busy,skin); await p.evaluate(()=>__wos.closeSheets()); await sleep(650);
+        await p.evaluate(()=>__wos.openSheet('settings'));
+        await p.waitForFunction(()=>__wos.sheet==='settings'&&document.querySelector('#settings.open'));
+        const settings=p.locator('#settings.open #settingsBody');
+        // Settings categories use data-st-page; data-st names feature actions, not routes.
+        await settings.locator('[data-st-page="appearance"]').click();
+        await p.waitForFunction(()=>document.querySelector('#settingsBody').dataset.settingsPage==='appearance');
+        await settings.locator('[data-skinfamily="wizard"]').click();
+        // Look paints pending before its rAF action. !busy alone can pass before the action starts.
+        await p.waitForFunction(()=>!WosExperience.state.busy&&!document.querySelector('#settingsBody [data-skinfamily][disabled], #settingsBody [data-skinfamily][aria-busy="true"]'));
+        await settings.locator(`[data-skinpick="${skin}"]`).click();
+        await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience.state.busy&&!document.querySelector('#settingsBody [data-skinpick][disabled], #settingsBody [data-skinpick][aria-busy="true"]'),skin);
+        await p.evaluate(()=>__wos.closeSheets());
+        await p.waitForFunction(()=>!__wos.sheet&&!document.querySelector('#settings.open'));
+        await sleep(650);
         await swipe(p);let s=await state(p);check(s.pill&&!s.apps&&s.skin===skin&&s.active==='My skin',`${skin} radial:${enabled} two-orbs:${two}: actual Look -> Miguel selector`,s);
         const fill=await p.locator('#overview .ov-sheet').evaluate(e=>({background:getComputedStyle(e).backgroundColor,blur:getComputedStyle(e).backdropFilter,radius:getComputedStyle(e).borderRadius}));
         check(!/rgba\([^)]*,\s*0\./.test(fill.background)&&fill.blur==='none'&&parseFloat(fill.radius)>20,'Miguel pill has opaque shared panel and rounded identity',fill);
