@@ -1,0 +1,6 @@
+# Exact R23 rootfs retained, with only candidate static replacement.
+FROM wisdom-r24-base:7af9d0c77ff9
+ARG WISDOM_SOURCE
+COPY --chmod=a+rX wisdom/static/ /app/static/
+LABEL org.opencontainers.image.revision="${WISDOM_SOURCE}" \
+ org.wizard.source.sha="${WISDOM_SOURCE}"
