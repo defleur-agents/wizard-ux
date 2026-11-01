@@ -51,5 +51,6 @@ test('Pages stays directly openable from both shell pickers', () => {
   const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(kinds, /const opensScreen = a =>/);
   assert.match(phone, /const kindTile = a => AK\.opensScreen\(a\)/);
+  assert.match(phone, /wiz: grp\('wiz', sysSplit\(K\.wiz, kindTile\)\)/);
   assert.match(desktop, /run: o => AK\.opensScreen\(a\) \? openApp\(a, o\)/);
 });

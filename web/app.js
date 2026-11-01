@@ -1476,7 +1476,7 @@
     const grp = (k, body) => `<div class="lgroup kg-${k}"><h4>${AK.LABELS[k]}</h4><div class="lgrid">${body}${getTile(k)}</div></div>`;
     const G = {
       apps: grp('apps', sysSplit(K.apps, kindTile)),
-      wiz: grp('wiz', sysSplit(K.wiz, backTile)),
+      wiz: grp('wiz', sysSplit(K.wiz, kindTile)),
       agents: grp('agents', sysSplit(K.agents, kindTile) + (K.builder ? plusTile('data-app="agents"', 'Build agents') : '')),
       conns: grp('conns', sysSplit(K.conns, kindTile)),
     };
