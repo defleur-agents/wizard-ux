@@ -3622,9 +3622,9 @@
       return orbTapBusy();
     } else if (g.mode === 'radial') {
       const out = window.WosOrbSwitcher?.release(cancelled) || { kind: 'none' };
-      if (out.kind === 'desk' && out.desk !== idx) return goDesk(out.desk);
       placeTrack(0, true); parkDesks(false);
-      if (out.kind === 'open') { const a = APP[out.id]; if (a) openApp(a); } // a pinned app that is not open: the shared opener decides where it goes
+      if (out.kind === 'open' && out.id === 'home') execute({ action: 'desk', to: 'home' });
+      else if (out.kind === 'open') { const a = APP[out.id]; if (a) openApp(a); } // every pin uses shared placement, including already-open apps
       else if (out.kind === 'customize') window.WosOrbSwitcher.openSettings();
     } else if (g.mode === 'hold') {
 
