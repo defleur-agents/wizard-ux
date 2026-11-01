@@ -5,6 +5,8 @@ from pathlib import Path
 sys.dont_write_bytecode=True
 R=Path(__file__).resolve().parent
 FALSE=dict(nativeAcceptance=False,releaseAllowed=False,liveParityAcceptance=False,visualAcceptance=False,ordinaryPathAcceptance=False)
+def interrupted(*_):raise KeyboardInterrupt('parent-admitted R33 interrupted; unwind owned native driver')
+signal.signal(signal.SIGTERM,interrupted)
 def sha(p):return hashlib.file_digest(Path(p).open('rb'),'sha256').hexdigest()
 def read(p):return json.loads(Path(p).read_text())
 def write(p,x):Path(p).write_text(json.dumps(x,indent=2,sort_keys=True)+'\n')
@@ -108,7 +110,7 @@ def main():
   root,c,rc=arm('control-normal',False,m)
   b=read(root/'evidence/native/reader-boundary.json');assert b['prekill']['frames'][-1]['pair']==[5,13] and b['restored']['frames'][-1]['pair']==[5,15] and rc!=0,'STOP: native normal control did not reproduce exact old failure'
   report['control_normal']='exact-5/13-to-5/15-reproduced'
-  root,d,rc=arm('control-reciprocal',False,m,True);assert totals(root)==[13,15,18,15],'STOP: native reciprocal control not reproduced'
+  root,d,rc=arm('control-reciprocal',False,m,True);assert rc==0 and totals(root)==[13,15,18,15],'STOP: native reciprocal control not reproduced'
   report['control_reciprocal']=[13,15,18,15];write(R/'evidence/acceptance.json',report)
   report['candidate_image']=package(m)
   root,c,rc=arm('candidate-normal',True,m)
@@ -117,7 +119,7 @@ def main():
   for phase in ('prekill','restored','home_prekill','home_restored'):assert b[phase]['frames'][-1]['pair']==[5,15]
   report['candidate_normal']='all normal native gates observed; parent pixel review still required'
   root,d,rc=arm('candidate-reciprocal',True,m,True);report['candidate_reciprocal']=totals(root)
-  assert report['candidate_reciprocal']==[15,18,15,15],'STOP: candidate reciprocal discriminator failed'
+  assert rc==0 and report['candidate_reciprocal']==[15,18,15,15],'STOP: candidate reciprocal discriminator failed'
   report['status']='diagnostic-effect-observed-not-root-cause-or-flight-ready'
  except BaseException as e:report['failure']=repr(e)
  finally:
