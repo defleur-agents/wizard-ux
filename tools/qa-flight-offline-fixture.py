@@ -17,8 +17,12 @@ fixture={'thinkers':[{'id':'flight-author','name':'Synthetic Author','series':'F
 library.catalog=lambda c:copy.deepcopy(fixture)
 with server.db() as c:
  library.init(c);wisdom.init(c);discussions.init(c,server.DATA/'wisdom.sqlite');c.commit()
-# Small valid PNG; no copied artwork, fonts, collections or owner state.
-PNG=base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=')
+# Unmistakable synthetic checkerboard art: native screenshots must show this, not a blank fallback.
+import struct,zlib
+w,h=180,240
+raw=b''.join(b'\0'+b''.join(bytes((32,88,155) if (x//30+y//30)%2 else (238,175,62)) for x in range(w)) for y in range(h))
+def chunk(t,d):return struct.pack('!I',len(d))+t+d+struct.pack('!I',zlib.crc32(t+d)&0xffffffff)
+PNG=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('!IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw))+chunk(b'IEND',b'')
 class H(server.Handler):
  calls=[]
  lost=False
@@ -35,6 +39,10 @@ class H(server.Handler):
    with server.db() as c:
     state=wisdom.state(c);tables={r[0] for r in c.execute('select name from sqlite_master')};count=c.execute('select count(*) from wisdom_offline_receipts').fetchone()[0] if 'wisdom_offline_receipts' in tables else 0
    return self.send(200,{'synthetic':True,'state':state,'receipts':count,'writes':self.calls})
+  if path.startswith('/wisdom/wisdom-art/f/'):
+   font=(a.wisdom_source/'static'/path.removeprefix('/wisdom/')).resolve()
+   if font.is_relative_to(a.wisdom_source/'static') and font.is_file():return self.send(200,font.read_bytes(),mimetypes.guess_type(font.name)[0] or 'font/woff2')
+   return self.send(404,{})
   if path.startswith('/wisdom/wisdom-art/'):
    return self.send(200,PNG,'image/png')
   if path=='/wizard/v1/bootstrap':
