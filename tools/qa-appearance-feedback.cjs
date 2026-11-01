@@ -43,7 +43,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
       for (let retry = 0; ; retry++) { try { await p.goto(url, { waitUntil: 'load', timeout: 60000 }); break; } catch (e) { if (retry > 1 || !String(e).includes('ERR_NETWORK_CHANGED')) throw e; } }
       await p.waitForFunction(([skin]) => window.WosExperience?.state.owner && window.WosSkin?.current === skin && !WosExperience.state.busy, [skin], { timeout: 30000 });
       // Use the real shell's Settings surface, not a separately mounted test page.
-      await p.evaluate(shell => { if (shell === 'desktop') __wux.openSettings('appearance'); else { __wos.openSheet('settings'); WosSettings.focus('look'); } }, shell);
+      await p.evaluate(shell => { if (shell === 'desktop') __wux.openSettings('appearance'); else { __wos.openSheet('settings'); } }, shell);
+      if (shell === 'phone') { await p.waitForTimeout(1500); await p.locator('#settingsBody').getByText('Appearance', { exact: true }).first().click(); await p.waitForTimeout(800); }
       const group = p.locator('.tw-group:visible').first(); await group.waitFor({ state: 'visible', timeout: 20000 });
       await p.waitForTimeout(1200);
       const text = await group.innerText();
