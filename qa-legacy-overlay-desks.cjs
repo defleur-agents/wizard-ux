@@ -80,7 +80,7 @@ async function shot(p, name) {
       let s=await state(p);check(s.pill&&!s.apps&&data.active==='My skin'&&s.skin==='grove','reload reads restored CSS and active pointer from box without reseeding',s);await close(p);
       // Real thumb hold + tap still use the existing voice/radial handlers.
       let o=await orbXY(p);await T(p,'touchStart',o.x,o.y);await sleep(750);
-      if(enabled)check(await p.evaluate(()=>WosOrbSwitcher.isOpen&&WosOrbSwitcher._wedges().every(w=>w.kind!=='app')),'long hold remains pins-only radial (empty fixture: voice+Customize)');
+      if(enabled)check(await p.evaluate(()=>WosOrbSwitcher.isOpen&&WosOrbSwitcher._wedges().every(w=>w.kind==='voice'||w.kind==='custom'||(w.kind==='app'&&WosLauncher.get().pins.includes(w.item.id)))),'long hold remains pins-only radial (no desk wedges)');
       else check(await p.evaluate(()=>__wos.voice==='command'),'OFF long hold remains ordinary voice command');
       await p.evaluate(()=>__wos.cancelVoice(true));await T(p,'touchEnd');await sleep(500);
       o=await orbXY(p);await T(p,'touchStart',o.x,o.y);await sleep(40);await T(p,'touchEnd');await sleep(500);
