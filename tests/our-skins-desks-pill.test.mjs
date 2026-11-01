@@ -1,8 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
 const web = new URL('../web/', import.meta.url);
-const read = f => readFileSync(new URL(f, web), 'utf8');
+const read = f => withLayout(f, readFileSync(new URL(f, web), 'utf8'));
 
 test('Desks overview restyle (smaller cards, badges, grown pill) lives only in Miguel\'s skin packages', () => {
   for (const [dir, pre] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {

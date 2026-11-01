@@ -411,6 +411,13 @@
     if (!el) { el = document.createElement('span'); el.id = 'orbApp'; el.className = 'orb-app'; el.hidden = true; el.setAttribute('aria-hidden', 'true'); wrap.appendChild(el); }
     const h = deskSigil(idx); if (h !== orbAppHtml) { orbAppHtml = h; el.innerHTML = h; }
   }
+  // Miguel's layout is a tweak (miguel/layout): switching it on or off repaints the dock and Home at once, no reload.
+  if (typeof MutationObserver === 'function') {
+    const layoutOn = () => (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/layout');
+    let wasLayout = layoutOn();
+    new MutationObserver(() => { const on = layoutOn(); if (on === wasLayout) return; wasLayout = on; try { renderDots(); renderHome(); } catch (_) {} })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
   function renderDots() {
     window.WosBell?.paint?.();
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}

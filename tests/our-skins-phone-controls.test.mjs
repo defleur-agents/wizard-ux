@@ -5,17 +5,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
 
-// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
-const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
-const read = p => ungate(readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
+const read = p => withLayout(p, (readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')));
 const obsidian = read('web/skins/obsidian/skin.css');
 const landscapes = read('web/skins/landscapes/skin.css');
 const rule = (css, sel) => {
   const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // The last rule for a selector wins, like the cascade (older size-only rules can share a selector).
   const all = [...css.matchAll(new RegExp(`(?:^|\\n)${esc}\\s*\\{([^}]*)\\}`, 'g'))];
-  return all.length ? all[all.length - 1][1] : null;
+  // With Miguel's layout split off, one selector can have a colour rule and a layout rule: read them together.
+  return all.length ? all.map(m => m[1]).join(' ') : null;
 };
 const VIOLET = /var\(--violet|143,\s*99,\s*255|122,\s*77,\s*255|185,\s*155,\s*255|160,\s*140,\s*255|205,\s*190,\s*255|#7a4dff|#c04dff|#C9BEFF/i;
 const O = 'html[data-skin^="obsidian"]:not([data-shell="desktop"])';
@@ -68,7 +68,8 @@ test('Landscapes phone controls are frosted white glass, not core violet', () =>
 });
 
 test('phone polish never reaches desktop and keeps the private purple', () => {
-  for (const css of [obsidian, landscapes]) {
+  const raw = d => readFileSync(new URL(`../web/skins/${d}/skin.css`, import.meta.url), 'utf8');
+  for (const css of [raw('obsidian'), raw('landscapes')]) {
     const from = css.indexOf('/* Phone polish (Miguel 27 Oct'), to = css.indexOf('/* Landscapes Light (', from);
     const block = css.slice(from, to > 0 ? to : undefined);
     assert.ok(block.length > 100, 'phone polish block present');

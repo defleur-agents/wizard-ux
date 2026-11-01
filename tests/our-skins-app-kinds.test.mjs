@@ -3,8 +3,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-const css = f => readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8');
+const css = f => withLayout(`skins/${f}/skin.css`, readFileSync(new URL(`../web/skins/${f}/skin.css`, import.meta.url), 'utf8'));
 const kinds = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
 test('app kinds are gated on our three skins only', () => {

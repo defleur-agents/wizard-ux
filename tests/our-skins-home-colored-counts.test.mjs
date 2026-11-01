@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { withLayout } from './fixtures/mizel-layout-css.mjs';
 
-// Miguel's layout rules sit behind his miguel/layout tweak (a zero-specificity :where gate); read them ungated.
-const ungate = s => s.replaceAll(':where([data-tweaks~="miguel/layout"])', '');
-const read = f => ungate(fs.readFileSync(new URL(f, import.meta.url), 'utf8'));
+const read = f => withLayout(f, (fs.readFileSync(new URL(f, import.meta.url), 'utf8')));
 
 test('our skins colour Ready/Working text instead of the dot', () => {
   for (const [f, p] of [['obsidian', 'html\\[data-skin\\^="obsidian"\\]'], ['landscapes', 'html\\[data-skin\\^="landscapes"\\]']]) {

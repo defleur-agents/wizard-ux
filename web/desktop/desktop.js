@@ -643,6 +643,13 @@
       } catch (e) {}
     });
   }
+  // Miguel's layout is a tweak (miguel/layout): switching it on or off repaints the dock and Home at once, no reload.
+  if (typeof MutationObserver === 'function') {
+    const layoutOn = () => (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/layout');
+    let wasLayout = layoutOn();
+    new MutationObserver(() => { const on = layoutOn(); if (on === wasLayout) return; wasLayout = on; try { render(); } catch (_) {} })
+      .observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] });
+  }
   function render() {
     // Stable desktop IDs preserve hosted apps, composers and scroll when desktop indices shift.
     $$('.win', stage).forEach(el => { if (!W[el.dataset.win]) { el.querySelector('iframe')?._appDetach?.(); el.remove(); } });
