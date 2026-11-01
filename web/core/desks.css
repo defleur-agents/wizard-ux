@@ -156,6 +156,8 @@
 .new-desk .nd-head { display: flex; align-items: baseline; gap: 10px; margin: 6px 4px 18px; }
 .new-desk .nd-head b { font-size: 22px; font-weight: 700; }
 .new-desk .nd-head span { font-size: 13.5px; color: var(--ink-3); }
+.new-desk .kg-apps > h4 { display: none; }
+.new-desk .kg-apps { margin-top: 0; }
 .new-desk .lgroup { margin-bottom: 22px; }
 /* Search apps (James, 23 Oct 2026): pill at bottom centre, above the dock. The desk scroll leaves room for it. */
 /* Room under the last row for the search pill, the dock and the iPhone home bar, so the list can always scroll the

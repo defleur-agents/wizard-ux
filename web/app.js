@@ -1508,7 +1508,7 @@
     // Wizard apps, Agents and Connectors folded under "For agents".
     // Search apps (James, 23 Oct 2026): a pill at bottom centre, above the dock; typing filters every group in place
     // (For agents unfolds while a query is on), Enter opens the first match.
-    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b><span>Pick an app to open here</span></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
+    tileN = 0; return `<div class="desk-scroll new-desk kinds"><div class="nd-head"><b>New desk</b></div>${kindGroups(['apps', 'wiz', 'agents', 'conns'])}<p class="nd-none" hidden>No app matches</p></div><form class="nd-search" role="search" data-ndsearch><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg><input type="search" data-ndq placeholder="Search apps" aria-label="Search apps" autocomplete="off" enterkeyhint="go"></form>`;
   }
   function renderApp(w) {
     const a = APP[w.appId] || {};
