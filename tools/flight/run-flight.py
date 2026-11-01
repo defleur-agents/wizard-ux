@@ -70,7 +70,7 @@ try:
  assert os.access('/dev/kvm',os.R_OK|os.W_OK),'KVM unavailable'
  assert shutil.disk_usage(R).free>30*1024**3,'insufficient scratch disk'
  mem={s.split(':')[0]:int(s.split()[1])*1024 for s in Path('/proc/meminfo').read_text().splitlines()};assert mem['MemAvailable']>8*1024**3,'insufficient available RAM'
- for port in [5588,5589,5147,28543]:
+ for port in [5568,5569,5147,28543]:
   with socket.socket() as s:s.bind(('127.0.0.1',port))
  package=json.loads((Path(ENV['PLAYWRIGHT_DIR'])/'package.json').read_text());assert package['version']=='1.64.1'
  browsers=json.loads((Path(ENV['PLAYWRIGHT_DIR']).parent/'playwright-core/browsers.json').read_text());assert next(b for b in browsers['browsers'] if b['name']=='chromium')['revision']=='1248'
@@ -80,21 +80,31 @@ try:
  assert '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd' in cert;assert digest(R/'current-release.apk')==M['apk']['sha256'];(OUT/'apk-signer.txt').write_text(cert)
  # Package from the exact accepted current runtime; no model/backend/content changes.
  base='sha256:c20dac0d0609dcc26e8ee07fefe57b1a3e1bdd8003661dc3be97248eece44823'
- prior=Path('/srv/work/wisdom-flight-c0fa4bd7-908f001e-r2')
+ prior=Path('/srv/work/wisdom-flight-6aa0e40e-908f001e-r6')
  previous=json.loads((prior/'evidence/acceptance.json').read_text())['image']
- assert previous['id']=='sha256:dc229c78a6fe51015b1a8e2f82f1208def35046066b65473e48c6945e94a2c9b' and previous['source']==M['wisdom_candidate']
- imageTar=prior/'artifacts/wisdom-candidate-image.tar';assert digest(imageTar)=='44ee956574ca62d25a90ac60ced82e840cbe76a857fe18523076a65ffd53e7f9'==previous['tar_sha256']
- tag=previous['id'];info=json.loads(run(['docker','image','inspect',tag]).stdout)[0]
- assert info['Id']==tag and info['Architecture']=='amd64' and info['RootFS']==previous['rootfs'] and info['Config']['Labels']['org.wizard.source.sha']==M['wisdom_candidate']
+ base_info=json.loads(run(['docker','image','inspect',base]).stdout)[0]
+ assert base_info['Id']==base and base_info['Architecture']=='amd64'
+ base_tag='wisdom-flight-r7-live-base:7a423b3'
+ run(['docker','tag',base,base_tag])
+ assert json.loads(run(['docker','image','inspect',base_tag]).stdout)[0]['Id']==base
+ (OUT/'base-image-inspect.json').write_text(json.dumps(base_info,indent=2))
+ tag='wisdom-flight-candidate:'+M['wisdom_candidate'][:12]+'-r7'
+ run(['docker','build','--pull=false','--network=none','--build-arg','WISDOM_SOURCE='+M['wisdom_candidate'],'-f','Dockerfile.flight','-t',tag,'.'],timeout=300,log=OUT/'image-build.log')
+ info=json.loads(run(['docker','image','inspect',tag]).stdout)[0]
+ assert info['Id']!=previous['id'] and info['Architecture']=='amd64' and info['Config']['Labels']['org.wizard.source.sha']==M['wisdom_candidate']
  (OUT/'image-inspect.json').write_text(json.dumps(info,indent=2))
- result['image_reuse']={'prior':str(prior),'tar_sha256':previous['tar_sha256'],'id':tag}
+ art=R/'artifacts';imageTar=art/'wisdom-candidate-image.tar'
+ run(['docker','image','save','-o',imageTar,tag],timeout=300)
+ result['image_build']={'base_id':base,'source':M['wisdom_candidate'],'dockerfile_sha256':digest(R/'Dockerfile.flight'),'fresh_build':True}
  static={k[len('wisdom/'):]:v['sha256'] for k,v in M['export_members'].items() if k.startswith('wisdom/static/') and v['mode']!='120000'}
  code='import pathlib,hashlib,json; r=pathlib.Path("/app"); names='+repr(list(static))+';print(json.dumps({n:hashlib.sha256((r/n).read_bytes()).hexdigest() for n in names}))'
  cname='wisdom-flight-proof-'+M['wisdom_candidate'][:12]
  try:
   actual=json.loads(run(['docker','run','--rm','--name',cname,'--network','none','--entrypoint','python',tag,'-c',code],timeout=60).stdout);assert actual==static,'candidate image static bytes differ'
  finally:run(['docker','rm','-f',cname],ok=False)
- assert static==previous['assets'],'prior full static asset map differs';art=prior/'artifacts'
+ delta=sorted(k for k in static if static[k]!=previous['assets'].get(k))
+ assert delta==['static/app.js'],('unexpected R7 product delta',delta)
+ result['image_delta_from_r6']=delta
  result['image']={'id':info['Id'],'tag':tag,'tar_sha256':digest(art/'wisdom-candidate-image.tar'),'source':M['wisdom_candidate'],'assets':static,'rootfs':info['RootFS']}
  # A real API/status/cache smoke must pass before the longer flows. After it,
  # browser/baseline failures never hide first-ever native evidence.

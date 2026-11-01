@@ -44,7 +44,17 @@ async function cacheReady(f,p){await f.evaluate(async()=>{await WisdomOffline.st
  await context.setOffline(true);await f.evaluate(()=>window.dispatchEvent(new Event('offline')));await quiet(f);await context.close();context=null;
  p=await open(true);await p.goto(URL0,{waitUntil:'domcontentloaded'});f=await frame(p);await quiet(f);await chapter(f);await p.screenshot({path:path.join(OUT,'offline-cold-chapter.png')});
  const beforeCollapse=await f.locator('.wb-count').textContent();await f.locator('.wb-stage').evaluate(el=>el.style.width='0px');await f.evaluate(()=>dispatchEvent(new Event('resize')));await f.waitForTimeout(800);assert.equal(await f.locator('.wb-count').textContent(),beforeCollapse);assert((await f.evaluate(()=>__qaReadOutbox())).every(i=>i.body?.field!=='progress'||Number.isFinite(i.body.value)));await f.locator('.wb-stage').evaluate(el=>el.style.width='');await f.evaluate(()=>dispatchEvent(new Event('resize')));result.checks.zeroWidthFiniteProgress=true;
- await f.getByRole('button',{name:'Next page',exact:true}).click();
+ if(WIDTH<600){
+  // Real touchscreen input, routed through the stage's pointerdown/move/up handlers.
+  // Locator bounds include the iframe offset in the top-level viewport.
+  const b=await f.locator('.wb-stage').boundingBox();assert(b&&b.width>100&&b.height>0);
+  const cdp=await context.newCDPSession(p),y=b.y+b.height*.5,x=b.x+b.width*.8,end=b.x+b.width*.2;
+  const point=x=>[{x,y,id:1,radiusX:1,radiusY:1,force:1}];
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:point(x)});
+  for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:point(x+(end-x)*i/8)});await p.waitForTimeout(20)}
+  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+  result.checks.pagingGesture={kind:'Chromium touchscreen stream',bounds:b,start:{x,y},end:{x:end,y}};
+ }else await f.getByRole('button',{name:'Next page',exact:true}).click();
  const chosen=await settledProgress(f,'chosen-real-page');assert(chosen.page>1&&chosen.page<chosen.pages,'real non-cover, non-end reader page');
  const write=await f.evaluate(async()=>{const e=(await WisdomOffline.projected()).entries.find(e=>e.id==='flight-chapter');const text='Quiet attention begins with one thing.';const flow=document.querySelector('.wb-flow');const walker=document.createTreeWalker(flow,NodeFilter.SHOW_TEXT);let rendered='',node;while((node=walker.nextNode())){if(!node.parentElement.closest('script,style'))rendered+=node.nodeValue}const start=rendered.indexOf(text);if(start<0)throw Error('Highlight quote absent from rendered flow');const h=await api('wisdom/highlight',{action:'add',entry_id:e.id,start,end:start+text.length,text,body_sha256:e.body_sha256,note:'Synthetic flight highlight'});return {queued:h.queued,pending:await __qaReadOutbox(),snapshot:await WisdomOffline.projected()}});
  result.checks.offlineWriteReceipt=write;assert.equal(write.queued,true);assert(write.pending.length>=2);assert.equal(write.snapshot.highlights.length,1);

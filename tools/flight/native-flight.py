@@ -31,7 +31,7 @@ APK = ROOT / 'current-release.apk'
 EXPECTED = '04a188ae173b3a2cd22139256be9fe3158355079949f8b44c4be0eca2f90b767'
 PKG = 'ai.wizards.os'
 PORT = 28543
-SERIAL = 'emulator-5588'
+SERIAL = 'emulator-5568'
 ORIGIN = f'https://localhost:{PORT}'
 ENV = {**os.environ, 'ANDROID_HOME': str(SDK), 'ANDROID_SDK_ROOT': str(SDK),
        'ANDROID_AVD_HOME': str(ROOT / 'avds'), 'TMPDIR': str(ROOT / 'tmp'), 'ANDROID_ADB_SERVER_PORT': '5147'}
@@ -46,14 +46,8 @@ def run(argv, *, ok=True, timeout=120, input=None):
     return r.stdout.decode(errors='replace')
 
 def a(*args, **kw):
-    # A transient adb transport drop ('device not found') is retried after wait-for-device.
-    for attempt in range(4):
-        try:
-            return run([adb, '-P', '5147', '-s', SERIAL, *args], **kw)
-        except RuntimeError as e:
-            if attempt == 3 or 'not found' not in str(e) and 'offline' not in str(e): raise
-            sp.run([str(adb), '-P', '5147', '-s', SERIAL, 'wait-for-device'], env=ENV, timeout=180)
-            time.sleep(2)
+    # Fail fast: a lost transport is evidence, not three 180-second waits.
+    return run([adb, '-P', '5147', '-s', SERIAL, *args], **kw)
 
 def shell(command, **kw):
     return a('shell', command, **kw)
@@ -169,6 +163,26 @@ def scroll_tap(pattern, attempts=10):
         shell('input swipe 540 1700 540 600 450'); time.sleep(1)
     raise AssertionError('No visible native target: ' + pattern)
 
+def page_count(raw=None):
+    counts=[label(n) for n in nodes(raw) if re.fullmatch(r'\d+\s*/\s*\d+',label(n))]
+    if len(counts)!=1:raise AssertionError('Expected actual reader page count: '+repr(counts))
+    return tuple(map(int,counts[0].split('/')))
+
+def next_page():
+    raw=ui();before=page_count(raw);ns=nodes(raw)
+    # Bounds are from actual accessibility: between reader header and page footer.
+    header=next(n for n in ns if label(n)=='Chapter discussions')
+    footer=next(n for n in ns if re.fullmatch(r'\d+\s*/\s*\d+',label(n)))
+    hb=list(map(int,re.findall(r'\d+',header.get('bounds',''))))
+    fb=list(map(int,re.findall(r'\d+',footer.get('bounds',''))))
+    rootb=list(map(int,re.findall(r'\d+',ns[0].get('bounds',''))))
+    left,right=rootb[0],rootb[2];y=(hb[3]+fb[1])//2
+    assert hb[3]<y<fb[1] and right-left>100
+    shell(f'input swipe {left+(right-left)*4//5} {y} {left+(right-left)//5} {y} 200')
+    after=until(lambda: (c if (c:=page_count())!=before else None),15)
+    record('native touch swipe advances exactly one real page',after==(before[0]+1,before[1]),{'before':before,'after':after,'header':hb,'footer':fb})
+    return after
+
 def capture(name):
     for action in [lambda:raw_screen(name), lambda:diagnostics(name), lambda:(OUT / (name + '.xml')).write_text(ui())]:
         try:action()
@@ -233,7 +247,7 @@ try:
     (ROOT/'tmp').mkdir(exist_ok=True)
     record('hardware KVM accessible', os.access('/dev/kvm', os.R_OK|os.W_OK))
     sdk_prepare()
-    emulator = sp.Popen([str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-port','5588',
+    emulator = sp.Popen([str(SDK/'emulator/emulator'), '-avd','wisdom-flight','-port','5568',
         '-accel','on','-no-window','-no-audio','-no-snapshot','-wipe-data','-gpu','swiftshader',
         '-memory','4096','-cores','4'], env=ENV, stdout=(OUT/'emulator.log').open('w'), stderr=sp.STDOUT)
     until(lambda:a('get-state',ok=False).strip()=='device',180)
@@ -252,10 +266,9 @@ try:
     readiness('post-tls-user-unlocked', 'dumpsys user', lambda s:bool(re.search(r'UserInfo\{0:[^\n]+\n(?:(?!\s*UserInfo\{)[\s\S])*?\n\s+State: RUNNING_UNLOCKED\b',s)) and 'Started users state: [0=RUNNING_UNLOCKED]' in s)
     readiness('post-tls-zygote', 'getprop init.svc.zygote', lambda s:s.strip()=='running')
     diagnostics('boot-ready')
-    # No device traffic may leave this disposable rig: loopback + adb reverse only.
-    # Apply before installing/starting the release APK, including its background jobs.
-    shell('iptables -I OUTPUT 1 ! -o lo -j REJECT && ip6tables -I OUTPUT 1 ! -o lo -j REJECT')
-    (OUT/'device-egress-policy.txt').write_text(shell('iptables -S OUTPUT; ip6tables -S OUTPUT'))
+    # The app UID policy is installed after package discovery, before first launch.
+    # Do not filter root/adbd: its TCP control transport is not app web egress.
+    (OUT/'device-sockets-before.txt').write_text(shell('ss -ntp; iptables -S OUTPUT; ip6tables -S OUTPUT'))
     env={**ENV,'QA_LOST_HIGHLIGHT':'1'}
     fixture = sp.Popen([sys.executable,str(ROOT/'ux/tools/qa-flight-offline-fixture.py'),
         '--web',str(ROOT/'ux/web'),'--wisdom-source',str(ROOT/'wisdom'),'--port',str(PORT),
@@ -273,6 +286,23 @@ try:
     record('published release installs','Success' in a('install','-r',str(APK),timeout=180))
     installed=shell('dumpsys package '+PKG);(OUT/'installed-package.txt').write_text(installed)
     record('installed exact .23/code87 signed artifact','versionName=0.10.23' in installed and 'versionCode=87' in installed)
+    uid_match=re.search(r'\buserId=(\d+)\b',installed)
+    record('exact installed application UID discovered', bool(uid_match))
+    assert uid_match is not None
+    uid=int(uid_match[1]);record('application UID is not root or shell',uid>=10000)
+    for table in ('iptables','ip6tables'):
+        shell(f'{table} -N WISDOM_QA_EGRESS && {table} -A WISDOM_QA_EGRESS ! -o lo -j REJECT && {table} -I OUTPUT 1 -m owner --uid-owner {uid} -j WISDOM_QA_EGRESS')
+    policy=shell('iptables -S OUTPUT; iptables -S WISDOM_QA_EGRESS; ip6tables -S OUTPUT; ip6tables -S WISDOM_QA_EGRESS')
+    (OUT/'device-egress-policy.txt').write_text(policy)
+    record('app external egress denied IPv4 and IPv6 before launch',policy.count(f'--uid-owner {uid} -j WISDOM_QA_EGRESS')==2 and policy.count('! -o lo -j REJECT')==2,{'uid':uid,'scope':'release app UID; loopback retained; root/adbd unaffected'})
+    # Documentation-only address cannot receive traffic: the UID rule rejects the SYN.
+    probe=shell(f"su {uid} /system/bin/sh -c 'id; toybox nc -w 2 192.0.2.1 443 </dev/null; echo probe_status=$?'",timeout=10)
+    counters=shell('iptables -nvx -L WISDOM_QA_EGRESS; ip6tables -nvx -L WISDOM_QA_EGRESS; ss -ntp')
+    (OUT/'device-egress-probe.txt').write_text(probe+'\n'+counters)
+    rejected=sum(int(m[1]) for m in re.finditer(r'^\s*(\d+)\s+\d+\s+REJECT\b',counters,re.M))
+    record('app UID external SYN rejected by actual firewall counter',f'uid={uid}' in probe and 'probe_status=0' not in probe and rejected>0,{'probe':probe,'rejected_packets':rejected})
+    record('ADB healthy immediately after app egress isolation',a('get-state',timeout=10).strip()=='device' and shell('echo adb-control-alive',timeout=10).strip()=='adb-control-alive')
+    (OUT/'device-sockets-after.txt').write_text(shell('ss -ntp; cat /proc/net/nf_conntrack 2>/dev/null',ok=False))
     # Pair through the real release Connect screen (no QA origin hook or TLS bypass).
     data='wizard://connect?origin=https%3A%2F%2Flocalhost%3A'+str(PORT)
     shell('am start -W -a android.intent.action.VIEW -d '+data+' -p '+PKG)
@@ -341,7 +371,7 @@ try:
     chapter_labels=[label(n) for n in nodes() if label(n)]
     record('offline chapter title readable',any(chosen['entry']['title'] in s for s in chapter_labels),chapter_labels)
     record('reader controls prove chapter opened',find('^Chapter discussions$') is not None)
-    tap('^Next page$')
+    next_page()
     capture('06b-offline-chapter-text')
     body_labels=[label(n) for n in nodes() if label(n)]
     record('offline chapter has readable text',sum(len(s) for s in body_labels)>120,body_labels)
@@ -360,9 +390,9 @@ try:
     shell('input keyevent KEYCODE_BACK');time.sleep(1)
     after=[label(n) for n in nodes() if label(n)]
     record('native nested Back returns to collection',find('^Chapter discussions$') is None and any('Export this collection' in s for s in after),after)
-    scroll_tap(re.escape(chosen['entry']['title']));tap('^Next page$')
+    scroll_tap(re.escape(chosen['entry']['title']));next_page()
     # Move forward to save actual reading position, then kill the process again offline.
-    tap('^Next page$');tap('^Next page$')
+    next_page();next_page()
     shell('input keyevent KEYCODE_HOME');shell('am force-stop '+PKG)
     record('second process death before reconnect',not shell('pidof '+PKG,ok=False).strip())
     tap('^Wisdom$');until(lambda:'.AppSessionActivity' in top(),30);time.sleep(8)

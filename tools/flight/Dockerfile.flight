@@ -1,7 +1,8 @@
-# Exact accepted Forum image for effective current source 7a423b3; no pull/rebuild of backend.
-FROM wisdom-flight-local-base:c0fa4bd7-908f001e-r2
-COPY --chmod=a+rX wisdom/static/offline.js wisdom/static/wisdom.js wisdom/static/app.css wisdom/static/sw.js /app/static/
-LABEL org.opencontainers.image.revision="908f001eaeb768bb911044535ac2681827bce5cc" \
- org.wizard.source.sha="908f001eaeb768bb911044535ac2681827bce5cc" \
+# Exact effective-live backend; named locally after immutable ID verification.
+FROM wisdom-flight-r7-live-base:7a423b3
+ARG WISDOM_SOURCE
+COPY --chmod=a+rX wisdom/static/ /app/static/
+LABEL org.opencontainers.image.revision="${WISDOM_SOURCE}" \
+ org.wizard.source.sha="${WISDOM_SOURCE}" \
  org.opencontainers.image.version="0.4.0-private.35+flight-offline" \
  io.wizard.hotfix.preserved-recovery-revision="7a423b38647fe2a06e54b0942e4c3d87d45ce7c2"
