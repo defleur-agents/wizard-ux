@@ -12,6 +12,8 @@ Prior browser evidence: forum heavy_c24cd09476fa45d3ad68921b2f4f7bea, QA834fad68
 
 ## Native packet
 
+Signed packet validation requires trusted controller environment variables `WIZARD_SIGNING_ENV` and `WIZARD_OWNER_CONFIG`, each a nonempty absolute path matching its job configuration exactly. Supply both independently of the job being validated on every controller invocation, including `--preflight` and the full run; missing forwarding fails closed. Debug jobs require both configuration values to be `None`, regardless of the environment. Validation does not open either configured path.
+
 `qa_orb_phone_packet.py` validates the complete two prepared source archives, workers and seal; builds signed release + unit tests + lint and a separate inspection-only debug APK. It reuses `qa_android_connect.py` for exact signed86→87 offline in-place upgrade, preserving UID, first install, grants, origin and data. Actual encoded old/new owner defaults must agree. New code compiles using the existing project/toolchain.
 
 `qa_orb_release_native.py` uses one owned API35/x86_64 KVM guest for real signed-overlay screenshots, recording/pause/cancel (no send), screen sleep/wake, and the same packaged assist bytes in a debug native overlay for two GL loss/restore cycles and idle refreeze. It reuses raw CDP/boot helpers; it is not a physical Samsung/Pixel acceptance claim. No release WebView debugging is enabled. Captured native screenshots require parent visual review; a PNG capture alone is not colored-galaxy proof.

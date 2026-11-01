@@ -30,6 +30,12 @@ def sha(p):
         return hashlib.file_digest(f, 'sha256').hexdigest()
 
 
+def configured_absolute_path(name):
+    value = os.environ.get(name)
+    assert value and Path(value).is_absolute(), f'{name} must be a nonempty absolute path'
+    return value
+
+
 def verify_job(root, entry, signed):
     root = Path(root)
     assert root.is_relative_to('/srv/work/AndroidBuilds/jobs') and not root.is_symlink()
@@ -40,8 +46,8 @@ def verify_job(root, entry, signed):
     assert cfg['host'] == 'forum' and cfg['java'] == '21' and not cfg['cap_sync']
     assert cfg['tasks'] == (SIGNED_TASKS if signed else DEBUG_TASKS)
     assert cfg['expected_signer'] == (SIGNER if signed else None)
-    assert cfg['signing_env'] == ('/home/james/.wizard-secure/wizard-os/signing.env' if signed else None)
-    assert cfg['owner_config'] == ('/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties' if signed else None)
+    assert cfg['signing_env'] == (configured_absolute_path('WIZARD_SIGNING_ENV') if signed else None)
+    assert cfg['owner_config'] == (configured_absolute_path('WIZARD_OWNER_CONFIG') if signed else None)
     assert cfg['revision'] == entry['revision'] and cfg['manifest_sha256'] == entry['manifest_sha256']
     members = {}
     with tarfile.open(root / 'source.tar.gz') as tar:
