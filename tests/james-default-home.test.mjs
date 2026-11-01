@@ -40,12 +40,29 @@ test('#778/#779/#789: author All switches stay skin-scoped and never turn Miguel
   assert.ok(!f.active().includes('miguel/home-bars'));
   const globals = f.active().filter(id => catalog.defaults.includes(id));
   await f.E.chooseAuthor('miguel');
+  assert.ok(f.active().includes('wizard/pin-buttons'), 'Miguel All includes his carried shared tweak: mixed → all on');
+  await f.E.chooseAuthor('miguel');
   assert.ok(!f.active().some(id => id.startsWith('miguel/')));
+  assert.ok(!f.active().includes('wizard/pin-buttons'), 'Miguel All off also drops his carried shared tweak');
   assert.deepEqual(f.active().filter(id => catalog.defaults.includes(id)), globals, 'All does not touch core defaults');
   await f.E.chooseAuthor('miguel');
   assert.ok(f.active().includes('miguel/model-pills') && f.active().includes('miguel/hidden-pin'));
   f.window.WosSkin.current = 'nebula'; await f.E.chooseSkin();
   assert.ok(!f.active().some(id => id.startsWith('miguel/')), 'switching back to James drops Miguel');
+});
+
+test('worn owner authors list carries shared tweaks and never labels house choices James', async () => {
+  for (const [skin, who, label] of [['nebula', 'wizard', 'Wizard'], ['obsidian', 'miguel', 'Miguel']]) {
+    const f = experience(skin); await f.E.refresh();
+    const authors = await f.E.authors();
+    assert.equal(authors.length, 1); assert.equal(authors[0].id, who); assert.equal(authors[0].name, label);
+    assert.ok(authors[0].ids.includes('wizard/pin-buttons'));
+    assert.ok(!authors[0].ids.includes('wizard/unified-inbox'));
+    assert.ok(!authors.some(a => /James/i.test(a.name)));
+    const before = JSON.stringify(f.E.state.tweaks);
+    await f.E.chooseAuthor(who === 'wizard' ? 'miguel' : 'wizard');
+    assert.equal(JSON.stringify(f.E.state.tweaks), before, 'another author cannot act on this skin');
+  }
 });
 
 test('James: the default Wizard skins keep the classic Home: no network map, no AI fuel widget', async () => {
