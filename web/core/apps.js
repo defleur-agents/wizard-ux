@@ -50,6 +50,13 @@
   const PALETTE = [['#6b46ff', '#c04dff'], ['#3fe0ff', '#3f6bff'], ['#ff5ccf', '#5c3bff'], ['#4ff0b0', '#2f8cff'], ['#ffbe55', '#ff6b86'], ['#ff8a5c', '#ff5ccf']];
   const hue = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
   const APP_TYPES = new Set(['view', 'service', 'agent', 'external']), APP_CATEGORIES = new Set(['agent', 'interface', 'app', 'system']);
+  function readyCard(a) {
+    const c = a.ready_card, base = a.url;
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) || !c || !/^\/(?:[a-zA-Z0-9_-]+\/)+$/.test(base || '')) return null;
+    const endpoint = p => typeof p === 'string' && p.length <= 160 && /^[a-zA-Z0-9_-]+(?:\/[a-zA-Z0-9_-]+)*$/.test(p);
+    if (!endpoint(c.status) || (c.dismiss !== undefined && !endpoint(c.dismiss)) || typeof c.title !== 'string' || !c.title.trim()) return null;
+    return { title: c.title.slice(0, 60), subtitle: String(c.subtitle || '').slice(0, 160), status: base + c.status, ...(c.dismiss ? { dismiss: base + c.dismiss } : {}) };
+  }
   const toTile = (a, trusted = false) => ({
     id: String(a.id), kind: 'wizard', name: String(a.name || a.id), icon: a.icon || String(a.name || a.id).trim().charAt(0).toUpperCase(),
     g: Array.isArray(a.colors) && a.colors.length === 2 ? a.colors : hue(a.id),
@@ -61,6 +68,7 @@
     phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
     status: a.status,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    ...(trusted && readyCard(a) ? { ready_card: readyCard(a) } : {}),
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,
@@ -118,6 +126,7 @@
   }
   const firstLoad = loadRemote();
   window.WizCore.refreshApps = loadRemote;
+  window.WizCore.readyCards = () => REMOTE.filter(a => a.ready_card && (!a.status || a.status === 'running'));
   // ?open=<id> before the box's app list arrived (first run, no cache): wait for it once, then retry.
   window.WizCore.appsLoaded = () => Promise.all([firstLoad, window.WosAgents?.load(), window.WosPages?.ready]);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) loadRemote(); });

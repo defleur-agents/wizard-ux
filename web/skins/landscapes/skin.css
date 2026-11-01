@@ -926,10 +926,10 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.ch-fail-b button, .ch-err-b button):not(.ghost):not(.warn):not([data-chretrymodel]) { color: #fff; background: #111216; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.ch-fail-b button.ghost, .ch-err-b button.ghost, .ch-fail-b [data-chretrymodel]) { background: rgba(0, 0, 0, .05); }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-carry button { background: rgba(0, 0, 0, .06); }
-html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-morning .hd i { color: #9a5a00; border-color: rgba(154, 90, 0, .4); }
-html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-morning small { color: var(--ink-2); }
-html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-morning.done { border-color: rgba(0, 0, 0, .1); background: rgba(0, 0, 0, .03); }
-html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-morning.done .hd i { color: #0f7a4a; border-color: rgba(15, 122, 74, .4); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-appcard .hd i { color: #9a5a00; border-color: rgba(154, 90, 0, .4); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-appcard small { color: var(--ink-2); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-appcard.done { border-color: rgba(0, 0, 0, .1); background: rgba(0, 0, 0, .03); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-appcard.done .hd i { color: #0f7a4a; border-color: rgba(15, 122, 74, .4); }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .wk-helper button { color: #0f3d26; background: #dff3e7; border-color: #8cbf9f; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.ch-sheet-b .fi-kinds button.on, .fi-row.on .fi-att) { color: #fff; background: #111216; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) :is(.ch-row, .ch-head) .emo.sti { background: rgba(0, 0, 0, .05); }
