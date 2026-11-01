@@ -81,9 +81,24 @@ test('stale experience state never flashes another skin owner’s group during r
   assert.match(f.root.innerHTML, /Loading this skin’s tweaks/);
   assert.doesNotMatch(f.root.innerHTML, /Wizard’s tweaks|data-tweakauthor=/);
 });
-test('pending overlay uses opaque skin tokens and honours reduced motion', () => {
+test('pending tiles retain rounded preview art and a visible label, never a button-sized slab', () => {
   const css = read('web/core/settings.css');
-  assert.match(css, /\.st-root \.st-pending::before[^}]*background: var\(--wz-panel, var\(--wz-base\)\)/);
-  assert.match(css, /\.st-root \.st-pending:disabled[^}]*opacity: 1/);
-  assert.match(css, /prefers-reduced-motion: reduce[^]*\.st-root \.st-pending::after \{ animation: none/);
+  assert.doesNotMatch(css, /\.st-pending::(?:before|after)/, 'no full-button overlay or spinner');
+  assert.match(css, /\.st-pending \.skp-mini::before[^}]*inset: 0[^}]*border-radius: inherit[^}]*background: color-mix\(in srgb, var\(--wz-base\) 45%, transparent\)/);
+  assert.match(css, /\.skp-card\.st-pending[^}]*outline: none/);
+  assert.match(css, /\.skp-card\.st-pending \.skp-nm[^}]*color: var\(--wz-text\)[^}]*visibility: visible/);
+  assert.match(css, /\.st-pending:disabled[^}]*opacity: 1/);
+  assert.match(css, /\.st-pending \.skp-mini \{[^}]*box-shadow:[^}]*var\(--wz-accent\)[^}]*animation: st-busy-ring/);
+  assert.match(css, /\.st-pending \.skp-mini::after[^}]*width: 22px; height: 22px[^}]*border: 2px solid[^}]*border-top-color: var\(--wz-accent\)/);
+});
+test('competing Appearance choices dim without layout changes; switch progress stays at the switch', () => {
+  const css = read('web/core/settings.css');
+  assert.match(css, /:is\(\[data-skinfamily\], \[data-skinpick\], \[data-ownskin\], \[data-newskin\], \[data-tweak-toggle\], \[data-tweakauthor\]\):disabled:not\(\.st-pending\) \{ opacity: .6; \}/);
+  assert.match(css, /\.st-pending \.sw i \{ opacity: 0; \}/);
+  assert.match(css, /\.st-pending \.sw::after \{ width: 18px; height: 18px/);
+  assert.doesNotMatch(css, /\.st-pending \.sw::before|\.st-pending[^}]*outline: 2px/);
+});
+test('reduced motion removes both the pulse and spin, leaving static partial rings', () => {
+  const css = read('web/core/settings.css');
+  assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.st-root \.st-pending \.skp-mini, \.st-root \.st-pending \.skp-mini::after, \.st-root \.st-pending \.sw::after \{ animation: none; \}/);
 });
