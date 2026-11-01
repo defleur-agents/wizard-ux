@@ -74,6 +74,8 @@
     };
     let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null, known = null, revision = 0, worn = false;
     const live = id => !known || known.has(id); // retired ids an old device still stores are no choice: never seeded, never counted
+    // Oscar's PR829 follow-up: compare and wear the same live-only projection or completed applies can loop forever.
+    const wear = doc => onIds(doc).filter(live);
     const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, clock: meta.clock, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
     function observe(doc) {
       meta.clock = Math.max(meta.clock, at(doc?.skin?.at), ...Object.values(doc?.tweaks || {}).map(t => at(t.at)));
@@ -123,8 +125,8 @@
         try {
           if (visible.skin && visible.skin.id !== skin.current && skin.has(visible.skin.id)) skin.set(visible.skin.id);
         } finally { applying = false; } // only skin.set emits a synchronous choice; never suppress real input across awaits
-        const want = onIds(visible);
-        if (!worn || !same(want, mixOn(exp.mix))) await exp.adopt(Object.fromEntries(want.map(id => [id, true])), { current: () => revision === seen && !off });
+        const want = wear(visible);
+        if (!worn || !same(want, mixOn(exp.mix).filter(live))) await exp.adopt(Object.fromEntries(want.map(id => [id, true])), { current: () => revision === seen && !off });
         if (seen === revision) worn = true; // an empty explicit set must also suppress local preset/migration defaults once
       } while (seen !== revision && !off);
     }
@@ -187,8 +189,8 @@
           for (const [id, t] of Object.entries(fixed.tweaks)) if (!same(t, boxDoc.tweaks[id])) meta.pending.tweaks[id] = t;
           boxDoc = fixed; save(); schedule(0);
         }
-        want = onIds(fixed);
-      } else want = onIds(exclusive(local(), views()));
+        want = wear(fixed);
+      } else want = wear(exclusive(local(), views()));
       const mine = local();
       if (!same(want, onIds(mine))) {
         const seen = revision;
