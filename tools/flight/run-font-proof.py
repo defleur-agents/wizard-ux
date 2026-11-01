@@ -2,7 +2,7 @@
 """Bounded parent-only Forum browser job; --preflight-only NEVER starts a browser.
 Reuse existing synthetic TLS fixture; no Docker/APK/VM/install/live writes.
 """
-import argparse,hashlib,json,os,selectors,signal,subprocess,sys,time,traceback
+import argparse,hashlib,json,os,selectors,shutil,signal,subprocess,sys,time,traceback
 from pathlib import Path
 R=Path(__file__).resolve().parent
 P=argparse.ArgumentParser();P.add_argument('--manifest-sha',required=True);P.add_argument('--preflight-only',action='store_true');A=P.parse_args()
@@ -17,6 +17,7 @@ def integrity():
  assert sha(R/'source-manifest.json')==A.manifest_sha,'manifest hash differs'
  for name,row in M['members'].items():
   p=R/name;assert p.is_file() and not p.is_symlink() and sha(p)==row['sha256'],'staged member drift: '+name
+  assert p.stat().st_mode&0o777==int(row['mode'],8),'staged member mode drift: '+name
  for root in ['old','candidate','web']:
   actual={str(p.relative_to(R)) for p in (R/root).rglob('*') if p.is_file() or p.is_symlink()}
   expected={n for n in M['members'] if n.startswith(root+'/')};assert actual==expected,'source closure differs: '+root
@@ -28,7 +29,8 @@ def integrity():
  r=subprocess.run([NODE,'-e','const p=require(process.env.PLAYWRIGHT_DIR);console.log(JSON.stringify({version:require(process.env.PLAYWRIGHT_DIR+"/package.json").version,executable:p.chromium.executablePath()}))'],env=ENV,text=True,capture_output=True,timeout=15,check=True)
  tool=json.loads(r.stdout);assert tool=={'version':'1.64.1','executable':CHROME}
  ldd=subprocess.run(['ldd',CHROME],capture_output=True,text=True,timeout=15,check=True);assert 'not found' not in ldd.stdout+ldd.stderr
- return {'integrity':'pass','members':len(M['members']),'toolchain':tool,'chrome_sha256':sha(CHROME),'browsers_started':0}
+ free=shutil.disk_usage(R).free;assert free>=2*1024**3,'requires 2 GiB free for isolated browser profiles/evidence'
+ return {'integrity':'pass','members':len(M['members']),'toolchain':tool,'chrome_sha256':sha(CHROME),'browsers_started':0,'free_bytes':free,'required_free_bytes':2*1024**3}
 
 preflight=integrity()
 if A.preflight_only:
@@ -45,22 +47,34 @@ def stop(p):
   try:p.wait(timeout=8)
   except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait(timeout=8)
 
+OWNED_GROUPS=set()
 def marker_processes():
- # Never inspect arbitrary process environments or persist foreign argv. Select
- # only same-UID processes bearing this stage's unique profile/TMPDIR marker.
- found=[]
+ # Read argv only to select this exact synthetic stage; never read process
+ # environments or persist foreign argv. Remember a verified root's process
+ # group across root death so its reparented Chromium children remain owned.
+ rows={};roots=set()
  for root in Path('/proc').iterdir():
   if not root.name.isdigit() or int(root.name) in (0,1,os.getpid()):continue
   try:
    if root.stat().st_uid!=os.getuid():continue
-   argv=(root/'cmdline').read_bytes();env=(root/'environ').read_bytes()
-   if (str(R/'evidence')+'/').encode() in argv or ('TMPDIR='+str(R/'tmp')).encode()+b'\0' in env:found.append(int(root.name))
+   pid=int(root.name);stat=(root/'stat').read_text().split(') ',1)[1].split();ppid,pgid=int(stat[1]),int(stat[2])
+   argv=(root/'cmdline').read_bytes();rows[pid]=(ppid,pgid)
+   markers=[str(R/'font-proof.cjs').encode(),str(R/'fixture.py').encode(),(str(R/'evidence')+'/').encode()]
+   if any(m in argv for m in markers):
+    roots.add(pid)
+    if pgid==pid:OWNED_GROUPS.add(pgid)
   except (FileNotFoundError,PermissionError,ProcessLookupError):pass
- return found
+ selected={pid for pid,(_,pgid) in rows.items() if pid in roots or pgid in OWNED_GROUPS}
+ while True:
+  children={pid for pid,(ppid,_) in rows.items() if ppid in selected};new=selected|children
+  if new==selected:break
+  selected=new
+ if not selected:OWNED_GROUPS.clear()
+ return sorted(selected)
 
 def cleanup():
- stop(child);stop(fixture)
  selected=marker_processes()
+ stop(child);stop(fixture)
  for sig in (signal.SIGTERM,signal.SIGKILL):
   for pid in marker_processes():
    try:os.kill(pid,sig)
@@ -87,7 +101,7 @@ def group(arm,width,height):
    base=info['url'].split('/wizard-os-home/')[0]+'/wisdom/'
    env={**ENV,'QA_OUT':str(out),'QA_URL':base,'QA_ARM':arm,'QA_WIDTH':str(width),'QA_HEIGHT':str(height)}
    child=subprocess.Popen([NODE,R/'font-proof.cjs'],cwd=R,env=env,stdout=browser_log,stderr=subprocess.STDOUT,start_new_session=True)
-   try:rc=child.wait(timeout=175)
+   try:rc=child.wait(timeout=160)
    except subprocess.TimeoutExpired:stop(child);raise RuntimeError('bounded browser group timed out')
    result=json.loads((out/'report.json').read_text());return {'exit_code':rc,'report':str((out/'report.json').relative_to(R)),'sha256':sha(out/'report.json'),'result':result}
   finally:
@@ -111,7 +125,11 @@ try:
   for arm,group_result in [('old',old),('candidate',new)]:
    for case in ['warm','untouched','turn-pending','replaced-reader','offline']:
     row=group_result.get('cases',{}).get(case,{});cases.append({'arm':arm,'viewport':key,'case':case,'status':row.get('status','not-run')})
-  if new.get('status')!='pass':candidate_failures.append(key)
+  if new.get('status')!='pass' or new.get('pageErrors'):candidate_failures.append(key)
+  for case in ['untouched','turn-pending','replaced-reader']:
+   if not old.get('cases',{}).get(case,{}).get('final'):candidate_failures.append(key+': old '+case+' incomplete, not an expected regression failure')
+  old_offline=old.get('cases',{}).get('offline',{})
+  if not old_offline.get('before') or not old_offline.get('after'):candidate_failures.append(key+': old offline incomplete')
   old_warm=old.get('cases',{}).get('warm',{}).get('reference');new_warm=new.get('cases',{}).get('warm',{}).get('reference')
   if not old_warm or not new_warm or any(old_warm[k]!=new_warm[k] for k in ['count','localRaw','firstVisible','bodyTextSHA']):candidate_failures.append(key+': warm A/B reference differs or missing')
   lane=old.get('cases',{}).get('untouched',{});s=lane.get('final',{});pending=lane.get('pending',{})

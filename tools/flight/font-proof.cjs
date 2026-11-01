@@ -78,7 +78,7 @@ async function turn(p){const before=await p.locator('.wb-count').textContent();a
 async function seek(p,target){let current=await p.locator('.wb-count').evaluate(el=>+el.textContent.split('/')[0]);assert(target>=1&&target<=100);while(current!==target){await p.getByRole('button',{name:current<target?'Next page':'Previous page',exact:true}).click();current+=current<target?1:-1;}await p.waitForTimeout(380);}
 async function stableDurable(p,label){let last='',n=0;for(let i=0;i<35;i++){
  const s=await snapshot(p,label),latest=s.outbox.filter(x=>x.body?.field==='progress'&&x.body.id==='flight-chapter').at(-1),pct=Math.round((s.page-1)/(s.total-1)*100),key=JSON.stringify([s.localRaw,s.projectedProgress,s.count,s.outbox]);
- n=key===last?n+1:0;last=key;if(n>=2&&s.projectedProgress===pct&&latest?.body.value===pct&&Number.isFinite(+s.localRaw))return s;await p.waitForTimeout(100);
+ n=key===last?n+1:0;last=key;if(n>=2&&s.projectedProgress===pct&&latest?.body.value===pct&&s.localRaw!==null&&Number(s.localRaw)===(s.page-1)/(s.total-1))return s;await p.waitForTimeout(100);
  }throw Error('Actual UI page, exact fraction, projected progress and durable outbox did not agree');}
 async function warm(){
  const o=await open('warm',{fraction:0});await o.p.goto(BASE,{waitUntil:'domcontentloaded'});await o.p.waitForFunction(()=>typeof Wisdom!=='undefined'&&document.querySelector('.wb-home'));
@@ -122,11 +122,11 @@ async function delayed(name,fraction,action,warmRef){
    const anchor=turned.firstVisible.offset;
    const target=await warmRef.p.evaluate(off=>{const r=document.querySelector('.wb-reader'),flow=r.querySelector('.wb-flow'),stage=r.querySelector('.wb-stage'),walker=document.createTreeWalker(flow,NodeFilter.SHOW_TEXT),lead=r.querySelectorAll('.wb-track>.wb-slide:not(.wb-end)').length;let n,pos=0;while((n=walker.nextNode())){if(pos+n.length>off){const rg=document.createRange();rg.setStart(n,off-pos);rg.setEnd(n,off-pos+1);return lead+Math.floor((rg.getBoundingClientRect().left-flow.getBoundingClientRect().left+1)/stage.clientWidth)+1;}pos+=n.length;}throw Error('anchor outside same body')},anchor);
    await seek(warmRef.p,target);const ref=await snapshot(warmRef.p,name+'-warm-anchor-reference');metrics(ref);
-   assert(final.visibleOffsets.includes(anchor),'genuine turn preserves the exact fallback-visible anchor after font settlement');assert.equal(final.count,ref.count);assert.deepEqual(final.firstVisible,ref.firstVisible,'turned pending position equals fully warm anchored passage');
+   assert(final.visibleOffsets.includes(anchor),'genuine turn preserves the exact fallback-visible anchor after font settlement');assert.equal(final.count,ref.count);assert.deepEqual(final.firstVisible,ref.firstVisible,'turned pending position equals fully warm anchored passage');assert.equal(final.localRaw,ref.localRaw,'turned pending exact persisted fraction equals warm anchored passage');
   }else identity(final,warmRef.reference);
   if(action==='replace'){const after=await o.p.evaluate(()=>({connected:__fontQA.removed.isConnected,count:__fontQA.removed.querySelector('.wb-count').textContent,mutations:__fontQA.removedMutations}));report.cases[name].removedAfter=after;assert.equal(after.count,removed.count);assert.equal(after.mutations.length,0,'no stale callback mutation of removed reader');}
   report.cases[name].status='pass';return final;
- }finally{releaseAPI();releaseFonts();await close(o);}
+ }finally{releaseAPI();releaseFonts();fs.writeFileSync(path.join(OUT,name+'-font-deliveries.json'),JSON.stringify(deliveries,null,2));await close(o);}
 }
 async function offline(){
  let o=await open('offline',{fraction:0,sw:true});
@@ -135,14 +135,16 @@ async function offline(){
   await o.p.evaluate(async()=>{await WisdomOffline.started;await WisdomOffline.warm(await WisdomOffline.projected())});
   await o.p.waitForFunction(async()=>{const s=await WisdomOffline.status();return s.ready&&!s.warming&&!s.error&&navigator.serviceWorker.controller});
   const cache=await o.p.evaluate(async()=>{const rows=[];for(const key of await caches.keys()){const c=await caches.open(key);for(const req of await c.keys())if(req.url.includes('/wisdom-art/f/')){const b=await(await c.match(req)).arrayBuffer(),h=await crypto.subtle.digest('SHA-256',b);rows.push({key,file:new URL(req.url).pathname.split('/').at(-1),sha256:[...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')})}}return rows});
+  fs.writeFileSync(path.join(OUT,'offline-warmed-font-cache.json'),JSON.stringify(cache,null,2));
   for(const [file,hash]of Object.entries(manifest.fonts))assert(cache.some(x=>x.file===file&&x.sha256===hash),'actual warmed font cache '+file);
   await o.ctx.setOffline(true);for(let i=0;i<4;i++)await turn(o.p);
   await o.p.evaluate(async()=>{const e=(await WisdomOffline.projected()).entries.find(e=>e.id==='flight-chapter'),text='Quiet attention begins with one thing.',flow=document.querySelector('.wb-flow'),start=flow.textContent.indexOf(text);if(start<0)throw Error('fixture quote absent');await api('wisdom/highlight',{action:'add',entry_id:e.id,start,end:start+text.length,text,body_sha256:e.body_sha256,note:'Synthetic font settlement proof'})});
   const before=await stableDurable(o.p,'offline-before-kill');metrics(before);assert.equal(before.highlights.length,1);
   const cdp=await o.ctx.browser().newBrowserCDPSession(),info=await cdp.send('SystemInfo.getProcessInfo'),pid=Number(info.processInfo.find(x=>x.type==='browser')?.id);
   assert(Number.isInteger(pid)&&pid>1,'actual browser PID');assert(fs.readFileSync(`/proc/${pid}/cmdline`,'utf8').includes(o.profile),'browser PID bound to this isolated persistent profile');
-  report.cases.offline={status:'failed',cache,before,death:{kind:'SIGKILL of verified actual Chromium browser PID',pid}};save();
-  const disconnected=new Promise(r=>o.ctx.browser().once('disconnected',r));process.kill(pid,'SIGKILL');await Promise.race([disconnected,new Promise((_,rej)=>setTimeout(()=>rej(Error('browser death timeout')),6000))]);contexts.delete(o.ctx);
+  const pgid=Number(fs.readFileSync(`/proc/${pid}/stat`,'utf8').split(') ')[1].split(' ')[2]);assert.equal(pgid,pid,'owned Chromium is its own process-group root');
+  report.cases.offline={status:'failed',cache,before,death:{kind:'SIGKILL of verified actual Chromium process group',pid,pgid}};save();
+  const disconnected=new Promise(r=>o.ctx.browser().once('disconnected',r));process.kill(-pgid,'SIGKILL');await Promise.race([disconnected,new Promise((_,rej)=>setTimeout(()=>rej(Error('browser death timeout')),6000))]);contexts.delete(o.ctx);
   const profile=o.profile;o=null;
   // Re-open the SAME disk-backed profile after real process death, with network
   // offline BEFORE navigation. No fonts/storage/API response injection on resume.
