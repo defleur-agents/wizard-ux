@@ -106,7 +106,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
 }
 const layout = () => import(new URL('web/layouts/ai-apps/layout.js', root).href);
 
-test('packaging: an ordinary Miguel view tweak, off by default; the phone wears AI apps, the desktop stays stock', async () => {
+test('packaging: an ordinary Miguel view tweak, off by default; the phone and the desktop wear AI apps', async () => {
   const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
   assert.equal(man.name, 'Different shell view - AI apps'); assert.equal(man.view, 'AI apps'); assert.deepEqual(man.capabilities, ['layout']);
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
@@ -120,8 +120,8 @@ test('packaging: an ordinary Miguel view tweak, off by default; the phone wears 
   await p.clear(); assert.equal(p.host.layout, 'classic'); assert.ok(!p.doc.head.children.some(l => /layouts\//.test(l.href || '')));
   const d = fixture({ shell: 'desktop' });
   await d.mount('miguel/ai-apps'); await settle();
-  assert.equal(d.host.layout, 'classic', 'the desktop keeps the stock shell for now'); assert.equal(d.doc.documentElement.dataset.layout, undefined);
-  assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
+  assert.equal(d.host.layout, 'ai-apps', 'the desktop wears it too (desktop.js)'); assert.equal(d.doc.documentElement.dataset.layout, 'ai-apps');
+  await d.clear(); assert.equal(d.host.layout, 'classic'); assert.ok(!d.doc.head.children.some(l => /layouts\//.test(l.href || '')));
   const host = read('web/core/skin-host.js');
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
@@ -142,10 +142,106 @@ test('scoped and quiet: every rule needs the worn layout on the phone; skin toke
   assert.match(js, /import \{ viewChrome, openApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the Orb and Apps views\' own chrome: one + sheet, one app list');
 });
 
-test('desktop: the layout does nothing (no top bar, no drawer)', async () => {
+test('desktop: a sidebar (open apps, All apps, Recents, View all, + New chat, cog) that folds to a rail; the top row; the orb', async () => {
   const w = world({ shell: 'desktop' });
+  const store = {}, keys = [];
+  Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: k => k in store ? store[k] : null, set: (k, v) => { store[k] = v; } },
+    keys: { on: h => { keys.push(h); return () => {}; } }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk: () => w.st.orbDown.push('talk'), command: () => w.st.orbDown.push('command') },
+    desk: { settings: p => w.st.settings.push(p ?? ''), home: () => {} } });
+  w.api.apps.inset = (px, orb) => { w.st.inset = px; w.st.insetOrb = orb; return () => { w.st.inset = null; }; };
   const off = (await layout()).default(w.api);
-  assert.equal(typeof off, 'function'); assert.equal(w.device.children.length, 1, 'nothing mounted'); assert.equal(w.html.dataset.aiApps, undefined);
+  assert.equal(w.html.dataset.aiApps, 'desktop'); assert.equal(w.html.dataset.viewChrome, 'desktop', 'the shared view chrome (the three-level sheet)');
+  assert.equal(w.st.inset, 84, 'hosted apps keep room for the floating orb'); assert.equal(typeof w.st.insetOrb, 'function', 'and the orb says where it is (the orb bar)');
+  assert.ok(w.q('link').getAttribute('href').endsWith('/desktop.css'), 'its own stylesheet, desktop-scoped');
+  assert.equal(w.html.dataset.aadSide, 'open', 'open from 900 px up');
+  assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
+  // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); Recents (Working, then Ready); View all
+  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-word', 'aad-find', 'aad-tog']);
+  assert.equal(w.q('.aad-word').textContent, 'Oscar');
+  assert.deepEqual(w.q('.aad-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'open apps = desks, badged first, then desk order; Chats left out');
+  assert.equal(w.q('.aad-gi[data-app="money"] [data-badge="money"]').textContent, '3');
+  assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['w1:working', 'r1:ready', 'r2:ready']);
+  assert.ok(w.q('.aad-viewall'));
+  assert.deepEqual(w.q('.aad-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aad-new', 'New chat', ''], ['aad-set', 'Settings', '']], 'icons only, as on the phone');
+  w.q('.aad-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
+  w.q('.aad-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
+  w.q('.aad-gi[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk');
+  w.q('.aad-grid .aad-all').dispatchEvent(new FakePointerEvent('click')); assert.ok(w.q('.vc-sheet'), 'All apps = the three-level sheet');
+  w.q('.vc-x').dispatchEvent(new FakePointerEvent('click'));
+  // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
+  w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive']);
+  w.q('.aad-pop-i[data-act="done"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.acts, [['r2', 'done']]); assert.equal(w.q('.aad-pop'), null);
+  w.q('.aad-rw[data-sid="r1"] .aad-row').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'thread:r1');
+  // fold to the rail with ◫ or Ctrl / ⌘ + Shift + S; kept on this device
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(store.folded, true);
+  assert.deepEqual(w.q('.aad-rapps').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'the rail: the open apps, then All apps');
+  assert.equal(keys.length, 1);
+  assert.equal(keys[0].down({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' }), true); assert.equal(w.html.dataset.aadSide, 'open');
+  assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
+  assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
+  // the top row: what is in front · the workspace switcher
+  assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
+  w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-wr b').map(b => b.textContent), ['Miguel', 'Carlos']); assert.ok(w.q('.aad-wm'));
+  w.q('.aad-wm').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings.at(-1), 'network');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aad-tt').textContent, 'Money', 'the top row names the app');
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aiFront, 'chat'); assert.equal(w.q('.aad-tt').textContent, 'Ready one');
+  // Home (Miguel, 2 Nov 2026) = the empty new chat: the Wizard's name in the sidebar header or the top row goes there
+  const before = w.st.newChats;
+  w.q('.aad-word').dispatchEvent(new FakePointerEvent('click')); w.q('.aad-tname').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, before + 2, 'the name = Home = a new chat, from anywhere');
+  // no voice button in the composer: its Send is the stock one; the orb is the one way to talk (click talks, hold commands)
+  const form = new El('form'); form.className = 'ch-compose'; const row2 = new El('div'); row2.className = 'ch-row2'; const send = new El('button'); send.className = 'ch-send';
+  form.append(row2); row2.append(send); w.device.append(form);
+  const e = w.fire('pointerdown', send, { pointerId: 21 }); assert.ok(!e.defaultPrevented, 'the composer\'s button is only Send');
+  const orb = w.q('.aad-orbbtn');
+  orb.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 22, button: 0, clientX: 10, clientY: 10 })); orb.dispatchEvent(new FakePointerEvent('pointerup', {}));
+  assert.deepEqual(w.st.orbDown, ['talk'], 'a click on the orb talks');
+  orb.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 23, button: 0, clientX: 10, clientY: 10 })); w.st.timers.filter(t => t.ms === 300).at(-1).fn();
+  assert.deepEqual(w.st.orbDown, ['talk', 'command'], 'a hold gives a command');
+  // Home becomes the empty new chat
+  const nc = w.st.newChats; w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route); w.run(); assert.ok(w.st.newChats > nc, 'Home → a new chat');
+  off();
+  assert.equal(w.q('.aad'), null); assert.equal(w.html.dataset.aiApps, undefined); assert.equal(w.html.dataset.viewChrome, undefined); assert.equal(w.html.attrs['data-settings-over'], undefined);
+});
+
+test('desktop scoped and quiet: every rule needs the worn layout on the desktop; skin tokens only; measured sizes', () => {
+  const css = read('web/layouts/ai-apps/desktop.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\("[^"]*"\)/g, 'url()');
+  const body = css.replace(/@keyframes[^{]*\{(?:[^{}]*\{[^{}]*\})*[^{}]*\}/g, '').replace(/@media[^{]*\{/g, '');
+  for (const sel of [...body.matchAll(/([^{}]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(Boolean)) for (const part of sel.split(/,(?![^(]*\))/))
+    assert.ok(/^html\[data-shell="desktop"\]\[data-layout="ai-apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
+  assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i.test(css.replace(/#(bar|logo|wsList|clock|searchBtn|micBtn|status|settingsBtn|keysBtn|generalVoice|commandBtn|dictateBtn|stage|desktopHome)\b/g, '')), 'colours are skin tokens');
+  assert.ok(!/font(-size)?\s*:[^;}]*\b\d+px/.test(css), 'type in rem');
+  const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
+  assert.match(css, new RegExp(P + ' \\{\\s*--aad-side: 288px;'), 'a 288 px sidebar (Claude; ChatGPT\'s panel)');
+  assert.match(css, new RegExp(P + '\\[data-aad-side="rail"\\],\\s*' + P + '\\[data-aad-side="over"\\] \\{ --aad-side: 52px; \\}'), 'a 52 px rail (ChatGPT)');
+  assert.match(css, /\.ch-compose \{\s*width: min\(768px, calc\(100% - 48px\)\); box-sizing: border-box; margin: 0 auto 84px;/, 'a 768 px column, the composer docked 24 px above the orb');
+  assert.match(css, /\.ch-compose:not\(\.has-text\) \.ch-row2 > \.ch-send \{ display: none !important; \}/, 'Send only with words; no voice button of its own');
+  assert.match(css, /:is\(\.ch-newchat, \.nc-classic\) \{ display: none !important; \}/, 'Home has no greeting');
+  assert.match(css, /\.ch-row2 \{\s*display: flex !important; align-items: center; gap: 2px; min-height: 52px;[^}]*border-radius: 26px;/, 'a 52 px pill composer (r 26)');
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
+  assert.match(js, /import \{ viewChrome, openApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
+  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
+});
+
+test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {
+  const dj = read('web/desktop/desktop.js');
+  const fn = dj.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/)[1];
+  const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
+  const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
+  const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
+  const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
+  assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
+  assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
+  assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
+  assert.match(dj, /showChats: \(\) => !!skinShowChats\(\),\n    newChat: \(\) => \{ const w = skinShowChats\(\); if \(!w\) return false; newChat\(\); return true; \},/);
+  assert.match(dj, /const settingsOver = \(\) => document\.documentElement\.hasAttribute\('data-settings-over'\);/); assert.match(dj, /if \(homeOpen \|\| settingsOver\(\)\) \{  \/\/ from Home/, 'a layout may keep Settings over the page');
+  assert.match(read('web/layouts/apps/chrome.js'), /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], orb \|\| \(shell === 'phone' \? orbSpot : null\)\)/, 'a view drawing its own orb says where it is');
 });
 
 test('top bar: ☰ · the Wizard\'s name · the workspace switcher; the drawer: open apps, All apps, Recents, View all, Settings, New chat', async () => {

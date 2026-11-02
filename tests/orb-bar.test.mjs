@@ -88,12 +88,12 @@ test('the shell wiring: the CSS around the orb, gated on the orb being over the 
   assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\*var\(--wos-tab-f,1\)\)!important/, 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
   assert.match(host, /html\.wos-orb-bar \[data-wos-fs\]\{white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important/, 'a label is never cut or ellipsed');
   assert.match(host, /if \(row\) fitTabs\(d, row\);/, 'the split bar is measured and shared by its labels');
-  assert.match(host, /if \(o && o\.d > 0 && cy > o\.d \/ 2 && cy < 160 && fr\.width >= vwTop \* \.9 && Math\.abs\(vwTop \/ 2 - o\.x\) < 8\) \{/, 'only a screen-wide frame with the orb centred over its bottom');
+  assert.match(host, /if \(o && o\.d > 0 && cy > o\.d \/ 2 && cy < 160 && \(fr\.width >= vwTop \* \.9 && Math\.abs\(vwTop \/ 2 - o\.x\) < 8 \|\| fr\.width >= vwTop \* \.6 && Math\.abs\(fr\.left \+ fr\.width \/ 2 - o\.x\) < 8\)\) \{/, 'only a screen-wide frame with the orb centred over its bottom (or the desktop AI apps frame beside its sidebar, the orb centred over it)');
   assert.match(host, /d\.documentElement\.style\.setProperty\('--wos-orb-slot', Math\.round\(o\.d \+ 16\) \+ 'px'\);/);
   assert.match(host, /inset\(px, orb = null\) \{/, 'api.apps.inset(px, orb): the layout says where its orb is');
   assert.match(host, /new d\.defaultView\.MutationObserver\(/, 'an app that redraws its bar is laid out again');
   const chrome = read('web/layouts/apps/chrome.js');
-  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], shell === 'phone' \? orbSpot : null\)/, 'phone views hand over the dock orb; the desktop keeps the lift');
+  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], orb \|\| \(shell === 'phone' \? orbSpot : null\)\)/, 'phone views hand over the dock orb; a view drawing its own orb says where it is (desktop AI apps); else the lift');
   assert.match(chrome, /d = o\.offsetWidth \|\| r\.width;/, 'the untransformed size: pressing the orb never reflows the bar');
 });
 

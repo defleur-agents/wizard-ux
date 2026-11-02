@@ -544,7 +544,8 @@
       const fr = f.getBoundingClientRect(), cy = o ? fr.bottom - o.y : 0;
       // the frame spans the screen (an app alone on its desk; its desk may still be sliding in) and the orb is centred
       const vwTop = globalThis.innerWidth || fr.width;
-      if (o && o.d > 0 && cy > o.d / 2 && cy < 160 && fr.width >= vwTop * .9 && Math.abs(vwTop / 2 - o.x) < 8) {
+      // (or, on the desktop, a frame filling the page beside a sidebar with the view's orb centred over it: AI apps)
+      if (o && o.d > 0 && cy > o.d / 2 && cy < 160 && (fr.width >= vwTop * .9 && Math.abs(vwTop / 2 - o.x) < 8 || fr.width >= vwTop * .6 && Math.abs(fr.left + fr.width / 2 - o.x) < 8)) {
         d.documentElement.style.setProperty('--wos-orb-cy', Math.round(cy) + 'px');
         d.documentElement.style.setProperty('--wos-orb-slot', Math.round(o.d + 16) + 'px');
         split = orbTabs(d, bar, d.documentElement.clientWidth);
