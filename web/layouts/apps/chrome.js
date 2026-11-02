@@ -93,13 +93,22 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
     box.append(go, x);
     return box;
   }
-  // level 2: installed, not open; tap = open it on a desk of its own
+  // level 2: installed, not open; tap = open it on a desk of its own (an agent app with no screen: its settings)
   function row(a) {
-    const b = el('button', 'vc-app', { type: 'button', role: 'listitem', 'data-app': a.id, 'aria-label': 'Open ' + a.name });
+    const b = el('button', 'vc-app' + (a.system ? ' vc-sys' : ''), { type: 'button', role: 'listitem', 'data-app': a.id, 'aria-label': 'Open ' + a.name });
     b.append(tile(a), el('span', 'vc-name', { text: a.name }));
-    api.listen(b, 'click', () => { close(); api.apps.openDesk ? api.apps.openDesk(a.id) : api.apps.open(a.id); });
+    api.listen(b, 'click', () => { close(); if (api.apps.openAny && kindsOf()) api.apps.openAny(a.id); else if (api.apps.openDesk) api.apps.openDesk(a.id); else api.apps.open(a.id); });
     return b;
   }
+  /* Installed, by kind (Miguel, 2 Nov 2026: "the different types of apps", as the launcher groups them): Apps, Agent apps,
+   * Agents, Connectors, In development; each without what is already open. A shell without kinds: one Installed list. */
+  const KINDS = [['apps', 'Apps'], ['wiz', 'Agent apps'], ['agents', 'Agents'], ['conns', 'Connectors'], ['dev', 'In development']];
+  const kindsOf = () => { const k = api.apps.kinds?.(); return k && typeof k === 'object' ? k : null; };
+  function installedGroups(K) {
+    const open = new Set([CHATS, ...(openIds() || [])]);
+    return KINDS.map(([k, label]) => [k, label, (K[k] || []).filter(a => a && a.id && !open.has(a.id) && matches(a, q))]);
+  }
+  let openFold = false;   // Open (already running) starts folded to one line; a search shows its matches
   // level 3: in the App Store, not installed; tap = its Store page (Get there; it opens once installed)
   function getRow(a) {
     const b = el('button', 'vc-get', { type: 'button', role: 'listitem', 'data-store': a.id, 'aria-label': `Get ${a.name} from the App Store` });
@@ -111,12 +120,28 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   const section = (title, n) => { const h = el('h3', 'vc-sec-h'); h.append(el('span', '', { text: title }), ...(n != null ? [el('small', 'vc-count', { text: String(n) })] : [])); return h; };
   function paint() {
     if (!sheet || !body) return;
-    const apps = api.apps.list(), open = openApps(apps, desks()).filter(a => matches(a, q)), inst = list().filter(a => matches(a, q));
+    const apps = api.apps.list(), open = openApps(apps, desks()).filter(a => matches(a, q)), K = kindsOf();
     const out = [];
-    if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
-    out.push(section('Installed', inst.length));
-    if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Installed' }); g.append(...inst.map(row)); out.push(g); }
-    else out.push(el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is open.' }));
+    if (K) {
+      // already open: one quiet folded row first (tap to see them, each with its ✕); while searching, its matches show
+      if (open.length) {
+        const shown = openFold || !!String(q).trim();
+        const h = el('button', 'vc-fold' + (shown ? ' open' : ''), { type: 'button', 'aria-expanded': String(shown) });
+        h.append(el('span', '', { text: 'Already open' }), el('small', 'vc-count', { text: String(open.length) }), icon('m6 9 6 6 6-6', 'vc-ico vc-chev'));
+        api.listen(h, 'click', () => { openFold = !openFold; paint(); });
+        out.push(h);
+        if (shown) { const g = el('div', 'vc-list vc-list-open', { role: 'list', 'aria-label': 'Already open' }); g.append(...open.map(openTile)); out.push(g); }
+      }
+      const groups = installedGroups(K).filter(([, , l]) => l.length);
+      for (const [k, label, l] of groups) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': label, 'data-kind': k }); g.append(...l.map(row)); out.push(section(label, l.length), g); }
+      if (!groups.length) out.push(section('Installed', 0), el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is open.' }));
+    } else {
+      const inst = list().filter(a => matches(a, q));
+      if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
+      out.push(section('Installed', inst.length));
+      if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Installed' }); g.append(...inst.map(row)); out.push(g); }
+      else out.push(el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is open.' }));
+    }
     out.push(section('Get more', store ? store.filter(a => matches(a, q)).length : null));
     if (storeErr) out.push(el('p', 'vc-empty', { text: 'The App Store can’t be reached right now.' }));
     else if (!store) out.push(el('p', 'vc-empty', { text: 'Looking in the App Store…' }));
@@ -132,7 +157,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   }
   function open() {
     if (sheet) return;
-    q = ''; store = null; storeErr = false;
+    q = ''; store = null; storeErr = false; openFold = false;
     sheet = el('div', 'vc-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Apps' });
     const scrim = el('div', 'vc-scrim', { 'aria-hidden': 'true' });
     const card = el('div', 'vc-card');
@@ -146,7 +171,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
     card.append(head, body); sheet.append(scrim, card);
     api.listen(scrim, 'click', close); api.listen(shut, 'click', close);
     api.listen(field, 'input', () => { q = field.value; paint(); });
-    api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); body.querySelector('button')?.click(); } });
+    api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); body.querySelector('button:not(.vc-fold)')?.click(); } });
     offMount = api.mount(sheet);
     offBack = api.back?.push ? api.back.push(close) : null;
     root.dataset.vcSheet = 'open';

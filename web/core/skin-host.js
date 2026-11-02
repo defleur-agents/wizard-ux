@@ -462,6 +462,12 @@
           const off = () => { insetHolders.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
         },
         all: () => { if (live()) shell.openPicker?.(); },
+        /* Every app by kind, as the launcher groups them (core/app-kinds.js): { apps, wiz (agent apps), agents, conns
+         * (connectors), dev } of { id, name, icon, system }; null on a shell without kinds. openAny(id) opens any of them
+         * like openDesk (an agent app with no screen shows its settings sheet). */
+        kinds: () => { const k = live() ? shell.appKinds?.() : null; return k ? structuredClone(k) : null; },
+        openAny: id => live() && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) && shell.openAnyApp
+          ? !!shell.openAnyApp(id, x => !!(shell.openAppDesk ? shell.openAppDesk(x) : shell.openApp?.(x))) : false,
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
         search: () => { if (live()) shell.openPalette?.(); },
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.

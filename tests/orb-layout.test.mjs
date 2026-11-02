@@ -80,7 +80,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'inset', 'list', 'logo', 'open', 'openDesk', 'search', 'store']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'search', 'store']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
@@ -413,9 +413,10 @@ test('Orbs view satellites stay minimal (Miguel, v8): just the mark, a dot not a
   const badge = /\.ob-sat-badge \{([^}]*)\}/.exec(css)[1];
   assert.doesNotMatch(badge, /0 0 0 \dpx/, 'the count dot has no ring');
   for (const sel of ['.ob-sat-key {', '.ob-keyrow-i b {']) { const i = css.indexOf(sel); assert.ok(i > 0, sel); assert.doesNotMatch(css.slice(i, css.indexOf('}', i)), /background: var\(--ob-glass|border: 1px/, sel + ' is a bare letter, no keycap'); }
-  assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps or ask…' \}\)/);
-  assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.all\(\)\);/, 'the pill opens the launcher in its apps-first mode');
-  assert.match(js, /all apps: ' \+ MK \+ 'O'/, 'its tooltip names ⌥O');
+  assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps…' \}\)/);
+  assert.match(js, /api\.listen\(hint, 'click', \(\) => chrome\.open\(\)\);/, 'the pill opens the app sheet: open apps folded away, the rest by kind (Miguel, 2 Nov 2026)');
+  assert.match(js, /if \(alt && !e\.shiftKey && e\.code === 'KeyO'\) \{ if \(!e\.repeat\) \{ if \(chrome\.isOpen\) chrome\.close\(\); else chrome\.open\(\); \} return true; \}/, '⌥O too');
+  assert.match(js, /'Search apps \(' \+ MK \+ 'O\)/, 'its tooltip names ⌥O');
 });
 
 test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {

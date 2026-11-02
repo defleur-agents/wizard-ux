@@ -4062,6 +4062,9 @@
      * satellites), the Home desk's section and the dock orb's box. */
     apps: () => { const AK = window.WosAppKinds; return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
+    // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
+    appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
+    openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, open),
     panelRunning: () => { const run = new Map(); desks.forEach((d, i) => { if (d.home || !d.wins.length) return; const w = W[d.focus] || W[d.wins[0]], id = w && (w.appId || winApp(w).id); if (id && !run.get(id)?.open) run.set(id, { id, open: i === idx, playing: false }); }); return [...run.values()]; },
     // The Orb and Apps views' app sheet: close an app (every desk showing it), and an App Store page on a desk of its own.
     closeApp: id => { let n = 0; for (let i = desks.length - 1; i >= 0; i--) { const d = desks[i]; if (!d.home && d.wins.some(x => W[x] && (W[x].appId || winApp(W[x]).id) === id) && closeDesk(i)) n++; } return n > 0; },

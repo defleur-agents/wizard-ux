@@ -78,14 +78,14 @@ export default function setup(api) {
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
   const mod = mac ? '⌥' : 'Alt+';
-  // The bottom of the scene: one quiet search pill, the always-there way to open any app: it opens the shell's own
-  // launcher in its apps-first mode (⌥O: installed apps, type a name, ↵ opens it; no app by that name widens to ⌘K /
-  // ⌥Space to find a thread or ask). The key hint
-  // lives in it) with the Look button beside it.
+  // The bottom of the scene: one quiet search pill, the always-there way to open any app: it (and ⌥O) opens the app
+  // sheet (chrome.js, the same as the + and the Apps view's): type a name, ↵ opens it; installed apps grouped by kind,
+  // the ones already open folded away (Miguel, 2 Nov 2026). ⌥Space stays the shell's search & ask. The Look button
+  // sits beside it.
   const dock = el('div', 'ob-dock');
-  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps or ask (' + mod + 'Space) · all apps: ' + MK + 'O', 'aria-label': 'Search apps or ask', 'aria-keyshortcuts': 'Alt+O Alt+Space' });
-  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search apps or ask…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
-  api.listen(hint, 'click', () => api.apps.all());
+  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps (' + MK + 'O) · search or ask: ' + mod + 'Space', 'aria-label': 'Search apps', 'aria-keyshortcuts': 'Alt+O Alt+Space' });
+  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search apps…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
+  api.listen(hint, 'click', () => chrome.open());
   // The look picker, bottom right: a quiet button that opens Style (live previews) and Colour.
   const picker = el('div', 'ob-picker');
   const pickBtn = el('button', 'ob-pick-btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'dialog', title: 'Orb style and colour', 'aria-label': 'Orb style and colour' });
@@ -396,6 +396,8 @@ export default function setup(api) {
       const alt = e.altKey && !e.metaKey && !e.ctrlKey;
       // ⌥\ the list open ⇄ folded (from wide: back to open); ⌥⇧\ the list wide ⇄ open
       if (alt && e.code === 'Backslash') { if (!e.repeat) { if (e.shiftKey) widen(!maxed); else if (maxed) widen(false); else fold(!folded); } return true; }
+      // ⌥O: the app sheet (again: closes it)
+      if (alt && !e.shiftKey && e.code === 'KeyO') { if (!e.repeat) { if (chrome.isOpen) chrome.close(); else chrome.open(); } return true; }
       // ⌥⇧C closes the chat column, ⌥⇧A hides the app panel (it keeps running; its satellite glows)
       if (alt && e.shiftKey && (e.code === 'KeyC' || e.code === 'KeyA')) { if (!e.repeat) api.panel.close(e.code === 'KeyC' ? 'chat' : 'app'); return true; }
       if (pendingAsk && e.key === 'Enter' && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !typingIn(e.target)) { askNow(); return true; }

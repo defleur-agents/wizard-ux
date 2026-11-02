@@ -156,3 +156,17 @@ html[data-view-chrome="phone"][data-skin^="landscapes"] .device:not(.orb-corner)
   background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--vc-fade-top), transparent 100%);
 }
 @media (prefers-reduced-motion: reduce) { html[data-view-chrome] :is(.vc-scrim, .vc-card) { animation: none; } }
+
+/* Already open (the kinds layout): one quiet folded row; open, it shows the open apps with their ✕ */
+html[data-view-chrome] .vc-fold {
+  display: flex; align-items: center; gap: 8px; width: 100%; margin: 10px 0 2px; padding: 0 10px; min-height: 44px; box-sizing: border-box; border: 0; border-radius: 12px; cursor: pointer;
+  background: color-mix(in srgb, var(--wz-text, var(--ink)) 5%, transparent); color: var(--wz-text-secondary, var(--ink-2, var(--wz-text)));
+  font: 650 var(--wz-text-sm, 0.8125rem) / 1.2 var(--wz-font-ui); text-align: left; -webkit-tap-highlight-color: transparent;
+}
+html[data-view-chrome] .vc-fold:hover { background: color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent); }
+html[data-view-chrome] .vc-fold:focus-visible { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 1px; }
+html[data-view-chrome] .vc-fold .vc-chev { width: 16px; height: 16px; margin-left: auto; transition: transform 160ms ease; }
+html[data-view-chrome] .vc-fold.open .vc-chev { transform: rotate(180deg); }
+html[data-view-chrome] .vc-list-open { margin-top: 8px; }
+/* system apps lead their group with the accent ring the launcher gives them */
+html[data-view-chrome] .vc-app.vc-sys .vc-tile { box-shadow: 0 0 0 2px var(--wz-accent, var(--ink)); }

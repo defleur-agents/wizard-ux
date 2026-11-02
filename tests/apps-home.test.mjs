@@ -288,3 +288,37 @@ test('three levels on both shells: close an app (its desk goes), an App Store pa
   assert.match(lay, /#stage > \.wsp \{ bottom: 76px; \}/, 'desktop Apps: Chats and tiled windows still end above the orb');
   assert.match(lay, /:has\(> \.win:not\(\.gone\) iframe\[data-own-app\]\):not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) \{ inset: -8px; \}/, 'desktop Apps: an app alone on its desk is full screen');
 });
+
+test('the sheet by kind (Miguel, 2 Nov 2026): already-open apps fold to one row; installed apps grouped Apps · Agent apps · Agents · Connectors; a search unfolds open matches', async () => {
+  const P = appsWorld(), opened = [];
+  P.api.after = (ms, fn) => { fn(); return () => {}; };
+  const K = { apps: [{ id: 'files', name: 'Files', icon: '', system: true }, { id: 'mail', name: 'Mail', icon: '' }, { id: 'notes', name: 'Notes', icon: '' }],
+    wiz: [{ id: 'transcriber', name: 'Transcriber', icon: '', system: true }], agents: [{ id: 'carlos', name: 'Carlos', icon: '' }, { id: 'agents', name: 'Build agents', icon: '' }],
+    conns: [{ id: 'wizard-claude', name: 'Claude', icon: '', system: true }, { id: 'music', name: 'Music', icon: '' }], dev: [] };
+  Object.assign(P.api.apps, { kinds: () => structuredClone(K), openAny: id => { opened.push(id); return true; }, store: () => Promise.resolve([]) });
+  const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
+  const off = setup(P.api);
+  P.find('ap-plus')[0].dispatchEvent({ type: 'click' }); await settle();
+  const heads = () => P.find('vc-sec-h').map(h => h.children[0].textContent);
+  assert.deepEqual(heads(), ['Apps', 'Agent apps', 'Agents', 'Connectors', 'Get more'], 'one heading per kind that has an app not open yet');
+  assert.equal(P.find('vc-fold').length, 1, 'open apps: one folded row'); assert.equal(P.find('vc-open').length, 0, 'folded: none shown');
+  assert.deepEqual(P.find('vc-app').map(b => b.attrs['data-app']), ['notes', 'transcriber', 'carlos', 'agents', 'wizard-claude'], 'open apps (mail, music, files) and Chats left out of every group');
+  P.find('vc-fold')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['mail', 'music', 'files'], 'unfolded: each open app with its ✕');
+  P.find('vc-fold')[0].dispatchEvent({ type: 'click' }); assert.equal(P.find('vc-open').length, 0);
+  const q = P.find('vc-q')[0]; q.value = 'mu'; q.dispatchEvent({ type: 'input' });
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['music'], 'a search shows its open matches');
+  q.value = 'trans'; q.dispatchEvent({ type: 'input' });
+  P.find('vc-app')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(opened, ['transcriber'], 'an agent app opens through openAny (its settings sheet)'); assert.equal(P.find('vc-sheet').length, 0);
+  off();
+});
+
+test('apps.kinds / openAny: the launcher kinds for layouts, shared by both shells', () => {
+  const ak = read('web/core/app-kinds.js'), host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  assert.match(ak, /const agents = K\.agents\.filter\(a => a\.id !== 'wizard'\)\.map\(row\);/, 'the main agent is Chats, never a tile');
+  assert.match(ak, /window\.WosAppRoute\?\.open\(a\.id, \{ name: a\.name \}\); return true;/, 'an agent app without a screen shows its settings');
+  for (const s of [app, desk]) { assert.match(s, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\)\) : null,/); assert.match(s, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, open\),/); }
+  assert.match(host, /kinds: \(\) => \{ const k = live\(\) \? shell\.appKinds\?\.\(\) : null; return k \? structuredClone\(k\) : null; \},/);
+  assert.match(host, /openAny: id => live\(\) && typeof id === 'string' && \/\^\[a-z0-9\]\[a-z0-9-\]\{0,63\}\$\/\.test\(id\) && shell\.openAnyApp/);
+});
