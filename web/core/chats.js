@@ -820,26 +820,29 @@ window.WizCore.chats = function createChats(H) {
   /* Where this notification's app sends its notifications: the same Badge | Chats picker as Settings › Notifications
    * (WosBell.picker, one saved setting). Notifications' own alerts route as 'notifications'. */
   const APP_NOTE = /^a-([a-z0-9][a-z0-9-]{0,63})-[0-9a-f]{16}$/;
-  const noteRoute = NV => NV.item?.app || (!NV.item && APP_NOTE.exec(NV.id)?.[1]) || 'notifications';
+  // A System notice (app updates, connections, Wizard updates) routes on its own row, not as Notifications.
+  const noteRoute = NV => NV.item?.app || (!NV.item && APP_NOTE.exec(NV.id)?.[1]) || (NV.item && window.WosBell?.routeIdOf?.(NV.item)) || 'notifications';
   function noteRouteHtml(NV) {
     const B = window.WosBell; if (!B?.picker || !B.chatsAvailable) return '';
     const id = noteRoute(NV), name = B.nameOf?.(id) || id;
-    return `<div class="ch-notif-route" data-part="notify-route"><span>${esc(name)} notifications go to</span>${B.picker(id, { name })}</div>`;
+    // "Notifications go to", "App updates go to", "Messenger notifications go to" (never "Notifications notifications").
+    const ask = id === 'notifications' || id.startsWith('system:') ? `${name} go to` : `${name} notifications go to`;
+    return `<div class="ch-notif-route" data-part="notify-route"><span>${esc(ask)}</span>${B.picker(id, { name })}</div>`;
   }
   // Picked in the notification: Badge takes this app's items out of Chats at once (this one too) with Undo.
   function notifRoute(wid, app, to) {
     const B = window.WosBell, w = W[owner(wid)]; if (!B?.setRoute || !w) return false;
-    if (B.route(app) === to) return true;
+    const from = B.route(app); if (from === to) return true;
     vib(8);
     if (!B.setRoute(app, to)) return false;
-    if (to === 'badge') {
+    if (to !== 'chats') {
       const n = notifOf(w);
       if (n && noteRoute(n) === app) {
         const d = KIT.drafts.get('new');
         if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
         ch(w.id).draft = ''; chatsBack(w);
       }
-      B.movedToast?.(app, toast);
+      B.movedToast?.(app, toast, 5000, from);
     }
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;

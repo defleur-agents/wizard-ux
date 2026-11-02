@@ -1307,7 +1307,9 @@
    * the side button and the Unsent list. Unsent = everything saved on this phone that Wizard hasn't accepted yet:
    * messages from the app (outbox) and recordings from the Everywhere button (native outbox), one list, Retry each. */
   const GEAR_SVG = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
-  function gearBtn() { const n = unsentAll().length; return `<button class="gear" data-act="settings" aria-label="Settings${n ? `, ${n} unsent` : ''}">${GEAR_SVG}${n ? `<span class="gear-n">${n}</span>` : ''}</button>`; }
+  // The cog also counts System notices set to Badge (Settings › Notifications › System).
+  function gearBtn() { const u = unsentAll().length, y = window.WosBell?.systemCount | 0, n = u + y; return `<button class="gear" data-act="settings" aria-label="Settings${u ? `, ${u} unsent` : ''}${y ? `, ${y} new from Wizard` : ''}">${GEAR_SVG}${n ? `<span class="gear-n">${n}</span>` : ''}</button>`; }
+  addEventListener('wizard:system-notices', () => refreshHome());
   let NATIVE_UNSENT = [];
   function readNativeUnsent() { try { NATIVE_UNSENT = NATIVE() && window.WizardOSNative.unsent ? JSON.parse(window.WizardOSNative.unsent()) : []; } catch (e) { NATIVE_UNSENT = []; } }
   // From the app (outbox) and from the Everywhere button (native), oldest first.

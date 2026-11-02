@@ -66,6 +66,9 @@
     // Updates never appear here: the update card at the top of Settings says it once.
     if (window.WizCore.voiceStatus?.state?.ready === false) items.push({ title: 'Voice unavailable', feature: 'voice' });
     if (ctx.live?.error === 'access') items.push({ title: 'Sign-in needed', feature: 'wizard' });
+    // System notices set to Badge (Settings › Notifications › System): the cog counts them, this row opens them.
+    const sys = window.WosBell?.systemCount | 0;
+    if (sys) items.push({ title: `${sys} new from Wizard`, feature: 'notification-routing' });
     return items;
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
@@ -553,16 +556,27 @@
    * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */
   // The picker itself is WosBell.picker: the same one sits on every notification opened in Chats.
   const routeSeg = (r, off) => window.WosBell.picker(r.id, { name: r.name, off });
+  const SEEN = { list: null }; // the System notices as they were when the page opened (new ones keep their dot)
   register({ id: 'notification-routing', page: 'notifications', aliases: ['notifications', 'notification-routing'],
-    subtitle: () => { const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
-    enter: () => { window.WosBell?.discover?.(); },
+    subtitle: () => { const sys = window.WosBell?.systemCount | 0; if (sys) return `${sys} new`; const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
+    // Opening the page is seeing the System notices: the cog's count clears (the list below keeps them).
+    enter: () => { window.WosBell?.discover?.(); SEEN.list = window.WosBell?.systemItems?.() || []; void window.WosBell?.seenSystem?.(); },
+    leave: () => { SEEN.list = null; },
     html() {
       const B = window.WosBell, list = B?.routes?.() || [], off = !B?.chatsAvailable;
       if (!B?.routes) return '';
       void B.discover?.();
-      const rows = list.map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats'}</small></span>${routeSeg(off ? { ...r, route: 'badge' } : r, off)}</div>`).join('');
+      const where = r => r.route === 'off' ? 'Off · kept in its own history' : r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats';
+      const rows = list.map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${where(r)}</small></span>${routeSeg(r, off)}</div>`).join('');
+      // System: notices about Wizard itself, not an app. Problems always reach you through Notifications' choice.
+      const sysWhere = r => r.route === 'off' ? 'Off · listed below' : r.route === 'chats' && !off ? 'In Chats' : 'Badge on the Settings cog';
+      const sysRows = (B.systemRoutes?.() || []).map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${sysWhere(r)}</small></span>${routeSeg(r, off)}</div>`).join('');
+      const recent = SEEN.list || B.systemItems?.() || [];
+      const ago = t => { const m = Math.max(0, Math.round((Date.now() / 1000 - t) / 60)); return m < 60 ? `${m || 1}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+      const recentHtml = recent.length ? `<h4>Recent</h4><ul class="st-sys-list">${recent.map(i => `<li class="${i.read ? '' : 'new'}${i.needs ? ' needs' : ''}"><span class="st-tx"><b>${esc(i.title || i.kindName)}</b><small>${esc(String(i.message || '').slice(0, 160))}</small></span><time>${esc(ago(i.time))}</time></li>`).join('')}</ul>` : '';
+      const system = sysRows ? `<div class="st-group st-sys"><h4>System</h4><p class="st-hint">About Wizard itself, not your apps. Anything that needs you, like a failed update, still reaches you as Notifications do.</p>${sysRows}${recentHtml}</div>` : '';
       const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. Turn on Notifications in Chats to choose Chats:</p>${settingRow('wizard/unified-inbox')}` : '';
-      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a <b>Badge</b> on its icon, or a thread in <b>Chats</b> that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. Saved on this device.</p></div>`;
+      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a <b>Badge</b> on its icon, a thread in <b>Chats</b> that waits with Archive and Snooze, or <b>Off</b>. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. Saved on this device.</p></div>${system}`;
     },
     act(ctx, el) {
       const b = el.closest('[data-notify-route]');
@@ -716,8 +730,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:system-notices', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:system-notices', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.

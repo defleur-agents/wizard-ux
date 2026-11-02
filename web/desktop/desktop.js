@@ -1769,6 +1769,15 @@
   function returnToSettings() { if (!settingsReturn) return; const from = settingsReturn; openSettings(); setEl.querySelector(`[data-st="${from}"]`)?.focus({ preventScroll: true }); }
   setEl.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeSettings(); });
   $('#settingsBtn').addEventListener('click', () => openSettings());
+  // System notices set to Badge (Settings › Notifications › System) count on the cog.
+  function paintCog() {
+    const b = $('#settingsBtn'); if (!b) return;
+    const n = window.WosBell?.systemCount | 0; let m = b.querySelector('.cog-n');
+    if (!n) { m?.remove(); b.setAttribute('aria-label', 'Settings'); return; }
+    if (!m) { m = document.createElement('b'); m.className = 'cog-n'; b.append(m); }
+    m.textContent = n > 99 ? '99+' : String(n); b.setAttribute('aria-label', `Settings, ${n} new from Wizard`);
+  }
+  addEventListener('wizard:system-notices', paintCog); paintCog();
   C.voiceStatus?.onChange(() => renderSettings());
   OUTBOX?.onChange(() => renderSettings());
 

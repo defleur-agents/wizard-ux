@@ -495,3 +495,7 @@ html[data-skin-frame="borderless"] .win.hud > .wbar { padding-right: calc(96px +
 .win.hud:not([hidden]) { animation: hud-in 200ms var(--ease, ease-out) both; }
 @keyframes hud-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .win.hud:not([hidden]) { animation: none; } }
+
+/* The Settings cog's count: System notices set to Badge (Settings › Notifications › System). */
+#settingsBtn { position: relative; }
+#settingsBtn .cog-n { position: absolute; top: -3px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--wz-accent, #f5b942); color: var(--wz-base, #111); font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; pointer-events: none; }

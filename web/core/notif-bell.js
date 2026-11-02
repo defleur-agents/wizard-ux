@@ -20,21 +20,52 @@
   const readJson = (k, d) => { try { const v = JSON.parse(store?.getItem(k) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : d; } catch (e) { return d; } };
   const writeJson = (k, v) => { try { store?.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
-  /* ---- Routing: Badge or Chats, per app ---- */
+  /* ---- Routing: Badge, Chats or Off, per app; and per System kind ---- */
+  /* Off (Miguel, 2 Nov 2026): no badge and nothing in Chats; the item stays in Notifications' own history.
+   * System (same day): notices about Wizard itself, not an app (app updates, app connections, Wizard updates), come
+   * through Notifications but route on their own rows, default Off. A system notice that needs the owner (a failed
+   * update, a connection waiting for his OK) never goes quiet: it follows Notifications' own choice instead.
+   * A System row set to Badge counts on the Settings cog, and Settings lists them under Notifications. */
   const ROUTE_KEY = 'wos.notify.route.v1', ROUTE_DEFAULT = Object.freeze({ notifications: 'chats' });
-  const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+  const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/, TO = ['badge', 'chats', 'off'];
+  const SYSTEM = Object.freeze([
+    { kind: 'app-updates', name: 'App updates', what: 'Apps updated overnight',
+      title: /^(\d+ apps? updated|App updates need a look)$/i },
+    { kind: 'connections', name: 'App connections', what: 'An app was connected to another',
+      title: /^(App connection added|Connection needs your OK)$/i },
+    { kind: 'wizard-updates', name: 'Wizard updates', what: 'Wizard itself was updated',
+      title: /^(App Manager updated|Wizard OS updated|Your release needs you to finish an update)$/i },
+  ]);
+  const SYSID = /^system:([a-z-]{1,40})$/;
+  const sysOf = id => { const m = SYSID.exec(String(id || '')); return m ? SYSTEM.find(k => k.kind === m[1]) || null : null; };
+  const validId = id => APPID.test(id) || !!sysOf(id);
   let ROUTES = readJson(ROUTE_KEY, {});
-  const route = id => { id = String(id || ''); const r = Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : ROUTE_DEFAULT[id]; return r === 'chats' ? 'chats' : 'badge'; };
+  const route = id => { id = String(id || ''); const r = Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : sysOf(id) ? 'off' : ROUTE_DEFAULT[id]; return TO.includes(r) ? r : 'badge'; };
+  // Which System kind a Notifications item is: the sender's tags (`wizard-system` + kind), else its known title.
+  function sysKind(it) {
+    if (!it || it.app) return null;
+    const tags = Array.isArray(it.tags) ? it.tags.map(String) : [];
+    if (tags.includes('wizard-system')) { const k = SYSTEM.find(k => tags.includes(k.kind)); if (k) return k; }
+    const t = String(it.title || '').trim();
+    return SYSTEM.find(k => k.title.test(t)) || null;
+  }
+  // Needs the owner: tagged so, high priority, or a title that asks for him. These are never silenced by a System row.
+  const needsYou = it => (Array.isArray(it.tags) && it.tags.includes('needs-you')) || (Number(it.priority) || 3) >= 4
+    || /need(s)? (a look|your OK|you)/i.test(String(it.title || ''));
+  // The route that decides one item: its app's, its System row's, or Notifications'.
+  const routeIdOf = it => it.app ? it.app : (() => { const k = sysKind(it); return k && !needsYou(it) ? 'system:' + k.kind : 'notifications'; })();
   const chatsReady = () => !!window.WosSkinHost?.inboxList;
   // Effective: Chats only when Chats can list it (a package holds the inbox list) and, for an app, it has a feed.
   // Chats itself ('wizard') is the inbox and always keeps its own badge.
   function inChats(id) {
     id = String(id || '');
     if (!id || id === 'wizard' || route(id) !== 'chats' || !chatsReady()) return false;
-    return id === 'notifications' ? installed() : known()[id]?.s === 'yes';
+    return id === 'notifications' || sysOf(id) ? installed() : known()[id]?.s === 'yes';
   }
+  // Off: no badge anywhere and nothing in Chats (Notifications keeps it in its history).
+  const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && route(id) === 'off'; };
   function setRoute(id, to) {
-    id = String(id || ''); if (!APPID.test(id) || id === 'wizard' || !['badge', 'chats'].includes(to)) return false;
+    id = String(id || ''); if (!validId(id) || id === 'wizard' || !TO.includes(to)) return false;
     if (route(id) === to) return true;
     ROUTES = { ...ROUTES, [id]: to }; writeJson(ROUTE_KEY, ROUTES);
     rerouted(); loadItems();
@@ -42,24 +73,25 @@
   }
   // Something changed what goes where: drop items that no longer belong in Chats at once, recount every badge.
   function rerouted() {
-    const keep = IN.items.filter(i => i.app ? inChats(i.app) : inChats('notifications'));
+    const keep = IN.items.filter(i => inChats(routeIdOf(i)));
     if (keep.length !== IN.items.length) { IN.items = Object.freeze(keep); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } }
     window.WizCore?.workspaceNav?.rerouted?.();
-    paint();
+    systemCount(); paint();
     window.dispatchEvent(new CustomEvent('wizard:notify-route'));
     inboxChanged();
   }
 
   function html() {
     if (!installed()) return '';
-    // Routed to Chats (or its window is open): the count already shows in one place, so no bell.
-    if (inChats('notifications') || (typeof window.WizAppOpen === 'function' && window.WizAppOpen('notifications'))) return '<button type="button" class="ch-bell" data-chbell hidden aria-hidden="true" tabindex="-1"></button>';
+    // Routed to Chats or Off (or its window is open): the count already shows in one place, or nowhere, so no bell.
+    if (inChats('notifications') || isOff('notifications') || (typeof window.WizAppOpen === 'function' && window.WizAppOpen('notifications'))) return '<button type="button" class="ch-bell" data-chbell hidden aria-hidden="true" tabindex="-1"></button>';
     const n = S.unread, lbl = n ? `Notifications, ${n} unread` : 'Notifications';
     return `<button type="button" class="ch-bell${S.needs ? ' needs' : ''}" data-chbell aria-label="${lbl}">${BELL}${n ? `<b>${n > 99 ? '99+' : n}</b>` : ''}</button>`;
   }
   function paint() {
     // The raw count; workspace-navigation shows it as a badge only while Notifications is set to Badge.
-    window.WizCore?.workspaceNav?.setCount('notifications', S.unread);
+    // System notices are not Notifications' own: they count on their own rows (the Settings cog), never here.
+    window.WizCore?.workspaceNav?.setCount('notifications', Math.max(0, S.unread - SY.away));
     for (const b of document.querySelectorAll('[data-chbell]')) {
       const h = html(); if (!h) { b.remove(); continue; }
       const t = document.createElement('div'); t.innerHTML = h; const nb = t.firstElementChild;
@@ -70,10 +102,34 @@
    * while something watches, on the bell's own cadence. Text stays data; the tweak renders it with textContent.
    * Only what is routed to Chats is listed: Notifications' items, and the items of apps set to Chats. */
   const IN = { items: [], subs: new Set(), seq: 0 };
+  /* Every Notifications item (not only Chats'): System rows read their history and counts from it. `SY.badge` = unread
+   * System notices set to Badge (the Settings cog); `SY.away` = unread ones that are not Notifications' own count. */
+  const NOTES = { all: [] }, SY = { badge: 0, away: 0 };
+  function systemCount() {
+    let badge = 0, away = 0;
+    for (const i of NOTES.all) {
+      if (i.read || i.archived) continue;
+      const id = routeIdOf(i); if (!sysOf(id)) continue;
+      away++; if (route(id) === 'badge') badge++;
+    }
+    const ch = badge !== SY.badge || away !== SY.away; SY.badge = badge; SY.away = away;
+    if (ch) { paint(); window.dispatchEvent(new CustomEvent('wizard:system-notices', { detail: { n: badge } })); }
+  }
+  // Recent System notices for Settings › Notifications (newest first; read or not; needs-you ones included).
+  const systemItems = (n = 8) => NOTES.all.filter(i => sysKind(i) && !i.archived).sort((a, b) => b.time - a.time).slice(0, n)
+    .map(i => Object.freeze({ ...i, kind: sysKind(i).kind, kindName: sysKind(i).name, needs: needsYou(i) }));
+  // Seen in Settings: unread System notices set to Badge are marked read (the cog clears).
+  function seenSystem() {
+    const ids = NOTES.all.filter(i => !i.read && !i.archived && sysOf(routeIdOf(i)) && route(routeIdOf(i)) === 'badge').map(i => i.id);
+    if (!ids.length) return Promise.resolve(false);
+    NOTES.all = Object.freeze(NOTES.all.map(i => ids.includes(i.id) ? Object.freeze({ ...i, read: true }) : i)); systemCount();
+    return mark(ids, { read: true });
+  }
   const str = (v, n) => String(v == null ? '' : v).slice(0, n);
   // The editor's short message is a preview, not the source. Keep the complete original separately, including
   // paragraphs and long diagnostic output. Legacy items without editor details use their complete body.
   const cleanItem = i => Object.freeze({ id: str(i.id, 128), title: str(i.title, 300), message: str(i.message, 8000), details: String(i.details || i.message || ''), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000), read: !!i.read, archived: !!i.archived,
+    tags: Object.freeze((Array.isArray(i.tags) ? i.tags : []).slice(0, 8).map(t => str(t, 40))),
     ...(i.app ? { app: str(i.app, 64), appName: str(i.appName, 80), key: str(i.key, 200), open: str(i.open, 500) } : {}) });
 
   /* App inbox feeds (Wizard OS inbox feed v1): an installed app that serves GET /<app>/api/inbox → { inbox: 1, items }
@@ -158,21 +214,33 @@
     return withMarks(out.filter(it => inChats(it.app)));
   }
   async function loadItems() {
-    if (!IN.subs.size) return;
+    if (!IN.subs.size) return loadNotes();
     const seq = ++IN.seq;
     try {
-      const wantNotes = installed() && route('notifications') === 'chats';
+      // Notifications' list is read whenever it is installed: System rows and the Settings cog count from it too.
+      const wantNotes = installed();
       const [notes, apps] = await Promise.all([
         wantNotes ? fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => null) : null,
         loadFeeds().catch(() => []),
       ]);
       if (seq !== IN.seq) return;
-      // A failed Notifications read keeps its last items; Notifications set to Badge lists none.
-      const base = !wantNotes ? [] : notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app);
+      // A failed Notifications read keeps its last items. Only what routes to Chats is listed there.
+      if (wantNotes && notes && Array.isArray(notes.items)) NOTES.all = Object.freeze(notes.items.filter(i => i && i.id).map(cleanItem));
+      const base = !wantNotes ? [] : NOTES.all.filter(i => inChats(routeIdOf(i)));
+      systemCount();
       const before = JSON.stringify(IN.items);
       IN.items = Object.freeze([...base, ...apps].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
       for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
       if (before !== JSON.stringify(IN.items)) inboxChanged();
+    } catch (e) {}
+  }
+  // No Chats list watching: still read Notifications' list (at the bell's cadence) for System counts.
+  async function loadNotes() {
+    if (!installed()) return;
+    try {
+      const r = await fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' });
+      const d = r.ok ? await r.json() : null;
+      if (d && Array.isArray(d.items)) { NOTES.all = Object.freeze(d.items.filter(i => i && i.id).map(cleanItem)); systemCount(); }
     } catch (e) {}
   }
   function watch(fn) {
@@ -241,7 +309,9 @@
   addEventListener('storage', e => { if (e && e.key === ROUTE_KEY) { ROUTES = readJson(ROUTE_KEY, {}); rerouted(); loadItems(); } });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  const nameOf = id => { const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
+  const nameOf = id => { if (sysOf(id)) return sysOf(id).name; const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
+  /* System rows for Settings › Notifications (only while Notifications is installed: it carries them). */
+  const systemRoutes = () => installed() ? SYSTEM.map(k => ({ id: 'system:' + k.kind, kind: k.kind, name: k.name, what: k.what, route: route('system:' + k.kind), chats: inChats('system:' + k.kind) })) : [];
   /* The list Settings › Notifications shows: Notifications (when installed), then every app with a feed, by name. */
   function routes() {
     const out = [];
@@ -256,17 +326,18 @@
   const ROUTE_ICON = {
     badge: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>',
     chats: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5z"/></svg>',
+    off: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M4.2 11.8l7.6-7.6"/></svg>',
   };
   const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   function picker(id, { name, off = false } = {}) {
-    id = String(id || ''); const nm = name || nameOf(id), cur = off ? 'badge' : route(id);
-    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
+    id = String(id || ''); const nm = name || nameOf(id), cur = off && route(id) === 'chats' ? 'badge' : route(id);
+    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats'], ['off', 'Off']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
   }
   /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
    * Undo, which puts the app back on Chats. `toast` is the shell's toast(icon, text, ms); the button is added here. */
-  function movedToast(id, toast, ms = 5000) {
-    id = String(id || ''); const back = route(id) === 'badge' ? 'chats' : 'badge';
-    const text = `${nameOf(id)} moved to ${back === 'chats' ? 'badges' : 'Chats'} · `;
+  function movedToast(id, toast, ms = 5000, from) {
+    id = String(id || ''); const now = route(id), back = TO.includes(from) && from !== now ? from : now === 'badge' ? 'chats' : 'badge';
+    const text = now === 'off' ? `${nameOf(id)} turned off · ` : `${nameOf(id)} moved to ${now === 'badge' ? 'badges' : 'Chats'} · `;
     try { toast?.('●', '', ms); } catch (e) {}
     const t = document.getElementById?.('toast'); if (!t) return null;
     const spans = t.querySelectorAll('span'); const tx = spans[spans.length - 1];
@@ -276,5 +347,5 @@
     t.append(b);
     return b;
   }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, routes, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routes, systemRoutes, systemItems, seenSystem, routeIdOf, get systemCount() { return SY.badge; }, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
