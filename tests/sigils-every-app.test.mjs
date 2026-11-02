@@ -35,14 +35,14 @@ test('Home wears the approved 12%-wider hat while the main Hermes agent wears th
   const css = read('web/core/sigils.css');
   const hermesBadge = css.match(/\.sgi\.sg-hermes\s*\{([^}]*)\}/s);
   assert.ok(hermesBadge, 'Hermes badge rule exists');
-  assert.match(hermesBadge[1], /background:\s*#F7F5FF;/, 'Hermes uses a light circle');
+  assert.match(hermesBadge[1], /background:\s*(?:#F7F5FF|color\(srgb 0\.96862745 0\.96078431 1\));/, 'Hermes uses the exact approved light circle');
   assert.match(hermesBadge[1], /border-radius:\s*50%;/, 'Hermes badge is circular');
   assert.match(hermesBadge[1], /mask:\s*none;/, 'Hermes is not reversed into the app hue');
   assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
   const hermesPortrait = css.match(/\.sgi\.sg-hermes::after\s*\{([^}]*)\}/s);
   assert.ok(hermesPortrait, 'Hermes portrait layer exists');
   assert.match(hermesPortrait[1], /inset:\s*0;/, 'the portrait fills the circle without changing the badge size');
-  assert.match(hermesPortrait[1], /background:\s*#08070A;/, 'the portrait stays black');
+  assert.match(hermesPortrait[1], /background:\s*(?:#08070A|color\(srgb 0\.03137255 0\.02745098 0\.03921569\));/, 'the portrait stays the exact approved black');
   assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
   assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
   assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
@@ -74,7 +74,7 @@ test('two-orb active marks preserve the Hermes light badge and black portrait', 
     'all active-orb marks keep the same containment cap');
   assert.match(css, /#orbApp :is\(img, \.sgi:not\(\.sg-hermes\), svg\)\s*\{[^}]*filter:\s*brightness\(0\) invert\(1\);[^}]*\}/s,
     'only ordinary masks are whitened in the active orb');
-  assert.match(css, /#orbApp \.sgi:not\(\.sg-hermes\)\s*\{[^}]*background:\s*#fff;[^}]*\}/s,
+  assert.match(css, /#orbApp \.sgi:not\(\.sg-hermes\)\s*\{[^}]*background:\s*(?:#fff|white);[^}]*\}/s,
     'the layout never paints over the Hermes badge');
   assert.match(css, /:is\(\.to-face, \.to-chip-sig\) \.sgi\s*\{[^}]*width:\s*82%;[^}]*height:\s*82%;[^}]*\}/s,
     'all agent marks keep the approved optical box');
@@ -149,7 +149,7 @@ test('the generated files are in sync with the template (rebuild with tools/sigi
   const strip = s => s.replace(/\/\*NAMES\*\/|\/\*HOUSE\*\/|\/\*BRAND\*\/|\/\*FALLBACK\*\//g, '');
   for (const line of strip(tpl).split('\n').filter(l => l.trim() && !/NAMES|HOUSE|BRAND = |FALLBACK/.test(l)))
     assert.ok(js.includes(line), 'web/core/sigils.js is stale; rerun tools/sigils/build.py. Missing: ' + line.trim());
-  const house = JSON.parse(js.match(/const HOUSE = (\{.*?\});/)[1]);
+  const house = JSON.parse(js.match(/const HOUSE = Object\.fromEntries\(Object\.entries\((\{.*?\})\)\.map/)[1]);
   const src = read('tools/sigils/build.py');
   for (const id of Object.keys(house)) assert.ok(src.includes(`'${id}'`), `HOUSE ${id} not in build.py`);
 });

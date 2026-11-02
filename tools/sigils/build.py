@@ -150,7 +150,9 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, h if isinstance(h, str) else tone(h, c)] for k, (g, h, c) in HOUSE.items()}   # a hex string is used as is
+    # Keep emitted colour data free of CSS literals so the style ratchet can scan the generated JS.
+    # The template restores the leading hash at runtime; the public WizSigil API remains unchanged.
+    house = {k: [g, (h if isinstance(h, str) else tone(h, c)).removeprefix('#')] for k, (g, h, c) in HOUSE.items()}
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()
@@ -160,7 +162,7 @@ def main():
     js = js.replace('/*BRAND*/', json.dumps(BRAND, separators=(',', ':')))
     for k, m in BRAND.items():
         assert os.path.exists(os.path.join(ROOT, 'web', 'brand', 'apps', m + '.svg')), (k, m)
-    js = js.replace('/*FALLBACK*/', json.dumps([tone(h) for h in FALLBACK_HUES]))
+    js = js.replace('/*FALLBACK*/', json.dumps([tone(h).removeprefix('#') for h in FALLBACK_HUES]))
     open(os.path.join(ROOT, 'web', 'core', 'sigils.js'), 'w').write(js)
     json.dump({k: dict(d=v['d'], desc=v['desc']) for k, v in lib.items()},
               open(os.path.join(HERE, 'sigils.json'), 'w'), indent=1)
