@@ -4129,7 +4129,7 @@
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
         return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
-          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you',
+          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
           actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
       return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
     },

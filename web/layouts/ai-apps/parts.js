@@ -24,6 +24,9 @@ export const ICON = {
   restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
+  // the app panel wider / back to a third (round 7, the Orb desktop's panel)
+  expand: ['M14 4h6v6', 'M20 4l-7 7', 'M10 20H4v-6', 'M4 20l7-7'],
+  shrink: ['M4 14h6v6', 'M10 14l-6 6', 'M20 10h-6V4', 'M14 10l6-6'],
   // a microphone: the orb wears it (round 6: the orb IS the microphone)
   mic: ['M12 3.5a2.75 2.75 0 0 0-2.75 2.75v5.5a2.75 2.75 0 0 0 5.5 0v-5.5A2.75 2.75 0 0 0 12 3.5z', 'M6.5 11.25a5.5 5.5 0 0 0 11 0', 'M12 16.75v3.75'],
   newchat: ['M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12', 'M17.5 4.5l2 2L13 13l-3 1 1-3z'],
@@ -49,6 +52,47 @@ export function sectionsOpen(stored) {
   const o = { archive: false, working: false, ready: true };
   if (stored && typeof stored === 'object') for (const k of Object.keys(o)) if (typeof stored[k] === 'boolean') o[k] = stored[k];
   return o;
+}
+/* Round 7 (Miguel, 2 Nov 2026): the stock Chats statuses (core/chats.js stiKind: what a thread wants from him), in Chats'
+ * own order of urgency, with Chats' own words. The rail groups Ready by them and marks each chat with its colour; a
+ * notification row is FYI unless it is urgent. */
+export const STATES = [['needs', 'Needs you'], ['approval', 'Needs approval'], ['failed', 'Error'], ['check', 'Your call'], ['fyi', 'FYI'], ['done', 'Done'], ['deferred', 'Snoozed'], ['none', 'Ready']];
+const KNOWN = new Set(STATES.map(s => s[0]));
+/** One row's status: the shell's own (row.state), else what the row says (needs / a note). */
+export function stateOf(r) {
+  const s = r && typeof r.state === 'string' ? r.state : '';
+  if (KNOWN.has(s)) return s;
+  return r?.needs ? 'needs' : r?.note ? 'fyi' : 'none';
+}
+/** Ready grouped by status in STATES order: [{ state, word, rows }], empty groups left out. */
+export function stateGroups(rows) {
+  const by = new Map(STATES.map(([k]) => [k, []]));
+  for (const r of rows || []) by.get(stateOf(r)).push(r);
+  return STATES.map(([state, word]) => ({ state, word, rows: by.get(state) })).filter(g => g.rows.length);
+}
+/** The notification Chats shows in place of a thread (a New chat holding the note: .ch-notif-thread), if one is on
+ * screen; the AI apps view treats it exactly like a chat (never Home). */
+export function noteThread(doc, scope = '') {
+  for (const n of doc.querySelectorAll(`${scope} .ch-thread.ch-notif-thread`.trim())) {
+    if (typeof n.getClientRects === 'function' && !n.getClientRects().length) continue;
+    return n;
+  }
+  return null;
+}
+/** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
+ * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)
+ * and opens Settings › AI. Returns the copy's signature so callers repaint only on change. */
+export function gaugeInto(doc, box, last, open) {
+  const src = [...doc.querySelectorAll('.mh-gauge')].find(n => !n.classList.contains('is-still') && !n.closest('[data-fuel-copy]'));
+  const sig = src && typeof src.cloneNode === 'function' ? `${src.getAttribute('data-s')}|${src.getAttribute('aria-label')}|${src.querySelectorAll('.on').length}` : '';
+  if (sig === last) return last;
+  if (!sig) { box.replaceChildren(); box.hidden = true; return sig; }
+  const c = src.cloneNode(true);
+  for (const n of [c, ...c.querySelectorAll('[id]')]) n.removeAttribute('id');
+  c.removeAttribute('data-go'); c.classList.add('vw-gauge');
+  box.replaceChildren(c); box.hidden = false;
+  c.addEventListener('click', open);
+  return sig;
 }
 /** The box of one column of a grid row (the composer's orb slot, round 6): its middle in viewport px and its size
  * ({ x, y, d }), on the grid's last row. Read from the resolved tracks, so it is right whether the composer is one line

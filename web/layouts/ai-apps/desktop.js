@@ -33,7 +33,7 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
+import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, gaugeInto } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -65,7 +65,11 @@ export default function desktop(api) {
   /* ---------- the sidebar ---------- */
   const side = el('nav', 'aad-side', { 'aria-label': 'Sidebar' });
   const head = el('div', 'aad-sh');
-  const word = el('button', 'aad-word', { type: 'button', title: 'Home' });
+  // round 7 (Miguel): the workspace switcher IS the header (this Wizard's name; a click opens the switcher menu), where
+  // the name was; Home = + and ⌥`
+  const wsBtn = el('button', 'aad-ws', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+  const wsDisc = el('span', 'aad-wsd', { 'aria-hidden': 'true' }), wsName = el('span', 'aad-wsn');
+  wsBtn.append(wsDisc, wsName, icon('down', 'aad-ico aad-wsc'));
   const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
   // the Ready count (round 5): on the sidebar's ◫ and on the rail's, like the phone's ☰
@@ -74,40 +78,48 @@ export default function desktop(api) {
   const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
   const cancelBtn = el('button', 'aad-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
-  head.append(word, findBtn, searchBox, cancelBtn, togBtn);
+  head.append(wsBtn, findBtn, searchBox, cancelBtn, togBtn);
   const scroll = el('div', 'aad-scroll');
   const foot = el('div', 'aad-foot');
   const newBtn = el('button', 'aad-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); newBtn.append(icon('plus'));
   const setBtn = el('button', 'aad-set', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); setBtn.append(icon('cog'));
-  foot.append(newBtn, setBtn);
-  // the rail (collapsed): ◫ · + · 🔍 · the open apps · All apps … the cog
+  // round 7: the cog on the left, the AI fuel gauge between, + on the right
+  const fuel = el('div', 'aad-fuel', { 'data-fuel-copy': '' }); fuel.hidden = true;
+  foot.append(setBtn, fuel, newBtn);
+  // the rail (collapsed, round 7): ◫ · + · 🔍 · Working (a count) · every Ready chat, grouped by its stock status
+  // (Needs you, Your call, FYI, Done…: a coloured count, then each chat's initial with its status colour) · Archive (a
+  // count) … the cog
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rCount = el('b', 'aad-count', { 'aria-hidden': 'true' }); rCount.hidden = true; rTog.append(rCount);
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); rNew.append(icon('plus'));
   const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); rFind.append(icon('search'));
-  const rApps = el('div', 'aad-rapps', { role: 'list', 'aria-label': 'Open apps' });
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); rSet.append(icon('cog'));
-  rail.append(rTog, rNew, rFind, el('span', 'aad-rgap'), rSet);   // (no apps: they live on Home)
-  // round 7: the AI fuel gauge sits at the top of the sidebar, under its header (the stock bar is placed over this row)
-  const fuel = el('div', 'aad-fuel', { 'aria-hidden': 'true' });
-  const panel = el('div', 'aad-panel'); panel.append(head, fuel, scroll, foot);
+  const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
+  rail.append(rTog, rNew, rFind, rList, rSet);   // (no apps: they live on Home)
+  const panel = el('div', 'aad-panel'); panel.append(head, scroll, foot);
   side.id = 'aad-side'; side.append(panel, rail);
   const shade = el('div', 'aad-shade', { 'aria-hidden': 'true' });
 
-  /* ---------- the top row of the main area: what is in front · the workspace switcher ---------- */
+  /* ---------- the top row of the main area: the chat column's title and ✕ · the app panel's title ---------- */
   const top = el('header', 'aad-top');
-  // (round 7, Miguel: no home button in the top row, to save room: Home = the Wizard's name in the sidebar, +, ⌥`)
-  const tt = el('b', 'aad-tt');
-  const wsBtn = el('button', 'aad-ws', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
-  const wsDisc = el('span', 'aad-wsd', { 'aria-hidden': 'true' }), wsName = el('span', 'aad-wsn');
-  wsBtn.append(wsDisc, wsName, icon('down', 'aad-ico aad-wsc'));
+  // (no home button in the top row: Home = +, ⌥`; no workspace switcher either: it is the sidebar's header, round 7)
+  const cTop = el('div', 'aad-ctop'), tt = el('b', 'aad-tt');
+  const cX = el('button', 'aad-ib aad-cx', { type: 'button', 'aria-label': 'Close the chat (Esc)', title: 'Close (Esc)' }); cX.append(icon('x')); cX.hidden = true;
+  cTop.append(tt, cX);
   // the app panel's own title over it, at the top row's right (round 7): its icon and name, and ✕ (Esc) to close it
   const pTop = el('div', 'aad-ptop'); pTop.hidden = true;
   const pIcon = el('span', 'aad-pti'), pName = el('b', 'aad-ptn');
   const pX = el('button', 'aad-ib aad-px', { type: 'button', 'aria-label': 'Close the app panel (Esc)', title: 'Close (Esc)' }); pX.append(icon('x'));
-  pTop.append(pIcon, pName, pX);
-  top.append(tt, wsBtn, pTop);
+  // round 7: wider (the whole main area) and back to a third, like the Orb desktop's panel (⌥F, the desktop's full screen key)
+  const pW = el('button', 'aad-ib aad-pw', { type: 'button', 'aria-pressed': 'false' });
+  pTop.append(pIcon, pName, pW, pX);
+  top.append(cTop, pTop);
+  // a placeholder in the panel's place from the first frame while a slow app loads (never a blank third)
+  const pLoad = el('div', 'aad-pload', { role: 'status' }); pLoad.hidden = true;
+  const pLoadT = el('span', 'aad-pload-t'); pLoad.append(el('span', 'aad-pload-i'), pLoadT, el('i', 'aad-pload-s', { 'aria-hidden': 'true' }));
+  // behind the docked chat column: the page's own surface (Home's apps sit on it)
+  const back = el('div', 'aad-back', { 'aria-hidden': 'true' });
 
   /* ---------- the orb: bottom centre of the main area, always (Home, a chat, an app): the one way to talk ---------- */
   const orbBox = el('div', 'aad-orb');
@@ -119,9 +131,9 @@ export default function desktop(api) {
   orbBox.append(cv, fb, micG, orbBtn);
 
   const scene = el('div', 'aad');
-  scene.append(shade, side, top, orbBox);
+  scene.append(back, shade, side, top, orbBox, pLoad);
   api.mount(scene);
-  /* Home: the apps above the composer (Grid, or the Orb scene), home.js; an app opens as the panel on the right */
+  /* Home: the app grid above the composer (home.js); an app opens as the panel on the right */
   const homeEl = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
   scene.append(homeEl.el);
 
@@ -163,7 +175,7 @@ export default function desktop(api) {
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
-    searchBox.hidden = cancelBtn.hidden = !on; word.hidden = findBtn.hidden = on;
+    searchBox.hidden = cancelBtn.hidden = !on; wsBtn.hidden = findBtn.hidden = on;
     if (!on) { q = ''; field.value = ''; offSearch?.(); offSearch = null; } else if (!offSearch) offSearch = api.back.push(() => { offSearch = null; setSearch(false); });
     paintList(true);
     if (on) field.focus?.({ preventScroll: true });
@@ -173,10 +185,9 @@ export default function desktop(api) {
   api.listen(cancelBtn, 'click', () => setSearch(false));
   api.listen(field, 'input', () => { q = field.value; paintList(); });
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
-  // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. The
-  // Wizard's name (sidebar header, or the top row while the sidebar is the rail) and + both go there, from anywhere.
-  const newChat = () => { unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); api.sessions.newChat(); };
-  api.listen(word, 'click', () => newChat());
+  // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
+  // there from anywhere (and ⌥`, the desktop's own Home key).
+  const newChat = () => { unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); noteWant = false; api.sessions.newChat(); };
   const settings = () => { unpeek(); api.desk.settings(); };
   api.listen(newBtn, 'click', newChat); api.listen(rNew, 'click', newChat);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
@@ -194,7 +205,7 @@ export default function desktop(api) {
     });
     return t;
   }
-  const goApp = id => { unpeek(); want = id; const d = desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
+  const goApp = id => { unpeek(); want = id; loading(id); const d = desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
   function appCell(a) {
     const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === (pane?.id || here().app) ? { 'aria-current': 'page' } : {}) });
     const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
@@ -223,7 +234,7 @@ export default function desktop(api) {
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
-    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); api.sessions.open(s.id); });
+    api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
     if ((s.actions || []).some(k => ACTS.some(([a]) => a === k))) {
@@ -264,7 +275,6 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
-    word.textContent = agentName();
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
     const sig = JSON.stringify([q, h.thread, h.app, pane?.id, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')), apps.length,
       secOpen, ['working', 'ready', 'archive'].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
@@ -284,6 +294,8 @@ export default function desktop(api) {
         const rows = s[k] || [], on = !!secOpen[k];
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', '', { text: word0 }), icon('down', 'aad-ico aad-sec-c'));
+        // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
+        if (!on && k !== 'archive' && rows.length) { hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' })); hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`); }
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on) {
@@ -296,22 +308,50 @@ export default function desktop(api) {
     closeMenu();
     scroll.replaceChildren(...out);
   }
-  function paintRail(force = false) {
-    const dk = desks(), list = litFirst(realApps(openApps(api.apps.list(), dk), api.apps.kinds?.())), h = here();
-    const sig = JSON.stringify([h.app, pane?.id, list.map(a => a.id + (lit(a.id) ? '*' : ''))]);
-    if (!force && sig === railDrawn && rApps.childElementCount) return;
-    railDrawn = sig;
-    const cells = list.map(a => {
-      const b = el('button', 'aad-ri', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, 'aria-label': a.name + (lit(a.id) ? `, ${badgeText(a.id)} new` : ''), ...(a.id === (pane?.id || h.app) ? { 'aria-current': 'page' } : {}) });
-      b.append(appTile(a.id, 'aad-tile is-s'));
-      if (lit(a.id)) b.append(el('i', 'aad-rdot', { 'aria-hidden': 'true' }));
-      api.listen(b, 'click', () => goApp(a.id));
-      return b;
-    });
-    rApps.replaceChildren(...cells, allCell('aad-ri aad-all'));
+  /* The rail (round 7, Miguel: the folded sidebar must still be useful): Working as a count with a tiny spinner; every
+   * Ready chat as a small clickable initial carrying its stock status colour (a dot for new), grouped by status under a
+   * coloured count (Needs you · Your call · FYI · Done…), the title and status in its tooltip; Archive as a count. The
+   * counts open the sidebar on that section. */
+  const STATE_WORD = Object.fromEntries(STATES);
+  function openSection(k) {
+    secOpen[k] = true; api.storage.set('sections', { ...secOpen });
+    if (narrow()) { if (!peek) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } }
+    else { folded = false; api.storage.set('folded', false); }
+    paintSide(); paintList(true);
   }
+  function railCount(k, n, word0, ico) {
+    const b = el('button', 'aad-rk', { type: 'button', role: 'listitem', 'data-k': k, title: `${n} ${word0}`, 'aria-label': `${word0}: ${n}. Open the sidebar there` });
+    b.append(ico, el('b', '', { text: n > 99 ? '99+' : String(n) }));
+    api.listen(b, 'click', () => openSection(k));
+    return b;
+  }
+  function paintRail(force = false) {
+    if (root.dataset.aadSide !== 'rail') return;
+    const s = sessions || readSessions(), h = here(), ready = s.ready || [], groups = stateGroups(ready);
+    const sig = JSON.stringify([h.thread, (s.working || []).length, (s.archive || []).length, ready.map(r => [r.id, r.title, r.unread, stateOf(r)])]);
+    if (!force && sig === railDrawn && rList.childElementCount) return;
+    railDrawn = sig;
+    const out = [];
+    if ((s.working || []).length) out.push(railCount('working', s.working.length, 'working', el('i', 'aad-rspin', { 'aria-hidden': 'true' })));
+    for (const g of groups) {
+      out.push(el('span', 'aad-rg', { 'data-state': g.state, 'data-n': String(g.rows.length), title: `${g.rows.length} · ${g.word}`, 'aria-label': `${g.word}: ${g.rows.length}` }));
+      for (const r of g.rows) {
+        const b = el('button', 'aad-rc' + (r.id === h.thread ? ' is-cur' : ''), { type: 'button', role: 'listitem', 'data-sid': r.id, 'data-state': g.state, title: `${r.title} · ${STATE_WORD[g.state]}${r.unread ? ' · new' : ''}`,
+          'aria-label': `${r.note ? 'Notification: ' : ''}${r.title}, ${STATE_WORD[g.state]}${r.unread ? ', new' : ''}`, ...(r.id === h.thread ? { 'aria-current': 'page' } : {}) });
+        if (r.note) b.append(icon('bell', 'aad-ico aad-rc-i')); else b.append(el('span', 'aad-rc-l', { text: initial(r.title) }));
+        b.append(el('i', 'aad-rc-m' + (r.unread ? ' is-new' : ''), { 'aria-hidden': 'true' }));
+        api.listen(b, 'click', () => { noteWant = !!r.note; api.sessions.open(r.id); });
+        out.push(b);
+      }
+    }
+    if (!ready.length && !(s.working || []).length) out.push(el('span', 'aad-rnone', { title: 'Nothing ready', 'aria-label': 'Nothing ready' }));
+    if ((s.archive || []).length) out.push(railCount('archive', s.archive.length, 'archived', icon('done', 'aad-ico aad-rk-i')));
+    rList.replaceChildren(...out);
+  }
+  let fuelSig = '';
+  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { unpeek(); api.desk.settings('ai'); }); };
   function paintBadges() {
-    homeEl.paint();
+    homeEl.paint(); paintFuel();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     for (const n of scroll.querySelectorAll('[data-badge]')) { n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent; }
     const rt = badgeText(CHATS);
@@ -326,8 +366,6 @@ export default function desktop(api) {
     const list = api.workspaces?.list() || [], own = list[0] || { name: agentName() };
     wsDisc.textContent = initial(own.name); wsName.textContent = own.name;
     wsBtn.setAttribute('aria-label', `Workspace: ${own.name}. Switch workspace`); wsBtn.title = `Workspace: ${own.name}`;
-    // the stock bar's last pieces (the fuel gauge) stop short of the switcher
-    api.frame(() => { const w = Math.round(wsBtn.offsetWidth || 0); if (w) root.style.setProperty?.('--aad-ws-w', w + 'px'); });
     if (wsPop) paintWsPop(list);
   }
   function paintWsPop(list) {
@@ -352,7 +390,7 @@ export default function desktop(api) {
   }
   function closeWs() { if (!wsPop) return; wsPop.remove(); wsPop = null; offWsBack?.(); offWsBack = null; wsBtn.setAttribute('aria-expanded', 'false'); }
   api.listen(wsBtn, 'click', () => (wsPop ? closeWs() : openWs()));
-  api.listen(globalThis, 'wos:resources', paintWs);
+  api.listen(globalThis, 'wos:resources', () => { paintWs(); paintFuel(); });
   // a click anywhere else closes the menus (their own popovers, like ChatGPT's)
   api.listen(doc, 'pointerdown', e => {
     const t = e.target;
@@ -416,14 +454,20 @@ export default function desktop(api) {
   api.listen(orbBox, 'transitionend', syncOrb);
   api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) syncOrb(); }, true);
   api.listen(doc, 'focusin', syncOrb, true);
-  /* ---------- round 7 (Miguel, 2 Nov 2026): an app opens as a panel on the RIGHT, the chat stays in the middle ----------
-   * The Orb desktop's thirds: the sidebar (the list) on the left, the chat in the middle, the app in a panel about one
-   * third wide on the right; a thread opened from the sidebar slides in from the left, next to the sidebar. Built on the
-   * desks as they are: the app's desk and the Chats desk are both shown (desktop.css, data-aad-role on their desks),
-   * so the app keeps running as it was; ✕ or Esc hides the panel (the app keeps running on its desk, as in the Orb
-   * view) and the chat takes the room back. Short slide + fade (desktop.css), the open app lit in the sidebar grid. */
+  /* ---------- round 7 (Miguel, 2 Nov 2026): the Orb desktop's thirds ----------
+   * The sidebar (the list) on the left; a chat (a thread, or a notification shown as one) opens as a column docked right
+   * beside it, about a third wide (never the whole screen), with ✕ at its top right (Esc too) back to the list and Home,
+   * whose apps stay in view behind it; an app opens as a panel about one third wide on the right, which grows to the
+   * whole main area and back (⤢, ⌥F) and shows a placeholder from the first frame while a slow app loads. Built on the
+   * desks as they are: the Chats desk and the app's desk are both shown (desktop.css, data-aad-role on their desks), so
+   * the app keeps running as it was; ✕ or Esc hides the panel (the app keeps running on its desk, as in the Orb view).
+   * Short slides + fades (desktop.css). */
   const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
-  function paintSplit() {
+  const NOTE = '__note__';
+  let noteWant = false, docked = false, wide = false;
+  const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
+  const noteTitle = () => noteThread(doc, '.win .dchats .pane-main')?.querySelector('.ch-head .ti b')?.textContent || 'Notification';
+  function paintSplit(chatOn) {
     const h = here();
     if (h.app && (want === h.app || !pane || pane.id !== h.app)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
@@ -432,36 +476,91 @@ export default function desktop(api) {
       want = null;
     }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.id === pane.id))) pane = null;
-    const chat = pane ? wsps().find(w => w.querySelector('.dchats')) : null;
+    if (!pane && wide) setWide(false);
+    const chat = pane || chatOn ? wsps().find(w => w.querySelector('.dchats')) : null;
     for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
-    const was = !!root.dataset.aadSplit;
+    const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
+    docked = !!(chatOn && chat);
     if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
+    if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
+    if (docked && !wasDocked) anim('dock');
     // the windows are laid out in pixels and the app's bottom bar around the orb: again for the new widths
-    if (was !== !!root.dataset.aadSplit) api.frame(() => globalThis.dispatchEvent?.(new Event('resize')));
-    pTop.hidden = !pane;
+    if (was !== `${!!root.dataset.aadSplit}${docked}`) api.frame(() => globalThis.dispatchEvent?.(new Event('resize')));
+    pTop.hidden = !pane; cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Close ${appName(pane.id)} (Esc)`); }
+    if (loadId && (!want || want !== loadId) && (!pane || pane.id !== loadId)) { if (!want) doneLoading(); }
+    else if (loadId && pane?.id === loadId) waitLoaded(pane.el);
   }
   // the panel goes (the app keeps running on its desk); the chat takes the room back and the keyboard
   function closeSide() {
     if (!pane) return false;
-    const was = pane; pane = null; anim('close');
-    if (here().app === was.id) api.sessions.chats(); else paintSplit();
+    const was = pane; pane = null; setWide(false); doneLoading(); anim('close');
+    if (here().app === was.id) api.sessions.chats(); else paintSplit(!!chatThread);
     paintTop(); return true;
+  }
+  // the chat column goes: back to the list and Home (a new chat), the app panel (if any) stays
+  function closeChat() {
+    if (!docked) return false;
+    chatThread = null; noteWant = false; anim('undock');
+    api.sessions.newChat(); return true;
+  }
+  // the app panel: a third, or the whole main area (the Orb desktop's panel, wider and back)
+  function setWide(on) {
+    const w = !!on && !!pane; if (w === wide) return; wide = w;
+    if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide;
+    paintWide();
+    api.after(260, () => globalThis.dispatchEvent?.(new Event('resize')));
+  }
+  function paintWide() {
+    pW.setAttribute('aria-pressed', String(wide)); pW.replaceChildren(icon(wide ? 'shrink' : 'expand'));
+    pW.title = wide ? 'Back to a third (⌥F)' : 'Wider (⌥F)'; pW.setAttribute('aria-label', wide ? 'Make the app panel a third again' : 'Make the app panel wider');
+  }
+  paintWide();
+  // a slow app: its placeholder in the panel's place at once (desktop.css fades it in after a beat, so a fast app never
+  // flashes it), gone once the app's frame has loaded (or after 15 s whatever happens)
+  let loadId = '', loadOff = null, loadWait = null;
+  function loading(id) {
+    if (pane?.id === id && frameReady(pane.el)) return;
+    loadId = id; pLoadT.textContent = `Opening ${appName(id) || 'the app'}…`;
+    pLoad.querySelector('.aad-pload-i').replaceChildren(appTile(id, 'aad-tile'));
+    pLoad.hidden = false; root.dataset.aadLoading = '';
+    loadOff?.(); loadOff = api.after(15000, doneLoading);
+  }
+  function doneLoading() { loadOff?.(); loadOff = null; loadWait?.(); loadWait = null; loadId = ''; pLoad.hidden = true; delete root.dataset.aadLoading; }
+  function frameReady(w) {
+    const f = w?.querySelector?.('iframe'); if (!f) return !!w;
+    try { const d = f.contentDocument; return !d || (d.readyState === 'complete' && d.URL !== 'about:blank'); } catch (_) { return true; }
+  }
+  function waitLoaded(w) {
+    if (frameReady(w)) return doneLoading();
+    if (loadWait) return;
+    const f = w.querySelector('iframe'); loadWait = api.listen(f, 'load', () => { if (frameReady(w)) doneLoading(); });
   }
   let animOff = null;
   function anim(kind) { animOff?.(); root.dataset.aadAnim = kind; animOff = api.after(320, () => { delete root.dataset.aadAnim; animOff = null; }); }
   api.listen(pX, 'click', closeSide);
-  api.keys.on({ down: e => { if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || !pane || menu || wsPop || q) return false; closeSide(); return true; } });
+  api.listen(cX, 'click', closeChat);
+  api.listen(pW, 'click', () => setWide(!wide));
+  const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
+  // Esc: a wide panel back to a third, else the panel closes, else the chat column (never words being typed)
+  api.keys.on({ down: e => {
+    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || menu || wsPop || q) return false;
+    if (pane) { if (wide) setWide(false); else closeSide(); return true; }
+    if (docked && !typing()) { closeChat(); return true; }
+    return false;
+  } });
 
   /* ---------- ⌥ keys (Miguel, 2 Nov 2026): every desktop ⌥ key keeps working; the hold-⌥ hints map onto this view ----------
    * The shell's own hold-⌥ overlay (desktop.js keyHints: bare letters on their targets while LEFT ⌥ is held, gone on
    * release) draws these too (api.keys.guide). This view adds: ⌥\ the sidebar (as the Orbs view's list; Ctrl / ⌘ ⇧ S
-   * too), ⌥W / Esc close the app panel, ⌥H Home's Grid ⇄ Orb, ⌥ + a free letter a Home app (home.js appKeys). */
+   * too), ⌥W / Esc close the app panel (else the chat column), ⌥F the panel wider / a third (the desktop's own full
+   * screen key), ⌥ + a free letter a Home app (home.js appKeys). */
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     if (e.code === 'Backslash' && !e.shiftKey) { if (!e.repeat) toggleSide(); return true; }
     if (e.code === 'KeyW' && !e.shiftKey && pane) { if (!e.repeat) closeSide(); return true; }
-    if (e.code === 'KeyH' && !e.shiftKey && root.dataset.aadHome != null) { if (!e.repeat) homeEl.toggleStyle(); return true; }
+    if (e.code === 'KeyW' && !e.shiftKey && docked) { if (!e.repeat) closeChat(); return true; }
+    if (e.code === 'KeyF' && !e.shiftKey && pane) { if (!e.repeat) setWide(!wide); return true; }
     const k = /^Key([A-Z])$/.exec(e.code || '')?.[1], id = k && !e.shiftKey && homeEl.appFor(k);
     if (id) { if (!e.repeat) goApp(id); return true; }
     return false;
@@ -470,7 +569,7 @@ export default function desktop(api) {
   api.keys.guide(() => {
     const open = root.dataset.aadSide === 'open', out = [];
     const put = (n, key, word, at) => { if (shown(n)) out.push({ el: n, key, word, at }); };
-    put(open ? word : null, '`', 'Home', 'inside');
+    put(open ? newBtn : rNew, '`', 'Home', open ? 'start' : 'end');
     put(open ? togBtn : rTog, '\\', open ? 'Close sidebar' : 'Sidebar', 'below');
     put(open ? newBtn : rNew, 'N', 'New chat', open ? 'above' : 'below');
     put(open ? setBtn : rSet, ',', 'Settings', 'above');
@@ -482,8 +581,8 @@ export default function desktop(api) {
       if (i > 0 && rows.length > 2) put(rows[i - 1], '↑', '', 'inside');
     }
     put(orbBox, 'S', 'Talk', 'above'); put(orbBox, 'C', 'Command', 'below');
-    if (pane) put(pX, 'W', 'Close · Esc', 'below');
-    if (root.dataset.aadHome != null) put(homeEl.switchEl, 'H', 'Grid ⇄ Orb', 'start');
+    if (pane) { put(pX, 'W', 'Close · Esc', 'below'); put(pW, 'F', wide ? 'A third' : 'Wider', 'below'); }
+    else if (docked) put(cX, 'W', 'Close · Esc', 'below');
     return out;
   });
   api.keys.guide(() => homeEl.chips());
@@ -491,7 +590,10 @@ export default function desktop(api) {
   /* ---------- the main area: the chat (Home and the bare list become it), or an app ---------- */
   function here(r = api.route()) {
     const d = desks().find(x => x.desk === r.desk), id = r.home ? '' : d?.id || '';
-    return { app: id && id !== CHATS && !(r.view === 'thread' || r.view === 'list') ? id : '', thread: r.thread && r.thread !== '__new__' ? r.thread : null, r };
+    const app = id && id !== CHATS && !(r.view === 'thread' || r.view === 'list') ? id : '';
+    // a notification opened from the list is a New chat holding the note (round 7: it is a chat, never Home)
+    const note = !app && !r.home && r.view === 'thread' && r.thread === '__new__' && (noteWant || noteOn());
+    return { app, thread: r.thread && r.thread !== '__new__' ? r.thread : null, note, r };
   }
   let pending = false;
   const soon = fn => { if (pending) return; pending = true; api.after(0, () => { pending = false; fn(); }); };
@@ -502,24 +604,24 @@ export default function desktop(api) {
   }
   let lastThread, chatThread = null;
   function paintTop(r = api.route()) {
+    if (noteOn() || r.view !== 'thread' || (r.thread && r.thread !== '__new__')) noteWant = false;   // the note is on screen now (or gone)
     const h = here(r);
-    paintSplit();
-    // a thread picked slides in from the left, next to the sidebar
-    if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined) anim('thread'); lastThread = h.thread; }
+    // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
+    if (!h.app) chatThread = h.thread || (h.note ? NOTE : null);
+    const wasDocked = docked;
+    paintSplit(!!chatThread);
+    // a thread picked slides in from the left, next to the sidebar (the column itself slides in when it docks)
+    if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
-    root.dataset.aadNew = String(r.view === 'thread' && r.thread === '__new__');
-    // the workspace switcher only on Home (round 5): never over a chat or an app
-    // (with the app panel in front, the chat beside it is as it was: Home stays Home, a chat stays that chat)
-    if (!h.app) chatThread = h.thread;
-    const atHome = h.app ? !!pane && pane.id === h.app && !chatThread : (r.home || (r.view === 'thread' && r.thread === '__new__'));
-    const home = atHome && !pane;
-    wsBtn.hidden = !home; if (!home) closeWs();
-    if (atHome) root.dataset.aadHome = ''; else delete root.dataset.aadHome;
-    homeEl.show(atHome);
-    const t = h.app && !pane ? appName(h.app) : h.app ? (chatThread ? titleOf(chatThread) : '') : h.thread ? titleOf(h.thread) : '';
+    const fresh = !h.app && !h.note && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    root.dataset.aadNew = String(fresh && !r.home);
+    // Home = the new chat with its apps; with the chat docked, Home's apps stay in view beside it
+    const atHome = h.app ? !!pane && pane.id === h.app && !chatThread : fresh;
+    if (atHome || docked) root.dataset.aadHome = ''; else delete root.dataset.aadHome;
+    homeEl.show(atHome || docked);
+    const t = h.app && !pane ? appName(h.app) : chatThread === NOTE ? noteTitle() : chatThread ? titleOf(chatThread) : '';
     tt.textContent = t; tt.title = t;
-    const nm = agentName();
-    word.setAttribute('aria-label', `${nm}: Home (a new chat)`);
+    cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : 'Close the chat (Esc)');
     paintWs();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     syncOrb();
@@ -534,12 +636,11 @@ export default function desktop(api) {
   if (api.route().home) soon(() => api.sessions.newChat());
 
   return () => {
-    closeMenu(); closeWs(); offSearch?.(); offPeek?.();
+    closeMenu(); closeWs(); offSearch?.(); offPeek?.(); doneLoading();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
-    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadHome']) delete root.dataset[k];
+    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadHome', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
     root.style.removeProperty?.('--ah-bottom');
     for (const w of wsps()) delete w.dataset.aadRole;
-    root.style.removeProperty?.('--aad-ws-w');
     globalThis.dispatchEvent?.(new Event('resize'));
   };
 }
