@@ -44,9 +44,13 @@ export default function desktop(api) {
   root.dataset.appsDesk = 'home';
 
   /* ---------- the grid: Chats, one icon per desk, + ---------- */
-  let badgeMap = api.apps.badges(m => { badgeMap = m; paintCounts(); });
+  // Chats first, then every app with a badge, then the rest, each in desk order (Miguel, 2 Nov 2026: the same order as
+  // the Orb's ring). A newly opened app grows into its place (chrome.css .vc-born) instead of just appearing.
+  const litFirst = out => [out[0], ...out.slice(1).filter(i => (badgeMap[i.id] || 0) > 0), ...out.slice(1).filter(i => !((badgeMap[i.id] || 0) > 0))];
+  const bornIf = (on, x) => { if (on && x?.b) { x.b.classList.add('vc-born'); api.after(800, () => x.b.classList.remove('vc-born')); } return x; };
+  let badgeMap = api.apps.badges(m => { badgeMap = m; paint(); });   // a badge can reorder the grid (badged apps first)
   let sig = '', icons = [];
-  const plus = chrome.plus('apd-icon apd-plus', 'Open an app', (b, ico) => { const t = el('span', 'apd-tile', { 'aria-hidden': 'true' }); t.append(ico); b.append(t, el('span', 'apd-label', { text: 'Open app' })); });
+  const plus = chrome.plus('apd-icon apd-plus', 'Add an app', (b, ico) => { b.setAttribute('data-app', '+add'); const t = el('span', 'apd-tile', { 'aria-hidden': 'true' }); t.append(ico); b.append(t, el('span', 'apd-label', { text: 'Add' })); });
   function icon(item, meta) {
     const b = el('button', 'apd-icon', { type: 'button', 'data-app': item.id, ...(item.desk != null ? { 'data-desk': String(item.desk) } : {}) });
     const tile = el('span', 'apd-tile', { 'aria-hidden': 'true' });
@@ -70,7 +74,7 @@ export default function desktop(api) {
     const all = desks(), chatsDesk = all.find(d => d.id === CHATS);
     const out = [{ id: CHATS, name: 'Chats', desk: chatsDesk ? chatsDesk.desk : null }];
     for (const d of all) if (d.id && d.id !== CHATS) out.push({ id: d.id, name: d.name || d.id, desk: d.desk });
-    return out;
+    return litFirst(out);
   }
   function paintCounts() {
     for (const { b, count, item } of icons) {
@@ -86,7 +90,8 @@ export default function desktop(api) {
       sig = next;
       const meta = new Map(api.apps.list().map(a => [a.id, a]));
       const was = new Map(icons.map(x => [`${x.item.id}@${x.item.desk}:${x.item.name}`, x]));
-      icons = list.map(i => was.get(`${i.id}@${i.desk}:${i.name}`) || icon(i, meta.get(i.id)));
+      const first = !icons.length;
+      icons = list.map(i => was.get(`${i.id}@${i.desk}:${i.name}`) || bornIf(!first, icon(i, meta.get(i.id))));
       grid.replaceChildren(...icons.map(x => x.b), plus);
     }
     paintCounts();

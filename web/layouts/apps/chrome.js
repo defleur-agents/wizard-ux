@@ -102,13 +102,18 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   }
   /* Installed, by kind (Miguel, 2 Nov 2026: "the different types of apps", as the launcher groups them): Apps, Agent apps,
    * Agents, Connectors, In development; each without what is already open. A shell without kinds: one Installed list. */
-  const KINDS = [['apps', 'Apps'], ['wiz', 'Agent apps'], ['agents', 'Agents'], ['conns', 'Connectors'], ['dev', 'In development']];
+  /* Miguel, 2 Nov 2026: Apps open; everything mostly for agents (Agent apps, Agents, Connectors) folded into one
+   * "For agents" row, like the launcher; apps made on this Wizard (agent Pages, launcher links, test copies: what the
+   * launcher calls In development) are just apps here, with the rest. */
+  const KINDS = [['apps', 'Apps'], ['wiz', 'Agent apps'], ['agents', 'Agents'], ['conns', 'Connectors']];
+  const AGENT_KINDS = new Set(['wiz', 'agents', 'conns']);
   const kindsOf = () => { const k = api.apps.kinds?.(); return k && typeof k === 'object' ? k : null; };
   function installedGroups(K) {
     const open = new Set([CHATS, ...(openIds() || [])]);
-    return KINDS.map(([k, label]) => [k, label, (K[k] || []).filter(a => a && a.id && !open.has(a.id) && matches(a, q))]);
+    const of = k => k === 'apps' ? [...(K.apps || []), ...(K.dev || [])].sort((x, y) => (!!y.system - !!x.system) || String(x.name).localeCompare(String(y.name), undefined, { sensitivity: 'base' })) : K[k] || [];
+    return KINDS.map(([k, label]) => [k, label, of(k).filter(a => a && a.id && !open.has(a.id) && matches(a, q))]);
   }
-  let openFold = false;   // Open (already running) starts folded to one line; a search shows its matches
+  let openFold = false, agentFold = false;   // Already open and For agents start folded to one line; a search shows their matches
   // level 3: in the App Store, not installed; tap = its Store page (Get there; it opens once installed)
   function getRow(a) {
     const b = el('button', 'vc-get', { type: 'button', role: 'listitem', 'data-store': a.id, 'aria-label': `Get ${a.name} from the App Store` });
@@ -132,9 +137,32 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
         out.push(h);
         if (shown) { const g = el('div', 'vc-list vc-list-open', { role: 'list', 'aria-label': 'Already open' }); g.append(...open.map(openTile)); out.push(g); }
       }
-      const groups = installedGroups(K).filter(([, , l]) => l.length);
-      for (const [k, label, l] of groups) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': label, 'data-kind': k }); g.append(...l.map(row)); out.push(section(label, l.length), g); }
+      const groups = installedGroups(K).filter(([, , l]) => l.length), searching = !!String(q).trim();
+      const people = groups.filter(([k]) => !AGENT_KINDS.has(k)), agents = groups.filter(([k]) => AGENT_KINDS.has(k));
+      const block = ([k, label, l], head) => { const g = el('div', 'vc-list', { role: 'list', 'aria-label': label, 'data-kind': k }); g.append(...l.map(row)); out.push(head(label, l.length), g); };
+      for (const gr of people) block(gr, section);
+      if (agents.length) {
+        const shown = agentFold || searching, n = agents.reduce((s, [, , l]) => s + l.length, 0);
+        const h = el('button', 'vc-fold vc-fold-agents' + (shown ? ' open' : ''), { type: 'button', 'aria-expanded': String(shown) });
+        h.append(el('span', '', { text: 'For agents' }), el('small', 'vc-count', { text: String(n) }), icon('m6 9 6 6 6-6', 'vc-ico vc-chev'));
+        api.listen(h, 'click', () => { agentFold = !agentFold; paint(); });
+        out.push(h);
+        if (shown) for (const gr of agents) block(gr, (label, c) => { const s = section(label, c); s.classList.add('vc-sub-h'); return s; });
+      }
       if (!groups.length) out.push(section('Installed', 0), el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is open.' }));
+      // the App Store: no list of everything you don't have (that is the Store's job); a search also looks there, and
+      // one row opens the Store itself
+      if (searching && store?.length) {
+        // an app you already have under another Store id (a renamed Store listing) is not offered again
+        const have = new Set([...api.apps.list(), ...Object.values(K).flat()].map(a => String(a?.name || '').trim().toLowerCase()).filter(Boolean));
+        const hits = store.filter(a => matches(a, q) && !have.has(String(a.name || '').trim().toLowerCase()));
+        if (hits.length) { const g = el('div', 'vc-rows', { role: 'list', 'aria-label': 'In the App Store' }); g.append(...hits.map(getRow)); out.push(section('In the App Store', hits.length), g); }
+      }
+      const all = el('button', 'vc-store', { type: 'button', text: 'Get more apps in the App Store' });
+      api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); });
+      out.push(all);
+      body.replaceChildren(...out);
+      return;
     } else {
       const inst = list().filter(a => matches(a, q));
       if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
@@ -157,7 +185,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   }
   function open() {
     if (sheet) return;
-    q = ''; store = null; storeErr = false; openFold = false;
+    q = ''; store = null; storeErr = false; openFold = false; agentFold = false;
     sheet = el('div', 'vc-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Apps' });
     const scrim = el('div', 'vc-scrim', { 'aria-hidden': 'true' });
     const card = el('div', 'vc-card');
@@ -171,7 +199,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
     card.append(head, body); sheet.append(scrim, card);
     api.listen(scrim, 'click', close); api.listen(shut, 'click', close);
     api.listen(field, 'input', () => { q = field.value; paint(); });
-    api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); body.querySelector('button:not(.vc-fold)')?.click(); } });
+    api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); body.querySelector('button:is(.vc-app, .vc-hit, .vc-get)')?.click(); } });
     offMount = api.mount(sheet);
     offBack = api.back?.push ? api.back.push(close) : null;
     root.dataset.vcSheet = 'open';

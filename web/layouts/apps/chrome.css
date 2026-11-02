@@ -170,3 +170,10 @@ html[data-view-chrome] .vc-fold.open .vc-chev { transform: rotate(180deg); }
 html[data-view-chrome] .vc-list-open { margin-top: 8px; }
 /* system apps lead their group with the accent ring the launcher gives them */
 html[data-view-chrome] .vc-app.vc-sys .vc-tile { box-shadow: 0 0 0 2px var(--wz-accent, var(--ink)); }
+/* For agents: a fold like Already open; open, its kinds show as quieter sub-headings */
+html[data-view-chrome] .vc-fold-agents { margin-top: 18px; }
+html[data-view-chrome] .vc-sec-h.vc-sub-h { margin-top: 10px; font-size: calc(var(--wz-text-sm, 0.8125rem) * .78); opacity: .8; }
+/* a newly opened app grows into its place in the Apps grid (layouts/apps: bornIf) */
+html[data-view-chrome] .vc-born { animation: vc-born 640ms cubic-bezier(.2, .9, .25, 1.25) both; }
+@keyframes vc-born { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html[data-view-chrome] .vc-born { animation: none; } }
