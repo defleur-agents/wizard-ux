@@ -158,9 +158,10 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-nr .st-tx small { font-size: var(--wz-text-sm); color: var(--wz-text-secondary); }
 /* The Badge | Chats picker (WosBell.picker): the same control in Settings › Notifications and in every notification
  * opened in Chats, so it is styled once here (settings.css loads in both shells), not per place. */
-.st-nr-seg.wos-route { flex: none; width: 392px; }
-.st-nr-seg.wos-route button span { line-height: 1.1; text-align: center; }
-.st-nr-seg.wos-route .wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
+.st-nr-seg.wos-route { flex: none; width: 440px; }
+.st-nr-seg.wos-route button span { white-space: nowrap; }
+/* The Morning Report's coffee cup is a filled glyph (512 grid), not a line icon. */
+.st-nr-seg.wos-route svg.wos-route-ic.wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
 .st-nr-seg.wos-route button:disabled { opacity: .35; }
 .st-nr-seg.wos-route button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 6px 10px; font-size: var(--wz-font-size); }
 .st-nr-seg.wos-route .wos-route-ic { flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; }
@@ -278,4 +279,5 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-sys-list li small { color: var(--wz-text-secondary); font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
 .st-sys-list li time { flex: none; color: var(--wz-text-secondary); font-size: var(--wz-text-sm); }
 .st-sys-list li.new b::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--wz-accent); vertical-align: middle; }
-@media (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; } }
+/* Narrow: words only, so the four choices stay whole on one row. */
+@media (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; } .st-nr-seg.wos-route button { padding: 6px 4px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
