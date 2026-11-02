@@ -5,7 +5,8 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {chromium}=require(process.env.PLAYWRIGHT_DIR);
 const ROOT=process.env.QA_SOURCE,OUT=process.env.QA_OUT,SHELL=process.env.QA_SHELL;
 const LIVE=process.env.QA_LIVE==='1';
-const BASE=new URL('https://wizard.tailc0f369.ts.net/wizard-os-home/?app-session=wisdom');
+if(!process.env.QA_ORIGIN)throw Error('QA_ORIGIN is required');
+const BASE=new URL('/wizard-os-home/?app-session=wisdom',process.env.QA_ORIGIN);
 const fixture=JSON.parse(fs.readFileSync(process.env.QA_FIXTURE)),manifest=JSON.parse(fs.readFileSync(process.env.QA_SOURCE_MANIFEST));
 const allowed=new Set(JSON.parse(fs.readFileSync(process.env.QA_SHELL_ALLOWLIST)));
 const digest=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -105,7 +106,7 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
    c.desktopMode.after=await frame.evaluate(()=>innerWidth);
    c.desktopMode.state=await page.evaluate(()=>({shell:document.documentElement.dataset.shell,frame:document.documentElement.dataset.skinFrame,fullscreen:document.body.classList.contains('desktop-fullscreen')}));
   }
-  c.natural=await frame.evaluate(()=>({hosted:WizardApp.hosted,threadAgents:WizardApp.nav.threadAgents,threadDrafts:WizardApp.nav.threadDrafts,openThreadType:typeof WizardApp.nav.openThread}));
+  c.natural=await frame.evaluate(()=>({hosted:WizardApp.hosted,visible:WizardApp.view.isVisible(),threadAgents:WizardApp.nav.threadAgents,threadDrafts:WizardApp.nav.threadDrafts,openThreadType:typeof WizardApp.nav.openThread}));
   c.registration=await page.evaluate(()=>{const f=[...document.querySelectorAll('iframe')].find(f=>new URL(f.src,location.href).pathname.startsWith('/wisdom/'));return{authorized:WizAppServices.authorized(f),registeredApp:(WizCore.apps().APPS||[]).find(a=>a.id==='wisdom')?.id,framePath:new URL(f.src,location.href).pathname}});
   assert(c.registration.authorized&&c.registration.registeredApp==='wisdom');assert.equal(c.natural.hosted,true);assert.equal(c.natural.threadAgents,true);assert.equal(c.natural.threadDrafts,true);
   await frame.evaluate(id=>Wisdom.navigate('/read/'+id),entry.id);await frame.locator('.wb-reader').waitFor();await frame.evaluate(()=>document.fonts.ready);await delay(450);
@@ -209,7 +210,7 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
   c.admissions={discussionIds:thread?[thread.id]:[],sessionIds:[SID],providerRuns:0};
   assert(!c.requests.some(r=>r.path.includes('/runs')||r.path.endsWith('/ask')),'No send or provider request');
   assert.equal(c.failures.length,0,'No source pageerrors');c.status='pass';
- }catch(e){c.status='fail';await ctx.pages()[0]?.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-failure.png`)}).catch(()=>{});c.failures.push({kind:'assertion',message:String(e.message).slice(0,600),...sourceError(e)})}finally{await ctx.close();save()}
+ }catch(e){c.status='fail';const failedFrame=ctx.pages()[0]?.frames().find(f=>new URL(f.url(),BASE).pathname.startsWith('/wisdom/'));c.errorText=await failedFrame?.locator('.wd-notice').textContent().catch(()=>'');await ctx.pages()[0]?.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-failure.png`)}).catch(()=>{});c.failures.push({kind:'assertion',message:String(e.message).slice(0,600),...sourceError(e)})}finally{await ctx.close();save()}
 }
 result.status=result.cases.length===(process.env.QA_BASELINE==='1'?2:8)&&result.cases.every(c=>c.status==='pass')?'pass':'fail';save();if(result.status!=='pass')process.exitCode=1;
 }finally{await browser.close()}})().catch(e=>{result.status='blocked';result.error={message:String(e.message).slice(0,600),...sourceError(e)};save();process.exitCode=1});
