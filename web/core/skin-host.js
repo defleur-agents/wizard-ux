@@ -865,6 +865,17 @@
         look: () => { if (live()) shell.openSettings?.('look'); },
         // Settings (a page id such as 'network', or its first page).
         settings: page => { if (live()) shell.openSettings?.(typeof page === 'string' && /^[a-z-]{1,24}$/.test(page) ? page : undefined); },
+        /* What the Settings cog carries (WosBell.attention, the same count as the phone's gear and the desktop's cog):
+         * read-only { n, label } or null; watch(fn) is called again when it changes and is released on teardown. */
+        attention(watch) {
+          const read = () => { const at = isDoc ? window.WosBell?.attention?.() : null, n = Math.max(0, Math.min(999, Number(at?.n) | 0)); return n ? Object.freeze({ n, label: String(at.label || '') }) : null; };
+          if (live() && typeof watch === 'function' && isDoc) {
+            const g = guard(a, 'attention', watch), h = () => { if (live()) g(read()); };
+            window.addEventListener('wizard:notify-attention', h);
+            const off = () => { window.removeEventListener('wizard:notify-attention', h); a.offs.delete(off); }; a.offs.add(off);
+          }
+          return live() ? read() : null;
+        },
         /* Back to the Desks view for this device: switches off the tweak wearing this layout, the same way as its
          * Settings › Look switch (WosExperience mix, no reload), so the layout itself always offers a way back. */
         classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },

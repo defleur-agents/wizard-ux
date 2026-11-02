@@ -193,6 +193,8 @@ Layouts are shell code: they get the skin API plus the shell's own lists and act
 - `api.desk.home()` (⌥`), `api.desk.look()` (Settings › Look), `api.desk.classic()` (back to the Desks view: switches
   off the tweak wearing the layout for this device, like its Settings switch; resolves false once the layout is gone), `api.desk.emptyHome()`: closing the last window of
   a desk goes Home instead of to another desk (`WosSkinHost.emptyHome`, read by `closeWin`); released on teardown.
+- `api.desk.attention(watch?)` → `{ n, label }` or null: what the Settings cog carries (`WosBell.attention`, as on the
+  phone's gear and the desktop's cog); `watch` follows `wizard:notify-attention`, released on teardown.
 - `api.panel.claim()`: no desks while held (`WosSkinHost.panelMode`; the adapter's `panelMode(on)`). desktop.js then
   sends every new window to a panel (`panelOpen`): an app (a frame or a page) to its own desk shown in the app panel
   (`panelDeskShow`; its window lives in the panel layer while the Orbs view is on, so it never moves or reloads there);

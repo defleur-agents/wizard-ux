@@ -81,7 +81,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'search', 'store']);
-  assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look', 'settings']);
+  assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
@@ -110,6 +110,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.equal(D.host.emptyHome, false, 'desks behave as before once it is off');
   const n = D.calls.length;
   assert.equal(api.sessions.list(), null); assert.equal(api.sessions.act('r1', 'done'), false); api.apps.open('files'); api.desk.home(); api.voice.command();
+  assert.equal(api.desk.attention(() => {}), null, 'the cog count is gone too');
   assert.equal(api.apps.list().length, 0); assert.equal(D.calls.length, n, 'stale handles are inert');
   assert.equal(D.ls._['wos.layout'], undefined, 'nothing left stored');
 });

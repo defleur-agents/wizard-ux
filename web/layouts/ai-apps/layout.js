@@ -141,6 +141,10 @@ export default function setup(api) {
   api.listen(newBtn, 'click', goHome);
   api.listen(mid, 'click', goHome);
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
+  // the cog's count (System notices set to Badge, …): the same WosBell.attention the phone's gear and the desktop's cog show
+  const setCount = el('b', 'aa-count aa-setn', { 'aria-hidden': 'true' }); setCount.hidden = true; setBtn.append(setCount);
+  const paintCog = at => { const n = at?.n | 0; setCount.textContent = !n ? '' : n > 99 ? '99+' : String(n); setCount.hidden = !n; setBtn.setAttribute('aria-label', n ? `Settings, ${n} ${at.label}` : 'Settings'); };
+  paintCog(api.desk.attention?.(paintCog));
 
   /* rows: an app (its logo, else the dock's own mark for it), a chat (Working spinner / Ready dot, title, pin) */
   // round 6: the app's own icon filling its tile like an iPhone icon (its sigil on a tile tinted by its colour, or its

@@ -48,6 +48,8 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-count {
   font: 800 0.6875rem / 1 var(--wz-font-ui);
 }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-count[hidden] { display: none; }
+/* the same number on the drawer's cog (Settings: System notices set to Badge) */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-setn { top: -2px; left: auto; right: -4px; }
 /* Home (round 5): a small house in the middle, the same round disc as ☰ (a 48 px target) */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-top .aa-home { justify-self: center; margin: 0; }
 /* the workspace switcher shows on Home only (round 5) */
@@ -268,7 +270,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-new {
 html[data-shell="phone"][data-layout="ai-apps"] .aa-new .aa-ico { width: 26px; height: 26px; stroke-width: 2.2; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-new:active { transform: scale(.94); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-set {
-  width: 48px; height: 48px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+  position: relative; width: 48px; height: 48px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
   color: var(--aa-ink); background: var(--aa-disc); box-shadow: var(--aa-lift); -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: transform 120ms ease;
 }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-set .aa-ico { width: 22px; height: 22px; }
