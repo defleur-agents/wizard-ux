@@ -26,7 +26,9 @@ public final class DictationEditorFixture extends Activity {
     private String mode;
     private Editor editor;
     private EditText other;
-    private int commits, pastes;
+    private int commits, pastes, slowReads;
+    private long preflightWait;
+    private String pastePayload = "";
     private boolean moved;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -54,7 +56,8 @@ public final class DictationEditorFixture extends Activity {
             JSONObject value = new JSONObject().put("text", editor.getText().toString())
                     .put("start", editor.getSelectionStart()).put("end", editor.getSelectionEnd())
                     .put("commits", commits).put("pastes", pastes).put("pid", android.os.Process.myPid())
-                    .put("other", other.getText().toString()).put("mode", mode);
+                    .put("other", other.getText().toString()).put("mode", mode)
+                    .put("preflightWait", preflightWait).put("pastePayload", pastePayload);
             File next = new File(getFilesDir(), "dictation-fixture.json.tmp");
             try (FileOutputStream out = new FileOutputStream(next)) {
                 out.write(value.toString().getBytes(StandardCharsets.UTF_8)); out.getFD().sync();
@@ -66,6 +69,17 @@ public final class DictationEditorFixture extends Activity {
     private final class Editor extends EditText {
         Editor() { super(DictationEditorFixture.this); }
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+            if (mode.equals("slowPreflightPaste") && slowReads < 3) {
+                android.content.ClipDescription clip = getSystemService(ClipboardManager.class).getPrimaryClipDescription();
+                if (clip != null && String.valueOf(clip.getLabel()).startsWith("Wizard dictation ")) {
+                    // Real cross-process synchronous read latency, below each accessibility IPC timeout.
+                    // Three refreshed preflight reads exceed the former outer 2.5 second timer.
+                    slowReads++;
+                    long before = android.os.SystemClock.uptimeMillis();
+                    android.os.SystemClock.sleep(950);
+                    preflightWait += android.os.SystemClock.uptimeMillis() - before;
+                }
+            }
             if (mode.equals("focusBefore") && other != null && !moved) {
                 ClipboardManager cb = getSystemService(ClipboardManager.class);
                 android.content.ClipDescription clip = cb.getPrimaryClipDescription();
@@ -90,6 +104,14 @@ public final class DictationEditorFixture extends Activity {
             if (mode.equals("latePaste")) {
                 main.postDelayed(() -> { super.performAccessibilityAction(action, arguments); persist(); }, 900);
                 persist(); return false; // Lost/false reply is NOT permission to commit again.
+            }
+            if (mode.equals("slowPreflightPaste") || mode.equals("acceptedDelayedPaste")) {
+                main.postDelayed(() -> {
+                    android.content.ClipData clip = getSystemService(ClipboardManager.class).getPrimaryClip();
+                    pastePayload = clip == null ? "" : String.valueOf(clip.getItemAt(0).getText());
+                    super.performAccessibilityAction(action, arguments); persist();
+                }, 300);
+                persist(); return true; // Acceptance is not readback; paste consumes the clipboard later.
             }
             boolean result = super.performAccessibilityAction(action, arguments);
             if (mode.equals("focusChange")) other.requestFocus();

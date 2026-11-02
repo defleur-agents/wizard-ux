@@ -42,6 +42,8 @@ public class DictationInsertionE2eTest {
     private EverywhereOutbox.Item item;
     private final AtomicInteger terminals = new AtomicInteger();
     private final AtomicInteger verified = new AtomicInteger();
+    private final AtomicInteger ownerCalls = new AtomicInteger();
+    private boolean reenterOwner, throwAfterDispatch, throwAfterCallback;
     private boolean legacy() { return InstrumentationRegistry.getArguments().getString("lane", "candidate").equals("control"); }
     public static final class Caller extends EverywhereService {
         void attach(Context context) { attachBaseContext(context); }
@@ -109,15 +111,29 @@ public class DictationInsertionE2eTest {
             output.write(new JSONArray().put(item.json()).toString().getBytes(StandardCharsets.UTF_8)); output.getFD().sync();
         }
         outbox = new EverywhereOutbox(dir,"http://127.0.0.1:1"); item = outbox.item(item.id);
+        // Exercise production recovery without the singleton, pump or owner's storage.
+        // A null app previously hid the premature watchdog's clipboard overwrite.
+        java.lang.reflect.Field app = EverywhereOutbox.class.getDeclaredField("app"); app.setAccessible(true); app.set(outbox,context);
         Method call = EverywhereService.class.getMethod("onDictated",EverywhereOutbox.Item.class,String.class,boolean.class,Consumer.class);
         outbox.addListener((EverywhereOutbox.Listener) Proxy.newProxyInstance(EverywhereOutbox.Listener.class.getClassLoader(),
                 new Class<?>[]{EverywhereOutbox.Listener.class}, (proxy, method, args) -> {
                     if (!method.getName().equals("onDictated")) return null;
                     @SuppressWarnings("unchecked") Consumer<Boolean> complete = (Consumer<Boolean>) args[3];
+                    ownerCalls.incrementAndGet();
+                    if (reenterOwner) {
+                        Method deliver = EverywhereOutbox.class.getDeclaredMethod("deliverDictation",EverywhereOutbox.Item.class);
+                        deliver.setAccessible(true); deliver.invoke(outbox,item);
+                    }
                     Consumer<Boolean> watched = success -> {
                         terminals.incrementAndGet(); if (success) verified.incrementAndGet(); complete.accept(success);
+                        if (throwAfterCallback) {
+                            complete.accept(!success); // Duplicate terminal must not undo the first.
+                            throw new IllegalStateException("synthetic callback failure after completion");
+                        }
                     };
-                    return call.invoke(caller,args[0],args[1],args[2],watched);
+                    Object accepted = call.invoke(caller,args[0],args[1],args[2],watched);
+                    if (throwAfterDispatch) throw new IllegalStateException("synthetic owner failure after dispatch");
+                    return accepted;
                 }));
         invokeDelivery();
     }
@@ -248,5 +264,33 @@ public class DictationInsertionE2eTest {
         Files.write(new File(dir,"outbox.json").toPath(),new JSONArray().put(item.json()).toString().getBytes(StandardCharsets.UTF_8));
         outbox = new EverywhereOutbox(dir,"http://127.0.0.1:1"); item = outbox.item(item.id); invokeDelivery();
         assertNotNull(outbox.item(item.id)); assertEquals("failed",item.state); inserted("prefix hello world ",0,1);
+    }
+    @Test public void slowPreflightAcceptedPasteKeepsShapedPayloadAndSingleCompletion() throws Exception {
+        editor("slowPreflightPaste","Done. ",6,6);
+        long start = SystemClock.uptimeMillis(); dispatch("hello world");
+        assertTrue("real synchronous preflight must exceed the former outer watchdog",SystemClock.uptimeMillis()-start >= 2500);
+        terminal(true); inserted("Done. Hello world ",0,1);
+        assertTrue("fixture must witness preflight latency, not setup time",state().getLong("preflightWait") >= 2850);
+        assertEquals("Hello world ",state().getString("pastePayload")); assertEquals(1,ownerCalls.get());
+    }
+    @Test public void reentrantDeliveryCannotStealAcceptedPasteOwnership() throws Exception {
+        editor("acceptedDelayedPaste","Done. ",6,6); reenterOwner = true;
+        dispatch("hello world"); terminal(true); inserted("Done. Hello world ",0,1);
+        assertEquals(1,ownerCalls.get()); assertEquals("Hello world ",state().getString("pastePayload"));
+    }
+    @Test public void throwingOwnerAfterDispatchDoesNotRewriteDelayedPaste() throws Exception {
+        editor("acceptedDelayedPaste","Done. ",6,6); throwAfterDispatch = true;
+        dispatch("hello world"); terminal(true); inserted("Done. Hello world ",0,1);
+        assertEquals("Hello world ",state().getString("pastePayload"));
+        SystemClock.sleep(1200); assertEquals(1,terminals.get()); assertNull(outbox.item(item.id));
+        final String[] clip = {null};
+        onMain(() -> clip[0] = context.getSystemService(ClipboardManager.class).getPrimaryClip().getItemAt(0).getText().toString());
+        assertEquals("saved clipboard",clip[0]);
+    }
+    @Test public void throwingDuplicateCompletionCannotRecoverOrRepeatPaste() throws Exception {
+        editor("acceptedDelayedPaste","Done. ",6,6); throwAfterCallback = true;
+        dispatch("hello world"); terminal(true); inserted("Done. Hello world ",0,1);
+        assertEquals(1,ownerCalls.get()); assertEquals("Hello world ",state().getString("pastePayload"));
+        assertNull(outbox.item(item.id));
     }
 }

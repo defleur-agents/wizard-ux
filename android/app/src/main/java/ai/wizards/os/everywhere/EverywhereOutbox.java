@@ -159,6 +159,8 @@ public final class EverywhereOutbox {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
+    /** Live owner fence only; persisted dictationAttempted still handles process restart/retry. */
+    private final java.util.Set<String> dictationsInFlight = new java.util.HashSet<>();
     private final Runnable pumpTask = this::pumpNow;
     private boolean pumping;
     /** Set for the app-wide instance: "Not sent" and reply notifications don't depend on the floating orb running. */
@@ -369,7 +371,7 @@ public final class EverywhereOutbox {
     void deliverDictation(Item it) {
         final boolean mayInsert;
         synchronized (this) {
-            if (items.get(it.id) != it || !it.dictation()) return;
+            if (items.get(it.id) != it || !it.dictation() || dictationsInFlight.contains(it.id)) return;
             mayInsert = !it.dictationAttempted;
             it.dictationAttempted = true;
             it.state = "sending";
@@ -377,11 +379,13 @@ public final class EverywhereOutbox {
                 it.state = "failed"; it.error = "Words kept · could not save typing attempt";
                 changed(); return;
             }
+            dictationsInFlight.add(it.id);
         }
         final java.util.concurrent.atomic.AtomicBoolean finished = new java.util.concurrent.atomic.AtomicBoolean();
         java.util.function.Consumer<Boolean> complete = verified -> {
             if (!finished.compareAndSet(false, true)) return;
             synchronized (EverywhereOutbox.this) {
+                dictationsInFlight.remove(it.id);
                 if (items.get(it.id) != it) return; // Owner deleted while the editor was replying.
                 if (verified) {
                     it.state = "sent"; it.sentAt = System.currentTimeMillis(); it.error = "";
@@ -396,21 +400,25 @@ public final class EverywhereOutbox {
             }
             changed();
         };
-        Runnable abandoned = () -> {
-            if (finished.get()) return;
-            try { if (app != null) WizardKeyboardService.copyAsLatest(app, it.text.trim()); }
-            finally { complete.accept(false); }
-        };
-        main.postDelayed(abandoned, 2500);
-        try {
-            for (Listener listener : snapshot()) {
-                if (listener.onDictated(it, it.text, mayInsert, verified -> {
-                    main.removeCallbacks(abandoned); complete.accept(verified);
-                })) return; // Exactly one owner; observers cannot cause additional insertion.
+        for (Listener listener : snapshot()) {
+            try {
+                // The accepted insertion owns its timeout, exact clipboard payload and completion.
+                // In particular, synchronous editor preflight may outlive 2.5 seconds. Never arm
+                // a competing timer before entering the owner or rewrite its delayed paste clip.
+                if (listener.onDictated(it, it.text, mayInsert, complete)) return;
+                if (finished.get()) return; // A synchronous callback is terminal even if owner returns false.
+            } catch (RuntimeException e) {
+                Log.w(TAG, "dictation owner failed", e);
+                // An exception is ambiguous: the owner may already have dispatched a write. No
+                // second owner or clipboard recovery. Allow its own pending completion first;
+                // a clipboard-free backstop is measured AFTER the failing call returns.
+                if (!finished.get()) main.postDelayed(() -> complete.accept(false), 2500);
+                return;
             }
-        } catch (RuntimeException e) { Log.w(TAG, "dictation owner failed", e); }
-        main.removeCallbacks(abandoned);
-        abandoned.run(); // No listener: never silently delete the take.
+        }
+        // Only an explicit lack of owner may prepare raw recovery words. Clipboard is not delivery.
+        try { if (!finished.get() && app != null) WizardKeyboardService.copyAsLatest(app, it.text.trim()); }
+        finally { complete.accept(false); }
     }
 
     private void failed(Item it, int status, String msg) {
