@@ -1,0 +1,151 @@
+{
+  "tool": "tools/qa-browser-notifications-real.cjs",
+  "heads": {
+    "wizard-ux": "1b703e589edce615c3ce5e4f2f66f5ca4d0b0d96",
+    "wizard-agent-service": "07b6767ac2d7b289d2d72484f38051ab717fd07a",
+    "wizard-app-manager": "12100327cf89a91e239bebf72f4a860ac32d8b90",
+    "oscarhenrycollins/notifications": "7274125f35da804957d1ebdff961b50eb40b3eb0"
+  },
+  "baseline_heads": {
+    "note": "same UX/Service/WAM heads, unmigrated Notifications",
+    "oscarhenrycollins/notifications": "e6df99a8f63e19dcd8b1e7ac4c652b9041536c5c"
+  },
+  "host": "local runtime (Forum not reachable); nginx replaced by Node stand-in applying packaging/browser-boundary-document.conf.template; synthetic data only",
+  "passed": true,
+  "checks": [
+    "WAM: the app's own declaration alone is not admissible",
+    "WAM: installed contract = the app's wizard.md (inbox + mark)",
+    "WAM: owner grant recorded for this installation and source",
+    "WAM: the real view path /notifications/",
+    "the real Notifications view is an opaque sandboxed frame (no allow-same-origin)",
+    "inside the frame: origin \"null\", data layer in opaque mode",
+    "original screen: data.call notifications.inbox renders the three synthetic notifications",
+    "binding created by the shell with possession (server trace)",
+    "original screen: unread count from typed counts",
+    "original screen: opening an unread item marks it read (inbox.json readback)",
+    "durable outcome receipt for notifications.mark",
+    "badge: the shell re-read the count itself after the typed write (3 -> 2)",
+    "badge in one place: no Chats bell count while the Notifications window is open",
+    "original screen: Back closes the open item (boundary Back)",
+    "Back at the list stays in Wizard (never exits)",
+    "original screen: Flag persisted",
+    "original screen: Flagged tab lists the flagged item (view=flagged)",
+    "original screen: Archive persisted",
+    "original screen: Archive tab lists it (view=archive)",
+    "original screen: Move to inbox persisted (compare-and-set write)",
+    "original screen: Mark all read persisted",
+    "badge: count 0 after mark all read",
+    "Appearance v1 tokens applied live on nebula",
+    "no translucent text panels on nebula (window glass is the canvas)",
+    "Appearance v1 tokens applied live on grove",
+    "no translucent text panels on grove (window glass is the canvas)",
+    "Miguel's skin: the gate reloads the frame into the minimal screen",
+    "minimal screen: Unread list through notifications.inbox",
+    "minimal screen: the MEDIA thumbnail renders",
+    "Reply: unsent Chats draft keyed notifications:<id> opened by the shell",
+    "Reply: nothing was sent (no chat/run POST)",
+    "minimal screen: Mark read persisted",
+    "minimal screen: one tap on Mark read returns to the list",
+    "minimal screen: Back leaves the detail for the list",
+    "minimal screen: Back at the list stays in Wizard",
+    "agent flags the item directly (no expect)",
+    "stale view: conflict shown, nothing written",
+    "minimal screen: Unread filter lists only what is still unread",
+    "minimal screen: mark all read asks once more in place",
+    "minimal screen: Mark all read persisted",
+    "badge: 0 after the minimal screen's mark all read",
+    "the real UI never called /notifications/api/* from the frame (all reads/marks were typed)",
+    "frame cannot call unknown/ungranted operations or forge a principal",
+    "a forged count message from the frame is ignored by the shell",
+    "reply draft refuses off-schema context",
+    "after a WAM revoke the open binding is refused at the server (403 revoked)",
+    "fresh binding: inbox still granted, mark refused (not_allowed)",
+    "uninstalled app refused at the server: \"Notifications need permission from the owner for this.\"",
+    "opaque frame cannot read or write /notifications/api/* directly (browser-side)",
+    "the JSON write was stopped at its CORS preflight; no POST reached the app",
+    "inbox.json unchanged by the direct attempts",
+    "dark standalone: opaque dark canvas, same-origin data path (unchanged)"
+  ],
+  "open": [
+    {
+      "item": "thumbnails",
+      "detail": "loaded by the opaque frame as a no-cors image GET straight from /notifications/media/* (ambient gateway route, 1 request(s)); no typed M adapter yet. OPEN: card 3 (#386)."
+    },
+    {
+      "item": "direct listener",
+      "detail": "the frame's plain GET to /notifications/api/items still reaches the app (1 request(s), body hidden by the browser), and the app answers Origin:null requests; only the browser's preflight stops JSON writes. Server-side protection of /notifications/api/* is card 3 (#386)."
+    }
+  ],
+  "hostile_from_frame": {
+    "unknown": "not_allowed",
+    "forged": "bad_request",
+    "cardOne": "not_allowed",
+    "badDraft": "invalid_request"
+  },
+  "direct_api_from_sandbox_without_interception": {
+    "result": {
+      "opaque": true,
+      "read": "blocked",
+      "write": "blocked"
+    },
+    "requests": [
+      {
+        "method": "GET",
+        "path": "/notifications/api/items",
+        "site": "cross-site",
+        "dest": "empty",
+        "origin": "null",
+        "type": "",
+        "preflight": ""
+      },
+      {
+        "method": "OPTIONS",
+        "path": "/notifications/api/mark",
+        "site": "cross-site",
+        "dest": "empty",
+        "origin": "null",
+        "type": "",
+        "preflight": "POST"
+      }
+    ]
+  },
+  "badge": {
+    "before": 3,
+    "after_first_mark": 2
+  },
+  "thumbnail": {
+    "rendered": true
+  },
+  "landscapes_light": {
+    "skin": "landscapes-light",
+    "frame_path": "/notifications/"
+  },
+  "after_uninstall_status": "Notifications need permission from the owner for this.",
+  "wam_commands": [
+    "install notifications --repo oscarhenrycollins/notifications --port <front> --wizard-md $QA_NOTIFICATIONS_ROOT/wizard.md",
+    "grant notifications notifications.inbox notifications.mark",
+    "revoke notifications notifications.mark",
+    "uninstall notifications"
+  ],
+  "baseline": {
+    "view": {
+      "origin": "null",
+      "rows": 0,
+      "status": "Failed to fetch"
+    },
+    "direct_api_from_frame": 1,
+    "wam_contract": "no_contract"
+  },
+  "harness_notes": [
+    "page.route (onboarding fixture) makes Chromium skip CORS preflights; preflight claims come only from the no-interception context",
+    "the 'serviceWorker' page errors come from Playwright's serviceWorkers:'block' init script inside the sandboxed frame"
+  ],
+  "screenshots": [
+    "notifications-real-nebula.png",
+    "notifications-real-grove.png",
+    "notifications-real-landscapes-light.png",
+    "notifications-real-obsidian-detail.png",
+    "notifications-real-standalone-dark.png",
+    "baseline-unmigrated-nebula.png"
+  ]
+}
