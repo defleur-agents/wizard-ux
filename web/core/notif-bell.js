@@ -115,8 +115,8 @@
     const ch = badge !== SY.badge || away !== SY.away; SY.badge = badge; SY.away = away;
     if (ch) { paint(); window.dispatchEvent(new CustomEvent('wizard:system-notices', { detail: { n: badge } })); }
   }
-  // Recent System notices for Settings › Notifications (newest first; read or not; needs-you ones included).
-  const systemItems = (n = 8) => NOTES.all.filter(i => sysKind(i) && !i.archived).sort((a, b) => b.time - a.time).slice(0, n)
+  // Recent System notices for Settings › Notifications: a history, newest first (read, archived and needs-you ones too).
+  const systemItems = (n = 8) => NOTES.all.filter(i => sysKind(i)).sort((a, b) => b.time - a.time).slice(0, n)
     .map(i => Object.freeze({ ...i, kind: sysKind(i).kind, kindName: sysKind(i).name, needs: needsYou(i) }));
   // Seen in Settings: unread System notices set to Badge are marked read (the cog clears).
   function seenSystem() {
