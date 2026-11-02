@@ -37,7 +37,7 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
+import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot, noteThread, gaugeInto } from './parts.js';
 import { homeView } from './home.js';
 import desktop from './desktop.js';
 
@@ -77,9 +77,8 @@ export default function setup(api) {
   // Home: a small home button in the middle (round 5, in place of the Wizard's name), from a thread or inside an app
   const mid = el('button', 'aa-tb aa-home', { type: 'button', 'aria-label': 'Home', title: 'Home' });
   mid.append(icon('home'));
-  const wsBtn = el('button', 'aa-tb aa-ws', { type: 'button', 'aria-haspopup': 'dialog' });
-  const wsDisc = el('span', 'aa-ws-i', { 'aria-hidden': 'true' }); wsBtn.append(wsDisc);
-  top.append(menuBtn, mid, wsBtn);
+  // (round 7: the workspace switcher moved to the drawer's header, in place of the name, as on the desktop)
+  top.append(menuBtn, mid);
   api.mount(top);
 
   /* ---------- the drawer ---------- */
@@ -87,24 +86,30 @@ export default function setup(api) {
   const scrim = el('div', 'aa-scrim', { 'aria-hidden': 'true' });
   const drawer = el('nav', 'aa-drawer', { id: 'aa-drawer', 'aria-label': 'Menu' });
   const head = el('div', 'aa-dh');
-  const word = el('b', 'aa-word');
+  // round 7 (Miguel): the workspace switcher IS the drawer's header: this Wizard's name (a small disc, a chevron); a tap
+  // opens the switcher sheet
+  const wsBtn = el('button', 'aa-dws', { type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' });
+  const wsDisc = el('span', 'aa-ws-i', { 'aria-hidden': 'true' }), wsName = el('span', 'aa-word');
+  wsBtn.append(wsDisc, wsName, icon('down', 'aa-ico aa-dws-c'));
   const findBtn = el('button', 'aa-tb aa-find', { type: 'button', 'aria-label': 'Search chats and apps' }); findBtn.append(icon('search'));
   const searchBox = el('label', 'aa-search'); searchBox.hidden = true;
   const field = el('input', 'aa-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off', enterkeyhint: 'search' });
   searchBox.append(icon('search', 'aa-ico aa-search-i'), field);
   const cancelBtn = el('button', 'aa-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
-  head.append(word, findBtn, searchBox, cancelBtn);
+  head.append(wsBtn, findBtn, searchBox, cancelBtn);
   const scroll = el('div', 'aa-scroll');
   // the foot: New chat = a big round + (ChatGPT's compose spot, bottom left), Settings = a cog (bottom right); icons only
   const foot = el('div', 'aa-foot');
   const newBtn = el('button', 'aa-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); newBtn.append(icon('plus'));
   const setBtn = el('button', 'aa-set', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); setBtn.append(icon('cog'));
-  foot.append(newBtn, setBtn);
+  // round 7: the cog on the left, the AI fuel gauge between, + on the right (as on the desktop)
+  const fuel = el('div', 'aa-fuel', { 'data-fuel-copy': '' }); fuel.hidden = true;
+  foot.append(setBtn, fuel, newBtn);
   drawer.append(head, scroll, foot);
   layer.append(scrim, drawer);
   api.mount(layer);
 
-  /* ---------- Home: the apps above the composer (Grid, or the Orb scene), home.js ---------- */
+  /* ---------- Home: the app grid above the composer (home.js) ---------- */
   const home = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
   api.mount(home.el);
 
@@ -128,7 +133,7 @@ export default function setup(api) {
     api.after(220, () => { if (!open) layer.hidden = true; });
   }
   function setSearch(on) {
-    searchBox.hidden = cancelBtn.hidden = !on; word.hidden = findBtn.hidden = on;
+    searchBox.hidden = cancelBtn.hidden = !on; wsBtn.hidden = findBtn.hidden = on;
     if (!on) { q = ''; field.value = ''; }
     paintDrawer();
     if (on) field.focus?.({ preventScroll: true });
@@ -201,7 +206,7 @@ export default function setup(api) {
   let drawn = '';
   function paintDrawer(force = false) {
     if (!open) return;
-    const name = agentName(); word.textContent = name;
+    paintWs(); paintFuel();
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
@@ -221,6 +226,8 @@ export default function setup(api) {
         const rows = s[k] || [], on = !!secOpen[k];
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
         h.append(el('span', '', { text: word0 }), icon('down', 'aa-ico aa-sec-c'));
+        // folded (round 7): a minimal tally: Working its count with a tiny spinner, Ready its count
+        if (!on && k !== 'archive' && rows.length) { h.append(el('span', 'aa-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' })); h.setAttribute('aria-label', `${word0}, ${rows.length}, folded`); }
         api.listen(h, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintDrawer(true); });
         const body = el('div', 'aa-sec-b', { id: 'aa-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on) {
@@ -359,7 +366,7 @@ export default function setup(api) {
   let sheet = null, offSheetBack = null;
   function paintWs() {
     const list = api.workspaces?.list() || [], own = list[0] || { name: agentName() };
-    wsDisc.textContent = initial(own.name);
+    wsDisc.textContent = initial(own.name); wsName.textContent = own.name;
     wsBtn.setAttribute('aria-label', `Workspace: ${own.name}. Switch workspace`); wsBtn.title = `Workspace: ${own.name}`;
     if (sheet) paintSheet(list);
   }
@@ -394,7 +401,9 @@ export default function setup(api) {
   }
   function closeSheet() { if (!sheet) return; sheet.remove(); sheet = null; offSheetBack?.(); offSheetBack = null; wsBtn.setAttribute('aria-expanded', 'false'); }
   api.listen(wsBtn, 'click', () => (sheet ? closeSheet() : openSheet()));
-  api.listen(globalThis, 'wos:resources', paintWs);
+  api.listen(globalThis, 'wos:resources', () => { paintWs(); paintFuel(); });
+  let fuelSig = '';
+  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { closeDrawer(); api.desk.settings('ai'); }); };
 
   /* ---------- Home: a New chat (the drawer's +, the name in the top bar, the orb's swipe up all land here) ---------- */
   function goHome() { closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
@@ -444,11 +453,11 @@ export default function setup(api) {
     const app = r.app && r.app !== 'chats' ? r.app : '';
     root.dataset.aiFront = r.home ? 'chat' : app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     // Home = a New chat: nothing but the skin's background, the composer and the orb
-    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__');
+    // a notification opened from the list is a New chat holding the note: a chat, never Home (round 7)
+    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !noteThread(doc, '.win.app-chats');
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
     homeShow(home);
-    // the workspace switcher only on Home (round 5): never over a chat or an app
-    wsBtn.hidden = !home; if (!home) closeSheet();
+    if (!home && app) closeSheet();
     syncOrb();
     paintWs();
   }
