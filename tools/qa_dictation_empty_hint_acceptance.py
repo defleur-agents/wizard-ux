@@ -14,6 +14,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import traceback
 
 from qa_dictation_candidate_resume import archive_files, manifest_hash
@@ -23,6 +25,8 @@ BASE = Path('/srv/work/AndroidBuilds')
 PRIOR = BASE/'qa/graphene-orb-c07c16af-native-isolated-772c1424'
 DIAGNOSTIC = BASE/'jobs/20261102T050208Z-60220c6f'
 DIAGNOSTIC_SHA = '78f90cdafb8403bdef2a907cc16874a12b5dfa3590993ed910189e64651be3df'
+PREBUILD_FAILURE = BASE/'jobs/20261102T052250Z-b6c11dfe'
+PREBUILD_LOG_SHA = 'f095c09ec52032c4bf3bff291d16cd7921ae0d52de4b05620019e1aefde61baf'
 OLD = 'bc9e87effda72220cfca9c8ee306639f1677217a'
 TASKS = [':app:testDebugUnitTest', ':app:lintDebug', ':app:assembleDebug', ':app:assembleDebugAndroidTest']
 EXTRA = {'emptyHintNoopPasteRetainsTakeWithoutSecondWrite',
@@ -65,6 +69,52 @@ def write(path,value):
 def check_cases(old, new):
     if len(old)!=27 or len(set(old))!=27 or set(new)!=set(old)|EXTRA or len(new)!=32:
         raise ValueError('original 27 plus five cases required without duplicates')
+
+
+def check_contract_inputs(root, packet):
+    """Both source contracts exist before build; the future receipt must not be read."""
+    from qa_dictation_case_isolation import historical_source, editor_contract
+    historical = read(root/'historical-packet.json')
+    old_source = historical_source(root/'historical-packet.json')
+    old_contract = editor_contract(old_source, historical['candidate_cases'])
+    check_cases(list(old_contract), packet['candidate_cases'])
+    # Read the real candidate fixture bytes from the sealed canonical archive,
+    # without creating source/ or a receipt or substituting historical APKs.
+    fixture = 'android/app/src/debug/java/ai/wizards/os/everywhere/DictationEditorFixture.java'
+    with tempfile.TemporaryDirectory(prefix='current-contract-', dir=root/'scratch') as td:
+        source = Path(td)
+        with tarfile.open(root/'source.tar.gz') as archive:
+            for rel in (TEST, fixture):
+                target = source/rel; target.parent.mkdir(parents=True, exist_ok=True)
+                member = archive.extractfile(rel)
+                if member is None: raise ValueError('candidate contract member missing')
+                target.write_bytes(member.read())
+        methods = re.findall(r'@Test public void (\w+)\(', (source/TEST).read_text())
+        if len(methods) != 32 or set(methods) != set(packet['candidate_cases']):
+            raise ValueError('current archive method census differs')
+        current_contract = editor_contract(source, packet['candidate_cases'])
+    if {m:current_contract[m] for m in old_contract} != old_contract:
+        raise ValueError('original editor contracts changed')
+    return {'historical_cases':len(old_contract), 'current_cases':len(current_contract),
+            'future_build_receipt_required':False}
+
+
+def failed_prebuild_closure():
+    """Preserve the real controller failure; never mint its unbuilt Android receipt."""
+    log = PREBUILD_FAILURE/'controller-tests.log'
+    if sha(log) != PREBUILD_LOG_SHA: raise ValueError('original pre-build failure log drift')
+    failure = read(PREBUILD_FAILURE/'acceptance-receipt.json')
+    if failure['status'] != 'failed' or failure['stages'] != {'controller_tests':1}:
+        raise ValueError('original pre-build failure classification differs')
+    if any((PREBUILD_FAILURE/n).exists() for n in ('receipt.json','source','native')):
+        raise ValueError('original unbuilt failure unexpectedly mutated')
+    files = dict(read(PREBUILD_FAILURE/'acceptance-seal.json')['files'])
+    for name in ('controller-tests.log','acceptance-receipt.json','acceptance-seal.json',
+                 'parent-only-acceptance-spec.json','acceptance-preparation.json'):
+        p = PREBUILD_FAILURE/name; files[str(p)] = sha(p)
+    for p, expected in files.items():
+        if sha(p) != expected: raise ValueError('original pre-build closure drift')
+    return files
 
 
 def diagnostic_closure():
@@ -151,7 +201,10 @@ def verify(root):
     expected['candidate']={'receipt':str(root/'receipt.json'),'revision':cfg['revision'],'manifest_sha256':cfg['manifest_sha256']}
     if packet!=expected: raise ValueError('native controls or runner settings changed')
     check_cases(prior['candidate_cases'],packet['candidate_cases'])
-    required={str(root/n) for n in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','custody.json','opus-review.json','opus-review-prompt.md')}
+    if (root/'historical-packet.json').read_bytes() != (PRIOR/'packet.json').read_bytes():
+        raise ValueError('frozen historical packet differs')
+    check_contract_inputs(root, packet)
+    required={str(root/n) for n in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','custody.json','opus-review.json','opus-review-prompt.md')}
     custody=read(root/'custody.json')
     required.update(custody['preserved_originals'])
     if not required.issubset(seal['files']): raise ValueError('incomplete acceptance closure')
@@ -172,7 +225,7 @@ def prepare(root):
     if any((root/n).exists() for n in ('receipt.json','source','acceptance-seal.json','native')):
         raise ValueError('fresh unexecuted prepared job required')
     if shutil.disk_usage(BASE).free<240*1024**3: raise ValueError('200 GiB reserve plus 40 GiB pending headroom required')
-    originals=closure(PRIOR); originals.update(diagnostic_closure())
+    originals=closure(PRIOR); originals.update(diagnostic_closure()); originals.update(failed_prebuild_closure())
     prior_receipt=read(PRIOR/'native/receipt.json')
     if prior_receipt['status']!='failed' or not prior_receipt['stopped_emulator']:
         raise ValueError('preserve original failure/cleanup')
@@ -182,6 +235,8 @@ def prepare(root):
     packet['candidate_cases']+=sorted(EXTRA)
     packet['candidate']={'receipt':str(root/'receipt.json'),'revision':cfg['revision'],'manifest_sha256':cfg['manifest_sha256']}
     write(root/'packet.json',packet)
+    shutil.copyfile(PRIOR/'packet.json',root/'historical-packet.json')
+    (root/'historical-packet.json').chmod(0o600)
     write(root/'custody.json',{'source_revision':cfg['revision'],'preserved_originals':originals,
         'inherited_control_builds':['baseline','rejected'],'fresh_control_builds':[],
         'fresh_candidate_tasks':TASKS,'native_cases':{'candidate':32,'baseline':2,'rejected_expected_assertion_failures':2},
@@ -189,7 +244,7 @@ def prepare(root):
         'handset_proven':False,'native_acceptance_executed':False,'publication_authorized':False})
     (root/'scratch').mkdir(mode=0o700)
     files=dict(originals)
-    for name in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','custody.json','opus-review.json','opus-review-prompt.md'):
+    for name in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','custody.json','opus-review.json','opus-review-prompt.md'):
         files[str(root/name)]=sha(root/name)
         if name in MEMBERS and cfg['files']['tools/'+name]['sha256']!=sha(root/name):
             raise ValueError('QA file not exact pushed candidate: '+name)
@@ -207,6 +262,33 @@ def prepare(root):
     return spec
 
 
+def controller_preflight(root, runner=subprocess.run, log_name='controller-tests.log'):
+    """Exact shared pre-build command; controller-only, never starts Gradle or Android."""
+    packet = verify(root)
+    with (root/log_name).open('x') as out:
+        p = runner([sys.executable,'-m','unittest','-v',*TEST_MODULES],cwd=root,
+            stdout=out,stderr=subprocess.STDOUT,timeout=180)
+    log = (root/log_name).read_text()
+    counts = re.findall(r'^Ran (\d+) tests? in ', log, re.M)
+    if p.returncode or len(counts) != 1 or int(counts[0]) < 73 or not log.rstrip().endswith('OK'):
+        raise RuntimeError('controller regressions failed or incomplete')
+    return {'exit_code':p.returncode,'tests':int(counts[0]),'failures':0,'errors':0,'skipped':0,
+            'log_sha256':sha(root/log_name),'contracts':check_contract_inputs(root,packet)}
+
+
+def preflight(root):
+    root = root.resolve()
+    if any((root/n).exists() for n in ('receipt.json','source','native','acceptance-receipt.json')):
+        raise ValueError('preflight requires exact fresh pre-build environment')
+    result = controller_preflight(root,log_name='preflight-controller-tests.log')
+    if any((root/n).exists() for n in ('receipt.json','source','native','acceptance-receipt.json')):
+        raise ValueError('controller preflight created build/native output')
+    result.update(status='controller_only_pass',source_revision=read(root/'job.json')['revision'],
+                  build_executed=False,native_acceptance_executed=False,submitted=False)
+    write(root/'controller-preflight.json',result)
+    return result
+
+
 def execute(root):
     from qa_queue_lease import validated_queue_fd,run_with_queue_lease
     from qa_dictation_insertion_native import unit_census
@@ -217,11 +299,8 @@ def execute(root):
     result={'status':'failed','source_revision':packet['source_revision'],'handset_proven':False,'stopped_emulator':False,
             'inherited_control_builds':['baseline','rejected'],'fresh_control_builds':[],'stages':{}}
     try:
-        with (root/'controller-tests.log').open('w') as out:
-            p=run_with_queue_lease([sys.executable,'-m','unittest','-v',*TEST_MODULES],cwd=root,
-                stdout=out,stderr=subprocess.STDOUT,timeout=180)
-        result['stages']['controller_tests']=p.returncode
-        if p.returncode: raise RuntimeError('controller regressions failed')
+        result['controller_tests']=controller_preflight(root,runner=run_with_queue_lease)
+        result['stages']['controller_tests']=result['controller_tests']['exit_code']
         with (root/'candidate-build-controller.log').open('w') as out:
             p=run_with_queue_lease(['/usr/bin/python3',str(root/'worker.py'),'--worker',str(root/'job.json')],cwd=root,
                 stdout=out,stderr=subprocess.STDOUT,timeout=3600)
@@ -258,7 +337,7 @@ def execute(root):
 
 
 if __name__=='__main__':
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('mode',choices=('prepare','verify','execute'));p.add_argument('root',type=Path)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('mode',choices=('prepare','verify','preflight','execute'));p.add_argument('root',type=Path)
     p.add_argument('--seal-sha256');a=p.parse_args()
     if a.mode!='prepare' and sha(a.root/'acceptance-seal.json')!=a.seal_sha256: raise ValueError('parent-pinned seal mismatch')
-    print(json.dumps(prepare(a.root) if a.mode=='prepare' else verify(a.root) if a.mode=='verify' else execute(a.root),indent=2))
+    print(json.dumps(prepare(a.root) if a.mode=='prepare' else verify(a.root) if a.mode=='verify' else preflight(a.root) if a.mode=='preflight' else execute(a.root),indent=2))

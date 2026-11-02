@@ -62,6 +62,30 @@ def fresh_case(native, command, adb, out):
         'readiness_basis': 'one editor launch in a fresh target and :dictationEditor process; unchanged real IME package guard'})
 
 
+def historical_source(packet_path):
+    """Resolve only the frozen, already-built 27-case product, never a live candidate."""
+    from qa_dictation_native_resume import PRODUCT
+    packet = json.loads(Path(packet_path).read_text())
+    candidate = packet['candidate']
+    if packet['source_revision'] != PRODUCT or candidate['revision'] != PRODUCT:
+        raise ValueError('historical product identity differs')
+    receipt_path = Path(candidate['receipt'])
+    receipt = json.loads(receipt_path.read_text())
+    cfg = json.loads(receipt_path.with_name('job.json').read_text())
+    if (receipt['status'] != 'ok' or receipt['host'] != 'forum'
+            or receipt['source_revision'] != PRODUCT or cfg['revision'] != PRODUCT
+            or receipt['source_manifest_sha256'] != candidate['manifest_sha256']
+            or cfg['manifest_sha256'] != candidate['manifest_sha256']):
+        raise ValueError('historical build identity differs')
+    source = Path(receipt['job'])/'source'
+    import hashlib
+    for rel in ('android/app/src/androidTest/java/ai/wizards/os/everywhere/DictationInsertionE2eTest.java',
+                'android/app/src/debug/java/ai/wizards/os/everywhere/DictationEditorFixture.java'):
+        if hashlib.sha256((source/rel).read_bytes()).hexdigest() != cfg['files'][rel]['sha256']:
+            raise ValueError('historical fixture source drift')
+    return source
+
+
 def editor_contract(source, methods):
     """Fail closed if unchanged APK source cannot justify first-session identity.
 

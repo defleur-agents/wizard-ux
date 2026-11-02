@@ -135,11 +135,10 @@ class IsolationTests(unittest.TestCase):
                 path.write_text(subprocess.run(['git','show',PRODUCT+':'+rel],cwd=root,check=True,capture_output=True,text=True).stdout)
             root = target
         else:
-            # The sealed flat worker tests do not contain a checkout. The prepared
-            # closure re-validates every built source; exercise this against it there.
-            packet = json.loads(Path(__file__).with_name('packet.json').read_text())
-            receipt = json.loads(Path(packet['candidate']['receipt']).read_text())
-            root = Path(receipt['job'])/'source'
+            # A fresh live 32-case packet points at a receipt that does not exist
+            # until AFTER these pre-build tests. Keep this historical 27-case
+            # contract bound to its separately frozen, already-built product.
+            root = isolation.historical_source(Path(__file__).with_name('historical-packet.json'))
         test = (root/'android/app/src/androidTest/java/ai/wizards/os/everywhere/DictationInsertionE2eTest.java').read_text()
         import re
         methods = re.findall(r'@Test public void (\w+)\(', test)
