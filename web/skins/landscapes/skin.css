@@ -960,3 +960,12 @@ html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg.rs-empty i { background: #c98a1a; }
 html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .rs-sheet .rs-cap-seg.rs-crit i { background: #d64545; }
 
+
+/* Composer with the model label underneath (core .ch-field.lab-row): the box paints the field, never the textarea alone,
+   or the strip under the text shows a second colour behind the label (Miguel, 2 Nov 2026). */
+html[data-skin^="landscapes"] .ch-compose .ch-field.lab-row > textarea { background: transparent; border-color: transparent; }
+html[data-skin^="landscapes"][data-shell="desktop"] .ch-compose .ch-field.lab-row { background: rgba(255, 255, 255, .07); border-color: rgba(255, 255, 255, .2); }
+html[data-skin^="landscapes"]:not([data-shell="desktop"]) .ch-compose .ch-field.lab-row { border-color: transparent; background: color-mix(in srgb, var(--ink) 7%, transparent); }
+html[data-skin^="landscapes"] .ch-compose .ch-field.lab-row:focus-within { border-color: rgba(255, 255, 255, .5); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-compose .ch-field.lab-row { background: rgba(255, 255, 255, .6); border-color: rgba(0, 0, 0, .14); }
+html[data-skin="landscapes-light"]:is([data-shell="desktop"], :not([data-shell="desktop"])) .ch-compose .ch-field.lab-row:focus-within { border-color: rgba(0, 0, 0, .4); }
