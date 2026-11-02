@@ -25,6 +25,14 @@ final class DictationCommit {
 
     private DictationCommit() { }
 
+    /** Whole focused editable node only; a displayed hint is not document text.
+     * Android TextView reports -1/-1 for its empty hinted document, whose only caret is 0.
+     * Do not generalize this to non-hint, partial/malformed selection or IC window snapshots. */
+    static Snapshot nodeSnapshot(String text, boolean showingHint, int start, int end) {
+        if (showingHint && start == -1 && end == -1) start = end = 0;
+        return new Snapshot(showingHint ? "" : text, start, end, 0);
+    }
+
     /** Exact replacement, not containment, case-folding, trimming, or an arbitrary new phrase. */
     static boolean verifies(Snapshot before, Snapshot after, String payload) {
         if (payload == null || before == null || after == null || !before.valid() || !after.valid()

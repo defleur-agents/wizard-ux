@@ -54,6 +54,37 @@ public class DictationCommitTest {
         assertFalse(DictationCommit.verifiesWindow(before,new DictationCommit.Snapshot("hello tail",5,5,100),"hello"));
         assertFalse(DictationCommit.verifiesWindow(before,new DictationCommit.Snapshot("abcdefghijklmnopqrsthello tail",25,25,81),"hello"));
     }
+    @Test public void displayedHintWithAbsentSelectionHasOnlyEmptyCaret() {
+        DictationCommit.Snapshot before = DictationCommit.nodeSnapshot("Synthetic hint",true,-1,-1);
+        assertTrue(before.valid()); assertEquals("",before.text);
+        assertEquals(0,before.start); assertEquals(0,before.end); assertEquals(0,before.offset);
+        assertTrue(DictationCommit.verifies(before,s("Hello world ",12,12),"Hello world "));
+    }
+    @Test public void hintNormalizationDoesNotVerifyCorruptionNoopOrWrongCaret() {
+        DictationCommit.Snapshot before = DictationCommit.nodeSnapshot("Synthetic hint",true,-1,-1);
+        assertFalse(DictationCommit.verifies(before,s("shelloworld",11,11),"hello"));
+        assertFalse(DictationCommit.verifies(before,DictationCommit.nodeSnapshot("Synthetic hint",true,-1,-1),"Hello "));
+        assertFalse(DictationCommit.verifies(before,s("Hello ",0,0),"Hello "));
+    }
+    @Test public void nonHintUnknownSelectionIsNeverNormalized() {
+        assertFalse(DictationCommit.nodeSnapshot("",false,-1,-1).valid());
+        assertFalse(DictationCommit.nodeSnapshot(null,false,-1,-1).valid());
+        assertFalse(DictationCommit.nodeSnapshot("actual text",false,-1,-1).valid());
+    }
+    @Test public void partialAndMalformedHintSelectionsStayInvalid() {
+        for (int[] selection : new int[][]{{-1,0},{0,-1},{-2,-2},{1,1},{0,1},{-1,1}})
+            assertFalse(DictationCommit.nodeSnapshot("Synthetic hint",true,selection[0],selection[1]).valid());
+    }
+    @Test public void hintWithKnownCaretRemainsEmptyNotHintContent() {
+        assertTrue(DictationCommit.nodeSnapshot("Synthetic hint",true,0,0).same(s("",0,0)));
+        assertTrue(DictationCommit.nodeSnapshot(null,true,-1,-1).same(s("",0,0)));
+        assertTrue(DictationCommit.nodeSnapshot("actual text",false,4,4).same(s("actual text",4,4)));
+    }
+    @Test public void unknownIcOffsetsAndSelectionsRemainInvalid() {
+        assertFalse(new DictationCommit.Snapshot("",-1,-1,0).valid());
+        assertFalse(new DictationCommit.Snapshot("",0,0,-1).valid());
+        assertFalse(DictationCommit.verifiesWindow(new DictationCommit.Snapshot("",0,0,-1),s("Hello ",6,6),"Hello "));
+    }
     @Test public void reversedSelectionUsesExactReplacement() {
         assertTrue(DictationCommit.verifies(s("left old right",8,5),s("left new right",8,8),"new"));
     }

@@ -194,9 +194,9 @@ public class WizardKeyboardService extends AccessibilityService {
 
     private static DictationCommit.Snapshot nodeText(AccessibilityNodeInfo node) {
         if (node == null || !node.refresh() || !node.isFocused() || !node.isEditable()) return null;
-        CharSequence value = node.isShowingHintText() ? "" : node.getText();
-        return new DictationCommit.Snapshot(value == null ? null : value.toString(),
-                node.getTextSelectionStart(), node.getTextSelectionEnd(), 0);
+        CharSequence value = node.getText();
+        return DictationCommit.nodeSnapshot(value == null ? null : value.toString(), node.isShowingHintText(),
+                node.getTextSelectionStart(), node.getTextSelectionEnd());
     }
 
     @android.annotation.TargetApi(33)

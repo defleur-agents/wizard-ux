@@ -258,6 +258,19 @@ public class DictationInsertionE2eTest {
     @Test public void hintIsNotExistingTextAndSentenceCapitalizationSurvives() throws Exception {
         editor("noopIc","",0,0); dispatch("hello world"); terminal(true); inserted("Hello world ",0,1);
     }
+    @Test public void emptyHintNoopPasteRetainsTakeWithoutSecondWrite() throws Exception {
+        editor("noopPaste","",0,0); dispatch("hello world"); terminal(false); inserted("",0,1);
+        assertTrue(outbox.item(item.id).json().getBoolean("dictationAttempted"));
+    }
+    @Test public void emptyHintFocusBeforeDispatchStillWritesNothing() throws Exception {
+        editor("focusBefore","",0,0); dispatch("hello world"); terminal(false); inserted("",0,0);
+    }
+    @Test public void emptyHintFocusChangeAfterPasteCannotVerifyOtherField() throws Exception {
+        editor("focusChange","",0,0); dispatch("hello world"); terminal(false); inserted("Hello world ",0,1);
+    }
+    @Test public void emptyHintLatePasteRetainsTakeWithoutSecondWrite() throws Exception {
+        editor("latePaste","",0,0); dispatch("hello world"); terminal(false); inserted("Hello world ",0,1);
+    }
     @Test public void focusChangeDuringReadbackDoesNotVerifyDifferentField() throws Exception {
         editor("focusChange","prefix ",7,7); dispatch("hello world"); terminal(false); inserted("prefix hello world ",0,1);
     }
