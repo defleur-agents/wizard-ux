@@ -672,7 +672,7 @@
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
    * Host-window fullscreen keeps this readable width; explicit monocle remains immersive. */
   function layout() {
-    const host = wsEl(cur), d = ws[cur];
+    const d = ws[cur];
     // Apply chrome before measuring, including a single app, reload and workspace switches.
     const full = !homeOpen && !!d.mono && !!d.wins.length;
     document.body.classList.toggle('desktop-fullscreen', full);
@@ -681,12 +681,18 @@
     if (!ex) { ex = document.createElement('button'); ex.id = 'exitFull'; ex.type = 'button'; ex.className = 'exit-full'; ex.title = `Exit full screen (Esc / ${MOD}F)`; ex.setAttribute('aria-label', 'Exit full screen');
       ex.innerHTML = '⤡<span>Exit full screen</span>'; ex.addEventListener('click', () => { if (ws[cur].mono) toggleMono(); }); document.body.appendChild(ex); }
     ex.hidden = !full;
-    const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
-    const n = d.wins.length;
-    const rects = {};
-    if (!n || homeOpen) return;
     const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
     const maxWidth = configuredMax > 0 ? configuredMax : 1200;
+    // Desks out of sight (and the one in front while Home shows) are tiled too, at the size they will show at:
+    // their apps load at a real size, not 0×0. An app that measures its window once at load (File Browser) showed
+    // an empty list when its desk came into view. Measure every desk first, then write, so it costs one reflow.
+    const sizes = ws.map((dk, i) => dk.wins.length ? [wsEl(i).clientWidth, wsEl(i).clientHeight] : null);
+    ws.forEach((dk, i) => { if (sizes[i]) tile(dk, sizes[i][0], sizes[i][1], i === cur && !homeOpen ? full : !!dk.mono, maxWidth, i === cur && !homeOpen); });
+  }
+  function tile(d, W_, H_, full, maxWidth, front) {
+    const g = full ? 0 : 8;
+    const n = d.wins.length;
+    const rects = {};
     // Columns on request: a window that sets `share` (Video Editor's video + Feedback pair) lays the desktop out as
     // side-by-side columns in window order; windows without a share split what is left equally.
     const shared = !d.mono && n >= 2 && n <= 4 && d.wins.some(id => W[id]?.share > 0);
@@ -715,7 +721,7 @@
     for (const id of d.wins) {
       const el = winEl(id); if (!el) continue; const r = rects[id];
       el.classList.toggle('gone', !r);
-      el.classList.toggle('full', full && id === d.focus);
+      if (front) el.classList.toggle('full', full && id === d.focus);
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
