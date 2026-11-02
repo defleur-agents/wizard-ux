@@ -13,7 +13,7 @@ The rejected candidate stopped after an unverifiable input-connection commit, ev
 - Shape from the chosen snapshot with the existing capitalization/boundary-spacing rules. Do not strip requested leading space. Hint text is not field contents.
 - Verify exact selected-range replacement, collapsed cursor and unchanged neighbors; never case-fold, trim, or substring-search the evidence. For IC windows, use absolute offsets, all overlapping prefix/suffix characters, nearby anchors and known end-of-field bounds. Unknown offsets/insufficient context/IME transformations are conservative uncertainty, not claimed success.
 - Poll asynchronously at 100/250/500 ms, with a 1.5 s fallback. No explicit main-thread sleep. Platform accessibility/IC calls themselves are still synchronous Android RPCs; this is not a claim that every RPC is nonblocking.
-- Restore a readable saved clip only after verified paste and only while its unique label/text still belong to this attempt. A newer clip wins; unavailable clipboard reads never justify blind restoration/clearing.
+- Restore a readable saved clip only after verified paste and only while its unique label/text still belong to this attempt. A newer clip wins; unavailable clipboard reads never justify blind restoration/clearing. An uncertain paste keeps its exact shaped clip untouched: a delayed paste may still consume it, so the caller must not replace it with trimmed recovery words. IC uncertainty prepares its shaped recovery clip before completing.
 
 ## Completion and retention
 

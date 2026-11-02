@@ -341,6 +341,12 @@ public class WizardKeyboardService extends AccessibilityService {
                 pendingRestore = () -> { pendingRestore = null; restoreClip(); };
                 main.postDelayed(pendingRestore, 500);
             }
+            if (result == DictationCommit.Result.UNVERIFIED && !paste) {
+                try { copyAsLatest(WizardKeyboardService.this, payload == null ? original : payload); }
+                catch (RuntimeException ignored) { /* The outbox still retains the words and take. */ }
+            }
+            // An uncertain paste may consume the clipboard LATER. Do not replace its shaped payload
+            // with trimmed recovery text, and do not overwrite a newer clip while waiting for it.
             completion.accept(result);
         }
     }

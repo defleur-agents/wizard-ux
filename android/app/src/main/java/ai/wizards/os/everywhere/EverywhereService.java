@@ -1353,9 +1353,13 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
             try {
                 if (typed) { lastInserted = text; lastInsertAt = System.currentTimeMillis(); }
                 else {
-                    WizardKeyboardService.copyAsLatest(this, text.trim());
+                    // The insertion owner leaves an uncertain paste's exact payload in place;
+                    // changing its clipboard now can alter a delayed paste. IC uncertainty prepares
+                    // its own shaped recovery clip. The durable outbox retains both kinds.
+                    if (result != DictationCommit.Result.UNVERIFIED)
+                        WizardKeyboardService.copyAsLatest(this, text.trim());
                     toast(result == DictationCommit.Result.UNVERIFIED || !mayInsert
-                            ? "Copied · check the field before pasting"
+                            ? "Words kept · check the field before pasting"
                             : keyboard == null ? "Copied · turn on Accessibility → Wizard OS to type it for you"
                             : "Copied · paste it where you want it");
                 }
