@@ -45,11 +45,16 @@ export function svgIcon(doc, name, cls) {
 /** The first letter of a name, for a workspace disc. */
 export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
 /* The chats in Wizard's own sections (round 5, Miguel: in place of Recents and View all), in the stock Chats order
- * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. */
-export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['ready', 'Ready']];
-/** Which sections are open: Ready open, Working and Archive folded at first; a stored choice (this device) wins. */
+ * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. Round 13
+ * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready). */
+export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready']];
+/** Every list the sidebar / drawer shows, for searches and signatures. */
+export const KINDS = ['working', 'snoozed', 'ready', 'archive'];
+/** What an open section with no rows says. */
+export const EMPTY = { ready: 'Nothing ready.', working: 'Nothing working.', snoozed: 'Nothing snoozed.', archive: 'Nothing archived.' };
+/** Which sections are open: Ready open, Working, Snoozed and Archive folded at first; a stored choice (this device) wins. */
 export function sectionsOpen(stored) {
-  const o = { archive: false, working: false, ready: true };
+  const o = { archive: false, working: false, snoozed: false, ready: true };
   if (stored && typeof stored === 'object') for (const k of Object.keys(o)) if (typeof stored[k] === 'boolean') o[k] = stored[k];
   return o;
 }
