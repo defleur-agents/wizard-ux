@@ -639,16 +639,20 @@
     return null;
   }
   function insetFrame(f) {
+    // (round 7) a desktop app panel beside the orb's column (AI apps: the app on the right, the orb in the chat): no orb
+    // over it, so no room kept for one (no lift, no band)
+    let fi = frameInset;
+    if (fi && isDoc && document.documentElement.dataset.shell === 'desktop') { try { const o = frameOrb?.(), r = f.getBoundingClientRect(); if (o && r.width && (o.x < r.left || o.x > r.right)) fi = 0; } catch (_) {} }
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
     if (!d?.documentElement) return;
-    d.documentElement.style.setProperty('--wos-inset-b', frameInset + 'px');
+    d.documentElement.style.setProperty('--wos-inset-b', fi + 'px');
     // an app re-draws its bar (a tab picked, a list loaded): look again once it settles (one watcher per document)
-    if (frameInset && d.body && !insetWatch.has(d) && d.defaultView?.MutationObserver) {
+    if (fi && d.body && !insetWatch.has(d) && d.defaultView?.MutationObserver) {
       let t = 0; const mo = new d.defaultView.MutationObserver(() => { if (t) return; t = setTimeout(() => { t = 0; if (frameInset && f.isConnected && f.contentDocument === d) insetFrame(f); }, 180); });
       mo.observe(d.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
       insetWatch.set(d, mo);
     }
-    if (frameInset) {
+    if (fi) {
       // a kit scroll area (most apps) or, when the page itself scrolls, the page: room after the last item; an app's own
       // bottom tab bar is lifted clear of the orb instead (its background runs on under the orb, like a phone's home bar).
       // A constructed sheet in the app's own realm (CSSOM, so an app's style-src policy still lets it apply); put back if
@@ -660,7 +664,7 @@
         if (!d.adoptedStyleSheets.includes(sh)) d.adoptedStyleSheets = [...d.adoptedStyleSheets, sh];
       } catch (_) {}
     }
-    const se = d.scrollingElement, doc = !!frameInset && !!se && !d.querySelector('.wz-scroll') && se.scrollHeight > se.clientHeight + 4;
+    const se = d.scrollingElement, doc = !!fi && !!se && !d.querySelector('.wz-scroll') && se.scrollHeight > se.clientHeight + 4;
     if (doc) d.documentElement.classList.add('wos-inset-doc');
     // a bottom tab bar: a full-width nav / footer along the app's bottom edge (the window then needs no fade of its own);
     // else (round 5) any block of controls that stays put along the bottom: Messenger's filter rows, Notes' vault
@@ -668,7 +672,7 @@
     let bar = d.querySelector('[data-wos-inset-bar]');
     if (bar && !bar.getClientRects().length) { bar.removeAttribute('data-wos-inset-bar'); bar.removeAttribute('data-wos-lift'); bar = null; }
     const vw = d.documentElement.clientWidth, vh = d.documentElement.clientHeight;
-    if (frameInset && !bar?.isConnected && vw && vh) {
+    if (fi && !bar?.isConnected && vw && vh) {
       for (let n = d.elementFromPoint(vw / 2, vh - 3); n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
         const r = n.getBoundingClientRect();
         if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
@@ -681,14 +685,14 @@
       if (bar) floatsOver(d, bar, vw);
     }
     // a list that scrolls under the orb without a kit scroll area (Mail): room after its last item too
-    const sc = frameInset && !bar && !doc && !d.querySelector('.wz-scroll') && vw && vh ? mainScroller(d, vw, vh) : null;
+    const sc = fi && !bar && !doc && !d.querySelector('.wz-scroll') && vw && vh ? mainScroller(d, vw, vh) : null;
     for (const n of d.querySelectorAll('[data-wos-inset-scroll]')) if (n !== sc) n.removeAttribute('data-wos-inset-scroll');
-    if (sc && sc.getBoundingClientRect().bottom > vh - frameInset) sc.setAttribute('data-wos-inset-scroll', '');
-    if (!frameInset) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
+    if (sc && sc.getBoundingClientRect().bottom > vh - fi) sc.setAttribute('data-wos-inset-scroll', '');
+    if (!fi) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
     // the orb bar: the orb sits over this frame's bottom centre (a full-screen app under a view's orb), so the bar's tabs
     // go either side of it, on its row; else (no orb there, no tabs) the lifted bar above
     let split = false, spot = null;
-    if (frameInset && bar?.isConnected) {
+    if (fi && bar?.isConnected) {
       let o = null; try { o = frameOrb?.(); } catch (_) {}
       const fr = f.getBoundingClientRect(), cy = o ? fr.bottom - o.y : 0;
       // the frame spans the screen (an app alone on its desk; its desk may still be sliding in) and the orb is centred
@@ -709,8 +713,8 @@
     if (!spot) { clearEnd(d); d.documentElement.classList.remove('wos-orb-end'); }
     // kept in the frame's own coordinates: a desk still sliding in when this ran is placed where it comes to rest
     { const r0 = f.getBoundingClientRect(); frameSpots.set(f, spot && !spot.split ? Object.freeze({ fx: spot.x - r0.left, fy: spot.y - r0.top, d: spot.d }) : null); }
-    if (bar?.isConnected && !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '')) setAttr(bar, 'data-wos-lift', frameInset && !split ? '' : null);
-    if (!frameInset || split) for (const n of d.querySelectorAll('[data-wos-float]')) n.removeAttribute('data-wos-float');
+    if (bar?.isConnected && !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '')) setAttr(bar, 'data-wos-lift', fi && !split ? '' : null);
+    if (!fi || split) for (const n of d.querySelectorAll('[data-wos-float]')) n.removeAttribute('data-wos-float');
     if (!split) for (const n of d.querySelectorAll(WOS_MARKED)) unmark(n);
     if (d.documentElement.classList.contains('wos-orb-bar') !== split) d.documentElement.classList.toggle('wos-orb-bar', split);
     // with the split in place (its CSS applied), share each side by what the labels need; again once the app's fonts load
@@ -718,7 +722,7 @@
       try { const row = d.querySelector('[data-wos-tabs]'); if (row) fitTabs(d, row); } catch (_) {}
       if (!insetFonts.has(d) && d.fonts?.ready) { insetFonts.add(d); d.fonts.ready.then(() => { if (frameInset && f.isConnected && f.contentDocument === d) insetFrame(f); }, () => {}); }
     }
-    f.closest('.win')?.classList.toggle('wos-inset-bar', !!frameInset && !!bar?.isConnected);
+    f.closest('.win')?.classList.toggle('wos-inset-bar', !!fi && !!bar?.isConnected);
     placeSync();
   }
   /* Where the view's orb goes (round 6): the spot the app in front gave it (the end of its bottom row), else its own
