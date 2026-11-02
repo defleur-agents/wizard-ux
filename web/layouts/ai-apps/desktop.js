@@ -373,7 +373,12 @@ export default function desktop(api) {
     });
     return t;
   }
-  const goApp = id => { unpeek(); want = id; loading(id); const d = desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
+  // round 12: a Home icon is a desk (desk = its number): that desk, a Chats desk as itself (no app panel, no placeholder)
+  const goApp = (id, desk = null) => {
+    unpeek(); const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
+    if (id === CHATS) { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(CHATS); return; }
+    want = id; loading(id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id);
+  };
   function appCell(a) {
     const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === (pane?.id || here().app) ? { 'aria-current': 'page' } : {}) });
     const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
@@ -398,7 +403,7 @@ export default function desktop(api) {
    * to rearrange; a right click opens the quick actions below. Mounted on the stage itself, between the Chats desk and
    * an app panel, so the panel slides in OVER it. */
   const canPin = id => !!api.apps.homeScreen?.can?.(id);
-  const home = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit, badgeText, desks, paged: true, menu: (a, at) => openAppMenu(a, at) });
+  const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit, badgeText, desks, paged: true, menu: (a, at) => openAppMenu(a, at) });
   home.el.classList.add('aad-hg');
   const unmountHome = api.mount(home.el);
   const appFor = k => home.appFor(k);
@@ -406,10 +411,11 @@ export default function desktop(api) {
    * page (its own Update / Remove, behind the Store's own confirmations); Close for an open app (it stays installed) */
   function openAppMenu(a, at) {
     closeMenu(); closeWs();
-    const isOpen = desks().some(d => d.id === a.id);
-    const acts = [['open', 'Open', 'expand', () => goApp(a.id)]];
-    if (canPin(a.id)) acts.push(['pin', 'Add to Home Screen', 'plus', () => api.apps.homeScreen.offer(a.id)]);
-    if (api.apps.get) acts.push(['store', 'App Store page', 'apps', () => api.apps.get(a.id)]);
+    let isOpen = desks().some(d => d.id === a.id);
+    const acts = [['open', 'Open', 'expand', () => goApp(a.id, a.desk)]];
+    if (a.id === CHATS) isOpen = false;   // round 12: a Chats desk offers Open only
+    else if (canPin(a.id)) acts.push(['pin', 'Add to Home Screen', 'plus', () => api.apps.homeScreen.offer(a.id)]);
+    if (api.apps.get && a.id !== CHATS && !a.system) acts.push(['store', 'App Store page', 'apps', () => api.apps.get(a.id)]);
     if (isOpen && api.apps.close) acts.push(['close', 'Close', 'x', () => { api.apps.close(a.id); if (pane?.id === a.id) closeSide(); api.after(120, () => home.paint(true)); }]);
     const card = el('div', 'aad-pop aad-appmenu', { role: 'menu', 'aria-label': a.name });
     card.append(el('h3', 'aad-pop-h', { text: a.name }));

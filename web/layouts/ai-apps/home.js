@@ -12,8 +12,12 @@
  *   reads, api.desks.list), the only exception being that apps with a badge come first (in desk order among them); then
  *   the installed apps not open yet, by name; Get more last. No drag to rearrange and no order kept per device any more
  *   (round 10's appOrder is cleared), so switching from Desks never reshuffles anything. Icons stay put: no hover lift.
+ * Round 12 (Miguel, 2 Nov 2026: "all"): one icon PER DESK, every desk the Desks view has (Chats, a second Chats desk,
+ *   Files, the App Store, Claude, any system / agent / connector app with a desk), with the stock desk name and the
+ *   Apps view's desk icon (Chats = the chats glyph on the accent); a click opens THAT desk. The round-6 "real apps
+ *   only" filter now applies to the installed apps not open yet, after them, as before.
  * No timers beyond api.after, no markup strings; everything through the layout API. */
-import { openApps, realApps, CHATS } from '../apps/chrome.js';
+import { realApps, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { svgIcon } from './parts.js';
 
@@ -30,11 +34,17 @@ export function appKeys(apps, saved = {}) {
   return out;
 }
 const byName = (x, y) => String(x.name).localeCompare(String(y.name), undefined, { sensitivity: 'base' });
-/** Home's apps: the open real apps (badged first, then desk order), then the other installed real apps by name. */
+/** Home's icons: every desk, one each, in the desks' order (badged first) with its stock name ({ ...app, desk, key }),
+ * then the other installed real apps by name ({ ...app, key }). */
 export function homeApps(apps, desks, kinds, lit = () => false) {
-  const open = realApps(openApps(apps, desks), kinds), openIds = new Set(open.map(a => a.id));
+  const meta = new Map([...(kinds && Array.isArray(kinds.apps) ? kinds.apps : []), ...(apps || [])].filter(a => a && a.id).map(a => [a.id, a]));
+  const open = (desks || []).filter(d => d && d.id).map(d => {
+    const a = meta.get(d.id) || { id: d.id, icon: '' };
+    return { ...a, id: d.id, name: d.name || (d.id === CHATS ? 'Chats' : a.name || d.id), desk: d.desk, key: `desk:${d.desk}` };
+  });
+  const openIds = new Set(open.map(a => a.id));
   const pool = kinds && Array.isArray(kinds.apps) ? kinds.apps : apps || [];
-  const rest = realApps(pool.filter(a => a && a.id && a.id !== CHATS && !openIds.has(a.id)), kinds && Array.isArray(kinds.apps) ? { apps: pool } : null).sort(byName);
+  const rest = realApps(pool.filter(a => a && a.id && a.id !== CHATS && !openIds.has(a.id)), kinds && Array.isArray(kinds.apps) ? { apps: pool } : null).sort(byName).map(a => ({ ...a, key: a.id }));
   return { open: [...open.filter(a => lit(a.id)), ...open.filter(a => !lit(a.id))], rest };
 }
 
@@ -57,9 +67,10 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   if (paged) { view.append(track); box.append(view, dots); } else box.append(grid);
 
   function tile(a) {
-    const t = el('span', 'ah-tile', { 'aria-hidden': 'true' });
-    t.style.setProperty('--c', colourOf(a)); t.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
-    api.apps.logo(a.id).then(url => {
+    const t = el('span', 'ah-tile', { 'aria-hidden': 'true' }), chats = a.id === CHATS;
+    // a Chats desk: the Apps view's desk icon (the chats glyph on the accent; Chats has no logo of its own)
+    t.style.setProperty('--c', chats ? 'var(--wz-accent)' : colourOf(a)); t.append(el('i', `sgi sg-${chats ? 'chats' : glyphOf(a)}`, { 'aria-hidden': 'true' }));
+    if (!chats) api.apps.logo(a.id).then(url => {
       if (!url || !t.isConnected) return;
       const im = el('img', 'ah-logo', { alt: '', src: url, draggable: 'false' });
       im.decode().then(() => { t.replaceChildren(im); t.classList.add('is-logo'); }, () => {});
@@ -67,12 +78,12 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return t;
   }
   function cell(a, cls = 'ah-app') {
-    const b = el('button', cls, { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name });
+    const b = el('button', cls, { type: 'button', role: 'listitem', 'data-app': a.id, 'data-desk': a.desk == null ? null : String(a.desk), title: a.name });
     const ic = el('span', 'ah-ic'), n = el('b', 'ah-badge', { 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
     ic.append(tile(a), n);
     b.append(ic, el('span', 'ah-name', { text: a.name }));
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
-    api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id); });
+    api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id, a.desk); });
     pressable(b, a);
     return b;
   }
@@ -141,10 +152,10 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit);
     const list = [...open, ...rest];
     fitNow = fit();
-    const sig = JSON.stringify([list.map(a => [a.id, a.name, badgeText(a.id)]), fitNow.per]);
+    const sig = JSON.stringify([list.map(a => [a.key, a.id, a.name, badgeText(a.id)]), fitNow.per]);
     if (!force && sig === drawn) return;
     drawn = sig;
-    cells = new Map(list.map(a => [a.id, cell(a)])); order = list.map(a => a.id); more ||= moreCell();
+    cells = new Map(list.map(a => [a.key, cell(a)])); order = list.map(a => a.key); more ||= moreCell();
     place();
   }
 
@@ -196,7 +207,9 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   let keys = {};
   function lettersFor() {
     const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit);
-    const saved = api.storage.get('appKeys'); keys = appKeys([...open, ...rest], saved && typeof saved === 'object' ? saved : {});
+    // (a letter per app, not per desk: the first desk of an app gets it; Chats keeps its own ⌥ keys)
+    const seen = new Set(), apps = [...open, ...rest].filter(a => a.id !== CHATS && !seen.has(a.id) && seen.add(a.id));
+    const saved = api.storage.get('appKeys'); keys = appKeys(apps, saved && typeof saved === 'object' ? saved : {});
     if (JSON.stringify(keys) !== JSON.stringify(saved || {})) api.storage.set('appKeys', keys);
     return keys;
   }
@@ -208,7 +221,8 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     /** The Home icons on screen with their letters (for the hold-⌥ hints): the page in view. */
     chips() {
       if (box.hidden) return []; const ks = lettersFor(), pg = paged ? pages()[page] : grid;
-      return [...(pg?.querySelectorAll('.ah-app[data-app]') || [])].filter(b => ks[b.dataset.app]).map(b => ({ el: b.querySelector('.ah-ic'), key: ks[b.dataset.app], at: 'inside' }));
+      const first = new Set();
+      return [...(pg?.querySelectorAll('.ah-app[data-app]') || [])].filter(b => ks[b.dataset.app] && !first.has(b.dataset.app) && first.add(b.dataset.app)).map(b => ({ el: b.querySelector('.ah-ic'), key: ks[b.dataset.app], at: 'inside' }));
     },
     show(on) { if (box.hidden === !on) { if (on) paint(); return; } box.hidden = !on; if (on) paint(true); },
     page: () => page, turn,
