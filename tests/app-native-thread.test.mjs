@@ -18,6 +18,23 @@ function fixture({id='wizard-manager',installed=true,path='/wizard-manager/'}={}
  return {calls,doc,child,frame,app,host,state,service,detach,context};
 }
 test('verified current Manager opens exact ID without normalizing it',()=>{const f=fixture();assert.equal(f.service.nav.openThread('thread/one'),true);assert.deepEqual(f.calls,['thread/one']);});
+test('Wisdom uses the same verified nav.openThread with exact draft and app-keyed passage',()=>{
+ const f=fixture({id:'wisdom',path:'/wisdom/'}),text='  Synthetic pinned question\nkept exactly  ';
+ const reply={key:'wisdom:synthetic-passage',title:'Synthetic passage',message:'Quoted source data only'};
+ assert.equal(f.service.nav.openThread('synthetic-thread',{draft:{text},reply}),true);
+ assert.equal(f.options[0].draft.text,text);assert.equal(f.options[0].reply.key,reply.key);
+ f.state.visible=false;assert.throws(()=>f.service.nav.openThread('synthetic-thread',{draft:{text},reply}));
+ assert.equal(f.calls.length,1);
+});
+test('pinned host supplies the shared Chats callback and live visibility, not a custom composer',()=>{
+ const pinned=readFileSync(new URL('../web/core/single-app-session.js',import.meta.url),'utf8');
+ assert.match(pinned,/window\.WizChatsHost\?\.create\(/);
+ assert.match(pinned,/openThread: \(sid, opts\) => chats\?\.openHosted\(wid, frame, sid, opts\) === true/);
+ assert.match(pinned,/isVisible: \(\) => !!frame\?\.isConnected && !chats\?\.isHosted\(wid\)/);
+ assert.match(pinned,/chats\.threadBack\(threadWindow\)/);
+ assert.match(pinned,/const wid = 'single-app'/);
+ assert.doesNotMatch(pinned,/<textarea|createElement\(['"]textarea/);
+});
 test('Manager owns only marked canonical links, preserving ordinary link handling',()=>{const f=fixture(),a={href:'https://wizard.example/wizard-os-home/?session=thread%2Fone',dataset:{wizardNativeThread:'thread/one'}};assert(f.host.ownsThreadLink(f.child,a));a.dataset.wizardNativeThread='thread/two';assert.equal(f.host.ownsThreadLink(f.child,a),false);a.dataset={};assert.equal(f.host.ownsThreadLink(f.child,a),false);});
 for(const [name,alter] of [
  ['hidden app',f=>f.state.visible=false],['detached frame',f=>f.detach()],['closed frame',f=>f.frame.isConnected=false],['reloaded document',f=>f.child.document={}],['foreign navigation',f=>f.child.location=new URL('https://foreign.example/wizard-manager/')],['revoked catalog path',f=>f.app.url='/other/'],
