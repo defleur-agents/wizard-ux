@@ -42,7 +42,15 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-tb:focus-visible::before { b
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tb .aa-ico { position: relative; width: 22px; height: 22px; stroke-width: 2; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--wz-accent, var(--aa-ink)); box-shadow: 0 0 0 2px var(--aa-canvas); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-dot[hidden] { display: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-mid { min-width: 0; display: grid; justify-items: center; line-height: 1.2; text-align: center; pointer-events: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-mid {
+  min-width: 0; min-height: 44px; display: grid; justify-items: center; align-content: center; line-height: 1.2; text-align: center;
+  margin: 0; padding: 0 8px; border: 0; border-radius: 22px; background: none; color: inherit; font: inherit; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background 120ms ease;
+}
+/* the name is Home's button (round 4): a quiet press, like the other top-bar controls */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-mid:active { background: var(--aa-hover); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-mid:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--wz-accent, var(--aa-ink)); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-mid > * { pointer-events: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-name { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 650 0.9375rem / 1.25 var(--wz-font-ui); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sub { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aa-ink-2); font: 500 0.75rem / 1.25 var(--wz-font-ui); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sub[hidden] { display: none; }
@@ -62,10 +70,12 @@ html[data-shell="phone"][data-layout="ai-apps"] .device .desk:not(.home-desk) > 
 html[data-shell="phone"][data-layout="ai-apps"] .device .desk:not(.home-desk) > .tiles > .win.solo > .wbody { padding-top: 0 !important; }
 /* Home is the chat in this view: the layout moves to it at once; until then nothing of the old Home shows */
 html[data-shell="phone"][data-layout="ai-apps"] .home-desk > .glance { visibility: hidden; }
-/* the dock: only while an app is in front (its orb floats over the app, chrome.css) or a take is running (the stock
- * voice controls); over the chat the composer's round button is the voice button */
-html[data-shell="phone"][data-layout="ai-apps"]:not([data-ai-front="app"]) #device:not([data-voice]:not([data-voice="idle"])) #dock { opacity: 0; pointer-events: none !important; transition: opacity 160ms ease; }
-html[data-shell="phone"][data-layout="ai-apps"]:not([data-ai-front="app"]) #device:not([data-voice]:not([data-voice="idle"])) #dock * { pointer-events: none !important; }
+/* the dock orb: always there, in its one spot (bottom centre), the chat too (round 4: talking is the orb's, the composer
+ * has no voice button of its own); the composer sits above its row (--aa-orb-room, measured by the layout). While the
+ * field is typed in (the keyboard is up) the orb steps aside and the composer drops to the bottom, like theirs; a take
+ * (dictation included) keeps the stock voice controls. */
+html[data-shell="phone"][data-layout="ai-apps"]:has(.win.app-chats .ch-compose textarea:focus) #device:not([data-voice]:not([data-voice="idle"])) #dock { opacity: 0; pointer-events: none !important; transition: opacity 160ms ease; }
+html[data-shell="phone"][data-layout="ai-apps"]:has(.win.app-chats .ch-compose textarea:focus) #device:not([data-voice]:not([data-voice="idle"])) #dock * { pointer-events: none !important; }
 html[data-shell="phone"][data-layout="ai-apps"] #device[data-voice]:not([data-voice="idle"]) .ch-compose { visibility: hidden; }
 
 /* ---------- the chat: no list, no thread header (the drawer holds them); the composer is the pill at the bottom ---------- */
@@ -74,6 +84,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats::after { display:
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose {
   padding: 6px 16px max(12px, var(--safe-b-low, var(--safe-b, 0px))) !important; background: none !important; border: 0 !important; box-shadow: none !important;
 }
+html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose:not(:has(textarea:focus)) { padding-bottom: calc(var(--aa-orb-room, 72px) + 4px) !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-row2 {
   display: flex !important; align-items: center; gap: 0; min-height: 52px; padding: 4px 4px 4px 2px; box-sizing: border-box; border-radius: 26px;
   background: var(--aa-surface) !important; box-shadow: inset 0 0 0 1px var(--aa-line), 0 2px 12px color-mix(in srgb, var(--aa-canvas) 30%, transparent) !important;
@@ -87,15 +98,12 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-field textare
   color: var(--aa-ink); font: 400 1rem / 1.375 var(--wz-font-ui) !important;
 }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-field textarea::placeholder { color: var(--aa-ink-2); opacity: 1; }
-/* a new chat: the centred mark and greeting (Claude's empty state), not the boxed hint */
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-newchat {
-  display: flex !important; flex-direction: column; align-items: center; gap: 6px; margin: auto; padding: 24px 24px 40px; max-width: 440px; text-align: center; animation: ncIn .32s ease-out both;
-}
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-newchat .nc-mark { width: 56px; height: 56px; border-radius: 18px; background: var(--aa-ink); box-shadow: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-newchat .nc-mark .sgi { background: var(--aa-canvas) !important; }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-newchat .nc-hi { font: 650 1.375rem / 1.25 var(--wz-font-display, var(--wz-font-ui)); }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-newchat .nc-sub { color: var(--aa-ink-2); font: 400 0.9375rem / 1.4 var(--wz-font-ui); }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats :is(.ch-newchat .nc-keys, .nc-classic) { display: none !important; }
+/* Home = a New chat with no greeting (round 4, Miguel): no mark, no 'Good afternoon', no hint; only the skin's
+ * background (the window and the top bar let it through), the composer and the orb */
+html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats :is(.ch-newchat, .nc-classic) { display: none !important; }
+html[data-shell="phone"][data-layout="ai-apps"][data-ai-new] .device .desk:not(.home-desk) > .tiles > .win.app-chats,
+html[data-shell="phone"][data-layout="ai-apps"][data-ai-new] .device .desk:not(.home-desk) > .tiles > .win.app-chats :is(.wbody, .ch-thread, .ch-msgs),
+html[data-shell="phone"][data-layout="ai-apps"][data-ai-new] .aa-top { background: transparent !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 /* pictures in a chat: rounded like theirs (ChatGPT ≈ 18 px) */
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .mimg { border-radius: 18px; }
 /* the model chip (Claude / Perplexity put it in the composer): a small pill */
@@ -120,20 +128,15 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-row2 > :is(.c
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop):active::after { background: var(--aa-hover); }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-mic.on { color: var(--aa-canvas); }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-mic.on::after { background: var(--aa-ink); }
-/* the round button, always there: a filled disc in the skin's ink. Send (↑) with words; else the voice button */
+/* the round Send (↑): a filled disc in the skin's ink, only while there are words (round 4, like ChatGPT); the mic
+ * (dictation) stays; talking is the dock orb's */
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose .ch-row2 > .ch-send { display: grid !important; color: var(--aa-canvas) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose .ch-row2 > .ch-send::after {
   content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--aa-ink); transition: transform 120ms ease;
 }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose .ch-row2 > .ch-send.is-pressed::after,
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose .ch-row2 > .ch-send:active::after { transform: scale(.9); }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose .ch-row2 > .ch-send svg { stroke: var(--aa-canvas) !important; }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send > svg { display: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send::before {
-  content: ""; position: relative; z-index: 1; width: 20px; height: 20px; background: var(--aa-canvas);
-  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'><path d='M6 10v4M10 6.5v11M14 8.5v7M18 10.5v3'/></svg>") center / contain no-repeat;
-  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'><path d='M6 10v4M10 6.5v11M14 8.5v7M18 10.5v3'/></svg>") center / contain no-repeat;
-}
 
 /* ---------- the drawer ---------- */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-layer { position: fixed; inset: 0; z-index: 300; pointer-events: auto; }

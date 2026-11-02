@@ -4,8 +4,9 @@
  * Copies the layout the ChatGPT, Claude and Perplexity phone apps share (measured references:
  * ~/.hermes/cache/screenshots/ai-apps-ref/REPORT.md, "Recommended spec", Mobile), with Wizard's own pieces in it:
  *   - Top bar, always there (an app open too): ☰ on the left opens the drawer; the Wizard's name in the middle (what is
- *     in front, a thread's title or an app's name, under it); on the right the workspace switcher, in the slot where
- *     they put Temporary / Incognito (this Wizard, then the Wizards he manages; Manage = Settings › Your network).
+ *     in front, a thread's title or an app's name, under it; a tap on it goes Home from anywhere, an app included); on
+ *     the right the workspace switcher, in the slot where they put Temporary / Incognito (this Wizard, then the Wizards
+ *     he manages; Manage = Settings › Your network).
  *   - Drawer from the left (☰, or a swipe from the left edge; a swipe right in a thread too, which keeps the chat
  *     under it and never also runs the thread swipe-back): the name and 🔍 (searches chats and apps), then where they list Projects / GPTs / Spaces
  *     a compact grid of EVERY open app (a small icon with its name under it, like ChatGPT's GPT grid; desk order, apps
@@ -13,10 +14,14 @@
  *     Installed · Get more, chrome.js); then Recents = the chats Working and Ready (a long press opens the row menu:
  *     Pin, Rename, Mark unread, Snooze, Archive / Restore, through Chats' own actions), View all = the stock Chats
  *     list. At the foot (round 2): New chat = a big round + where ChatGPT puts its compose button, Settings = a cog.
- *   - Main screen = the real Chats window, without its list (the list lives in the drawer): a New chat or the thread
- *     picked, with the real composer: + (attach) on the left, the model chip, the mic, and on the right one round
- *     button: Send when there are words, else the voice button (it hands the press to the dock orb, so tap talks and
- *     hold gives a command, exactly as in every view). A take shows the stock voice controls at the bottom.
+ *   - Home = a New chat (round 4, Miguel): the empty chat with no greeting, only the skin's background, the composer
+ *     and the dock orb under it; typing there starts a new chat, so Home and New chat are one screen. Ways back to it
+ *     from anywhere: a tap on the Wizard's name in the top bar, a swipe up on the orb, the drawer's round +.
+ *   - Main screen = the real Chats window, without its list (the list lives in the drawer): Home (a New chat) or the
+ *     thread picked, with the real composer: + (attach) on the left, the model chip, the mic (dictation), and the round
+ *     Send only while there are words (like ChatGPT). Talking is the orb's: the dock orb keeps its one spot, bottom
+ *     centre, under the composer (tap talks, hold gives a command, exactly as in every view); while the field is being
+ *     typed in, the orb steps aside and the composer drops to the bottom. A take shows the stock voice controls.
  *   - An app = its desk, filling the screen under the same top bar, with the orb bar at the bottom: the dock orb in its
  *     one fixed spot, bottom centre, and the app's own tabs (if it has a bottom tab bar) split either side of it
  *     (chrome.js inset → skin-host's orb bar).
@@ -79,7 +84,8 @@ export default function setup(api) {
   const menuBtn = el('button', 'aa-tb aa-menu', { type: 'button', 'aria-label': 'Open menu', 'aria-expanded': 'false', 'aria-controls': 'aa-drawer' });
   const menuDot = el('i', 'aa-dot', { 'aria-hidden': 'true' }); menuDot.hidden = true;
   menuBtn.append(icon('menu'), menuDot);
-  const mid = el('div', 'aa-mid'), nameEl = el('b', 'aa-name'), subEl = el('small', 'aa-sub');
+  // the Wizard's name: a tap goes Home (a New chat), from a thread or from inside an app (round 4)
+  const mid = el('button', 'aa-mid', { type: 'button' }), nameEl = el('b', 'aa-name'), subEl = el('small', 'aa-sub');
   mid.append(nameEl, subEl);
   const wsBtn = el('button', 'aa-tb aa-ws', { type: 'button', 'aria-haspopup': 'dialog' });
   const wsDisc = el('span', 'aa-ws-i', { 'aria-hidden': 'true' }); wsBtn.append(wsDisc);
@@ -136,7 +142,8 @@ export default function setup(api) {
   api.listen(findBtn, 'click', () => setSearch(true));
   api.listen(cancelBtn, 'click', () => setSearch(false));
   api.listen(field, 'input', () => { q = field.value; paintDrawer(); });
-  api.listen(newBtn, 'click', () => { closeDrawer(); api.sessions.newChat(); });
+  api.listen(newBtn, 'click', goHome);
+  api.listen(mid, 'click', goHome);
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
 
   /* rows: an app (its logo, else the dock's own mark for it), a chat (Working spinner / Ready dot, title, pin) */
@@ -380,30 +387,25 @@ export default function setup(api) {
   api.listen(wsBtn, 'click', () => (sheet ? closeSheet() : openSheet()));
   api.listen(globalThis, 'wos:resources', paintWs);
 
-  /* ---------- the round button: Send with words, else the voice button (the dock orb's own press) ---------- */
-  const sendOf = t => t?.closest?.('.ch-compose .ch-send');
-  const empty = b => !b.closest('.ch-compose')?.classList.contains('has-text');
-  api.listen(doc, 'pointerdown', e => {
-    const b = sendOf(e.target); if (!b || !empty(b) || e.isPrimary === false) return;
-    const host = api.phone.orb(); if (!host) return;
-    e.preventDefault(); e.stopPropagation();
-    b.classList.add('is-pressed');
-    const init = { bubbles: true, cancelable: true, composed: true, pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: true, clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY, button: e.button, buttons: e.buttons, width: e.width, height: e.height, pressure: e.pressure };
-    host.dispatchEvent(new PointerEvent('pointerdown', init));
-  }, true);
-  const unpress = () => { for (const b of doc.querySelectorAll('.ch-send.is-pressed')) b.classList.remove('is-pressed'); };
-  api.listen(globalThis, 'pointerup', unpress, true); api.listen(globalThis, 'pointercancel', unpress, true);
-  // the press went to the orb: the button's own click (an empty submit) never happens
-  api.listen(doc, 'click', e => { const b = sendOf(e.target); if (b && empty(b) && e.detail !== 0) { e.preventDefault(); e.stopPropagation(); } }, true);
-  api.listen(doc, 'keydown', e => { const b = sendOf(e.target); if (b && empty(b) && (e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); e.stopPropagation(); api.voice.tap(); } }, true);
-  const labelSend = () => { for (const b of doc.querySelectorAll('.ch-compose .ch-send')) b.setAttribute('aria-label', empty(b) ? `Talk to ${agentName()} (hold for a command)` : 'Send'); };
-  api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) api.frame(labelSend); }, true);
+  /* ---------- Home: a New chat (the drawer's +, the name in the top bar, the orb's swipe up all land here) ---------- */
+  function goHome() { closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
+
+  /* ---------- the composer above the orb: room for the dock orb's row (its untransformed size) under the composer ---------- */
+  let room = -1;
+  function paintRoom() {
+    const o = api.phone.orb?.(); if (!o?.getBoundingClientRect) return;
+    const r = o.getBoundingClientRect(), d = o.offsetHeight || r.height, H = globalThis.innerHeight || 0;
+    if (!r.height || !H) return;
+    const px = Math.max(0, Math.round(H - (r.top + r.height / 2 - d / 2)));
+    if (px !== room) { room = px; root.style.setProperty('--aa-orb-room', px + 'px'); }
+  }
+  api.listen(globalThis, 'resize', () => api.frame(paintRoom));
 
   /* ---------- the main screen: the chat (Home and the bare list become it), or an app ---------- */
   let last = { view: '', thread: null, desk: -1 }, pending = false;
   const soon = fn => { if (pending) return; pending = true; api.after(0, () => { pending = false; fn(); }); };
   function onRoute(r) {
-    if (r.home) { soon(() => { if (api.route().home) api.sessions.chats(); }); return paintTop(r); }
+    if (r.home) { soon(() => { if (api.route().home) api.sessions.newChat(); }); return paintTop(r); }
     if (r.view === 'list') {
       if (!listWanted) {
         // the list lives in the drawer here: a thread left for the list (Back) opens the drawer over a new chat
@@ -420,19 +422,23 @@ export default function setup(api) {
     nameEl.textContent = agentName();
     const sub = app ? appName(app) : r.thread && r.thread !== '__new__' ? titleOf(r.thread) : '';
     subEl.textContent = sub; subEl.hidden = !sub;
-    labelSend();
+    mid.setAttribute('aria-label', `${agentName()}${sub ? ', ' + sub : ''}. Home: a new chat`);
+    // Home = a New chat: nothing but the skin's background, the composer and the orb
+    if (!app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__')) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
+    paintRoom();
     paintWs();
   }
   api.on('route', onRoute);
   api.on('render', () => { if (open) { readSessions(); paintDrawer(); } paintTop(); });
-  api.on('home', () => soon(() => { if (api.route().home) api.sessions.chats(); }));
+  api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   api.on('voice', () => paintTop());
   readSessions(); paintTop(); paintBadges();
-  if (api.route().home) soon(() => api.sessions.chats());
+  if (api.route().home) soon(() => api.sessions.newChat());
 
   return () => {
     closeMenu(); closeSheet(); closeDrawer();
     top.remove(); layer.remove(); chrome.dispose();
-    for (const k of ['aiApps', 'aiFront', 'aaDrawer']) delete root.dataset[k];
+    for (const k of ['aiApps', 'aiFront', 'aaDrawer', 'aiNew']) delete root.dataset[k];
+    root.style.removeProperty('--aa-orb-room');
   };
 }
