@@ -7,6 +7,26 @@ import { tmpdir } from 'node:os';
 import { scanFeatureIds, compareFeatureIds } from './feature-id-scan.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+test('launcher count and tiles share one ordered app list without expanding app eligibility', async () => {
+  const { runInNewContext } = await import('node:vm');
+  const source = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const start = source.indexOf('  function renderLauncher(q, live)');
+  const body = source.slice(start, source.indexOf('    const n = norm(q);', start));
+  const declaration = body.match(/const launcherApps = ([^\n]+);/);
+  assert.ok(declaration, 'the existing launcher computes eligibility once');
+  assert.ok(body.includes('${launcherApps.length}'));
+  assert.ok(body.includes("${launcherApps.map(appTile).join('')}"));
+  const apps = [
+    {id:'first',kind:'wizard'}, {id:'phone-only',kind:'native'},
+    {id:'chat',kind:'chats'}, {id:'food',kind:'usuals'},
+    {id:'view',kind:'view'}, {id:'app-store',kind:'wizard'},
+    {id:'agents',kind:'wizard'}, {id:'maintenance',kind:'wizard'},
+    {id:'last',kind:'wizard'}
+  ];
+  const actual = runInNewContext(declaration[1], {APPS:apps, window:{WizCore:{isMaintenanceApp:a=>a.id==='maintenance'}}});
+  assert.deepEqual(Array.from(actual, a=>a.id), ['first','chat','food','last']);
+});
+
 test('feature app references in the shells never grow beyond the explicit allowlist', () => {
   const allowed = JSON.parse(readFileSync(new URL('./feature-id-allowlist.json', import.meta.url), 'utf8'));
   for (const [key, count] of Object.entries(allowed)) {
