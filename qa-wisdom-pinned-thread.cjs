@@ -138,12 +138,15 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
   await page.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-native.png`)});
   // Native Back uses the real shell handler, not a fabricated app callback.
   const shellBack=()=>page.evaluate(()=>window.__wosNativeBack?__wosNativeBack():__wux.escStep());
-  assert(await page.locator('.hosted-thread [data-chmic]').isVisible(),'Shared native reply microphone is visible');
+  assert.equal(await page.locator('.hosted-thread [data-chmic]').count(),1,'Shared native reply microphone is mounted (typed text normally hides it)');
   if(width===390 && action==='selection-ask-ai'){
+   await native.fill('');
+   assert(await page.locator('.hosted-thread [data-chmic]').isVisible());
    await ctx.grantPermissions(['microphone']);
    await page.locator('.hosted-thread [data-chmic]').click();
    await page.waitForFunction(()=>WizAppCapture.getState().phase==='recording');
    assert.equal(await page.locator('.hosted-thread [data-chmic]').getAttribute('aria-pressed'),'true');
+   await page.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-microphone.png`)});
    await delay(1200);assert.equal(await shellBack(),'recording');
    await page.waitForFunction(()=>!WizAppCapture.getState().active);
    c.microphone=await page.evaluate(async sid=>{
