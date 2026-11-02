@@ -1,0 +1,121 @@
+{
+  "mode": "boundary-on",
+  "candidate": true,
+  "nativeProven": false,
+  "realStoreInstallProven": false,
+  "realTailscaleServeProven": false,
+  "checks": [
+    "WAM: granted installation has a listener credential reference",
+    "WAM: the app env and the Service key file hold the same per-installation credential",
+    "WAM: apps.json never contains the credential value",
+    "real nginx: every non-navigation or non-GET shell document request is refused and carries no shell token",
+    "preflight to /notifications/api/mark refused (403, no Access-Control-* header)",
+    "network owner identity cannot read /notifications/api/items (403, no data)",
+    "network owner identity cannot write /notifications/api/mark (403, inbox.json unchanged)",
+    "shell document served by real nginx with the boundary template (token injected by sub_filter)",
+    "app view is an opaque sandboxed frame",
+    "adapter path works: data.call notifications.list -> Service -> gated listener (app credential)",
+    "every direct frame request reached the listener and was refused server-side (nginx access log)",
+    "JSON write from the frame refused server-side (403)",
+    "simple text/plain and form writes refused server-side",
+    "media <img> load refused server-side",
+    "no hostile write reached the inbox (inbox.json readback)",
+    "shell document direct /notifications/api/count refused (bell needs the card-2 shell-owned count)",
+    "adapter mark_read persisted the requested item (inbox.json readback)",
+    "WAM uninstall removed the listener credential",
+    "reinstall is a new installation",
+    "reinstall minted a new credential",
+    "old binding refused after reinstall"
+  ],
+  "nginx": {
+    "image": "wizard-ux:mine-961b05fd",
+    "version": "nginx version: nginx/1.28.3"
+  },
+  "failure": null,
+  "observed": {
+    "documentRefusals": [
+      {
+        "method": "GET",
+        "dest": "empty",
+        "mode": "cors",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "GET",
+        "dest": "iframe",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "GET",
+        "dest": "script",
+        "mode": "no-cors",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "POST",
+        "dest": "document",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": false
+      }
+    ],
+    "preflight": {
+      "status": 403,
+      "cors": []
+    },
+    "network": {
+      "read": 403,
+      "readLeaked": false,
+      "write": 403,
+      "writeLanded": false
+    },
+    "frame": {
+      "corsRead": "blocked:TypeError",
+      "noCorsRead": "opaque",
+      "simpleWrite": "opaque",
+      "jsonWrite": "blocked:TypeError",
+      "sourcesWrite": "opaque",
+      "form": "submitted",
+      "img": "error"
+    },
+    "frameServerStatuses": [
+      "GET /notifications/api/items 403",
+      "GET /notifications/api/items 403",
+      "POST /notifications/api/mark 403",
+      "POST /notifications/api/mark 403",
+      "POST /notifications/api/sources 403",
+      "POST /notifications/api/mark 403",
+      "GET /notifications/media/tmp/synthetic.png 403"
+    ],
+    "shellDirect": 403,
+    "shellServer": [
+      "GET /notifications/api/count 403 site=same-origin"
+    ],
+    "afterReinstallOldBinding": "revoked"
+  },
+  "inbox": {
+    "SynthGate0001": {
+      "read": true
+    }
+  },
+  "wam": [
+    "install notifications --repo oscarhenrycollins/notifications --port 35819 --listener-auth",
+    "grant notifications notifications.list notifications.mark_read",
+    "uninstall notifications",
+    "install notifications --repo oscarhenrycollins/notifications --port 35819 --listener-auth",
+    "grant notifications notifications.list"
+  ],
+  "heads": {
+    "notifications": "4609df967f73fce92a7acef71ef86e56705e2159",
+    "wizard-app-manager": "8e7b5707920599d8bd4f2cbe8143701fc8eadf56",
+    "wizard-agent-service": "6c0dd303c98bb3a09c2a8f041ad6f9d96c1ab139",
+    "wizard-ux": "2d151a664bc4c8d34b61c3fe6f81f65e055274be",
+    "wizard-os": "c26e682ab84fcbe5e360587c5ddcbaef16bfd41e"
+  },
+  "notifications_front": "candidate 4609df96",
+  "ux_template": "candidate 2d151a66"
+}

@@ -1,0 +1,107 @@
+{
+  "mode": "control-boundary-off",
+  "candidate": true,
+  "nativeProven": false,
+  "realStoreInstallProven": false,
+  "realTailscaleServeProven": false,
+  "checks": [
+    "WAM: granted installation has a listener credential reference",
+    "WAM: the app env and the Service key file hold the same per-installation credential",
+    "WAM: apps.json never contains the credential value",
+    "real nginx: every non-navigation or non-GET shell document request is refused and carries no shell token",
+    "shell document served by real nginx with the boundary template (token injected by sub_filter)",
+    "app view is an opaque sandboxed frame",
+    "adapter path works: data.call notifications.list -> Service -> gated listener (app credential)",
+    "adapter mark_read persisted the requested item (inbox.json readback)"
+  ],
+  "nginx": {
+    "image": "wizard-ux:mine-961b05fd",
+    "version": "nginx version: nginx/1.28.3"
+  },
+  "failure": null,
+  "observed": {
+    "documentRefusals": [
+      {
+        "method": "GET",
+        "dest": "empty",
+        "mode": "cors",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "GET",
+        "dest": "iframe",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "GET",
+        "dest": "script",
+        "mode": "no-cors",
+        "status": 403,
+        "leaked": false
+      },
+      {
+        "method": "POST",
+        "dest": "document",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": false
+      }
+    ],
+    "preflight": {
+      "status": 404,
+      "cors": []
+    },
+    "network": {
+      "read": 200,
+      "readLeaked": true,
+      "write": 200,
+      "writeLanded": true
+    },
+    "frame": {
+      "corsRead": "blocked:TypeError",
+      "noCorsRead": "opaque",
+      "simpleWrite": "opaque",
+      "jsonWrite": "blocked:TypeError",
+      "sourcesWrite": "opaque",
+      "form": "submitted",
+      "img": "error"
+    },
+    "frameServerStatuses": [
+      "GET /notifications/api/items 200",
+      "GET /notifications/api/items 200",
+      "POST /notifications/api/mark 415",
+      "POST /notifications/api/mark 200",
+      "POST /notifications/api/sources 415",
+      "POST /notifications/api/mark 415",
+      "GET /notifications/media/tmp/synthetic.png 404"
+    ],
+    "shellDirect": 200,
+    "shellServer": [
+      "GET /notifications/api/count 200 site=same-origin"
+    ],
+    "afterReinstallOldBinding": null
+  },
+  "inbox": {
+    "SynthGate0002": {
+      "read": true
+    },
+    "SynthGate0001": {
+      "read": true
+    }
+  },
+  "wam": [
+    "install notifications --repo oscarhenrycollins/notifications --port 45987 --listener-auth",
+    "grant notifications notifications.list notifications.mark_read"
+  ],
+  "heads": {
+    "notifications": "e6df99a8f63e19dcd8b1e7ac4c652b9041536c5c",
+    "wizard-app-manager": "8e7b5707920599d8bd4f2cbe8143701fc8eadf56",
+    "wizard-agent-service": "6c0dd303c98bb3a09c2a8f041ad6f9d96c1ab139",
+    "wizard-ux": "2d151a664bc4c8d34b61c3fe6f81f65e055274be",
+    "wizard-os": "c26e682ab84fcbe5e360587c5ddcbaef16bfd41e"
+  },
+  "notifications_front": "base e6df99a8 (no gate), QA_FRONT_BOUNDARY=0"
+}

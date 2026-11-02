@@ -1,0 +1,70 @@
+{
+  "mode": "boundary-on",
+  "candidate": true,
+  "nativeProven": false,
+  "realStoreInstallProven": false,
+  "realTailscaleServeProven": false,
+  "checks": [
+    "WAM: granted installation has a listener credential reference",
+    "WAM: the app env and the Service key file hold the same per-installation credential",
+    "WAM: apps.json never contains the credential value"
+  ],
+  "nginx": {
+    "image": "wizard-ux:mine-961b05fd",
+    "version": "nginx version: nginx/1.28.3"
+  },
+  "failure": "AssertionError [ERR_ASSERTION]: real nginx: every non-navigation or non-GET shell document request is refused and carries no shell token",
+  "observed": {
+    "documentRefusals": [
+      {
+        "method": "GET",
+        "dest": "empty",
+        "mode": "cors",
+        "status": 403,
+        "leaked": true
+      },
+      {
+        "method": "GET",
+        "dest": "iframe",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": true
+      },
+      {
+        "method": "GET",
+        "dest": "script",
+        "mode": "no-cors",
+        "status": 403,
+        "leaked": true
+      },
+      {
+        "method": "POST",
+        "dest": "document",
+        "mode": "navigate",
+        "status": 403,
+        "leaked": true
+      }
+    ],
+    "preflight": null,
+    "network": null,
+    "frame": null,
+    "frameServerStatuses": null,
+    "shellDirect": null,
+    "shellServer": null,
+    "afterReinstallOldBinding": null
+  },
+  "inbox": null,
+  "wam": [
+    "install notifications --repo oscarhenrycollins/notifications --port 46081 --listener-auth",
+    "grant notifications notifications.list notifications.mark_read"
+  ],
+  "heads": {
+    "notifications": "4609df967f73fce92a7acef71ef86e56705e2159",
+    "wizard-app-manager": "8e7b5707920599d8bd4f2cbe8143701fc8eadf56",
+    "wizard-agent-service": "6c0dd303c98bb3a09c2a8f041ad6f9d96c1ab139",
+    "wizard-ux": "2d151a664bc4c8d34b61c3fe6f81f65e055274be",
+    "wizard-os": "c26e682ab84fcbe5e360587c5ddcbaef16bfd41e"
+  },
+  "ux_template": "card-1 head 032b7e09 (QA_UX_ROOT)",
+  "note": "expected to fail at the document-refusal check: token leaked in every 403 body"
+}
