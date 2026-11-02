@@ -4,7 +4,6 @@
   "version": 1,
   "skin": "obsidian",
   "tweaks": [
-    "miguel/layout",
     "miguel/send-and-go",
     "miguel/snooze-someday",
     "miguel/machines-home",
