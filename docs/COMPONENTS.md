@@ -49,7 +49,7 @@ Reuse:
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| Desktop tiling | `web/desktop/desktop.js` `layout` / `tile`: measure all desks before writes, with each desk's eventual fullscreen geometry; `.wsp .win.full` owns local chrome | app-specific initial sizing or a second desktop layout |
+| Desktop tiling | `layout` / `tile` in `web/desktop/desktop.js`: all desks, own fullscreen | app-local geometry |
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
