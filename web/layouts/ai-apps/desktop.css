@@ -1,0 +1,303 @@
+/* AI apps view on the desktop (layouts/ai-apps/desktop.js): the ChatGPT / Claude / Perplexity desktop layout, measured
+ * at 1440 × 900 (REPORT.md §6). Loaded by desktop.js only while it is worn; every rule is scoped to the worn layout on
+ * the desktop shell, so Desks, Orb and Apps never see it. Sizes are theirs: a 288 px sidebar (Claude; ChatGPT's panel)
+ * folding to a 52 px rail with 36 px icons at x 8; a 52 px top row; a 768 px chat column (ChatGPT) with a 52 px pill
+ * composer docked 24 px from the bottom, or centred under the greeting in a new chat; rows 36 px with 14 px text.
+ * Shapes are the phone's round 2 (round discs, 12 px row pills, 16–18 px menus, full-pill composer and search, icons as
+ * rounded squares). Colours are the skin's tokens only. */
+html[data-shell="desktop"][data-layout="ai-apps"] {
+  --aad-side: 288px;
+  --bar-h: 52px;
+  --desktop-window-max-width: 100000px;
+  --aad-ink: var(--wz-text, var(--ink));
+  --aad-ink-2: var(--wz-text-secondary, var(--ink-2, var(--wz-text, var(--ink))));
+  --aad-canvas: var(--wz-base, var(--bg));
+  --aad-main: var(--sk-win, var(--aad-canvas));
+  --aad-panel: color-mix(in srgb, var(--aad-ink) 4%, var(--aad-main));
+  --aad-surface: var(--wz-panel, var(--aad-canvas));
+  --aad-line: color-mix(in srgb, var(--aad-ink) 10%, transparent);
+  --aad-hover: color-mix(in srgb, var(--aad-ink) 7%, transparent);
+  --aad-held: color-mix(in srgb, var(--aad-ink) 11%, transparent);
+  --aad-disc: color-mix(in srgb, var(--aad-ink) 7%, var(--aad-canvas));
+  --aad-lift: 0 0 0 1px var(--aad-line), 0 2px 10px color-mix(in srgb, black 12%, transparent);
+  --aad-menu: 0 0 0 1px var(--aad-line), 0 12px 32px color-mix(in srgb, black 24%, transparent);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"],
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] { --aad-side: 52px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; flex: none; }
+
+/* ---------- the stock bar: only what is not a desk switcher stays (fuel gauge, warnings, notices), in the top row ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] #bar {
+  left: var(--aad-side); right: 0; height: 52px; padding: 0 calc(16px + var(--aad-ws-w, 140px)) 0 16px; background: none !important; border: 0 !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none; transition: left 200ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #bar > * > * { pointer-events: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] #bar :is(#logo, #wsList, #clock, #searchBtn, #micBtn, #status, #settingsBtn, #keysBtn, #generalVoice, #commandBtn, #dictateBtn, .ws-add) { display: none !important; }
+/* the network Home's own bar pieces: its Wizard picker is the workspace switcher here; its machine / network / backup
+ * buttons live on the Home this view does not show (its warnings stay in Settings); the AI fuel gauge stays */
+html[data-shell="desktop"][data-layout="ai-apps"] #bar :is(.mh-wiz, .mh-bi, .mh-bar-sep) { display: none !important; }
+/* the desks' Home is the chat here: nothing of the old Home shows while the view moves to it */
+html[data-shell="desktop"][data-layout="ai-apps"] #desktopHome > * { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] #desktopHome:focus { outline: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp > .home { display: none !important; }
+
+/* ---------- the main area: beside the sidebar, under the top row; a desk with one window fills it edge to edge ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp { left: var(--aad-side); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px -8px -8px calc(var(--aad-side) - 8px); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {
+  border-radius: 0; border-color: transparent !important; box-shadow: none !important; outline: none; background: var(--aad-main);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) > .wbar { display: none; }
+/* an app with no bottom tab bar fades out toward the bottom under the floating orb (the Apps view's fade) */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 4; pointer-events: none;
+  background: linear-gradient(to top, var(--aad-main) 6px, color-mix(in srgb, var(--aad-main) 80%, transparent) 46px, transparent 100%);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad { position: absolute; inset: 0; z-index: 150; pointer-events: none; }
+
+/* ---------- the top row: what is in front · the workspace switcher (where they put Temporary / Incognito) ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-top {
+  position: fixed; top: 0; right: 0; left: var(--aad-side); height: 52px; box-sizing: border-box; z-index: 1;
+  display: flex; align-items: center; gap: 12px; padding: 0 8px 0 20px; color: var(--aad-ink); background: var(--aad-main);
+  transition: left 200ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tname { display: none; flex: none; height: 36px; margin: 0 0 0 -12px; padding: 0 12px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); font: 650 1.0625rem / 1 var(--wz-font-display, var(--wz-font-ui)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-tname { display: block; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tname:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws {
+  pointer-events: auto; flex: none; max-width: 200px; height: 36px; margin: 0; padding: 0 10px 0 6px; border: 0; border-radius: 18px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; color: var(--aad-ink); background: var(--aad-disc); box-shadow: var(--aad-lift); transition: background 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws[aria-expanded="true"] { background: color-mix(in srgb, var(--aad-ink) 13%, var(--aad-canvas)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsd {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box;
+  color: var(--aad-canvas); background: var(--aad-ink); font: 700 0.75rem / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsd.is-big { width: 36px; height: 36px; font-size: 0.875rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsn { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsc { width: 16px; height: 16px; color: var(--aad-ink-2); }
+
+/* ---------- the sidebar ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-side {
+  pointer-events: auto; position: fixed; z-index: 3; top: 0; bottom: 0; left: 0; width: 288px; box-sizing: border-box; overflow: hidden;
+  color: var(--aad-ink); background: var(--aad-panel); box-shadow: 1px 0 0 var(--aad-line); transition: width 200ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-side { width: 52px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] .aad-side { box-shadow: 1px 0 0 var(--aad-line), 8px 0 32px color-mix(in srgb, black 22%, transparent); border-radius: 0 16px 16px 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-shade { position: fixed; inset: 0; z-index: 2; display: none; pointer-events: auto; background: color-mix(in srgb, black 30%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] .aad-shade { display: block; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel { position: absolute; inset: 0 auto 0 0; width: 288px; display: flex; flex-direction: column; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rail { position: absolute; inset: 0 auto 0 0; width: 52px; display: none; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 12px; box-sizing: border-box; overflow: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-panel { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-rail { display: flex; }
+/* icon buttons: 36 px round discs on hover (ChatGPT's header buttons, round like round 2) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib {
+  position: relative; flex: none; width: 36px; height: 36px; margin: 0; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: var(--aad-ink); background: none; transition: background 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib[aria-expanded="true"]:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-word, .aad-tname, .aad-ib, .aad-gi, .aad-ri, .aad-row, .aad-more, .aad-viewall, .aad-new, .aad-set, .aad-cancel, .aad-pop-i, .aad-wm, .aad-orbbtn):focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+/* header: wordmark · 🔍 · ◫ */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sh { flex: none; display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 8px 0 16px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sh [hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-word:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-word { flex: 1; min-width: 0; height: 36px; margin: 0 0 0 -8px; padding: 0 8px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 650 1.0625rem / 1.2 var(--wz-font-display, var(--wz-font-ui)); letter-spacing: -.01em; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-search {
+  flex: 1; min-width: 0; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; margin-left: -8px; box-sizing: border-box; border-radius: 18px;
+  background: var(--aad-hover); color: var(--aad-ink-2);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-search:focus-within { box-shadow: inset 0 0 0 2px var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-search-i { width: 16px; height: 16px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-q { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: none; color: var(--aad-ink); font: 400 0.875rem / 1.2 var(--wz-font-ui); -webkit-appearance: none; appearance: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-q::placeholder { color: var(--aad-ink-2); opacity: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-q::-webkit-search-cancel-button { -webkit-appearance: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cancel { flex: none; height: 36px; padding: 0 8px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); font: 600 0.8125rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 12px; scrollbar-width: thin; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-lab { margin: 12px 8px 4px; color: var(--aad-ink-2); font: 600 0.8125rem / 1.4 var(--wz-font-ui); }
+/* the open apps: a compact grid of small icons with their names (the phone drawer's grid, four to a row here) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px 0 4px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi {
+  position: relative; min-width: 0; min-height: 64px; margin: 0; padding: 6px 0 4px; border: 0; border-radius: 12px; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--aad-ink); background: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi:active .aad-tile { transform: scale(.92); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gt { position: relative; width: 36px; height: 36px; flex: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile {
+  --c: var(--wz-accent, var(--aad-ink));
+  width: 36px; height: 36px; flex: none; border-radius: 9px; overflow: hidden; display: grid; place-items: center; box-sizing: border-box;
+  background: color-mix(in srgb, var(--aad-ink) 7%, var(--aad-canvas)); box-shadow: inset 0 0 0 1px var(--aad-line); transition: transform 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s { width: 28px; height: 28px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-logo { background: var(--aad-canvas); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile .sgi { width: 22px; height: 22px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 80%, var(--aad-ink)) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s .sgi { width: 18px; height: 18px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain { color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain .aad-ico { width: 18px; height: 18px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gn { max-width: 100%; padding: 0 3px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; font: 500 0.6875rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-badge {
+  position: absolute; top: -6px; left: calc(100% - 12px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+  display: grid; place-items: center; white-space: nowrap; color: var(--aad-canvas); background: var(--amber, var(--aad-ink)); box-shadow: 0 0 0 2px var(--aad-panel);
+  font: 700 0.6875rem / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-badge[hidden] { display: none; }
+/* Recents: 36 px rows, 14 px text, a 12 px pill on hover; ⋯ shows on hover (ChatGPT / Claude) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw { position: relative; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-row {
+  position: relative; width: 100%; height: 36px; margin: 0; padding: 0 10px; border: 0; border-radius: 12px; box-sizing: border-box; cursor: pointer;
+  display: flex; align-items: center; gap: 8px; text-align: left; color: var(--aad-ink); background: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw:hover .aad-row, html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-cur .aad-row { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-held .aad-row { background: var(--aad-held); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-row-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="archive"] .aad-row-t { color: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pin { width: 14px; height: 14px; color: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-st { width: 12px; height: 12px; margin: 0 2px; flex: none; box-sizing: border-box; border-radius: 50%; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-st.is-new { width: 8px; height: 8px; background: var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="working"] .aad-st { border: 1.5px solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-more {
+  position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; margin: 0; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: var(--aad-ink); background: var(--aad-panel); opacity: 0; transition: opacity 100ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-more .aad-ico { stroke-width: 2.6; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-more { opacity: 1; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-more:hover { background: color-mix(in srgb, var(--aad-ink) 12%, var(--aad-panel)); }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-row { padding-right: 36px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-viewall { display: flex; align-items: center; gap: 2px; height: 36px; margin: 2px 0 0; padding: 0 10px; border: 0; border-radius: 12px; background: none; cursor: pointer; color: var(--aad-ink-2); font: 500 0.875rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-viewall:hover { background: var(--aad-hover); color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-chev { width: 14px; height: 14px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-empty { margin: 6px 10px 8px; color: var(--aad-ink-2); font: 500 0.8125rem / 1.4 var(--wz-font-ui); }
+/* the foot: a round + (New chat) and a cog (Settings), icons only (the phone drawer's) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-foot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 14px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-new {
+  width: 48px; height: 48px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+  color: var(--aad-canvas); background: var(--aad-ink); box-shadow: 0 4px 14px color-mix(in srgb, black 20%, transparent); transition: transform 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-new .aad-ico { width: 24px; height: 24px; stroke-width: 2.2; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-new:hover { transform: scale(1.04); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-new:active { transform: scale(.94); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-set {
+  width: 40px; height: 40px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+  color: var(--aad-ink); background: var(--aad-disc); box-shadow: var(--aad-lift); transition: background 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-set:hover { background: color-mix(in srgb, var(--aad-ink) 13%, var(--aad-canvas)); }
+/* the rail (collapsed): 36 px icons at x 8 (ChatGPT) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rdiv { width: 24px; height: 1px; margin: 6px 0; border: 0; background: var(--aad-line); flex: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rapps { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; overflow: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri { position: relative; flex: none; width: 36px; height: 36px; margin: 0; padding: 0; border: 0; border-radius: 10px; cursor: pointer; display: grid; place-items: center; background: none; color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri[aria-current="page"] { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-gt { width: 28px; height: 28px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-tile { width: 28px; height: 28px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-gn { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rdot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber, var(--aad-ink)); box-shadow: 0 0 0 2px var(--aad-panel); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rgap { flex: 1; }
+
+/* ---------- menus: the row menu (⋯ / right click) and the workspace menu, 16 px cards with 40 px items ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop {
+  pointer-events: auto; position: fixed; z-index: 6; min-width: 220px; padding: 6px; box-sizing: border-box; border-radius: 16px;
+  color: var(--aad-ink); background: var(--aad-canvas); box-shadow: var(--aad-menu); animation: aad-pop 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-i {
+  width: 100%; height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 10px; background: none; cursor: pointer;
+  display: flex; align-items: center; gap: 12px; color: inherit; font: 500 0.875rem / 1 var(--wz-font-ui); text-align: left;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-i:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-i .aad-ico { width: 18px; height: 18px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wspop { top: 50px; right: 8px; width: 280px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wh { margin: 6px 10px 6px; color: var(--aad-ink-2); font: 600 0.75rem / 1.4 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wr { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 10px; border-radius: 12px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wr.is-on { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wr.is-off { color: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wr.is-off .aad-wsd { background: var(--aad-disc); color: var(--aad-ink); box-shadow: inset 0 0 0 1px var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ww { flex: 1; min-width: 0; display: grid; gap: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ww b { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ww small { color: var(--aad-ink-2); font: 500 0.75rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pdiv { height: 1px; margin: 6px 4px; border: 0; background: var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wm { width: 100%; height: 40px; margin: 0; padding: 0 10px; border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left; color: var(--aad-ink); font: 500 0.875rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-wm:hover { background: var(--aad-hover); }
+
+/* ---------- the chat: the real Chats window, no list and no header (the sidebar and the top row hold them) ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) .win .dchats > :is(.pane-list, .pane-split) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .win .dchats > .pane-list { flex: 1; border-right: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .win .dchats > :is(.pane-split, .pane-main) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-head { display: none !important; }
+/* one column, 768 px at most, centred (ChatGPT): the messages, the Snooze / Done row and the composer, docked just above
+ * the orb (24 px over its 60 px at 10 px from the bottom: the orb is the one way to talk, so it never hides) */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs { padding: 20px max(24px, calc((100% - 768px) / 2)) 12px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs .msg.a .bub { max-width: 100%; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main :is(.ch-swrow, .ch-latest) { width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin-left: auto; margin-right: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose {
+  width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin: 0 auto 84px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 {
+  display: flex !important; align-items: center; gap: 2px; min-height: 52px; padding: 4px 6px 4px 4px; box-sizing: border-box; border-radius: 26px;
+  background: var(--aad-surface) !important; box-shadow: inset 0 0 0 1px var(--aad-line), 0 4px 16px color-mix(in srgb, black 8%, transparent) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose:focus-within .ch-row2 { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aad-ink) 22%, transparent), 0 4px 16px color-mix(in srgb, black 8%, transparent) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-field,
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.lab-row .ch-field {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field textarea {
+  flex: 1; min-width: 0; min-height: 44px !important; padding: 10px 4px !important; margin: 0; border: 0 !important; background: none !important; box-shadow: none !important;
+  color: var(--aad-ink); font: 400 1rem / 1.5 var(--wz-font-ui) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field textarea::placeholder { color: var(--aad-ink-2); opacity: 1; }
+/* the model chip, in the composer like theirs ("Medium ⌄"): a quiet pill */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field .ch-mlabel {
+  position: static !important; flex: none; align-self: center; height: 36px; min-width: 44px; padding: 0 12px !important; margin: 0 !important; border: 0 !important; border-radius: 18px;
+  color: var(--aad-ink-2) !important; background: none !important; font: 500 0.875rem / 1 var(--wz-font-ui) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field .ch-mlabel:hover { background: var(--aad-hover) !important; color: var(--aad-ink) !important; }
+/* + · mic · stop · the round button: 36 px marks (ChatGPT's composer toolbar) */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop, .ch-send) {
+  position: relative; flex: none; width: 40px !important; height: 40px !important; min-width: 40px; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 50%;
+  display: grid !important; place-items: center; color: var(--aad-ink); background: none !important; box-shadow: none !important; cursor: pointer;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop, .ch-send) svg { position: relative; z-index: 1; width: 20px; height: 20px; stroke: currentColor !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-attach > svg { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-attach::before {
+  content: ""; position: relative; z-index: 1; width: 22px; height: 22px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>") center / contain no-repeat;
+  mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>") center / contain no-repeat;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop)::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: transparent; transition: background 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop):hover::after { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-mic.on { color: var(--aad-canvas); }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-mic.on::after { background: var(--aad-ink); }
+/* the round Send: a filled disc in the skin's ink, only when there are words (no voice button of its own: the orb talks) */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.has-text .ch-row2 > .ch-send { display: grid !important; color: var(--aad-canvas) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose .ch-row2 > .ch-send::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--aad-ink); transition: transform 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose .ch-row2 > .ch-send:active::after { transform: scale(.9); }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose .ch-row2 > .ch-send svg { stroke: var(--aad-canvas) !important; }
+/* Home = a new chat (Miguel, 2 Nov 2026): no greeting, just the skin's background and the composer, centred (ChatGPT) */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread:has(.ch-newchat) { justify-content: center; padding-bottom: 6vh; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread:has(.ch-newchat) > .ch-msgs { flex: none; overflow: visible; padding-top: 0; padding-bottom: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread:has(.ch-newchat) > .ch-compose { margin-bottom: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats :is(.ch-newchat, .nc-classic) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .mimg { border-radius: 18px; }
+
+/* ---------- the orb: the bottom centre of the main area, on every screen but the stock list (the one way to talk) ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb {
+  position: fixed; z-index: 4; bottom: 10px; left: calc(var(--aad-side) + (100vw - var(--aad-side)) / 2 - 30px); width: 60px; height: 60px;
+  transition: left 200ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .aad-orb { opacity: 0; visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbc { position: absolute; inset: -38%; width: 176%; height: 176%; display: block; pointer-events: none; transition: transform 180ms ease;
+  -webkit-mask-image: radial-gradient(closest-side, currentColor 72%, transparent); mask-image: radial-gradient(closest-side, currentColor 72%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbfb { position: absolute; inset: 4%; width: 92%; height: 92%; border-radius: 50%; pointer-events: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbfb[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb:has(.is-pressed) .aad-orbc { transform: scale(.94); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbbtn { pointer-events: auto; position: absolute; inset: 0; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; touch-action: none; }
+
+@keyframes aad-spin { to { transform: rotate(360deg); } }
+@keyframes aad-pop { from { opacity: 0; transform: scale(.97); } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-side, .aad-top, .aad-orb, #bar) { transition: none; }
+  html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop { animation: none; }
+  html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="working"] .aad-st { animation-duration: 3s; }
+}

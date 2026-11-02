@@ -1732,12 +1732,15 @@
   }
   afterRender = hostSettings;
   let voiceMenuBack = () => false;  // set once the one-mic menu exists
+  // A layout that has no Home to show Settings over (html[data-settings-over]) keeps it the centred panel everywhere.
+  const settingsOver = () => document.documentElement.hasAttribute('data-settings-over');
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
     // From Home (every skin, classic or Miguel's) Settings opens as a centred panel over Home and never moves to a desk
     // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
-    if (homeOpen) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
+    // A layout may ask for it over the page everywhere (settingsOver: the AI apps view, like Claude's settings modal).
+    if (homeOpen || settingsOver()) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
       if (!settingsModal) settingsFocus = document.activeElement;
       settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
       if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
@@ -2813,6 +2816,14 @@
   /* Skin packages (core/skin-host.js) on desktop: the same narrow adapter the phone shell hands over, so a skin
    * declared when: 'always' runs its script here too. James's skins declare no package and load nothing. */
   const skinChatsWin = () => { const f = focused(); return f && f.app === 'chats' ? f : ((globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(x => x && x.app === 'chats') || null); };
+  function skinShowChats() {
+    const on = () => ws[cur].wins.map(id => W[id]).find(mainChats) || null;
+    const at = ws.findIndex(d => d.wins.some(x => mainChats(W[x])));
+    if (at >= 0) goWs(at);
+    else if (ws[cur].wins.length) { ws.push(freshDesk()); openApp(APP.wizard, { ws: ws.length - 1 }); goWs(ws.length - 1); }
+    else { if (homeOpen) leaveHome(); openApp(APP.wizard); }
+    const w = on(); if (w) focusWin(w.id); return w;
+  }
   window.WosSkinHost?.attach({
     route() { const w = homeOpen && !panelWin() ? null : skinChatsWin(); return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: cur, home: homeOpen || !ws[cur].wins.length, panel: panelKind(panelChat() || panelAppW()), panelList: !!panelListW(), panelApp: panelAppW()?.appId || (panelAppW() ? panelAppW().app : null) }; },
     // No desks (core/skin-host.js api.panel): everything opens in one panel on the right over Home.
@@ -2843,14 +2854,28 @@
     // An unmatched command's words, sent on as a new chat (the launcher's own ask path; the layout says so itself).
     askAgent: text => { void ask(text, 'an orb command with no local match, sent on as a message', null, null, true); return true; },
     agentHere: () => ({ id: '', label: window.WizConfig.agent(), main: true }),
+    /* Working / Ready rows (the rest too, for the AI apps view's search), each with the actions Chats' own row offers
+     * (Pin, Rename, Mark unread, Snooze, Done, Restore), acted on through Chats' own paths; the Orb view reads the same. */
     sessionList: () => {
       const G = LIVE?.ok ? LIVE.workGroups() : null; if (!G) return null;
-      const row = (s, kind) => ({ id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', snoozed: !!s.deferred, unread: !!LIVE.isNew?.(s),
-        needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', actions: kind === 'ready' ? CHATS.threadActions(s).filter(a => a === 'snooze' || a === 'done') : [] });
-      return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')) };
+      const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
+      const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),
+          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you',
+          actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s).filter(a => KEEP.includes(a))] }; };
+      return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
     },
-    // The thread's own Snooze / Done (Chats threadAct: the snooze tweak's interception, toasts, optimistic list).
-    sessionAct: (sid, act) => { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; },
+    // The thread's own actions (Chats threadAct: the snooze tweak's interception, toasts, optimistic list); Pin = the Pins
+    // toggle; Rename = Chats' rename sheet, over the chat.
+    sessionAct: (sid, act) => {
+      if (act !== 'pin' && act !== 'rename') { const w = findWin(mainChats); CHATS.threadAct(w?.id || '', sid, act); return true; }
+      if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+      const w = skinShowChats(); if (!w) return false; CHATS.openRenameSheet(w.id, sid); return true;
+    },
+    // The AI apps view's main screen: the Chats desk in front as it is (its thread kept; opened if there is none), and
+    // a New chat in it.
+    showChats: () => !!skinShowChats(),
+    newChat: () => { const w = skinShowChats(); if (!w) return false; newChat(); return true; },
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },

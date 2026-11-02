@@ -1,0 +1,37 @@
+/* The AI apps view's shared marks and words (phone layout.js and desktop.js): one icon set, one row-menu order, so the
+ * drawer on the phone and the sidebar on the desktop draw and say the same things. 24-unit outline paths, drawn with
+ * currentColor by the caller's CSS. No DOM at import time. */
+export const SVG = 'http://www.w3.org/2000/svg';
+export const ICON = {
+  menu: ['M4 8.5h16', 'M4 15.5h10'],
+  search: ['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z', 'M15.5 15.5 20 20'],
+  apps: ['M5 5h5v5H5z', 'M14 5h5v5h-5z', 'M5 14h5v5H5z', 'M14 14h5v5h-5z'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  chev: ['m10 7 5 5-5 5'],
+  down: ['m7 10 5 5 5-5'],
+  more: ['M5.5 12h.01', 'M12 12h.01', 'M18.5 12h.01'],
+  // the sidebar toggle (ChatGPT's ◫): a panel with its left column
+  side: ['M4.5 5.5h15v13h-15z', 'M9.5 5.5v13'],
+  pin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7'],
+  rename: ['M4 20h4L19 9l-4-4L4 16z', 'm13.5 6.5 4 4'],
+  unread: ['M3.5 6.5h17v11h-17z', 'm4.5 7.5 7.5 5.5 7.5-5.5'],
+  snooze: ['M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z', 'M12 8v4.5l3 2'],
+  done: ['M3.5 5h17v4h-17z', 'M5.5 9v9.5h13V9', 'M10 13h4'],
+  restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
+  check: ['m5 12.5 4.5 4.5L19 7.5'],
+  x: ['M6 6l12 12', 'M18 6 6 18'],
+  newchat: ['M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12', 'M17.5 4.5l2 2L13 13l-3 1 1-3z'],
+  // a cogwheel (the Lucide settings outline, ISC licence)
+  cog: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
+};
+/* The row menu (long press on the phone, ⋯ or right click on the desktop), in the order they use (Pin, Rename, …, the
+ * filing action last), Wizard's words. */
+export const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
+/** An outline icon from ICON as an <svg> of the given class. */
+export function svgIcon(doc, name, cls) {
+  const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
+  for (const d of ICON[name] || []) { const p = doc.createElementNS(SVG, 'path'); p.setAttribute('d', d); s.append(p); }
+  return s;
+}
+/** The first letter of a name, for a workspace disc. */
+export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();

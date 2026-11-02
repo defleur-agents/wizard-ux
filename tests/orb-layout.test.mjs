@@ -125,7 +125,7 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
 test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and feeds the orb voice and level', () => {
   const src = read('web/desktop/desktop.js');
   assert.match(src, /sessionAct: \(sid, act\) => \{[^}]*CHATS\.threadAct\(/);
-  assert.match(src, /CHATS\.threadActions\(s\)\.filter\(a => a === 'snooze' \|\| a === 'done'\)/);
+  assert.match(src, /KEEP = \['snooze', 'done', 'restore'\];[\s\S]{0,600}CHATS\.threadActions\(s\)\.filter\(a => KEEP\.includes\(a\)\)/, 'Snooze / Done (and Restore for the AI apps search) as Chats offers them');
   assert.match(src, /window\.WosSkinHost\?\.voice\(st\)/); assert.match(src, /window\.WosSkinHost\?\.level\(l\)/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length/);
   assert.match(src, /removeDesktop\(d\); if \(window\.WosSkinHost\?\.emptyHome\) goHome\(\);/);

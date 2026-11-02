@@ -31,31 +31,15 @@
  * chats = Chats' own Working / Ready), so switching views loses nothing. Colours are skin tokens (layout.css). */
 import { viewChrome, openApps, matches, CHATS } from '../apps/chrome.js';
 
-const SVG = 'http://www.w3.org/2000/svg';
-const ICON = {
-  menu: ['M4 8.5h16', 'M4 15.5h10'],
-  search: ['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z', 'M15.5 15.5 20 20'],
-  apps: ['M5 5h5v5H5z', 'M14 5h5v5h-5z', 'M5 14h5v5H5z', 'M14 14h5v5h-5z'],
-  plus: ['M12 5v14', 'M5 12h14'],
-  chev: ['m10 7 5 5-5 5'],
-  pin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7'],
-  rename: ['M4 20h4L19 9l-4-4L4 16z', 'm13.5 6.5 4 4'],
-  unread: ['M3.5 6.5h17v11h-17z', 'm4.5 7.5 7.5 5.5 7.5-5.5'],
-  snooze: ['M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z', 'M12 8v4.5l3 2'],
-  done: ['M3.5 5h17v4h-17z', 'M5.5 9v9.5h13V9', 'M10 13h4'],
-  restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
-  check: ['m5 12.5 4.5 4.5L19 7.5'],
-  x: ['M6 6l12 12', 'M18 6 6 18'],
-  newchat: ['M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12', 'M17.5 4.5l2 2L13 13l-3 1 1-3z'],
-  // a cogwheel (the Lucide settings outline, ISC licence)
-  cog: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
-};
-/* The row menu (long press on a chat), in the order they use (Pin, Rename, …, the filing action last), Wizard's words. */
-const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
+// one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
+import { ICON, ACTS, SVG, initial } from './parts.js';
+import desktop from './desktop.js';
+
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
 const EDGE = 24;            // px from the left edge where a swipe opens the drawer
 
 export default function setup(api) {
+  if (api.env.shell === 'desktop') return desktop(api);
   if (api.env.shell !== 'phone') return () => {};
   const doc = document, root = doc.documentElement;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
@@ -64,7 +48,6 @@ export default function setup(api) {
     for (const d of ICON[name] || []) { const p = doc.createElementNS(SVG, 'path'); p.setAttribute('d', d); s.append(p); }
     return s;
   };
-  const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
   const desks = () => (api.desks?.list || api.phone.desks)();
   root.dataset.aiApps = 'on';
 
