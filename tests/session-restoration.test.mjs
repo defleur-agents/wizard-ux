@@ -54,10 +54,10 @@ test('Wisdom hash startup is not synthetically rerendered after scoped reader re
 });
 test('removed registry entry can recover and stale frame loads cannot reset the new task',async()=>{
  const f=fixture('wisdom');const first=await f.ready();first.events.load();
- delete f.apps.APP.wisdom;f.listeners['wizard:apps']();
+ delete f.apps.APP.wisdom;await f.listeners['wizard:apps']();
  assert.equal(first.isConnected,false);
  f.apps.APP.wisdom={id:'wisdom',name:'Wisdom',kind:'wizard',url:'/wisdom/'};
- f.listeners['wizard:apps']();const second=f.frames.at(-1);second.events.load();
+ await f.listeners['wizard:apps']();const second=f.frames.at(-1);second.events.load();
  const saved=f.data.get(f.key);first.events.load();first.wEvents.pagehide();
  assert.equal(f.data.get(f.key),saved);second.contentWindow.location.href='https://box.test/wisdom/#/collection/real';
  f.listeners.interval();assert.equal(JSON.parse(f.data.get(f.key)).href,second.contentWindow.location.href);

@@ -10,6 +10,14 @@
   const shell = new Set(c.shell.map(url));
   const match = (list, u) => (list || []).some(p => u.href.startsWith(url(p)));
   const unavailable = () => new Response(JSON.stringify({error:'Needs a connection'}), {status:503, headers:{'Content-Type':'application/json'}});
+  // Optional shell-host policy: only reviewed app-session IDs get a navigation fallback.
+  // No normal workspace, auth redirect, or arbitrary app/query is saved as a document.
+  const navigation = u => !c.navigation || (
+    c.navigation.paths.includes(u.pathname) &&
+    u.searchParams.getAll(c.navigation.parameter).length === 1 &&
+    c.navigation.apps[u.searchParams.get(c.navigation.parameter)]?.offline === true &&
+    [...u.searchParams.keys()].every(k => k === c.navigation.parameter)
+  );
   async function networkFirst(request, kind) {
     const cache = await caches.open(names[kind]);
     try {
@@ -22,7 +30,7 @@
       const saved = await cache.match(request, {ignoreSearch:kind==='shell'});
       if (saved) return saved;
       if (request.mode==='navigate') {
-        const home = await cache.match(url('./'));
+        const home = await cache.match(url(c.navigation?.fallback || './'));
         if (home) return home;
       }
       throw e;
@@ -42,13 +50,24 @@
     for (const key of await caches.keys()) if (key.startsWith(c.prefix+'shell-') && key!==names.shell) await caches.delete(key);
     await self.clients.claim();
   })()));
+  // One fetch owner even when composed with the existing workspace worker.
+  const handles = r => {
+    const u = new URL(r.url), clean = new URL(u); clean.search = '';
+    return r.method === 'GET' && u.origin === base.origin && !r.headers?.has('range') &&
+      !/^\/wizard\/(?:attachments|files)(?:\/|$)/.test(u.pathname) &&
+      (r.mode === 'navigate' ? navigation(u) : shell.has(clean.href) ||
+        (c.data || []).some(p => u.pathname === new URL(p, base).pathname) || match(c.assets,u) || match(c.onlineOnly,u));
+  };
+  self.WizOfflineWorker = Object.freeze({handles});
   self.addEventListener('fetch', e => {
     const r=e.request, u=new URL(r.url);
-    if (u.origin!==base.origin) return;
+    if (!handles(r)) return;
+    if (u.origin!==base.origin || r.headers?.has('range') || /^\/wizard\/(?:attachments|files)(?:\/|$)/.test(u.pathname)) return;
+    if (r.mode==='navigate' && !navigation(u)) return;
     if (match(c.onlineOnly,u) && self.navigator.onLine===false) {e.respondWith(unavailable());return;}
     if (r.method!=='GET') return; // writes belong to the durable client outbox, never CacheStorage
     const clean = new URL(u);clean.search='';
-    if (r.mode==='navigate' && u.pathname.startsWith(base.pathname) || shell.has(clean.href)) e.respondWith(networkFirst(r,'shell'));
+    if ((r.mode==='navigate' && u.pathname.startsWith(base.pathname)) || shell.has(clean.href)) e.respondWith(networkFirst(r,'shell'));
     else if ((c.data||[]).some(p=>u.pathname===new URL(p,base).pathname)) e.respondWith(networkFirst(r,'data'));
     else if (match(c.assets,u)) e.respondWith((async()=>{
       const cache=await caches.open(names.assets), saved=await cache.match(r);

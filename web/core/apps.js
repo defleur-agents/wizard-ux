@@ -38,7 +38,9 @@
   // Never migrate /sw.js at scope / (Social's historical root worker is not app-owned).
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
-    wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
+    // Wisdom now owns an opt-in offline reading worker at this exact URL.
+    // Unregistering it on frame load races clients.claim() and strands pinned readers.
+    // Its generation updates through the shared offline kit, not legacy cleanup.
     'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
     trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js', '/trackhunt/__pwa/service-worker.js'], caches: ['trackhunt-v1-20260711d'] },
@@ -67,6 +69,7 @@
     // so backend-only tiles carry them too; app-kinds.js sorts Connectors by type === 'external'.
     ...(APP_TYPES.has(a.type) ? { type: a.type } : {}),
     ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
+    offline: window.WizOfflineApps?.allows(String(a.id), a.source === 'apps.json' && a.view?.mode === 'own' ? a.view.url : a.url || '') === true,
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
   // Core plumbing has no owner-facing action. Keep it in the installed-app snapshot for the Store and agents, but
