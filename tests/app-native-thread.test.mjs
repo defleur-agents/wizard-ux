@@ -12,7 +12,7 @@ function fixture({id='wizard-manager',installed=true,path='/wizard-manager/'}={}
  const app={id,kind:'wizard',url:'/'+id+'/'};
  const window={WizCore:{apps:()=>({APPS:installed?[app]:[]})},dispatchEvent(){}};
  const context={window,location,URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{hidden:false,readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}};
- launcherFixture(context); vm.runInNewContext(source,context); const host=window.WizAppServices,state={visible:true};
+ launcherFixture(context); vm.runInNewContext(readFileSync(new URL('../web/core/chat-kit.js',import.meta.url),'utf8'), {...context, window, localStorage:{getItem:()=>null}, document:{addEventListener(){},querySelector:()=>null,createElement:()=>({style:{}})}}); vm.runInNewContext(source,context); const host=window.WizAppServices,state={visible:true};
  const detach=host.attach(frame,{appId:id,path,openThread:(sid,opts)=>{calls.push(sid);options.push(opts);return true;},isVisible:()=>state.visible});
  const service=host.connect(child,{back:()=>false});
  return {calls,options,doc,child,frame,app,host,state,service,detach,context};
