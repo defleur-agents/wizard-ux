@@ -44,6 +44,9 @@ import { homeApps, appKeys } from './home.js';
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
 /** Round 8 (Miguel, 2 Nov 2026): the apps' own sidebar on the RIGHT, mirroring the chats' on the left; folds to a rail. */
 export const APPS_SIDE = 232;
+/** Round 9 (Miguel, 2 Nov 2026): every panel resizable by drag, within these limits (px); the middle always keeps
+ * MIDDLE px (the orb's room). */
+export const SIZE_LIMITS = { side: [220, 440], apps: [180, 360], panel: 340 }, MIDDLE = 200;
 /** ⌥⇧\ folds / unfolds the apps' sidebar (⌥\ is the chats' sidebar: the same key, shifted, for its mirror). */
 export const isAppsKey = e => !!e && e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && e.code === 'Backslash';
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
@@ -178,6 +181,7 @@ export default function desktop(api) {
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
     rTog.title = 'Open sidebar (Ctrl+Shift+S)';
     if (open) paintList(); else paintRail();
+    applySizes();
     // the desks' windows are laid out in pixels: lay them out again for the new width
     if (relayout && was !== mode && (was === 'open') !== (mode === 'open')) { globalThis.dispatchEvent?.(new Event('resize')); api.after(260, () => syncOrb()); }
   }
@@ -204,12 +208,89 @@ export default function desktop(api) {
     aTog.setAttribute('aria-expanded', String(open));
     aTog.title = open ? 'Fold the apps (⌥⇧\\)' : 'Show the apps (⌥⇧\\)';
     aTog.setAttribute('aria-label', open ? 'Fold the apps sidebar' : 'Open the apps sidebar');
-    paintApps(true);
+    paintApps(true); applySizes();
     if (relayout && was && was !== mode) { globalThis.dispatchEvent?.(new Event('resize')); api.after(260, () => syncOrb()); }
   }
   function toggleApps() { if (narrow()) return; appsFolded = !appsFolded; api.storage.set('appsFolded', appsFolded); paintAppsSide(); }
   api.listen(aTog, 'click', toggleApps);
   api.listen(globalThis, 'resize', () => { const m = narrow() || appsFolded ? 'rail' : 'open'; if (m !== root.dataset.aadApps) paintAppsSide(); });
+
+  /* ---------- round 9 (Miguel, 2 Nov 2026): every panel resizable by drag ----------
+   * The Orb desktop's grips (layouts/orb/layout.js, its resizable panels), on the four panels here: the chats' sidebar,
+   * the docked chat column, the app panel and the apps' sidebar. A thin separator on each panel's inner edge (a hairline
+   * in the accent on hover); drag it, or ←/→ (⇧ for bigger steps) with it focused; a double click or Enter goes back to
+   * the default. Kept per device. Limits keep each panel readable and always leave the middle its room for the orb. */
+  let sized = { ...(api.storage.get('widths') || {}) }, sizing = '', laidOut = '';
+  const GRIP_NAMES = { side: 'Resize the chats sidebar', chat: 'Resize the chat', app: 'Resize the app panel', apps: 'Resize the apps sidebar' };
+  const SIZE_VARS = { side: '--aad-side-w', chat: '--aad-chat-px', app: '--aad-app-px', apps: '--aad-rs-w' };
+  const vw = () => globalThis.innerWidth || 1440;
+  const clampTo = (v, lo, hi) => Math.round(Math.min(Math.max(v, lo), Math.max(lo, hi)));
+  /** each panel's width now (the owner's, else the default) within its limits: [now, lo, hi] */
+  function sizes() {
+    const W = vw(), out = {};
+    out.side = [clampTo(sized.side ?? SIDE, SIZE_LIMITS.side[0], Math.min(SIZE_LIMITS.side[1], W * .32)), SIZE_LIMITS.side[0], Math.round(Math.min(SIZE_LIMITS.side[1], W * .32))];
+    out.apps = [clampTo(sized.apps ?? APPS_SIDE, SIZE_LIMITS.apps[0], Math.min(SIZE_LIMITS.apps[1], W * .26)), SIZE_LIMITS.apps[0], Math.round(Math.min(SIZE_LIMITS.apps[1], W * .26))];
+    const main = W - (root.dataset.aadSide === 'open' ? out.side[0] : RAIL) - (root.dataset.aadApps === 'open' ? out.apps[0] : RAIL);
+    const both = !!(docked && pane), lo = SIZE_LIMITS.panel;
+    const chatHi = Math.max(lo, main - MIDDLE - (pane ? lo : 0)), appHi = Math.max(lo, main - MIDDLE - (docked ? lo : 0));
+    let c = clampTo(sized.chat ?? Math.min(Math.max(W / 3, 400), 560), lo, chatHi), a = clampTo(sized.app ?? Math.min(Math.max(W / 3, 380), 600), lo, appHi);
+    // both open: the middle keeps its room; the one not being dragged gives way first (else both, evenly), never below lo
+    let over = both ? c + a - (main - MIDDLE) : 0;
+    const give = (x, n) => { const t = Math.max(0, Math.min(n, x - lo)); return [x - t, n - t]; };
+    if (over > 0) {
+      if (sizing === 'chat') { [a, over] = give(a, over); [c, over] = give(c, over); }
+      else if (sizing === 'app') { [c, over] = give(c, over); [a, over] = give(a, over); }
+      else { const half = Math.ceil(over / 2); let left; [c, left] = give(c, half); over = over - half + left; [a, over] = give(a, over); [c, over] = give(c, over); }
+    }
+    out.chat = [c, lo, chatHi]; out.app = [a, lo, appHi];
+    return out;
+  }
+  function applySizes() {
+    const s = sizes();
+    for (const id of Object.keys(SIZE_VARS)) {
+      root.style.setProperty(SIZE_VARS[id], s[id][0] + 'px');
+      const g = grip[id]; if (!g) continue;
+      g.setAttribute('aria-valuenow', String(s[id][0])); g.setAttribute('aria-valuemin', String(s[id][1])); g.setAttribute('aria-valuemax', String(Math.round(s[id][2])));
+    }
+    // the desks' windows are laid out in pixels: again when a width changed (once a frame while dragging)
+    const sig = Object.keys(SIZE_VARS).map(id => s[id][0]).join(',');
+    if (sig !== laidOut) { laidOut = sig; relayoutSoon(); }
+  }
+  let relayoutAsked = false;
+  function relayoutSoon() { if (relayoutAsked) return; relayoutAsked = true; api.frame(() => { relayoutAsked = false; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
+  function setSize(id, w, keep) {
+    sized = { ...sized, [id]: Math.round(w) }; applySizes();
+    // what shows is what is kept (the panel that gave way too, so it never springs back over the middle)
+    const now = sizes(); sized = { ...sized, [id]: now[id][0] };
+    if (docked && pane && (id === 'chat' || id === 'app')) sized = { ...sized, chat: now.chat[0], app: now.app[0] };
+    if (keep) api.storage.set('widths', sized);
+  }
+  function resetSize(id) { const { [id]: _, ...rest } = sized; sized = rest; api.storage.set('widths', sized); applySizes(); }
+  const grips = el('div', 'aad-grips');
+  const grip = {};
+  for (const id of ['side', 'chat', 'app', 'apps']) {
+    const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
+    grips.append(g); grip[id] = g;
+    // the left two grow to the right, the right two to the left
+    const sign = id === 'side' || id === 'chat' ? 1 : -1;
+    let drag = null;
+    api.listen(g, 'pointerdown', e => {
+      if (e.button) return; e.preventDefault();
+      try { g.setPointerCapture(e.pointerId); } catch (_) {}
+      drag = { x: e.clientX, w: sizes()[id][0] }; sizing = id; g.classList.add('is-drag'); root.dataset.aadResizing = id;
+    });
+    api.listen(g, 'pointermove', e => { if (drag) setSize(id, drag.w + (e.clientX - drag.x) * sign, false); });
+    const end = () => { if (!drag) return; drag = null; sizing = ''; g.classList.remove('is-drag'); delete root.dataset.aadResizing; api.storage.set('widths', sized); relayoutSoon(); };
+    api.listen(g, 'pointerup', end); api.listen(g, 'pointercancel', end); api.listen(g, 'lostpointercapture', end);
+    api.listen(g, 'dblclick', () => resetSize(id));
+    api.listen(g, 'keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); resetSize(id); return; }
+      const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!dir) return;
+      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign * (e.shiftKey ? 64 : 16), true); sizing = '';
+    });
+  }
+  api.listen(globalThis, 'resize', () => applySizes());
+  scene.append(grips);
 
   /* ---------- search (a field over the same lists, as on the phone) ---------- */
   let q = '';
@@ -596,6 +677,7 @@ export default function desktop(api) {
     if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
     if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
     if (docked && !wasDocked) anim('dock');
+    applySizes();
     // the windows are laid out in pixels and the app's bottom bar around the orb: again for the new widths
     if (was !== `${!!root.dataset.aadSplit}${docked}`) api.frame(() => globalThis.dispatchEvent?.(new Event('resize')));
     pTop.hidden = !pane; cX.hidden = !docked;
@@ -758,6 +840,7 @@ export default function desktop(api) {
     toolsMo?.disconnect();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadApps', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
     for (const w of wsps()) delete w.dataset.aadRole;
+    delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };
 }
