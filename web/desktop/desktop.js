@@ -2916,7 +2916,12 @@
         return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),
           needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
           actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s).filter(a => KEEP.includes(a))] }; };
-      return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
+      // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
+      // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
+      const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
+      const ready = G.ready || [];
+      return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
+        snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
     },
     // The thread's own actions (Chats threadAct: the snooze tweak's interception, toasts, optimistic list); Pin = the Pins
     // toggle; Rename = Chats' rename sheet, over the chat.
@@ -2940,6 +2945,8 @@
       if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
     // The Orb and Apps views' app sheet: close an app (its desks; the Orb panel quits it), and an App Store page on a
     // desk of its own (the Store window opened before goes; the page's Get opens the app right after it installs).
+    // The AI apps view's tab strip: a tab's ✕ = the stock close of that desk (round 13)
+    closeDesk: i => Number.isInteger(i) && i >= 0 && i < ws.length ? closeDesktop(i) : false,
     closeApp: id => { if (globalThis.WosSkinHost?.panelMode) return panelQuit(id); const home = homeOpen; let n = 0; for (let i = ws.length - 1; i >= 0; i--) if (ws[i].wins.some(x => W[x]?.appId === id) && closeDesktop(i)) n++; if (home && !homeOpen) goHome(); return n > 0; },   // closed from Home (the + sheet): stay Home
     openStore: id => { const S = APP['app-store']; if (!S?.url) return false; Object.keys(W).filter(x => W[x]?.appId === 'app-store').forEach(x => closeWin(x));
       const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); const obj = { app: 'frame', appId: 'app-store', url: u.pathname + u.search };

@@ -925,6 +925,8 @@
        * desk is id 'wizard'). nav.goDesk(desk) opens one. The Apps view's grid (phone: phoneDesks, desktop: deskApps). */
       desks: Object.freeze({
         list: () => { const l = live() ? (shell.deskApps || shell.phoneDesks)?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
+        // close one desk as the stock ✕ does (the AI apps view's tab ✕; desktop only)
+        close: desk => live() && Number.isInteger(desk) && desk >= 0 ? !!shell.closeDesk?.(desk) : false,
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
