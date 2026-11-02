@@ -1,0 +1,681 @@
+{
+ "candidate": true,
+ "nativeProven": false,
+ "nginxStandIn": "node",
+ "ticketTtlMs": 4000,
+ "checks": [
+  "WAM: installed contract = the app's wizard.md (inbox, mark, media)",
+  "WAM: media granted for this installation, listener credential written",
+  "front gate on: a bare box caller without the credential gets 401 on /notifications/media/*",
+  "Service: content tickets configured (default-off elsewhere)",
+  "the real Notifications view is an opaque sandboxed frame",
+  "Obsidian: the MEDIA thumbnail renders inside the opaque frame (320x200 synthetic picture)",
+  "its src is a ticket on the separate content origin (not the owner origin, no path)",
+  "the image loads anonymous with no Referer",
+  "content listener saw the frame's GET: Origin null, no cookie, no Referer, no shell token",
+  "the ticket was minted through the shell's possession-bound adapter call",
+  "the real screen never asked the app's own /notifications/media/* route for the thumbnail",
+  "opening the picture asks for a fresh read ticket; the viewer shows it",
+  "frame <img> straight at media/<path> fails",
+  "server-side: the frame's 2 direct requests to /notifications/media/* (img + fetch) were refused 403 by the app listener gate",
+  "media.open refuses paths (bad_request) and a notification without that picture (not_found)",
+  "content listener has no route for / (404)",
+  "content listener has no route for /wizard/v1/browser-adapters/bindings (404)",
+  "content listener has no route for /notifications/api/items (404)",
+  "content listener has no route for /t/short (404)",
+  "landscapes-light: thumbnail through a ticket",
+  "landscapes: thumbnail through a ticket",
+  "Range and HEAD on the live ticket",
+  "after 4000 ms the same ticket is refused (410), use never extended it",
+  "reopening the notification gets a fresh ticket and the picture renders again",
+  "fresh ticket serves before the window closes",
+  "navigating the frame away revokes its binding; the unexpired ticket is refused (410)",
+  "after a WAM revoke of notifications.media the unexpired ticket is refused (403)",
+  "fresh binding without the media grant: inbox still works, the picture shows \"Picture unavailable\"",
+  "no content-listener request ever carried a cookie or the shell token"
+ ],
+ "open": [],
+ "screenshots": [
+  "<QA_OUT>/media-obsidian-detail.png",
+  "<QA_OUT>/media-obsidian-viewer.png",
+  "<QA_OUT>/media-landscapes-light-detail.png",
+  "<QA_OUT>/media-landscapes-detail.png",
+  "<QA_OUT>/media-revoked-obsidian-light.png"
+ ],
+ "errors": [
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "console: Failed to load resource: the server responded with a status of 400 (Bad Request)",
+  "console: Failed to load resource: the server responded with a status of 400 (Bad Request)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag.",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+ ],
+ "wam": [
+  "install notifications --repo oscarhenrycollins/notifications --port 34237 --wizard-md <local> --listener-auth",
+  "grant notifications notifications.inbox notifications.mark notifications.media",
+  "revoke notifications notifications.media"
+ ],
+ "notificationsRequests": [
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "cross-site",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-boot.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-kit.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-render.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/media<QA_OUT>/media/synthetic-chart.png",
+   "site": "cross-site",
+   "dest": "image",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/media<QA_OUT>/media/synthetic-chart.png",
+   "site": "cross-site",
+   "dest": "empty",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "cross-site",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-kit.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-boot.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-render.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "cross-site",
+   "dest": "iframe",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-boot.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-kit.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-render.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "status": 200
+  }
+ ],
+ "contentRequests": [
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "/",
+   "status": 404,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "/wizard/v1/browser-adapters/bindings",
+   "status": 404,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "/notifications/api/items",
+   "status": 404,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "/t/short",
+   "status": 404,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 206,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "HEAD",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 410,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 410,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 200,
+   "origin": "null",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "image",
+   "mode": "cors"
+  },
+  {
+   "method": "GET",
+   "ticket": "ticket",
+   "status": 403,
+   "origin": "",
+   "cookie": false,
+   "referer": false,
+   "shellToken": false,
+   "dest": "",
+   "mode": ""
+  }
+ ],
+ "onboardingFixture": {
+  "providerReads": 1,
+  "setupReads": 1
+ },
+ "thumbnail": {
+  "ok": true,
+  "src": "http://127.0.0.1:32929/t/iIaPiTU4fZfmyzR3TWQqzj8fqLvn4dO7pj3-T62Z_q0",
+  "crossOrigin": "anonymous",
+  "referrerPolicy": "no-referrer"
+ },
+ "hostile": {
+  "directImg": "error",
+  "directFetch": "opaque",
+  "path:../../et": "bad_request",
+  "path:/home/os": "bad_request",
+  "noPicture": "not_found"
+ },
+ "hostileMedia": [
+  {
+   "method": "GET",
+   "path": "/notifications/media<QA_OUT>/media/synthetic-chart.png",
+   "site": "cross-site",
+   "dest": "image",
+   "origin": "",
+   "status": 403
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/media<QA_OUT>/media/synthetic-chart.png",
+   "site": "cross-site",
+   "dest": "empty",
+   "origin": "",
+   "status": 403
+  }
+ ]
+}

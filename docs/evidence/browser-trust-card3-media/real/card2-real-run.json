@@ -1,0 +1,750 @@
+{
+ "candidate": true,
+ "nativeProven": false,
+ "realStoreInstallProven": false,
+ "nginxStandIn": "node",
+ "checks": [
+  "WAM: the app's own declaration alone is not admissible",
+  "WAM: installed contract = the app's wizard.md (inbox + mark + media)",
+  "WAM: owner grant recorded for this installation and source",
+  "WAM: the real view path /notifications/",
+  "the real Notifications view is an opaque sandboxed frame (no allow-same-origin)",
+  "inside the frame: origin \"null\", data layer in opaque mode",
+  "original screen: data.call notifications.inbox renders the three synthetic notifications",
+  "binding created by the shell with possession (server trace)",
+  "original screen: unread count from typed counts",
+  "original screen: opening an unread item marks it read (inbox.json readback)",
+  "durable outcome receipt for notifications.mark",
+  "badge: the shell re-read the count itself after the typed write (3 -> 2)",
+  "badge in one place: no Chats bell count while the Notifications window is open",
+  "original screen: Back closes the open item (boundary Back)",
+  "Back at the list stays in Wizard (never exits)",
+  "original screen: Flag persisted",
+  "original screen: Flagged tab lists the flagged item (view=flagged)",
+  "original screen: Archive persisted",
+  "original screen: Archive tab lists it (view=archive)",
+  "original screen: Move to inbox persisted (compare-and-set write)",
+  "original screen: Mark all read persisted",
+  "badge: count 0 after mark all read",
+  "Appearance v1 tokens applied live on nebula",
+  "no translucent text panels on nebula (window glass is the canvas)",
+  "Appearance v1 tokens applied live on grove",
+  "no translucent text panels on grove (window glass is the canvas)",
+  "Miguel's skin: the gate reloads the frame into the minimal screen",
+  "minimal screen: Unread list through notifications.inbox",
+  "minimal screen: the MEDIA thumbnail renders",
+  "thumbnail through a 60 s media ticket on the content origin; the frame never asked /notifications/media/*",
+  "Reply: unsent Chats draft keyed notifications:<id> opened by the shell",
+  "Reply: nothing was sent (no chat/run POST)",
+  "minimal screen: Mark read persisted",
+  "minimal screen: one tap on Mark read returns to the list",
+  "minimal screen: Back leaves the detail for the list",
+  "minimal screen: Back at the list stays in Wizard",
+  "agent flags the item directly (no expect)",
+  "stale view: conflict shown, nothing written",
+  "minimal screen: Unread filter lists only what is still unread",
+  "minimal screen: mark all read asks once more in place",
+  "minimal screen: Mark all read persisted",
+  "badge: 0 after the minimal screen's mark all read",
+  "the real UI never called /notifications/api/* from the frame (all reads/marks were typed)",
+  "frame cannot call unknown/ungranted operations or forge a principal",
+  "a forged count message from the frame is ignored by the shell",
+  "reply draft refuses off-schema context",
+  "after a WAM revoke the open binding is refused at the server (403 revoked)",
+  "fresh binding: inbox still granted, mark refused (not_allowed)",
+  "uninstalled app refused at the server: \"Notifications need permission from the owner for this.\"",
+  "opaque frame cannot read or write /notifications/api/* directly (browser-side)",
+  "the JSON write was stopped at its CORS preflight; no POST reached the app",
+  "inbox.json unchanged by the direct attempts",
+  "dark standalone: opaque dark canvas, same-origin data path (unchanged)"
+ ],
+ "open": [
+  {
+   "item": "direct listener",
+   "detail": "the frame's plain GET to /notifications/api/items still reaches the app (1 request(s), body hidden by the browser), and the app answers Origin:null requests; only the browser's preflight stops JSON writes. Server-side protection of /notifications/api/* is card 3 (#386)."
+  }
+ ],
+ "screenshots": [
+  "<QA_OUT>/notifications-real-nebula.png",
+  "<QA_OUT>/notifications-real-grove.png",
+  "<QA_OUT>/notifications-real-landscapes-light.png",
+  "<QA_OUT>/notifications-real-obsidian-detail.png",
+  "<QA_OUT>/notifications-real-standalone-dark.png"
+ ],
+ "errors": [
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "console: Failed to load resource: the server responded with a status of 409 (Conflict)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "page: Failed to read the 'serviceWorker' property from 'Navigator': Service worker is disabled because the context is sandboxed and lacks the 'allow-same-origin' flag. @     at <anonymous>:3:15 |     at <anonymous>:5:7",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "console: Failed to load resource: the server responded with a status of 403 (Forbidden)"
+ ],
+ "wam": [
+  "install notifications --repo oscarhenrycollins/notifications --port 35643 --wizard-md <local>",
+  "grant notifications notifications.inbox notifications.mark notifications.media",
+  "revoke notifications notifications.mark",
+  "uninstall notifications"
+ ],
+ "notificationsRequests": [
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "cross-site",
+   "dest": "iframe",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-kit.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-boot.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-render.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "cross-site",
+   "dest": "iframe",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-boot.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-kit.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-render.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/count",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "same-origin",
+   "dest": "iframe",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "cross-site",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "cross-site",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "cross-site",
+   "dest": "empty",
+   "origin": "null",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "OPTIONS",
+   "path": "/notifications/api/mark",
+   "site": "cross-site",
+   "dest": "empty",
+   "origin": "null",
+   "type": "",
+   "preflight": "POST"
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/",
+   "site": "none",
+   "dest": "document",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.css",
+   "site": "same-origin",
+   "dest": "style",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/minimal-data.js",
+   "site": "same-origin",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/layout.js",
+   "site": "same-origin",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/inbox.js",
+   "site": "same-origin",
+   "dest": "script",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  },
+  {
+   "method": "GET",
+   "path": "/notifications/api/items",
+   "site": "same-origin",
+   "dest": "empty",
+   "origin": "",
+   "type": "",
+   "preflight": ""
+  }
+ ],
+ "mediaTickets": true,
+ "browserFacts": {
+  "schema": 1,
+  "installation_id": "inst-f9d5b294ff44f7078da32cec69ce1a9f",
+  "source_id": "standard:oscarhenrycollins/notifications",
+  "commit": "cccccccccccccccccccccccccccccccccccccccc",
+  "contract": {
+   "version": 1,
+   "isolation": "opaque",
+   "operations": [
+    "notifications.inbox",
+    "notifications.mark",
+    "notifications.media"
+   ],
+   "state": {
+    "schema_version": 1,
+    "persistent_bytes": 0
+   }
+  },
+  "granted": [
+   "notifications.inbox",
+   "notifications.mark",
+   "notifications.media"
+  ],
+  "grant_revision": 1,
+  "admissible": true,
+  "upstream": "http://127.0.0.1:35643",
+  "reason": null,
+  "contract_digest": "6fe274d11bac69bd45fd33a2808203bd8d18eb7b5d823cae8fee7ff74e042ca9",
+  "permission_revision": "p-bf5aec8ba158e55c51149f55"
+ },
+ "viewUrl": "/notifications/",
+ "onboardingFixture": {
+  "providerReads": 2,
+  "setupReads": 1
+ },
+ "bellBefore": 3,
+ "bellAfterRead": 2,
+ "landscapesLight": {
+  "frameUrl": "http://127.0.0.1:42035/notifications/?layout=minimal",
+  "skin": "landscapes-light"
+ },
+ "thumbnail": {
+  "ok": true,
+  "src": "http://127.0.0.1:46351/t/RyWDEWMq23qpOSeFhQHhGEZNrg-KMHk35146oDHT1bM"
+ },
+ "hostile": {
+  "unknown": "not_allowed",
+  "forged": "bad_request",
+  "cardOne": "not_allowed",
+  "badDraft": "invalid_request"
+ },
+ "afterUninstall": "Notifications need permission from the owner for this.",
+ "directFromSandbox": {
+  "result": {
+   "opaque": true,
+   "read": "blocked",
+   "write": "blocked"
+  },
+  "requests": [
+   {
+    "method": "GET",
+    "path": "/notifications/api/items",
+    "site": "cross-site",
+    "dest": "empty",
+    "origin": "null",
+    "type": "",
+    "preflight": ""
+   },
+   {
+    "method": "OPTIONS",
+    "path": "/notifications/api/mark",
+    "site": "cross-site",
+    "dest": "empty",
+    "origin": "null",
+    "type": "",
+    "preflight": "POST"
+   }
+  ]
+ }
+}
