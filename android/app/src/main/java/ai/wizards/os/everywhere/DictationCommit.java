@@ -1,37 +1,58 @@
 package ai.wizards.os.everywhere;
 
-import java.util.Locale;
-
-/** A non-null accessibility input connection is not proof that an editor accepts input. */
+/** Selection-bound evidence, shared by the native node and input-connection channels. No writes here. */
 final class DictationCommit {
     enum Result { UNAVAILABLE, VERIFIED, UNVERIFIED }
 
-    interface Connection {
-        CharSequence before();
-        void commit(String text);
-        CharSequence after();
+    static final class Snapshot {
+        final String text;
+        final int start, end, offset;
+        Snapshot(String text, int start, int end, int offset) {
+            this.text = text; this.start = Math.min(start, end); this.end = Math.max(start, end);
+            this.offset = offset;
+        }
+        boolean valid() {
+            return text != null && start >= 0 && end <= text.length() && offset >= 0;
+        }
+        boolean same(Snapshot other) {
+            return valid() && other != null && other.valid() && offset == other.offset
+                    && start == other.start && end == other.end && text.equals(other.text);
+        }
     }
 
     private DictationCommit() { }
 
-    static Result insert(Connection connection, String text) {
-        final String before;
-        try {
-            CharSequence value = connection.before();
-            // Some editors expose an input connection but no surrounding-text channel. Do not send
-            // a fire-and-forget commit there: use the existing focused-node paste path instead.
-            if (value == null) return Result.UNAVAILABLE;
-            before = value.toString();
-        } catch (RuntimeException e) { return Result.UNAVAILABLE; }
-        try {
-            connection.commit(text);
-            CharSequence after = connection.after();
-            if (after != null && !before.contentEquals(after)
-                    && after.toString().toLowerCase(Locale.ROOT).contains(text.trim().toLowerCase(Locale.ROOT)))
-                return Result.VERIFIED;
-        } catch (RuntimeException ignored) { }
-        // A commit might have reached the editor even if its reply is unavailable or delayed. Never
-        // automatically paste again after an ambiguous commit: keep the clipboard recovery instead.
-        return Result.UNVERIFIED;
+    /** Exact replacement, not containment, case-folding, trimming, or an arbitrary new phrase. */
+    static boolean verifies(Snapshot before, Snapshot after, String payload) {
+        if (payload == null || before == null || after == null || !before.valid() || !after.valid()
+                || before.offset != 0 || after.offset != 0) return false;
+        String expected = before.text.substring(0, before.start) + payload + before.text.substring(before.end);
+        return expected.equals(after.text) && verifiesWindow(before, after, payload);
+    }
+
+    static boolean verifiesWindow(Snapshot before, Snapshot after, String payload) {
+        if (before == null || after == null || !before.valid() || !after.valid()
+                || payload == null || payload.trim().isEmpty()) return false;
+        int a = before.offset + before.start;
+        int b = before.offset + before.end;
+        int cursor = a + payload.length();
+        if (after.offset + after.start != cursor || after.start != after.end) return false;
+        int at = a - after.offset;
+        // Require the entire inserted payload, nearby anchors, and every overlapping context character.
+        // Absolute offsets bind a moving IC window; unknown offsets are not a verifiable empty field.
+        int delta = payload.length() - (b - a);
+        if (at < 0 || at + payload.length() > after.text.length()
+                || !after.text.regionMatches(at, payload, 0, payload.length())) return false;
+        int left = Math.min(16, before.start);
+        int right = Math.min(16, before.text.length() - before.end);
+        if (at < left || at + payload.length() + right > after.text.length()) return false;
+        int prefixStart = Math.max(before.offset, after.offset);
+        for (int p = prefixStart; p < a; p++)
+            if (before.text.charAt(p - before.offset) != after.text.charAt(p - after.offset)) return false;
+        int suffixEnd = Math.min(before.offset + before.text.length(),
+                after.offset + after.text.length() - delta);
+        for (int p = b; p < suffixEnd; p++)
+            if (before.text.charAt(p - before.offset) != after.text.charAt(p + delta - after.offset)) return false;
+        return true;
     }
 }

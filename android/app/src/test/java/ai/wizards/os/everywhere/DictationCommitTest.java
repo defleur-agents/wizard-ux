@@ -4,49 +4,57 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class DictationCommitTest {
-    private static final class Editor implements DictationCommit.Connection {
-        String before, after; int commits; boolean failBefore, failCommit, failAfter;
-        Editor(String before, String after) { this.before = before; this.after = after; }
-        public CharSequence before() { if (failBefore) throw new IllegalStateException(); return before; }
-        public void commit(String text) { commits++; if (failCommit) throw new IllegalStateException(); }
-        public CharSequence after() { if (failAfter) throw new IllegalStateException(); return after; }
+    private DictationCommit.Snapshot s(String text, int a, int b) {
+        return new DictationCommit.Snapshot(text, a, b, 0);
     }
-
-    @Test public void opaqueEditorUsesPasteWithoutSendingBlindCommit() {
-        Editor e = new Editor(null, null);
-        assertEquals(DictationCommit.Result.UNAVAILABLE, DictationCommit.insert(e, "hello"));
-        assertEquals(0, e.commits);
+    @Test public void exactInsertionPreservesPrefixAndSuffix() {
+        assertTrue(DictationCommit.verifies(s("prefix suffix",7,7), s("prefix hello suffix",13,13),"hello "));
     }
-    @Test public void unavailablePreflightDoesNotCommit() {
-        Editor e = new Editor("", "hello"); e.failBefore = true;
-        assertEquals(DictationCommit.Result.UNAVAILABLE, DictationCommit.insert(e, "hello"));
-        assertEquals(0, e.commits);
+    @Test public void replacesSelectionNotWholeField() {
+        assertTrue(DictationCommit.verifies(s("left old right",5,8), s("left new right",8,8),"new"));
     }
-    @Test public void verifiedChangedEditorAcceptsCaseAndSpacing() {
-        Editor e = new Editor("", "Hello ");
-        assertEquals(DictationCommit.Result.VERIFIED, DictationCommit.insert(e, "hello "));
-        assertEquals(1, e.commits);
+    @Test public void selectedIdenticalPhraseVerifiedByCollapsedCursor() {
+        assertTrue(DictationCommit.verifies(s("hello",0,5),s("hello",5,5),"hello"));
+        assertFalse(DictationCommit.verifies(s("hello",0,5),s("hello",0,5),"hello"));
     }
-    @Test public void noOpCommitIsNotSuccessEvenWhenWordsAlreadyExist() {
-        Editor e = new Editor("hello", "hello");
-        assertEquals(DictationCommit.Result.UNVERIFIED, DictationCommit.insert(e, "hello"));
+    @Test public void existingPhraseAndPunctuationAreNotInsertion() {
+        assertFalse(DictationCommit.verifies(s("hello",5,5),s("hello!",6,6),"hello"));
     }
-    @Test public void unreadableReplyIsNotSuccessOrPermissionToPasteAgain() {
-        Editor e = new Editor("", null);
-        assertEquals(DictationCommit.Result.UNVERIFIED, DictationCommit.insert(e, "hello"));
-        assertEquals(1, e.commits);
+    @Test public void existingPhraseAndCaseChangeAreNotInsertion() {
+        assertFalse(DictationCommit.verifies(s("hello",5,5),s("Hello",5,5),"hello"));
     }
-    @Test public void unrelatedEditorChangeDoesNotVerifyInsertion() {
-        Editor e = new Editor("before", "different");
-        assertEquals(DictationCommit.Result.UNVERIFIED, DictationCommit.insert(e, "hello"));
+    @Test public void substringIsNotInsertion() {
+        assertFalse(DictationCommit.verifies(s("",0,0),s("shelloworld",11,11),"hello"));
     }
-    @Test public void lostCommitReplyDoesNotAuthorizeSecondInsertion() {
-        Editor e = new Editor("", "hello"); e.failCommit = true;
-        assertEquals(DictationCommit.Result.UNVERIFIED, DictationCommit.insert(e, "hello"));
-        assertEquals(1, e.commits);
+    @Test public void unexpectedSuffixIsNotInsertionEvenAtRightCursor() {
+        assertFalse(DictationCommit.verifies(s("",0,0),s("hello!",5,5),"hello"));
     }
-    @Test public void lostReadbackIsNotSuccess() {
-        Editor e = new Editor("", "hello"); e.failAfter = true;
-        assertEquals(DictationCommit.Result.UNVERIFIED, DictationCommit.insert(e, "hello"));
+    @Test public void edgeSpacesAreEvidence() {
+        assertFalse(DictationCommit.verifies(s("left",4,4),s("lefthello",9,9)," hello "));
+        assertTrue(DictationCommit.verifies(s("left",4,4),s("left hello ",11,11)," hello "));
+    }
+    @Test public void transformedNbspDoesNotInventSuccess() {
+        assertFalse(DictationCommit.verifies(s("",0,0),s("hello\u00a0world",11,11),"hello world"));
+    }
+    @Test public void missingSelectionOrOffsetIsNotEmptyField() {
+        assertFalse(DictationCommit.verifies(s("",-1,-1),s("hello",5,5),"hello"));
+        assertFalse(DictationCommit.verifiesWindow(new DictationCommit.Snapshot("",0,0,-1),s("hello",5,5),"hello"));
+    }
+    @Test public void emptyPayloadAndNoOpDoNotVerify() {
+        assertFalse(DictationCommit.verifies(s("x",1,1),s("x",1,1)," "));
+        assertFalse(DictationCommit.verifies(s("hello",5,5),s("hello",5,5),"hello"));
+    }
+    @Test public void absoluteOffsetsFollowMovingIcWindow() {
+        DictationCommit.Snapshot before = new DictationCommit.Snapshot("abcdefghijklmnopqrst tail",20,20,80);
+        DictationCommit.Snapshot after = new DictationCommit.Snapshot("efghijklmnopqrst hello tail",22,22,84);
+        assertTrue(DictationCommit.verifiesWindow(before,after," hello"));
+    }
+    @Test public void insufficientOverlapOrWrongOffsetRefuses() {
+        DictationCommit.Snapshot before = new DictationCommit.Snapshot("abcdefghijklmnopqrst tail",20,20,80);
+        assertFalse(DictationCommit.verifiesWindow(before,new DictationCommit.Snapshot("hello tail",5,5,100),"hello"));
+        assertFalse(DictationCommit.verifiesWindow(before,new DictationCommit.Snapshot("abcdefghijklmnopqrsthello tail",25,25,81),"hello"));
+    }
+    @Test public void reversedSelectionUsesExactReplacement() {
+        assertTrue(DictationCommit.verifies(s("left old right",8,5),s("left new right",8,8),"new"));
     }
 }
