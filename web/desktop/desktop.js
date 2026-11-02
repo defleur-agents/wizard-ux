@@ -2332,7 +2332,8 @@
         const fab = wel.querySelector('.pane-list [data-chfab]'); if (vis(fab)) chip(fab, 'N', 'corner');
       }
       // No Chats on this desk: N with its word on the right edge of the window in front, where the chat opens.
-      else if (f && f.app !== 'chats') { const b = winEl(f.id)?.querySelector('.wbody'); if (vis(b)) chip(b, 'N', 'inside', 'New chat'); }
+      // (not when the view puts N on its own New chat button: the AI apps view's sidebar)
+      else if (f && f.app !== 'chats' && !(window.WosSkinHost?.keyChips?.() || []).some(c => c.key === 'N')) { const b = winEl(f.id)?.querySelector('.wbody'); if (vis(b)) chip(b, 'N', 'inside', 'New chat'); }
       // Heads-up chat: P on the float button, or (floating) on Back to desktop 1.
       if (hud && W[hud.id]) { const n = winEl(hud.id)?.querySelector('.wbar [data-wact="hud-home"]'); if (vis(n)) chip(n, 'P'); }
       else {

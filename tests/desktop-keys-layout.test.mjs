@@ -191,7 +191,8 @@ test('⌥N opens a New chat on this desk beside the app in front, and holding �
   assert.match(js, /code === 'KeyN'\) return hit\(\(\) => \{[^\n]*newChat\(\); \}\);/);
   assert.doesNotMatch(js, /newChat\(\{ fresh: true \}\)/);
   // Guide: N on this desk's New chat button, or with its word on the right edge of the app in front.
-  assert.match(js, /else if \(f && f\.app !== 'chats'\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
+  // (not when a view puts N on its own New chat button: the AI apps view's sidebar, so N shows once)
+  assert.match(js, /else if \(f && f\.app !== 'chats' && !\(window\.WosSkinHost\?\.keyChips\?\.\(\) \|\| \[\]\)\.some\(c => c\.key === 'N'\)\) \{ const b = winEl\(f\.id\)\?\.querySelector\('\.wbody'\); if \(vis\(b\)\) chip\(b, 'N', 'inside', 'New chat'\); \}/);
 });
 
 test('Omarchy-style keys: ⌥− / ⌥= resize, ⌥⇧W reopens, ⌥Z jumps back, each shown where it acts', () => {

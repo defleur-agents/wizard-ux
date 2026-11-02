@@ -147,7 +147,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   const w = world({ shell: 'desktop' });
   const store = {}, keys = [];
   Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: k => k in store ? store[k] : null, set: (k, v) => { store[k] = v; } },
-    keys: { on: h => { keys.push(h); return () => {}; } }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk: () => w.st.orbDown.push('talk'), command: () => w.st.orbDown.push('command') },
+    keys: { on: h => { keys.push(h); return () => {}; }, guide: g => { (w.st.guides ||= []).push(g); return () => {}; } }, orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk: () => w.st.orbDown.push('talk'), command: () => w.st.orbDown.push('command') },
     desk: { settings: p => w.st.settings.push(p ?? ''), home: () => {} } });
   w.api.apps.inset = (px, orb) => { w.st.inset = px; w.st.insetOrb = orb; return () => { w.st.inset = null; }; };
   const off = (await layout()).default(w.api);
@@ -159,8 +159,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
   assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-word', 'aad-find', 'aad-tog']);
   assert.equal(w.q('.aad-word').textContent, 'Oscar');
-  assert.deepEqual(w.q('.aad-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'open apps = desks, badged first, then desk order; Chats left out');
-  assert.equal(w.q('.aad-gi[data-app="money"] [data-badge="money"]').textContent, '3');
+  assert.equal(w.q('.aad-grid'), null, 'the sidebar is the chat list only: no app grid (the apps live on Home)');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'Home: open apps (badged first), installed, Get more');
+  assert.equal(w.q('.ah-app[data-app="money"] .ah-badge').textContent, '3');
   assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'ready:true']);
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
@@ -172,9 +173,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.q('.aad-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aad-new', 'New chat', ''], ['aad-set', 'Settings', '']], 'icons only, as on the phone');
   w.q('.aad-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
   w.q('.aad-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
-  w.q('.aad-gi[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk');
-  w.q('.aad-grid .aad-all').dispatchEvent(new FakePointerEvent('click')); assert.ok(w.q('.vc-sheet'), 'All apps = the three-level sheet');
-  w.q('.vc-x').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.ah-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk (the right panel)');
   // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
   w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive']);
@@ -184,8 +183,11 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.q('.aad-rtog .aad-count').textContent, '2', 'the rail\'s ◫ carries it too'); assert.match(w.q('.aad-rtog').getAttribute('aria-label'), /2 ready/);
   assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(store.folded, true);
-  assert.deepEqual(w.q('.aad-rapps').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'the rail: the open apps, then All apps');
-  assert.equal(keys.length, 2, 'Ctrl/⌘+Shift+S, and Esc for the app panel (round 7)');
+  assert.equal(w.q('.aad-rail .aad-rapps'), null, 'the rail: no apps either');
+  assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel (round 7), the view\'s ⌥ keys');
+  assert.equal(w.st.guides.length, 2, 'two hold-⌥ hint guides: the view\'s targets and Home\'s app letters');
+  const chips = w.st.guides[0]();
+  assert.ok(Array.isArray(chips), 'the guide lists chips');
   assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc with no app panel: not the layout\'s');
   assert.equal(keys[0].down({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' }), true); assert.equal(w.html.dataset.aadSide, 'open');
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
@@ -277,28 +279,27 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
   const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(grid|app|more|all|div|sec|sec-b|chat|viewall|empty)$/.test(c)));
-  assert.deepEqual(rows, ['aa-grid', 'aa-div', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b'], 'round 5: three sections, no Recents, no View all');
-  // round 2: EVERY open app in one compact grid (no "N more"), badged apps first (the Orb view's rule), then desk order;
-  // All apps is the grid's last cell; each cell is a small icon with its name under it and the badge on the icon
-  assert.deepEqual(w.q('.aa-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'open apps = desks, badged first, then desk order; Chats left out');
-  assert.equal(w.q('.aa-grid').getAttribute('role'), 'list'); assert.ok(w.qa('.aa-gi').every(b => b.getAttribute('role') === 'listitem'));
-  assert.equal(w.q('.aa-more'), null, 'no "N more open"');
-  assert.equal(w.q('.aa-gi[data-app="money"] .aa-gt [data-badge="money"]').textContent, '3', 'the shell\'s own count, on the icon');
-  assert.equal(w.q('.aa-gi[data-app="money"] .aa-gn').textContent, 'Money', 'the name under the icon');
-  assert.equal(w.q('.aa-gi[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new');
-  assert.ok(w.q('.aa-grid').children.at(-1).classList.contains('aa-all'), 'All apps closes the grid');
+  assert.deepEqual(rows, ['aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
+  assert.equal(w.q('.aa-scroll .aa-grid'), null, 'no app grid and no All apps in the drawer');
   assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['r1:ready', 'r2:ready'], 'Ready open; Working and Archive folded at first');
   assert.ok(w.q('.aa-chat[data-sid="r1"] .aa-st').classList.contains('is-new') && w.q('.aa-chat[data-sid="r1"] .aa-pin'), 'new dot, pin mark');
   assert.equal(w.q('.aa-chat[data-sid="r2"] .aa-st'), null, 'a seen chat is a plain title (no state ring)');
   assert.deepEqual(w.q('.aa-chat[data-sid="r1"]').children.map(c => c.className.split(' ').pop()), ['aa-row-t', 'aa-pin', 'is-new'], 'title first, the state at the end');
-  // an app row goes to its desk; All apps opens the shared three-level sheet
-  w.q('.aa-gi[data-app="money"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.st.gone, [4]); assert.equal(w.html.dataset.aaDrawer, undefined, 'the drawer closes');
-  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  w.q('.aa-all').dispatchEvent(new FakePointerEvent('click'));
-  assert.ok(w.q('.vc-sheet'), 'All apps = the Orb and Apps views\' sheet (Open · Installed · Get more)');
+  // Home: the apps above the composer, open first (badged first), then the rest installed, then Get more
+  w.q('.aa-scrim').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'open apps (badged first, desk order), then installed, then Get more');
+  assert.equal(w.q('.ah-app[data-app="money"] .ah-badge').textContent, '3', 'the shell\'s own count, on the icon');
+  assert.equal(w.q('.ah-app[data-app="money"] .ah-name').textContent, 'Money');
+  assert.equal(w.q('.ah-app[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new');
+  w.q('.ah-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk (full screen on the phone)');
+  w.q('.ah-app[data-app="movies"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'movies', 'an installed app opens on a desk of its own');
+  w.q('.ah-more').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'app-store', 'Get more = the App Store');
+  // the Home style: Grid (default) or Orb, kept on this device
+  assert.equal(w.q('.ah').dataset.style, 'grid');
+  w.q('.ah-swo[data-style="orb"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.q('.ah').dataset.style, 'orb'); assert.equal(w.st.store.homeStyle, 'orb');
+  assert.deepEqual(w.q('.ah-ring').children.map(b => b.dataset.app), ['money', 'mail', 'music', 'notes', 'maps'], 'the open apps around the orb');
   // footer
-  w.q('.vc-x').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   // round 2: icons only — a big round + (New chat) where ChatGPT's compose button sits, then a cog (Settings); no words,
   // no avatar letter; their accessible names say what they do
@@ -577,7 +578,7 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
 
 test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher on Home only, the sections, the count on ◫', () => {
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js')), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(!/aad-home/.test(css + js), 'round 7: the top row has no home button (Home = the name, +, ⌥`)');
+  assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js), 'round 7: the top row has no home button (Home = the name, +, ⌥`)');
   assert.ok(css.includes(P + ' .aad-ws[hidden] { display: none !important; }'));
   assert.ok(!/aad-tname|aad-viewall/.test(css + js), 'the name in the top row and View all are gone');
   assert.match(js, /top\.append\(tt, wsBtn, pTop\);/, 'the title stays on the left');
@@ -630,13 +631,11 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const w = world();
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }], wiz: [{ id: 'notes', name: 'Notes' }], agents: [], conns: [], dev: [{ id: 'music', name: 'Music' }] });
   (await layout()).default(w.api);
-  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aa-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'all'], 'Notes (agent app), Music (in development), Maps (system) are left out');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['money', 'mail', 'movies', 'more'], 'Home: Notes (agent app), Music (in development), Maps (system) are left out');
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /grid\('Open apps', \[\.\.\.litFirst\(realApps\(openApps\(apps, dk\), api\.apps\.kinds\?\.\(\)\)\)\.map\(appCell\), allCell\(\)\]\)/, 'the desktop sidebar too');
-  assert.match(dj, /const dk = desks\(\), list = litFirst\(realApps\(openApps\(api\.apps\.list\(\), dk\), api\.apps\.kinds\?\.\(\)\)\)/, 'and its rail');
+  assert.match(dj, /homeView\(api, \{ goApp: id => goApp\(id\)/, 'the desktop Home: the same grid');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -706,11 +705,36 @@ test('round 7 desktop: the app panel on the right, the chat in the middle, calm 
   assert.match(css, /\[data-aad-anim="app"\] #stage > \.wsp\[data-aad-role="app"\] \{ animation: aad-in-right 240ms/, 'the panel slides in from the right');
   assert.match(css, /\[data-aad-anim="thread"\] \.win \.dchats \.pane-main \.ch-thread \{ animation: aad-in-left 220ms/, 'a thread from the left');
   assert.match(css, /prefers-reduced-motion[\s\S]*\[data-aad-anim\] :is\(#stage > \.wsp, \.aad-ptop, \.ch-thread\) \{ animation: none !important; \}/);
-  assert.match(css, /\.aad-gi\[aria-current="page"\] \.aad-tile \{ box-shadow:/, 'the open app lit in the grid');
+
   assert.match(css, /\[data-aad-side="open"\] #bar \{\s*left: 0; right: auto; top: 50px; width: var\(--aad-side\);/, 'the fuel gauge at the top of the sidebar');
   assert.match(css, /left: calc\(var\(--aad-side\) \+ \(100vw - var\(--aad-side\) - var\(--aad-app-w, 0px\)\) \/ 2 - 30px\)/, 'the orb stays with the chat');
   assert.match(js, /if \(e\.key !== 'Escape' \|\| e\.altKey \|\| e\.ctrlKey \|\| e\.metaKey \|\| !pane \|\| menu \|\| wsPop \|\| q\) return false; closeSide\(\); return true;/, 'Esc closes the panel (a menu or a search first)');
   assert.match(js, /api\.listen\(pX, 'click', closeSide\);/, '✕ too');
   assert.match(js, /if \(here\(\)\.app === was\.id\) api\.sessions\.chats\(\);/, 'closing it gives the chat the room back; the app keeps running on its desk');
   assert.match(read('web/core/skin-host.js'), /if \(o && r\.width && \(o\.x < r\.left \|\| o\.x > r\.right\)\) fi = 0;/, 'no room kept for an orb that is not over the panel');
+});
+
+/* Miguel, 2 Nov 2026: apps live on Home (Grid or the Orb scene); every desktop ⌥ key keeps working, with hold-⌥ hints. */
+test('Home apps: open first (badged first), then the rest installed, real apps only; app letters avoid the desktop\'s own ⌥ keys', async () => {
+  const { homeApps, appKeys, APP_LETTERS, homeStyle } = await import('../web/layouts/ai-apps/home.js');
+  const apps = [{ id: 'chats', name: 'Chats' }, { id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'notes', name: 'Notes' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }];
+  const kinds = { apps: apps.filter(a => ['mail', 'money', 'movies', 'maps'].includes(a.id)), wiz: [apps[3]], dev: [] };
+  const desks = [{ id: 'chats', desk: 0 }, { id: 'mail', desk: 1 }, { id: 'money', desk: 2 }, { id: 'notes', desk: 3 }];
+  const { open, rest } = homeApps(apps, desks, kinds, id => id === 'money');
+  assert.deepEqual(open.map(a => a.id), ['money', 'mail']); assert.deepEqual(rest.map(a => a.id), ['movies']);
+  for (const k of 'CDFGHILNOPRSTVWXZ') assert.ok(!APP_LETTERS.includes(k), `⌥${k} keeps its meaning`);
+  const ks = appKeys([{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }]);
+  assert.deepEqual(ks, { mail: 'M', money: 'E', movies: 'A' }, 'the first free letter of the name, else the first free one');
+  assert.deepEqual(appKeys([{ id: 'money', name: 'Money' }, { id: 'mail', name: 'Mail' }], { mail: 'M' }), { mail: 'M', money: 'E' }, 'stable: a kept letter stays');
+  assert.equal(homeStyle('orb'), 'orb'); assert.equal(homeStyle('x'), 'grid');
+});
+test('desktop ⌥ keys in the AI apps view: ⌥\\ sidebar, ⌥W closes the panel, ⌥H Grid ⇄ Orb, ⌥ + letter an app; hints on their targets', () => {
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(js, /if \(e\.code === 'Backslash' && !e\.shiftKey\) \{ if \(!e\.repeat\) toggleSide\(\); return true; \}/);
+  assert.match(js, /if \(e\.code === 'KeyW' && !e\.shiftKey && pane\) \{ if \(!e\.repeat\) closeSide\(\); return true; \}/, '⌥W closes the panel only when there is one (else the desktop\'s ⌥W)');
+  assert.match(js, /if \(e\.code === 'KeyH' && !e\.shiftKey && root\.dataset\.aadHome != null\)/);
+  assert.match(js, /id = k && !e\.shiftKey && homeEl\.appFor\(k\);/);
+  assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
+  for (const [k, w] of [['`', 'Home'], ['\\\\', 'Sidebar'], ['N', 'New chat'], [',', 'Settings'], ['␣', 'Search'], ['S', 'Talk'], ['C', 'Command'], ['W', 'Close · Esc'], ['H', 'Grid ⇄ Orb']]) assert.ok(js.includes(`'${k}', '${w}'`) || js.includes(`'${k}', open ? 'Close sidebar' : '${w}'`), `hint ${k} ${w}`);
+  assert.match(js, /api\.keys\.guide\(\(\) => homeEl\.chips\(\)\);/, 'the app letters on Home\'s icons');
 });
