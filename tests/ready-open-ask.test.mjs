@@ -44,7 +44,7 @@ function pipeline() {
   const lines = chats.split('\n');
   const pick = re => lines.find(l => re.test(l));
   assert.ok(a > 0 && b > a, 'live.js normalizer block found');
-  const context = vm.createContext({});
+  const context = vm.createContext({window:{}}); // normalize now reads the optional shared model owner
   vm.runInContext(`${live.slice(a, b)}\n${pick(/const WORKING_ST =/)}\n${pick(/const isWorking =/)}\n${pick(/const backgroundBadge =/)}\n${pick(/const attOf =/)}\nthis.normalize = normalize; this.badge = backgroundBadge;`, context);
   return context;
 }
