@@ -107,7 +107,8 @@ test('the shell wiring: the CSS around the orb, gated on the orb being over the 
   assert.match(host, /new d\.defaultView\.MutationObserver\(/, 'an app that redraws its bar is laid out again');
   const chrome = read('web/layouts/apps/chrome.js');
   assert.match(chrome, /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'phone views hand over the dock orb; a view drawing its own orb says where it is (desktop AI apps); else the lift');
-  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], rawSpot \? home : null, s => \{ appSpot = s \|\| null; placeOrb\(\); \}\)/, 'the orb\'s own spot (untransformed) is what the bars go around; the app\'s spot moves it');
+  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], rawSpot && appOrb \? home : null, s => \{ appSpot = s \|\| null; placeOrb\(\); \}\)/, 'the orb\'s own spot (untransformed) is what the bars go around; the app\'s spot moves it (round 14: unless the view keeps its orb in a composer, appOrb false)');
+  assert.match(chrome, /appOrb = true,/, 'the Orb and Apps views keep the orb bar (default on)');
   assert.match(chrome, /d = o\.offsetWidth \|\| r\.width;/, 'the untransformed size: pressing the orb never reflows the bar');
 });
 

@@ -57,7 +57,7 @@ export const FLOAT_INSET = Object.freeze({ phone: 96, desktop: 84 });
  * the stock ones. Desks declares nothing, so the dock keeps every stock swipe there. */
 export const ORB_SWIPES = Object.freeze({ up: 'home', side: null, down: null });
 
-export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = null, swipes = null, micGlyph = false }) {
+export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = null, appOrb = true, swipes = null, micGlyph = false }) {
   const doc = document, root = doc.documentElement, shell = api.env.shell === 'desktop' ? 'desktop' : 'phone';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (d, cls) => {
@@ -101,7 +101,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     else { for (const k of ['--vc-orb-dx', '--vc-orb-dy', '--vc-orb-k']) root.style.removeProperty(k); delete root.dataset.vcOrb; }
   }
   const sameSpot = (a, b) => a === b || (!!a && !!b && Math.abs(a.x - b.x) < .5 && Math.abs(a.y - b.y) < .5 && Math.abs(a.d - b.d) < .5);
-  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell], rawSpot ? home : null, s => { appSpot = s || null; placeOrb(); }) : null;
+  // (appOrb false: the view's orb never floats over an app on its own: AI apps' desktop keeps it in the composer, so an
+  // app's bottom tabs are lifted clear of the composer instead of split around a spot the orb has left; round 14)
+  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell], rawSpot && appOrb ? home : null, s => { appSpot = s || null; placeOrb(); }) : null;
   // the small microphone in the orb (round 6: the orb IS the microphone, everywhere the view shows it): the dock orb's;
   // a view drawing its own orb draws its own
   let glyph = null;

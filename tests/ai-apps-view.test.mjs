@@ -152,7 +152,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   w.api.apps.inset = (px, orb) => { w.st.inset = px; w.st.insetOrb = orb; return () => { w.st.inset = null; }; };
   const off = (await layout()).default(w.api);
   assert.equal(w.html.dataset.aiApps, 'desktop'); assert.equal(w.html.dataset.viewChrome, 'desktop', 'the shared view chrome (the three-level sheet)');
-  assert.equal(w.st.inset, 84, 'hosted apps keep room for the floating orb'); assert.equal(typeof w.st.insetOrb, 'function', 'and the orb says where it is (the orb bar)');
+  assert.equal(w.st.inset, 104, 'round 14: hosted apps keep room for the floating composer (its pill, margin and a gap)'); assert.equal(w.st.insetOrb, null, 'round 14: the orb lives in the composer: an app\'s bottom tabs are lifted clear of the composer, never split around an old orb spot');
   assert.ok(w.q('link').getAttribute('href').endsWith('/desktop.css'), 'its own stylesheet, desktop-scoped');
   assert.equal(w.html.dataset.aadSide, 'open', 'open from 900 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
@@ -1038,7 +1038,10 @@ test('round 11: Home order = the desks\' order (badged first), no arrangement ke
   assert.deepEqual(r12.open.map(a => `${a.desk}:${a.name}`), ['0:Chats', '1:Files', '2:Mail', '3:Chats', '4:App Store', '5:Claude'], 'every desk in desk order, the stock names');
   assert.deepEqual(r12.open.map(a => a.key), ['desk:0', 'desk:1', 'desk:2', 'desk:3', 'desk:4', 'desk:5'], 'one cell per desk');
   assert.deepEqual(r12.rest.map(a => a.id), ['money', 'movies', 'music', 'news'], 'then installed apps not open yet');
-  assert.deepEqual(H.homeApps(all, ds, null, id => id === 'wizard').open.map(a => a.desk), [0, 3, 1, 2, 4, 5], 'badged first (both Chats desks), else desk order');
+  // round 14: Chats' count is one inbox: only the first Chats desk carries it (a second is `dupe`: no badge, not first)
+  const lit14 = H.homeApps(all, ds, null, id => id === 'wizard').open;
+  assert.deepEqual(lit14.map(a => a.desk), [0, 1, 2, 3, 4, 5], 'the first Chats desk badged (already first), the second keeps its desk place');
+  assert.deepEqual(lit14.filter(a => a.dupe).map(a => a.desk), [3], 'the second Chats desk is the duplicate');
   assert.deepEqual(H.pageFit(1104, 520, 124, 128), { cols: 7, rows: 4, per: 28 }, '1440 wide: 7 × 4');
   assert.deepEqual(H.pageFit(944, 300, 124, 128), { cols: 7, rows: 2, per: 14 });
   assert.equal(H.pageFit(900, 90, 124, 128).rows, 2, 'never a single row');
@@ -1111,8 +1114,9 @@ test('round 12 + 13: one tab per desk (Home pinned first, then badged first, sto
   w.api.desks.close = d => { closed.push(d); return true; };
   (await layout()).default(w.api);
   const tabs = () => w.qa('.aad-tab').map(b => b.dataset.tab + (b.classList.contains('is-on') ? '*' : ''));
-  assert.deepEqual(tabs(), ['home*', 'desk:3', 'desk:4', 'desk:2', 'desk:5'], 'Home first (the first Chats desk), then badged first (Chats, Money), then desk order');
-  assert.deepEqual(w.qa('.aad-tab .aad-tlab').map(n => n.textContent), ['Home', 'Chats', 'Money', 'Mail', 'Files']);
+  assert.deepEqual(tabs(), ['home*', 'desk:4', 'desk:2', 'desk:3', 'desk:5'], 'Home first (the first Chats desk), then badged first (Money), then desk order (round 14: a second Chats desk does not carry Chats\' count)');
+  assert.deepEqual(w.qa('.aad-tab .aad-tlab').map(n => n.textContent), ['Home', 'Money', 'Mail', 'Chats', 'Files']);
+  assert.equal(w.q('.aad-tab[data-tab="desk:3"] .aad-tbadge'), null, 'round 14: Chats\' count shows once, on Home');
   assert.equal(w.q('.aad-tab[data-tab="desk:4"] .aad-tbadge').textContent, '3', 'the badge on the tab');
   assert.equal(w.q('.aad-tab[data-tab="home"] .aad-tbadge').textContent, '2', 'Home (the Chats desk) carries its own');
   assert.equal(w.q('.aad-tab[data-tab="home"] .aad-tx'), null, 'Home is pinned: no ✕');
@@ -1128,7 +1132,7 @@ test('round 12 + 13: one tab per desk (Home pinned first, then badged first, sto
   w.q('.aad-tab[data-tab="desk:4"]').dispatchEvent(new FakePointerEvent('auxclick', { button: 1 })); assert.deepEqual(closed, [2, 4]);
   // keys: ⌥1 Home, ⌥9 the last, ⌥[ ⌥] the neighbours (no wrap), ⌥W the tab in front (never Home), ⌥T the New tab page
   const k = code => keys[2].down({ altKey: true, code });
-  assert.equal(k('BracketLeft'), true); assert.equal(w.st.gone.at(-1), 2, '⌥[ the tab before');
+  assert.equal(k('BracketLeft'), true); assert.equal(w.st.gone.at(-1), 3, '⌥[ the tab before');
   assert.equal(k('Digit1'), true); assert.equal(w.st.gone.at(-1), 1, '⌥1 Home');
   assert.equal(k('Digit9'), true); assert.equal(w.st.gone.at(-1), 5, '⌥9 the last');
   assert.equal(k('KeyW'), true); assert.deepEqual(closed, [2, 4, 5], '⌥W closes the tab in front');
@@ -1138,7 +1142,8 @@ test('round 12 + 13: one tab per desk (Home pinned first, then badged first, sto
   assert.equal(w.q('.aad-tab[data-tab="new"] .aad-tlab').textContent, 'New tab');
   // the New tab grid: every desk, badged first, stock names; a pick opens it as a tab
   const cells = w.qa('.aad-hg .ah-app[data-app]');
-  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '3:Chats', '4:Money', '2:Mail', '5:Files'], 'every desk, badged first, stock names');
+  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '4:Money', '2:Mail', '3:Chats', '5:Files'], 'every desk, badged first, stock names');
+  assert.equal(w.q('.aad-hg .ah-app[data-desk="3"] .ah-badge').hidden, true, 'round 14: no second Chats count on the grid');
   w.q('.aad-hg .ah-app[data-desk="4"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.st.gone.at(-1), 4); assert.equal(w.html.dataset.aadNtp, undefined, 'the pick replaces the New tab');
   // ✕ on the New tab goes back to where it came from
@@ -1196,3 +1201,131 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(p.qa('.aa-sec').map(h => h.dataset.sec), ['archive', 'working', 'snoozed', 'ready']);
 });
+
+/* Round 14 (Miguel, 3 Nov 2026: "keep working on it so that it's perfect"): the polish pass on the desktop tab strip and
+ * the app tabs. Each guard below failed on round 13's build. */
+const tabWorld = async (extra = {}) => {
+  const { w, keys, store } = deskWorld();
+  w.st.desks = null;
+  const closed = [], moved = [];
+  w.api.desks.list = () => [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }, { desk: 3, id: 'music', name: 'Music' }, { desk: 4, id: 'money', name: 'Money' }, { desk: 5, id: 'files', name: 'Files' }];
+  w.api.desks.close = d => { closed.push(d); return true; };
+  w.api.desks.move = (a, b) => { moved.push([a, b]); return true; };
+  Object.assign(w.api, extra);
+  (await layout()).default(w.api);
+  return { w, keys, store, closed, moved };
+};
+test('round 14: a tab\'s tooltip says the app and its count (after a short rest; at once on keyboard focus); gone on leave', async () => {
+  const { w } = await tabWorld();
+  const tab = w.q('.aad-tab[data-tab="desk:4"]'), tip = w.q('.aad-tip');
+  assert.equal(tip.getAttribute('role'), 'tooltip'); assert.equal(tip.hidden, true);
+  assert.equal(tab.title, '', 'no native title (it doubled the tooltip, late and unstyled)');
+  tab.dispatchEvent(new FakePointerEvent('pointerenter'));
+  assert.equal(tip.hidden, true, 'not at once on a hover');
+  const t = w.st.timers.at(-1); assert.equal(t.ms, 450, 'a short rest (TIP_MS)'); w.run();
+  assert.equal(tip.hidden, false); assert.equal(w.q('.aad-tip-n').textContent, 'Money'); assert.equal(w.q('.aad-tip-b').textContent, '3 new', 'its count');
+  assert.equal(tab.getAttribute('aria-describedby'), 'aad-tip');
+  tab.dispatchEvent(new FakePointerEvent('pointerleave')); assert.equal(tip.hidden, true); assert.equal(tab.getAttribute('aria-describedby'), null);
+  // a neighbour right after: no wait (Chrome's rule)
+  w.q('.aad-tab[data-tab="desk:2"]').dispatchEvent(new FakePointerEvent('pointerenter')); assert.equal(w.st.timers.at(-1).ms, 0); w.run();
+  assert.equal(w.q('.aad-tip-n').textContent, 'Mail'); assert.equal(w.q('.aad-tip-b').hidden, true, 'no count, no badge');
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(js, /export const TIP_MS = 450;/);
+  assert.match(js, /api\.listen\(b, 'focus', \(\) => \{ if \(b\.matches\?\.\(':focus-visible'\)\) tipShow\(b\); \}\);/, 'keyboard focus shows it at once');
+  const css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.aad-tip \{\n  position: fixed; left: 0; top: 0;[^}]*pointer-events: none;/, 'placed by transform, never in the way');
+});
+test('round 14: a tab switch re-dresses two tabs (no rebuild, no icon re-decoded); the active tab is the one Tab stop; ←/→ move along', async () => {
+  const { w, closed } = await tabWorld();
+  const before = w.qa('.aad-tab');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 3 }; w.emit('route', w.st.route);
+  const after = w.qa('.aad-tab');
+  assert.ok(before.length === after.length && before.every((n, i) => n === after[i]), 'the same tab nodes');
+  assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'desk:3'); assert.equal(w.q('.aad-tab[data-tab="home"]').classList.contains('is-on'), false);
+  assert.deepEqual(after.map(n => n.getAttribute('tabindex')), after.map(n => n.dataset.tab === 'desk:3' ? '0' : '-1'), 'roving focus');
+  const focused = []; for (const n of after) n.focus = () => focused.push(n.dataset.tab);
+  const k = (n, key) => n.dispatchEvent(Object.assign(new FakePointerEvent('keydown'), { key }));
+  const cur = w.q('.aad-tab[data-tab="desk:3"]'), i = after.indexOf(cur);
+  k(cur, 'ArrowRight'); k(cur, 'ArrowLeft'); k(cur, 'Home'); k(cur, 'End');
+  assert.deepEqual(focused, [after[i + 1].dataset.tab, after[i - 1].dataset.tab, 'home', after.at(-1).dataset.tab]);
+  k(cur, 'Delete'); assert.deepEqual(closed, [3], 'Delete closes the focused tab');
+  // a badge change re-makes only that tab
+  const mail = w.q('.aad-tab[data-tab="desk:2"]');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 2 }; w.emit('route', w.st.route);
+  assert.equal(w.q('.aad-tab[data-tab="desk:2"]'), mail, 'kept');
+});
+test('round 14: a right click on a tab: Close tab first (its desk), App Store page; Home: New chat; the menu key too', async () => {
+  const { w, closed } = await tabWorld();
+  w.api.apps.get = () => true;
+  const ctx = (n, x = 300) => n.dispatchEvent(new FakePointerEvent('contextmenu', { clientX: x, clientY: 20 }));
+  ctx(w.q('.aad-tab[data-tab="desk:4"]'));
+  const acts = () => w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act);
+  assert.deepEqual(acts(), ['close', 'store'], 'Close tab, then its App Store page (no Open: it is the tab)');
+  assert.equal(w.q('.aad-appmenu .aad-pop-i span').textContent, 'Close tab');
+  w.q('.aad-appmenu .aad-pop-i[data-act="close"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(closed, [4], 'the stock close of that desk');
+  ctx(w.q('.aad-tab[data-tab="home"]'));
+  assert.deepEqual(acts(), ['new'], 'Home: New chat only (pinned, never closed)');
+  const n0 = w.st.newChats; w.q('.aad-appmenu .aad-pop-i[data-act="new"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 1);
+  w.q('.aad-tab[data-tab="desk:2"]').dispatchEvent(Object.assign(new FakePointerEvent('keydown'), { key: 'F10', shiftKey: true }));
+  assert.deepEqual(acts(), ['close', 'store'], 'Shift+F10 opens it from the keyboard');
+});
+test('round 14: dragging a tab moves its DESK (the stock moveDesk), Home never moves, a short press is still a click', async () => {
+  const { w, moved } = await tabWorld();
+  const tabs = w.qa('.aad-tab');
+  tabs.forEach((n, i) => { n.getBoundingClientRect = () => ({ left: 8 + i * 100, right: 8 + i * 100 + 96, width: 96, top: 7, bottom: 37, height: 30, x: 8 + i * 100, y: 7 }); });
+  const doc = n => (...a) => { for (const f of w.doc.__listeners[n] || []) f(...a); };
+  const order = tabs.map(n => n.dataset.tab);   // home, desk:4 (badged), desk:2, desk:3, desk:5
+  assert.deepEqual(order, ['home', 'desk:4', 'desk:2', 'desk:3', 'desk:5']);
+  const mail = w.q('.aad-tab[data-tab="desk:2"]');
+  mail.dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, pointerId: 3, clientX: 250, clientY: 20 }));
+  doc('pointermove')(new FakePointerEvent('pointermove', { pointerId: 3, clientX: 300, clientY: 20 }));
+  assert.ok(mail.classList.contains('is-drag'), 'lifted'); assert.equal(mail.style.transform, 'translateX(50px)', 'follows the pointer (a transform)');
+  doc('pointermove')(new FakePointerEvent('pointermove', { pointerId: 3, clientX: 470, clientY: 20 }));
+  assert.equal(w.q('.aad-tab[data-tab="desk:3"]').style.transform, 'translateX(-98px)', 'a passed tab slides aside (its width and the 2 px gap)');
+  doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 3 }));
+  assert.deepEqual(moved, [[2, 5]], 'Mail\'s desk goes after Files\' desk (the desks\' own order)');
+  assert.equal(mail.classList.contains('is-drag'), false); assert.equal(mail.style.transform, '');
+  // Home is pinned; a press that never moves is a click
+  w.q('.aad-tab[data-tab="home"]').dispatchEvent(new FakePointerEvent('pointerdown', { button: 0, pointerId: 4, clientX: 50, clientY: 20 }));
+  doc('pointermove')(new FakePointerEvent('pointermove', { pointerId: 4, clientX: 300, clientY: 20 })); doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 4 }));
+  assert.equal(moved.length, 1, 'Home never moves');
+  const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
+  assert.match(host, /move: \(from, to\) => live\(\) && Number\.isInteger\(from\) && Number\.isInteger\(to\) && from >= 0 && to >= 0 \? !!shell\.moveDesk\?\.\(from, to\) : false,/);
+  assert.match(dj, /moveDesk: \(from, to\) => Number\.isInteger\(from\) && Number\.isInteger\(to\) \? moveDesk\(from, to\) : false,/, 'the Desks bar\'s own moveDesk (saves and syncs)');
+});
+test('round 14: a tab whose app is still loading spins and the page shows a quiet spinner, until its frame loads', async () => {
+  const { w } = deskWorld();
+  w.st.desks = [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }];
+  const stage = new El('div'); stage.id = 'stage';
+  const chat = new El('div'); chat.className = 'wsp'; chat.hidden = true; const dc = new El('div'); dc.className = 'dchats'; chat.append(dc);
+  const app = new El('div'); app.className = 'wsp'; const win = new El('div'); win.className = 'win'; const f = new El('iframe'); f.contentDocument = { readyState: 'loading', URL: 'https://x/mail/' };
+  win.append(f); app.append(win); stage.append(chat, app); w.html.children[0].append(stage);
+  (await layout()).default(w.api);
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 2 }; w.emit('route', w.st.route);
+  const grace = w.st.timers.find(t => t.ms === 180); assert.ok(grace, 'a short grace first (a quick app never shows it)');
+  assert.equal(w.q('.aad-load').hidden, true);
+  grace.fn();
+  assert.equal(w.q('.aad-load').hidden, false, 'the page spinner');
+  assert.ok(w.st.timers.some(t => t.ms === 20000), 'never stuck (gives up after 20 s)'); assert.ok(w.q('.aad-tab[data-tab="desk:2"]').classList.contains('is-loading'), 'the tab spins');
+  f.contentDocument.readyState = 'complete'; f.dispatchEvent(new FakePointerEvent('load'));
+  assert.equal(w.q('.aad-load').hidden, true); assert.equal(w.q('.aad-tab[data-tab="desk:2"]').classList.contains('is-loading'), false);
+  const css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.aad-tab\.is-loading \.aad-tspin \{ display: block;/);
+});
+test('round 14: the composer never covers an app (room for it), the ⌥ banner never covers the tabs, resizes and folds never wait for a re-tile', () => {
+  const js = noComments(read('web/layouts/ai-apps/desktop.js')), css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(js, /export const COMPOSER_INSET = 104;/);
+  assert.match(js, /viewChrome\(api, \{ openIds: \(\) => desks\(\)\.map\(d => d\.id\), orb: orbSpot, inset: COMPOSER_INSET, appOrb: false \}\)/, 'apps keep the composer\'s room; their bars lift, never split round the old orb spot');
+  const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
+  assert.match(css, new RegExp(P + ' \\.kh-foot \\{ top: 52px; left: var\\(--aad-side\\); right: 0;'), 'hold ⌥: the banner under the strip, in the main area');
+  assert.match(css, new RegExp(P + ' #stage > \\.wsp:not\\(:has\\(> \\.win:not\\(\\.gone\\) ~ \\.win:not\\(\\.gone\\)\\)\\) > \\.win:not\\(\\.gone\\) \\{ top: 8px !important; bottom: 8px !important; height: auto !important; \\}'), 'a lone window fills its desk on both axes by CSS (no stale height after a resize)');
+  assert.match(css, new RegExp(P + ' #stage > \\.wsp\\[data-aad-role="chat"\\]'), 'the hidden Chats desk lending its composer follows too');
+  assert.match(css, new RegExp(P + ' #stage > \\.wsp\\[hidden\\]:not\\(\\[data-aad-role\\]\\) \\{ left: var\\(--aad-side-w, 288px\\); \\}'), 'desks out of sight keep their geometry when the sidebar folds');
+  assert.match(css, new RegExp(P + ' #stage > \\.wsp \\{ transition: none !important; \\}'), 'a tab switch is instant');
+  assert.match(js, /if \(needsTile\(\)\) globalThis\.dispatchEvent\?\.\(new Event\('resize'\)\);/, 'the shell re-tiles only a desk tiling several windows');
+  assert.match(css, /\.aad-tab\.is-on \{ background: color-mix\(in srgb, var\(--aad-ink\) 12%, transparent\); box-shadow: inset 0 0 0 1px/, 'the tab in front reads at once');
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /querySelectorAll\('nav, footer, \[role="navigation"\], \[role="tablist"\]'\)/, 'a bottom footer covered at the probe point is still found (Wisdom\'s page count)');
+});
+

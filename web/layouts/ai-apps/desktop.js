@@ -68,6 +68,12 @@ export const SIDE = 288, RAIL = 120, DOCKED_FROM = 900;
 export const SIZE_LIMITS = { side: [220, 440] };
 /** Round 13: the tab strip's row and a tab's widths (the ChatGPT desktop app's pill tabs; icon only under ICON_ONLY). */
 export const TAB = { row: 44, max: 200, min: 40, iconOnly: 72 };
+/** Round 14: the room an app keeps clear under the floating composer (px from the window's bottom): the composer's 52 px
+ * pill + its 24 px margin + a 16 px gap + the 12 px the inset rule gives back. An app's own bottom bar or last item
+ * (Troubleshooter's chat box, Mail's Load more, Card Benefits' tabs) sits above it, never under it. */
+export const COMPOSER_INSET = 104;
+/** Round 14: a tab's tooltip waits this long on hover (none while another tooltip was just up: Chrome's rule). */
+export const TIP_MS = 450;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
 export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyS' || String(e.key).toLowerCase() === 's');
 
@@ -191,7 +197,7 @@ export default function desktop(api) {
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
   // spot (its centre, its size) lets an app's own bottom tabs go either side of it
   const orbSpot = () => { const r = orbBox.getBoundingClientRect?.(); return r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, d: orbBox.offsetWidth || r.width } : null; };
-  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id), orb: orbSpot });
+  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id), orb: orbSpot, inset: COMPOSER_INSET, appOrb: false });
   const near = (a, b) => a === b || (!!a && !!b && Math.abs(a.x - b.x) < .5 && Math.abs(a.y - b.y) < .5 && Math.abs(a.d - b.d) < .5);
   const orbAt = { done: false, slot: null, home: null };   // where placeOrb last put the orb (round 11)
 
@@ -265,7 +271,11 @@ export default function desktop(api) {
    * follow their desks by CSS meanwhile (desktop.css), so nothing re-lays out per frame and the wallpaper is untouched
    * (core/skins.js ignores a resize that leaves the page its size). */
   let retileOff = null;
-  function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
+  /* round 14 (Miguel: the fold must feel instant): a desk whose only window follows it by CSS (desktop.css: every lone
+   * window, shown or not) needs no re-tile; only a desk tiling two or more windows side by side does. The shell's
+   * re-tile re-laid out every desk's app (~100 layouts, a 100 ms frame) right after each fold. */
+  const needsTile = () => [...doc.querySelectorAll('#stage > .wsp')].some(w => w.querySelectorAll(':scope > .win:not(.gone)').length > 1);
+  function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; if (needsTile()) globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
   const relayoutSoon = () => retileSoon();
   function setSize(id, w, keep) {
     sized = { ...sized, [id]: Math.round(w) }; applySizes();
@@ -399,14 +409,16 @@ export default function desktop(api) {
   const appFor = k => home.appFor(k);
   /* the quick actions (round 10): Open; Add to Home Screen (the Desks' own sheet, apps it would offer); the App Store
    * page (its own Update / Remove, behind the Store's own confirmations); Close for an open app (it stays installed) */
-  function openAppMenu(a, at) {
+  function openAppMenu(a, at, opts = {}) {
     closeMenu(); closeWs();
     let isOpen = desks().some(d => d.id === a.id);
-    const acts = [['open', 'Open', 'expand', () => goApp(a.id, a.desk)]];
-    if (a.id === CHATS) isOpen = false;   // round 12: a Chats desk offers Open only
+    // round 14: a tab's menu leads with Close tab (its desk; ⌥W); the Home tab offers New chat; the grid's leads with Open
+    const acts = opts.home ? [['new', 'New chat', 'plus', () => newChat()]] : opts.tab ? [['close', 'Close tab', 'x', () => closeTab(opts.tab)]] : [['open', 'Open', 'expand', () => goApp(a.id, a.desk)]];
+    if (opts.home) isOpen = false;
+    else if (a.id === CHATS) isOpen = false;   // round 12: a Chats desk offers Open only
     else if (canPin(a.id)) acts.push(['pin', 'Add to Home Screen', 'plus', () => api.apps.homeScreen.offer(a.id)]);
-    if (api.apps.get && a.id !== CHATS && !a.system) acts.push(['store', 'App Store page', 'apps', () => api.apps.get(a.id)]);
-    if (isOpen && api.apps.close) acts.push(['close', 'Close', 'x', () => { api.apps.close(a.id); api.after(120, () => { home.paint(true); paintTabs(true); }); }]);
+    if (!opts.home && api.apps.get && a.id !== CHATS && !a.system) acts.push(['store', 'App Store page', 'apps', () => api.apps.get(a.id)]);
+    if (!opts.tab && isOpen && api.apps.close) acts.push(['close', 'Close', 'x', () => { api.apps.close(a.id); api.after(120, () => { home.paint(true); paintTabs(true); }); }]);
     const card = el('div', 'aad-pop aad-appmenu', { role: 'menu', 'aria-label': a.name });
     card.append(el('h3', 'aad-pop-h', { text: a.name }));
     for (const [k, word0, ico, run] of acts) {
@@ -492,9 +504,11 @@ export default function desktop(api) {
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
-    const sig = JSON.stringify([q, h.thread, h.app, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')), apps.length,
+    // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
+    // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
+    const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
       secOpen, only, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
-    if (!force && sig === drawn && scroll.childElementCount) return;
+    if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
@@ -530,6 +544,15 @@ export default function desktop(api) {
     }
     closeMenu();
     scroll.replaceChildren(...out);
+  }
+  /** the chat in front, marked in the list where it already is (round 14: no rebuild for it) */
+  function markCurrent(id) {
+    for (const w of scroll.querySelectorAll('.aad-rw')) {
+      const on = !!id && w.dataset.sid === id;
+      if (w.classList.contains('is-cur') === on) continue;
+      w.classList.toggle('is-cur', on);
+      const b = w.querySelector('.aad-row'); if (on) b?.setAttribute('aria-current', 'page'); else b?.removeAttribute('aria-current');
+    }
   }
   /* The rail (round 12, Miguel: the icon tiles were unreadable): words in the expanded list's type, no status icons or
    * coloured dots. Working n, Ready n and under Ready, indented, each stock Chats status with chats in it (STATES:
@@ -697,12 +720,20 @@ export default function desktop(api) {
 
   /* ---------- round 13: the tabs ----------
    * One tab per desk: the first Chats desk is Home (pinned first, no ✕), the others in desk order, badged first. The tab
-   * in front follows the route; the New tab page adds its own tab at the end while it shows. */
+   * in front follows the route; the New tab page adds its own tab at the end while it shows.
+   * Round 14 (Miguel: "perfect"): Chats' count is one inbox, so it shows once, on Home (a second Chats desk carries no
+   * badge and does not jump the queue); a tab is kept and only re-dressed when what it shows changes (a switch moves
+   * the active state, nothing is rebuilt, no icon re-decoded); a tooltip with the app's name and count (icon-only tabs
+   * say nothing otherwise); ←/→ Home End move along the strip (the tablist pattern); a right click gives the app's
+   * menu with Close tab; a drag moves the tab AND its desk (the stock desk order, the same as ⌥⇧[ / ⌥⇧]); a tab whose
+   * app is still loading spins in place of its icon and the page shows a quiet spinner. */
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
+  const tabLit = t => !t.dupe && !t.ntp && lit(t.id);
   function tabList() {
     const dk = desks(), main = dk.find(d => d.id === CHATS) || null, rest = dk.filter(d => d !== main);
     const out = [{ key: 'home', desk: main ? main.desk : null, id: CHATS, name: 'Home', home: true }];
-    for (const d of litFirst(rest)) out.push({ key: 'desk:' + d.desk, desk: d.desk, id: d.id, name: d.name || appName(d.id) || d.id });
+    const mid = rest.map(d => ({ key: 'desk:' + d.desk, desk: d.desk, id: d.id, name: d.name || appName(d.id) || d.id, dupe: d.id === CHATS }));
+    out.push(...mid.filter(tabLit), ...mid.filter(t => !tabLit(t)));
     if (ntp) out.push({ key: 'new', desk: null, id: '', name: 'New tab', ntp: true });
     return out;
   }
@@ -718,40 +749,70 @@ export default function desktop(api) {
     if (t.id === CHATS) { const s = el('span', 'aad-tile is-tab', { 'aria-hidden': 'true' }); s.style.setProperty('--c', 'var(--wz-accent)'); s.append(el('i', 'sgi sg-chats', { 'aria-hidden': 'true' })); return s; }
     return appTile(t.id, 'aad-tile is-tab');
   }
-  function tabEl(t, on) {
-    const b = el('div', 'aad-tab' + (on ? ' is-on' : '') + (t.home ? ' is-pinned' : ''), { role: 'tab', 'aria-selected': String(on), tabindex: on ? '0' : '-1', 'data-tab': t.key, ...(t.desk != null ? { 'data-desk': String(t.desk) } : {}), ...(t.id ? { 'data-app': t.id } : {}) });
-    const label = t.home && homeThread ? homeThread.title || 'Home' : t.name;
-    const n = t.ntp ? '' : badgeText(t.id);
-    b.title = label + (n ? ` · ${n} new` : '');
+  const tabLabel = t => t.home && homeThread ? homeThread.title || 'Home' : t.name;
+  const tabBadge = t => t.ntp || t.dupe ? '' : badgeText(t.id);
+  /** what a tab tells: its name, then its count ("Mail · 18 new"), the Home tab its chat and "Home" */
+  const tabTip = t => { const n = tabBadge(t), l = tabLabel(t); return { name: l, sub: t.home && l !== 'Home' ? 'Home' : '', n }; };
+  const tabEls = new Map();   // key -> { b, sig, t }
+  function tabEl(t) {
+    const b = el('div', 'aad-tab' + (t.home ? ' is-pinned' : ''), { role: 'tab', 'aria-selected': 'false', tabindex: '-1', 'data-tab': t.key, ...(t.desk != null ? { 'data-desk': String(t.desk) } : {}), ...(t.id ? { 'data-app': t.id } : {}) });
+    const label = tabLabel(t), n = tabBadge(t);
     b.setAttribute('aria-label', label + (n ? `, ${n} new` : ''));
-    const ic = el('span', 'aad-tic'); ic.append(tabIcon(t));
+    const ic = el('span', 'aad-tic'); ic.append(tabIcon(t), el('i', 'aad-tspin', { 'aria-hidden': 'true' }));
     b.append(ic, el('span', 'aad-tlab', { text: label }));
     // the badge: a count after the name (a wide tab), on the icon's corner once the tab is icon only (desktop.css)
     if (n) b.append(el('b', 'aad-tbadge', { 'aria-hidden': 'true', text: n }));
     if (!t.home) {
       const x = el('button', 'aad-tx', { type: 'button', 'aria-label': `Close ${label}`, title: 'Close tab (⌥W)', tabindex: '-1' }); x.append(icon('x', 'aad-ico aad-tx-i'));
-      api.listen(x, 'click', e => { e.stopPropagation?.(); closeTab(t); });
+      api.listen(x, 'click', e => { e.stopPropagation?.(); closeTab(cur(b)); });
       b.append(x);
     }
-    api.listen(b, 'click', () => pickTab(t));
-    api.listen(b, 'auxclick', e => { if (e.button === 1 && !t.home) { e.preventDefault?.(); closeTab(t); } });   // a middle click closes (Chrome / Atlas)
-    api.listen(b, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); pickTab(t); } });
+    api.listen(b, 'click', () => { if (Date.now() < dragSwallow) return; pickTab(cur(b)); });
+    api.listen(b, 'auxclick', e => { if (e.button === 1 && !cur(b).home) { e.preventDefault?.(); closeTab(cur(b)); } });   // a middle click closes (Chrome / Atlas)
+    api.listen(b, 'keydown', e => tabKey(e, b));
+    api.listen(b, 'contextmenu', e => { e.preventDefault?.(); tabMenu(cur(b), { x: e.clientX, y: e.clientY, el: b }); });
+    api.listen(b, 'pointerenter', () => tipSoon(b));
+    api.listen(b, 'pointerleave', () => tipHide());
+    api.listen(b, 'focus', () => { if (b.matches?.(':focus-visible')) tipShow(b); });
+    api.listen(b, 'blur', () => tipHide());
+    api.listen(b, 'pointerdown', e => dragStart(e, b));
     return b;
   }
+  /** the tab a node shows now (its entry is replaced when the desks change; the node lives on) */
+  const cur = b => tabEls.get(b.dataset.tab)?.t || { key: b.dataset.tab, home: b.dataset.tab === 'home' };
   function paintTabs(force = false) {
     const list = tabList(), on = activeKey();
-    const sig = JSON.stringify([on, homeThread?.title || '', list.map(t => [t.key, t.id, t.name, t.ntp ? '' : badgeText(t.id)])]);
+    const sig = JSON.stringify([on, homeThread?.title || '', loadingKey, list.map(t => [t.key, t.id, t.name, tabBadge(t)])]);
     if (!force && sig === tabsDrawn && tabsBox.childElementCount) return;
     tabsDrawn = sig;
-    tabsBox.replaceChildren(...list.map(t => tabEl(t, t.key === on)));
+    const keep = new Set();
+    const nodes = list.map(t => {
+      const s = JSON.stringify([t.id, tabLabel(t), tabBadge(t), t.home, t.ntp]);
+      let e = tabEls.get(t.key);
+      if (!e || e.sig !== s) { e = { b: tabEl(t), sig: s, t }; tabEls.set(t.key, e); } else e.t = t;
+      keep.add(t.key);
+      const isOn = t.key === on;
+      if (e.b.classList.contains('is-on') !== isOn) e.b.classList.toggle('is-on', isOn);
+      if (e.b.getAttribute('aria-selected') !== String(isOn)) e.b.setAttribute('aria-selected', String(isOn));
+      // (roving focus: the tab in front is the strip's one Tab stop)
+      if (e.b.getAttribute('tabindex') !== (isOn ? '0' : '-1')) e.b.setAttribute('tabindex', isOn ? '0' : '-1');
+      const ld = t.key === loadingKey;
+      if (e.b.classList.contains('is-loading') !== ld) e.b.classList.toggle('is-loading', ld);
+      return e.b;
+    });
+    for (const k of [...tabEls.keys()]) if (!keep.has(k)) tabEls.delete(k);
+    // nodes move only when the order or the set changed (a switch writes two classes, nothing else)
+    const now = tabsBox.children;
+    if (now.length !== nodes.length || nodes.some((n, i) => now[i] !== n)) tabsBox.replaceChildren(...nodes);
     // (the row's natural width: every tab at its widest; the strip shrinks them from there, Atlas's compressing strip)
-    tabsBox.style.setProperty('--aad-tabs-n', String(list.length));
+    if (tabsBox.style.getPropertyValue('--aad-tabs-n') !== String(list.length)) tabsBox.style.setProperty('--aad-tabs-n', String(list.length));
+    if (tipFor && !tipFor.isConnected) tipHide();
     // the tab in front stays in view when the strip scrolls (many tabs)
-    api.frame(() => { const cur = tabsBox.querySelector('.aad-tab.is-on'); if (!cur || typeof cur.getBoundingClientRect !== 'function') return;
-      const r = cur.getBoundingClientRect(), b = strip.getBoundingClientRect(); if (r.left < b.left) strip.scrollLeft -= b.left - r.left + 8; else if (r.right > b.right - 36) strip.scrollLeft += r.right - b.right + 44; });
+    api.frame(() => { const c = tabsBox.querySelector('.aad-tab.is-on'); if (!c || typeof c.getBoundingClientRect !== 'function') return;
+      const r = c.getBoundingClientRect(), b = strip.getBoundingClientRect(); if (r.left < b.left) strip.scrollLeft -= b.left - r.left + 8; else if (r.right > b.right - 36) strip.scrollLeft += r.right - b.right + 44; });
   }
   function pickTab(t) {
-    unpeek(); closeMenu();
+    unpeek(); closeMenu(); tipHide();
     if (t.ntp) return;
     if (ntp) closeNtp(false);
     if (t.home) { const m = mainChats(); if (m) api.nav.goDesk(m.desk); else api.sessions.newChat(); return; }
@@ -759,6 +820,7 @@ export default function desktop(api) {
   }
   function closeTab(t) {
     if (!t || t.home) return false;
+    tipHide();
     if (t.ntp) { closeNtp(true); return true; }
     // the stock close of that desk (its ✕); else the app's own close
     if (!(api.desks.close?.(t.desk))) api.apps.close?.(t.id);
@@ -769,6 +831,123 @@ export default function desktop(api) {
   /** ⌥1–9 / ⌥[ ] (Chrome, Atlas and ChatGPT's ⌘1–9 / ⌃Tab, on Wizard's one key): never wraps */
   function stepTab(dir) { const l = tabsNow(), i = l.findIndex(t => t.key === activeKey()), n = l[i + dir]; if (n) pickTab(n); return !!n; }
   function nthTab(k) { const l = tabsNow(), t = k === 9 ? l.at(-1) : l[k - 1]; if (t) pickTab(t); return !!t; }
+  /* the keyboard on a focused tab (the ARIA tablist): ←/→ move the focus, Home / End the ends, Enter / Space open it,
+   * Delete closes it, Shift+F10 / the menu key its menu */
+  function tabKey(e, b) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault?.(); pickTab(cur(b)); return; }
+    if (e.key === 'Delete' && !cur(b).home) { e.preventDefault?.(); closeTab(cur(b)); return; }
+    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault?.(); const r = b.getBoundingClientRect(); tabMenu(cur(b), { x: r.left, y: r.bottom + 4, el: b }); return; }
+    const all = [...tabsBox.children], i = all.indexOf(b);
+    const j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (j == null || !all[j]) return;
+    e.preventDefault?.(); all[j].focus?.({ preventScroll: false });
+  }
+  /* the tooltip (Chrome's / ChatGPT's): a small dark pill under the tab after a short rest, at once while one was just up;
+   * on keyboard focus too; a press, a scroll or leaving takes it away. One element, moved by transform. */
+  const tip = el('div', 'aad-tip', { role: 'tooltip', id: 'aad-tip', 'aria-hidden': 'true' }); tip.hidden = true;
+  const tipName = el('span', 'aad-tip-n'), tipSub = el('span', 'aad-tip-s'), tipBadge = el('b', 'aad-tip-b');
+  tip.append(tipName, tipSub, tipBadge);
+  scene.append(tip);
+  let tipFor = null, tipOff = null, tipAt = 0;
+  function tipShow(b) {
+    tipOff?.(); tipOff = null;
+    if (!b?.isConnected || dragging) return;
+    const { name, sub, n } = tabTip(cur(b));
+    tipName.textContent = name; tipSub.textContent = sub; tipSub.hidden = !sub; tipBadge.textContent = n ? `${n} new` : ''; tipBadge.hidden = !n;
+    tipFor = b; tip.hidden = false;
+    const r = b.getBoundingClientRect(), w = tip.offsetWidth || 120, W = globalThis.innerWidth || 1440;
+    const x = Math.round(Math.max(8, Math.min(W - w - 8, r.left + r.width / 2 - w / 2)));
+    tip.style.transform = `translate(${x}px, ${Math.round(r.bottom + 6)}px)`;
+    b.setAttribute('aria-describedby', 'aad-tip');
+  }
+  function tipSoon(b) { tipOff?.(); tipOff = api.after(Date.now() - tipAt < 600 ? 0 : TIP_MS, () => { tipOff = null; tipShow(b); }); }
+  function tipHide() {
+    tipOff?.(); tipOff = null;
+    if (!tipFor) return;
+    tipFor.removeAttribute('aria-describedby'); tipFor = null; tip.hidden = true; tipAt = Date.now();
+  }
+  api.listen(strip, 'scroll', tipHide);
+  /* a tab's menu (a right click, the menu key): the app's quick actions with Close tab first; Home offers New chat */
+  function tabMenu(t, at) {
+    tipHide();
+    if (!t || t.ntp) return;
+    if (t.home) { openAppMenu({ id: CHATS, name: tabLabel(t), desk: t.desk }, at, { home: true }); return; }
+    openAppMenu({ id: t.id, name: tabLabel(t), desk: t.desk, system: !!(api.apps.list().find(a => a.id === t.id)?.system) }, at, { tab: t });
+  }
+  /* drag to reorder (Atlas / Chrome): press and move 6 px; the tab follows the pointer (a transform), its neighbours
+   * make room as it passes their middle; the drop moves its DESK to that place in the desks' own order (the stock
+   * moveDesk, as dragging a desk along the Desks bar or ⌥⇧[ / ⌥⇧]). Home stays pinned first; the New tab never moves. */
+  let drag = null, dragging = false, dragSwallow = 0;
+  function dragStart(e, b) {
+    const t = cur(b);
+    if (e.button || t.home || t.ntp || e.target?.closest?.('.aad-tx') || !api.desks.move) return;
+    drag = { b, t, x: e.clientX, y: e.clientY, id: e.pointerId, on: false, slots: null };
+  }
+  function dragMove(e) {
+    const d = drag; if (!d || (e.pointerId != null && d.id != null && e.pointerId !== d.id)) return;
+    if (!d.on) {
+      if (Math.hypot(e.clientX - d.x, e.clientY - d.y) < 6) return;
+      d.on = true; dragging = true; tipHide(); closeMenu();
+      try { d.b.setPointerCapture?.(d.id); } catch (_) {}
+      // the slots measured once at the start: the tabs' boxes (the row does not reflow while dragging)
+      d.all = [...tabsBox.children].filter(n => n !== d.b && !n.classList.contains('is-pinned') && n.dataset.tab !== 'new');
+      d.rects = new Map(d.all.map(n => [n, n.getBoundingClientRect()]));
+      d.me = d.b.getBoundingClientRect(); d.w = d.me.width + 2;
+      d.b.classList.add('is-drag'); tabsBox.classList.add('is-dragging');
+    }
+    e.preventDefault?.();
+    const dx = e.clientX - d.x, mid = d.me.left + d.me.width / 2 + dx;
+    d.b.style.transform = `translateX(${Math.round(dx)}px)`;
+    // the tabs it has passed slide over by one tab's width (transforms only)
+    d.over = [];
+    for (const n of d.all) {
+      const r = d.rects.get(n), c = r.left + r.width / 2;
+      const shift = r.left > d.me.left && mid > c ? -d.w : r.left < d.me.left && mid < c ? d.w : 0;
+      if (shift) d.over.push(n);
+      const want = shift ? `translateX(${shift}px)` : '';
+      if (n.style.transform !== want) n.style.transform = want;
+    }
+  }
+  function dragEnd(cancel = false) {
+    const d = drag; drag = null; if (!d || !d.on) return;
+    dragging = false; dragSwallow = Date.now() + 350;
+    for (const n of [d.b, ...d.all]) n.style.transform = '';
+    d.b.classList.remove('is-drag'); tabsBox.classList.remove('is-dragging');
+    if (cancel || !d.over.length) return;
+    // the new place among the desks: before the first tab it passed going left, after the last going right
+    const right = d.rects.get(d.over[0]).left > d.me.left;
+    const ref = right ? d.over.reduce((a, n) => d.rects.get(n).left > d.rects.get(a).left ? n : a) : d.over.reduce((a, n) => d.rects.get(n).left < d.rects.get(a).left ? n : a);
+    const to = +ref.dataset.desk, from = d.t.desk;
+    if (Number.isInteger(to) && Number.isInteger(from) && to !== from && api.desks.move(from, to)) {
+      // (shown at once: the moved node goes where it was dropped, the next paint confirms it from the desks)
+      if (right) ref.after?.(d.b); else ref.before?.(d.b);
+      api.after(0, () => paintTabs(true));
+    }
+  }
+  api.listen(doc, 'pointermove', dragMove, true);
+  api.listen(doc, 'pointerup', () => dragEnd(false), true);
+  api.listen(doc, 'pointercancel', () => dragEnd(true), true);
+  /* a tab whose app has not loaded yet (a cold desk, a slow app): the tab's icon spins and the page shows a quiet spinner
+   * until its frame says load; a quick app never shows it (a short grace) */
+  const LOAD_GRACE = 180;
+  let loadingKey = '', loadOff = null, loadFrame = null;
+  const loader = el('div', 'aad-load', { 'aria-hidden': 'true' }); loader.append(el('i', 'aad-load-i')); loader.hidden = true;
+  scene.append(loader);
+  const frameReady = f => { try { const d = f.contentDocument; return !d || (d.readyState === 'complete' && d.URL !== 'about:blank'); } catch (_) { return true; } };
+  function watchLoad(key, deskEl) {
+    const f = [...(deskEl?.querySelectorAll('iframe') || [])].find(x => !x.closest?.('.win.gone')) || null;
+    if (f === loadFrame) return;
+    loadOff?.(); loadOff = null; loadFrame = f;
+    if (loadingKey) { loadingKey = ''; loader.hidden = true; paintTabs(); }
+    if (!f || frameReady(f)) return;
+    const done = () => { if (loadFrame !== f) return; loadOff?.(); loadOff = null; loadingKey = ''; loader.hidden = true; paintTabs(); };
+    const offL = api.listen(f, 'load', done);
+    const offT = api.after(LOAD_GRACE, () => { if (loadFrame !== f || frameReady(f)) return; loadingKey = key; loader.hidden = false; paintTabs(); });
+    // (never stuck: at most 20 s)
+    const offS = api.after(20000, done);
+    loadOff = () => { offL?.(); offT?.(); offS?.(); };
+  }
   /* The New tab page (+, ⌥T): the composer of a new chat with the app grid over the background; a pick opens that app as
    * a tab, a sent message becomes the Home tab's chat; ✕ / Esc go back to the tab it came from. */
   function openNtp() {
@@ -812,6 +991,7 @@ export default function desktop(api) {
     const chat = h.app ? wsps().find(w => w.hidden && w.querySelector('.dchats')) || null : null;
     for (const w of wsps()) { const r = w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
     paintTools();
+    watchLoad(h.app ? activeKey(h.r) : '', appDesk);
   }
   const NOTE = '__note__';
   const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
@@ -825,6 +1005,7 @@ export default function desktop(api) {
   const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
   // Esc: the New tab page goes back (its own Back entry); a menu or search first
   api.keys.on({ down: e => {
+    if (e.key === 'Escape' && drag?.on) { dragEnd(true); return true; }   // (round 14: a tab drag is called off)
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || menu || wsPop || q) return false;
     if (ntp && !typing()) { closeNtp(true); return true; }
     return false;

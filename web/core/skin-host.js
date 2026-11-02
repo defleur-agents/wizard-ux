@@ -674,6 +674,9 @@
         const r = n.getBoundingClientRect();
         if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
       }
+      // (round 14) a full-width footer along the bottom that something else covers at the probe point (Wisdom's reader:
+      // its page count and time left sat in the orb's row, under its body's flow): found by what it is, lifted the same
+      if (!bar) { try { bar = [...d.querySelectorAll('nav, footer, [role="navigation"], [role="tablist"]')].find(n => { const r = n.getBoundingClientRect(); return r.width >= vw * .8 && r.height > 0 && r.height < 160 && r.bottom >= vh - 2 && r.bottom <= vh + 2 && shownIn(d, n); }) || null; if (bar) bar.setAttribute('data-wos-inset-bar', ''); } catch (_) { bar = null; } }
       // a block found this way is never a tab bar: it is lifted above the orb's row (data-wos-lift set from the start)
       if (!bar) { try { bar = bottomBar(d, vw, vh); } catch (_) { bar = null; } }
       // round 6: else a narrower block of controls right under the orb (a pane's composer beside a list)
@@ -943,6 +946,9 @@
         list: () => { const l = live() ? (shell.deskApps || shell.phoneDesks)?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
         // close one desk as the stock ✕ does (the AI apps view's tab ✕; desktop only)
         close: desk => live() && Number.isInteger(desk) && desk >= 0 ? !!shell.closeDesk?.(desk) : false,
+        // move one desk to another place in the desks' order, as dragging it along the Desks bar does (the AI apps view's
+        // tab drag, round 14; desktop only): the shell's own moveDesk, so the order saves and syncs like any desk change
+        move: (from, to) => live() && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 ? !!shell.moveDesk?.(from, to) : false,
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
