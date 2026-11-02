@@ -51,7 +51,10 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   assert.match(live, /localStorage\.getItem\(LAYOUT_KEY\) === 'status' \? 'status' : 'day'/);
   assert.match(live, /else if \(chatLayout\(\) === 'status'\) g\.ready\.push\(s\);[^\n]*\n\s*else if \(!isFinite\(t\) \|\| t < yB\) g\.pastWeek\.push\(s\);/);
   assert.match(chats, /\(byStatus\(\) \? SECTIONS_STATUS : SECTIONS_DAY\)\.map/);
-  assert.match(chats, /data-chlayout=/);
+  // One switch, not two layouts: Group by day on = By day, off = By status; the stored value is unchanged.
+  assert.match(chats, /data-chgroupday aria-pressed="\$\{!byStatus\(\)\}">Group by day/);
+  assert.match(chats, /closest\('\[data-chgroupday\]'\)\) \{ LIVE\.chatLayout = byStatus\(\) \? 'day' : 'status';/);
+  assert.doesNotMatch(chats, /<h5>Layout<\/h5>|data-chlayout/);
 });
 test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {
   // WosMorph keeps every form field's live value, so a <select> painted with "1 week" kept saying so after the

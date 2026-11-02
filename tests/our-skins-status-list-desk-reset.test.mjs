@@ -30,9 +30,9 @@ test("James's skins keep the stored layout and the By day default", () => {
   }
 });
 
-test('our skins drop the Layout picker and the Yesterday filter', () => {
+test('our skins drop the Group by day switch and the Yesterday filter', () => {
   const src = read('../web/core/chats.js');
-  assert.match(src, /\$\{ourSkin\(\) \? '' : `<h5>Layout<\/h5>/);
+  assert.match(src, /\$\{ourSkin\(\) \? '' : `<button type="button" class="ch-fopt\$\{byStatus\(\) \? '' : ' on'\}" data-chgroupday/);
   assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(k === 'yesterday' && \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\]/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });
