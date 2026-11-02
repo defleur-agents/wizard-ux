@@ -18,7 +18,8 @@
     "wizard/unified-inbox",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "miguel/archive-top"
   ],
   "defaults": [
     "wizard/unified-inbox"

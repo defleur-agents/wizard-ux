@@ -10,7 +10,8 @@
     "miguel/no-desk-close",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "miguel/archive-top"
   ],
   "flags": {},
   "off": [
