@@ -28,6 +28,8 @@ test('an app reporting more shows N+ on its desk mark; turning it off repaints',
 });
 
 test('apps pass { more } through the badge API; Chats reads it from routed feeds', () => {
+  assert.match(read('web/core/app-client.js'), /request\('badge\.set', \{ n, more \}\)/, 'the app SDK forwards more');
+  assert.match(read('web/core/app-services.js'), /svc\.badge\.set\(d\.args\?\.n, \{ more: d\.args\?\.more === true \}\)/);
   assert.match(read('web/core/app-services.js'), /set\(n, o\) \{ check\(\); setBadge\(st\.appId, n, !!\(o && o\.more === true\)\)/);
   const bell = read('web/core/notif-bell.js');
   assert.match(bell, /FD\.more\[id\] = d\.more === true \|\| d\.items\.length > 50/);
