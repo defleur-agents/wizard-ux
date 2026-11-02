@@ -29,7 +29,11 @@
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
+    // Miguel's miguel/ai-apps tweak wears it (phone only for now): the ChatGPT / Claude / Perplexity phone layout, a top
+    // bar, a left drawer (apps, then the chats) and the chat with its composer as the main screen.
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Like the AI chat apps: a top bar, a left drawer with your apps and chats, the chat in the middle (phone)', css: true, js: true }),
   ]);
+  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
@@ -440,8 +444,25 @@
       sessions: Object.freeze({
         list: () => { const l = live() ? shell.sessionList?.() : null; return l ? structuredClone(l) : null; },
         open: id => { if (live() && typeof id === 'string' && id) shell.openThread(id); },
-        act: (id, action) => live() && typeof id === 'string' && id && ['snooze', 'done'].includes(action) ? !!shell.sessionAct?.(id, action) : false,
+        // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
+        // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
+        act: (id, action) => live() && typeof id === 'string' && id && SESSION_ACTS.includes(action) ? !!shell.sessionAct?.(id, action) : false,
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
+        // The Chats window as it is (its thread kept), and a New chat in it: the AI apps view's main screen.
+        chats: () => live() ? !!shell.showChats?.() : false,
+        newChat: () => live() ? !!shell.newChat?.() : false,
+      }),
+      /* Workspaces: this Wizard first (the one on this screen), then the Wizards the owner manages (the devices registry,
+       * the same list as the network map's switcher; not connected yet). refresh() reads the registry again. */
+      workspaces: Object.freeze({
+        list: () => {
+          if (!live() || !isDoc) return [];
+          const d = window.WosResources?.state?.devices || {}, txt = (v, n) => String(v || '').slice(0, n);
+          const own = txt(d.this?.wizard, 60) || (window.WizConfig?.agent?.() || 'Wizard');
+          return [Object.freeze({ id: 'this', name: own, org: '', current: true, owner: txt(window.WizConfig?.owner?.(), 60) }),
+            ...(Array.isArray(d.managed) ? d.managed : []).filter(m => m && m.id).map(m => Object.freeze({ id: txt(m.id, 64), name: txt(m.name, 60) || txt(m.id, 60), org: txt(m.org, 60), current: false }))];
+        },
+        refresh: () => { if (live()) try { window.WosResources?.sync?.(); } catch (_) {} },
       }),
       apps: Object.freeze({
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
@@ -490,6 +511,8 @@
       desk: Object.freeze({
         home: () => { if (live()) shell.home?.(); },
         look: () => { if (live()) shell.openSettings?.('look'); },
+        // Settings (a page id such as 'network', or its first page).
+        settings: page => { if (live()) shell.openSettings?.(typeof page === 'string' && /^[a-z-]{1,24}$/.test(page) ? page : undefined); },
         /* Back to the Desks view for this device: switches off the tweak wearing this layout, the same way as its
          * Settings › Look switch (WosExperience mix, no reload), so the layout itself always offers a way back. */
         classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },
@@ -559,6 +582,7 @@
       } }),
     };
   }
+  const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename']);
   const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
   const orbSwipeHolders = new Map();      // layout → its dock-orb swipe map (api.phone.swipes); none = the stock swipes
   const ORB_SWIPE_ACTS = { up: ['home'], side: [], down: [] };
@@ -957,7 +981,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if ((layoutId === 'orb' || layoutId === 'apps') && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if (VIEW_LAYOUTS.has(layoutId) && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }

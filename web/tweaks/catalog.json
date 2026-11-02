@@ -17,7 +17,8 @@
     "wizard/app-borders",
     "wizard/unified-inbox",
     "miguel/orb-shell",
-    "miguel/apps-home"
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ],
   "defaults": [
     "wizard/unified-inbox"

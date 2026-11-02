@@ -83,7 +83,7 @@ test('turning one on turns the other off; off again = Desks; one tweak reload pe
 test('no author quick button: every tweak is its own switch and other switches leave the worn view alone', async () => {
   const b = box(); await b.E.refresh();
   assert.equal(b.E.chooseAuthor, undefined, 'the author mix is gone');
-  const others = JSON.parse(read('web/tweaks/catalog.json')).tweaks.filter(id => id.startsWith('miguel/') && !VIEWS.includes(id)).slice(0, 3);
+  const others = JSON.parse(read('web/tweaks/catalog.json')).tweaks.filter(id => id.startsWith('miguel/') && !VIEWS.includes(id) && !JSON.parse(read(`web/tweaks/${id}/manifest.json`)).view).slice(0, 3);
   b.tap('miguel/apps-home'); await tick();
   for (const id of others) { b.tap(id); await tick(); }
   assert.deepEqual(b.views(), ['miguel/apps-home'], 'Apps kept, Orb not added');
@@ -91,6 +91,15 @@ test('no author quick button: every tweak is its own switch and other switches l
   for (const id of others) { b.tap(id); await tick(); }
   assert.deepEqual(b.views(), ['miguel/apps-home'], 'off again: the view is left alone too');
   assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [false, true]);
+});
+
+test('AI apps is a third shell view: on turns Orb and Apps off, Orb or Apps on turns it off, off again = Desks', async () => {
+  const b = box(); await b.E.refresh();
+  const worn = () => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
+  b.tap('miguel/orb-shell'); await tick();
+  b.tap('miguel/ai-apps'); await tick(); assert.deepEqual(worn(), ['miguel/ai-apps'], 'AI apps on turns Orb off');
+  b.tap('miguel/apps-home'); await tick(); assert.deepEqual(worn(), ['miguel/apps-home'], 'Apps on turns AI apps off');
+  b.tap('miguel/ai-apps'); await tick(); b.tap('miguel/ai-apps'); await tick(); assert.deepEqual(worn(), [], 'the worn one off = Desks');
 });
 
 test('a device that stores both on wears only the first in catalog order (Orb), and the switches agree', async () => {
