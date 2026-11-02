@@ -14,12 +14,14 @@ import os
 from pathlib import Path
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import time
 import traceback
 import xml.etree.ElementTree as ET
 from qa_queue_lease import validated_queue_fd
+from qa_dictation_case_isolation import collect_isolated_lane, editor_contract
 
 SDK = Path('/srv/work/android-sdk')
 BASE = Path('/srv/work/AndroidBuilds')
@@ -28,6 +30,14 @@ TEST = 'ai.wizards.os.qa.test'
 CLASS = 'ai.wizards.os.everywhere.DictationInsertionE2eTest'
 CONTROLS = {'noopInputConnectionWorkingPastePreservesSingleInsertion',
             'missingNodeWorkingInputConnectionPreservesSingleInsertion'}
+
+
+class NativeDeadline(BaseException):
+    """Unwind through the emulator's finally BEFORE the parent's hard child timeout."""
+
+
+def expire_native(signum, frame):
+    raise NativeDeadline('native 2300-second budget exhausted; no acceptance claim')
 
 
 def sha(path):
@@ -178,7 +188,7 @@ def diagnostics(command, adb, lane, out):
 def collect_lane(command, adb, lane, methods, out, env):
     result = {'status':'failed','expected_cases':list(methods)}
     try:
-        transport_error = instrument(command,adb,methods,lane,out,env)
+        transport_error = instrument(command,adb,methods,lane,out,env,timeout=90)
         text = (out/(lane+'-instrumentation.txt')).read_text()
         result['records'] = statuses(text)  # retain raw failures even when strict validation refuses them
         try:
@@ -232,6 +242,8 @@ def run(config_path, out):
             probe.bind(('127.0.0.1',number))
     serial = f'emulator-{port}'
     adb = [SDK/'platform-tools/adb','-s',serial]
+    previous_alarm = signal.signal(signal.SIGALRM, expire_native)
+    signal.alarm(2300)
     try:
         command([SDK/'cmdline-tools/latest/bin/avdmanager','create','avd','--force','-n','dictation',
                  '-k','system-images;android-35;google_apis;x86_64','--device','pixel_7'],stdin='no\n')
@@ -248,8 +260,8 @@ def run(config_path, out):
         else: raise TimeoutError('emulator boot')
         command(adb+['shell','input','keyevent','82'])
         for lane in ('baseline','rejected','candidate'):
-            # JUnit continues all selected methods; the host must also continue all
-            # independent lanes rather than losing candidate evidence to baseline failure.
+            # One instrumentation and fresh target/editor processes per method. Do not
+            # reuse the previous activity/IME session, nor lose independent failed protocols.
             try:
                 receipt = json.loads(Path(config[lane]['receipt']).read_text())
                 if receipt.get('status') != 'ok' or receipt['source_revision'] != config[lane]['revision']:
@@ -261,7 +273,9 @@ def run(config_path, out):
                 for name in ('qa_origin.txt','qa_home.txt'):
                     command(adb+['shell','run-as',PKG,'sh','-c',f'"mkdir -p files; printf http://127.0.0.1:1 > files/{name}"'])
                 methods = config['candidate_cases'] if lane == 'candidate' else sorted(CONTROLS)
-                result = collect_lane(command,adb,lane,methods,out,env)
+                contract = editor_contract(Path(receipt['job'])/'source', methods)
+                (out/(lane+'-editor-contract.json')).write_text(json.dumps(contract,indent=2)+'\n')
+                result = collect_isolated_lane(__import__(__name__),command,adb,lane,methods,out,env,contract=contract)
                 result.update(apk=meta,test_apk=testmeta,revision=receipt['source_revision'])
                 evidence['cases'][lane] = result
                 if lane == 'candidate':
@@ -287,6 +301,8 @@ def run(config_path, out):
         evidence['error']=traceback.format_exc()
         raise
     finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous_alarm)
         if emulator is not None:
             try: command(adb+['emu','kill'],timeout=15,check=False)
             except (subprocess.SubprocessError, OSError): pass
@@ -297,7 +313,8 @@ def run(config_path, out):
                 except subprocess.TimeoutExpired: emulator.kill(); emulator.wait(timeout=10)
             evidence['stopped_emulator']=emulator.poll() is not None
         if emlog: emlog.close()
-        evidence['files']={str(p.relative_to(out)):sha(p) for p in out.iterdir() if p.is_file()}
+        evidence['files']={str(p.relative_to(out)):sha(p) for p in out.rglob('*')
+                           if p.is_file() and p.relative_to(out).parts[0] not in ('avd','android-user')}
         (out/'receipt.json').write_text(json.dumps(evidence,indent=2)+'\n')
     return evidence
 

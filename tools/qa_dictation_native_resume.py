@@ -15,10 +15,13 @@ import zipfile
 
 PRODUCT = 'c07c16afbcf80ba4d5209a195680f442db9827c0'
 MEMBERS = ('qa_dictation_native_resume.py','qa_dictation_insertion_native.py',
+           'qa_dictation_case_evidence.py',
+           'qa_dictation_case_isolation.py','test_qa_dictation_case_isolation.py',
            'test_qa_dictation_accessibility_lifecycle.py','qa_queue_lease.py','test_qa_queue_lease.py',
            'qa_dictation_packet.py','test_qa_dictation_insertion_native.py',
            'qa_dictation_candidate_resume.py','test_qa_dictation_candidate_resume.py')
 TEST_MODULES = ('test_qa_queue_lease','test_qa_dictation_insertion_native',
+                'test_qa_dictation_case_isolation',
                 'test_qa_dictation_candidate_resume','test_qa_dictation_accessibility_lifecycle')
 
 
@@ -42,8 +45,9 @@ def closure(root):
     old=read(root/'seal.json'); files=dict(old['files']); packet=read(root/'packet.json')
     for path in root.iterdir():
         if path.is_file(): files[str(path)]=digest(path)
-    for path in (root/'native').iterdir():
-        if path.is_file(): files[str(path)]=digest(path)
+    for path in (root/'native').rglob('*'):
+        if path.is_file() and path.relative_to(root/'native').parts[0] not in ('avd','android-user'):
+            files[str(path)]=digest(path)
     for lane in ('baseline','rejected','candidate'):
         receipt_path=Path(packet[lane]['receipt']); receipt=read(receipt_path)
         cfg_path=receipt_path.with_name('job.json'); cfg=read(cfg_path)
@@ -69,6 +73,7 @@ def closure(root):
             raise ValueError('selected fixture automation flags differ')
         for name in (selected,'android/app/src/main/AndroidManifest.xml',
                      'android/app/src/debug/AndroidManifest.xml',
+                     'android/app/src/debug/java/ai/wizards/os/everywhere/DictationEditorFixture.java',
                      'android/app/src/main/java/ai/wizards/os/everywhere/WizardKeyboardService.java'):
             path=source/name
             if digest(path) != cfg['files'][name]['sha256']: raise ValueError('built fixture/source drift')
@@ -92,7 +97,7 @@ def verify(root):
     custody=read(root/'custody.json'); old_root=Path(custody['old_root'])
     old=read(old_root/'packet.json'); packet=read(root/'packet.json')
     expected=copy.deepcopy(old); expected['workers']={}
-    if packet != expected or packet['source_revision'] != PRODUCT or len(packet['candidate_cases']) != 27:
+    if packet != expected or packet['source_revision'] != PRODUCT or len(packet['candidate_cases']) != 27 or len(set(packet['candidate_cases'])) != 27:
         raise ValueError('native methods, controls, product or overlay changed')
     mandatory=set(read(old_root/'seal.json')['files']) | set(custody['preserved_originals'])
     mandatory.update(str(root/name) for name in (*MEMBERS,'packet.json','custody.json','diagnosis.json'))
@@ -124,13 +129,15 @@ def prepare(root,old_root,revision,diagnosis,base):
     write(root/'custody.json',{'old_root':str(old_root),'qa_revision':revision,'product_revision':PRODUCT,
         'preserved_originals':originals,'fresh_builds':[],'apk_count':6,'native_expected_counts':{'baseline':2,'rejected':2,'candidate':27},
         'rejected_requires_exact_insertion_assertions':True,'android_source_changes':[],
+        'isolation':'one instrumentation, fresh target/editor/test processes and no stale fixture per method',
+        'baseline_eligibility':'both original IC paths remain required; no node is NOT a source guard on baseline IC commit',
         'native_acceptance_executed':False,'signed_product_untouched':True,'handset_proven':False})
     files=dict(originals)
     for path in root.iterdir():
         if path.is_file(): files[str(path)]=digest(path)
     write(root/'seal.json',{'worker_base':str(base),'qa_revision':revision,'source_revision':PRODUCT,'files':files})
     verify(root)
-    spec={'host':'forum','lane':'heavy','key':'dictation-native-lifecycle-'+PRODUCT+'-'+revision,
+    spec={'host':'forum','lane':'heavy','key':'dictation-native-isolation-'+PRODUCT+'-'+revision,
         'cwd':str(root),'argv':['/usr/bin/env','PYTHONDONTWRITEBYTECODE=1','TMPDIR='+str(root/'scratch'),
         '/usr/bin/python3',str(root/'qa_dictation_native_resume.py'),'execute',str(root),'--seal-sha256',digest(root/'seal.json')],
         'timeout_seconds':3600}

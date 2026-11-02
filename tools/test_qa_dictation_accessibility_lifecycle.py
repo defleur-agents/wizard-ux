@@ -147,7 +147,7 @@ class AccessibilityLifecycleTests(unittest.TestCase):
         lint=self.root/'source/android/app/build/reports/lint-results-debug.xml'
         lint.parent.mkdir(parents=True); lint.write_text('<issues/>')
         lanes=[]
-        def collect(command,adb,lane,*args):
+        def collect(module,command,adb,lane,*args,**kwargs):
             lanes.append(lane); return {'status':'failed' if lane=='baseline' else 'ok'}
         def command(argv,**kwargs):
             return type('Result',(),{'returncode':0,'stdout':'1' if 'getprop' in argv else '', 'stderr':''})()
@@ -158,7 +158,8 @@ class AccessibilityLifecycleTests(unittest.TestCase):
              patch.object(native.socket,'socket'), patch.object(native.subprocess,'run',side_effect=command), \
              patch.object(native.subprocess,'Popen',return_value=emulator), \
              patch.object(native,'artifact',return_value=(self.root/'not-an-apk',{})), \
-             patch.object(native,'collect_lane',side_effect=collect), \
+             patch.object(native,'collect_isolated_lane',side_effect=collect), \
+             patch.object(native,'editor_contract',return_value={}), \
              patch.object(native,'unit_census',return_value={'tests':410}):
             with self.assertRaisesRegex(AssertionError,'baseline'): native.run(cfg,out)
         self.assertEqual(['baseline','rejected','candidate'],lanes)
