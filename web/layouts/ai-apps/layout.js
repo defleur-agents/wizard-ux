@@ -6,8 +6,8 @@
  *   - Top bar, always there (an app open too): ☰ on the left opens the drawer; the Wizard's name in the middle (what is
  *     in front, a thread's title or an app's name, under it); on the right the workspace switcher, in the slot where
  *     they put Temporary / Incognito (this Wizard, then the Wizards he manages; Manage = Settings › Your network).
- *   - Drawer from the left (☰, or a swipe from the left edge; a swipe right in a thread too, which in Chats would have
- *     gone back to the list): the name and 🔍 (searches chats and apps), then where they list Projects / GPTs / Spaces
+ *   - Drawer from the left (☰, or a swipe from the left edge; a swipe right in a thread too, which keeps the chat
+ *     under it and never also runs the thread swipe-back): the name and 🔍 (searches chats and apps), then where they list Projects / GPTs / Spaces
  *     a compact grid of EVERY open app (a small icon with its name under it, like ChatGPT's GPT grid; desk order, apps
  *     with a badge first as in the Orb view, the badge on the icon), ending in All apps = the three-level sheet (Open ·
  *     Installed · Get more, chrome.js); then Recents = the chats Working and Ready (a long press opens the row menu:
@@ -277,37 +277,58 @@ export default function setup(api) {
     for (const r of scroll.querySelectorAll('.is-held')) r.classList.remove('is-held');
   }
 
-  /* ---------- open the drawer with a swipe: from the left edge anywhere, or rightwards in a chat ---------- */
-  let drag = null;
+  /* ---------- open the drawer with a swipe: from the left edge anywhere, or rightwards anywhere in a chat ----------
+   * Once recognised, the swipe is the drawer's alone (Miguel, 2 Nov 2026: a swipe from the left of a chat also ran the
+   * thread swipe-back, which left the chat for a New chat under the drawer): it claims the finger (api.gesture.claim:
+   * the dock swipe and the row long-press stand down) and keeps its touches from the chat below, where the thread
+   * swipe-back listens, so the chat stays as it was. It is recognised before the swipe-back would follow the finger
+   * (16 px sideways vs its 24). Touch events, like the swipe-back, so a list starting to scroll never cancels it; code,
+   * tables, the composer and fields keep their own sideways gestures. Back (the button) still steps a thread back. */
+  const OWN_SIDEWAYS = 'pre, table, [data-part="composer"], .ch-compose, .ms-track, input, textarea, [contenteditable="true"]';
+  let drag = null, touchPid = null;
   const W = () => drawer.getBoundingClientRect().width || 300;
-  api.listen(doc, 'pointerdown', e => {
-    if (open || drag || e.isPrimary === false || root.dataset.vcSheet || sheet) return;
-    // from the left edge, under the top bar, never from the composer (its + sits there) or an open app's own page
-    if (e.clientX > EDGE || e.clientY <= top.getBoundingClientRect().bottom || e.target?.closest?.('.ch-compose, #dock, .aa-sheet, .vc-sheet')) return;
-    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now(), on: false };
-  }, true);
-  api.listen(doc, 'pointermove', e => {
-    if (!drag || e.pointerId !== drag.id) return;
-    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  api.listen(doc, 'pointerdown', e => { if (e.pointerType === 'touch' && e.isPrimary !== false) touchPid = e.pointerId; }, true);
+  api.listen(doc, 'touchstart', e => {
+    drag = null;
+    if (open || menu || sheet || root.dataset.vcSheet || e.touches.length !== 1) return;
+    const t = e.touches[0], tg = e.target;
+    // under the top bar only, never from the composer (its + sits at the edge), the dock or a sheet
+    if (t.clientY <= top.getBoundingClientRect().bottom || tg?.closest?.('.ch-compose, #dock, .aa-sheet, .vc-sheet')) return;
+    const edge = t.clientX <= EDGE;
+    const inChat = !edge && root.dataset.aiFront === 'chat' && api.route().view === 'thread' && !tg?.closest?.(OWN_SIDEWAYS)
+      && !String(globalThis.getSelection?.() || '');
+    if (edge || inChat) drag = { x: t.clientX, y: t.clientY, at: performance.now(), on: false, edge };
+  }, { capture: true, passive: true });
+  api.listen(doc, 'touchmove', e => {
+    if (!drag) return;
+    const t = e.touches[0];
+    if (!t || e.touches.length !== 1) { if (drag.on) settle(false); drag = null; return; }
+    const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
     if (!drag.on) {
       if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
-      if (dx < 10) return;
-      drag.on = true; closeMenu(); readSessions(); open = true; paintDrawer(); open = false;
+      if (drag.edge ? dx < 10 : !(dx > 16 && dx > Math.abs(dy) * 2)) return;
+      drag.on = true; if (touchPid != null) api.gesture.claim(touchPid);
+      closeMenu(); readSessions(); open = true; paintDrawer(); open = false;
       layer.hidden = false; layer.classList.add('is-drag');
     }
-    e.stopPropagation();   // once it is the drawer's swipe, no thread swipe-back or desk step follows it
+    // the drawer's swipe from here: nothing below (thread swipe-back, desk steps, scrolling) follows it
+    e.stopPropagation(); if (e.cancelable) e.preventDefault();
     const w = W(), x = Math.max(0, Math.min(w, dx));
     drawer.style.transform = `translateX(${x - w}px)`; scrim.style.opacity = String(x / w);
-  }, true);
+  }, { capture: true, passive: false });
+  function settle(go) {
+    if (go) return openDrawer();
+    layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity');
+    api.after(220, () => { if (!open) layer.hidden = true; });
+  }
   const dragEnd = e => {
-    if (!drag || e.pointerId !== drag.id) return;
+    if (!drag) return;
     const g = drag; drag = null; if (!g.on) return;
     e.stopPropagation();
-    const dx = e.clientX - g.x, dy = e.clientY - g.y;
-    if (e.type !== 'pointercancel' && (dx > W() * .4 || api.gesture.intent(dx, dy, performance.now() - g.at))) openDrawer();
-    else { layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity'); api.after(220, () => { if (!open) layer.hidden = true; }); }
+    const t = e.changedTouches?.[0], dx = t ? t.clientX - g.x : 0, dy = t ? t.clientY - g.y : 0;
+    settle(e.type !== 'touchcancel' && !!t && (dx > W() * .4 || api.gesture.intent(dx, dy, performance.now() - g.at)));
   };
-  api.listen(doc, 'pointerup', dragEnd, true); api.listen(doc, 'pointercancel', dragEnd, true);
+  api.listen(doc, 'touchend', dragEnd, { capture: true, passive: true }); api.listen(doc, 'touchcancel', dragEnd, { capture: true, passive: true });
   // a swipe left on the open drawer closes it
   let shut = null;
   api.listen(drawer, 'pointerdown', e => { if (!menu) shut = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now() }; });
@@ -385,7 +406,7 @@ export default function setup(api) {
     if (r.home) { soon(() => { if (api.route().home) api.sessions.chats(); }); return paintTop(r); }
     if (r.view === 'list') {
       if (!listWanted) {
-        // the list lives in the drawer here: a thread left for the list (Back, a swipe) opens the drawer over a new chat
+        // the list lives in the drawer here: a thread left for the list (Back) opens the drawer over a new chat
         const fromThread = last.view === 'thread' && last.desk === r.desk;
         soon(() => { if (api.route().view === 'list' && !listWanted) { api.sessions.newChat(); if (fromThread) openDrawer(); } });
       }
