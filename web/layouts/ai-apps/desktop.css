@@ -14,7 +14,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] {
   --aad-canvas: var(--wz-base, var(--bg));
   --aad-main: var(--sk-win, var(--aad-canvas));
   --aad-panel: color-mix(in srgb, var(--aad-ink) 4%, var(--aad-main));
-  --aad-surface: var(--wz-panel, var(--aad-canvas));
+  --aad-surface: color-mix(in srgb, var(--aad-ink) 6%, var(--aad-canvas));   /* the composer: white with a ring on light (ChatGPT), a lifted grey on dark */
   --aad-line: color-mix(in srgb, var(--aad-ink) 10%, transparent);
   --aad-hover: color-mix(in srgb, var(--aad-ink) 7%, transparent);
   --aad-held: color-mix(in srgb, var(--aad-ink) 11%, transparent);
