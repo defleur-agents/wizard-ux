@@ -394,8 +394,11 @@
     + 'html.wos-orb-bar [data-wos-fs][data-wos-wrap]{white-space:normal!important;overflow-wrap:normal!important;word-break:normal!important;text-align:center!important;line-height:1.15!important}'
     // equal parts until tabFit has measured the labels (it then sets --wos-tab-f on each tab: its share of its side)
     + [1, 2, 3, 4].map(n => `html.wos-orb-bar [data-wos-tabs][data-wos-nl="${n}"] [data-wos-tab="l"],html.wos-orb-bar [data-wos-tabs][data-wos-nr="${n}"] [data-wos-tab="r"]{--wos-tab-f:${+(1 / n).toFixed(4)}}`).join('');
-  const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after{content:"";display:block;flex:none;height:var(--wos-inset-b,0px);pointer-events:none}'
-    + 'html:not(.wos-orb-bar) [data-wos-inset-bar]{height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}' + ORB_BAR;
+  const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after,[data-wos-inset-scroll]::after{content:"";display:block;flex:none;grid-column:1/-1;height:var(--wos-inset-b,0px);pointer-events:none}'
+    + 'html:not(.wos-orb-bar) [data-wos-inset-bar]:not([data-wos-lift="self"]){height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
+    // a lone control along the bottom (Mail's Load more) keeps its own shape and is pushed up by a margin instead
+    + 'html:not(.wos-orb-bar) [data-wos-inset-bar][data-wos-lift="self"]{margin-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
+    + 'html:not(.wos-orb-bar) [data-wos-float]{translate:0 calc(-1 * var(--wos-lift,0px))!important}' + ORB_BAR;
   const setAttr = (n, k, v) => { if (v == null) { if (n.hasAttribute(k)) n.removeAttribute(k); } else if (n.getAttribute(k) !== v) n.setAttribute(k, v); };
   const WOS_MARKS = ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr', 'data-wos-fs', 'data-wos-small', 'data-wos-wrap'];
   const WOS_MARKED = '[data-wos-tabs],[data-wos-tab],[data-wos-flat],[data-wos-fs]';
@@ -495,6 +498,63 @@
       }
     }));
   }
+  /* Round 5 (Miguel, 2 Nov 2026: "the orb floats over Messenger"): an app's bottom controls are not always a kit tab
+   * bar. bottomBar finds the outermost block along the bottom of the page that holds controls and stays put: at least
+   * 80 % of the page wide, at most 45 % tall, in its lower half, its bottom within 24 px of the page's, not inside
+   * anything that scrolls (and pinned when the page itself scrolls). Sampled under a few points of the bottom edge. */
+  const CONTROLS = 'button,a[href],input:not([type="hidden"]),textarea,select,[role="button"],[role="tab"],[role="radio"],[contenteditable="true"]';
+  const ENTRY = 'textarea,input:not([type]),input[type="text"],input[type="search"],[contenteditable="true"]';
+  const isTabBar = n => /^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || '');
+  const shownIn = (d, n) => n.getClientRects().length > 0 && d.defaultView.getComputedStyle(n).visibility !== 'hidden';
+  const hasEntry = (d, bar) => [...bar.querySelectorAll(ENTRY)].some(n => shownIn(d, n));
+  function bottomBar(d, vw, vh) {
+    const win = d.defaultView, cs = n => win.getComputedStyle(n), se = d.scrollingElement;
+    const scrolls = n => /(auto|scroll)/.test(cs(n).overflowY) && n.scrollHeight > n.clientHeight + 2;
+    const docScrolls = !!se && se.scrollHeight > se.clientHeight + 4;
+    const fits = r => r.width >= vw * .8 && r.height > 0 && r.height <= vh * .45 && r.top >= vh * .45 && r.bottom >= vh - 24 && r.bottom <= vh + 2;
+    let best = null;
+    for (const fx of [.5, .2, .8]) for (const dy of [3, 16, 32, 56]) {
+      let cand = null, pinned = false;
+      for (let n = d.elementFromPoint(vw * fx, vh - dy); n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
+        if (scrolls(n)) { cand = null; break; }   // inside a list: content, not controls
+        if (/^(fixed|sticky)$/.test(cs(n).position)) pinned = true;
+        if (fits(n.getBoundingClientRect())) cand = n;   // the outermost fit wins
+      }
+      if (!cand || (docScrolls && !pinned)) continue;
+      if (!cand.matches(CONTROLS) && ![...cand.querySelectorAll(CONTROLS)].some(n => shownIn(d, n))) continue;
+      if (!best || cand.contains(best)) best = cand;
+      else if (!best.contains(cand) && cand.getBoundingClientRect().height > best.getBoundingClientRect().height) best = cand;
+    }
+    return best;
+  }
+  /* A button floating just above the bar (Messenger's compose ✎, positioned from the page's bottom) would sit on the bar
+   * once the bar is lifted: it rises by the same amount (data-wos-float; --wos-lift = how far the bar's top moved). Found
+   * once, when the bar is first found, so a risen button is never let go of on the next look. */
+  function floatsOver(d, bar, vw) {
+    const win = d.defaultView;
+    bar.removeAttribute('data-wos-inset-bar'); const top0 = bar.getBoundingClientRect().top; bar.setAttribute('data-wos-inset-bar', '');
+    const near = [];
+    for (const n of d.body.querySelectorAll('*')) {
+      if (bar.contains(n) || n.contains(bar)) continue;
+      const cs = win.getComputedStyle(n); if (!/^(absolute|fixed)$/.test(cs.position) || !shownIn(d, n)) continue;
+      const r = n.getBoundingClientRect();
+      if (r.width < 24 || r.width > vw * .4 || r.bottom > top0 + 4 || r.bottom < top0 - 120 || n.parentElement?.closest('[data-wos-float]')) continue;
+      if (n.matches(CONTROLS) || n.querySelector(CONTROLS)) near.push(n);
+    }
+    // the bar's padding (the inset CSS) applies once it is marked: how far its top moved up is how far they rise
+    const lift = Math.max(0, Math.round(top0 - bar.getBoundingClientRect().top));
+    d.documentElement.style.setProperty('--wos-lift', lift + 'px');
+    for (const n of near) n.setAttribute('data-wos-float', '');
+  }
+  // the list a page scrolls in (no kit scroll area): the scroller under the middle of the page, nearly full width
+  function mainScroller(d, vw, vh) {
+    const win = d.defaultView;
+    for (let n = d.elementFromPoint(vw / 2, vh * .6); n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
+      const r = n.getBoundingClientRect();
+      if (r.width >= vw * .8 && /(auto|scroll)/.test(win.getComputedStyle(n).overflowY) && n.scrollHeight > n.clientHeight + 2) return n;
+    }
+    return null;
+  }
   function insetFrame(f) {
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
     if (!d?.documentElement) return;
@@ -519,15 +579,25 @@
     }
     const se = d.scrollingElement, doc = !!frameInset && !!se && !d.querySelector('.wz-scroll') && se.scrollHeight > se.clientHeight + 4;
     if (doc) d.documentElement.classList.add('wos-inset-doc');
-    // a bottom tab bar: a full-width nav / footer along the app's bottom edge (the window then needs no fade of its own)
+    // a bottom tab bar: a full-width nav / footer along the app's bottom edge (the window then needs no fade of its own);
+    // else (round 5) any block of controls that stays put along the bottom: Messenger's filter rows, Notes' vault
+    // footer, a composer. One that went away (a thread opened over the list) is let go and looked for again.
     let bar = d.querySelector('[data-wos-inset-bar]');
-    if (frameInset && !bar?.isConnected) {
-      const vw = d.documentElement.clientWidth, vh = d.documentElement.clientHeight;
-      for (let n = vw && vh ? d.elementFromPoint(vw / 2, vh - 3) : null; n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
+    if (bar && !bar.getClientRects().length) { bar.removeAttribute('data-wos-inset-bar'); bar.removeAttribute('data-wos-lift'); bar = null; }
+    const vw = d.documentElement.clientWidth, vh = d.documentElement.clientHeight;
+    if (frameInset && !bar?.isConnected && vw && vh) {
+      for (let n = d.elementFromPoint(vw / 2, vh - 3); n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
         const r = n.getBoundingClientRect();
         if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
       }
+      // a block found this way is never a tab bar: it is lifted above the orb's row (data-wos-lift set from the start)
+      if (!bar) { try { bar = bottomBar(d, vw, vh); } catch (_) { bar = null; } if (bar) { bar.setAttribute('data-wos-lift', bar.matches(CONTROLS) ? 'self' : 'block'); bar.setAttribute('data-wos-inset-bar', ''); } }
+      if (bar) floatsOver(d, bar, vw);
     }
+    // a list that scrolls under the orb without a kit scroll area (Mail): room after its last item too
+    const sc = frameInset && !bar && !doc && !d.querySelector('.wz-scroll') && vw && vh ? mainScroller(d, vw, vh) : null;
+    for (const n of d.querySelectorAll('[data-wos-inset-scroll]')) if (n !== sc) n.removeAttribute('data-wos-inset-scroll');
+    if (sc && sc.getBoundingClientRect().bottom > vh - frameInset) sc.setAttribute('data-wos-inset-scroll', '');
     if (!frameInset) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
     // the orb bar: the orb sits over this frame's bottom centre (a full-screen app under a view's orb), so the bar's tabs
     // go either side of it, on its row; else (no orb there, no tabs) the lifted bar above
@@ -541,9 +611,14 @@
       if (o && o.d > 0 && cy > o.d / 2 && cy < 160 && (fr.width >= vwTop * .9 && Math.abs(vwTop / 2 - o.x) < 8 || fr.width >= vwTop * .6 && Math.abs(fr.left + fr.width / 2 - o.x) < 8)) {
         d.documentElement.style.setProperty('--wos-orb-cy', Math.round(cy) + 'px');
         d.documentElement.style.setProperty('--wos-orb-slot', Math.round(o.d + 16) + 'px');
-        split = orbTabs(d, bar, d.documentElement.clientWidth);
+        // tabs go either side of the orb only on a real tab bar (a nav / footer / tablist) with no field in it; a
+        // composer or any other block of controls is lifted above the orb's row instead, its own surface running on
+        // under the orb, so the two read as one bar (Miguel, round 5: never the orb layered over an app's controls)
+        split = !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '') && isTabBar(bar) && !hasEntry(d, bar) && orbTabs(d, bar, d.documentElement.clientWidth);
       }
     }
+    if (bar?.isConnected && !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '')) setAttr(bar, 'data-wos-lift', frameInset && !split ? '' : null);
+    if (!frameInset || split) for (const n of d.querySelectorAll('[data-wos-float]')) n.removeAttribute('data-wos-float');
     if (!split) for (const n of d.querySelectorAll(WOS_MARKED)) unmark(n);
     if (d.documentElement.classList.contains('wos-orb-bar') !== split) d.documentElement.classList.toggle('wos-orb-bar', split);
     // with the split in place (its CSS applied), share each side by what the labels need; again once the app's fonts load
@@ -595,11 +670,16 @@
         },
       }),
       sessions: Object.freeze({
-        list: () => { const l = live() ? shell.sessionList?.() : null; return l ? structuredClone(l) : null; },
-        open: id => { if (live() && typeof id === 'string' && id) shell.openThread(id); },
+        // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
+        // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
+        // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
+        list: () => { const l = live() ? shell.sessionList?.() : null; if (!l) return null; const o = structuredClone(l); o.ready = withNoteRows(o.ready || []); return o; },
+        open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
-        act: (id, action) => live() && typeof id === 'string' && id && SESSION_ACTS.includes(action) ? !!shell.sessionAct?.(id, action) : false,
+        act: (id, action) => !live() || typeof id !== 'string' || !id ? false
+          : id.startsWith(NOTE_ID) ? NOTE_ACTS.includes(action) && inboxAct(action, id.slice(NOTE_ID.length))
+          : SESSION_ACTS.includes(action) ? !!shell.sessionAct?.(id, action) : false,
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
         // The Chats window as it is (its thread kept), and a New chat in it: the AI apps view's main screen.
         chats: () => live() ? !!shell.showChats?.() : false,
@@ -717,7 +797,7 @@
           const t = document.createElement('template'); t.innerHTML = h; return t.content.firstElementChild || null;
         },
         /* The dock orb's swipes while this layout is worn: { up, side, down }, each 'stock' (or left out) = the dock's
-         * own, null = nothing; up may be 'home' (go Home). Tap and hold are always the stock ones. Desks (no layout)
+         * own, null = nothing; up may be 'home' (go Home) or 'new' (a New chat, typing). Tap and hold are always the stock ones. Desks (no layout)
          * declares nothing, so every stock swipe stays. Released on teardown. */
         swipes(map) {
           if (!live() || !map || typeof map !== 'object') return () => {};
@@ -740,9 +820,31 @@
     };
   }
   const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename']);
+  /* Notification rows in sessions.list() (round 5): the items Chats lists while a package shows the inbox as threads
+   * (host.inboxList), as Ready rows. New = unread (Snooze, Archive), snoozed = read (Restore, Archive), the actions the
+   * inbox's handler takes; open = the notification as a chat (its Badge | Chats picker above it). */
+  const NOTE_ID = 'notif:', NOTE_ID_OPEN = 'open', NOTE_ACTS = Object.freeze(['snooze', 'restore', 'done']);
+  const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
+  function noteRows() {
+    if (!isDoc || !inboxList()) return [];
+    return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived).map(it => ({
+      id: NOTE_ID + it.id, title: (notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification').slice(0, 120),
+      kind: 'ready', note: true, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+      unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] }));
+  }
+  function withNoteRows(ready) {
+    const notes = noteRows(); if (!notes.length) return ready;
+    const t = r => Date.parse(r.at) || 0, awake = notes.filter(n => n.unread).sort((a, b) => t(b) - t(a)), later = notes.filter(n => !n.unread).sort((a, b) => t(b) - t(a));
+    const out = []; let i = 0;
+    for (const r of ready) { while (i < awake.length && t(awake[i]) >= t(r)) out.push(awake[i++]); out.push(r); }
+    return [...out, ...awake.slice(i), ...later];
+  }
+  const inboxList = () => { for (const h of inboxThreads.values()) if (h.list) return true; return false; };
+  function inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; }
   const panelHolders = new Set();   // layouts that asked for the one right-side panel instead of desks
   const orbSwipeHolders = new Map();      // layout → its dock-orb swipe map (api.phone.swipes); none = the stock swipes
-  const ORB_SWIPE_ACTS = { up: ['home'], side: [], down: [] };
+  // up: 'home' (go Home) or 'new' (a New chat, the cursor in its composer: the AI apps view, round 5)
+  const ORB_SWIPE_ACTS = { up: ['home', 'new'], side: [], down: [] };
   function orbSwipeMap(map) {
     const o = {};
     for (const k of Object.keys(ORB_SWIPE_ACTS)) {

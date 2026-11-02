@@ -4,6 +4,10 @@
 export const SVG = 'http://www.w3.org/2000/svg';
 export const ICON = {
   menu: ['M4 8.5h16', 'M4 15.5h10'],
+  // a bell: a notification among the chats (round 5)
+  bell: ['M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15z', 'M10 20.5a2 2 0 0 0 4 0'],
+  // a house: Home (round 5, the top bar's middle)
+  home: ['M4.5 10.5 12 4.5l7.5 6', 'M6.5 9v10h11V9', 'M10 19v-5h4v5'],
   search: ['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13z', 'M15.5 15.5 20 20'],
   apps: ['M5 5h5v5H5z', 'M14 5h5v5h-5z', 'M5 14h5v5H5z', 'M14 14h5v5h-5z'],
   plus: ['M12 5v14', 'M5 12h14'],
@@ -35,3 +39,12 @@ export function svgIcon(doc, name, cls) {
 }
 /** The first letter of a name, for a workspace disc. */
 export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
+/* The chats in Wizard's own sections (round 5, Miguel: in place of Recents and View all), in the stock Chats order
+ * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. */
+export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['ready', 'Ready']];
+/** Which sections are open: Ready open, Working and Archive folded at first; a stored choice (this device) wins. */
+export function sectionsOpen(stored) {
+  const o = { archive: false, working: false, ready: true };
+  if (stored && typeof stored === 'object') for (const k of Object.keys(o)) if (typeof stored[k] === 'boolean') o[k] = stored[k];
+  return o;
+}

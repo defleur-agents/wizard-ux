@@ -3445,6 +3445,17 @@
     if (idx !== HOME) goDesk(HOME);
     if (desks[idx]?.id !== from) lastMove = { from, at: Date.now() };
   }
+  /* A New chat to type in from the orb (the AI apps view, round 5: tap the orb to talk, swipe it up to type): the Chats
+   * window's New chat with the cursor in its composer, focused inside the swipe's own release so the phone's keyboard
+   * comes up (iOS raises it only for a focus made while handling the touch). */
+  function orbSwipeNew() {
+    if (sheet) closeSheets(true);
+    if (pillOvOpen()) closeOverview();
+    const w = showChats(); if (!w) return;
+    CHATS.openChat(w.id, '__new__');
+    const ta = winEl(w.id)?.querySelector('.ch-compose textarea');
+    if (ta) { ta.focus({ preventScroll: true }); try { ta.setSelectionRange(ta.value.length, ta.value.length); } catch (_) {} }
+  }
   orbWrap.addEventListener('contextmenu', e => e.preventDefault());
   orbWrap.addEventListener('pointerdown', e => {
     if (G || e.isPrimary === false) return;
@@ -3486,7 +3497,7 @@
       clearTimeout(G.hold); G.mode = Math.abs(G.dx) > Math.abs(G.dy) ? 'h' : 'v'; orbWrap.classList.add('dragging');
     }
     // A layout's own swipe (Orb / Apps): nothing follows the finger; only the hint for Home.
-    if (G.swipes && orbSwipeAct(G) !== 'stock') { orbWrap.dataset.dir = orbSwipeAct(G) === 'home' && G.dy < -40 ? '↑ Home' : ''; return; }
+    if (G.swipes && orbSwipeAct(G) !== 'stock') { orbWrap.dataset.dir = G.dy < -40 ? ({ home: '↑ Home', new: '↑ New chat' }[orbSwipeAct(G)] || '') : ''; return; }
     if (G.mode === 'h' && sheet === 'settings') liftSettings(); // swipe away from Settings: it stays on its desk
     if (G.mode === 'h' && !sheet) {
       let dx = G.dx; if ((idx === 0 && dx > 0) || (atPickerEnd() && dx < 0)) dx *= .28;
@@ -3534,7 +3545,7 @@
     if (g.ovOpened) { if (cancelled) closeOverview(); return; }
     // A layout's own swipe (Orb / Apps): up far or fast enough = Home; a swipe it set to null does nothing.
     const own = orbSwipeAct(g);
-    if (own !== 'stock') { if (own === 'home' && !cancelled && (g.dy < -70 || g.dy / vt < -.55)) orbSwipeHome(); return; }
+    if (own !== 'stock') { if ((own === 'home' || own === 'new') && !cancelled && (g.dy < -70 || g.dy / vt < -.55)) { if (own === 'new') orbSwipeNew(); else orbSwipeHome(); } return; }
     if (g.upDesks && g.mode === 'v' && !sheet) { if (g.dy < -70 || g.dy / vt < -.55) openOverview('pill'); else if (!cancelled && V.state === 'idle' && (g.dy > 18 || (g.dy > 8 && g.dy / vt > .3))) setZen(true); return; }
     if (g.mode === 'pending' && !cancelled) {
       if (sheet) return closeSheets();

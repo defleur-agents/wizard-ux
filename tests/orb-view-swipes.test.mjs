@@ -47,7 +47,7 @@ test('app.js: the layout swipe runs before every stock swipe branch, and the sto
   const end = app.slice(app.indexOf('function endGesture(e, cancelled)'), app.indexOf("orbWrap.addEventListener('pointerup', e => endGesture(e, false));"));
   const own = end.indexOf("const own = orbSwipeAct(g);");
   assert.ok(own > 0 && own < end.indexOf('if (g.upDesks && g.mode === \'v\' && !sheet)') && own < end.indexOf("if (g.mode === 'pending' && !cancelled)"), 'before the Desks panel and every stock branch');
-  assert.match(end, /if \(own !== 'stock'\) \{ if \(own === 'home' && !cancelled && \(g\.dy < -70 \|\| g\.dy \/ vt < -\.55\)\) orbSwipeHome\(\); return; \}/);
+  assert.match(end, /if \(own !== 'stock'\) \{ if \(\(own === 'home' \|\| own === 'new'\) && !cancelled && \(g\.dy < -70 \|\| g\.dy \/ vt < -\.55\)\) \{ if \(own === 'new'\) orbSwipeNew\(\); else orbSwipeHome\(\); \} return; \}/);
   // Desks keeps: sideways = swipeDesk, up = launcher / Desks panel, down = distraction-free
   assert.match(end, /if \(g\.dx < -60 \|\| v < -\.5\) \{ swipeDesk\(1\);/);
   assert.match(end, /if \(g\.dy < -70 \|\| v < -\.55\) openSheet\('launcher'\);\n\s+else if \(!cancelled && V\.state === 'idle' && \(g\.dy > 18 \|\| \(g\.dy > 8 && v > \.3\)\)\) setZen\(true\);/);
@@ -97,7 +97,7 @@ test('skin-host: a worn layout declares its orb swipes (api.phone.swipes), relea
   const host = read('web/core/skin-host.js');
   assert.ok(!/miguel|orb-shell|apps-home/.test(host.slice(host.indexOf('function orbSwipeMap'), host.indexOf('function orbSwipeMap') + 400)), 'core stays generic');
   // the desktop Apps orb is the layout's own button: chrome.js only declares the dock swipes on the phone
-  assert.match(read('web/layouts/apps/chrome.js'), /const offSwipes = shell === 'phone' && api\.phone\?\.swipes \? api\.phone\.swipes\(ORB_SWIPES\) : null;/);
+  assert.match(read('web/layouts/apps/chrome.js'), /const offSwipes = shell === 'phone' && api\.phone\?\.swipes \? api\.phone\.swipes\(swipes \|\| ORB_SWIPES\) : null;/, 'the views\' swipes, or a view\'s own (AI apps: up = a New chat to type in)');
 });
 
 test('no round Back button in any view; the desktop Apps orb: drag up = Home, sideways does nothing', async () => {

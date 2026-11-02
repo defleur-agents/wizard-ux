@@ -61,12 +61,18 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-top {
   display: flex; align-items: center; gap: 12px; padding: 0 8px 0 20px; color: var(--aad-ink); background: var(--aad-main);
   transition: left 200ms ease;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tname { display: none; flex: none; height: 36px; margin: 0 0 0 -12px; padding: 0 12px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); font: 650 1.0625rem / 1 var(--wz-font-display, var(--wz-font-ui)); }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-tname { display: block; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tname:hover { background: var(--aad-hover); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
+/* Home (round 5): a small house in the middle of the top row (the main area's centre, over the orb), always there */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-home {
+  pointer-events: auto; position: absolute; left: 50%; top: 4px; width: 44px; height: 44px; margin: 0 0 0 -22px; padding: 0; border: 0; border-radius: 50%; cursor: pointer;
+  display: grid; place-items: center; color: var(--aad-ink); background: none; transition: background 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-home:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-home .aad-ico { width: 22px; height: 22px; }
+/* the workspace switcher shows on Home only (round 5) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws[hidden] { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tt { flex: 1; min-width: 0; max-width: calc(50% - 48px); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws {
-  pointer-events: auto; flex: none; max-width: 200px; height: 36px; margin: 0; padding: 0 10px 0 6px; border: 0; border-radius: 18px; cursor: pointer;
+  pointer-events: auto; flex: none; max-width: 200px; height: 36px; margin: 0 0 0 auto; padding: 0 10px 0 6px; border: 0; border-radius: 18px; cursor: pointer;
   display: flex; align-items: center; gap: 8px; color: var(--aad-ink); background: var(--aad-disc); box-shadow: var(--aad-lift); transition: background 120ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws[aria-expanded="true"] { background: color-mix(in srgb, var(--aad-ink) 13%, var(--aad-canvas)); }
@@ -98,7 +104,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib {
   display: grid; place-items: center; color: var(--aad-ink); background: none; transition: background 120ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ib[aria-expanded="true"]:hover { background: var(--aad-hover); }
-html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-word, .aad-tname, .aad-ib, .aad-gi, .aad-ri, .aad-row, .aad-more, .aad-viewall, .aad-new, .aad-set, .aad-cancel, .aad-pop-i, .aad-wm, .aad-orbbtn):focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-word, .aad-home, .aad-sec, .aad-ib, .aad-gi, .aad-ri, .aad-row, .aad-more, .aad-new, .aad-set, .aad-cancel, .aad-pop-i, .aad-wm, .aad-orbbtn):focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
 /* header: wordmark · 🔍 · ◫ */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-sh { flex: none; display: flex; align-items: center; gap: 4px; height: 52px; padding: 0 8px 0 16px; box-sizing: border-box; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-sh [hidden] { display: none !important; }
@@ -116,6 +122,23 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-q::-webkit-search-cancel-
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-cancel { flex: none; height: 36px; padding: 0 8px; border: 0; border-radius: 18px; background: none; cursor: pointer; color: var(--aad-ink); font: 600 0.8125rem / 1 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 8px 12px; scrollbar-width: thin; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-lab { margin: 12px 8px 4px; color: var(--aad-ink-2); font: 600 0.8125rem / 1.4 var(--wz-font-ui); }
+/* a section header (round 5): the Recents label's look, a button folding its section, a small chevron after the word */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec {
+  display: flex; align-items: center; gap: 4px; width: 100%; height: 32px; margin: 10px 0 2px; padding: 0 8px; box-sizing: border-box;
+  border: 0; border-radius: 10px; background: none; cursor: pointer; text-align: left;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec:hover { background: var(--aad-hover); color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-c { width: 14px; height: 14px; stroke-width: 2.2; opacity: .8; transition: transform 160ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec[aria-expanded="false"] .aad-sec-c { transform: rotate(-90deg); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-b[hidden] { display: none; }
+/* the Ready count on ◫ (round 5): Chats' amber number on the button's corner */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-count {
+  position: absolute; top: -3px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+  display: grid; place-items: center; white-space: nowrap; pointer-events: none;
+  color: color-mix(in srgb, black 88%, var(--amber, var(--aad-ink))); background: var(--amber, var(--aad-ink)); box-shadow: 0 0 0 2px var(--aad-panel);
+  font: 800 0.625rem / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-count[hidden] { display: none; }
 /* the open apps: a compact grid of small icons with their names (the phone drawer's grid, four to a row here) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px 0 4px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi {
@@ -154,6 +177,8 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw:hover .aad-row, html[d
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-held .aad-row { background: var(--aad-held); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-row-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.43 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="archive"] .aad-row-t { color: var(--aad-ink-2); }
+/* a notification among the chats (round 5): a small, quiet bell before the title (the secondary ink), the same row */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-bell { width: 15px; height: 15px; margin-right: -2px; color: var(--aad-ink-2); stroke-width: 1.8; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-pin { width: 14px; height: 14px; color: var(--aad-ink-2); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-st { width: 12px; height: 12px; margin: 0 2px; flex: none; box-sizing: border-box; border-radius: 50%; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-st.is-new { width: 8px; height: 8px; background: var(--wz-accent, var(--aad-ink)); }
@@ -166,8 +191,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-more .aad-ico { stroke-wi
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-more { opacity: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-more:hover { background: color-mix(in srgb, var(--aad-ink) 12%, var(--aad-panel)); }
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-row { padding-right: 36px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-viewall { display: flex; align-items: center; gap: 2px; height: 36px; margin: 2px 0 0; padding: 0 10px; border: 0; border-radius: 12px; background: none; cursor: pointer; color: var(--aad-ink-2); font: 500 0.875rem / 1 var(--wz-font-ui); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-viewall:hover { background: var(--aad-hover); color: var(--aad-ink); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-chev { width: 14px; height: 14px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-empty { margin: 6px 10px 8px; color: var(--aad-ink-2); font: 500 0.8125rem / 1.4 var(--wz-font-ui); }
 /* the foot: a round + (New chat) and a cog (Settings), icons only (the phone drawer's) */
