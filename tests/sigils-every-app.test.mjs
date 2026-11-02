@@ -41,7 +41,7 @@ test('Home wears the approved 12%-wider hat while the main Hermes agent wears th
   assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
   const hermesPortrait = css.match(/\.sgi\.sg-hermes::after\s*\{([^}]*)\}/s);
   assert.ok(hermesPortrait, 'Hermes portrait layer exists');
-  assert.match(hermesPortrait[1], /inset:\s*2%;/, 'the portrait fills more of the circle');
+  assert.match(hermesPortrait[1], /inset:\s*0;/, 'the portrait fills the circle without changing the badge size');
   assert.match(hermesPortrait[1], /background:\s*#08070A;/, 'the portrait stays black');
   assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
   assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
@@ -53,6 +53,19 @@ test('Home wears the approved 12%-wider hat while the main Hermes agent wears th
   }
   const style = read('tools/sigils/style.css');
   assert.match(style, /\.sgi\.sg-hat[^{}]*\{[^}]*mask-size:\s*56\.59224% 68%/s, 'Home inherits the selected exactly 12%-wider hat geometry');
+});
+
+test('phone navigation keeps active and inactive app marks smaller and inside the orb', () => {
+  const css = read('web/core/desks.css');
+  const nav = css.match(/#device:not\(\.orb-corner\) \.dock :is\(\.ddot\.sig\[data-goto\], #orbApp\) \.dsg\s*\{([^}]*)\}/s);
+  assert.ok(nav, 'one shell rule sizes active and inactive app marks without shrinking New desk');
+  assert.match(nav[1], /scale:\s*\.9;/, 'both navigation states step down by ten percent');
+  const active = css.match(/#device:not\(\.orb-corner\) \.dock #orbApp \.dsg\s*\{([^}]*)\}/s);
+  assert.ok(active, 'the active app has an explicit orb containment cap');
+  const cap = Number(active[1].match(/max-width:\s*([\d.]+)%/)?.[1]);
+  assert.equal(cap, 54, 'the active mark is capped before the shared optical scale');
+  assert.ok(cap * .9 < 50, 'the active mark remains inside the visible half-diameter of the orb');
+  assert.match(active[1], /max-height:\s*54%;/);
 });
 
 test('Cloudflare wears the warm cloud', () => {
