@@ -373,7 +373,8 @@ export default function desktop(api) {
     });
     return t;
   }
-  // round 12: a Home icon is a desk (desk = its number): that desk, a Chats desk as itself (no app panel, no placeholder)
+  // round 12: a Home icon is a desk (desk = its number): that desk. A Chats desk gets no app panel or placeholder: this
+  // view has one chat area, so a Chats desk showing its list lands on the chat Home (the sidebar is the list)
   const goApp = (id, desk = null) => {
     unpeek(); const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     if (id === CHATS) { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(CHATS); return; }
