@@ -884,3 +884,28 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state: CHATS\.stiKind\?\.\(s\) \|\| '',/);
 });
+test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offers it for the home screen through the stock Desks sheet', async () => {
+  for (const shell of ['phone', 'desktop']) {
+    const w = shell === 'phone' ? world() : deskWorld().w;
+    const offered = [];
+    w.api.apps.homeScreen = { can: id => id !== 'maps', offer: id => { offered.push(id); return true; } };
+    (await layout()).default(w.api);
+    if (shell === 'phone') w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; else w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 };
+    w.emit('route', w.st.route);
+    const money = w.q('.ah-app[data-app="money"]');
+    money.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 41, button: 0, clientX: 10, clientY: 10 }));
+    const h = w.st.timers.filter(t => t.ms === 450).at(-1); assert.ok(h, `${shell}: the stock 450 ms hold`); h.fn();
+    assert.deepEqual(offered, ['money'], `${shell}: the hold offers it`);
+    const go = w.st.gone.length; money.dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.length, go, `${shell}: the lift does not also open it`);
+    const e = new FakePointerEvent('contextmenu'); const realNow = Date.now; Date.now = () => realNow() + 2000;
+    try { w.q('.ah-app[data-app="mail"]').dispatchEvent(e); } finally { Date.now = realNow; }
+    assert.ok(e.defaultPrevented); assert.deepEqual(offered, ['money', 'mail'], `${shell}: a right click too`);
+    const m = new FakePointerEvent('contextmenu'); w.q('.ah-app[data-app="maps"]').dispatchEvent(m);
+    assert.ok(!m.defaultPrevented && offered.length === 2, `${shell}: an app the stock sheet would not offer keeps its plain menu`);
+  }
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /offer: id => \{ const x = live\(\) \? homeScreenApp\(id\) : null; return x \? !!window\.WizHomeScreenApps\.offer\(x\) : false; \},/, 'the stock sheet, not a copy');
+  assert.match(host, /if \(x && !x\.system && H\.canOffer\(x\)\) return x;/, 'the Desks\' own checks (no system apps)');
+  const dh = read('web/desktop.html');
+  assert.ok(dh.includes('<script src="core/home-screen-apps.js"></script>') && dh.includes('<script src="core/home-screen-policy.js"></script>') && dh.includes('href="core/home-screen-apps.css"'), 'the desktop loads the same sheet');
+});

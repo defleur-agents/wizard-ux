@@ -815,6 +815,12 @@
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
         openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
+        // Add to home screen: the Desks' own hold on an app tile (core/home-screen-apps.js, its sheet and its checks), for a
+        // layout's own app icons (the AI apps view's Home, round 7). can(id) says whether that app may be offered.
+        homeScreen: Object.freeze({
+          can: id => live() && !!homeScreenApp(id),
+          offer: id => { const x = live() ? homeScreenApp(id) : null; return x ? !!window.WizHomeScreenApps.offer(x) : false; },
+        }),
         // Close the app everywhere it is open (its desk goes; the Orb panel quits it). Chats always stays.
         close: id => live() && typeof id === 'string' && id && id !== 'wizard' ? !!shell.closeApp?.(id) : false,
         /* Not installed yet: the App Store's Apps this Wizard lacks ([{ id, name, summary }], a Promise), and get(id),
@@ -944,6 +950,13 @@
         a.offs.add(off); return off;
       } }),
     };
+  }
+  // The registered app the stock Add to home screen sheet may offer (Desks: a frontend app, never a system one).
+  function homeScreenApp(id) {
+    const H = isDoc ? window.WizHomeScreenApps : null, C = isDoc ? window.WizCore : null;
+    if (!H || typeof id !== 'string' || !id || typeof C?.apps !== 'function') return null;
+    for (const k of ['mobile', 'desktop']) { let x = null; try { x = C.apps(k)?.APP?.[id]; } catch (_) {} if (x && !x.system && H.canOffer(x)) return x; }
+    return null;
   }
   const SESSION_ACTS = Object.freeze(['snooze', 'done', 'unread', 'restore', 'pin', 'rename']);
   /* Notification rows in sessions.list() (round 5): the items Chats lists while a package shows the inbox as threads
