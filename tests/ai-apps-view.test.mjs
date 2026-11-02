@@ -161,15 +161,23 @@ test('top bar: ☰ · the Wizard\'s name · the workspace switcher; the drawer: 
   // open the drawer
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
-  const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(app|more|all|div|lab|chat|viewall|empty)$/.test(c)));
-  assert.deepEqual(rows, ['aa-app', 'aa-app', 'aa-app', 'aa-app', 'aa-more', 'aa-all', 'aa-div', 'aa-lab', 'aa-chat', 'aa-chat', 'aa-chat', 'aa-viewall']);
-  assert.deepEqual(w.qa('.aa-app').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes'], 'open apps = desks, in desk order, Chats left out');
-  assert.equal(w.q('.aa-more').textContent.trim(), '1 more open');
-  assert.equal(w.q('[data-badge="money"]').textContent, '3', 'the shell\'s own counts');
+  const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(grid|app|more|all|div|lab|chat|viewall|empty)$/.test(c)));
+  assert.deepEqual(rows, ['aa-grid', 'aa-div', 'aa-lab', 'aa-chat', 'aa-chat', 'aa-chat', 'aa-viewall']);
+  // round 2: EVERY open app in one compact grid (no "N more"), badged apps first (the Orb view's rule), then desk order;
+  // All apps is the grid's last cell; each cell is a small icon with its name under it and the badge on the icon
+  assert.deepEqual(w.q('.aa-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'music', 'notes', 'maps', 'all'], 'open apps = desks, badged first, then desk order; Chats left out');
+  assert.equal(w.q('.aa-grid').getAttribute('role'), 'list'); assert.ok(w.qa('.aa-gi').every(b => b.getAttribute('role') === 'listitem'));
+  assert.equal(w.q('.aa-more'), null, 'no "N more open"');
+  assert.equal(w.q('.aa-gi[data-app="money"] .aa-gt [data-badge="money"]').textContent, '3', 'the shell\'s own count, on the icon');
+  assert.equal(w.q('.aa-gi[data-app="money"] .aa-gn').textContent, 'Money', 'the name under the icon');
+  assert.equal(w.q('.aa-gi[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new');
+  assert.ok(w.q('.aa-grid').children.at(-1).classList.contains('aa-all'), 'All apps closes the grid');
   assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['w1:working', 'r1:ready', 'r2:ready'], 'Recents: Working, then Ready');
   assert.ok(w.q('.aa-chat[data-sid="r1"] .aa-st').classList.contains('is-new') && w.q('.aa-chat[data-sid="r1"] .aa-pin'), 'new dot, pin mark');
+  assert.equal(w.q('.aa-chat[data-sid="r2"] .aa-st'), null, 'a seen chat is a plain title (no state ring)');
+  assert.deepEqual(w.q('.aa-chat[data-sid="r1"]').children.map(c => c.className.split(' ').pop()), ['aa-row-t', 'aa-pin', 'is-new'], 'title first, the state at the end');
   // an app row goes to its desk; All apps opens the shared three-level sheet
-  w.q('.aa-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aa-gi[data-app="money"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.st.gone, [4]); assert.equal(w.html.dataset.aaDrawer, undefined, 'the drawer closes');
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-all').dispatchEvent(new FakePointerEvent('click'));
@@ -177,10 +185,13 @@ test('top bar: ☰ · the Wizard\'s name · the workspace switcher; the drawer: 
   // footer
   w.q('.vc-x').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.q('.aa-av').textContent, 'M', 'the owner\'s initial');
+  // round 2: icons only — a big round + (New chat) where ChatGPT's compose button sits, then a cog (Settings); no words,
+  // no avatar letter; their accessible names say what they do
+  assert.deepEqual(w.q('.aa-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aa-new', 'New chat', ''], ['aa-set', 'Settings', '']]);
+  assert.equal(w.q('.aa-av'), null); assert.equal(w.q('.aa-acct'), null);
   w.q('.aa-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
-  w.q('.aa-acct').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
+  w.q('.aa-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-viewall').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.lists, ['ready'], 'View all = the stock Chats list');
   off();
@@ -193,7 +204,7 @@ test('search covers chats (archive too) and apps; a chat row opens its thread; a
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-find').dispatchEvent(new FakePointerEvent('click'));
   const f = w.q('.aa-q'); f.value = 'mo'; f.dispatchEvent(new FakePointerEvent('input'));
-  assert.deepEqual(w.qa('.aa-scroll .aa-row').map(b => b.dataset.app || b.dataset.sid), ['money', 'movies', 'a1']);
+  assert.deepEqual(w.qa('.aa-scroll .aa-gi, .aa-scroll .aa-row').map(b => b.dataset.app || b.dataset.sid), ['money', 'movies', 'a1']);
   w.q('.aa-cancel').dispatchEvent(new FakePointerEvent('click'));
   // tap
   w.q('.aa-chat[data-sid="r2"]').dispatchEvent(new FakePointerEvent('click'));
@@ -283,4 +294,23 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   const ws = host.match(/list: \(\) => \{\n          if \(!live\(\) \|\| !isDoc\) return \[\];([\s\S]*?)\n        \},\n        refresh/)[1];
   const list = vm.runInNewContext(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(list)), [{ id: 'this', name: 'Miguel', org: '', current: true, owner: 'Miguel' }, { id: 'g', name: 'Carlos', org: 'Acme', current: false }]);
+});
+
+test('round 2 shapes: rounded like the native apps (measured), icon-only drawer foot, an icon grid for the open apps', () => {
+  const css = read('web/layouts/ai-apps/layout.css'), P = 'html\\[data-shell="phone"\\]\\[data-layout="ai-apps"\\] ';
+  const rule = sel => (css.match(new RegExp(P + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}')) || [])[1] || '';
+  assert.match(rule('.aa-tb::before'), /border-radius: 50%;/, 'top-bar buttons are round discs (ChatGPT)');
+  assert.match(rule('.aa-drawer'), /border-radius: 0 16px 16px 0;/, 'the drawer\'s end corners (Claude, 16 dp)');
+  assert.match(rule('.aa-row'), /border-radius: 12px;/, 'row and selection pills (Claude, 11 dp)');
+  assert.match(rule('.aa-pop'), /border-radius: 18px;/, 'menus (ChatGPT long-press menu, 16–18 dp)');
+  assert.match(rule('.aa-sh-card'), /border-radius: 28px 28px 0 0;/, 'sheets');
+  assert.match(rule('.aa-search'), /height: 44px;[^}]*border-radius: 22px;/, 'search is a full pill');
+  assert.match(rule('.aa-new'), /width: 56px; height: 56px;[^}]*border-radius: 50%;/, 'New chat = a big round +');
+  assert.match(rule('.aa-set'), /width: 48px; height: 48px;[^}]*border-radius: 50%;/, 'Settings = a round cog');
+  assert.match(rule('.aa-tile'), /width: 44px; height: 44px;[^}]*border-radius: 10px;/, 'app icons: rounded squares (≈ 23 %)');
+  assert.match(rule('.aa-grid'), /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/, 'five small icons a row');
+  assert.match(rule('.aa-gi'), /min-height: 72px;/, 'cells stay >= 44 px targets');
+  assert.ok(!/\.aa-acct|\.aa-av\b|aa-more/.test(css + read('web/layouts/ai-apps/layout.js')), 'the avatar letter, the Settings word and "N more open" are gone');
+  const chrome = read('web/layouts/apps/chrome.css');
+  assert.match(chrome, /max-height: 88%; border-radius: 28px 28px 0 0;/, 'the shared app sheet matches');
 });

@@ -66,7 +66,14 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   const offSwipes = shell === 'phone' && api.phone?.swipes ? api.phone.swipes(ORB_SWIPES) : null;
 
   /* ---------- full screen: hosted apps get room under their last item for the floating orb ---------- */
-  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell]) : null;
+  // the orb bar (the Wizard standard on the phone): the dock orb's fixed spot, bottom centre; an app's own bottom tabs
+  // are laid out either side of it on its row (skin-host), never under it
+  const orbSpot = () => {
+    const o = api.phone?.orb?.(); if (!o?.getBoundingClientRect) return null;
+    const r = o.getBoundingClientRect(), d = o.offsetWidth || r.width;   // untransformed size: a press never reflows the bar
+    return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, d } : null;
+  };
+  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell], shell === 'phone' ? orbSpot : null) : null;
 
   /* ---------- the + sheet: Open · Installed · Get more ---------- */
   let sheet = null, offBack = null, offMount = null, q = '', store = null, storeErr = false, body = null, closing = false;

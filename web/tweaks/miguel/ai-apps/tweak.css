@@ -6,3 +6,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .home-desk::before {
   content: ""; position: absolute; z-index: 1; left: 16px; right: 16px; bottom: max(12px, var(--safe-b, 0px)); height: 52px; border-radius: 26px;
   background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); pointer-events: none;
 }
+/* The open apps' count badges in the drawer grid: the Apps view's amber (the dock's count colour), dark figures on the
+ * dark skins; the light skins' amber is a deep gold, so white figures there. */
+html[data-shell="phone"][data-layout="ai-apps"] { --aa-badge: var(--amber, #ffbf5a); --aa-badge-ink: #160b05; }
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="light"]) { --aa-badge-ink: #ffffff; }
