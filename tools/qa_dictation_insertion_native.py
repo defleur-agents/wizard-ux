@@ -7,17 +7,19 @@ meeting-sync/overlay startup; tests explicitly exercise the production insertion
 All emulator state is job-owned, finally stopped; no existing emulator or phone may be targeted.
 """
 import argparse
-import fcntl
+
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import socket
 import subprocess
 import time
 import traceback
 import xml.etree.ElementTree as ET
+from qa_queue_lease import validated_queue_fd
 
 SDK = Path('/srv/work/android-sdk')
 BASE = Path('/srv/work/AndroidBuilds')
@@ -92,11 +94,8 @@ def artifact(receipt, package):
 def run(config_path, out):
     config = json.loads(Path(config_path).read_text())
     # Parent supplies an inherited queue lease. No direct-SSH or standalone emulator bypass.
-    fd = int(os.environ['WIZARD_HEAVY_LOCK_FD'])
-    actual, expected = os.fstat(fd), (BASE / 'worker.lock').stat()
-    if (actual.st_dev,actual.st_ino) != (expected.st_dev,expected.st_ino):
-        raise RuntimeError('wrong worker lease')
-    fcntl.flock(fd,fcntl.LOCK_EX | fcntl.LOCK_NB)
+    validated_queue_fd()
+    if shutil.disk_usage(BASE).free < 200*1024**3: raise RuntimeError('200 GiB reserve required')
     if not out.resolve().is_relative_to(BASE) or out.exists():
         raise ValueError('output must be a NEW directory under worker root')
     out.mkdir(parents=True)
