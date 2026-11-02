@@ -29,6 +29,20 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
   assert.deepEqual(missing, [], `add a HOUSE entry in tools/sigils/build.py for: ${missing.join(', ')}`);
 });
 
+test('Home wears the approved 12%-wider hat while the main Hermes agent wears the Hermes logo', () => {
+  const S = sigil();
+  assert.ok(S.has('hermes'), 'Hermes is available as a first-class mask sigil');
+  assert.match(read('web/core/sigils.css'), /\.sg-hermes\s*\{\s*--sg:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\)/);
+  assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
+  for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
+    const src = read(p);
+    assert.match(src, /class="sgi sg-hat"/, `${p}: Home uses the hat`);
+    assert.doesNotMatch(src, /class="sgi sg-home"/, `${p}: old house mark is gone`);
+  }
+  const style = read('tools/sigils/style.css');
+  assert.match(style, /\.sgi\.sg-hat[^{}]*\{[^}]*mask-size:\s*56\.59224% 68%/s, 'Home inherits the selected exactly 12%-wider hat geometry');
+});
+
 test('Cloudflare wears the warm cloud', () => {
   const S = sigil(), s = S.of({ id: 'wizard-cloudflare', name: 'Cloudflare (Testing)' });
   assert.equal(s.glyph, 'cloud');

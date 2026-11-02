@@ -16,7 +16,7 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
+  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents', 'hermes']);
   const HOUSE = /*HOUSE*/;
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];

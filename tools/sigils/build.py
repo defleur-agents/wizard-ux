@@ -112,11 +112,12 @@ HOUSE = {
     'wizard-youtube-music': ('music', 352, None),
     'wizard-voice-service': ('voice', 318, None),
 }
-# Brand-mask sigils: drawn from web/brand/*.png in style.css, not from glyphs.py.
-#   hat          supplied company hat (Chats, main agent)
+# Brand-mask sigils: drawn from web/brand assets in style.css, not from glyphs.py.
+#   hat          supplied company hat (Home and non-default standard agents)
 #   hat-private  tools/sigils/private_hat.py: the hat with a keyhole for its door
 #   agents       tools/sigils/agent_hats.py: two layered hats, private green behind main purple
-MASKS = ('hat', 'hat-private', 'agents')
+#   hermes       Hermes product mark (the main agent)
+MASKS = ('hat', 'hat-private', 'agents', 'hermes')
 # Real products wear their own brand mark (web/brand/apps/<mark>.svg; sources in tools/sigils/README.md, "Brand marks").
 # html() adds `sgb sgb-<mark>` next to the house glyph; a skin opts in by styling .sgb-<mark> (Miguel's skins do, in
 # web/skins/*/skin.css), so any other skin still shows the house glyph unchanged.
