@@ -320,7 +320,8 @@
     return out;
   }
 
-  /* THE Badge | Chats picker (Miguel, 1 Nov 2026: "one simple design everywhere"). Settings › Notifications and every
+  /* THE Chats | Badge | Off picker, loudest to quietest (Miguel, 2 Nov 2026: Chats one end, Off the other, Badge between).
+   * Was: the Badge | Chats picker (Miguel, 1 Nov 2026: "one simple design everywhere"). Settings › Notifications and every
    * notification opened in Chats render this one function, and both write the one saved route above, so a change in
    * either place shows in the other at once (`wizard:notify-route`). Badge wears a badge dot, Chats a chat bubble. */
   const ROUTE_ICON = {
@@ -331,7 +332,7 @@
   const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   function picker(id, { name, off = false } = {}) {
     id = String(id || ''); const nm = name || nameOf(id), cur = off && route(id) === 'chats' ? 'badge' : route(id);
-    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats'], ['off', 'Off']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
+    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['chats', 'Chats'], ['badge', 'Badge'], ['off', 'Off']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
   }
   /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
    * Undo, which puts the app back on Chats. `toast` is the shell's toast(icon, text, ms); the button is added here. */

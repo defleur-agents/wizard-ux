@@ -45,9 +45,9 @@ function boot({ storage = new Map() } = {}) {
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const ids = B => [...B.items()].map(i => i.id);
 
-test('the picker has three choices, Badge · Chats · Off, everywhere it is drawn', () => {
+test('the picker has three choices, Chats · Badge · Off, everywhere it is drawn', () => {
   const w = boot(), h = w.WosBell.picker('notifications');
-  assert.deepEqual([...h.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['badge', 'chats', 'off']);
+  assert.deepEqual([...h.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats', 'badge', 'off'], 'loudest to quietest');
   assert.match(w.WosBell.picker('system:app-updates'), /data-notify-route="system:app-updates" data-notify-to="off" aria-checked="true"/, 'System rows default to Off');
 });
 
