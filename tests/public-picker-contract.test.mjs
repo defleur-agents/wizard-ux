@@ -104,3 +104,22 @@ test('same session id has independent main, profile, container and restricted pu
 test('an unexpected actual provider never matches merely because requested metadata matches', () => {
   const { M } = fixture(); assert.equal(M.matchesRuntime({ ...B, model: A.model, requested: A }, A), false);
 });
+test('public picker return retains the acknowledged revision and never upgrades an older frozen choice', async () => {
+  const { M } = fixture(async () => ack(B, 8));
+  const frozen = M.snapshot('synthetic');
+  const saved = await M.setThreadModel('synthetic', {value:B.model,provider:B.provider});
+  assert.equal(saved.selection_version,8);
+  assert.equal(M.snapshot('synthetic',saved).selection_version,8);
+  assert.equal(M.snapshot('synthetic',frozen).selection_version,7);
+});
+test('Live reply passes an explicit public revision unchanged, including a stale one', async () => {
+  const {M,rows}=fixture(async()=>ack(B,8));
+  await M.setThreadModel('synthetic',{value:B.model,provider:B.provider});
+  const live=readFileSync(new URL('../web/live.js',import.meta.url),'utf8');
+  const method=live.slice(live.indexOf('    async reply(id, input, opts = {}) {'),live.indexOf('    /* Full message history'));
+  const bodies=[];
+  const api=vm.runInNewContext(`({${method}})`,{window:{WosModels:M},WORKING:new Set(),crypto:webcrypto,setTimeout(){},aq:()=>'',J:{},req:async(_path,init)=>{bodies.push(JSON.parse(init.body));return new Response(JSON.stringify({run_id:'synthetic_run'}))}});
+  api.session=id=>rows.get(id);api.emit=()=>{};
+  for(const version of [8,7])await api.reply('synthetic','Synthetic request',{...B,selection_version:version});
+  assert.deepEqual(bodies.map(b=>b.selection_version),[8,7]);
+});

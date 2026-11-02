@@ -1032,7 +1032,8 @@
     async reply(id, input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null));
+      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider,
+        ...(M.publicRoute?.(id) ? { selection_version: opts.selection_version } : {}) } : null));
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {

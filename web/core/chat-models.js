@@ -500,7 +500,7 @@
           throw new Error('Wizard did not confirm the selected model');
         M.selections.set(key, { model: route.model, provider: route.provider, version: ack.runtime.selection_version, state: 'confirmed' });
         M.uncertain.delete(key); M.savePickerAttempts();
-        return { model: route.model, provider: route.provider };
+        return { model: route.model, provider: route.provider, selection_version: ack.runtime.selection_version };
       })();
       M.pending.set(key, task);
       return task.finally(() => M.pending.delete(key));
