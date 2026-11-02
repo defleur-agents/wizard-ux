@@ -18,7 +18,7 @@ function sigil() {
 // Apps published in the Wizard App Store / index or installed by default on a Wizard box. When you publish a new
 // app, add its id here AND give it a HOUSE entry in tools/sigils/build.py (see tools/sigils/README.md).
 const STORE_APPS = [
-  'browser', 'card-benefits', 'movies', 'defleur-video', 'files', 'messenger', 'money', 'morning-report', 'notifications', 'profiles', 'secret-drop',
+  'browser', 'card-benefits', 'movies', 'defleur-video', 'files', 'messenger', 'money', 'morning-report', 'news', 'notifications', 'profiles', 'secret-drop',
   'sniper', 'transcriber', 'wisdom', 'wizard-agent-service', 'wizard-calendar', 'wizard-chatgpt', 'wizard-claude',
   'wizard-cloudflare', 'wizard-podcasts', 'wizard-search', 'wizard-shopping', 'wizard-notes', 'wizard-tinfoil', 'wizard-ux',
 ];

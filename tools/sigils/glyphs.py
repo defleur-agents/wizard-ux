@@ -395,6 +395,13 @@ def g_gauge():
     ticks = U(*[R(rrect(248, 186, 16, 40, 8), a, 256, 330) for a in (-60, -30, 0, 30, 60)])
     return D(dial, needle, ticks)
 
+@glyph('news', 'A folded newspaper with its headline and picture cut out: the day\u2019s stories, picked for you.')
+def g_news():
+    sheet = rrect(152, 108, 264, 300, 40)
+    back = rrect(96, 196, 96, 212, 34)
+    seam = stroke('M152 210V368', 30, cap='round')          # the fold between the back page and the front one
+    return D(U(D(back, rrect(140, 150, 300, 300, 52)), sheet), rrect(196, 156, 176, 44, 14), rrect(196, 236, 80, 124, 14), rrect(300, 236, 72, 28, 10), rrect(300, 286, 72, 28, 10), rrect(300, 336, 72, 24, 10))
+
 @glyph('letter', 'Placeholder ring for apps without a sigil yet.')
 def g_letter():
     return D(circle(256, 256, 156), circle(256, 256, 120))

@@ -73,6 +73,7 @@ HOUSE = {
     'system':        ('gauge',    200, 0.07),
     'notifications': ('bell',     70,  None),
     'morning-report':('coffee',   46,  None),
+    'news':          ('news',     18,  None),
     'wizard-calendar':('calendar', 8,  None),
     'secret-drop':   ('secret',   190, None),
     'browser':       ('globe',    220, None),
