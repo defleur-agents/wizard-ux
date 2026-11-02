@@ -47,7 +47,7 @@ public final class AppNotifications {
     static final int N_ID = 7600;
     static final String GROUP = "wizard-apps";
     public static final String ACTION_ACT = "ai.wizards.os.notify.APP_ACTION";
-    public static final String EXTRA_APP = "wos.app", EXTRA_KEY = "wos.key", EXTRA_ACTION = "wos.action";
+    public static final String EXTRA_APP = "wos.app", EXTRA_KEY = "wos.key", EXTRA_ACTION = "wos.action", EXTRA_ORIGIN = "wos.origin";
     public static final String REPLY_KEY = "wos.reply";
     private static final Object LOCK = new Object();
 
@@ -207,11 +207,11 @@ public final class AppNotifications {
         return PendingIntent.getActivity(c, tag.hashCode(), open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
-    static Intent actIntent(Context c, String app, String key, String action) {
+    static Intent actIntent(Context c, String origin, String app, String key, String action) {
         // Explicit, not exported, and a distinct data URI per item + action so PendingIntents never collide.
         return new Intent(c, AppNotifyReceiver.class).setAction(ACTION_ACT)
                 .setData(new Uri.Builder().scheme("wizapp-act").authority(app).appendPath(action).appendQueryParameter("k", key).build())
-                .putExtra(EXTRA_APP, app).putExtra(EXTRA_KEY, key).putExtra(EXTRA_ACTION, action);
+                .putExtra(EXTRA_APP, app).putExtra(EXTRA_KEY, key).putExtra(EXTRA_ACTION, action).putExtra(EXTRA_ORIGIN, origin);
     }
 
     static boolean post(Context c, String origin, JSONObject ev, boolean routerSaysNew) {
@@ -250,7 +250,7 @@ public final class AppNotifications {
             JSONObject a = acts.optJSONObject(i);
             if (a == null || !AppNotifyPolicy.validAction(a.optString("id"))) continue;
             String label = a.optString("label", a.optString("id"));
-            Intent act = actIntent(c, app, key, a.optString("id"));
+            Intent act = actIntent(c, origin, app, key, a.optString("id"));
             int req = (tag + "|" + a.optString("id")).hashCode();
             Notification.Action.Builder ab;
             if (a.optBoolean("input")) {

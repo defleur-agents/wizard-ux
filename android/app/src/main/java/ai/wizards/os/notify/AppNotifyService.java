@@ -46,7 +46,11 @@ public final class AppNotifyService extends Service {
     static final String TAG = AppNotifications.TAG;
     static final String CH_CONN = "wizard-connection";
     static final int N_CONN = 7601;
+    static final String ACTION_RECHECK = "ai.wizards.os.notify.RECHECK";
+    public static final int REQ_PERMISSION = 7603;
     private static volatile boolean running;
+    /** The Wizard the open stream belongs to ("" while not connected). */
+    private static volatile String connectedTo = "";
     private volatile boolean stop;
     private volatile HttpURLConnection live;
     private Thread worker;
@@ -58,16 +62,24 @@ public final class AppNotifyService extends Service {
 
     public static boolean running() { return running; }
 
+    /** See {@link #ensure(Context, android.app.Activity)}; never asks for the notification permission. */
+    public static void ensure(Context context) { ensure(context, null); }
+
     /**
      * Start (or keep) the connection if this Wizard supports it. Cheap; call it whenever Wizard OS comes to the front,
-     * after boot and from the backstop job. Network work happens off the calling thread.
+     * after boot and from the backstop job. Network work happens off the calling thread. With an activity, asks once
+     * for Android's notification permission when this Wizard has the phone router and it is missing.
      */
-    public static void ensure(Context context) {
+    public static void ensure(Context context, android.app.Activity askFrom) {
         final Context c = context.getApplicationContext();
-        if (running || !AppNotifications.canNotify(c)) return;
         final String origin = AppState.origin(c);
         if (origin == null || origin.isEmpty()) return;
-        if (prefs(c).getBoolean("supported:" + origin, false)) { start(c); return; }
+        if (running) {
+            // Connect switched Wizards: drop the old stream now (its pings would keep it open forever).
+            if (!origin.equals(connectedTo)) recheck(c);
+            return;
+        }
+        if (prefs(c).getBoolean("supported:" + origin, false)) { startOrAsk(c, askFrom); return; }
         if (System.currentTimeMillis() - prefs(c).getLong("probed:" + origin, 0) < 6 * 3600_000L) return;
         new Thread(() -> {
             boolean ok;
@@ -79,8 +91,24 @@ public final class AppNotifyService extends Service {
             } catch (IOException e) { return; }
             prefs(c).edit().putBoolean("supported:" + origin, ok).putLong("probed:" + origin, System.currentTimeMillis()).apply();
             Log.i(TAG, "phone router on this Wizard: " + ok);
-            if (ok) start(c);
+            if (ok) startOrAsk(c, askFrom);
         }, "wizard-app-notify-probe").start();
+    }
+
+    private static void startOrAsk(Context c, android.app.Activity askFrom) {
+        if (AppNotifications.canNotify(c)) { start(c); return; }
+        // Android 13+: notifications start denied. Ask once, from Wizard OS on screen; the next resume starts it.
+        if (askFrom == null || Build.VERSION.SDK_INT < 33 || prefs(c).getBoolean("asked-permission", false)) return;
+        prefs(c).edit().putBoolean("asked-permission", true).apply();
+        askFrom.runOnUiThread(() -> {
+            if (!askFrom.isFinishing() && !askFrom.isDestroyed())
+                askFrom.requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, REQ_PERMISSION);
+        });
+    }
+
+    private static void recheck(Context c) {
+        try { c.startService(new Intent(c, AppNotifyService.class).setAction(ACTION_RECHECK)); }
+        catch (RuntimeException e) { Log.w(TAG, "recheck: " + e.getMessage()); }
     }
 
     static void start(Context c) {
@@ -107,6 +135,7 @@ public final class AppNotifyService extends Service {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         foreground(shownState.isEmpty() ? "Connecting to your Wizard\u2026" : shownState);
+        if (intent != null && ACTION_RECHECK.equals(intent.getAction())) poke();
         return START_STICKY;
     }
 
@@ -114,6 +143,7 @@ public final class AppNotifyService extends Service {
         stop = true;
         running = false;
         poke();
+        connectedTo = "";
         if (netCallback != null) try { getSystemService(ConnectivityManager.class).unregisterNetworkCallback(netCallback); } catch (RuntimeException ignored) { }
         super.onDestroy();
     }
@@ -161,6 +191,7 @@ public final class AppNotifyService extends Service {
             c.setRequestProperty("Origin", origin);
             c.setUseCaches(false);
             live = c;
+            connectedTo = origin;
             int code = c.getResponseCode();
             if (code != 200) return code;
             BufferedReader in = new BufferedReader(new InputStreamReader(c.getInputStream(), StandardCharsets.UTF_8), 8192);
@@ -177,11 +208,14 @@ public final class AppNotifyService extends Service {
             return 0;
         } finally {
             live = null;
+            connectedTo = "";
             if (c != null) c.disconnect();
         }
     }
 
     private void dispatch(String origin, AppNotifyPolicy.Sse.Event e) {
+        // The owner switched Wizards mid-stream: nothing from the old one may show (or be answered to the new one).
+        if (!origin.equals(AppState.origin(this))) { poke(); return; }
         JSONObject ev;
         try { ev = new JSONObject(e.data); } catch (JSONException bad) { return; }
         PowerManager.WakeLock wl = null;

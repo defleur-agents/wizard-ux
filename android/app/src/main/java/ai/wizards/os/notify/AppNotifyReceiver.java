@@ -33,6 +33,12 @@ public final class AppNotifyReceiver extends BroadcastReceiver {
         final PendingResult pending = goAsync();
         new Thread(() -> {
             String origin = AppState.origin(c);
+            if (!origin.equals(intent.getStringExtra(AppNotifications.EXTRA_ORIGIN))) {
+                // From the Wizard the owner switched away from: never answer it to the new one.
+                AppNotifications.cancel(c, app, key);
+                pending.finish();
+                return;
+            }
             try {
                 JSONObject body = new JSONObject().put("key", key).put("action", action);
                 if (text != null) {

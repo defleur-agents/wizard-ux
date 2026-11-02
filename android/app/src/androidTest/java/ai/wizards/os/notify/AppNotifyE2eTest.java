@@ -176,6 +176,34 @@ public class AppNotifyE2eTest {
         assertTrue("reconnects were tried while offline", fake.refused.get() >= 1);
     }
 
+    /** Connect switches to another Wizard: the old stream is dropped at once, and nothing from it shows or is answered. */
+    @Test public void switchingWizardsDropsTheOldStreamAndItsActions() throws Exception {
+        AppNotifyService.ensure(c);
+        FakeWizard.Stream s1 = fake.nextStream(20);
+        assertNotNull(s1);
+        long t = System.currentTimeMillis() / 1000;
+        s1.send(1, notify("chat:qa", "QA Carlos", "See you at 5", t));
+        Notification n = shown("wizapp:messenger:chat:qa", true).getNotification();
+        try (FakeWizard other = new FakeWizard()) {
+            Files.write(new File(c.getFilesDir(), "qa_home.txt").toPath(), other.origin().getBytes(StandardCharsets.UTF_8));
+            AppNotifyService.ensure(c);                       // what MainActivity.onResume does after Connect
+            FakeWizard.Stream s2 = other.nextStream(30);
+            assertNotNull("never connected to the new Wizard", s2);
+            assertTrue("the old Wizard's stream is still open", s1.closedByPhone(10_000));
+            // An action on the old Wizard's notification is not sent anywhere (least of all to the new Wizard).
+            Intent fill = new Intent();
+            Bundle typed = new Bundle();
+            typed.putCharSequence(AppNotifications.REPLY_KEY, "wrong box");
+            RemoteInput.addResultsToIntent(n.actions[0].getRemoteInputs(), fill, typed);
+            n.actions[0].actionIntent.send(c, 0, fill);
+            assertNull(other.acts.poll(4, TimeUnit.SECONDS));
+            assertNull(fake.acts.poll(1, TimeUnit.SECONDS));
+            shown("wizapp:messenger:chat:qa", false);
+            s2.send(1, notify("chat:new", "QA New box", "hello", t + 1));
+            shown("wizapp:messenger:chat:new", true);
+        }
+    }
+
     /** Synthetic Wizard: probe, registry, the router's SSE stream and Messenger's inbox action route. */
     static final class FakeWizard implements AutoCloseable {
         final ServerSocket socket = new ServerSocket(0, 20, InetAddress.getByName("127.0.0.1"));
@@ -195,6 +223,11 @@ public class AppNotifyE2eTest {
             }
             void send(long id, JSONObject ev) throws IOException { write("id: " + id + "\nevent: " + ev.optString("type") + "\ndata: " + ev + "\n\n"); }
             void close() throws IOException { s.close(); }
+            /** The phone hung up (EOF on our side) within the time. */
+            boolean closedByPhone(int ms) {
+                try { s.setSoTimeout(ms); return s.getInputStream().read() < 0; }
+                catch (IOException e) { return e instanceof java.net.SocketTimeoutException ? false : true; }
+            }
         }
 
         FakeWizard() throws IOException {
