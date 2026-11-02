@@ -228,8 +228,10 @@
     level(s, 0); s.levels.clear();
   }
   function release(s) {
-    cleanup(s); s.unlock?.(); s.unlock = null;
+    cleanup(s); const unlocked = s.unlock?.(); s.unlock = null;
     if(s.inputStopped || s.discard)recoveryLive.delete(s.row.id); if (active === s) active = null; changed();
+    // The browser lock is not available until its release promise settles.
+    void Promise.resolve(unlocked).then(() => { captureReleaseEpoch++; reconcileAbandonedStarts(); }).catch(() => {});
   }
   function finish(s, partial = false) {
     if (s.discard || s.cancelPromise) return Promise.reject(fail('cancelled', 'Capture was cancelled.'));
@@ -775,18 +777,32 @@
   async function recover() {
     let unlock, lease;
     try { unlock = await acquire();
-      if (active?.instant) return;
+      if (active?.instant) return false;
       lease = { unlock, cancelled: false }; recoveryLease = lease;
-      recoveryError = null; await recoverLocked(lease); }
-    catch (e) { if (e.code === 'recovery_yielded') return; if (e.code !== 'busy') { recoveryError = e; throw e; }
-      const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
+      recoveryError = null; await recoverLocked(lease); return true; }
+    catch (e) { if (e.code === 'recovery_yielded') return false; if (e.code !== 'busy') { recoveryError = e; throw e; }
+      const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); return false; }
     finally { if (recoveryLease === lease) recoveryLease = null; unlock?.(); }
+  }
+  let abandonedRecoveryPending = false, abandonedRecoveryRunning = false, captureReleaseEpoch = 0;
+  function reconcileAbandonedStarts() {
+    if (!abandonedRecoveryPending || abandonedRecoveryRunning || active) return;
+    abandonedRecoveryPending = false; abandonedRecoveryRunning = true;
+    const epoch = captureReleaseEpoch;
+    void recover().then(done => { if (!done) abandonedRecoveryPending = true; }, () => { abandonedRecoveryPending = true; }).finally(() => {
+      abandonedRecoveryRunning = false;
+      // Only an actual capture release retries a yielded/busy pass. No timer or recovery spin.
+      if (captureReleaseEpoch !== epoch) reconcileAbandonedStarts();
+    });
   }
   // Start budget per attempt. Messenger hands its composer back at 8 s; the shared bound frees the mic just after.
   const START_BOUND_MS = 10000, PROMPT_BOUND_MS = 60000;
   async function micPromptOpen() {
-    try { return await Promise.race([navigator.permissions.query({ name: 'microphone' }).then(p => p.state === 'prompt'), new Promise(r => setTimeout(() => r(false), 500))]); }
-    catch (_) { return false; }
+    let timer;
+    // Optional browser metadata cannot rule out a pending getUserMedia prompt.
+    try { return await Promise.race([Promise.resolve(navigator.permissions?.query?.({ name: 'microphone' })).then(p => !['granted', 'denied'].includes(p?.state)), new Promise(r => { timer = setTimeout(() => r(true), 500); })]); }
+    catch (_) { return true; }
+    finally { clearTimeout(timer); }
   }
   // The bound fired: free the microphone now and tell the app which stage hung. A native reservation stays
   // recoverable (recoverLocked claims or clears it); a reservation that never reached a recorder is dropped.
@@ -799,7 +815,7 @@
     release(s); s.readyResolve();
     // With no native recorder running, the recovery pass turns an ID-less reservation into pending custody, so it
     // stops holding updates; a recorder that really started keeps it recoverable until it is claimed.
-    void saved.catch(() => {}).then(() => active ? null : recover()).catch(() => {});
+    void saved.catch(() => {}).then(() => { abandonedRecoveryPending = true; reconcileAbandonedStarts(); });
     return e;
   }
   // The abandoned start settled after all. It never touches `active` (a newer take may own the mic): it returns
@@ -826,12 +842,17 @@
     // Bounded start (James's phone, 31 Oct 2026): a start that never settles must not hold the microphone. Before
     // this bound a hung store/recovery/permission/native await kept `active` set, so every app read the mic as busy
     // until Wizard reloaded, and the app's update hold never ended.
-    let timer;
+    let timer; const started = Date.now();
     const bound = new Promise((_, reject) => {
       const arm = ms => { timer = setTimeout(async () => {
         if (s.phase !== 'starting' || s.engine || s.settled) return;
         // The owner may still be reading Android's microphone prompt: give that one stage a longer budget.
-        if (!s.promptExtended && s.stage === 'microphone permission' && await micPromptOpen()) { s.promptExtended = true; arm(PROMPT_BOUND_MS - START_BOUND_MS); return; }
+        if (!s.promptExtended && s.stage === 'microphone permission') {
+          const prompt = await micPromptOpen();
+          // Permission/engine settlement can win while the optional query is outstanding.
+          if (s.phase !== 'starting' || s.engine || s.settled) return;
+          if (prompt && s.stage === 'microphone permission') { s.promptExtended = true; arm(Math.max(0, PROMPT_BOUND_MS - (Date.now() - started))); return; }
+        }
         if (s.phase !== 'starting' || s.engine || s.settled) return;
         reject(abandonStart(s, !!opts.resumeId));
       }, ms); };
