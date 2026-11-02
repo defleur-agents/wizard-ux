@@ -40,26 +40,27 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-tb:active::before, html[data
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tb:focus-visible { outline: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tb:focus-visible::before { box-shadow: 0 0 0 2px var(--wz-accent, var(--aa-ink)); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tb .aa-ico { position: relative; width: 22px; height: 22px; stroke-width: 2; }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-dot { position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--wz-accent, var(--aa-ink)); box-shadow: 0 0 0 2px var(--aa-canvas); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-dot[hidden] { display: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-mid {
-  min-width: 0; min-height: 44px; display: grid; justify-items: center; align-content: center; line-height: 1.2; text-align: center;
-  margin: 0; padding: 0 8px; border: 0; border-radius: 22px; background: none; color: inherit; font: inherit; cursor: pointer;
-  -webkit-tap-highlight-color: transparent; touch-action: manipulation; transition: background 120ms ease;
+/* the Ready count on ☰ (round 5): Chats' amber number (the one the stock orb wears), on the disc's corner */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-count {
+  position: absolute; top: 2px; left: 28px; z-index: 1; min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px;
+  display: grid; place-items: center; white-space: nowrap; pointer-events: none;
+  color: color-mix(in srgb, black 88%, var(--amber, var(--aa-ink))); background: var(--amber, var(--aa-ink)); box-shadow: 0 0 0 2px var(--aa-canvas);
+  font: 800 0.6875rem / 1 var(--wz-font-ui);
 }
-/* the name is Home's button (round 4): a quiet press, like the other top-bar controls */
-html[data-shell="phone"][data-layout="ai-apps"] .aa-mid:active { background: var(--aa-hover); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-mid:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--wz-accent, var(--aa-ink)); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-mid > * { pointer-events: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-name { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 650 0.9375rem / 1.25 var(--wz-font-ui); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-sub { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aa-ink-2); font: 500 0.75rem / 1.25 var(--wz-font-ui); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-sub[hidden] { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-count[hidden] { display: none; }
+/* Home (round 5): a small house in the middle, the same round disc as ☰ (a 48 px target) */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-top .aa-home { justify-self: center; margin: 0; }
+/* the workspace switcher shows on Home only (round 5) */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-top .aa-ws[hidden] { display: none !important; }
 /* the workspace switcher: the same round disc with this Wizard's initial (where they put Temporary / Incognito) */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-ws-i {
   position: relative; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box;
   color: var(--aa-ink); font: 700 0.875rem / 1 var(--wz-font-ui);
 }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-ws-i.is-big { flex: none; background: var(--aa-disc); box-shadow: var(--aa-lift); font-size: 0.9375rem; }
+
+/* the orb wears no count and no moons here (round 5, Miguel: noise): the Ready count is on ☰ */
+html[data-shell="phone"][data-layout="ai-apps"] #dock :is(#orbBadge, #moons) { display: none !important; }
 
 /* ---------- the main screen under the bar: the chat, or an app; edge to edge, no window title bar ---------- */
 html[data-shell="phone"][data-layout="ai-apps"] .device .desk:not(.home-desk) > .tiles {
@@ -212,14 +213,24 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-badge {
 html[data-shell="phone"][data-layout="ai-apps"] .aa-badge[hidden] { display: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-div { height: 1px; margin: 8px 12px; border: 0; background: var(--aa-line); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-lab { margin: 8px 12px 4px; color: var(--aa-ink-2); font: 600 0.8125rem / 1.3 var(--wz-font-ui); }
+/* a section header (round 5): the Recents label's look, a button folding its section, a small chevron after the word */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec {
+  display: flex; align-items: center; gap: 4px; width: calc(100% - 8px); min-height: 36px; margin: 6px 4px 0; padding: 0 8px; box-sizing: border-box;
+  border: 0; border-radius: 12px; background: none; cursor: pointer; text-align: left; -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec:active { background: var(--aa-hover); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec:focus-visible { outline: 2px solid var(--wz-accent, var(--aa-ink)); outline-offset: -2px; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec-c { width: 14px; height: 14px; stroke-width: 2.2; transition: transform 160ms ease; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec[aria-expanded="false"] .aa-sec-c { transform: rotate(-90deg); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec-b[hidden] { display: none; }
 /* a chat: a plain title like theirs; its state only when it has one, at the end (Working turns, Ready new = a dot) */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-st { width: 12px; height: 12px; margin: 0 2px 0 4px; flex: none; box-sizing: border-box; border-radius: 50%; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-st.is-new { width: 9px; height: 9px; background: var(--wz-accent, var(--aa-ink)); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-chat[data-kind="working"] .aa-st { border: 1.5px solid color-mix(in srgb, var(--aa-ink) 25%, transparent); border-top-color: var(--aa-ink); animation: aa-spin 900ms linear infinite; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-chat[data-kind="archive"] .aa-row-t { color: var(--aa-ink-2); }
+/* a notification among the chats (round 5): a small, quiet bell before the title (the secondary ink), the same row */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-bell { width: 16px; height: 16px; margin-right: -4px; color: var(--aa-ink-2); stroke-width: 1.8; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-pin { width: 16px; height: 16px; color: var(--aa-ink-2); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-viewall { display: flex; align-items: center; gap: 2px; min-height: 44px; margin: 0; padding: 0 12px; border-radius: 12px; border: 0; background: none; cursor: pointer; color: var(--aa-ink-2); font: 500 0.9375rem / 1 var(--wz-font-ui); }
-html[data-shell="phone"][data-layout="ai-apps"] .aa-viewall .aa-chev { width: 16px; height: 16px; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-empty { margin: 8px 10px 10px; color: var(--aa-ink-2); font: 500 0.875rem / 1.4 var(--wz-font-ui); }
 /* footer (round 2): New chat = a big round + bottom left (ChatGPT's compose button), Settings = a cog bottom right; no
  * words, no avatar letter (their accessible names say what they do) */
@@ -240,7 +251,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-set {
 }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-set .aa-ico { width: 22px; height: 22px; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-set:active { transform: scale(.94); background: color-mix(in srgb, var(--aa-ink) 14%, var(--aa-surface)); }
-html[data-shell="phone"][data-layout="ai-apps"] :is(.aa-new, .aa-set, .aa-viewall, .aa-cancel):focus-visible { outline: 2px solid var(--wz-accent, var(--aa-ink)); outline-offset: 2px; }
+html[data-shell="phone"][data-layout="ai-apps"] :is(.aa-new, .aa-set, .aa-cancel):focus-visible { outline: 2px solid var(--wz-accent, var(--aa-ink)); outline-offset: 2px; }
 
 /* the row menu (a long press): a card under the row, 48 px items, the filing action last */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-menu-layer { position: absolute; inset: 0; z-index: 5; }

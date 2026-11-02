@@ -48,7 +48,7 @@ export const FLOAT_INSET = Object.freeze({ phone: 96, desktop: 84 });
  * the stock ones. Desks declares nothing, so the dock keeps every stock swipe there. */
 export const ORB_SWIPES = Object.freeze({ up: 'home', side: null, down: null });
 
-export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
+export function viewChrome(api, { openIds, goOpen = null, inset = null, swipes = null }) {
   const doc = document, root = doc.documentElement, shell = api.env.shell === 'desktop' ? 'desktop' : 'phone';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (d, cls) => {
@@ -63,7 +63,8 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   root.dataset.viewChrome = shell;
 
   // the dock orb's swipes (phone; the desktop Apps orb is the layout's own button): up = Home, the rest inert
-  const offSwipes = shell === 'phone' && api.phone?.swipes ? api.phone.swipes(ORB_SWIPES) : null;
+  // (a view may give its own: AI apps' swipe up is a New chat with the keyboard up, 'new')
+  const offSwipes = shell === 'phone' && api.phone?.swipes ? api.phone.swipes(swipes || ORB_SWIPES) : null;
 
   /* ---------- full screen: hosted apps get room under their last item for the floating orb ---------- */
   // the orb bar (the Wizard standard on the phone): the dock orb's fixed spot, bottom centre; an app's own bottom tabs

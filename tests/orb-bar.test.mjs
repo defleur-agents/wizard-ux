@@ -82,7 +82,7 @@ test('no tab row (one wide button, a mini player above the tabs): nothing is spl
 
 test('the shell wiring: the CSS around the orb, gated on the orb being over the frame; the views hand over the dock orb', () => {
   // the split rules apply only while html.wos-orb-bar is set; without it the old lift (room above the orb) stays
-  assert.match(host, /'html:not\(\.wos-orb-bar\) \[data-wos-inset-bar\]\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}' \+ ORB_BAR;/);
+  assert.match(host, /'html:not\(\.wos-orb-bar\) \[data-wos-inset-bar\]:not\(\[data-wos-lift="self"\]\)\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}'/);
   assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]::after\{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var\(--wos-orb-slot,80px\)!important/, 'an empty slot as wide as the orb in the middle');
   assert.match(host, /min-height:calc\(2\*var\(--wos-orb-cy,40px\)\)!important/, 'the tabs sit on the orb\'s row');
   assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\*var\(--wos-tab-f,1\)\)!important/, 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
@@ -146,4 +146,82 @@ test('a bar of one tab: it sits left of the orb, the orb stays centred (the slot
   assert.equal(ctx.orbTabs(docOf(new N('body', {}, R(0, 0, 390, 788), [bar])), bar, 390), true);
   assert.equal(only.attrs['data-wos-tab'], 'l'); assert.equal(bar.attrs['data-wos-nl'], '1'); assert.equal(bar.attrs['data-wos-nr'], '0');
   assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]\[data-wos-nr="0"\]::after\{flex-basis:calc\(var\(--wos-orb-slot,80px\) \+ \(100% - var\(--wos-orb-slot,80px\)\)\/2\)!important\}/);
+});
+
+/* Round 5 (Miguel, 2 Nov 2026: "the orb floats over Messenger"): an app's bottom controls are not always a kit tab bar.
+ * bottomBar finds any block of controls that stays put along the page's bottom (Messenger's filter rows, Notes' vault
+ * footer, a composer, a lone Load more); such a block is lifted above the orb's row (its own surface running on under
+ * the orb, one bar), never split; a button floating just above it (Messenger's ✎) rises with it. Tabs still split. */
+class B {
+  constructor(tag, attrs = {}, rect = null, kids = [], css = {}) {
+    this.tagName = tag.toUpperCase(); this.attrs = { ...attrs }; this.rect = rect; this.css = { position: 'static', overflowY: 'visible', visibility: 'visible', ...css };
+    this.children = []; this.parentElement = null; this.scrollHeight = css.sh || (rect ? rect.height : 0); this.clientHeight = rect ? rect.height : 0;
+    for (const k of kids) { k.parentElement = this; this.children.push(k); }
+  }
+  hasAttribute(k) { return k in this.attrs; } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  setAttribute(k, v) { this.attrs[k] = String(v); } removeAttribute(k) { delete this.attrs[k]; }
+  all() { return this.children.flatMap(c => [c, ...c.all()]); }
+  matches(sel) {
+    if (sel === '*') return true;
+    return sel.split(',').some(one => {
+      const m = /^([a-z]*)((?:\[[^\]]+\])*)(?::not\((\[[^\]]+\])\))?$/.exec(one.trim()); if (!m) throw new Error('selector ' + one);
+      const attr = a => { const [, k, v] = /^\[([\w-]+)(?:="([^"]*)")?\]$/.exec(a); return v === undefined ? this.hasAttribute(k) : this.getAttribute(k) === v; };
+      if (m[1] && this.tagName !== m[1].toUpperCase()) return false;
+      if (!(m[2].match(/\[[^\]]+\]/g) || []).every(attr)) return false;
+      return !m[3] || !attr(m[3]);
+    });
+  }
+  querySelectorAll(sel) { return this.all().filter(n => n.matches(sel)); }
+  querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
+  closest(sel) { for (let n = this; n; n = n.parentElement) if (n.matches(sel)) return n; return null; }
+  contains(n) { for (; n; n = n.parentElement) if (n === this) return true; return false; }
+  getClientRects() { return this.rect ? [this.rect] : []; }
+  getBoundingClientRect() { const r = this.rect || { left: 0, top: 0, width: 0, height: 0 }; return { ...r, x: r.left, y: r.top, right: r.left + r.width, bottom: r.top + r.height }; }
+}
+const pageOf = (kids, { docScroll = false } = {}) => {
+  const body = new B('body', {}, R(0, 0, 390, 788), kids), html = new B('html', {}, R(0, 0, 390, 788), [body]);
+  const hs = {}; html.style = { setProperty: (k, v) => { hs[k] = v; }, getPropertyValue: k => hs[k] || '' };
+  const hit = (n, x, y) => { for (const c of [...n.children].reverse()) { const r = c.rect; if (r && x >= r.left && x < r.left + r.width && y >= r.top && y < r.top + r.height) return hit(c, x, y) || c; } return null; };
+  return { body, documentElement: html, elementFromPoint: (x, y) => hit(body, x, y) || body, scrollingElement: { scrollHeight: docScroll ? 2000 : 788, clientHeight: 788 },
+    defaultView: { getComputedStyle: n => n.css } };
+};
+const bb = host.match(/  const CONTROLS = [\s\S]*?\n(?=  function insetFrame\(f\) \{)/)[0];
+const bctx = {}; vm.runInNewContext(bb + ';globalThis.bottomBar = bottomBar; globalThis.floatsOver = floatsOver; globalThis.hasEntry = hasEntry; globalThis.isTabBar = isTabBar;', bctx);
+
+test('round 5: Messenger\'s filter rows (a plain div of controls under its list) are the bar; its ✎ rises with it', () => {
+  const list = new B('div', { class: 'u-list' }, R(0, 0, 390, 693), [new B('button', {}, R(6, 630, 378, 52))], { overflowY: 'auto', sh: 4462 });
+  const seg = new B('div', { role: 'radiogroup' }, R(12, 702, 366, 38), [new B('button', { role: 'radio' }, R(15, 705, 89, 32)), new B('button', { role: 'radio' }, R(106, 705, 89, 32))]);
+  const chips = new B('div', {}, R(12, 744, 366, 40), [new B('button', {}, R(14, 746, 36, 36)), new B('button', {}, R(300, 746, 76, 36))]);
+  const filters = new B('div', { id: 'u-filters', role: 'group' }, R(0, 693, 390, 95), [seg, chips]);
+  const fab = new B('button', { class: 'u-fab' }, R(318, 620, 56, 56), [], { position: 'absolute' });
+  const section = new B('section', {}, R(0, 0, 390, 788), [list, filters, fab], { overflowY: 'hidden' });
+  const d = pageOf([section]);
+  assert.equal(bctx.bottomBar(d, 390, 788), filters, 'the outermost block of controls along the bottom, not the list above it');
+  assert.equal(bctx.isTabBar(filters), false, 'not a tab bar: lifted, never split');
+  filters.setAttribute('data-wos-inset-bar', ''); bctx.floatsOver(d, filters, 390);
+  assert.equal(fab.attrs['data-wos-float'], '', 'the compose button above it rises with the bar');
+  assert.equal(list.children[0].attrs['data-wos-float'], undefined, 'a list row never does');
+});
+
+test('round 5: content that scrolls is never the bar; a composer footer is lifted, not split; a lone Load more counts', () => {
+  // a list running to the bottom edge: its rows are content (no bar)
+  const rows = new B('div', {}, R(0, 0, 390, 788), [new B('button', {}, R(6, 740, 378, 52))], { overflowY: 'auto', sh: 3000 });
+  assert.equal(bctx.bottomBar(pageOf([rows]), 390, 788), null);
+  // a page that scrolls as a whole: an in-flow card at the bottom is content too; a fixed bar is not
+  const card = new B('div', {}, R(0, 700, 390, 88), [new B('button', {}, R(10, 710, 100, 40))]);
+  assert.equal(bctx.bottomBar(pageOf([card], { docScroll: true }), 390, 788), null);
+  const fixed = new B('div', {}, R(0, 720, 390, 68), [new B('button', {}, R(10, 730, 100, 40))], { position: 'fixed' });
+  assert.equal(bctx.bottomBar(pageOf([fixed], { docScroll: true }), 390, 788), fixed);
+  // the Troubleshooter's footer: a field and Send; a footer, yet it holds a field, so it is lifted whole
+  const ta = new B('textarea', {}, R(16, 712, 290, 60)), send = new B('button', {}, R(310, 712, 64, 60));
+  const foot = new B('footer', {}, R(0, 656, 390, 132), [ta, send]), dd = pageOf([foot]);
+  assert.equal(bctx.isTabBar(foot), true); assert.equal(bctx.hasEntry(dd, foot), true, 'a composer is never split around the orb');
+  // Mail: a lone Load more under its list (nothing else along the bottom)
+  const more = new B('button', { class: 'wz-button' }, R(12, 732, 366, 44)), mail = new B('section', {}, R(0, 0, 390, 788), [new B('div', {}, R(0, 150, 390, 582), [], { overflowY: 'auto', sh: 3000 }), more]);
+  assert.equal(bctx.bottomBar(pageOf([mail]), 390, 788), more);
+  const host2 = host;
+  assert.match(host2, /bar\.setAttribute\('data-wos-lift', bar\.matches\(CONTROLS\) \? 'self' : 'block'\)/, 'found this way = lifted (a lone control by a margin)');
+  assert.match(host2, /split = !\/\^\(block\|self\)\$\/\.test\(bar\.getAttribute\('data-wos-lift'\) \|\| ''\) && isTabBar\(bar\) && !hasEntry\(d, bar\) && orbTabs\(/, 'only a real tab bar with no field splits');
+  assert.match(host2, /'html:not\(\.wos-orb-bar\) \[data-wos-float\]\{translate:0 calc\(-1 \* var\(--wos-lift,0px\)\)!important\}'/);
+  assert.match(host2, /\[data-wos-inset-scroll\]::after\{content:""/, 'a plain scroller under the orb gets room after its last item');
 });
