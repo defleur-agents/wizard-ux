@@ -26,7 +26,9 @@ PRIOR = BASE/'qa/graphene-orb-c07c16af-native-isolated-772c1424'
 DIAGNOSTIC = BASE/'jobs/20261102T050208Z-60220c6f'
 DIAGNOSTIC_SHA = '78f90cdafb8403bdef2a907cc16874a12b5dfa3590993ed910189e64651be3df'
 PREBUILD_FAILURE = BASE/'jobs/20261102T052250Z-b6c11dfe'
-PREBUILD_LOG_SHA = 'f095c09ec52032c4bf3bff291d16cd7921ae0d52de4b05620019e1aefde61baf'
+PREBUILD_LOG_SHA = 'bb3e34b8c226511c94c7d706bd6c3de0dc4fad167858559b14de370c2d95579a'
+FAILED_QUEUE_LOG = Path('/srv/work/heavy/production/spool/heavy_162a9ed1bf3742e7b75153a1cf498d5b.log')
+FAILED_QUEUE_LOG_SHA = 'f095c09ec52032c4bf3bff291d16cd7921ae0d52de4b05620019e1aefde61baf'
 OLD = 'bc9e87effda72220cfca9c8ee306639f1677217a'
 TASKS = [':app:testDebugUnitTest', ':app:lintDebug', ':app:assembleDebug', ':app:assembleDebugAndroidTest']
 EXTRA = {'emptyHintNoopPasteRetainsTakeWithoutSecondWrite',
@@ -102,6 +104,7 @@ def check_contract_inputs(root, packet):
 def failed_prebuild_closure():
     """Preserve the real controller failure; never mint its unbuilt Android receipt."""
     log = PREBUILD_FAILURE/'controller-tests.log'
+    if sha(FAILED_QUEUE_LOG) != FAILED_QUEUE_LOG_SHA: raise ValueError('original queue failure log drift')
     if sha(log) != PREBUILD_LOG_SHA: raise ValueError('original pre-build failure log drift')
     failure = read(PREBUILD_FAILURE/'acceptance-receipt.json')
     if failure['status'] != 'failed' or failure['stages'] != {'controller_tests':1}:
@@ -203,8 +206,10 @@ def verify(root):
     check_cases(prior['candidate_cases'],packet['candidate_cases'])
     if (root/'historical-packet.json').read_bytes() != (PRIOR/'packet.json').read_bytes():
         raise ValueError('frozen historical packet differs')
+    if sha(root/'prior-heavy-failure.log') != FAILED_QUEUE_LOG_SHA:
+        raise ValueError('preserved queue failure log drift')
     check_contract_inputs(root, packet)
-    required={str(root/n) for n in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','custody.json','opus-review.json','opus-review-prompt.md')}
+    required={str(root/n) for n in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','prior-heavy-failure.log','custody.json','opus-review.json','opus-review-prompt.md')}
     custody=read(root/'custody.json')
     required.update(custody['preserved_originals'])
     if not required.issubset(seal['files']): raise ValueError('incomplete acceptance closure')
@@ -237,14 +242,17 @@ def prepare(root):
     write(root/'packet.json',packet)
     shutil.copyfile(PRIOR/'packet.json',root/'historical-packet.json')
     (root/'historical-packet.json').chmod(0o600)
+    shutil.copyfile(FAILED_QUEUE_LOG,root/'prior-heavy-failure.log')
+    (root/'prior-heavy-failure.log').chmod(0o600)
     write(root/'custody.json',{'source_revision':cfg['revision'],'preserved_originals':originals,
         'inherited_control_builds':['baseline','rejected'],'fresh_control_builds':[],
         'fresh_candidate_tasks':TASKS,'native_cases':{'candidate':32,'baseline':2,'rejected_expected_assertion_failures':2},
         'prior_diagnostic_sha256':DIAGNOSTIC_SHA,'unit_expected_tests':417,
+        'prior_queue_failure':{'path':str(FAILED_QUEUE_LOG),'sha256':FAILED_QUEUE_LOG_SHA},
         'handset_proven':False,'native_acceptance_executed':False,'publication_authorized':False})
     (root/'scratch').mkdir(mode=0o700)
     files=dict(originals)
-    for name in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','custody.json','opus-review.json','opus-review-prompt.md'):
+    for name in (*MEMBERS,'worker.py','job.json','source.tar.gz','source-proof.json','packet.json','historical-packet.json','prior-heavy-failure.log','custody.json','opus-review.json','opus-review-prompt.md'):
         files[str(root/name)]=sha(root/name)
         if name in MEMBERS and cfg['files']['tools/'+name]['sha256']!=sha(root/name):
             raise ValueError('QA file not exact pushed candidate: '+name)
