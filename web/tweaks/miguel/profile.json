@@ -5,13 +5,10 @@
   "skin": "obsidian",
   "tweaks": [
     "miguel/layout",
-    "miguel/swipe-strip",
     "miguel/send-and-go",
-    "miguel/model-pills",
     "miguel/snooze-someday",
     "miguel/machines-home",
-    "miguel/arrange-download",
-    "miguel/refresh-button",
+    "miguel/no-desk-close",
     "miguel/orb-shell",
     "miguel/apps-home"
   ],

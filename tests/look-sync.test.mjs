@@ -257,15 +257,15 @@ test('experience.js: switches raise wos:tweak-choice, adopt() wears the shared s
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience; await E.refresh();
-  await E.toggle('miguel/swipe-strip');
-  assert.deepEqual(clone(events), [{ id: 'miguel/swipe-strip', on: true }]);
-  assert.ok(active.includes('miguel/swipe-strip'));
+  await E.toggle('miguel/snooze-someday');
+  assert.deepEqual(clone(events), [{ id: 'miguel/snooze-someday', on: true }]);
+  assert.ok(active.includes('miguel/snooze-someday'));
   await E.adopt({ 'miguel/send-and-go': true });
   assert.equal(events.length, 1, 'adopting raises no choice');
   const onOf = m => Object.keys(m).filter(id => m[id] === true);
   assert.deepEqual(onOf(clone(E.mix)), ['miguel/send-and-go']);
   assert.deepEqual(onOf(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), ['miguel/send-and-go'], 'cached for the next first frame');
-  assert.ok(active.includes('miguel/send-and-go') && !active.includes('miguel/swipe-strip'));
+  assert.ok(active.includes('miguel/send-and-go') && !active.includes('miguel/snooze-someday'));
 });
 
 // Live QA found it: a fresh device (Mac app) adopting Miguel's set ran its one-time machines-home migration and
@@ -280,8 +280,8 @@ test('experience.js: a fresh device adopting the shared set never adds its own o
     localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) },
     fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
   const E = window.WosExperience;
-  await E.adopt({ 'miguel/swipe-strip': true, 'miguel/send-and-go': true });
-  assert.deepEqual([...active].sort(), ['miguel/send-and-go', 'miguel/swipe-strip', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
+  await E.adopt({ 'miguel/snooze-someday': true, 'miguel/send-and-go': true });
+  assert.deepEqual([...active].sort(), ['miguel/send-and-go', 'miguel/snooze-someday', ...JSON.parse(read('web/tweaks/catalog.json')).defaults].sort());
   assert.ok(!active.includes('miguel/machines-home'), 'no migration adds to the shared set');
 });
 

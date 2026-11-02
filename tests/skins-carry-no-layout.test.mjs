@@ -54,14 +54,14 @@ async function boot(skin, saved) {
 }
 
 test("Miguel's device keeps his layout once; Dark alone brings none; an explicit off stays off", async () => {
-  const his = await boot('obsidian-light', { mix: { 'miguel/model-pills': true } });
+  const his = await boot('obsidian-light', { mix: { 'miguel/send-and-go': true } });
   assert.ok(his.active.includes('miguel/layout'), 'his device keeps the layout');
   const dark = await boot('obsidian', { mix: {} });
   assert.ok(!dark.active.includes('miguel/layout'), 'picking Dark with no Miguel tweaks changes no layout');
-  const other = await boot('nebula', { mix: { 'miguel/model-pills': true } });
+  const other = await boot('nebula', { mix: { 'miguel/send-and-go': true } });
   assert.ok(!other.active.includes('miguel/layout'), 'a James skin is not migrated');
-  const off = await boot('landscapes', { mix: { 'miguel/model-pills': true, 'miguel/layout': false } });
+  const off = await boot('landscapes', { mix: { 'miguel/send-and-go': true, 'miguel/layout': false } });
   assert.ok(!off.active.includes('miguel/layout'), 'explicit off wins');
-  const done = await boot('landscapes', { mix: { 'miguel/model-pills': true }, miguelLayoutMoved: true });
+  const done = await boot('landscapes', { mix: { 'miguel/send-and-go': true }, miguelLayoutMoved: true });
   assert.ok(!done.active.includes('miguel/layout'), 'migration runs once');
 });

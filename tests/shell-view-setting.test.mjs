@@ -96,10 +96,10 @@ test('no author quick button: every tweak is its own switch and other switches l
 test('a device that stores both on wears only the first in catalog order (Orb), and the switches agree', async () => {
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.indexOf('miguel/orb-shell') < cat.tweaks.indexOf('miguel/apps-home'));
-  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/orb-shell': true, 'miguel/apps-home': true, 'miguel/swipe-strip': true } })]]);
+  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/orb-shell': true, 'miguel/apps-home': true, 'miguel/snooze-someday': true } })]]);
   const b = box({ storage }); await b.E.refresh();
   assert.deepEqual(b.views(), ['miguel/orb-shell']);
-  assert.ok(b.active().includes('miguel/swipe-strip'), 'the rest of the mix is untouched');
+  assert.ok(b.active().includes('miguel/snooze-someday'), 'the rest of the mix is untouched');
   assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [true, false]);
   b.tap('miguel/apps-home'); await tick(); assert.deepEqual(b.views(), ['miguel/apps-home']);
   b.tap('miguel/apps-home'); await tick(); assert.deepEqual(b.views(), [], 'off = Desks, the stale Orb on is cleared too');
