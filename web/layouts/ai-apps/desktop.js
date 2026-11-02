@@ -245,16 +245,22 @@ export default function desktop(api) {
     out.chat = [c, lo, chatHi]; out.app = [a, lo, appHi];
     return out;
   }
+  /* round 10 (Miguel: dragging felt laggy): a drag writes only what changed, once a frame. While a grip is held
+   * (data-aad-resizing) the shown desks' windows follow their desk by CSS (desktop.css), and the page's resize (the
+   * desks tiled again, every app frame, the orb, the composer) waits for the release: once, at pointerup. */
+  const shownVars = {}, shownAria = {};
   function applySizes() {
     const s = sizes();
     for (const id of Object.keys(SIZE_VARS)) {
-      root.style.setProperty(SIZE_VARS[id], s[id][0] + 'px');
+      const px = s[id][0] + 'px';
+      if (shownVars[id] !== px) { shownVars[id] = px; root.style.setProperty(SIZE_VARS[id], px); }
       const g = grip[id]; if (!g) continue;
+      const aria = `${s[id][0]},${s[id][1]},${Math.round(s[id][2])}`; if (shownAria[id] === aria) continue; shownAria[id] = aria;
       g.setAttribute('aria-valuenow', String(s[id][0])); g.setAttribute('aria-valuemin', String(s[id][1])); g.setAttribute('aria-valuemax', String(Math.round(s[id][2])));
     }
-    // the desks' windows are laid out in pixels: again when a width changed (once a frame while dragging)
+    // the desks' windows are laid out in pixels: again when a width changed (after the drag, while one is held)
     const sig = Object.keys(SIZE_VARS).map(id => s[id][0]).join(',');
-    if (sig !== laidOut) { laidOut = sig; relayoutSoon(); }
+    if (sig !== laidOut) { laidOut = sig; if (!sizing || !root.dataset.aadResizing) relayoutSoon(); }
   }
   let relayoutAsked = false;
   function relayoutSoon() { if (relayoutAsked) return; relayoutAsked = true; api.frame(() => { relayoutAsked = false; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
@@ -266,6 +272,16 @@ export default function desktop(api) {
     if (keep) api.storage.set('widths', sized);
   }
   function resetSize(id) { const { [id]: _, ...rest } = sized; sized = rest; api.storage.set('widths', sized); applySizes(); }
+  /* (round 10) an app's page lays itself out again whenever its frame changes width, and the shown apps run in this
+   * page's thread: while a grip is held their frames keep a fixed width (the window clips or shows its own background
+   * at the moving edge), refitted a few times a second, and once more on release. */
+  const FRAME_FIT_MS = 120;
+  const shownFrames = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden]) > .win:not(.gone) iframe')];
+  function fitFrames(list) {
+    for (const f of list) f.style.removeProperty('width');
+    const ws = list.map(f => f.getBoundingClientRect().width);
+    list.forEach((f, i) => { if (ws[i] > 0) f.style.setProperty('width', Math.round(ws[i]) + 'px'); });
+  }
   const grips = el('div', 'aad-grips');
   const grip = {};
   for (const id of ['side', 'chat', 'app', 'apps']) {
@@ -273,14 +289,28 @@ export default function desktop(api) {
     grips.append(g); grip[id] = g;
     // the left two grow to the right, the right two to the left
     const sign = id === 'side' || id === 'chat' ? 1 : -1;
-    let drag = null;
+    let drag = null, cancelFrame = null;
+    // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
+    const step = t => {
+      cancelFrame = null; if (!drag || drag.at === drag.done) return;
+      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign, false);
+      if (t && t - drag.fit > FRAME_FIT_MS) { drag.fit = t; fitFrames(drag.frames); }
+    };
     api.listen(g, 'pointerdown', e => {
       if (e.button) return; e.preventDefault();
       try { g.setPointerCapture(e.pointerId); } catch (_) {}
-      drag = { x: e.clientX, w: sizes()[id][0] }; sizing = id; g.classList.add('is-drag'); root.dataset.aadResizing = id;
+      drag = { x: e.clientX, at: e.clientX, done: e.clientX, w: sizes()[id][0], fit: 0, frames: shownFrames() }; sizing = id; g.classList.add('is-drag'); root.dataset.aadResizing = id;
+      fitFrames(drag.frames);
     });
-    api.listen(g, 'pointermove', e => { if (drag) setSize(id, drag.w + (e.clientX - drag.x) * sign, false); });
-    const end = () => { if (!drag) return; drag = null; sizing = ''; g.classList.remove('is-drag'); delete root.dataset.aadResizing; api.storage.set('widths', sized); relayoutSoon(); };
+    api.listen(g, 'pointermove', e => { if (!drag) return; drag.at = e.clientX; if (!cancelFrame) cancelFrame = api.frame(step); });
+    const end = () => {
+      if (!drag) return;
+      cancelFrame?.(); cancelFrame = null; step(); const held = drag.frames; drag = null;
+      for (const f of held) f.style.removeProperty('width');
+      // the desks tiled for the final widths (and the orb placed) BEFORE the CSS follow is lifted: no jump on release
+      sizing = ''; g.classList.remove('is-drag'); globalThis.dispatchEvent?.(new Event('resize')); syncOrb();
+      delete root.dataset.aadResizing; api.storage.set('widths', sized);
+    };
     api.listen(g, 'pointerup', end); api.listen(g, 'pointercancel', end); api.listen(g, 'lostpointercapture', end);
     api.listen(g, 'dblclick', () => resetSize(id));
     api.listen(g, 'keydown', e => {
@@ -621,7 +651,9 @@ export default function desktop(api) {
   const syncOrb = () => api.frame(() => { placeOrb(); watchComposer(); });
   /* round 8: the composer moves without a resize of the page (the Chats window laid out again after the sidebars settle,
    * the model chip filled in late): follow its box and its window's, so the orb never sits on the chip */
-  let roSeen = null; const ro = globalThis.ResizeObserver ? new ResizeObserver(() => api.frame(placeOrb)) : null;
+  let roSeen = null, roAsked = false;
+  // (once a frame at most; while a grip is held the orb waits for the release, which places it: round 10)
+  const ro = globalThis.ResizeObserver ? new ResizeObserver(() => { if (roAsked || root.dataset.aadResizing) return; roAsked = true; api.frame(() => { roAsked = false; placeOrb(); }); }) : null;
   function watchComposer() {
     if (!ro) return;
     const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length) || null;

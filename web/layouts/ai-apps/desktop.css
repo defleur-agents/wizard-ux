@@ -601,6 +601,19 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-apps="open"] .aad-grip[data-grip="apps"] { display: block; left: calc(100vw - var(--aad-rs)); }
 /* while dragging: the panels follow the pointer at once, no text gets selected, app pages never swallow the pointer */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] { cursor: col-resize; user-select: none; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-panel, .aad-apps, .aad-top, .aad-ctop, .aad-ptop, .aad-orb, .aad-pload, #bar, #stage > .wsp) { transition: none !important; animation: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-panel, .aad-apps, .aad-top, .aad-ctop, .aad-ptop, .aad-orb, .aad-pload, #bar, #stage > .wsp, #stage > .wsp > .win) { transition: none !important; animation: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] iframe { pointer-events: none !important; }
+/* round 10 (Miguel: dragging felt laggy): while a grip is held, desktop.js only moves the width variables, once a
+ * frame. A shown desk's lone window follows its desk here (inset 8 px, as the shell tiles it; centred within the shell's
+ * widest window) instead of the page's resize re-tiling every desk and every app frame each frame; the release tiles
+ * them once. Out-of-sight desks keep their size until then. The glass blur stops re-sampling while it moves, and the
+ * sidebars lay out and paint on their own. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {
+  left: 8px !important; right: 8px !important; width: auto !important; max-width: var(--desktop-window-max-width, 1200px); margin-inline: auto;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win.full:not(.gone) { left: 0 !important; right: 0 !important; max-width: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-apps, .aad-ptop, .aad-ctop, .aad-top, .aad-pload, #stage .win, #stage .win *) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-apps) { contain: layout paint; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]) > .win:not(.gone) .wbody { overflow: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]) > .win:not(.gone) iframe { flex: none; max-width: none; }
 @media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip::after { transition: none; } }

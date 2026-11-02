@@ -353,6 +353,18 @@ html[data-shell="phone"][data-layout="ai-apps"] .ah-badge {
   display: grid; place-items: center; white-space: nowrap; color: color-mix(in srgb, black 88%, var(--amber, var(--ink))); background: var(--amber, var(--ink)); font: 800 0.6875rem / 1 var(--wz-font-ui);
 }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-badge[hidden] { display: none; }
+/* round 10 (Miguel: the icons looked washed out on the light skins): the plate mixed the app's colour into the white
+ * panel (a pastel square) and the light skins dim or tint the glyph on it. On a light skin the plate is the app's own
+ * colour, full strength, with the glyph in white (an iPhone icon), and the names read on a photo; dark skins unchanged. */
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) :is(.ah-tile, .aa-tile):not(.is-logo):not(.is-plain) {
+  background: linear-gradient(165deg, color-mix(in oklab, var(--c) 82%, white), var(--c) 55%, color-mix(in oklab, var(--c) 82%, black));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, black 8%, transparent), 0 2px 6px color-mix(in srgb, black 18%, transparent);
+}
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) :is(.ah-tile, .aa-tile):not(.is-logo):not(.is-plain) > .sgi:not(.sgb) {
+  background: white !important; filter: drop-shadow(0 1px 1px color-mix(in srgb, black 28%, transparent)) !important;
+}
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-tile.is-plain { background: color-mix(in srgb, white 82%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, black 10%, transparent), 0 2px 6px color-mix(in srgb, black 14%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-name { text-shadow: 0 0 2px color-mix(in srgb, white 90%, transparent), 0 0 8px color-mix(in srgb, white 70%, transparent); }
 @keyframes ah-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { html[data-shell="phone"][data-layout="ai-apps"] .ah { animation: none; } }
 
