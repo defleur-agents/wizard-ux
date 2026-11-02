@@ -1,0 +1,37 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+
+// Borderless app windows paint their heading in the app's colour (dark default, or the colour the phone measured along
+// the app's top), so the title and buttons there must not use the skin's ink: Landscapes Light put its dark ink on the
+// dark default heading. Behaviour (real Chromium, every skin, both shells): tools/qa-app-window-title-contrast.cjs.
+const css = fs.readFileSync(new URL('../web/core/skin-frame.css', import.meta.url), 'utf8');
+const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+const rule = (sel) => { const i = css.indexOf(sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
+const lum = (s) => { const [r, g, b] = s.match(/[\d.]+/g).map(Number), f = (c) => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + .05) / (y + .05); };
+const UNTHEMED = 'html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar';
+const LIGHT = 'html[data-skin-frame="borderless"] .win.edge-light:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar';
+
+test('an unthemed app heading carries its own light ink, readable on the dark default heading', () => {
+  const r = rule(UNTHEMED);
+  assert.ok(r, 'skin-frame.css sets the ink of an unthemed app window heading');
+  const ink = /--ink:\s*(rgba?\([^)]*\))/.exec(r)?.[1];
+  assert.ok(ink, 'the rule sets --ink (title and buttons read it)');
+  for (const bg of ['rgb(5, 3, 12)', 'rgb(15, 16, 20)']) // desktop and phone fallbacks in the same file
+    assert.ok(ratio(ink, bg) >= 4.5, `ink ${ink} on ${bg}: ${ratio(ink, bg).toFixed(2)}`);
+  assert.match(css, /#05030c/); assert.match(css, /#0f1014/);
+});
+
+test('a heading measured as light gets a dark ink; Settings keeps the skin ink', () => {
+  const ink = /--ink:\s*(rgba?\([^)]*\))/.exec(rule(LIGHT))?.[1];
+  assert.ok(ink, 'skin-frame.css sets a dark --ink for .edge-light app headings');
+  assert.ok(ratio(ink, 'rgb(250, 250, 250)') >= 4.5);
+  assert.ok(UNTHEMED.includes(':not(:has(> .wbody .st-embed iframe))'));
+});
+
+test('the phone marks a light measured heading (.edge-light) from the colour it paints', () => {
+  const i = app.indexOf('function frameEdge(f)'), body = app.slice(i, app.indexOf('\n  }\n', i));
+  assert.match(body, /classList\.toggle\('edge-light'/);
+  assert.match(body, /top \|\| bg/, 'decided on the colour the heading actually shows (top, else bg)');
+});

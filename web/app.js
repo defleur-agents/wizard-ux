@@ -886,6 +886,10 @@
       }
     } catch (e) {}
     we.classList.toggle('edge-own', own);
+    // The heading shows `top`, else `bg`: say when that colour is light so its title takes a dark ink (skin-frame.css).
+    const rgb = (top || bg).match(/[\d.]+/g), lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+    we.classList.toggle('edge-light', !!rgb && rgb.length >= 3 && (rgb[3] === undefined || +rgb[3] >= .5) &&
+      .2126 * lin(+rgb[0]) + .7152 * lin(+rgb[1]) + .0722 * lin(+rgb[2]) > .18);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
     if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
