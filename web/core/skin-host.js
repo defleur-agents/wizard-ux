@@ -37,6 +37,8 @@
   const cssLinks = new Map();       // dir -> <link>
   const disabled = new Set();       // skin ids whose script failed this page
   const claims = new Set();         // pointer ids a skin gesture has claimed
+  const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  let claimAt = -Infinity;          // when a claimed finger last went down or lifted (a back swipe that follows is the gesture's)
   const requested = [];             // asset URLs requested (diagnostics + tests)
   let importer = url => import(url);
   let committedId = null, loadSeq = 0;
@@ -133,7 +135,7 @@
       },
       gesture: Object.freeze({
         // Claim a pointer before the shell's dock swipe locks direction. False once the shell owns it.
-        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); return true; },
+        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); claimAt = clock(); return true; },
         // The shell's one swipe threshold (core/swipe-intent.js): true for an intentional sideways swipe either way.
         intent: (dx, dy, ms) => { const w = typeof window !== 'undefined' && window.WosSwipeIntent; return !!(w && w.intentional(+dx || 0, +dy || 0, +ms || 0)); },
       }),
@@ -330,7 +332,7 @@
     lastRoute = ''; emitRoute();
     return personal === a;
   }
-  function release(id) { claims.delete(id); for (const l of layers()) l.claims.delete(id); }
+  function release(id) { if (claims.has(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
   function startBuiltin(name) {
     const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
     if (d.when === 'touch' && !env().touch) return false;
@@ -713,6 +715,9 @@
     beside() { emitBeside(); },
     /* app.js dock swipe: true when a skin gesture owns this pointer. Cleared on pointerup/cancel. */
     claimed: pointerId => claims.has(pointerId),
+    /* app.js Back: true while a skin gesture owns a finger or lifted it within `ms`. The browser's / OS's own back swipe
+     * (iOS Safari's left edge, Chrome's overscroll, Android's edge) under that finger is the gesture's, not a Back. */
+    claimedLately: (ms = 800) => { const t = clock() - claimAt; return t < ms || (claims.size > 0 && t < 10000); },
     release,
     get state() { return { active: active ? active.id : null, listeners: active ? active.offs.size : 0, frames: active ? active.frames.size : 0, handlers: active ? active.on.route.size + active.on.render.size : 0, disabled: [...disabled], requested: [...requested], css: [...cssLinks.keys()] }; },
     _test: { setImporter(fn) { importer = fn; }, env, load, unload, loadLayout },
