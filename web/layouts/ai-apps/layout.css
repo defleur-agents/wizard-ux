@@ -397,7 +397,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-fuel .mh-g-cells i.on { back
 html[data-shell="phone"][data-layout="ai-apps"] .aa-fuel .vw-gauge[data-s="tight"] .mh-g-cells i.on { background: var(--amber, var(--aa-ink)); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-fuel .vw-gauge[data-s="no"] .mh-g-cells i.on { background: var(--red, var(--aa-ink)); }
 /* Archive's header a step quieter; a folded section's minimal tally (Working: a tiny spinner + count, Ready: count) */
-html[data-shell="phone"][data-layout="ai-apps"] .aa-sec[data-sec="archive"] > :is(span, .aa-sec-c) { opacity: .6; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sec[data-sec="archive"] > :is(span, .aa-sec-c) { opacity: .85; }   /* round 14: readable on the light skins */
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tally { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--aa-ink-2); }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tally::after { content: attr(data-n); font: 600 0.8125rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sec[data-sec="working"] .aa-tally::before {

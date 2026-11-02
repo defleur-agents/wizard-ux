@@ -352,7 +352,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-fuel .vw-gauge[data-s="no
 html[data-shell="desktop"][data-layout="ai-apps"] #bar .mh-gauge { display: none !important; }
 
 /* Archive's header a step quieter than Working and Ready (lower opacity text) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .6; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }   /* round 14: .6 read 3.0:1 on Landscapes Light, 3.7:1 on Obsidian Light */
 /* a folded section's tally (minimal): Working = a tiny spinner + its count, Ready = its count */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tally { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--aad-ink-2); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tally::after { content: attr(data-n); font: 600 0.75rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
@@ -376,7 +376,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-n { flex: none; color:
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub { height: 28px; padding-left: 18px; color: var(--aad-ink-2); font-size: 0.8125rem; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub:hover { color: var(--aad-ink); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="archive"] { margin-bottom: 6px; color: var(--aad-ink-2); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="archive"] > * { opacity: .75; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="archive"] > * { opacity: .9; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rnone { margin: 4px 8px; color: var(--aad-ink-2); font: 400 0.8125rem / 1.4 var(--wz-font-ui); }
 /* Ready showing one status (a click on it in the rail): its name and count, and Show all */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-only {
@@ -586,3 +586,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="c
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-thread { justify-content: flex-end; }
 /* the New tab page: the grid between the strip and the composer (home.js); Home itself shows none */
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-ntp]) .ah.aad-hg { display: none !important; }
+
+/* ---------- round 14 (Miguel, 3 Nov 2026: "perfect"): the sidebar's polish ---------- */
+/* a long list fades out under the header and above the foot (ChatGPT's sidebar) instead of rows cut flat by the foot */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll { -webkit-mask-image: linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 22px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, black 10px, black calc(100% - 22px), transparent 100%); }
+/* desks out of sight keep the open sidebar's geometry: folding the sidebar re-lays out only what shows (it re-laid out
+ * all of his 22 apps, ~100 layouts and a 100 ms frame); a desk coming into view takes the current width then */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]) { left: var(--aad-side-w, 288px); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px -8px -8px calc(var(--aad-side-w, 288px) - 8px); }
