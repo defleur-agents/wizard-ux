@@ -80,6 +80,19 @@ test('no tab row (one wide button, a mini player above the tabs): nothing is spl
   assert.equal(wide.attrs['data-wos-tab'], undefined); assert.equal(stale.attrs['data-wos-tabs'], undefined, 'stale marks go');
 });
 
+test('a bar with a date picker in its row (Morning Report: ‹ date › PDF) is not split: the picker is never crushed', () => {
+  const older = new N('button', { 'aria-label': 'Older report' }, R(78, 682, 40, 40)), sel = new N('select', { 'aria-label': 'Report date' }, R(124, 682, 142, 40));
+  const newer = new N('button', { 'aria-label': 'Newer report' }, R(272, 682, 40, 40)), pdf = new N('a', { href: '#' }, R(331, 682, 51, 40));
+  const nav = new N('span', {}, R(78, 682, 234, 40), [older, new N('label', {}, R(124, 682, 142, 40), [sel]), newer]);
+  const bar = new N('nav', { 'aria-label': 'Report navigation' }, R(0, 673, 390, 57), [nav, pdf]), body = new N('body', {}, R(0, 0, 390, 788), [bar]);
+  bar.attrs['data-wos-tabs'] = 'bar'; older.attrs['data-wos-tab'] = 'l';   // marks from an earlier pass go too
+  assert.equal(ctx.orbTabs(docOf(body), bar, 390), false);
+  assert.deepEqual(tabsOf(bar), []); assert.equal(bar.attrs['data-wos-tabs'], undefined);
+  // a hidden field does not count
+  sel.attrs.type = 'hidden'; sel.tagName = 'INPUT';
+  assert.equal(ctx.orbTabs(docOf(body), bar, 390), true);
+});
+
 test('the shell wiring: the CSS around the orb, gated on the orb being over the frame; the views hand over the dock orb', () => {
   // the split rules apply only while html.wos-orb-bar is set; without it the old lift (room above the orb) stays
   assert.match(host, /'html:not\(\.wos-orb-bar\):not\(\.wos-orb-end\) \[data-wos-inset-bar\]:not\(\[data-wos-lift="self"\]\)\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}'/);

@@ -429,6 +429,10 @@
     let row = tabs[0].n.parentElement;
     while (row && row !== bar && !tabs.every(t => row.contains(t.n))) row = row.parentElement;
     if (!row || !bar.contains(row) && row !== bar) return false;
+    // a row that also holds another kind of control (a date picker, a field: Morning Report's ‹ date › PDF) is not a
+    // tab bar: splitting it would crush that control at the row's start; the orb takes the row's end instead
+    const isTab = new Set(tabs.map(t => t.n));
+    if ([...row.querySelectorAll('select,input,textarea')].some(n => n.getAttribute('type') !== 'hidden' && vis(n) && !isTab.has(n) && Math.abs(n.getBoundingClientRect().top + n.getBoundingClientRect().height / 2 - low) < 16)) { for (const n of old) unmark(n); return false; }
     const nl = Math.ceil(tabs.length / 2), keep = new Set([row]);
     tabs.forEach((t, i) => {
       keep.add(t.n); setAttr(t.n, 'data-wos-tab', i < nl ? 'l' : 'r');
