@@ -30,7 +30,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-ico { width: 20px; height
 /* ---------- the stock bar: only what is not a desk switcher stays (fuel gauge, warnings, notices), in the top row ---------- */
 html[data-shell="desktop"][data-layout="ai-apps"] #bar {
   left: var(--aad-side); right: var(--aad-rs); height: 52px; padding: 0 calc(16px + var(--aad-app-w, 0px)) 0 16px; background: none !important; border: 0 !important; box-shadow: none !important;
-  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none; transition: left 200ms ease;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; pointer-events: none;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] #bar > * > * { pointer-events: auto; }
 html[data-shell="desktop"][data-layout="ai-apps"] #bar :is(#logo, #wsList, #clock, #searchBtn, #micBtn, #status, #settingsBtn, #keysBtn, #generalVoice, #commandBtn, #dictateBtn, .ws-add) { display: none !important; }
@@ -62,7 +62,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad { position: absolute; ins
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-top {
   position: fixed; top: 0; right: var(--aad-rs); left: var(--aad-side); height: 52px; box-sizing: border-box; z-index: 1;
   display: flex; align-items: center; gap: 12px; padding: 0; color: var(--aad-ink); background: var(--aad-main);
-  transition: left 200ms ease, right 200ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ws[hidden] { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop { flex: 1; min-width: 0; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 20px; }
@@ -88,7 +87,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsc { width: 16px; height
 /* ---------- the sidebar ---------- */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-side {
   pointer-events: auto; position: fixed; z-index: 3; top: 0; bottom: 0; left: 0; width: var(--aad-side-w, 288px); box-sizing: border-box; overflow: hidden;
-  color: var(--aad-ink); background: var(--aad-panel); box-shadow: 1px 0 0 var(--aad-line); transition: width 200ms ease;
+  color: var(--aad-ink); background: var(--aad-panel); box-shadow: 1px 0 0 var(--aad-line);
 }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-side { width: 52px; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] .aad-side { box-shadow: 1px 0 0 var(--aad-line), 8px 0 32px color-mix(in srgb, black 22%, transparent); border-radius: 0 16px 16px 0; }
@@ -327,7 +326,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .mimg { border-ra
 /* ---------- the orb: the bottom centre of the main area, on every screen but the stock list (the one way to talk) ---------- */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb {
   position: fixed; z-index: 4; bottom: 10px; left: calc(var(--aad-side) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px); width: 60px; height: 60px;
-  transition: left 200ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .aad-orb { opacity: 0; visibility: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbc { position: absolute; inset: -38%; width: 176%; height: 176%; display: block; pointer-events: none; transition: transform 180ms ease;
@@ -357,8 +355,8 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb[data-mode]:not([data-
  * set by desktop.js), the chat between the sidebar and the panel, the app on the right; their windows fill their part. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] { --aad-app-w: clamp(380px, 33.333vw, 600px); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] { visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; transform: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] { inset: 0 var(--aad-rs) 0 var(--aad-side) !important; transition: right 220ms ease, left 200ms ease; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] { inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important; transition: left 240ms cubic-bezier(.2, .8, .2, 1); box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] { inset: 0 var(--aad-rs) 0 var(--aad-side) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] { inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important; box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) { inset: 0 !important; width: auto !important; height: auto !important; border-radius: 0; border-color: transparent !important; box-shadow: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) > .wbar { display: flex; position: absolute; top: 0; right: 0; width: 1px; height: 1px; overflow: hidden; visibility: hidden; pointer-events: none; }
 /* no orb over the panel: no fade at its bottom either (its own bottom controls stay crisp) */
@@ -368,7 +366,7 @@ html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-split], [data-aad
 html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-split], [data-aad-chat]) .wsp[data-aad-role="chat"] .win .dchats .pane-main :is(.ch-compose, .ch-swrow) { width: min(768px, calc(100% - 40px)); }
 /* the panel's title over it, at the top row's right: its icon, its name, ✕ */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop {
-  pointer-events: auto; position: absolute; top: 0; right: 0; bottom: 0; width: var(--aad-app-w, 0px); transition: width 240ms cubic-bezier(.2, .8, .2, 1); box-sizing: border-box; padding: 0 8px 0 16px;
+  pointer-events: auto; position: absolute; top: 0; right: 0; bottom: 0; width: var(--aad-app-w, 0px); box-sizing: border-box; padding: 0 8px 0 16px;
   display: flex; align-items: center; gap: 10px; background: var(--aad-main); box-shadow: -1px 0 0 var(--aad-line);
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[hidden] { display: none; }
@@ -385,14 +383,14 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > .wtool-pick { ma
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] .aad-tile { box-shadow: 0 0 0 2px var(--aad-panel), 0 0 0 4px var(--wz-accent, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] .aad-gn { font-weight: 700; }
 /* calm transitions (his motion taste: one short slide + fade, no bounce): the panel from the right, a thread from the left */
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="app"] #stage > .wsp[data-aad-role="app"] { animation: aad-in-right 280ms cubic-bezier(.2, .8, .2, 1) both; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="app"] .aad-ptop { animation: aad-fade 240ms ease both; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="thread"] .win .dchats .pane-main .ch-thread { animation: aad-in-left 220ms cubic-bezier(.2, .8, .2, 1) both; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"][data-aad-anim="app"] { animation: aad-in-right 240ms cubic-bezier(.2, .8, .2, 1) both; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[data-aad-anim="app"] { animation: aad-fade 240ms ease both; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-anim="thread"] .win .dchats .pane-main .ch-thread { animation: aad-in-left 220ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes aad-in-right { from { translate: min(100%, 480px) 0; opacity: .3; } }
 @keyframes aad-in-left { from { transform: translateX(-24px); opacity: 0; } }
 @keyframes aad-fade { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim] :is(#stage > .wsp, .aad-ptop, .ch-thread, .aad-back) { animation: none !important; }
+  html[data-shell="desktop"][data-layout="ai-apps"] :is(#stage > .wsp, .aad-ptop, .aad-ctop)[data-aad-anim], html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-anim] .ch-thread { animation: none !important; }
   html[data-shell="desktop"][data-layout="ai-apps"] :is(#stage > .wsp[data-aad-role], .aad-ptop, .aad-ctop) { transition: none !important; }
   html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload { animation: none; }
 }
@@ -473,13 +471,13 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rnone { flex: none; width
  * surface beside it; ✕ at its top right */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] { --aad-chat-w: clamp(400px, 33.333vw, 560px); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] #stage > .wsp[data-aad-role="chat"] {
-  inset: 0 auto 0 var(--aad-side) !important; width: var(--aad-chat-w) !important; box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 8%, transparent); transition: left 200ms ease;
+  inset: 0 auto 0 var(--aad-side) !important; width: var(--aad-chat-w) !important; box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 8%, transparent);
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-back { position: fixed; top: 0; bottom: 0; left: calc(var(--aad-side) + var(--aad-chat-w, 0px)); right: calc(var(--aad-app-w, 0px) + var(--aad-rs)); z-index: 0; display: none; background: var(--aad-main); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .aad-back { display: block; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .aad-ctop { flex: none; width: var(--aad-chat-w); box-shadow: 1px 0 0 var(--aad-line); }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="dock"] #stage > .wsp[data-aad-role="chat"] { animation: aad-col-in 260ms cubic-bezier(.2, .8, .2, 1) both; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="dock"] .aad-ctop { animation: aad-col-in 260ms cubic-bezier(.2, .8, .2, 1) both; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"] { animation: aad-col-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop[data-aad-anim="dock"] { animation: aad-col-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes aad-col-in { from { translate: -48px 0; opacity: 0; } }
 
 /* the app panel wider (the whole main area) and back to a third */
@@ -555,10 +553,12 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] iframe { po
  * widest window) instead of the page's resize re-tiling every desk and every app frame each frame; the release tiles
  * them once. Out-of-sight desks keep their size until then. The glass blur stops re-sampling while it moves, and the
  * sidebars lay out and paint on their own. */
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {
+/* round 11: and not only while a grip is held: a shown desk's lone window ALWAYS follows its desk by CSS, so opening or
+ * closing a panel never waits for (or needs) the shell's re-tile; it comes once, after the change has settled */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {
   left: 8px !important; right: 8px !important; width: auto !important; max-width: var(--desktop-window-max-width, 1200px); margin-inline: auto;
 }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win.full:not(.gone) { left: 0 !important; right: 0 !important; max-width: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win.full:not(.gone) { left: 0 !important; right: 0 !important; max-width: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-ptop, .aad-ctop, .aad-top, .aad-pload, #stage .win, #stage .win *) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] .aad-side { contain: layout paint; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .wsp:not([hidden]) > .win:not(.gone) .wbody { overflow: hidden; }
@@ -569,13 +569,14 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] #stage > .w
  * The skin's background (round 9: no veil), the new chat's composer floating in the upper middle, and under it every app
  * as a big icon with its name (home.js, paged; no plate or panel behind them; names readable on pictures). An app slides in
  * from the right OVER Home as the panel (above the grid: the grid and the composer never move). */
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-home] .win .dchats .pane-main .ch-thread:has(.ch-newchat) { justify-content: flex-start; padding-top: clamp(40px, 9vh, 96px); padding-bottom: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-home] .win .dchats .pane-main .ch-thread:has(.ch-newchat) { justify-content: flex-end; padding-top: 0; padding-bottom: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-home] .win .dchats .pane-main .ch-thread:has(.ch-newchat) > .ch-compose { margin-bottom: 24px; }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] { z-index: 3; }
 /* over the grid the panel's glass would show the icons through it: an opaque ground under the window's own glass */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-home] #stage > .wsp[data-aad-role="app"] { background: var(--aad-canvas); }
 html[data-shell="desktop"][data-layout="ai-apps"] .ah.aad-hg {
-  position: fixed; z-index: 2; top: 240px; bottom: 0; left: var(--aad-side); right: var(--aad-rs); box-sizing: border-box; padding: 0 24px 76px;
-  display: flex; flex-direction: column; color: var(--aad-ink); pointer-events: auto; animation: aad-fade 200ms ease both;
+  position: fixed; z-index: 2; top: 72px; bottom: 100px; left: var(--aad-side-w, 288px); right: 0; box-sizing: border-box; padding: 0 24px;
+  display: flex; flex-direction: column; color: var(--aad-ink); pointer-events: auto; clip-path: inset(0 0 var(--aad-hg-clip, 0px) 0);
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .ah.aad-hg[hidden] { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-view { position: relative; flex: 1; min-height: 0; overflow: hidden; }
@@ -590,9 +591,10 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app {
   color: inherit; cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: none;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: 2px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-ic { position: relative; width: 72px; height: 72px; flex: none; transition: transform 140ms ease; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app:hover .ah-ic { transform: translateY(-2px) scale(1.04); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app:active .ah-ic { transform: scale(.94); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-ic { position: relative; width: 72px; height: 72px; flex: none; transition: filter 120ms ease; }
+/* round 11 (Miguel: icons stay static): no lift or scale; a hover brightens, a press dims */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app:hover .ah-ic { filter: brightness(1.08); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app:active .ah-ic { filter: brightness(.9); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-tile {
   --c: var(--wz-accent, var(--aad-ink));
   width: 72px; height: 72px; border-radius: 18px; overflow: hidden; display: grid; place-items: center; box-sizing: border-box;
@@ -617,12 +619,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-badge {
   box-shadow: 0 1px 4px color-mix(in srgb, black 30%, transparent);
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-badge[hidden] { display: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app.is-held .ah-ic { transform: scale(1.06); }
-/* rearranging: the icon in the hand floats over the rest; the others slide (home.js) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app.is-drag { z-index: 5; cursor: grabbing; pointer-events: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app.is-drag .ah-ic { transform: scale(1.1); filter: drop-shadow(0 12px 22px color-mix(in srgb, black 35%, transparent)); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg.is-arranging { cursor: grabbing; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg.is-arranging .ah-app:not(.is-drag) .ah-ic { transform: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-app.is-held .ah-ic { filter: brightness(1.08); }
 /* the pages' dots, under the grid */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-dots { flex: none; display: flex; justify-content: center; align-items: center; gap: 4px; height: 28px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg .ah-dots[hidden] { display: none; }
@@ -635,5 +632,16 @@ html[data-shell="desktop"][data-layout="ai-apps"]:is([data-skin$="-light"], [dat
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-h { margin: 4px 10px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aad-ink-2); font: 600 0.75rem / 1.3 var(--wz-font-ui); }
 @media (prefers-reduced-motion: reduce) {
   html[data-shell="desktop"][data-layout="ai-apps"] .aad-hg :is(.ah-track, .ah-ic) { transition: none; }
-  html[data-shell="desktop"][data-layout="ai-apps"] .ah.aad-hg { animation: none; }
 }
+
+/* ---------- round 11 (Miguel, 2 Nov 2026): the desktop like the phone ----------
+ * The grid stays on the background under everything (z-index 2, a box fixed to the page: it never follows the sidebar's
+ * fold, a chat or an app); a docked chat column, like the app panel, sits OVER it on an opaque ground. The Home composer
+ * is at the bottom centre; with the app panel open it moves into the room left of the panel (a transform glide, desktop.js
+ * flip) so the panel never covers it and the orb stays in it. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] #stage > .wsp[data-aad-role="chat"] { z-index: 3; background: var(--aad-canvas); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]):not([data-aad-wide]) #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-compose {
+  width: min(768px, calc(100% - var(--aad-app-w) - 48px)); margin-left: max(24px, calc((100% - var(--aad-app-w) - min(768px, calc(100% - var(--aad-app-w) - 48px))) / 2)); margin-right: 0;
+}
+/* the wide panel covers the middle: the orb's own spot is the bottom centre of the panel (it sat on the sidebar's edge) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-wide] .aad-orb { left: calc(var(--aad-side) + (100vw - var(--aad-side) - var(--aad-rs)) / 2 - 30px); }

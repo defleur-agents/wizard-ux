@@ -367,11 +367,7 @@ html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-
 }
 html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-tile.is-plain { background: color-mix(in srgb, white 82%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, black 10%, transparent), 0 2px 6px color-mix(in srgb, black 14%, transparent); }
 html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-name { text-shadow: 0 0 2px color-mix(in srgb, white 90%, transparent), 0 0 8px color-mix(in srgb, white 70%, transparent); }
-/* round 10: rearranging (home.js): a hold lifts the icon, a drag moves it, the others slide */
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-armed .ah-tile { transform: scale(1.08); filter: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-drag { z-index: 5; pointer-events: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-drag .ah-tile { transform: scale(1.12); box-shadow: 0 12px 24px color-mix(in srgb, black 30%, transparent); }
-html[data-shell="phone"][data-layout="ai-apps"] .ah.is-arranging .ah-grid { overflow: hidden; }
+/* (round 11: no rearranging on Home any more: the order is the desks') */
 @keyframes ah-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { html[data-shell="phone"][data-layout="ai-apps"] .ah { animation: none; } }
 

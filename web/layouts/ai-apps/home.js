@@ -5,13 +5,13 @@
  * more (the App Store).
  * Round 7 (Miguel, familiarity first): the Grid | Orb choice is gone; Home is the grid only.
  * Round 10 (Miguel, 2 Nov 2026: umbrelOS's Home with the AI-first composer):
- *   - Rearrange (both shells, iPhone / Umbrel style): press and drag an icon (the desktop: a mouse drag; the phone: hold,
- *     then drag); the others make room with a short slide; dropped, the order is kept (api.storage `appOrder`, on this
- *     device: there is no owner-wide app order to reuse). Apps never placed come after the arranged ones, in the default
- *     order; Get more stays last. A hold released without a drag still offers the app for the home screen (round 7).
  *   - Paged (the desktop): as many rows as fit (never a single row), then pages with dots; the wheel / a trackpad, ← / →
- *     (PageUp / PageDown) and a drag on the empty grid turn them; dragging an icon to a side edge turns the page too.
+ *     (PageUp / PageDown) and a drag on the empty grid turn them.
  *   - A right click (the desktop) opens the caller's quick actions (menu).
+ * Round 11 (Miguel, 2 Nov 2026): the order IS the desks' order, one to one with the Desks view (the same desk list it
+ *   reads, api.desks.list), the only exception being that apps with a badge come first (in desk order among them); then
+ *   the installed apps not open yet, by name; Get more last. No drag to rearrange and no order kept per device any more
+ *   (round 10's appOrder is cleared), so switching from Desks never reshuffles anything. Icons stay put: no hover lift.
  * No timers beyond api.after, no markup strings; everything through the layout API. */
 import { openApps, realApps, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
@@ -38,27 +38,14 @@ export function homeApps(apps, desks, kinds, lit = () => false) {
   return { open: [...open.filter(a => lit(a.id)), ...open.filter(a => !lit(a.id))], rest };
 }
 
-/** Round 10: the owner's arrangement (kept per device under this key). */
-export const ORDER_KEY = 'appOrder';
-/** The list in the owner's order: the arranged apps first, as he left them; the ones he never placed after, as given. */
-export function orderApps(list, saved) {
-  if (!Array.isArray(saved) || !saved.length) return list;
-  const by = new Map(list.map(a => [a.id, a])), out = [];
-  for (const id of saved) if (typeof id === 'string' && by.has(id)) { out.push(by.get(id)); by.delete(id); }
-  return [...out, ...list.filter(a => by.has(a.id))];
-}
-/** ids with id moved so that it ends at index i (a new array). */
-export function moveTo(ids, id, i) {
-  const out = ids.filter(x => x !== id);
-  out.splice(Math.max(0, Math.min(out.length, i | 0)), 0, id);
-  return out;
-}
+/** Round 10's per-device arrangement (retired in round 11: cleared once, never read). */
+export const OLD_ORDER_KEY = 'appOrder';
 /** A page of the desktop grid: the columns and rows that fit (cell cw × ch), at most maxCols wide, never one row. */
 export function pageFit(w, h, cw, ch, maxCols = 7) {
   const cols = Math.max(2, Math.min(maxCols, Math.floor(w / cw) || 0)), rows = Math.max(2, Math.floor(h / ch) || 0);
   return { cols, rows, per: cols * rows };
 }
-export const CELL = { w: 124, h: 128 }, DRAG_FROM = 6, EDGE = 40, EDGE_MS = 550;
+export const CELL = { w: 124, h: 128 };
 
 export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = false, menu = null }) {
   const doc = document;
@@ -92,49 +79,33 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   /* Round 7 (Miguel): a hold on an app icon (phone) or a right click (desktop) offers it for the home screen, exactly as
    * the Desks' hold on an app tile does: the stock sheet (core/home-screen-apps.js through api.apps.homeScreen; native
    * pin on the Android app, the two-step Add to Home Screen / Install app guide elsewhere), never a copy. Apps the stock
-   * sheet would not offer (system apps, no frontend) keep a plain tap. Round 10: the hold also picks the icon up: a drag
-   * from there rearranges, a release without one offers it. */
+   * sheet would not offer (system apps, no frontend) keep a plain tap. (Round 11: no drag to rearrange any more.) */
   const HOLD = 450;   // the stock hold (home-screen-apps.js)
-  let swallow = 0, press = null, drag = null;
+  let swallow = 0, press = null;
   const canPin = id => !!api.apps.homeScreen?.can?.(id);
   function offer(id) { swallow = Date.now() + 700; return !!api.apps.homeScreen?.offer?.(id); }
   function pressable(b, a) {
     api.listen(b, 'pointerdown', e => {
-      if (e.button > 0 || drag) return;
+      if (e.button > 0) return;
       const touch = !!e.pointerType && e.pointerType !== 'mouse';
-      const p = { b, id: a.id, x: e.clientX, y: e.clientY, pid: e.pointerId, touch, armed: !touch, held: false };
-      if (touch) p.off = api.after(HOLD, () => { if (press !== p) return; p.armed = true; p.held = true; b.classList.add('is-armed'); });
+      if (!touch || !canPin(a.id)) return;
+      const p = { b, id: a.id, x: e.clientX, y: e.clientY, pid: e.pointerId };
+      p.off = api.after(HOLD, () => { if (press !== p) return; press = null; offer(a.id); });
       press = p;
     });
     api.listen(b, 'contextmenu', e => {
-      if (press?.touch) { e.preventDefault?.(); return; }   // a long press (Android) is the hold's
-      if (menu) { e.preventDefault?.(); endPress(); menu(a, { x: e.clientX, y: e.clientY, el: b }); return; }
-      if (!canPin(a.id)) return; e.preventDefault?.(); endPress(); if (Date.now() >= swallow) offer(a.id);
+      if (press) { e.preventDefault?.(); return; }   // a long press (Android) is the hold's
+      if (menu) { e.preventDefault?.(); menu(a, { x: e.clientX, y: e.clientY, el: b }); return; }
+      if (!canPin(a.id)) return; e.preventDefault?.(); if (Date.now() >= swallow) offer(a.id);
     });
   }
-  function endPress() { if (!press) return; press.off?.(); press.b.classList.remove('is-armed'); press = null; }
+  function endPress() { if (!press) return; press.off?.(); press = null; }
   api.listen(doc, 'pointermove', e => {
     if (!press || (e.pointerId != null && press.pid != null && e.pointerId !== press.pid)) return;
-    const d = Math.hypot(e.clientX - press.x, e.clientY - press.y);
-    if (!drag) {
-      if (!press.armed) { if (d > 8) endPress(); return; }   // (a scroll, not a hold)
-      if (d < DRAG_FROM) return;
-      startDrag();
-    }
-    moveDrag(e.clientX, e.clientY);
+    if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) endPress();   // (a scroll, not a hold)
   });
-  const release = cancelled => {
-    if (!press) return;
-    const p = press;
-    if (drag) { drop(); press = null; return; }
-    endPress();
-    if (!cancelled && p.held && canPin(p.id)) offer(p.id);   // held, never dragged: the round 7 offer
-    else if (p.held) swallow = Date.now() + 400;
-  };
-  api.listen(doc, 'pointerup', () => release(false));
-  api.listen(doc, 'pointercancel', () => release(true));
-  // while an icon is held on a touch screen, the page must not scroll under the finger
-  api.listen(box, 'touchmove', e => { if (press?.armed || drag) e.preventDefault?.(); }, { passive: false });
+  api.listen(doc, 'pointerup', endPress);
+  api.listen(doc, 'pointercancel', endPress);
 
   /* ---------- the order and the cells ---------- */
   let order = [], cells = new Map(), more = null, page = 0, fitNow = { cols: 4, rows: 2, per: 8 };
@@ -151,10 +122,9 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const r = view.getBoundingClientRect();
     return pageFit(Math.max(0, r.width - 24), Math.max(0, r.height), CELL.w, CELL.h);
   }
-  /** Lay the cells out in `order` (pages of fitNow.per on the desktop); animate = the others slide to their new spots. */
-  function place(animate) {
+  /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
+  function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
-    const before = animate ? new Map(nodes.map(n => [n, n.getBoundingClientRect()])) : null;
     if (!paged) grid.replaceChildren(...nodes);
     else {
       const n = Math.max(1, Math.ceil(nodes.length / fitNow.per));
@@ -164,26 +134,18 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
       box.style.setProperty('--ah-cols', String(fitNow.cols)); box.style.setProperty('--ah-rows', String(fitNow.rows));
       paintDots(n); showPage(Math.min(page, n - 1), false);
     }
-    if (!animate) return;
-    const W = paged ? view.getBoundingClientRect().width : Infinity;
-    for (const n of nodes) {
-      if (n === drag?.b) continue;
-      const a = before.get(n), b = n.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
-      if ((!dx && !dy) || Math.abs(dx) > W * .6) continue;   // (one that changed page just appears there)
-      n.animate?.([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-    }
   }
   let drawn = '';
   function paint(force = false) {
-    if (box.hidden || drag) return;
+    if (box.hidden) return;
     const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit);
-    const list = orderApps([...open, ...rest], api.storage.get(ORDER_KEY));
+    const list = [...open, ...rest];
     fitNow = fit();
     const sig = JSON.stringify([list.map(a => [a.id, a.name, badgeText(a.id)]), fitNow.per]);
     if (!force && sig === drawn) return;
     drawn = sig;
     cells = new Map(list.map(a => [a.id, cell(a)])); order = list.map(a => a.id); more ||= moreCell();
-    place(false);
+    place();
   }
 
   /* ---------- pages (the desktop) ---------- */
@@ -224,56 +186,11 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     let sw = null;
     api.listen(view, 'pointerdown', e => { if (e.button > 0 || e.target?.closest?.('.ah-app')) return; sw = { x: e.clientX, y: e.clientY }; });
     api.listen(doc, 'pointerup', e => { if (!sw) return; const dx = e.clientX - sw.x, dy = e.clientY - sw.y; sw = null; if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) turn(dx < 0 ? 1 : -1); });
-    api.listen(globalThis, 'resize', () => { if (!box.hidden && !drag) paint(); });
+    api.listen(globalThis, 'resize', () => { if (!box.hidden) paint(); });
   }
 
-  /* ---------- rearranging ---------- */
-  function startDrag() {
-    const b = press.b, r = b.getBoundingClientRect();
-    press.off?.();
-    drag = { b, id: press.id, gx: press.x - r.left, gy: press.y - r.top, tx: 0, ty: 0, edge: null };
-    b.classList.remove('is-armed'); b.classList.add('is-drag'); box.classList.add('is-arranging');
-  }
-  function lift(x, y) {
-    const b = drag.b, r = b.getBoundingClientRect(), left = r.left - drag.tx, top = r.top - drag.ty;
-    drag.tx = Math.round(x - drag.gx - left); drag.ty = Math.round(y - drag.gy - top);
-    b.style.translate = `${drag.tx}px ${drag.ty}px`;
-  }
-  /** The slot under the pointer: the index of the cell it is over (on the page in view), else null. */
-  function slotAt(x, y) {
-    const pg = paged ? pages()[page] : grid; if (!pg) return null;
-    for (const c of pg.children) {
-      if (c === drag.b || c === more) continue;
-      const r = c.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return order.indexOf(c.dataset.app);
-    }
-    return null;
-  }
-  function moveDrag(x, y) {
-    lift(x, y);
-    const t = slotAt(x, y);
-    if (t != null && t >= 0 && t !== order.indexOf(drag.id)) { order = moveTo(order, drag.id, t); place(true); lift(x, y); }
-    if (!paged) return;
-    // held at a side edge: the page turns, the icon lands on its first (or last) spot
-    const v = view.getBoundingClientRect(), dir = x < v.left + EDGE ? -1 : x > v.right - EDGE ? 1 : 0;
-    if (!dir) { drag.edge?.(); drag.edge = null; return; }
-    if (drag.edge) return;
-    drag.edge = api.after(EDGE_MS, () => {
-      if (!drag) return; drag.edge = null;
-      if (!turn(dir)) return;
-      order = moveTo(order, drag.id, dir > 0 ? page * fitNow.per : page * fitNow.per + fitNow.per - 1);
-      place(true); lift(x, y);
-    });
-  }
-  function drop() {
-    const d = drag; drag = null; d.edge?.();
-    const { b, tx, ty } = d;
-    b.style.translate = ''; b.classList.remove('is-drag', 'is-armed'); box.classList.remove('is-arranging');
-    b.animate?.([{ translate: `${tx}px ${ty}px` }, { translate: '0px 0px' }], { duration: 180, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-    swallow = Date.now() + 400;
-    api.storage.set(ORDER_KEY, [...order]);
-    drawn = '';
-  }
+  // round 10's per-device arrangement is gone (round 11): forget it once
+  if (api.storage.get(OLD_ORDER_KEY) != null) api.storage.set(OLD_ORDER_KEY, null);
 
   // the letters: the apps in Home's order (open first), kept per device
   let keys = {};
@@ -293,9 +210,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
       if (box.hidden) return []; const ks = lettersFor(), pg = paged ? pages()[page] : grid;
       return [...(pg?.querySelectorAll('.ah-app[data-app]') || [])].filter(b => ks[b.dataset.app]).map(b => ({ el: b.querySelector('.ah-ic'), key: ks[b.dataset.app], at: 'inside' }));
     },
-    show(on) { if (box.hidden === !on) { if (on) paint(); return; } box.hidden = !on; if (on) paint(true); else if (drag) drop(); },
-    /** The desktop: where the grid starts (px from the top; under the composer). */
-    top(px) { const v = Math.round(px) + 'px'; if (box.style.top !== v) { box.style.top = v; if (!box.hidden && !drag) paint(); } },
+    show(on) { if (box.hidden === !on) { if (on) paint(); return; } box.hidden = !on; if (on) paint(true); },
     page: () => page, turn,
     paint,
   };
