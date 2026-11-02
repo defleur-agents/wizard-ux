@@ -469,6 +469,8 @@
         /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
          * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
          * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
+        // The badge text as the shell shows it ('50+' for an app that lists only its newest items); '' when none.
+        badgeText: id => live() && isDoc ? String(window.WizCore?.workspaceNav?.label?.(String(id)) || '') : '',
         badges(watch) {
           const read = () => { const c = isDoc ? window.WizCore?.workspaceNav?.counts : null, o = {}; if (c) for (const [k, v] of Object.entries(c)) if (v > 0) o[k] = v | 0; return Object.freeze(o); };
           if (live() && typeof watch === 'function' && isDoc) {

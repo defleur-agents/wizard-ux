@@ -145,7 +145,7 @@ export default function phone(api) {
     for (const s of sats) {
       if (s.id === '+more') continue;
       const a = apps.find(x => x.id === s.id), n = badgeMap[s.id] || 0;
-      s.count.textContent = n > 99 ? '99+' : n ? String(n) : ''; s.count.hidden = !n;
+      s.count.textContent = n ? (api.apps.badgeText?.(s.id) || (n > 99 ? '99+' : n ? String(n) : '')) : ''; s.count.hidden = !n;
       s.b.dataset.run = a?.run ? (a.run.open ? 'open' : 'hidden') : ''; s.b.classList.toggle('is-new', !a?.run);
       s.b.setAttribute('aria-label', 'Open ' + s.name + (n ? ` · ${n} new` : '') + (a?.run ? ' · on a desk' : ''));
     }
