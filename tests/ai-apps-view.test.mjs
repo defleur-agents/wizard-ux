@@ -997,3 +997,41 @@ test('round 9 desktop: every panel resizable by drag (sidebar, chat column, app 
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /export const SIZE_LIMITS = \{ side: \[220, 440\], apps: \[180, 360\], panel: 340 \}, MIDDLE = 200;/);
 });
+
+test('round 10 desktop: a drag is smooth (one write a frame, no page resize, no storage until the release; windows follow by CSS)', async () => {
+  const { w, store } = deskWorld();
+  const frames = []; w.api.frame = fn => { frames.push(fn); return () => { const i = frames.indexOf(fn); if (i >= 0) frames.splice(i, 1); }; };
+  const flush = () => { while (frames.length) frames.shift()(16 * (frames.length + 1)); };
+  (await layout()).default(w.api); flush();
+  let resizes = 0; const had = globalThis.dispatchEvent; globalThis.dispatchEvent = e => { if (e.type === 'resize') resizes++; return true; };
+  try {
+    const g = w.q('.aad-grip[data-grip="side"]'), st = w.html.style;
+    g.dispatchEvent(new FakePointerEvent('pointerdown', { clientX: 288, pointerId: 1 }));
+    g.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 300 })); g.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 330 }));
+    assert.equal(st.getPropertyValue('--aad-side-w'), '288px', 'nothing written between frames');
+    assert.equal(frames.length, 1, 'several moves, one frame');
+    flush(); assert.equal(st.getPropertyValue('--aad-side-w'), '330px', 'the latest x, once a frame');
+    assert.equal(resizes, 0, 'no page resize while held'); assert.equal('widths' in store, false, 'no storage write while held');
+    g.dispatchEvent(new FakePointerEvent('pointermove', { clientX: 352 }));
+    g.dispatchEvent(new FakePointerEvent('pointerup', {}));
+    assert.equal(st.getPropertyValue('--aad-side-w'), '352px', 'the release applies the last move');
+    assert.equal(resizes, 1, 'one resize, on release'); assert.equal(store.widths.side, 352, 'kept on release');
+    assert.equal(w.html.dataset.aadResizing, undefined);
+  } finally { globalThis.dispatchEvent = had; }
+  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing]';
+  assert.ok(css.includes(P + ' #stage > .wsp:not([hidden]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {'), 'a shown lone window follows its desk by CSS');
+  assert.match(css, /\[data-aad-resizing\] :is\([^)]*#stage > \.wsp > \.win\) \{ transition: none !important;/, 'windows never animate under the pointer');
+  assert.match(css, /\[data-aad-resizing\] :is\(\.aad-side, \.aad-apps[^{]*\{ -webkit-backdrop-filter: none !important; backdrop-filter: none !important; \}/, 'no blur re-sampled per frame');
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(js, /const FRAME_FIT_MS = 120;/, 'app frames refitted a few times a second');
+  assert.match(js, /if \(roAsked \|\| root\.dataset\.aadResizing\) return;/, 'the orb waits for the release');
+});
+
+test('round 10 phone: on light skins the Home icons are full colour (the app colour plate, a white glyph) with readable names; dark skins untouched', () => {
+  const css = read('web/layouts/ai-apps/layout.css'), L = 'html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"])';
+  assert.ok(css.includes(L + ' :is(.ah-tile, .aa-tile):not(.is-logo):not(.is-plain) {\n  background: linear-gradient(165deg, color-mix(in oklab, var(--c) 82%, white), var(--c) 55%, color-mix(in oklab, var(--c) 82%, black));'), 'full-colour plate');
+  assert.ok(css.includes(L + ' :is(.ah-tile, .aa-tile):not(.is-logo):not(.is-plain) > .sgi:not(.sgb) {\n  background: white !important;'), 'white glyph, past the skin\'s grey dimmer');
+  assert.match(css, /:is\(\[data-skin\$="-light"\], \[data-skin="sepia"\]\) \.ah-name \{ text-shadow:/, 'names keep a light halo on photos');
+  // the dark look is the stock rule, unchanged
+  assert.ok(css.includes('background: linear-gradient(165deg, color-mix(in oklab, var(--c) 30%, var(--wz-panel, var(--wz-base, var(--bg)))), color-mix(in oklab, var(--c) 12%, var(--wz-panel, var(--wz-base, var(--bg)))));'));
+});
