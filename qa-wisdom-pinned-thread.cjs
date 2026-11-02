@@ -17,7 +17,7 @@ const mime=f=>({'.js':'application/javascript','.json':'application/json','.css'
 const result={status:'running',scope:LIVE?'INSTALLED live unmodified shell/app assets; synthetic private APIs; no provider calls':'CANDIDATE exact shell source + installed Wisdom bytes; real installed registry; synthetic private APIs; no provider calls',revision:manifest.revision,shellRevision:manifest.shell_revision,cases:[]};
 function save(){fs.writeFileSync(path.join(OUT,'hosted-route.json'),JSON.stringify(result,null,2)+'\n')}
 function sourceError(e){return {name:e.name,sourceStack:[...String(e.stack||'').matchAll(/https?:\/\/[^\s)]+:\d+:\d+/g)].map(x=>x[0].replace(BASE.origin,''))};}
-(async()=>{const browser=await chromium.launch({headless:true});try{
+(async()=>{const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});try{
 for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const skin of (process.env.QA_BASELINE==='1'?['nebula']:['nebula','signal']))for(const action of ['selection-ask-ai','selection-open-discussion']){
  const c={width,skin,action,status:'running',requests:[],assets:{},failures:[]};result.cases.push(c);save();
  const ctx=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block',hasTouch:width===390,isMobile:width===390});
@@ -138,6 +138,21 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
   await page.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-native.png`)});
   // Native Back uses the real shell handler, not a fabricated app callback.
   const shellBack=()=>page.evaluate(()=>window.__wosNativeBack?__wosNativeBack():__wux.escStep());
+  assert(await page.locator('.hosted-thread [data-chmic]').isVisible(),'Shared native reply microphone is visible');
+  if(width===390 && action==='selection-ask-ai'){
+   await ctx.grantPermissions(['microphone']);
+   await page.locator('.hosted-thread [data-chmic]').click();
+   await page.waitForFunction(()=>WizAppCapture.getState().phase==='recording');
+   assert.equal(await page.locator('.hosted-thread [data-chmic]').getAttribute('aria-pressed'),'true');
+   await delay(1200);assert.equal(await shellBack(),'recording');
+   await page.waitForFunction(()=>!WizAppCapture.getState().active);
+   c.microphone=await page.evaluate(async sid=>{
+    const rows=await WizAppCapture.pending('wizard-chats'),r=rows.find(r=>r.meta?.sessionId===sid);
+    if(!r||!r.blob.size||r.meta.appId!=='wisdom')throw Error('Synthetic recording not retained for exact thread');
+    const report={bytes:r.blob.size,sessionId:r.meta.sessionId,appId:r.meta.appId,providerRuns:0,backKeptWithoutSend:true};
+    await WizAppCapture.ack('wizard-chats',r.id);return report;
+   },SID);
+  }
   await native.evaluate(e=>e.blur());await shellBack();await page.waitForFunction(()=>!document.querySelector('.hosted-thread'));
   assert(await frame.locator('.wb-reader').isVisible());
   await page.evaluate(sid=>WosChat.drafts.clear('direct:'+sid),SID);

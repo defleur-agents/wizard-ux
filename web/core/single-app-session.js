@@ -24,7 +24,11 @@
   } });
   // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
   const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
+  const replyVoice = window.WizChatsHost?.replyRecorder?.({appId:id, chats:() => chats,
+    repaint:() => chats?.refreshCompose(wid), toast});
   const chats = window.WizChatsHost?.create({
+    recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
+    recordingFor:() => replyVoice?.recordingFor(),
     win: value => value === wid ? threadWindow : null,
     root: () => win, save: () => checkpoint(), layout() {}, toast,
     title: () => policy.displayName(app || {id, name:'Thread'}),
@@ -34,7 +38,11 @@
     captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
   });
   chats?.bind(win);
-  win.addEventListener('click', e => { if (chats?.isHosted(wid)) chats.click(e, wid); });
+  win.addEventListener('click', e => {
+    if (!chats?.isHosted(wid)) return;
+    if (e.target.closest('[data-chback]') && replyVoice?.back()) return;
+    chats.click(e, wid);
+  });
   function checkpoint() {
     if (!loaded || !frame || !app) return;
     try {
@@ -79,6 +87,7 @@
     if (window.WosChat?.viewer?.close?.()) return 'media';
     if (window.WizLinks?.backMenu?.()) return 'link-menu';
     if (links?.back()) return 'link';
+    if (replyVoice?.back()) return 'recording';
     if (chats?.isHosted(wid)) { if (chats.closeOverlay()) return 'chat-overlay'; if (chats.beforeLeave(wid)) chats.threadBack(threadWindow); return 'thread'; }
     if (!frame || !loaded) return 'root';
     const step = window.WizAppServices?.back(frame);
