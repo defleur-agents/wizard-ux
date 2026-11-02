@@ -38,6 +38,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
 import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
+import { homeView } from './home.js';
 import desktop from './desktop.js';
 
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
@@ -102,6 +103,10 @@ export default function setup(api) {
   drawer.append(head, scroll, foot);
   layer.append(scrim, drawer);
   api.mount(layer);
+
+  /* ---------- Home: the apps above the composer (Grid, or the Orb scene), home.js ---------- */
+  const home = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
+  api.mount(home.el);
 
   let open = false, offBack = null, q = '';
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
@@ -206,11 +211,7 @@ export default function setup(api) {
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, here)));
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aa-empty', { text: 'No chat or app by that name.' }));
     } else {
-      // every open app (none hidden behind "N more"), then All apps as the grid's last cell; real apps only (round 6:
-      // the sheet's Apps, never agent apps, agents, connectors, system / Wizard apps or apps in development)
-      const openList = litFirst(realApps(openApps(apps, dk), api.apps.kinds?.()));
-      out.push(grid('Open apps', [...openList.map(a => appCell(a, () => goApp(a.id))), plainCell('aa-all', 'apps', 'All apps', () => chrome.open())]));
-      out.push(el('hr', 'aa-div'));
+      // the drawer is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         const rows = s[k] || [], on = !!secOpen[k];
@@ -228,6 +229,7 @@ export default function setup(api) {
     scroll.replaceChildren(...out);
   }
   function paintBadges() {
+    home.paint();
     if (open) paintDrawer();   // a badge that comes or goes reorders the grid (badged first); the signature skips the rest
     for (const n of scroll.querySelectorAll('[data-badge]')) {
       n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent;
@@ -406,7 +408,16 @@ export default function setup(api) {
     const row = c?.querySelector('.ch-row2'); if (!row) return null;
     return gridSlot(row, 3);
   }
-  const syncOrb = () => api.frame(() => chrome.orbIn(orbSlot()));
+  const syncOrb = () => api.frame(() => { chrome.orbIn(orbSlot()); homeRoom(); });
+  // Home's apps end where the composer starts (it grows with words)
+  function homeRoom() {
+    const W = globalThis.innerWidth || 0, H = globalThis.innerHeight || 0;
+    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const top = c ? c.getBoundingClientRect().top : 0;
+    if (H && top > 0) root.style.setProperty('--ah-bottom', Math.round(H - top) + 'px');
+  }
+  // only on Home (the empty New chat), never while the drawer is open over it
+  const homeShow = on => home.show(!!on);
   api.listen(globalThis, 'resize', syncOrb);
   if (globalThis.visualViewport) { api.listen(globalThis.visualViewport, 'resize', syncOrb); api.listen(globalThis.visualViewport, 'scroll', syncOrb); }
   api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) syncOrb(); }, true);
@@ -431,6 +442,7 @@ export default function setup(api) {
     // Home = a New chat: nothing but the skin's background, the composer and the orb
     const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__');
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
+    homeShow(home);
     // the workspace switcher only on Home (round 5): never over a chat or an app
     wsBtn.hidden = !home; if (!home) closeSheet();
     syncOrb();
@@ -447,5 +459,6 @@ export default function setup(api) {
     closeMenu(); closeSheet(); closeDrawer();
     top.remove(); layer.remove(); chrome.dispose();
     for (const k of ['aiApps', 'aiFront', 'aaDrawer', 'aiNew']) delete root.dataset[k];
+    home.el.remove(); root.style.removeProperty('--ah-bottom');
   };
 }

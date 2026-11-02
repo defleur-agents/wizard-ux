@@ -34,6 +34,7 @@ import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chr
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
+import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
@@ -87,7 +88,7 @@ export default function desktop(api) {
   const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); rFind.append(icon('search'));
   const rApps = el('div', 'aad-rapps', { role: 'list', 'aria-label': 'Open apps' });
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); rSet.append(icon('cog'));
-  rail.append(rTog, rNew, rFind, el('hr', 'aad-rdiv'), rApps, el('span', 'aad-rgap'), rSet);
+  rail.append(rTog, rNew, rFind, el('span', 'aad-rgap'), rSet);   // (no apps: they live on Home)
   // round 7: the AI fuel gauge sits at the top of the sidebar, under its header (the stock bar is placed over this row)
   const fuel = el('div', 'aad-fuel', { 'aria-hidden': 'true' });
   const panel = el('div', 'aad-panel'); panel.append(head, fuel, scroll, foot);
@@ -120,6 +121,9 @@ export default function desktop(api) {
   const scene = el('div', 'aad');
   scene.append(shade, side, top, orbBox);
   api.mount(scene);
+  /* Home: the apps above the composer (Grid, or the Orb scene), home.js; an app opens as the panel on the right */
+  const homeEl = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
+  scene.append(homeEl.el);
 
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
   // spot (its centre, its size) lets an app's own bottom tabs go either side of it
@@ -274,8 +278,7 @@ export default function desktop(api) {
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
     } else {
-      // real apps only (round 6: the sheet's Apps; never agent apps, agents, connectors, system / Wizard or in-development apps)
-      out.push(label('Apps'), grid('Open apps', [...litFirst(realApps(openApps(apps, dk), api.apps.kinds?.())).map(appCell), allCell()]));
+      // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         const rows = s[k] || [], on = !!secOpen[k];
@@ -308,6 +311,7 @@ export default function desktop(api) {
     rApps.replaceChildren(...cells, allCell('aad-ri aad-all'));
   }
   function paintBadges() {
+    homeEl.paint();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     for (const n of scroll.querySelectorAll('[data-badge]')) { n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent; }
     const rt = badgeText(CHATS);
@@ -401,7 +405,13 @@ export default function desktop(api) {
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
   }
-  const syncOrb = () => api.frame(() => chrome.orbIn(orbSlot()));
+  const syncOrb = () => api.frame(() => { chrome.orbIn(orbSlot()); homeRoom(); });
+  // Home's apps end where the composer starts
+  function homeRoom() {
+    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
+    const H = globalThis.innerHeight || 0, t = c ? c.getBoundingClientRect().top : 0;
+    if (H && t > 0) root.style.setProperty('--ah-bottom', Math.round(H - t + 8) + 'px');
+  }
   api.listen(globalThis, 'resize', syncOrb);
   api.listen(orbBox, 'transitionend', syncOrb);
   api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) syncOrb(); }, true);
@@ -443,6 +453,41 @@ export default function desktop(api) {
   api.listen(pX, 'click', closeSide);
   api.keys.on({ down: e => { if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || !pane || menu || wsPop || q) return false; closeSide(); return true; } });
 
+  /* ---------- ⌥ keys (Miguel, 2 Nov 2026): every desktop ⌥ key keeps working; the hold-⌥ hints map onto this view ----------
+   * The shell's own hold-⌥ overlay (desktop.js keyHints: bare letters on their targets while LEFT ⌥ is held, gone on
+   * release) draws these too (api.keys.guide). This view adds: ⌥\ the sidebar (as the Orbs view's list; Ctrl / ⌘ ⇧ S
+   * too), ⌥W / Esc close the app panel, ⌥H Home's Grid ⇄ Orb, ⌥ + a free letter a Home app (home.js appKeys). */
+  api.keys.on({ down: e => {
+    if (!e.altKey || e.ctrlKey || e.metaKey) return false;
+    if (e.code === 'Backslash' && !e.shiftKey) { if (!e.repeat) toggleSide(); return true; }
+    if (e.code === 'KeyW' && !e.shiftKey && pane) { if (!e.repeat) closeSide(); return true; }
+    if (e.code === 'KeyH' && !e.shiftKey && root.dataset.aadHome != null) { if (!e.repeat) homeEl.toggleStyle(); return true; }
+    const k = /^Key([A-Z])$/.exec(e.code || '')?.[1], id = k && !e.shiftKey && homeEl.appFor(k);
+    if (id) { if (!e.repeat) goApp(id); return true; }
+    return false;
+  } });
+  const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
+  api.keys.guide(() => {
+    const open = root.dataset.aadSide === 'open', out = [];
+    const put = (n, key, word, at) => { if (shown(n)) out.push({ el: n, key, word, at }); };
+    put(open ? word : null, '`', 'Home', 'inside');
+    put(open ? togBtn : rTog, '\\', open ? 'Close sidebar' : 'Sidebar', 'below');
+    put(open ? newBtn : rNew, 'N', 'New chat', open ? 'above' : 'below');
+    put(open ? setBtn : rSet, ',', 'Settings', 'above');
+    put(open ? findBtn : rFind, '␣', 'Search', 'below');
+    // ⌥↓ / ⌥↑: the next / previous Ready chat, on its row in the sidebar
+    if (open) {
+      const rows = [...side.querySelectorAll('.aad-rw[data-kind="ready"] .aad-row')].filter(shown), i = rows.findIndex(r => r.closest('.aad-rw.is-cur'));
+      const next = rows.length && (i < 0 ? rows[0] : rows[(i + 1) % rows.length]); if (next && next !== rows[i]) put(next, '↓', '', 'inside');
+      if (i > 0 && rows.length > 2) put(rows[i - 1], '↑', '', 'inside');
+    }
+    put(orbBox, 'S', 'Talk', 'above'); put(orbBox, 'C', 'Command', 'below');
+    if (pane) put(pX, 'W', 'Close · Esc', 'below');
+    if (root.dataset.aadHome != null) put(homeEl.switchEl, 'H', 'Grid ⇄ Orb', 'start');
+    return out;
+  });
+  api.keys.guide(() => homeEl.chips());
+
   /* ---------- the main area: the chat (Home and the bare list become it), or an app ---------- */
   function here(r = api.route()) {
     const d = desks().find(x => x.desk === r.desk), id = r.home ? '' : d?.id || '';
@@ -455,7 +500,7 @@ export default function desktop(api) {
     else if (r.view === 'list') soon(() => { if (api.route().view === 'list') api.sessions.newChat(); });
     paintTop(r);
   }
-  let lastThread;
+  let lastThread, chatThread = null;
   function paintTop(r = api.route()) {
     const h = here(r);
     paintSplit();
@@ -464,9 +509,14 @@ export default function desktop(api) {
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     root.dataset.aadNew = String(r.view === 'thread' && r.thread === '__new__');
     // the workspace switcher only on Home (round 5): never over a chat or an app
-    const home = !h.app && !pane && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    // (with the app panel in front, the chat beside it is as it was: Home stays Home, a chat stays that chat)
+    if (!h.app) chatThread = h.thread;
+    const atHome = h.app ? !!pane && pane.id === h.app && !chatThread : (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    const home = atHome && !pane;
     wsBtn.hidden = !home; if (!home) closeWs();
-    const t = h.app ? appName(h.app) : h.thread ? titleOf(h.thread) : '';
+    if (atHome) root.dataset.aadHome = ''; else delete root.dataset.aadHome;
+    homeEl.show(atHome);
+    const t = h.app && !pane ? appName(h.app) : h.app ? (chatThread ? titleOf(chatThread) : '') : h.thread ? titleOf(h.thread) : '';
     tt.textContent = t; tt.title = t;
     const nm = agentName();
     word.setAttribute('aria-label', `${nm}: Home (a new chat)`);
@@ -486,7 +536,8 @@ export default function desktop(api) {
   return () => {
     closeMenu(); closeWs(); offSearch?.(); offPeek?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
-    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim']) delete root.dataset[k];
+    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadHome']) delete root.dataset[k];
+    root.style.removeProperty?.('--ah-bottom');
     for (const w of wsps()) delete w.dataset.aadRole;
     root.style.removeProperty?.('--aad-ws-w');
     globalThis.dispatchEvent?.(new Event('resize'));
