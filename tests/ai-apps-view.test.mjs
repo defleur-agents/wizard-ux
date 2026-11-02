@@ -847,10 +847,15 @@ test('round 7: a notification opens as a chat (never Home), its route choice in 
   (await layout()).default(p.api);
   assert.equal(p.html.dataset.aiNew, undefined, 'phone: a notification is not the see-through Home');
   assert.equal(p.q('.ah').hidden, true, 'no Home apps over it');
+  // its Badge | Chats choice moves into the thread's own sticky action row, first
+  const route = new El('div'); route.className = 'ch-notif-route'; const msgs = new El('div'); msgs.className = 'ch-msgs'; const tacts = new El('div'); tacts.className = 'ch-tacts'; const btn = new El('button');
+  tacts.append(btn); msgs.append(route, tacts); th.append(msgs);
+  tacts.insertBefore = (n, ref) => { n.remove(); n.parentNode = tacts; tacts.children.splice(tacts.children.indexOf(ref), 0, n); };
+  w.emit('render');
+  assert.equal(route.parentNode, tacts); assert.equal(tacts.children[0], route, 'first in the action row');
   for (const [file, scope] of [['web/layouts/ai-apps/desktop.css', '.win .dchats .pane-main'], ['web/layouts/ai-apps/layout.css', '.win.app-chats']]) {
     const css = read(file);
-    assert.ok(css.includes(`${scope} .ch-notif-thread > .ch-msgs > .ch-notif-route {\n  grid-row: 90; grid-column: 1; position: sticky; bottom: 0;`), `${file}: Badge | Chats in the sticky action row`);
-    assert.ok(css.includes(`${scope} .ch-notif-thread > .ch-msgs > .ch-tacts { grid-row: 90; grid-column: 2;`), `${file}: beside its actions`);
+    assert.ok(css.includes(`${scope} .ch-notif-thread .ch-tacts > .ch-notif-route { flex: 1 0 100%;`), `${file}: Badge | Chats on the action row's first line`);
     assert.ok(css.includes(`${scope} .ch-notif-thread .msg.a.ch-notif::before {`), `${file}: a bell on that message only`);
   }
 });

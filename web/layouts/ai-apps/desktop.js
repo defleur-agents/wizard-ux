@@ -33,7 +33,7 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, gaugeInto } from './parts.js';
+import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -613,6 +613,7 @@ export default function desktop(api) {
   let lastThread, chatThread = null;
   function paintTop(r = api.route()) {
     if (noteOn() || r.view !== 'thread' || (r.thread && r.thread !== '__new__')) noteWant = false;   // the note is on screen now (or gone)
+    noteRouteIntoActions(doc, '.win .dchats .pane-main');
     const h = here(r);
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : null);

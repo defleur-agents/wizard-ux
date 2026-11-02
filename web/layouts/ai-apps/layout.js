@@ -37,7 +37,7 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot, noteThread, gaugeInto } from './parts.js';
+import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto } from './parts.js';
 import { homeView } from './home.js';
 import desktop from './desktop.js';
 
@@ -450,6 +450,7 @@ export default function setup(api) {
     paintTop(r);
   }
   function paintTop(r = api.route()) {
+    noteRouteIntoActions(doc, '.win.app-chats');
     const app = r.app && r.app !== 'chats' ? r.app : '';
     root.dataset.aiFront = r.home ? 'chat' : app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     // Home = a New chat: nothing but the skin's background, the composer and the orb
