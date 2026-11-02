@@ -190,11 +190,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad-rtog .aad-count').textContent, '2', 'the rail\'s ◫ carries it too'); assert.match(w.q('.aad-rtog').getAttribute('aria-label'), /2 ready/);
   assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(store.folded, true);
   assert.equal(w.q('.aad-rail .aad-rapps'), null, 'the rail: no apps either');
-  // round 7: the rail lists every Ready chat (its status colour, tooltip, a click opens it), grouped by status, with counts
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.className.split(' ')[0] + ':' + (n.dataset.sid || n.dataset.k || n.dataset.state)), ['aad-rk:working', 'aad-rg:none', 'aad-rc:r1', 'aad-rc:r2', 'aad-rk:archive']);
-  assert.match(w.q('.aad-rc[data-sid="r1"]').title, /^Ready one · Ready · new$/);
-  assert.ok(w.q('.aad-rc[data-sid="r1"] .aad-sti'), 'round 8: its status icon'); assert.equal(w.q('.aad-rc-l'), null, 'never a coloured first letter');
-  w.q('.aad-rc[data-sid="r2"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'thread:r2');
+  // round 12: the rail is words with counts (plain Ready chats count in Ready only, no status rows for them); no icons
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['working:Working1', 'ready:Ready2', 'archive:Archive1']);
+  assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
   assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel / chat column (round 7), the view\'s ⌥ keys');
   assert.equal(w.st.guides.length, 2, 'two hold-⌥ hint guides: the view\'s targets and Home\'s app letters');
   const chips = w.st.guides[0]();
@@ -244,7 +242,7 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   assert.ok(!/font(-size)?\s*:[^;}]*\b\d+px/.test(css), 'type in rem');
   const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
   assert.match(css, new RegExp(P + ' \\{\\s*--aad-side: 288px;'), 'a 288 px sidebar (Claude; ChatGPT\'s panel)');
-  assert.match(css, new RegExp(P + '\\[data-aad-side="rail"\\],\\s*' + P + '\\[data-aad-side="over"\\] \\{ --aad-side: 52px; \\}'), 'a 52 px rail (ChatGPT)');
+  assert.match(css, new RegExp(P + '\\[data-aad-side="rail"\\],\\s*' + P + '\\[data-aad-side="over"\\] \\{ --aad-side: 120px; \\}'), 'round 12: a 120 px rail, room for the words');
   assert.match(css, /\.ch-compose \{\s*width: min\(768px, calc\(100% - 48px\)\); box-sizing: border-box; margin: 0 auto 24px;/, 'a 768 px column, the composer docked 24 px from the bottom (round 6: the orb is inside it)');
   assert.match(css, /\.ch-compose:not\(\.has-text\) \.ch-row2 > \.ch-send \{ display: none !important; \}/, 'Send only with words; no voice button of its own');
   assert.match(css, /:is\(\.ch-newchat, \.nc-classic\) \{ display: none !important; \}/, 'Home has no greeting');
@@ -252,7 +250,7 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
   assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
-  assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
+  assert.match(js, /export const SIDE = 288, RAIL = 120, DOCKED_FROM = 900;/);
 });
 
 test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {
@@ -782,12 +780,25 @@ test('round 7 desktop: a chat docks beside the list (✕ / Esc / ⌥W back to Ho
   w.st.route = { home: false, view: 'thread', thread: 'r2', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(keys[1].down({ key: 'Escape' }), true); assert.equal(w.st.newChats, 2, 'Esc closes the column');
   assert.equal(keys[2].down({ altKey: true, code: 'KeyW' }), true); assert.equal(w.st.newChats, 3, '⌥W too');
-  // the rail: Ready by status (Needs you first), counts for Working and Archive that open the sidebar there
+  // the rail (round 12): words, Ready's stock statuses under it in Chats' order (Needs you before Done), counts muted
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.sid || n.dataset.k || n.dataset.state), ['working', 'needs', 'r1', 'done', 'r2', 'archive']);
-  assert.equal(w.q('.aad-rc[data-sid="r1"]').dataset.state, 'needs'); assert.match(w.q('.aad-rg[data-state="needs"]').getAttribute('aria-label'), /Needs you: 1/);
-  w.q('.aad-rk[data-k="archive"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="archive"]').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
+    ['Working 1', 'Ready 2', '  Needs you 1', '  Done 1', 'Archive 1']);
+  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^1 Needs you: show them in Ready$/);
+  // a status: one click opens the sidebar on Ready showing only that status, a chip shows all again
+  w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="ready"]').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1'], 'only Needs you');
+  assert.equal(w.q('.aad-only .aad-only-w').textContent, 'Needs you · 1 of 2');
+  w.q('.aad-only').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2'], 'Show all'); assert.equal(w.q('.aad-only'), null);
+  // folding drops a filter; Working opens the sidebar on Working
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); w.q('.aad-rk[data-k="done"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r2']);
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
+  w.q('.aad-rk[data-k="working"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="working"]').getAttribute('aria-expanded'), 'true');
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2'], 'the filter went with the fold');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + '[data-aad-chat] { --aad-chat-w: clamp(400px, 33.333vw, 560px); }'), 'a third, never the whole screen');
   assert.ok(css.includes(P + '[data-aad-chat] #stage > .wsp[data-aad-role="chat"] {\n  inset: 0 auto 0 var(--aad-side) !important; width: var(--aad-chat-w) !important;'), 'docked right beside the list');
@@ -970,7 +981,7 @@ test('round 9 desktop: every panel resizable by drag (sidebar, chat column, app 
   for (let i = 0; i < 80; i++) g('app').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowLeft' }));
   assert.equal(store.widths.app, 1440 - 288 - 200, 'the app panel never shuts the middle');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + '[data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }'), 'the rail keeps 52');
+  assert.ok(css.includes(P + '[data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }'), 'the rail keeps its own width');
   assert.ok(!css.includes('data-aad-apps') && !css.includes('.aad-apps'), 'round 10: no apps sidebar styles left');
   assert.match(css, /--aad-rs: 0px;/, 'round 10: nothing on the right');
   assert.ok(css.includes(P + '[data-aad-chat] { --aad-chat-w: var(--aad-chat-px, clamp(400px, 33.333vw, 560px)); }'));

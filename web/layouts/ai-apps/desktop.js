@@ -12,7 +12,7 @@
  *     click on a row: Pin, Rename, Mark unread, Snooze, Archive / Restore, through Chats' own actions); at its foot a
  *     round + (New chat) and a cog (Settings), icons only, as on the phone. Its ◫ toggle (and the rail's) carries the
  *     Ready count (round 5, the phone's ☰ count).
- *   - Collapsed, it is a 52 px icon rail (ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
+ *   - Collapsed, it is a 120 px rail (round 12: words, not icons; was a 52 px icon rail, ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
  *     at the bottom. ◫ or Ctrl / ⌘ + Shift + S (ChatGPT's key) toggles it; the choice is kept on this device. It stays
  *     open from 900 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
  *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; a small
@@ -50,10 +50,10 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, stateIcon } from './parts.js';
+import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto } from './parts.js';
 import { homeView } from './home.js';
 
-export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
+export const SIDE = 288, RAIL = 120, DOCKED_FROM = 900;
 /** Round 9 (Miguel, 2 Nov 2026): every panel resizable by drag, within these limits (px); the middle always keeps
  * MIDDLE px (the orb's room). */
 export const SIZE_LIMITS = { side: [220, 440], panel: 340 }, MIDDLE = 200;
@@ -134,9 +134,9 @@ export default function desktop(api) {
   // round 7: the cog on the left, the AI fuel gauge between, + on the right
   const fuel = el('div', 'aad-fuel', { 'data-fuel-copy': '' }); fuel.hidden = true;
   foot.append(setBtn, fuel, newBtn);
-  // the rail (collapsed, round 7): ◫ · + · 🔍 · Working (a count) · every Ready chat, grouped by its stock status
-  // (Needs you, Your call, FYI, Done…: a coloured count, then each chat's initial with its status colour) · Archive (a
-  // count) … the cog
+  // the rail (collapsed): ◫ · + · 🔍, then (round 12, Miguel: readable words, no status icons) a short text list in the
+  // sidebar's own type: Working n · Ready n, under it the stock Chats statuses with their counts (Needs you, Your call,
+  // FYI, Done…) · Archive n … the cog
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rCount = el('b', 'aad-count', { 'aria-hidden': 'true' }); rCount.hidden = true; rTog.append(rCount);
@@ -204,6 +204,7 @@ export default function desktop(api) {
     // the sidebar opens with a short reveal (clip, no width animation); folding snaps to the rail
     if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
+    if (!open) only = '';   // round 12: a status shown alone is dropped when the sidebar folds
     togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
     rTog.title = 'Open sidebar (Ctrl+Shift+S)';
@@ -221,6 +222,8 @@ export default function desktop(api) {
   let offPeek = null;
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
   const secOpen = sectionsOpen(api.storage.get('sections'));
+  const STATE_WORD = Object.fromEntries(STATES);
+  let only = '';   // round 12: the Ready status the sidebar shows alone (a click on it in the rail), '' = all
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
@@ -495,7 +498,7 @@ export default function desktop(api) {
     if (root.dataset.aadSide === 'rail') return;
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
     const sig = JSON.stringify([q, h.thread, h.app, pane?.id, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')), apps.length,
-      secOpen, ['working', 'ready', 'archive'].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
+      secOpen, only, ['working', 'ready', 'archive'].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     const out = [];
@@ -509,13 +512,20 @@ export default function desktop(api) {
       // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
-        const rows = s[k] || [], on = !!secOpen[k];
+        const all = s[k] || [], on = !!secOpen[k], rows = k === 'ready' && only ? all.filter(r => stateOf(r) === only) : all;
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', '', { text: word0 }), icon('down', 'aad-ico aad-sec-c'));
         // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
         if (!on && k !== 'archive' && rows.length) { hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' })); hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`); }
-        api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
+        api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; if (k === 'ready') only = ''; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
+        if (on && k === 'ready' && only) {
+          // round 12: Ready showing one status (a click on it in the rail): its name and how to see all again
+          const chip = el('button', 'aad-only', { type: 'button', 'aria-label': `Showing only ${STATE_WORD[only] || only}. Show all of Ready`, title: 'Show all of Ready' });
+          chip.append(el('span', 'aad-only-w', { text: `${STATE_WORD[only] || only} · ${rows.length} of ${all.length}` }), el('span', 'aad-only-x', { text: 'Show all' }));
+          api.listen(chip, 'click', () => { only = ''; paintList(true); });
+          body.append(chip);
+        }
         if (on) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
           else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : k === 'ready' ? 'Nothing ready.' : k === 'working' ? 'Nothing working.' : 'Nothing archived.' }));
@@ -526,45 +536,39 @@ export default function desktop(api) {
     closeMenu();
     scroll.replaceChildren(...out);
   }
-  /* The rail (round 7, Miguel: the folded sidebar must still be useful): Working as a count with a tiny spinner; every
-   * Ready chat as a small clickable initial carrying its stock status colour (a dot for new), grouped by status under a
-   * coloured count (Needs you · Your call · FYI · Done…), the title and status in its tooltip; Archive as a count. The
-   * counts open the sidebar on that section. */
-  const STATE_WORD = Object.fromEntries(STATES);
-  function openSection(k) {
+  /* The rail (round 12, Miguel: the icon tiles were unreadable): words in the expanded list's type, no status icons or
+   * coloured dots. Working n, Ready n and under Ready, indented, each stock Chats status with chats in it (STATES:
+   * core/chats.js stiKind's words and order; plain Ready chats count in Ready only), then Archive n, quieter. One click
+   * opens the sidebar on that section, scrolled to it; a status opens Ready showing only that status, with a chip
+   * above the rows that shows all again (dropped when the sidebar folds). */
+  function openSection(k, state = '') {
     secOpen[k] = true; api.storage.set('sections', { ...secOpen });
+    only = k === 'ready' ? state : '';
+    if (q) setSearch(false);
     if (narrow()) { if (!peek) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } }
     else { folded = false; api.storage.set('folded', false); }
     paintSide(); paintList(true);
+    const hd = scroll.querySelector?.(`.aad-sec[data-sec="${k}"]`), top = hd?.getBoundingClientRect?.().top, box = scroll.getBoundingClientRect?.().top;
+    if (typeof top === 'number' && typeof box === 'number') scroll.scrollTop = Math.max(0, (scroll.scrollTop || 0) + top - box - 4);
   }
-  function railCount(k, n, word0, ico) {
-    const b = el('button', 'aad-rk', { type: 'button', role: 'listitem', 'data-k': k, title: `${n} ${word0}`, 'aria-label': `${word0}: ${n}. Open the sidebar there` });
-    b.append(ico, el('b', '', { text: n > 99 ? '99+' : String(n) }));
-    api.listen(b, 'click', () => openSection(k));
+  function railRow(k, n, word0, state = '') {
+    const sub = !!state, tip = sub ? `${n} ${word0}: show them in Ready` : `${word0}, ${n}: open the sidebar there`;
+    const b = el('button', 'aad-rk' + (sub ? ' is-sub' : ''), { type: 'button', role: 'listitem', 'data-k': sub ? state : k, title: tip, 'aria-label': tip });
+    b.append(el('span', 'aad-rk-w', { text: word0 }), el('span', 'aad-rk-n', { text: n > 99 ? '99+' : String(n) }));
+    api.listen(b, 'click', () => openSection(k, state));
     return b;
   }
   function paintRail(force = false) {
     if (root.dataset.aadSide !== 'rail') return;
-    const s = sessions || readSessions(), h = here(), ready = s.ready || [], groups = stateGroups(ready);
-    const sig = JSON.stringify([h.thread, (s.working || []).length, (s.archive || []).length, ready.map(r => [r.id, r.title, r.unread, stateOf(r)])]);
+    const s = sessions || readSessions(), ready = s.ready || [], groups = stateGroups(ready).filter(g => g.state !== 'none');
+    const sig = JSON.stringify([(s.working || []).length, ready.length, (s.archive || []).length, groups.map(g => g.state + g.rows.length)]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     const out = [];
-    if ((s.working || []).length) out.push(railCount('working', s.working.length, 'working', el('i', 'aad-rspin', { 'aria-hidden': 'true' })));
-    for (const g of groups) {
-      out.push(el('span', 'aad-rg', { 'data-state': g.state, 'data-n': String(g.rows.length), title: `${g.rows.length} · ${g.word}`, 'aria-label': `${g.word}: ${g.rows.length}` }));
-      for (const r of g.rows) {
-        const b = el('button', 'aad-rc' + (r.id === h.thread ? ' is-cur' : ''), { type: 'button', role: 'listitem', 'data-sid': r.id, 'data-state': g.state, title: `${r.title} · ${STATE_WORD[g.state]}${r.unread ? ' · new' : ''}`,
-          'aria-label': `${r.note ? 'Notification: ' : ''}${r.title}, ${STATE_WORD[g.state]}${r.unread ? ', new' : ''}`, ...(r.id === h.thread ? { 'aria-current': 'page' } : {}) });
-        // round 8: its stock status icon (never a first letter); a notification keeps its bell
-        b.append(r.note ? icon('bell', 'aad-ico aad-rc-i') : stateIcon(doc, g.state, 'aad-rc-i aad-sti'));
-        b.append(el('i', 'aad-rc-m' + (r.unread ? ' is-new' : ''), { 'aria-hidden': 'true' }));
-        api.listen(b, 'click', () => { noteWant = !!r.note; api.sessions.open(r.id); });
-        out.push(b);
-      }
-    }
-    if (!ready.length && !(s.working || []).length) out.push(el('span', 'aad-rnone', { title: 'Nothing ready', 'aria-label': 'Nothing ready' }));
-    if ((s.archive || []).length) out.push(railCount('archive', s.archive.length, 'archived', icon('done', 'aad-ico aad-rk-i')));
+    if ((s.working || []).length) out.push(railRow('working', s.working.length, 'Working'));
+    if (ready.length) out.push(railRow('ready', ready.length, 'Ready'), ...groups.map(g => railRow('ready', g.rows.length, g.word, g.state)));
+    if ((s.archive || []).length) out.push(railRow('archive', s.archive.length, 'Archive'));
+    if (!out.length) out.push(el('p', 'aad-rnone', { text: 'Nothing ready' }));
     rList.replaceChildren(...out);
   }
   let fuelSig = '';
