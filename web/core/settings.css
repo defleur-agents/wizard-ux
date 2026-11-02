@@ -159,7 +159,7 @@ a.st-row { color: inherit; text-decoration: none; }
 /* The Badge | Chats picker (WosBell.picker): the same control in Settings › Notifications and in every notification
  * opened in Chats, so it is styled once here (settings.css loads in both shells), not per place. */
 /* Columns sized to their words (Morning report is the long one), so every label stays whole. */
-.st-nr-seg.wos-route { flex: none; width: auto; max-width: none; grid-auto-columns: auto; }
+.st-seg.st-nr-seg.wos-route { flex: none; width: auto; max-width: none; grid-auto-columns: auto; }
 .st-nr-seg.wos-route button span { white-space: nowrap; }
 /* The Morning Report's coffee cup is a filled glyph (512 grid), not a line icon. */
 .st-nr-seg.wos-route svg.wos-route-ic.wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
