@@ -29,6 +29,10 @@ public final class DictationEditorFixture extends Activity {
     private int commits, pastes, slowReads;
     private long preflightWait;
     private String pastePayload = "";
+    // Opt-in, bounded observations only. Never changes advertised capabilities or editor behavior.
+    private boolean emptyHintDiagnostics;
+    private final org.json.JSONArray observations = new org.json.JSONArray();
+    private int observationsDropped;
     private boolean moved;
     private final Handler main = new Handler(Looper.getMainLooper());
 
@@ -36,6 +40,7 @@ public final class DictationEditorFixture extends Activity {
         super.onCreate(state);
         mode = getIntent().getStringExtra("mode");
         if (mode == null) mode = "noopIc";
+        emptyHintDiagnostics = getIntent().getBooleanExtra("emptyHintDiagnostics", false);
         LinearLayout layout = new LinearLayout(this); layout.setOrientation(LinearLayout.VERTICAL);
         TextView label = new TextView(this); label.setText("Synthetic dictation editor · " + mode); layout.addView(label);
         editor = new Editor(); editor.setId(View.generateViewId()); editor.setSingleLine(false);
@@ -51,6 +56,33 @@ public final class DictationEditorFixture extends Activity {
     }
 
     private boolean noNode() { return mode.equals("missingNode") || mode.equals("delayedIc") || mode.equals("noopOnlyIc"); }
+    private void observe(String phase, AccessibilityNodeInfo info) {
+        if (!emptyHintDiagnostics) return;
+        if (observations.length() >= 64) { observationsDropped++; return; }
+        try {
+            ClipboardManager cb = getSystemService(ClipboardManager.class);
+            android.content.ClipDescription clip = cb.getPrimaryClipDescription();
+            String label = clip == null ? "absent" : String.valueOf(clip.getLabel());
+            JSONObject row = new JSONObject().put("phase", phase)
+                    .put("uptime", android.os.SystemClock.uptimeMillis())
+                    .put("actualText", editor.getText().toString())
+                    .put("actualStart", editor.getSelectionStart()).put("actualEnd", editor.getSelectionEnd())
+                    .put("actualFocused", editor.isFocused())
+                    .put("clipClass", label.startsWith("Wizard dictation ") ? "wizard" : label);
+            if (info != null) {
+                org.json.JSONArray actions = new org.json.JSONArray();
+                for (AccessibilityNodeInfo.AccessibilityAction action : info.getActionList()) actions.put(action.getId());
+                row.put("nodeText", info.getText() == null ? JSONObject.NULL : info.getText().toString())
+                        .put("nodeHint", info.getHintText() == null ? JSONObject.NULL : info.getHintText().toString())
+                        .put("nodeShowingHint", info.isShowingHintText())
+                        .put("nodeStart", info.getTextSelectionStart()).put("nodeEnd", info.getTextSelectionEnd())
+                        .put("nodeFocused", info.isFocused()).put("nodeEditable", info.isEditable())
+                        .put("actions", actions);
+            }
+            observations.put(row);
+            persist();
+        } catch (Exception e) { throw new IllegalStateException(e); }
+    }
     private void persist() {
         try {
             JSONObject value = new JSONObject().put("text", editor.getText().toString())
@@ -58,6 +90,7 @@ public final class DictationEditorFixture extends Activity {
                     .put("commits", commits).put("pastes", pastes).put("pid", android.os.Process.myPid())
                     .put("other", other.getText().toString()).put("mode", mode)
                     .put("preflightWait", preflightWait).put("pastePayload", pastePayload);
+            if (emptyHintDiagnostics) value.put("observations", observations).put("observationsDropped", observationsDropped);
             File next = new File(getFilesDir(), "dictation-fixture.json.tmp");
             try (FileOutputStream out = new FileOutputStream(next)) {
                 out.write(value.toString().getBytes(StandardCharsets.UTF_8)); out.getFD().sync();
@@ -93,10 +126,12 @@ public final class DictationEditorFixture extends Activity {
                 info.setEditable(false); info.setText(null); info.setTextSelection(-1,-1);
                 info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE);
             }
+            observe("publish", info);
         }
         @Override public boolean performAccessibilityAction(int action, Bundle arguments) {
             if (action != AccessibilityNodeInfo.ACTION_PASTE) return super.performAccessibilityAction(action, arguments);
             pastes++;
+            observe("paste", null);
             if (mode.equals("noopPaste")) { persist(); return true; }
             if (mode.equals("punctuation")) { append("!"); persist(); return true; }
             if (mode.equals("caseOnly")) { setText("Hello"); setSelection(length()); persist(); return true; }
@@ -127,6 +162,7 @@ public final class DictationEditorFixture extends Activity {
                 @Override public boolean commitText(CharSequence text, int cursor, TextAttribute attr) { return commit(text,cursor,attr); }
                 private boolean commit(CharSequence text, int cursor, TextAttribute attr) {
                     commits++;
+                    observe("commit", null);
                     if (mode.equals("noopIc") || mode.equals("noopOnlyIc") || mode.equals("opaqueIc")) { persist(); return true; }
                     if (mode.equals("delayedIc")) {
                         main.postDelayed(() -> { base.commitText(text,cursor,attr); persist(); }, 300);

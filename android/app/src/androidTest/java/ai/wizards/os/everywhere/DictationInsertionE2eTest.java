@@ -45,6 +45,9 @@ public class DictationInsertionE2eTest {
     private final AtomicInteger ownerCalls = new AtomicInteger();
     private boolean reenterOwner, throwAfterDispatch, throwAfterCallback;
     private boolean legacy() { return InstrumentationRegistry.getArguments().getString("lane", "candidate").equals("control"); }
+    private boolean emptyHintDiagnostics() {
+        return "true".equals(InstrumentationRegistry.getArguments().getString("emptyHintDiagnostics"));
+    }
     public static final class Caller extends EverywhereService {
         void attach(Context context) { attachBaseContext(context); }
     }
@@ -71,6 +74,7 @@ public class DictationInsertionE2eTest {
         Intent intent = new Intent().setClassName(context.getPackageName(), "ai.wizards.os.everywhere.DictationEditorFixture")
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 .putExtra("mode",mode).putExtra("text",text).putExtra("start",start).putExtra("end",end);
+        if (emptyHintDiagnostics()) intent.putExtra("emptyHintDiagnostics", true);
         context.startActivity(intent);
         await("companion editor ready", () -> fixture.isFile() && state().getString("mode").equals(mode));
         assertNotEquals("fixture must cross a real process boundary",android.os.Process.myPid(),state().getInt("pid"));
@@ -85,7 +89,55 @@ public class DictationInsertionE2eTest {
         });
         onMain(() -> context.getSystemService(ClipboardManager.class).setPrimaryClip(ClipData.newPlainText("fixture saved","saved clipboard")));
     }
+    /** Diagnostic-only reads of the real service's refreshed node and production snapshot helper.
+     * Does not set a clipboard, selection, focus, action, or input connection. Original assertions stay intact. */
+    @android.annotation.TargetApi(33)
+    private void captureEmptyHintPreflight() throws Exception {
+        onMain(() -> {
+            try {
+                WizardKeyboardService service = WizardKeyboardService.get();
+                Method focused = WizardKeyboardService.class.getDeclaredMethod("focusedEditor"); focused.setAccessible(true);
+                android.view.accessibility.AccessibilityNodeInfo node =
+                        (android.view.accessibility.AccessibilityNodeInfo) focused.invoke(service);
+                Method read = WizardKeyboardService.class.getDeclaredMethod("nodeText", android.view.accessibility.AccessibilityNodeInfo.class);
+                read.setAccessible(true);
+                Object snapshot = read.invoke(null, node);
+                JSONObject value = new JSONObject().put("uptime", SystemClock.uptimeMillis())
+                        .put("servicePid", android.os.Process.myPid()).put("snapshot", diagnosticSnapshot(snapshot));
+                if (node != null) {
+                    JSONArray actions = new JSONArray();
+                    for (android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction action : node.getActionList()) actions.put(action.getId());
+                    value.put("nodeText", node.getText() == null ? JSONObject.NULL : node.getText().toString())
+                            .put("nodeHint", node.getHintText() == null ? JSONObject.NULL : node.getHintText().toString())
+                            .put("nodeShowingHint", node.isShowingHintText()).put("nodeStart", node.getTextSelectionStart())
+                            .put("nodeEnd", node.getTextSelectionEnd()).put("nodeFocused", node.isFocused())
+                            .put("nodeEditable", node.isEditable()).put("actions", actions).put("windowId", node.getWindowId());
+                } else value.put("nodeText", JSONObject.NULL);
+                android.accessibilityservice.InputMethod method = service.getInputMethod();
+                android.view.inputmethod.EditorInfo info = method == null ? null : method.getCurrentInputEditorInfo();
+                if (info != null) value.put("editorPackage", info.packageName).put("fieldId", info.fieldId)
+                        .put("initialStart", info.initialSelStart).put("initialEnd", info.initialSelEnd);
+                android.content.ClipDescription clip = context.getSystemService(ClipboardManager.class).getPrimaryClipDescription();
+                value.put("clipClass", clip == null ? "absent" : String.valueOf(clip.getLabel()));
+                File target = new File(context.getFilesDir(), "dictation-preflight.json");
+                try (FileOutputStream out = new FileOutputStream(target)) {
+                    out.write(value.toString().getBytes(StandardCharsets.UTF_8)); out.getFD().sync();
+                }
+            } catch (Exception e) { throw new AssertionError("empty-hint observation failed", e); }
+        });
+    }
+    private static Object diagnosticSnapshot(Object value) throws Exception {
+        if (value == null) return JSONObject.NULL;
+        JSONObject result = new JSONObject();
+        for (String name : new String[]{"text", "start", "end", "offset"}) {
+            java.lang.reflect.Field field = value.getClass().getDeclaredField(name); field.setAccessible(true);
+            Object fieldValue = field.get(value); result.put(name, fieldValue == null ? JSONObject.NULL : fieldValue);
+        }
+        Method valid = value.getClass().getDeclaredMethod("valid"); valid.setAccessible(true);
+        return result.put("valid", valid.invoke(value));
+    }
     private void dispatch(String words) throws Exception {
+        if (emptyHintDiagnostics()) captureEmptyHintPreflight();
         item = new EverywhereOutbox.Item(); item.id = "synthetic-" + UUID.randomUUID();
         item.source = EverywhereOutbox.SRC_DICTATION; item.text = words;
         item.createdAt = System.currentTimeMillis(); item.sessionId = "synthetic-unused";
