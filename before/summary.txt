@@ -1,0 +1,17 @@
+desktop landscapes-light  /synthetic-dark/    title rgb(17, 18, 22)        behind rgb(5, 3, 12)        contrast 1.09  << unreadable
+desktop landscapes-light  /synthetic-light/   title rgb(17, 18, 22)        behind rgb(5, 3, 12)        contrast 1.09  << unreadable
+desktop nebula            /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
+desktop nebula            /synthetic-light/   title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
+desktop landscapes        /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop landscapes        /synthetic-light/   title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop grove             /synthetic-dark/    title rgb(238, 245, 233)     behind rgb(5, 3, 12)        contrast 18.42
+desktop grove             /synthetic-light/   title rgb(238, 245, 233)     behind rgb(5, 3, 12)        contrast 18.42
+phone   landscapes-light  /synthetic-dark/    title rgb(17, 18, 22)        behind rgb(5, 6, 15)        contrast 1.08  << unreadable
+phone   landscapes-light  /synthetic-light/   title rgb(17, 18, 22)        behind rgb(250, 250, 250)   contrast 17.93
+phone   nebula            /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 6, 15)        contrast 17.9
+phone   nebula            /synthetic-light/   title rgb(243, 239, 255)     behind rgb(250, 250, 250)   contrast 1.08  << unreadable
+phone   landscapes        /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 6, 15)        contrast 20.2
+phone   landscapes        /synthetic-light/   title rgb(255, 255, 255)     behind rgb(250, 250, 250)   contrast 1.04  << unreadable
+phone   grove             /synthetic-dark/    title rgb(238, 245, 233)     behind rgb(5, 6, 15)        contrast 18.16
+phone   grove             /synthetic-light/   title rgb(238, 245, 233)     behind rgb(250, 250, 250)   contrast 1.07  << unreadable
+FAIL 6 title(s) under 3:1

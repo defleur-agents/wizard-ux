@@ -1,0 +1,182 @@
+{
+  "min": 3,
+  "rows": [
+    {
+      "shell": "desktop",
+      "skin": "landscapes-light",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "landscapes-light",
+      "app": "/synthetic-light/",
+      "edgeLight": false,
+      "label": "Light app",
+      "focus": true,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "nebula",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "nebula",
+      "app": "/synthetic-light/",
+      "edgeLight": false,
+      "label": "Light app",
+      "focus": true,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "landscapes",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "landscapes",
+      "app": "/synthetic-light/",
+      "edgeLight": false,
+      "label": "Light app",
+      "focus": true,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "grove",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "desktop",
+      "skin": "grove",
+      "app": "/synthetic-light/",
+      "edgeLight": false,
+      "label": "Light app",
+      "focus": true,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 3, 12)",
+      "contrast": 18.15
+    },
+    {
+      "shell": "phone",
+      "skin": "landscapes-light",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 6, 15)",
+      "contrast": 17.9
+    },
+    {
+      "shell": "phone",
+      "skin": "landscapes-light",
+      "app": "/synthetic-light/",
+      "edgeLight": true,
+      "label": "Light app",
+      "focus": false,
+      "text": "rgb(17, 18, 22)",
+      "behind": "rgb(250, 250, 250)",
+      "contrast": 17.93
+    },
+    {
+      "shell": "phone",
+      "skin": "nebula",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 6, 15)",
+      "contrast": 17.9
+    },
+    {
+      "shell": "phone",
+      "skin": "nebula",
+      "app": "/synthetic-light/",
+      "edgeLight": true,
+      "label": "Light app",
+      "focus": false,
+      "text": "rgb(17, 18, 22)",
+      "behind": "rgb(250, 250, 250)",
+      "contrast": 17.93
+    },
+    {
+      "shell": "phone",
+      "skin": "landscapes",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 6, 15)",
+      "contrast": 17.9
+    },
+    {
+      "shell": "phone",
+      "skin": "landscapes",
+      "app": "/synthetic-light/",
+      "edgeLight": true,
+      "label": "Light app",
+      "focus": false,
+      "text": "rgb(17, 18, 22)",
+      "behind": "rgb(250, 250, 250)",
+      "contrast": 17.93
+    },
+    {
+      "shell": "phone",
+      "skin": "grove",
+      "app": "/synthetic-dark/",
+      "edgeLight": false,
+      "label": "Dark app",
+      "focus": false,
+      "text": "rgb(243, 239, 255)",
+      "behind": "rgb(5, 6, 15)",
+      "contrast": 17.9
+    },
+    {
+      "shell": "phone",
+      "skin": "grove",
+      "app": "/synthetic-light/",
+      "edgeLight": true,
+      "label": "Light app",
+      "focus": false,
+      "text": "rgb(17, 18, 22)",
+      "behind": "rgb(250, 250, 250)",
+      "contrast": 17.93
+    }
+  ],
+  "bad": []
+}
