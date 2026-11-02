@@ -79,6 +79,15 @@ export function noteThread(doc, scope = '') {
   }
   return null;
 }
+/** A notification's Badge | Chats choice joins its actions (round 7): moved into the thread's own sticky action row
+ * (.ch-tacts), first, so the note reads like a chat with one action row. Chats' click handler finds it there too
+ * (.ch-notif-route [data-notify-route]); a repaint puts it back above the message, so call again on renders. */
+export function noteRouteIntoActions(doc, scope = '') {
+  const t = noteThread(doc, scope); if (!t) return false;
+  const route = t.querySelector('.ch-notif-route'), acts = t.querySelector('.ch-tacts');
+  if (!route || !acts || route.parentNode === acts) return false;
+  acts.insertBefore(route, acts.firstChild); return true;
+}
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)
  * and opens Settings › AI. Returns the copy's signature so callers repaint only on change. */

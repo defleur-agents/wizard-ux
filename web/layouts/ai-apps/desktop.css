@@ -526,17 +526,15 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload-s { width: 18px; he
 @keyframes aad-load-in { from { opacity: 0; translate: 24px 0; } }
 
 /* a notification opens as a chat (round 7): the thread's solid surface, its header, the composer at the bottom; the note is
- * the agent's first message with a small bell; its Badge | Chats choice sits in the sticky action row with its actions */
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread > .ch-msgs { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; column-gap: 8px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread > .ch-msgs > * { grid-column: 1 / -1; }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread > .ch-msgs > .ch-notif-route {
-  grid-row: 90; grid-column: 1; position: sticky; bottom: 0; z-index: 2; align-self: end; margin: 4px 0 0; padding: 12px 0 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px;
-  color: var(--aad-ink-2); background: linear-gradient(to top, var(--aad-main) 62%, transparent); font: 500 0.8125rem / 1.3 var(--wz-font-ui);
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread > .ch-msgs > .ch-tacts { grid-row: 90; grid-column: 2; align-self: end; }
+ * the agent's first message with a small bell; its Badge | Chats choice sits first in the sticky action row with its actions (parts.js noteRouteIntoActions) */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .msg.a.ch-notif { position: relative; padding-left: 28px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .msg.a.ch-notif::before {
   content: ""; position: absolute; left: 0; top: 4px; width: 18px; height: 18px; background: var(--aad-ink-2);
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'><path d='M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15z'/><path d='M10 20.5a2 2 0 0 0 4 0'/></svg>") center / contain no-repeat;
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linejoin='round'><path d='M6 16.5V11a6 6 0 1 1 12 0v5.5l1.5 2h-15z'/><path d='M10 20.5a2 2 0 0 0 4 0'/></svg>") center / contain no-repeat;
 }
+
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .ch-tacts { flex-wrap: wrap; row-gap: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .ch-tacts > .ch-notif-route { flex: 1 0 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 10px; margin: 0; padding: 0; border: 0; background: none; color: var(--aad-ink-2); font: 500 0.75rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .ch-tacts > .ch-notif-route > span { flex: 1 1 auto; min-width: 0; text-align: right; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-notif-thread .ch-tacts > .ch-notif-route .wos-route { flex: none; }
