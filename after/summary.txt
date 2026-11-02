@@ -1,17 +1,17 @@
-desktop landscapes-light  /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop landscapes-light  /synthetic-light/   title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop nebula            /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop nebula            /synthetic-light/   title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop landscapes        /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop landscapes        /synthetic-light/   title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop grove             /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-desktop grove             /synthetic-light/   title rgb(243, 239, 255)     behind rgb(5, 3, 12)        contrast 18.15
-phone   landscapes-light  /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 6, 15)        contrast 17.9
-phone   landscapes-light  /synthetic-light/   title rgb(17, 18, 22)        behind rgb(250, 250, 250)   contrast 17.93
-phone   nebula            /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 6, 15)        contrast 17.9
-phone   nebula            /synthetic-light/   title rgb(17, 18, 22)        behind rgb(250, 250, 250)   contrast 17.93
-phone   landscapes        /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 6, 15)        contrast 17.9
-phone   landscapes        /synthetic-light/   title rgb(17, 18, 22)        behind rgb(250, 250, 250)   contrast 17.93
-phone   grove             /synthetic-dark/    title rgb(243, 239, 255)     behind rgb(5, 6, 15)        contrast 17.9
-phone   grove             /synthetic-light/   title rgb(17, 18, 22)        behind rgb(250, 250, 250)   contrast 17.93
+desktop landscapes-light  /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop landscapes-light  /synthetic-light/   title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop nebula            /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop nebula            /synthetic-light/   title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop landscapes        /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop landscapes        /synthetic-light/   title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop grove             /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+desktop grove             /synthetic-light/   title rgb(255, 255, 255)     behind rgb(5, 3, 12)        contrast 20.49
+phone   landscapes-light  /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 6, 15)        contrast 20.2
+phone   landscapes-light  /synthetic-light/   title color(srgb 0.07 0.07 0.07) behind rgb(250, 250, 250)   contrast 17.97
+phone   nebula            /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 6, 15)        contrast 20.2
+phone   nebula            /synthetic-light/   title color(srgb 0.07 0.07 0.07) behind rgb(250, 250, 250)   contrast 17.97
+phone   landscapes        /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 6, 15)        contrast 20.2
+phone   landscapes        /synthetic-light/   title color(srgb 0.07 0.07 0.07) behind rgb(250, 250, 250)   contrast 17.97
+phone   grove             /synthetic-dark/    title rgb(255, 255, 255)     behind rgb(5, 6, 15)        contrast 20.2
+phone   grove             /synthetic-light/   title color(srgb 0.07 0.07 0.07) behind rgb(250, 250, 250)   contrast 17.97
 PASS
