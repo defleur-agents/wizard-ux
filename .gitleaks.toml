@@ -4,7 +4,7 @@ useDefault = true
 
 [[allowlists]]
 description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
-regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^(wos|wux)\.[a-z0-9-]+\.v[0-9]+$''']
+regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^(wos|wux)(\.[a-z0-9-]+)+\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
 
 [[allowlists]]
@@ -18,3 +18,9 @@ description = "Verified SHA-256 of shared style tokens.css, not a credential"
 condition = "AND"
 paths = ['''^docs/provenance/appearance-review\.json$''']
 regexes = ['''^fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1$''']
+
+[[allowlists]]
+description = "Flight-recorder source manifests: SHA-256 digests of files, not credentials (sentry-access-token false positives)"
+condition = "AND"
+paths = ['''^tools/flight/[^/]+/source-manifest\.json$''']
+regexes = ['''^[0-9a-f]{64}$''']
