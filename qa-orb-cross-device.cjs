@@ -46,7 +46,8 @@ async function hold(p){const o=await orbXY(p);await T(p,'touchStart',o.x,o.y);aw
    check(s.two===(two?'two-orb':'classic'),'independent persisted two-orbs state retained',s);
    check(profile!=='vanadium'||current.imports.some(x=>x.includes('orb-retry=')),'failed module URL recovered by a distinct retry URL',current.imports);
    for(const skin of ['nebula','grove']){
-    await look(p);const button=p.locator(`[data-skinpick="${skin}"]`);await button.scrollIntoViewIfNeeded();await button.click();await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience.state.busy,skin);await close(p);
+    // Locator.click re-resolves, waits for pending controls and scrolls; no stale ElementHandle or separate scroll across Settings re-renders.
+    await look(p);const button=p.locator(`[data-skinpick="${skin}"]`);await button.click();await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience.state.busy,skin);await close(p);
     const o=await hold(p);check(await p.evaluate(()=>WosOrbSwitcher.isOpen&&__wos.voice==='idle'),'jittered hold opens radial without microphone '+skin,await snap(p));
     const wedges=await p.evaluate(()=>WosOrbSwitcher._wedges().map(w=>w.kind));check(wedges.length===2&&wedges.includes('voice')&&wedges.includes('custom'),'empty device-local pins still show Voice + Customize '+skin,wedges);await shot(p,skin+'-empty-radial');
     const custom=await p.evaluate(()=>{const w=WosOrbSwitcher._wedges().find(w=>w.kind==='custom');return{x:w.x,y:w.y};});await slide(p,o,custom,2,0);await p.evaluate(()=>new Promise(requestAnimationFrame));await T(p,'touchEnd');await p.waitForFunction(()=>document.querySelector('.wor-sheet'));await shot(p,skin+'-customize');await p.keyboard.press('Escape');await close(p);
