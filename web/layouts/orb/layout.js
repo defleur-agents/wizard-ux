@@ -304,7 +304,7 @@ export default function setup(api) {
   function paintBadge(b, id) {
     const n = badgeMap[id] || 0, rec = badgeOf.get(b); if (!rec) return;
     const { node, name } = rec;
-    node.textContent = n > 99 ? '99+' : n ? String(n) : ''; node.hidden = !n;
+    node.textContent = n ? (api.apps.badgeText?.(id) || (n > 99 ? '99+' : n ? String(n) : '')) : ''; node.hidden = !n;
     b.setAttribute('aria-label', 'Open ' + name + (n ? ` · ${n} new` : '') + (b.dataset.run === 'hidden' ? ' · running' : ''));
   }
   /* Satellites are ambient status, not a launcher (Miguel, v7): only (a) apps running in the panel (shown, or hidden
