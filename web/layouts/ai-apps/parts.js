@@ -70,6 +70,25 @@ export function stateGroups(rows) {
   for (const r of rows || []) by.get(stateOf(r)).push(r);
   return STATES.map(([state, word]) => ({ state, word, rows: by.get(state) })).filter(g => g.rows.length);
 }
+/* Round 8 (Miguel, 2 Nov 2026: the rail's coloured first letters were confusing): each Ready chat on the folded rail is
+ * its stock Chats status icon (core/chats.js STI, the Orb desktop's thin column of status icons), the same drawings:
+ * [tag, attrs] parts; class f = filled in the status colour, k / kd = the cut-out mark in the panel's colour. */
+export const STATE_ICON = {
+  needs: [['path', { d: 'M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8' }], ['path', { d: 'M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-6-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15' }]],
+  check: [['path', { d: 'M10 2v7.5a2 2 0 0 1-.2.9L4.7 20.6a1 1 0 0 0 .9 1.4h12.8a1 1 0 0 0 .9-1.4l-5.1-10.2a2 2 0 0 1-.2-.9V2M8.5 2h7M7 16h10' }]],
+  done: [['circle', { class: 'f', cx: '12', cy: '12', r: '10' }], ['path', { class: 'k', d: 'm7.5 12.3 3 3 6-6.3' }]],
+  fyi: [['circle', { class: 'f', cx: '12', cy: '12', r: '10' }], ['path', { class: 'k', d: 'M12 11v5.5' }], ['circle', { class: 'kd', cx: '12', cy: '7.6', r: '1.35' }]],
+  deferred: [['circle', { cx: '12', cy: '12', r: '9' }], ['path', { d: 'M12 7.5V12l3 2' }]],
+  approval: [['path', { d: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' }], ['path', { d: 'm9 12 2 2 4-4' }]],
+  failed: [['path', { d: 'm21.7 18-8-14a2 2 0 0 0-3.4 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.7-3M12 9v4M12 17h.01' }]],
+  none: [['circle', { class: 'f', cx: '12', cy: '12', r: '3' }]],
+};
+/** A Ready chat's status icon (STATE_ICON) as an <svg> of the given class. */
+export function stateIcon(doc, state, cls) {
+  const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
+  for (const [tag, attrs] of STATE_ICON[state] || STATE_ICON.none) { const p = doc.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v); s.append(p); }
+  return s;
+}
 /** The notification Chats shows in place of a thread (a New chat holding the note: .ch-notif-thread), if one is on
  * screen; the AI apps view treats it exactly like a chat (never Home). */
 export function noteThread(doc, scope = '') {
