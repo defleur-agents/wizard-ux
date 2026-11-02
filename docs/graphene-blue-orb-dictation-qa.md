@@ -71,3 +71,20 @@ The old mixed debug/release artifact audit failed because the worker applied the
 2. Separate release-only worker: `:app:assembleRelease`, explicit absolute worker paths in `WIZARD_OS_SIGNING_ENV` and `WIZARD_OWNER_CONFIG` (or preparation flags `--signing-env` / `--owner-config`), exact OS pin `3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd`. Paths are metadata only; controllers never read the credential files. Missing/relative paths fail before preparation. No default/debug task or artifact may enter this job.
 
 Parent owns heavy admission, independent exact-head review, native result evaluation, any further owner/Graphene QA and release decision. Keep candidate version 88 unpublished until those gates pass.
+
+## Source reconciliation is not a release decision
+
+The verified repair starts at installed source `a1e00daf` and reconciles only the
+actual PR/live base `fe79cbd3`; shared main has divergent, lower-version Android
+source and an unrelated app-ID migration. Do not bulk-merge it or replace the
+live web to make a phone-only repair appear current. The complete Android tree,
+not the root commit or a version label, binds the existing signed artifact and
+native acceptance. Later controller/docs corrections do not rebuild or relabel
+those artifacts. Preserve failed historical evidence and its original hashes.
+
+PR839 is prepared for normal independent source review, not merge/publication.
+The publisher audit is read-only. Actual private-feed publication remains gated
+by `docs/phone-owner-release.md`: a human approves the exact signed artifact and
+upgrade proof before the canonical publisher receives `--publish`. A source
+review comment, an emulator pass or an original request to fix the bug is not
+that exact-artifact approval. No approval or waiver is recorded by this document.
