@@ -1,0 +1,20 @@
+{
+  "sameOriginRows": 1,
+  "opaqueOrigin": "null",
+  "opaqueRows": 1,
+  "apiFromFrame": [
+    {
+      "method": "GET",
+      "path": "/chatgpt/api/accounts",
+      "origin": "null",
+      "site": "cross-site"
+    }
+  ],
+  "confirm": "false",
+  "popup": "blocked",
+  "consoleSandbox": [
+    "error: Access to fetch at 'http://127.0.0.1:<port>/chatgpt/api/accounts' from origin 'null' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+    "error: Ignored call to 'confirm()'. The document is sandboxed, and the 'allow-modals' keyword is not set.",
+    "error: Blocked opening 'https://example.invalid/' in a new window because the request was made in a sandboxed frame whose 'allow-popups' permission is not set."
+  ]
+}
