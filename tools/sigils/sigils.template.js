@@ -14,7 +14,7 @@
  */
 (() => {
   'use strict';
-  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
+  const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents', 'hermes']);
   const HOUSE = /*HOUSE*/;
   const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
