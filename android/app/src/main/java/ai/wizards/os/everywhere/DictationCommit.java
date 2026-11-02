@@ -7,7 +7,10 @@ final class DictationCommit {
     static final class Snapshot {
         final String text;
         final int start, end, offset;
-        Snapshot(String text, int start, int end, int offset) {
+        final boolean endKnown;
+        Snapshot(String text, int start, int end, int offset) { this(text,start,end,offset,true); }
+        Snapshot(String text, int start, int end, int offset, boolean endKnown) {
+            this.endKnown = endKnown;
             this.text = text; this.start = Math.min(start, end); this.end = Math.max(start, end);
             this.offset = offset;
         }
@@ -41,6 +44,7 @@ final class DictationCommit {
         // Require the entire inserted payload, nearby anchors, and every overlapping context character.
         // Absolute offsets bind a moving IC window; unknown offsets are not a verifiable empty field.
         int delta = payload.length() - (b - a);
+        if (before.endKnown && before.offset + before.text.length() + delta != after.offset + after.text.length()) return false;
         if (at < 0 || at + payload.length() > after.text.length()
                 || !after.text.regionMatches(at, payload, 0, payload.length())) return false;
         int left = Math.min(16, before.start);

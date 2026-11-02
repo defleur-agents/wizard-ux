@@ -36,7 +36,7 @@ public class DictationInsertionE2eTest {
     private final android.app.Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context context = instrumentation.getTargetContext();
     private final Handler main = new Handler(Looper.getMainLooper());
-    private File fixture;
+    private File fixture, syntheticAudio;
     private Caller caller;
     private EverywhereOutbox outbox;
     private EverywhereOutbox.Item item;
@@ -94,6 +94,17 @@ public class DictationInsertionE2eTest {
             return;
         }
         File dir = new File(context.getFilesDir(),"dictation-tests/" + item.id + "/everywhere"); assertTrue(dir.mkdirs());
+        // Valid 8 kHz mono PCM WAV silence, solely to exercise real recording custody/retention.
+        // No decoder or STT uses it. It is not an owner's take or a server-response fixture.
+        syntheticAudio = new File(dir.getParentFile(),"synthetic-silence.wav");
+        java.nio.ByteBuffer wav = java.nio.ByteBuffer.allocate(300).order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        wav.put("RIFF".getBytes(StandardCharsets.US_ASCII)).putInt(292).put("WAVEfmt ".getBytes(StandardCharsets.US_ASCII))
+                .putInt(16).putShort((short)1).putShort((short)1).putInt(8000).putInt(16000)
+                .putShort((short)2).putShort((short)16).put("data".getBytes(StandardCharsets.US_ASCII)).putInt(256);
+        Files.write(syntheticAudio.toPath(),wav.array()); item.audioPath = syntheticAudio.getAbsolutePath();
+        ai.wizards.os.audio.CaptureJournal journal = ai.wizards.os.audio.CaptureJournal.at(dir.getParentFile());
+        journal.register(item.id,item.source,"note",syntheticAudio,item.createdAt); journal.stopped(item.id);
+        journal.hand(item.id,"everywhere-outbox");
         try (FileOutputStream output = new FileOutputStream(new File(dir,"outbox.json"))) {
             output.write(new JSONArray().put(item.json()).toString().getBytes(StandardCharsets.UTF_8)); output.getFD().sync();
         }
@@ -118,8 +129,12 @@ public class DictationInsertionE2eTest {
         if (legacy()) return;
         await("exactly one caller completion", () -> terminals.get() == 1);
         assertEquals(success ? 1 : 0,verified.get());
-        if (success) assertNull(outbox.item(item.id));
-        else { assertNotNull(outbox.item(item.id)); assertEquals("failed",outbox.item(item.id).state); }
+        if (success) {
+            assertNull(outbox.item(item.id)); assertFalse("verified delivery releases its synthetic recording",syntheticAudio.exists());
+        } else {
+            assertNotNull(outbox.item(item.id)); assertEquals("failed",outbox.item(item.id).state);
+            assertTrue("uncertain delivery keeps the original synthetic recording",syntheticAudio.isFile());
+        }
         // A delayed watchdog/poll must not cause an extra terminal transition.
         SystemClock.sleep(1600); assertEquals(1,terminals.get());
     }
@@ -188,13 +203,41 @@ public class DictationInsertionE2eTest {
         File file = new File(context.getFilesDir(),"dictation-tests/" + item.id + "/everywhere/outbox.json");
         EverywhereOutbox restarted = new EverywhereOutbox(file.getParentFile(),"http://127.0.0.1:1");
         assertTrue(restarted.item(item.id).json().getBoolean("dictationAttempted"));
-        // Retry the persisted item through the same real caller, with insertion permission revoked.
-        Method call = EverywhereService.class.getMethod("onDictated",EverywhereOutbox.Item.class,String.class,boolean.class,Consumer.class);
+        // Retry through the persisted outbox admission boundary, not a helper classification.
         AtomicInteger recovered = new AtomicInteger();
-        onMain(() -> { try { call.invoke(caller,restarted.item(item.id),item.text,false,(Consumer<Boolean>) success -> {
-            assertFalse(success); recovered.incrementAndGet();
-        }); } catch (Exception e) { throw new AssertionError(e); } });
-        assertEquals(1,recovered.get()); inserted("prefix ",0,1);
+        Method call = EverywhereService.class.getMethod("onDictated",EverywhereOutbox.Item.class,String.class,boolean.class,Consumer.class);
+        restarted.addListener((EverywhereOutbox.Listener) Proxy.newProxyInstance(EverywhereOutbox.Listener.class.getClassLoader(),
+                new Class<?>[]{EverywhereOutbox.Listener.class}, (proxy, method, args) -> {
+                    if (!method.getName().equals("onDictated")) return null;
+                    assertEquals(false,args[2]);
+                    @SuppressWarnings("unchecked") Consumer<Boolean> complete = (Consumer<Boolean>) args[3];
+                    return call.invoke(caller,args[0],args[1],args[2],(Consumer<Boolean>) success -> {
+                        assertFalse(success); recovered.incrementAndGet(); complete.accept(success);
+                    });
+                }));
+        outbox = restarted; item = restarted.item(item.id); invokeDelivery();
+        assertEquals(1,recovered.get()); assertNotNull(outbox.item(item.id)); inserted("prefix ",0,1);
+    }
+    @Test public void focusChangeBeforeDispatchCausesZeroEditorWrites() throws Exception {
+        editor("focusBefore","prefix ",7,7); dispatch("hello world"); terminal(false); inserted("prefix ",0,0);
+    }
+    @Test public void unreadableSelectionsAndOpaqueConnectionNeverBlindWrite() throws Exception {
+        editor("opaqueAll","prefix ",7,7); dispatch("hello world"); terminal(false); inserted("prefix ",0,0);
+    }
+    @Test public void wordBoundaryGetsOneLeadingAndOneTrailingSpace() throws Exception {
+        editor("noopIc","prefix",6,6); dispatch("hello world"); terminal(true); inserted("prefix hello world ",0,1);
+    }
+    @Test public void sentenceBoundaryCapitalizesWithoutDroppingSpace() throws Exception {
+        editor("noopIc","Done. ",6,6); dispatch("hello world"); terminal(true); inserted("Done. Hello world ",0,1);
+    }
+    @Test public void newlineBoundaryCapitalizesWithoutDeletingNewline() throws Exception {
+        editor("noopIc","line\n",5,5); dispatch("hello world"); terminal(true); inserted("line\nHello world ",0,1);
+    }
+    @Test public void verifiedPasteRestoresSavedClipboard() throws Exception {
+        editor("noopIc","prefix ",7,7); dispatch("hello world"); terminal(true);
+        final String[] clip = {null};
+        onMain(() -> clip[0] = context.getSystemService(ClipboardManager.class).getPrimaryClip().getItemAt(0).getText().toString());
+        assertEquals("saved clipboard",clip[0]); inserted("prefix hello world ",0,1);
     }
     @Test public void noListenerRetainsPendingWordsInsteadOfDeleting() throws Exception {
         editor("noopIc","prefix ",7,7); dispatch("hello world"); terminal(true);

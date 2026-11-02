@@ -162,6 +162,7 @@ public class WizardKeyboardService extends AccessibilityService {
     private long editorGeneration;
     private boolean inserting;
 
+    @android.annotation.TargetApi(33)
     @Override public InputMethod onCreateInputMethod() {
         return new InputMethod(this) {
             @Override public void onStartInput(android.view.inputmethod.EditorInfo info, boolean restarting) {
@@ -198,11 +199,18 @@ public class WizardKeyboardService extends AccessibilityService {
                 node.getTextSelectionStart(), node.getTextSelectionEnd(), 0);
     }
 
+    @android.annotation.TargetApi(33)
     private static DictationCommit.Snapshot connectionText(InputMethod.AccessibilityInputConnection connection) {
-        SurroundingText value = connection.getSurroundingText(512, 128, 0);
+        return connectionText(connection, 512);
+    }
+
+    @android.annotation.TargetApi(33)
+    private static DictationCommit.Snapshot connectionText(InputMethod.AccessibilityInputConnection connection, int left) {
+        SurroundingText value = connection.getSurroundingText(left, 128, 0);
         return value == null ? null : new DictationCommit.Snapshot(
                 value.getText() == null ? null : value.getText().toString(),
-                value.getSelectionStart(), value.getSelectionEnd(), value.getOffset());
+                value.getSelectionStart(), value.getSelectionEnd(), value.getOffset(),
+                value.getText() != null && value.getText().length() - Math.max(value.getSelectionStart(),value.getSelectionEnd()) < 128);
     }
 
     private String shape(String text, DictationCommit.Snapshot context) {
@@ -218,6 +226,7 @@ public class WizardKeyboardService extends AccessibilityService {
         return text;
     }
 
+    @android.annotation.SuppressLint("NewApi") // IC branch is guarded by SDK >= 33; paste works on minSdk.
     private final class Insertion {
         final String original;
         final java.util.function.Consumer<DictationCommit.Result> completion;
@@ -307,7 +316,7 @@ public class WizardKeyboardService extends AccessibilityService {
                 if (generation != editorGeneration || (paste ? !sameNode() : !sameConnection())) {
                     finish(DictationCommit.Result.UNVERIFIED); return;
                 }
-                DictationCommit.Snapshot after = paste ? nodeText(node) : connectionText(connection);
+                DictationCommit.Snapshot after = paste ? nodeText(node) : connectionText(connection, Math.max(512,payload.length()+64));
                 boolean verified = paste ? DictationCommit.verifies(before, after, payload)
                         : DictationCommit.verifiesWindow(before, after, payload);
                 if (verified) { finish(DictationCommit.Result.VERIFIED); return; }
@@ -318,10 +327,10 @@ public class WizardKeyboardService extends AccessibilityService {
         void restoreClip() {
             try {
                 ClipData current = clipboard.getPrimaryClip();
-                if (clipLabel != null && current != null && clipLabel.contentEquals(current.getDescription().getLabel())
+                if (saved != null && clipLabel != null && current != null
+                        && clipLabel.contentEquals(current.getDescription().getLabel())
                         && ClipRestore.stillOurs(primaryText(clipboard), payload)) {
-                    if (saved != null) clipboard.setPrimaryClip(saved);
-                    else clipboard.clearPrimaryClip();
+                    clipboard.setPrimaryClip(saved);
                 }
             } catch (RuntimeException ignored) { /* No clipboard read permission: never blind-restore. */ }
         }

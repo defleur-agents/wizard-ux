@@ -21,11 +21,13 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 
 /** Synthetic native editor in a DIFFERENT process. Configurable editor behavior, real Android IPC. */
+@android.annotation.TargetApi(35)
 public final class DictationEditorFixture extends Activity {
     private String mode;
     private Editor editor;
     private EditText other;
     private int commits, pastes;
+    private boolean moved;
     private final Handler main = new Handler(Looper.getMainLooper());
 
     @Override public void onCreate(Bundle state) {
@@ -64,7 +66,15 @@ public final class DictationEditorFixture extends Activity {
     private final class Editor extends EditText {
         Editor() { super(DictationEditorFixture.this); }
         @Override public void onInitializeAccessibilityNodeInfo(AccessibilityNodeInfo info) {
+            if (mode.equals("focusBefore") && other != null && !moved) {
+                ClipboardManager cb = getSystemService(ClipboardManager.class);
+                android.content.ClipDescription clip = cb.getPrimaryClipDescription();
+                if (clip != null && String.valueOf(clip.getLabel()).startsWith("Wizard dictation ")) {
+                    moved = true; other.requestFocus(); persist();
+                }
+            }
             super.onInitializeAccessibilityNodeInfo(info);
+            if (mode.equals("opaqueAll")) info.setTextSelection(-1,-1);
             if (noNode()) {
                 info.setEditable(false); info.setText(null); info.setTextSelection(-1,-1);
                 info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_PASTE);
@@ -103,7 +113,7 @@ public final class DictationEditorFixture extends Activity {
                     boolean result = base.commitText(text,cursor,attr); persist(); return result;
                 }
                 @Override public SurroundingText getSurroundingText(int left, int right, int flags) {
-                    return mode.equals("opaqueIc") ? null : super.getSurroundingText(left,right,flags);
+                    return mode.equals("opaqueIc") || mode.equals("opaqueAll") ? null : super.getSurroundingText(left,right,flags);
                 }
             };
         }
