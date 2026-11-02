@@ -10,8 +10,7 @@
    * wait in Chats and count in Chats' badge instead. `raw` keeps what the app reported, `counts` what is shown. */
   // `more`: an app that lists only its newest items says there are more; its count shows as "50+".
   const counts = {}, raw = {}, more = new Set();
-  // Off (Settings › Notifications) shows no badge at all.
-  const shown = (id, n) => id !== 'wizard' && (window.WosBell?.inChats?.(id) || window.WosBell?.isOff?.(id)) ? 0 : n;
+  const shown = (id, n) => id !== 'wizard' && window.WosBell?.inChats?.(id) ? 0 : n;
   function apply(id) {
     const n = shown(id, raw[id] || 0); if ((counts[id] || 0) === n) return;
     counts[id] = n; window.dispatchEvent(new CustomEvent('wizard:app-counts', { detail: { id, n } }));
