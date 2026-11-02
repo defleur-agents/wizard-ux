@@ -33,7 +33,7 @@ export default function phone(api) {
   const doc = document, root = doc.documentElement;
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
-  const SAT = 48;   // a satellite's tap target (px), the phone's comfortable minimum and then some
+  const SAT = 48, GAP = SAT + 18;   // GAP: centre to centre on the ring, room for each name under its mark   // a satellite's tap target (px), the phone's comfortable minimum and then some
 
   /* ---------- nodes: the sky inside the Home desk (it slides with Home); the orb, its satellites and the Chats pill in
    * one layer over the desks and under every sheet; a small canvas inside the dock orb ---------- */
@@ -51,8 +51,10 @@ export default function phone(api) {
   // the small + beside the pill: the sheet of every app not open yet (chrome.js, the same as the Apps view's)
   const desks = () => (api.desks?.list || api.phone.desks)?.() || [];
   const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id) });
-  const plus = chrome.plus('obp-plus', 'Open an app');
-  layer.append(field, orbBox, chats, plus);
+  // One + (Miguel, 2 Nov 2026): the ring's last place, after the last app clockwise from the top; it opens the app sheet.
+  const plus = chrome.plus('ob-sat obp-sat obp-add', 'Add an app', (b, ico) => { b.setAttribute('data-app', '+add'); const f = el('span', 'ob-sat-face'); f.append(ico); b.append(f, el('b', 'obp-sat-n', { 'aria-hidden': 'true', text: 'Add' })); });
+  const plusMore = el('b', 'obp-add-n', { 'aria-hidden': 'true' }); plusMore.hidden = true; plus.append(plusMore);
+  layer.append(field, orbBox, chats);
   const dockCv = el('canvas', 'obp-dockc', { 'aria-hidden': 'true' });
   layer.hidden = true; sky.hidden = true;
   api.mount(css); api.mount(layer);
@@ -108,13 +110,16 @@ export default function phone(api) {
   /* ---------- satellites: the shared list (shared.js orbitApps), each app's own mark, still, on one ring ---------- */
   let badgeMap = api.apps.badges(m => { badgeMap = m; paintApps(); paintChats(); });
   let appSig = '', sats = [];
+  // a long single word may break in its middle (a soft hyphen), so it stays inside its slot on the ring
+  const softName = n => String(n || '').replace(/[A-Za-z]{12,}/g, w => w.slice(0, Math.ceil(w.length / 2)) + '\u00ad' + w.slice(Math.ceil(w.length / 2)));
   function sat(a) {
     const b = el('button', 'ob-sat obp-sat', { type: 'button', 'aria-label': 'Open ' + a.name, 'data-app': a.id });
     b.style.setProperty('--c', colourOf(a));
     const face = el('span', 'ob-sat-face');
     face.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
     const count = el('b', 'ob-sat-badge', { 'aria-hidden': 'true' }); count.hidden = true;
-    b.append(face, count, el('i', 'ob-sat-run', { 'aria-hidden': 'true' }));
+    // its name always under it (Miguel, 2 Nov 2026), small; a long one ends in …
+    b.append(face, count, el('i', 'ob-sat-run', { 'aria-hidden': 'true' }), el('b', 'obp-sat-n', { 'aria-hidden': 'true', text: softName(a.name) }));
     api.listen(b, 'click', () => api.apps.open(a.id));
     api.apps.logo(a.id).then(url => {
       if (!url) return;
@@ -123,27 +128,31 @@ export default function phone(api) {
     });
     return { b, count, name: a.name };
   }
-  // more open apps than the ring holds: one +N satellite, the sheet (its Open level lists every open app)
-  function moreSat(a) {
-    const b = el('button', 'ob-sat obp-sat obp-more', { type: 'button', 'aria-label': `${a.more} more open apps`, 'data-app': '+more' });
-    b.append(el('span', 'ob-sat-face obp-more-n', { text: '+' + a.more }));
-    api.listen(b, 'click', () => chrome.open());
-    return { b, count: el('b'), name: a.name };
-  }
   function paintApps() {
-    const every = orbitApps(api, badgeMap), cap = W ? ringCap() : every.length, over = every.length > cap ? every.length - cap + 1 : 0;
-    const apps = over ? [...every.slice(0, cap - 1), { id: '+more', name: `${over} more`, icon: '', more: over }] : every;
+    // the + always takes the last place; more open apps than fit: the + says how many more (its sheet lists them all)
+    const every = orbitApps(api, badgeMap), cap = W ? ringCap() : every.length + 1, over = Math.max(0, every.length - (cap - 1));
+    const apps = [...every.slice(0, cap - 1), { id: '+add', name: 'Add an app', icon: '' }];
+    plusMore.textContent = over ? '+' + over : ''; plusMore.hidden = !over; plus.classList.toggle('has-more', !!over);
+    plus.setAttribute('aria-label', over ? `Add an app · ${over} more open` : 'Add an app');
     const sig = apps.map(a => a.id + ':' + a.name + ':' + (a.icon || '').length).join('|') + '|' + (W ? ringCap() : 0);
     if (sig !== appSig) {
       appSig = sig;
-      const was = new Map(sats.map(s => [s.id, s]));
-      // evenly round the ring from the top, clockwise; fixed places (a satellite never moves under the finger)
-      sats = apps.map((a, i) => { const s = was.get(a.id) || { id: a.id, ...(a.more ? moreSat(a) : sat(a)) }; s.a = -Math.PI / 2 + i / apps.length * Math.PI * 2; return s; });
-      field.replaceChildren(...sats.map(s => s.b));
+      const was = new Map(sats.map(s => [s.id, s])), from = was.get('+add')?.a, first = !sats.length;
+      // evenly round the ring from the top, clockwise, the + last; fixed places (a satellite never moves under the
+      // finger). When the list changes everyone glides to the new place (phone.css), and a newly opened app grows out
+      // of the +'s old place: it was added to the end of the circle.
+      const born = [];
+      sats = apps.map((a, i) => { const s = was.get(a.id) || { id: a.id, ...(a.id === '+add' ? { b: plus, count: el('b'), name: a.name } : sat(a)) }; const ta = -Math.PI / 2 + i / apps.length * Math.PI * 2;
+        if (!was.has(a.id) && !first && from != null && !reduced) { s.a = from; born.push([s, ta]); s.b.classList.add('is-born'); } else s.a = ta; return s; });
+      // only what changed: re-inserting a kept node would replay its fade-in
+      const keep = new Set(sats.map(s => s.b));
+      for (const n of [...field.children]) if (!keep.has(n)) n.remove();
+      for (const s of sats) if (s.b.parentNode !== field) field.append(s.b);
       placeSats();
+      if (born.length) api.frame(() => api.frame(() => { for (const [s, ta] of born) s.a = ta; placeSats(); api.after(700, () => { for (const [s] of born) s.b.classList.remove('is-born'); }); }));
     }
     for (const s of sats) {
-      if (s.id === '+more') continue;
+      if (s.id === '+add') continue;
       const a = apps.find(x => x.id === s.id), n = badgeMap[s.id] || 0;
       s.count.textContent = n ? (api.apps.badgeText?.(s.id) || (n > 99 ? '99+' : n ? String(n) : '')) : ''; s.count.hidden = !n;
       s.b.dataset.run = a?.run ? (a.run.open ? 'open' : 'hidden') : ''; s.b.classList.toggle('is-new', !a?.run);
@@ -151,9 +160,9 @@ export default function phone(api) {
     }
   }
   // the ring's radius for n satellites: the resting one, wider when n needs it (a whole target + 6 px apart), at most Rmax
-  const ringFor = n => Math.round(Math.max(R0, Math.min(Rmax, n * (SAT + 6) / (2 * Math.PI))));
+  const ringFor = n => Math.round(Math.max(R0, Math.min(Rmax, n * GAP / (2 * Math.PI))));
   // how many fit on the widest ring; more than that: the last place is +N (the sheet, whose Open lists every one)
-  const ringCap = () => Math.max(1, Math.floor(2 * Math.PI * Rmax / (SAT + 6)));
+  const ringCap = () => Math.max(1, Math.floor(2 * Math.PI * Rmax / GAP));
   function placeSats() {
     if (!W) return;
     R = ringFor(sats.length);
@@ -163,7 +172,6 @@ export default function phone(api) {
     }
     orbBox.style.transform = homeX ? `translateX(${homeX}px)` : '';
     chats.style.transform = homeX ? `translateX(${homeX}px)` : '';
-    plus.style.transform = homeX ? `translateX(${homeX}px)` : '';
     const pw = chats.offsetWidth; if (pw > 0) layer.style.setProperty('--obp-pill-w', pw + 'px');
   }
 

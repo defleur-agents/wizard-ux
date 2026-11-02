@@ -244,7 +244,9 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored code');
   // Apps: still, like the phone (Miguel, 2 Nov 2026): one round ring, evenly from the top, clockwise, in orbitApps order
   // (badged apps first); no drift. Their own logo, else a designed glyph; never a letter tile.
-  assert.match(js, /a: -Math\.PI \/ 2 \+ i \/ items\.length \* Math\.PI \* 2, ring: 1, speed: 0/);
+  assert.match(js, /const ta = -Math\.PI \/ 2 \+ i \/ items\.length \* Math\.PI \* 2, o = was\.get\(it\.id\);/);
+  assert.match(js, /\{ id: '\+add', el: plus, a0: '' \}\];/, 'the + is the ring\'s last place (Miguel, 2 Nov 2026)');
+  assert.match(js, /return \{ \.\.\.it, ta, a: o \? o\.a : first \? ta : from, g: o \|\| first \? 1 : 0, ring: 1, speed: 0,/, 'a new app grows out of the +\'s old place; the rest glide');
   assert.doesNotMatch(js, /s\.a \+= s\.speed/, 'satellites never drift');
   assert.match(js, /let x = cx \+ Math\.cos\(s\.a\) \* R, y = cy \+ Math\.sin\(s\.a\) \* R;/, 'a round ring, not a tilted ellipse');
   assert.match(js, /api\.apps\.logo\(a\.id\)/);
@@ -265,7 +267,7 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="right"\] \{ z-index: 2; width: var\(--ob-app-w\);/, 'an app: the right third');
   assert.match(lcss, /\.ob-dock \{\n  position: absolute; left: 50%; bottom: 22px; transform: translateX\(-50%\);/, 'search pill and Look on the orb\'s axis at the bottom');
   // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
-  assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /el\('kbd', '', \{ text: mod \+ 'Space' \}\)/, 'the search pill names ⌥Space');
+  assert.match(js, /orbBtn\.title = 'Click to talk \(' \+ \(native \? 'Right ⌘' : mod \+ 'V'\) \+ '\) · hold \(or ⌥C\) for a command · search or ask: ' \+ mod \+ 'Space';/, 'the orb names the keys now the search pill is gone');
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));
   assert.deepEqual(m.capabilities, ['layout']);
   const prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
@@ -387,7 +389,7 @@ test('Orbs view satellites are exactly the open apps (= desks, = the Apps view\'
   // badged apps first (Miguel, 2 Nov 2026): a count only reorders the open apps
   assert.match(shared, /return \[\.\.\.open\.filter\(lit\), \.\.\.open\.filter\(a => !lit\(a\)\)\];/);
   assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
-  assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
+  assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close · stays installed', \(\) => \{ api\.panel\.quit\(a\.id\);/);
   assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && \(panelParks \|\| panelDeskApp\(w\)\) && !quit;/);
   assert.match(desk, /if \(park\) panelPark\(w\.id\); else if \(wasApp && panelDeskApp\(w\)\) \{ panelDeskClose\(w\.id\); panelApp = null; \}/, 'Close closes its desk');
   assert.match(desk, /trackOpenApps\?\.\(\(\) => \[\.\.\.ws\.flatMap\(d => d\.wins\)/, 'a hidden app is a desk window: it still counts as open (its mic and audio keep going)');
@@ -413,10 +415,11 @@ test('Orbs view satellites stay minimal (Miguel, v8): just the mark, a dot not a
   const badge = /\.ob-sat-badge \{([^}]*)\}/.exec(css)[1];
   assert.doesNotMatch(badge, /0 0 0 \dpx/, 'the count dot has no ring');
   for (const sel of ['.ob-sat-key {', '.ob-keyrow-i b {']) { const i = css.indexOf(sel); assert.ok(i > 0, sel); assert.doesNotMatch(css.slice(i, css.indexOf('}', i)), /background: var\(--ob-glass|border: 1px/, sel + ' is a bare letter, no keycap'); }
-  assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps…' \}\)/);
-  assert.match(js, /api\.listen\(hint, 'click', \(\) => chrome\.open\(\)\);/, 'the pill opens the app sheet: open apps folded away, the rest by kind (Miguel, 2 Nov 2026)');
+  assert.ok(!js.includes("'ob-search'"), 'no search pill: the + on the ring is the one way to add an app (Miguel, 2 Nov 2026)');
+  assert.match(js, /const plus = chrome\.plus\('ob-sat ob-add', 'Add an app \(' \+ MK \+ 'O\)'/);
+  assert.match(js, /dock\.append\(picker\);/);
   assert.match(js, /if \(alt && !e\.shiftKey && e\.code === 'KeyO'\) \{ if \(!e\.repeat\) \{ if \(chrome\.isOpen\) chrome\.close\(\); else chrome\.open\(\); \} return true; \}/, '⌥O too');
-  assert.match(js, /'Search apps \(' \+ MK \+ 'O\)/, 'its tooltip names ⌥O');
+
 });
 
 test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {

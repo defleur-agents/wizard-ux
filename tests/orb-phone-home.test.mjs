@@ -77,8 +77,12 @@ test('phone, Orbs, on Home: the orb fixed in the middle, still satellites to tap
   assert.equal(P.html.dataset.orbScene, 'home'); assert.equal(P.html.dataset.orbAt, 'centre', 'on Home the orb is in the middle');
   assert.ok(layer.classList.contains('is-home')); assert.equal(P.find('obp-orb')[0].dataset.show, 'on');
   // satellites: exactly the open apps (the shared list: one per desk; a count alone floats nothing)
-  const sats = P.find('obp-sat');
+  const sats = P.find('obp-sat').filter(b => b.attrs['data-app'] !== '+add');
   assert.deepEqual(sats.map(b => b.attrs['data-app']).sort(), ['mail', 'notes']);
+  // the + is the ring's last place (Miguel, 2 Nov 2026: one +, at the end of the circle; no separate + by the pill)
+  assert.equal(P.find('obp-sat').at(-1).attrs['data-app'], '+add'); assert.equal(P.find('obp-plus').length, 0);
+  P.find('obp-sat').at(-1).dispatchEvent({ type: 'click' }); assert.equal(P.find('vc-sheet').length, 1, 'the + opens the app sheet');
+  P.find('vc-x')[0].dispatchEvent({ type: 'click' });
   assert.equal(sats.find(b => b.attrs['data-app'] === 'mail').dataset.run, 'hidden', 'open on a desk: a quiet dot');
   // still, on one ring around the orb, clear of the sphere (its hit area is 60% of the canvas) by a whole target
   const O = parseFloat(layer.style['--obp-orb']), cy = parseFloat(layer.style['--obp-cy']);
@@ -125,11 +129,11 @@ test('phone, Orbs: every open app floats (one satellite per desk; the ring widen
     const pts = sats.map(at);
     for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) assert.ok(Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]) >= 48, `satellites never overlap (${n} open)`);
     assert.ok(pts.every(([x]) => x - 24 >= 0 && x + 24 <= 390), 'inside the screen');
-    if (n === 14) assert.deepEqual(ids, P.state.running.map(r => r.id), 'all 14 open apps float');
+    assert.equal(ids.at(-1), '+add', 'the + always takes the last place');
+    if (n === 14) assert.deepEqual(ids.slice(0, -1), P.state.running.map(r => r.id), 'all 14 open apps float');
     else {
-      assert.equal(ids.at(-1), '+more', 'too many for the ring: the last place is +N');
       const more = sats.at(-1), shown = ids.length - 1;
-      assert.equal(more.children[0].textContent, '+' + (n - shown), 'the count of the rest');
+      assert.equal(more.children.at(-1).textContent, '+' + (n - shown), 'too many for the ring: the + says how many more');
       more.dispatchEvent({ type: 'click' }); assert.ok(P.find('vc-sheet').length === 1, '+N opens the sheet (its Open level lists every one)');
     }
     off();
@@ -200,4 +204,13 @@ test('skins and tweaks never get the phone hosts', async () => {
   await f.host.loadTweaks(['miguel/orb-shell'], f.slots, { teamAuthors: ['miguel'] });
   assert.equal(api.phone, undefined);
   await f.clear();
+});
+
+test('Orbs: every satellite shows its name, always (Miguel, 2 Nov 2026); the ring spaces them for it', () => {
+  const ph = read('web/layouts/orb/phone.js'), pcss = read('web/layouts/orb/phone.css'), js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
+  assert.match(ph, /el\('b', 'obp-sat-n', \{ 'aria-hidden': 'true', text: softName\(a\.name\) \}\)/);
+  assert.match(ph, /const SAT = 48, GAP = SAT \+ 18;/);
+  assert.match(pcss, /\.obp-sat-n \{/); assert.doesNotMatch(pcss.slice(pcss.indexOf('.obp-sat-n {')), /opacity: 0/, 'never hidden');
+  assert.match(js, /const SP = 86;/);
+  const n = /\.ob-sat-n \{([^}]*)\}/.exec(css)[1]; assert.match(n, /opacity: \.9/); assert.doesNotMatch(n, /opacity: 0/, 'shown without a hover');
 });

@@ -78,14 +78,13 @@ export default function setup(api) {
   const mac = /Mac/.test(globalThis.navigator?.platform || globalThis.navigator?.userAgent || '');
   const native = !!globalThis.webkit?.messageHandlers?.wizardNative;
   const mod = mac ? '⌥' : 'Alt+';
+  // no search pill any more: the orb's own tooltip names the real keys (talk; ⌥Space search or ask)
+  orbBtn.title = 'Click to talk (' + (native ? 'Right ⌘' : mod + 'V') + ') · hold (or ⌥C) for a command · search or ask: ' + mod + 'Space';
   // The bottom of the scene: one quiet search pill, the always-there way to open any app: it (and ⌥O) opens the app
   // sheet (chrome.js, the same as the + and the Apps view's): type a name, ↵ opens it; installed apps grouped by kind,
   // the ones already open folded away (Miguel, 2 Nov 2026). ⌥Space stays the shell's search & ask. The Look button
   // sits beside it.
   const dock = el('div', 'ob-dock');
-  const hint = el('button', 'ob-search', { type: 'button', title: 'Search apps (' + MK + 'O) · search or ask: ' + mod + 'Space', 'aria-label': 'Search apps', 'aria-keyshortcuts': 'Alt+O Alt+Space' });
-  hint.append(icon(['M10.5 4a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM15.5 15.5 20 20']), el('span', 'ob-search-l', { text: 'Search apps…' }), el('kbd', '', { text: mod + 'Space' }), el('i', '', { text: '·', 'aria-hidden': 'true' }), el('kbd', 'is-talk', { text: native ? 'Right ⌘' : mod + 'V', title: 'to talk' }));
-  api.listen(hint, 'click', () => chrome.open());
   // The look picker, bottom right: a quiet button that opens Style (live previews) and Colour.
   const picker = el('div', 'ob-picker');
   const pickBtn = el('button', 'ob-pick-btn', { type: 'button', 'aria-expanded': 'false', 'aria-haspopup': 'dialog', title: 'Orb style and colour', 'aria-label': 'Orb style and colour' });
@@ -102,11 +101,12 @@ export default function setup(api) {
   api.listen(desksBtn, 'click', () => { api.desk.classic(); });
   pop.append(h1, styleRow, h2, colourRow, desksBtn);
   picker.append(pop, pickBtn);
-  // The + beside the search pill (Miguel, 1 Nov 2026): the same sheet as the Apps view's and the phone's (chrome.js):
-  // Open (the satellites; ✕ closes one), Installed (tap opens it in the panel) and Get more (the App Store).
+  // One + and no search pill (Miguel, 2 Nov 2026: "they're one and the same"): the + is the ring's last place, after
+  // the last app clockwise from the top; it (and ⌥O) opens the app sheet (chrome.js, the same as the Apps view's): a
+  // search field, the apps already open folded away, installed apps by kind, Get more from the App Store.
   const chrome = viewChrome(api, { openIds: () => api.panel.running().map(r => r.id), goOpen: id => api.apps.open(id), inset: 0 });   // the orb never floats over the app panel here
-  const plus = chrome.plus('ob-plus', 'Apps: open, installed, get more');
-  dock.append(plus, hint, picker);
+  const plus = chrome.plus('ob-sat ob-add', 'Add an app (' + MK + 'O)', (b, ico) => { b.setAttribute('data-app', '+add'); const f = el('span', 'ob-sat-face'); f.append(ico); b.append(f, el('b', 'ob-sat-n', { text: 'Add' })); });
+  dock.append(picker);
   scene.append(sky, field, orbWrap, caption, keyRow, dock, foldBtn, strip);   // no name label: the orb is the entity
   api.mount(scene);
 
@@ -275,6 +275,7 @@ export default function setup(api) {
   // The app's own logo first (the Store's picture of it); its designed glyph otherwise; never a bare letter.
   // glyphOf / colourOf: shared.js (the phone draws its satellites with the same marks)
   let appSig = '', sats = [];
+  const kcOf = new WeakMap();
   // Each app is just its own mark, clean-cut on the sky: its logo (a tile logo stays a tile, a free-form logo stays
   // free-form) or its glyph in its own colour. No plate, ring or bubble behind it; only a soft shadow for legibility.
   const tileProbe = el('canvas'); tileProbe.width = tileProbe.height = 16;
@@ -292,7 +293,7 @@ export default function setup(api) {
     // playing: three tiny bars in the dot's place
     const eq = el('i', 'ob-sat-eq', { 'aria-hidden': 'true' }); eq.append(el('i', ''), el('i', ''), el('i', ''));
     b.append(face, count, el('i', 'ob-sat-run', { 'aria-hidden': 'true' }), eq, kc, el('b', 'ob-sat-n', { text: a.name }));
-    keyEls.set(a.id, kc);
+    keyEls.set(a.id, kc); kcOf.set(b, kc);
     api.listen(b, 'click', () => { openMenu(null); api.apps.open(a.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); const r = b.getBoundingClientRect(); openMenu(a, Number.isFinite(e.clientX) && e.clientX ? e.clientX : r.x + r.width / 2, Number.isFinite(e.clientY) && e.clientY ? e.clientY : r.y + r.height / 2); });
     api.apps.logo(a.id).then(url => {
@@ -318,31 +319,42 @@ export default function setup(api) {
    * search away (the search pill / ⌥O, ⌥Space, a command, the ⌥ letters); no All apps satellite. Nothing running and nothing new: just the orb. */
   const orbitApps = () => orbitList(api, badgeMap);   // shared.js: the one list the phone floats too
   let satScale = 1;
-  // the ring: round, clear of the orb's sphere, wider for more apps (64 px apart), never past the bar or the hint line
-  const ringMin = () => O * .3 * (G.k || 1) + 64, ringMax = () => Math.max(ringMin(), Math.min(H * .46 - 64, H * .54 - 96));
-  const ringFor = n => Math.max(ringMin(), Math.min(ringMax(), n * 64 * satScale / (2 * Math.PI)));
+  // the ring: round, clear of the orb's sphere, wider for more apps (SP apart: room for each name under its mark,
+  // Miguel 2 Nov 2026), never past the bar or the Look button
+  const SP = 86;
+  const ringMin = () => O * .3 * (G.k || 1) + 70, ringMax = () => Math.max(ringMin(), Math.min(H * .46 - 64, H * .54 - 96));
+  const ringFor = n => Math.max(ringMin(), Math.min(ringMax(), n * SP * satScale / (2 * Math.PI)));
   function fits(n) {
     if (!W) return { cap: n, scale: 1 };
-    const cap = s => Math.floor(2 * Math.PI * ringMax() / (64 * s));
+    const cap = s => Math.floor(2 * Math.PI * ringMax() / (SP * s));
     for (const sc of [1, .86, .74]) if (n <= cap(sc)) return { cap: n, scale: sc };
     return { cap: Math.max(1, cap(.74) - 1), scale: .74 };
   }
   const runOf = a => a.run ? (a.run.open ? 'open' : 'hidden') : '';
   function paintApps() {
-    const every = orbitApps(), fit = fits(every.length), apps = every.slice(0, fit.cap);
+    const every = orbitApps(), fit = fits(every.length + 1), apps = every.slice(0, fit.cap - 1);   // + takes the last place
     const sig = apps.map(a => a.id + ':' + a.name + ':' + a.icon.length).join('|') + '|' + fit.scale;
     // state only (running, playing, badge-only): repaint in place, the orbit keeps turning
-    const paintState = () => { for (const s of sats) { const a = apps.find(x => x.id === s.id); if (!a) continue; s.el.dataset.run = runOf(a); s.el.classList.toggle('is-playing', !!a.run?.playing); s.el.classList.toggle('is-new', !a.run); paintBadge(s.el, s.id); } };
+    const paintState = () => { for (const s of sats) { const a = apps.find(x => x.id === s.id); if (!a || s.id === '+add') continue; s.el.dataset.run = runOf(a); s.el.classList.toggle('is-playing', !!a.run?.playing); s.el.classList.toggle('is-new', !a.run); paintBadge(s.el, s.id); } };
     if (sig === appSig) { paintState(); return; }
     appSig = sig; satScale = fit.scale;
     keyEls.clear();
     // more than fit: the rest stay one search away (the pill), never an All apps satellite
-    const items = apps.map(a => ({ id: a.id, el: sat(a) }));
-    field.replaceChildren(...items.map(i => i.el));
-    // still, like the phone (Miguel, 2 Nov 2026): one round ring, evenly from the top, clockwise, in orbitApps order
-    // (badged apps first); a satellite never drifts out from under the pointer
     const was = new Map(sats.map(s => [s.id, s]));
-    sats = items.map((it, i) => ({ ...it, a: -Math.PI / 2 + i / items.length * Math.PI * 2, ring: 1, speed: 0, pk: was.get(it.id)?.pk || 0 }));
+    // an app already on the ring keeps its node (no flash); a new one gets its own
+    const items = [...apps.map(a => ({ id: a.id, el: was.get(a.id)?.a0 === a.icon.length + ':' + a.name ? was.get(a.id).el : sat(a), a0: a.icon.length + ':' + a.name })), { id: '+add', el: plus, a0: '' }];
+    // only what changed: re-inserting a kept node would replay its entry animation (every icon blurring at once)
+    const keep = new Set(items.map(i => i.el));
+    for (const n of [...field.children]) if (!keep.has(n)) n.remove();
+    for (const i of items) if (i.el.parentNode !== field) field.append(i.el);
+    if (field.lastChild !== plus) field.append(plus);   // the + is last for the keyboard too
+    // still, like the phone (Miguel, 2 Nov 2026): one round ring, evenly from the top, clockwise, in orbitApps order
+    // (badged apps first), the + last; nothing drifts. When the list changes, everyone eases to the new place, and a
+    // newly opened app grows out of the +'s old place (added to the end of the circle).
+    const from = was.get('+add')?.a ?? -Math.PI / 2, first = !sats.length;
+    sats = items.map((it, i) => { const ta = -Math.PI / 2 + i / items.length * Math.PI * 2, o = was.get(it.id);
+      return { ...it, ta, a: o ? o.a : first ? ta : from, g: o || first ? 1 : 0, ring: 1, speed: 0, pk: o?.pk || 0 }; });
+    for (const s of sats) if (kcOf.has(s.el)) keyEls.set(s.id, kcOf.get(s.el));   // a kept node keeps its ⌥ letter
     extra = null; paintState(); paintKeys();
     placeSats(0);
   }
@@ -353,7 +365,8 @@ export default function setup(api) {
     if (!a) { menu.hidden = true; return; }
     const running = api.panel.running().some(r => r.id === a.id);
     const item = (label, fn) => { const b = el('button', 'ob-menu-i', { type: 'button', role: 'menuitem', text: label }); api.listen(b, 'click', () => { openMenu(null); fn(); }); return b; };
-    menu.replaceChildren(el('div', 'ob-menu-h', { text: a.name }), item('Open', () => api.apps.open(a.id)), ...(running ? [item('Close', () => { api.panel.quit(a.id); api.after(30, paintApps); })] : []));
+    // Close = off the orb and stopped; it stays installed (the + opens it again). Nothing keeps running off the orb.
+    menu.replaceChildren(el('div', 'ob-menu-h', { text: a.name }), item('Open', () => api.apps.open(a.id)), ...(running ? [item('Close · stays installed', () => { api.panel.quit(a.id); api.after(30, paintApps); })] : []));
     menu.hidden = false;   // fixed: at the pointer, kept on screen
     menu.style.left = Math.round(Math.max(8, Math.min(x, innerWidth - menu.offsetWidth - 8))) + 'px'; menu.style.top = Math.round(Math.max(8, Math.min(y, innerHeight - menu.offsetHeight - 8))) + 'px';
     menuOff = api.back.push(() => openMenu(null));
@@ -426,13 +439,19 @@ export default function setup(api) {
   // An app open in the panel: its satellite stops drifting and pins between the orb and the panel (eased there and
   // back); the bolts run orb → it → the panel's edge.
   const smooth = v => v * v * (3 - 2 * v);
+  let ringR = 0;
   function placeSats(dt) {
     if (!W) return;
-    const cy = H * .46, pinId = G.app ? G.app.id : null, R = ringFor(sats.filter(s => s !== extra).length);
+    const cy = H * .46, pinId = G.app ? G.app.id : null, Rt = ringFor(sats.filter(s => s !== extra).length), ease = reduced || !dt ? 1 : Math.min(1, dt * 6);
+    ringR = ringR ? ringR + (Rt - ringR) * ease : Rt; const R = ringR;
     for (const s of sats) {
+      // ease round the shorter way to its place on the ring; a new one grows in
+      if (s.ta != null && s.a !== s.ta) { let d = s.ta - s.a; d = Math.atan2(Math.sin(d), Math.cos(d)); s.a = Math.abs(d) < .001 ? s.ta : s.a + d * ease; }
+      if (s.g < 1) s.g = reduced || !dt ? 1 : Math.min(1, s.g + dt * 2.4);
       let x = cx + Math.cos(s.a) * R, y = cy + Math.sin(s.a) * R;
       const depth = 1;   // one flat ring: every satellite in front, full size and bright
-      let sc = satScale, op = 1;
+      const g = s.g == null ? 1 : smooth(s.g);
+      let sc = satScale * (s.id === '+add' ? .82 : 1) * (.35 + .65 * g), op = g;
       const want = pinId && s.id === pinId ? 1 : 0;
       s.pk = reduced ? want : (s.pk || 0) + (want - (s.pk || 0)) * Math.min(1, dt * 5);
       if (s.pk < .002) s.pk = 0;

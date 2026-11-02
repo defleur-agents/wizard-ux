@@ -208,7 +208,7 @@ test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb st
   // the Orb view wears the same chrome (+ beside the Chats pill, the same swipes), and no Back either
   const ph = read('web/layouts/orb/phone.js');
   assert.match(ph, /import \{ viewChrome \} from '\.\.\/apps\/chrome\.js';/);
-  assert.match(ph, /const plus = chrome\.plus\('obp-plus', 'Open an app'\);\n  layer\.append\(field, orbBox, chats, plus\);/);
+  assert.match(ph, /const plus = chrome\.plus\('ob-sat obp-sat obp-add', 'Add an app'/);
   assert.ok(!/chrome\.back|paintBack|vc-back/.test(ph + read('web/layouts/apps/chrome.js') + read('web/layouts/apps/desktop.js') + read('web/layouts/apps/layout.js')), 'no Back anywhere');
   assert.ok(!/fly|FLY|animate\(/.test(ph), 'the orb never flies between the centre and the dock');
 });
@@ -318,7 +318,9 @@ test('apps.kinds / openAny: the launcher kinds for layouts, shared by both shell
   const ak = read('web/core/app-kinds.js'), host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
   assert.match(ak, /const agents = K\.agents\.filter\(a => a\.id !== 'wizard'\)\.map\(row\);/, 'the main agent is Chats, never a tile');
   assert.match(ak, /window\.WosAppRoute\?\.open\(a\.id, \{ name: a\.name \}\); return true;/, 'an agent app without a screen shows its settings');
-  for (const s of [app, desk]) { assert.match(s, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\)\) : null,/); assert.match(s, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, open\),/); }
+  for (const s of [app, desk]) assert.match(s, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\)\) : null,/);
+  assert.match(app, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, open\),/);
+  assert.match(desk, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, globalThis\.WosSkinHost\?\.panelMode \? x => openApp\(APP\[x\]\) !== false : open\),/, 'the Orb opens it in its panel, never a fresh empty desk');
   assert.match(host, /kinds: \(\) => \{ const k = live\(\) \? shell\.appKinds\?\.\(\) : null; return k \? structuredClone\(k\) : null; \},/);
   assert.match(host, /openAny: id => live\(\) && typeof id === 'string' && \/\^\[a-z0-9\]\[a-z0-9-\]\{0,63\}\$\/\.test\(id\) && shell\.openAnyApp/);
 });

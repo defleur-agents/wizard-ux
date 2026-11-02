@@ -31,7 +31,7 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-orbbtn:focus-vi
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat {
   position: absolute; left: 0; top: 0; width: 48px; height: 48px; margin: -24px 0 0 -24px; padding: 0; border: 0; border-radius: 14px;
   display: grid; place-items: center; z-index: 6; pointer-events: auto; background: none; color: inherit; -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation; transition: visibility 0s;
+  touch-action: manipulation; transition: visibility 0s, transform 520ms cubic-bezier(.2, .8, .2, 1);
 }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:active .ob-sat-face { transform: scale(.92); }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--ob-ink3); }
@@ -102,3 +102,28 @@ html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus:active { b
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--ob-ink2); }
 html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-plus .vc-ico { width: 20px; height: 20px; }
 @keyframes obp-in { from { opacity: 0; } }
+
+/* ---------- the + on the ring (Miguel, 2 Nov 2026): the ring's last place, a quiet glass circle; +N when more apps are open
+ * than fit. A newly opened app grows out of it (phone.js is-born) while the others glide to their new places. ---------- */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-add .ob-sat-face {
+  width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--ob-ink2);
+  background: var(--ob-glass); box-shadow: inset 0 0 0 1px var(--ob-line2); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-add .vc-ico { width: 20px; height: 20px; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-add-n {
+  position: absolute; right: -4px; top: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px;
+  display: grid; place-items: center; font: 700 11px / 1 var(--wz-font-ui); color: var(--ob-ink); background: var(--ob-glass-solid); box-shadow: inset 0 0 0 1px var(--ob-line2);
+}
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-add-n[hidden] { display: none; }
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat.is-born .ob-sat-face { animation: obp-born 620ms cubic-bezier(.2, .9, .25, 1.25) both; }
+@keyframes obp-born { from { transform: scale(.3); opacity: 0; filter: drop-shadow(0 0 18px var(--c, white)); } 60% { opacity: 1; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat { transition: visibility 0s; } }
+
+/* every satellite's name, always (Miguel, 2 Nov 2026): small, under its mark, kept to its slot on the ring */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat-n {
+  position: absolute; top: calc(100% - 3px); left: 50%; transform: translateX(-50%); width: max-content; max-width: 60px; overflow: visible;
+  white-space: normal; overflow-wrap: normal; word-break: normal; hyphens: manual; text-align: center; pointer-events: none; font: 600 9.5px / 1.15 var(--wz-font-ui); letter-spacing: 0;
+  color: var(--ob-ink2); text-shadow: 0 1px 3px var(--ob-core), 0 0 8px var(--ob-core);
+}
+/* everything on the ring is open by definition: the "open on a desk" dot under each mark would sit on its name */
+html[data-shell="phone"][data-layout="orb"][data-orb-phone] .obp-sat .ob-sat-run { display: none; }

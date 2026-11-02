@@ -2848,7 +2848,7 @@
     openApp: id => !!APP[id] && openApp(APP[id]) !== false,
     // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
     appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
-    openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, open),
+    openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, globalThis.WosSkinHost?.panelMode ? x => openApp(APP[x]) !== false : open),   // the Orb: in its panel
     // The Apps view: one entry per desk (the app in front on it; a Chats desk is 'wizard'), and opening an app on a desk
     // of its own (the current desk when it is empty, else a fresh one), never tiled beside another app.
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
