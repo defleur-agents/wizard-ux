@@ -49,7 +49,7 @@ async function hold(p){const o=await orbXY(p);await T(p,'touchStart',o.x,o.y);aw
     await look(p);const button=p.locator(`[data-skinpick="${skin}"]`);await button.scrollIntoViewIfNeeded();await button.click();await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience.state.busy,skin);await close(p);
     const o=await hold(p);check(await p.evaluate(()=>WosOrbSwitcher.isOpen&&__wos.voice==='idle'),'jittered hold opens radial without microphone '+skin,await snap(p));
     const wedges=await p.evaluate(()=>WosOrbSwitcher._wedges().map(w=>w.kind));check(wedges.length===2&&wedges.includes('voice')&&wedges.includes('custom'),'empty device-local pins still show Voice + Customize '+skin,wedges);await shot(p,skin+'-empty-radial');
-    const custom=await p.evaluate(()=>{const w=WosOrbSwitcher._wedges().find(w=>w.kind==='custom');return{x:w.x,y:w.y};});await slide(p,o,custom,2,0);await T(p,'touchEnd');await p.waitForFunction(()=>document.querySelector('.wor-sheet'));await shot(p,skin+'-customize');await p.keyboard.press('Escape');await close(p);
+    const custom=await p.evaluate(()=>{const w=WosOrbSwitcher._wedges().find(w=>w.kind==='custom');return{x:w.x,y:w.y};});await slide(p,o,custom,2,0);await p.evaluate(()=>new Promise(requestAnimationFrame));await T(p,'touchEnd');await p.waitForFunction(()=>document.querySelector('.wor-sheet'));await shot(p,skin+'-customize');await p.keyboard.press('Escape');await close(p);
     await p.evaluate(()=>WosOrbSwitcher.set({pins:['notes','wizard-calendar']}));await hold(p);const apps=await p.evaluate(()=>WosOrbSwitcher._wedges().filter(w=>w.kind==='app').map(w=>w.item.id));check(apps.length===2&&apps.every(x=>['notes','wizard-calendar'].includes(x)),'only pinned app wedges '+skin,apps);await T(p,'touchCancel');await p.evaluate(()=>WosOrbSwitcher.set({pins:[]}));
     await swipe(p);check(await p.evaluate(()=>!!document.querySelector('#overview.open.ov-pill .ov-close')&&!document.getElementById('launcher').classList.contains('open')),'swipe-up still reaches Miguel selector '+skin);await shot(p,skin+'-selector');await close(p);
    }
@@ -57,7 +57,7 @@ async function hold(p){const o=await orbXY(p);await T(p,'touchStart',o.x,o.y);aw
    await look(p);await p.locator('[data-tweak-toggle="wizard/orb-radial"]').click();await p.waitForFunction(()=>!window.WosOrbSwitcher&&!WosExperience.state.busy);await close(p);check(await p.locator('.wor,.wor-scrim').count()===0,'explicit OFF tears down radial');
    await p.reload({waitUntil:'load'});await p.waitForFunction(()=>window.WosExperience&&!WosExperience.state.busy&&WosExperience.state.tweaks.length);await sleep(600);check(await p.evaluate(()=>!window.WosOrbSwitcher&&!performance.getEntriesByType('resource').some(r=>/orb-switcher\.js/.test(r.name))),'saved OFF reload loads no radial module');
    check(current.errors.length===0,'zero page errors / unrelated writes',current.errors);check(!current.writes.some(x=>Object.hasOwn(x,'id')),'active My skin pointer never rewritten',current.writes);
-  }finally{await ctx.close();save();}
+  }catch(e){current.failure=String(e);await shot(p,'failure').catch(()=>{});throw e;}finally{await ctx.close();save();}
  }
  assert.equal(runs().length,0,'no inference or session admission');
  console.log('COMPLETE',JSON.stringify({profiles:reports.length,checks:reports.reduce((n,r)=>n+r.checks.length,0),failed:reports.flatMap(r=>r.checks).filter(c=>!c.pass).length,realRuns:runs().length,writes:log.writes}));
