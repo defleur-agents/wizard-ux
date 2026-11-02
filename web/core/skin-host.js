@@ -380,7 +380,7 @@
    * --wos-inset-b on its <html> (like the camera's --wos-cutout) and one rule that adds that much room after a kit
    * scroll area's last item (.wz-scroll), so every list still scrolls clear of the orb. 0 = nothing (stock). */
   let frameInset = 0, frameOrb = null;
-  const insetHolders = new Map(), insetOrbs = new Map(), insetSheets = new WeakMap(), insetWatch = new WeakMap();
+  const insetHolders = new Map(), insetOrbs = new Map(), insetSheets = new WeakMap(), insetWatch = new WeakMap(), insetFonts = new WeakSet();
   /* The orb bar (Miguel, 2 Nov 2026; the Wizard standard for every full-screen app): the orb has ONE fixed spot, bottom
    * centre, and an app's own bottom tab bar is laid out around it, its tabs split evenly left and right of the orb (an
    * empty slot as wide as the orb in the middle), all on the orb's row; never under it, never covering it. Without an
@@ -391,23 +391,33 @@
     + 'html.wos-orb-bar [data-wos-tabs="inner"]{background:none!important;border-color:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}'
     + 'html.wos-orb-bar [data-wos-tabs]::after{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var(--wos-orb-slot,80px)!important;align-self:stretch!important;background:none!important;border:0!important}'
     + 'html.wos-orb-bar [data-wos-flat]{display:contents!important}'
-    + 'html.wos-orb-bar [data-wos-tab]{order:1!important;flex:0 0 calc((100% - var(--wos-orb-slot,80px))/2/var(--wos-tab-n,1))!important;min-width:0!important;max-width:none!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;row-gap:2px!important;column-gap:0!important;text-align:center!important}'
+    + 'html.wos-orb-bar [data-wos-tab]{order:1!important;flex:0 0 calc((100% - var(--wos-orb-slot,80px))/2*var(--wos-tab-f,1))!important;min-width:0!important;max-width:none!important;margin-left:0!important;margin-right:0!important;padding-left:2px!important;padding-right:2px!important;box-sizing:border-box!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;row-gap:2px!important;column-gap:0!important;text-align:center!important}'
     + 'html.wos-orb-bar [data-wos-tab="r"]{order:3!important}'
-    + [1, 2, 3, 4].map(n => `html.wos-orb-bar [data-wos-tabs][data-wos-nl="${n}"] [data-wos-tab="l"],html.wos-orb-bar [data-wos-tabs][data-wos-nr="${n}"] [data-wos-tab="r"]{--wos-tab-n:${n}}`).join('');
+    // no tab right of the orb (a bar of one): the slot takes the orb and the empty right half, so the orb stays centred
+    + 'html.wos-orb-bar [data-wos-tabs][data-wos-nr="0"]::after{flex-basis:calc(var(--wos-orb-slot,80px) + (100% - var(--wos-orb-slot,80px))/2)!important}'
+    // a label is always whole: no ellipsis, no clipping; smaller (--wos-fs) or on two lines only when tabFit says so
+    + 'html.wos-orb-bar [data-wos-fs]{white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important;min-width:0!important;flex-shrink:0!important}'
+    + 'html.wos-orb-bar [data-wos-fs][data-wos-small]{font-size:var(--wos-fs)!important}'
+    + 'html.wos-orb-bar [data-wos-fs][data-wos-wrap]{white-space:normal!important;overflow-wrap:normal!important;word-break:normal!important;text-align:center!important;line-height:1.15!important}'
+    // equal parts until tabFit has measured the labels (it then sets --wos-tab-f on each tab: its share of its side)
+    + [1, 2, 3, 4].map(n => `html.wos-orb-bar [data-wos-tabs][data-wos-nl="${n}"] [data-wos-tab="l"],html.wos-orb-bar [data-wos-tabs][data-wos-nr="${n}"] [data-wos-tab="r"]{--wos-tab-f:${+(1 / n).toFixed(4)}}`).join('');
   const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after{content:"";display:block;flex:none;height:var(--wos-inset-b,0px);pointer-events:none}'
     + 'html:not(.wos-orb-bar) [data-wos-inset-bar]{height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}' + ORB_BAR;
   const setAttr = (n, k, v) => { if (v == null) { if (n.hasAttribute(k)) n.removeAttribute(k); } else if (n.getAttribute(k) !== v) n.setAttribute(k, v); };
+  const WOS_MARKS = ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr', 'data-wos-fs', 'data-wos-small', 'data-wos-wrap'];
+  const WOS_MARKED = '[data-wos-tabs],[data-wos-tab],[data-wos-flat],[data-wos-fs]';
+  const unmark = n => { for (const k of WOS_MARKS) setAttr(n, k, null); n.style?.removeProperty?.('--wos-tab-f'); n.style?.removeProperty?.('--wos-fs'); };
   /* The tabs of a bottom bar: its buttons / links / tabs on the bar's lowest row (2 to 8 of them, none full width). Their
    * nearest common box becomes the tab row; wrappers in between flatten (display: contents), so the tabs themselves are
    * what gets split, whatever groups the app put them in. Returns false when the bar has no such row. */
   function orbTabs(d, bar, vw) {
-    const old = [...d.querySelectorAll('[data-wos-tabs],[data-wos-tab],[data-wos-flat]')];
+    const old = [...d.querySelectorAll(WOS_MARKED)];
     const vis = n => n.getClientRects().length > 0 && d.defaultView.getComputedStyle(n).visibility !== 'hidden';
     let tabs = [...bar.querySelectorAll('button,a[href],[role="tab"],[role="radio"]')].filter(n => vis(n) && !n.parentElement.closest('button,a[href],[role="tab"],[role="radio"]'))
       .map(n => ({ n, r: n.getBoundingClientRect() })).filter(t => t.r.width < vw * .7 && t.r.height >= 20);
     const low = Math.max(...tabs.map(t => t.r.top + t.r.height / 2));
     tabs = tabs.filter(t => Math.abs(t.r.top + t.r.height / 2 - low) < 16).sort((x, y) => x.r.left - y.r.left);
-    if (tabs.length < 2 || tabs.length > 8) { for (const n of old) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null); return false; }
+    if (!tabs.length || tabs.length > 8) { for (const n of old) unmark(n); return false; }
     let row = tabs[0].n.parentElement;
     while (row && row !== bar && !tabs.every(t => row.contains(t.n))) row = row.parentElement;
     if (!row || !bar.contains(row) && row !== bar) return false;
@@ -417,8 +427,80 @@
       for (let p = t.n.parentElement; p && p !== row; p = p.parentElement) { keep.add(p); setAttr(p, 'data-wos-flat', ''); }
     });
     setAttr(row, 'data-wos-tabs', row === bar ? 'bar' : 'inner'); setAttr(row, 'data-wos-nl', String(nl)); setAttr(row, 'data-wos-nr', String(tabs.length - nl));
-    for (const n of old) if (!keep.has(n)) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null);
+    // a label keeps its marks while its tab is still a tab (tabFit re-measures it); everything else goes
+    for (const n of old) if (!keep.has(n) && !(n.hasAttribute('data-wos-fs') && !n.hasAttribute('data-wos-tab') && keep.has(n.parentElement?.closest?.('[data-wos-tab]')))) unmark(n);
     return true;
+  }
+  /* Every label whole (Miguel, 2 Nov 2026: with three tabs two share a side, and Podcasts' 'Discover' was cut to
+   * 'Dis…'). Each side of the orb is shared by its tabs in proportion to what they need (label or icon, plus a little
+   * room, at least 44 px), not in equal parts; only when a side is still too tight do the labels get smaller, both
+   * sides alike and never under 10 px, and as a last resort a label of several words takes two lines. Pure: sides =
+   * [left, right], each tab { icon, text, word, fs } in px at the app's own size; room = px per side. Returns the scale,
+   * whether labels wrap, and each tab's share of its side (each side's shares add up to 1). */
+  function tabFit(sides, room) {
+    const PAD = 6, MIN = 44, all = sides.flat();
+    const need = (t, s, wrap) => Math.max(MIN, Math.max(t.icon || 0, (wrap ? t.word : t.text) * s) + PAD);
+    const sum = (side, s, wrap) => side.reduce((n, t) => n + need(t, s, wrap), 0);
+    const fits = (s, wrap) => sides.every(side => sum(side, s, wrap) <= room + .01);
+    const floor = Math.min(1, Math.max(.5, ...all.filter(t => t.text > 0 && t.fs > 0).map(t => 10 / t.fs)));
+    // the app's own size if it fits; else a little smaller, 2 % at a time down to the floor; else two lines as well
+    let best = null;
+    for (const wrap of [false, true]) {
+      for (let k = 100; k >= Math.ceil(floor * 100) && !best; k -= 2) if (fits(k / 100, wrap)) best = { s: k / 100, wrap };
+      if (best) break;
+    }
+    const { s, wrap } = best || { s: floor, wrap: true };
+    const share = sides.map(side => {
+      const ns = side.map(t => need(t, s, wrap)), total = ns.reduce((a, b) => a + b, 0), extra = Math.max(0, room - total) / (side.length || 1);
+      return ns.map(n => (n + extra) / Math.max(room, total));
+    });
+    return { s, wrap, share };
+  }
+  const fitCanvas = new WeakMap();
+  /* Measure the split tabs' labels (canvas text metrics at the app's own font, so it never depends on the current
+   * squeeze) and apply tabFit: --wos-tab-f on each tab, a smaller --wos-fs / two lines on labels only when needed. */
+  function fitTabs(d, row) {
+    const win = d.defaultView, tabs = [...row.querySelectorAll('[data-wos-tab]')];
+    if (!tabs.length || !win) return;
+    let cx = fitCanvas.get(d);
+    if (!cx) { cx = d.createElement('canvas').getContext?.('2d'); if (!cx) return; fitCanvas.set(d, cx); }
+    const shown = n => n.getClientRects().length > 0 && !/^(absolute|fixed)$/.test(win.getComputedStyle(n).position);
+    const info = tabs.map(tab => {
+      const t = { tab, icon: 0, text: 0, word: 0, fs: 0, labels: [] }, byEl = new Map();
+      const walk = d.createTreeWalker(tab, 4);
+      for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+        const el = n.parentElement, tx = n.nodeValue.replace(/\s+/g, ' ').trim();
+        if (!tx || !el || !shown(el)) continue;
+        let p = el; while (p && p !== tab && shown(p)) p = p.parentElement;
+        if (p !== tab) continue;   // inside a badge (positioned) or something hidden: not a label
+        byEl.set(el, (byEl.get(el) || '') + (byEl.has(el) ? ' ' : '') + tx);
+      }
+      for (const [el, tx] of byEl) {
+        // the app's own size: what it computes now, unless tabFit made it smaller (then the size it had before)
+        const cs = win.getComputedStyle(el), fs0 = (el.hasAttribute('data-wos-small') && parseFloat(el.getAttribute('data-wos-fs'))) || parseFloat(cs.fontSize) || 14;
+        const tr = cs.textTransform === 'uppercase' ? tx.toUpperCase() : tx, ls = parseFloat(cs.letterSpacing) || 0;
+        cx.font = `${cs.fontStyle} ${cs.fontWeight} ${fs0}px ${cs.fontFamily}`;
+        const m = str => cx.measureText(str).width + ls * str.length;
+        t.text = Math.max(t.text, m(tr)); t.word = Math.max(t.word, ...tr.split(' ').map(m)); t.fs = Math.max(t.fs, fs0);
+        t.labels.push({ el, fs0, words: tr.includes(' ') });
+      }
+      for (const el of tab.querySelectorAll('svg,img,i,[class*="icon"],[class*="ico"]')) if (!el.textContent.trim() && shown(el)) t.icon = Math.max(t.icon, el.getBoundingClientRect().width);
+      return t;
+    });
+    const slot = parseFloat(d.documentElement.style.getPropertyValue('--wos-orb-slot')) || 80;
+    const room = (row.getBoundingClientRect().width - slot) / 2;
+    if (!(room > 0)) return;
+    const sides = [info.filter(t => t.tab.getAttribute('data-wos-tab') === 'l'), info.filter(t => t.tab.getAttribute('data-wos-tab') === 'r')];
+    const fit = tabFit(sides.map(side => side.map(({ icon, text, word, fs }) => ({ icon, text, word, fs }))), room);
+    sides.forEach((side, i) => side.forEach((t, j) => {
+      t.tab.style.setProperty('--wos-tab-f', fit.share[i][j].toFixed(4));
+      for (const l of t.labels) {
+        setAttr(l.el, 'data-wos-fs', String(l.fs0));
+        if (fit.s < 1) { l.el.style.setProperty('--wos-fs', (l.fs0 * fit.s).toFixed(2) + 'px'); setAttr(l.el, 'data-wos-small', ''); }
+        else { l.el.style.removeProperty('--wos-fs'); setAttr(l.el, 'data-wos-small', null); }
+        setAttr(l.el, 'data-wos-wrap', fit.wrap && l.words ? '' : null);
+      }
+    }));
   }
   function insetFrame(f) {
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
@@ -468,8 +550,13 @@
         split = orbTabs(d, bar, d.documentElement.clientWidth);
       }
     }
-    if (!split) for (const n of d.querySelectorAll('[data-wos-tabs],[data-wos-tab],[data-wos-flat]')) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null);
+    if (!split) for (const n of d.querySelectorAll(WOS_MARKED)) unmark(n);
     if (d.documentElement.classList.contains('wos-orb-bar') !== split) d.documentElement.classList.toggle('wos-orb-bar', split);
+    // with the split in place (its CSS applied), share each side by what the labels need; again once the app's fonts load
+    if (split) {
+      try { const row = d.querySelector('[data-wos-tabs]'); if (row) fitTabs(d, row); } catch (_) {}
+      if (!insetFonts.has(d) && d.fonts?.ready) { insetFonts.add(d); d.fonts.ready.then(() => { if (frameInset && f.isConnected && f.contentDocument === d) insetFrame(f); }, () => {}); }
+    }
     f.closest('.win')?.classList.toggle('wos-inset-bar', !!frameInset && !!bar?.isConnected);
   }
   function insetSync() {

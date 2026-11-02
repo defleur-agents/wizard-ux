@@ -37,8 +37,9 @@ class N {
 const R = (left, top, width, height) => ({ left, top, width, height });
 const docOf = body => ({ querySelectorAll: s => body.querySelectorAll(s), defaultView: { getComputedStyle: () => ({ visibility: 'visible' }) } });
 // orbTabs and its setAttr helper, run on their own (the rest of skin-host is the shell's)
-const src = host.match(/  const setAttr = [^\n]+\n/)[0] + host.match(/  function orbTabs\(d, bar, vw\) \{[\s\S]*?\n  \}\n/)[0];
-const ctx = {}; vm.runInNewContext(src + ';globalThis.orbTabs = orbTabs;', ctx);
+const src = host.match(/  const setAttr = [^\n]+\n  const WOS_MARKS = [^\n]+\n  const WOS_MARKED = [^\n]+\n  const unmark = [^\n]+\n/)[0]
+  + host.match(/  function orbTabs\(d, bar, vw\) \{[\s\S]*?\n  \}\n/)[0] + host.match(/  function tabFit\(sides, room\) \{[\s\S]*?\n  \}\n/)[0];
+const ctx = {}; vm.runInNewContext(src + ';globalThis.orbTabs = orbTabs; globalThis.tabFit = tabFit;', ctx);
 const tabsOf = row => row.all().filter(n => n.hasAttribute('data-wos-tab')).map(n => (n.attrs['aria-label'] || '') + ':' + n.attrs['data-wos-tab']);
 
 test('a bar of four tabs (Money): the bar itself is the row, two tabs left of the orb, two right', () => {
@@ -84,7 +85,9 @@ test('the shell wiring: the CSS around the orb, gated on the orb being over the 
   assert.match(host, /'html:not\(\.wos-orb-bar\) \[data-wos-inset-bar\]\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}' \+ ORB_BAR;/);
   assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]::after\{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var\(--wos-orb-slot,80px\)!important/, 'an empty slot as wide as the orb in the middle');
   assert.match(host, /min-height:calc\(2\*var\(--wos-orb-cy,40px\)\)!important/, 'the tabs sit on the orb\'s row');
-  assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\/var\(--wos-tab-n,1\)\)!important/, 'each side gets half the rest, shared by its tabs');
+  assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\*var\(--wos-tab-f,1\)\)!important/, 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
+  assert.match(host, /html\.wos-orb-bar \[data-wos-fs\]\{white-space:nowrap!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important/, 'a label is never cut or ellipsed');
+  assert.match(host, /if \(row\) fitTabs\(d, row\);/, 'the split bar is measured and shared by its labels');
   assert.match(host, /if \(o && o\.d > 0 && cy > o\.d \/ 2 && cy < 160 && fr\.width >= vwTop \* \.9 && Math\.abs\(vwTop \/ 2 - o\.x\) < 8\) \{/, 'only a screen-wide frame with the orb centred over its bottom');
   assert.match(host, /d\.documentElement\.style\.setProperty\('--wos-orb-slot', Math\.round\(o\.d \+ 16\) \+ 'px'\);/);
   assert.match(host, /inset\(px, orb = null\) \{/, 'api.apps.inset(px, orb): the layout says where its orb is');
@@ -92,4 +95,55 @@ test('the shell wiring: the CSS around the orb, gated on the orb being over the 
   const chrome = read('web/layouts/apps/chrome.js');
   assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], shell === 'phone' \? orbSpot : null\)/, 'phone views hand over the dock orb; the desktop keeps the lift');
   assert.match(chrome, /d = o\.offsetWidth \|\| r\.width;/, 'the untransformed size: pressing the orb never reflows the bar');
+});
+
+/* Every label whole (Miguel, 2 Nov 2026: Podcasts has three tabs, two share the left side, and 'Discover' read 'Dis…').
+ * tabFit shares each side by what the tabs need instead of in equal parts, and shrinks labels only as far as needed. Label
+ * widths below are the apps' bold labels as measured on a phone (about .6 em per letter); the orb slot is the phone's
+ * (60 px orb + 16). For every phone width 360-430: each tab is at least as wide as its label (or icon) plus a little room
+ * and at least 44 px, a side's tabs fill exactly its half (never under the orb), and labels stay >= 10 px. */
+const SLOT = 76, em = (s, fs) => s.length * .6 * fs;
+const tab = (label, fs = 14) => ({ icon: 20, text: em(label, fs), word: Math.max(...label.split(' ').map(w => em(w, fs))), fs, label });
+function check(labels, fs, { wrapOk = false } = {}) {
+  for (let vw = 360; vw <= 430; vw += 10) {
+    const tabs = labels.map(l => tab(l, fs)), nl = Math.ceil(tabs.length / 2), sides = [tabs.slice(0, nl), tabs.slice(nl)], room = (vw - SLOT) / 2;
+    const fit = ctx.tabFit(sides.map(s => s.map(({ icon, text, word, fs }) => ({ icon, text, word, fs }))), room);
+    assert.ok(fit.s * fs >= 10 - 1e-9, `${vw}px: labels stay >= 10 px (${(fit.s * fs).toFixed(1)})`);
+    if (!wrapOk) assert.equal(fit.wrap, false, `${vw}px: ${labels.join(', ')} each on one line`);
+    sides.forEach((side, i) => {
+      if (!side.length) return;
+      const shares = fit.share[i], sum = shares.reduce((a, b) => a + b, 0);
+      assert.ok(Math.abs(sum - 1) < 1e-6, `${vw}px: side ${i} is filled exactly (${sum})`);
+      side.forEach((t, j) => {
+        const w = shares[j] * room, label = (fit.wrap ? t.word : t.text) * fit.s;
+        assert.ok(w >= 44 - 1e-6, `${vw}px: ${t.label} is a 44 px target (${w.toFixed(1)})`);
+        assert.ok(w >= label + 4 && w >= t.icon + 4, `${vw}px: '${t.label}' fits whole: ${label.toFixed(1)} px label in a ${w.toFixed(1)} px tab`);
+      });
+    });
+  }
+}
+
+test('three tabs (Podcasts: My feed · Discover | orb | Filters): every label whole at 360-430 px, the pair shares by need', () => {
+  check(['My feed', 'Discover', 'Filters'], 14);
+  // the old equal split gave 'Discover' (≈ 67 px at 14 px) half of the 142 px side at 360 px: 71 px with the app's
+  // 6 px padding each side = 59 px for the word, so it was cut; now its share follows its label
+  const room = (360 - SLOT) / 2, fit = ctx.tabFit([[tab('My feed'), tab('Discover')], [tab('Filters')]], room);
+  assert.ok(fit.share[0][1] > fit.share[0][0], 'the longer label gets the larger share');
+  assert.deepEqual(fit.share[1], [1], 'a single tab takes its whole side');
+});
+
+test('five tabs (two sides of 3 and 2) and the rest of 1-6: labels whole, smaller only when a side is tight', () => {
+  check(['Home', 'Search', 'Library', 'Saved', 'Settings'], 12);
+  check(['Review', 'Spending', 'Net worth', 'Accounts'], 14);   // Money
+  check(['Activity', 'Recovery & sleep'], 14, { wrapOk: true }); // Health (two words may take two lines)
+  check(['Inbox'], 14); check(['Feed', 'Saved'], 14); check(['Home', 'Search', 'Library', 'Saved', 'Profile', 'More'], 11);
+  const roomy = ctx.tabFit([[tab('Home'), tab('Feed')], [tab('Saved'), tab('More')]], (430 - SLOT) / 2);
+  assert.equal(roomy.s, 1, 'room to spare: the app\'s own label size'); assert.equal(roomy.wrap, false);
+});
+
+test('a bar of one tab: it sits left of the orb, the orb stays centred (the slot takes the empty right half)', () => {
+  const only = new N('button', { 'aria-label': 'Inbox' }, R(150, 740, 90, 44)), bar = new N('nav', {}, R(0, 735, 390, 53), [only]);
+  assert.equal(ctx.orbTabs(docOf(new N('body', {}, R(0, 0, 390, 788), [bar])), bar, 390), true);
+  assert.equal(only.attrs['data-wos-tab'], 'l'); assert.equal(bar.attrs['data-wos-nl'], '1'); assert.equal(bar.attrs['data-wos-nr'], '0');
+  assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]\[data-wos-nr="0"\]::after\{flex-basis:calc\(var\(--wos-orb-slot,80px\) \+ \(100% - var\(--wos-orb-slot,80px\)\)\/2\)!important\}/);
 });

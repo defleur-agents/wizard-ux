@@ -23,8 +23,8 @@ const noComments = s => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/
 /* ---------- a small DOM, enough for the layout ---------- */
 const parseSel = sel => sel.trim().split(/\s+/).map(part => {
   const tag = (part.match(/^[a-z]+/i) || [''])[0].toUpperCase(), cls = [...part.matchAll(/\.([\w-]+)/g)].map(m => m[1]);
-  const attrs = [...part.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)].map(m => [m[1], m[2]]);
-  return n => (!tag || n.tagName === tag) && cls.every(c => n.classList.contains(c)) && attrs.every(([k, v]) => { const a = n.getAttribute(k); return v === undefined ? a !== null : a === v; });
+  const attrs = [...part.matchAll(/\[([\w-]+)(?:="([^"]*)")?\]/g)].map(m => [m[1], m[2]]), id = (part.match(/^[a-z]*#([\w-]+)/i) || [])[1];
+  return n => (!tag || n.tagName === tag) && (!id || n.id === id) && cls.every(c => n.classList.contains(c)) && attrs.every(([k, v]) => { const a = n.getAttribute(k); return v === undefined ? a !== null : a === v; });
 });
 const matchesSel = (n, sel) => sel.split(',').some(one => {
   const parts = parseSel(one); let i = parts.length - 1;
@@ -69,7 +69,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
   const html = new El('html'), body = new El('body'), device = new El('div'), dock = new El('div'), orbWrap = new El('div');
   html.append(body); body.append(device); device.append(dock); dock.append(orbWrap);
   const docListeners = {};
-  const doc = { documentElement: html, body, createElement: t => new El(t), createElementNS: (ns, t) => new El(t, ns),
+  const doc = { documentElement: html, body, createElement: t => new El(t), createElementNS: (ns, t) => new El(t, ns), __listeners: docListeners,
     addEventListener: (t, fn) => (docListeners[t] ||= []).push(fn), removeEventListener() {}, querySelectorAll: s => html.querySelectorAll(s), querySelector: s => html.querySelector(s) };
   globalThis.document = doc; globalThis.PointerEvent = FakePointerEvent; globalThis.performance ||= { now: () => Date.now() };
   const st = { route: { ...route }, on: {}, acts: [], opened: [], gone: [], lists: [], chats: 0, newChats: 0, settings: [], backs: [], timers: [], orbDown: [], sheet: 0, swipes: null, inset: null,
@@ -85,7 +85,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
     after: (ms, fn) => { const h = { ms, fn, dead: false }; st.timers.push(h); return () => { h.dead = true; }; },
     frame: fn => { fn(0); return () => {}; },
     back: { push: fn => { st.backs.push(fn); return () => { const i = st.backs.indexOf(fn); if (i >= 0) st.backs.splice(i, 1); }; } },
-    gesture: { intent: dx => dx > 60 },
+    gesture: { intent: dx => dx > 60, claim: id => { (st.claims ||= []).push(id); return true; } },
     agents: { list: () => [{ id: 'hermes', label: 'Oscar', main: true }] },
     workspaces: { list: () => [{ id: 'this', name: 'Miguel', current: true, owner: 'Miguel Collins' }, { id: 'g1', name: 'Carlos', org: 'Acme', current: false }], refresh() {} },
     apps: { list: () => apps.map(a => ({ ...a })), badges: () => ({ wizard: 2, money: 3 }), logo: () => Promise.resolve(null), openDesk: id => st.opened.push(id), open: id => st.opened.push('open:' + id), store: () => Promise.resolve([]), inset: px => { st.inset = px; return () => { st.inset = null; }; } },
@@ -313,4 +313,51 @@ test('round 2 shapes: rounded like the native apps (measured), icon-only drawer 
   assert.ok(!/\.aa-acct|\.aa-av\b|aa-more/.test(css + read('web/layouts/ai-apps/layout.js')), 'the avatar letter, the Settings word and "N more open" are gone');
   const chrome = read('web/layouts/apps/chrome.css');
   assert.match(chrome, /max-height: 88%; border-radius: 28px 28px 0 0;/, 'the shared app sheet matches');
+});
+
+/* A swipe from the left of a chat is the drawer's alone (Miguel, 2 Nov 2026): it used to also run the thread swipe-back
+ * (core/thread-swipe-back.js, touch events on the chat), which left the chat for a New chat under the drawer. Runs the
+ * REAL swipe-back built-in beside the layout and feeds both the browser's event order: pointer, then touch; the
+ * layout's listeners are on the document (capture), the swipe-back's on the chat, so a stopped touch never gets there. */
+test('a swipe from the left of a chat opens the drawer and keeps the chat: the thread swipe-back never also runs', async () => {
+  let sbSetup = null;
+  globalThis.window = { ...(globalThis.window || {}), WosSkinHost: { builtin: (_n, fn) => { sbSetup = fn; } }, getSelection: () => '' };
+  await import(new URL('web/core/thread-swipe-back.js', root).href);
+  assert.equal(typeof sbSetup, 'function');
+  for (const x0 of [30, 60, 150, 6, 20]) {
+    const w = world({ route: { home: false, view: 'thread', thread: 't1', desk: 1, app: 'chats' } });
+    const chats = new El('div'), thread = new El('div'), msgs = new El('div');
+    thread.setAttribute('data-part', 'thread'); msgs.className = 'ch-msgs'; chats.append(thread); thread.append(msgs); w.device.append(chats);
+    (await layout()).default(w.api);
+    let backs = 0;
+    sbSetup({ part: n => (n === 'thread' ? chats : null), route: () => ({ ...w.st.route }), env: { edgeInset: 24 },
+      listen: (el, type, fn) => { el.addEventListener(type, fn); return () => {}; }, frame: fn => fn(0), on() {}, nav: { back: () => { backs++; return true; } } });
+    assert.equal(w.html.dataset.aiFront, 'chat');
+    const send = (type, x, y) => {
+      const pt = { clientX: x, clientY: y, identifier: 0 };
+      if (type.startsWith('pointer')) return w.fire(type, msgs, { pointerType: 'touch', pointerId: 31, clientX: x, clientY: y });
+      const e = { type, target: msgs, cancelable: true, touches: type === 'touchend' ? [] : [pt], changedTouches: [pt], stopped: false,
+        stopPropagation() { this.stopped = true; }, preventDefault() { this.defaultPrevented = true; } };
+      for (const fn of w.doc.__listeners?.[type] || []) fn(e);
+      if (!e.stopped) msgs.dispatchEvent(e);
+      return e;
+    };
+    const y = 400; let now = 0; const realNow = performance.now; performance.now = () => now;
+    send('pointerdown', x0, y); send('touchstart', x0, y);
+    for (let i = 1; i <= 10; i++) { now = i * 30; send('pointermove', x0 + 18 * i, y + i); send('touchmove', x0 + 18 * i, y + i); }
+    send('pointerup', x0 + 180, y + 10); send('touchend', x0 + 180, y + 10);
+    performance.now = realNow;
+    assert.equal(backs, 0, `from x=${x0}: the thread swipe-back did not run (no step back to the list, no New chat)`);
+    assert.equal(w.st.newChats, 0, `from x=${x0}: the chat stays`);
+    assert.equal(w.html.dataset.aaDrawer, 'open', `from x=${x0}: the drawer opened`);
+    assert.deepEqual(w.st.claims, [31], `from x=${x0}: the drawer claimed the finger (the dock swipe and row long-press stand down)`);
+  }
+  // still the swipe-back's own elsewhere: a vertical scroll is not the drawer's, and code keeps its sideways gesture
+  const w = world({ route: { home: false, view: 'thread', thread: 't1', desk: 1, app: 'chats' } });
+  (await layout()).default(w.api);
+  const pre = new El('pre'); w.device.append(pre);
+  const ev = (type, x, y, target) => { const pt = { clientX: x, clientY: y }; const e = { type, target, cancelable: true, touches: [pt], changedTouches: [pt], stopPropagation() { this.stopped = true; }, preventDefault() {} }; for (const fn of w.doc.__listeners?.[type] || []) fn(e); return e; };
+  ev('touchstart', 150, 400, pre); assert.equal(ev('touchmove', 250, 402, pre).stopped, undefined, 'a code block keeps its sideways scroll');
+  ev('touchstart', 150, 400, w.device); assert.equal(ev('touchmove', 152, 480, w.device).stopped, undefined, 'a vertical scroll is not the drawer\'s');
+  assert.equal(w.html.dataset.aaDrawer, undefined);
 });
