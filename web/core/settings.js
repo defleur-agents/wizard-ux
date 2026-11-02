@@ -66,6 +66,9 @@
     // Updates never appear here: the update card at the top of Settings says it once.
     if (window.WizCore.voiceStatus?.state?.ready === false) items.push({ title: 'Voice unavailable', feature: 'voice' });
     if (ctx.live?.error === 'access') items.push({ title: 'Sign-in needed', feature: 'wizard' });
+    // Whatever the notification routing part puts on the Settings cog (stock: nothing) opens Notifications.
+    const at = window.WosBell?.attention?.();
+    if (at?.n) items.push({ title: `${at.n} ${at.label}`, feature: 'notification-routing' });
     return items;
   }
   // A quiet value on the right of a row, only where it tells you something at a glance; '' otherwise.
@@ -554,15 +557,23 @@
   // The picker itself is WosBell.picker: the same one sits on every notification opened in Chats.
   const routeSeg = (r, off) => window.WosBell.picker(r.id, { name: r.name, off });
   register({ id: 'notification-routing', page: 'notifications', aliases: ['notifications', 'notification-routing'],
-    subtitle: () => { const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
-    enter: () => { window.WosBell?.discover?.(); },
+    subtitle: () => { const at = window.WosBell?.attention?.(); if (at?.n) return `${at.n} ${at.short}`; const n = (window.WosBell?.routes?.() || []).filter(r => r.chats).length; return n ? `${n} in Chats` : ''; },
+    // The routing part hears the page open and close (it may treat opening as having seen what it counts).
+    enter: () => { window.WosBell?.discover?.(); window.WosBell?.entered?.(); },
+    leave: () => { window.WosBell?.left?.(); },
     html() {
       const B = window.WosBell, list = B?.routes?.() || [], off = !B?.chatsAvailable;
       if (!B?.routes) return '';
       void B.discover?.();
-      const rows = list.map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats'}</small></span>${routeSeg(off ? { ...r, route: 'badge' } : r, off)}</div>`).join('');
+      // Every word below comes from the routing part (WosBell.describe / intro / groups); stock = Badge | Chats.
+      const row = r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${esc(B.describe ? B.describe(r, off) : '')}</small></span>${routeSeg(r, off)}</div>`;
+      const rows = list.map(row).join('');
+      const ago = t => { const m = Math.max(0, Math.round((Date.now() / 1000 - t) / 60)); return m < 60 ? `${m || 1}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
+      const listHtml = (l, key) => l?.items.length ? `<h4>${esc(l.title)}</h4><ul class="st-${key}-list">${l.items.map(i => `<li class="${i.fresh ? 'new' : ''}${i.needs ? ' needs' : ''}"><span class="st-tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span><time>${esc(ago(i.time))}</time></li>`).join('')}</ul>` : '';
+      const more = (B.groups?.() || []).filter(g => g.rows.length).map(g => `<div class="st-group st-${g.key}"><h4>${esc(g.title)}</h4>${g.hint ? `<p class="st-hint">${esc(g.hint)}</p>` : ''}${g.rows.map(row).join('')}${listHtml(g.list, g.key)}</div>`).join('');
+      const intro = B.intro?.(), lead = intro ? intro.lead.map(([t, b]) => b ? `<b>${esc(t)}</b>` : esc(t)).join('') : '';
       const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. Turn on Notifications in Chats to choose Chats:</p>${settingRow('wizard/unified-inbox')}` : '';
-      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a <b>Badge</b> on its icon, or a thread in <b>Chats</b> that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. Saved on this device.</p></div>`;
+      return `<div class="st-group"><p class="st-hint">${lead}</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">${esc(intro?.foot || '')}</p></div>${more}`;
     },
     act(ctx, el) {
       const b = el.closest('[data-notify-route]');
@@ -716,8 +727,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.

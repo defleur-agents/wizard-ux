@@ -20,7 +20,8 @@
     "miguel/apps-home",
     "miguel/ai-apps",
     "miguel/archive-top",
-    "miguel/group-by-day"
+    "miguel/group-by-day",
+    "miguel/notification-levels"
   ],
   "defaults": [
     "wizard/unified-inbox"

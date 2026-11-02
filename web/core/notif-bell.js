@@ -9,7 +9,11 @@
  * its items wait in Chats (yellow threads with Archive / Snooze, counted in Chats' Ready badge) and its own icon
  * shows no count. Default: Notifications (agent alerts) → Chats, every other app → Badge. Chats needs a package that
  * lists inbox threads (wizard/unified-inbox, on by default); without one everything is a badge. Saved per device
- * (`wos.notify.route.v1`); the same choice on every device would need a ui-preferences field in the Agent Service. */
+ * (`wos.notify.route.v1`); the same choice on every device would need a ui-preferences field in the Agent Service.
+ *
+ * Where things go is one replaceable part, `notify-routing` (version 1): the stock part below is the
+ * Badge | Chats choice. A trusted tweak (skin-host `notify` capability) may replace it whole, e.g. to add more
+ * choices or more sources carried by Notifications; core only renders what the part answers and never names a tweak. */
 (() => {
   'use strict';
   const S = { unread: 0, needs: 0, ok: false, at: 0 };
@@ -24,42 +28,109 @@
   const ROUTE_KEY = 'wos.notify.route.v1', ROUTE_DEFAULT = Object.freeze({ notifications: 'chats' });
   const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/;
   let ROUTES = readJson(ROUTE_KEY, {});
-  const route = id => { id = String(id || ''); const r = Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : ROUTE_DEFAULT[id]; return r === 'chats' ? 'chats' : 'badge'; };
+  /* The stock `notify-routing` part: Badge | Chats. Every method is pure data; core escapes and renders it. */
+  const STOCK = Object.freeze({
+    route: (id, stored) => { const r = stored !== undefined ? stored : ROUTE_DEFAULT[id]; return r === 'chats' ? 'chats' : 'badge'; },
+    accepts: (id, to) => APPID.test(id) && ['badge', 'chats'].includes(to),
+    choices: () => [{ to: 'badge', label: 'Badge' }, { to: 'chats', label: 'Chats' }],
+    quiet: () => false,          // true = no badge and nothing in Chats (kept in Notifications' own history)
+    carried: () => false,        // true = a source Notifications carries besides its own alerts (lives in its list)
+    sourceOf: () => 'notifications',  // which source a Notifications item routes as
+    name: () => '',
+    describe: (r, off) => r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats',
+    ask: (id, name) => `${name} notifications go to`,
+    moved: (id, now, from, name) => { const back = now === 'badge' ? 'chats' : 'badge'; return { back, text: `${name} moved to ${back === 'chats' ? 'badges' : 'Chats'} · ` }; },
+    intro: () => ({ lead: [['Each app tells you in one place: a '], ['Badge', true], [' on its icon, or a thread in '], ['Chats', true], [' that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.']], foot: 'Apps not listed here only show badges. Saved on this device.' }),
+    groups: () => [],            // more Settings groups: [{ key, title, hint, rows: [source ids], list?: { title, items } }]
+    attention: () => null,       // { n, label, short }: a count on the Settings cog and a row in Settings
+    readsAll: () => false,       // read Notifications' whole list even while it is not routed to Chats
+  });
+  const PART = { version: 1, live: null };
+  // The part as core calls it: the replacement while one is live, stock when it has no such method or it throws.
+  // Hooks only a replacement has (stock: nothing): notes(items), picked(id, to), tick(force), entered(), left(), attach(host).
+  const P = new Proxy({}, { get: (_, k) => (...args) => {
+    const live = PART.live?.impl;
+    if (live && typeof live[k] === 'function') { try { return live[k](...args); } catch (e) {} }
+    return typeof STOCK[k] === 'function' ? STOCK[k](...args) : undefined;
+  } });
+  const own = id => Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : undefined;
+  const route = id => { id = String(id || ''); return P.route(id, own(id)); };
   const chatsReady = () => !!window.WosSkinHost?.inboxList;
   // Effective: Chats only when Chats can list it (a package holds the inbox list) and, for an app, it has a feed.
   // Chats itself ('wizard') is the inbox and always keeps its own badge.
   function inChats(id) {
     id = String(id || '');
     if (!id || id === 'wizard' || route(id) !== 'chats' || !chatsReady()) return false;
-    return id === 'notifications' ? installed() : known()[id]?.s === 'yes';
+    return id === 'notifications' || P.carried(id) ? installed() : known()[id]?.s === 'yes';
   }
+  // Quiet (a part's Off, say): no badge anywhere and nothing in Chats. Never true for the stock part.
+  const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && P.quiet(id, route(id)) === true; };
+  // The source that decides one item: its app, else what the part says (stock: Notifications').
+  const routeIdOf = it => it?.app ? String(it.app) : String(P.sourceOf(it) || 'notifications');
   function setRoute(id, to) {
-    id = String(id || ''); if (!APPID.test(id) || id === 'wizard' || !['badge', 'chats'].includes(to)) return false;
+    id = String(id || ''); if (id === 'wizard' || P.accepts(id, to) !== true) return false;
     if (route(id) === to) return true;
     ROUTES = { ...ROUTES, [id]: to }; writeJson(ROUTE_KEY, ROUTES);
+    P.picked(id, to);
     rerouted(); loadItems();
     return true;
   }
   // Something changed what goes where: drop items that no longer belong in Chats at once, recount every badge.
   function rerouted() {
-    const keep = IN.items.filter(i => i.app ? inChats(i.app) : inChats('notifications'));
+    const keep = IN.items.filter(i => inChats(routeIdOf(i)));
     if (keep.length !== IN.items.length) { IN.items = Object.freeze(keep); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } }
     window.WizCore?.workspaceNav?.rerouted?.();
     paint();
     window.dispatchEvent(new CustomEvent('wizard:notify-route'));
-    inboxChanged();
+    inboxChanged(); attentionChanged();
   }
+  // What the part puts on the Settings cog; `wizard:notify-attention` fires when it changes.
+  let ATT = '';
+  function attention() {
+    const a = P.attention(); const n = Math.max(0, Math.min(999, Number(a?.n) | 0));
+    return n ? Object.freeze({ n, label: String(a.label || 'new').slice(0, 40), short: String(a.short || 'new').slice(0, 20) }) : null;
+  }
+  function attentionChanged() {
+    const a = attention(), k = a ? JSON.stringify(a) : '';
+    if (k !== ATT) { ATT = k; window.dispatchEvent(new CustomEvent('wizard:notify-attention', { detail: a })); }
+  }
+  /* Replace the part (skin-host `notify` capability). Returns a remover, or a reason: 'version' | 'methods' | 'taken'. */
+  const REQUIRED = ['route', 'accepts', 'choices', 'quiet', 'carried', 'sourceOf'];
+  function replaceRouting(impl, { owner = 'tweak', version } = {}) {
+    if (version !== PART.version) return 'version';
+    if (!impl || REQUIRED.some(m => typeof impl[m] !== 'function')) return 'methods';
+    if (PART.live && PART.live.owner !== owner) return 'taken';
+    const live = { impl, owner }; PART.live = live;
+    try { impl.attach?.(HOST); } catch (e) {}
+    rerouted(); loadItems();
+    return () => { if (PART.live !== live) return; PART.live = null; rerouted(); loadItems(); };
+  }
+  // What a replacement may do back: read this device's saved choices, take the box's, ask for a recount, mark items.
+  const HOST = Object.freeze({
+    stored: () => ({ ...ROUTES }),
+    adopt(next) {
+      if (!next || typeof next !== 'object' || Array.isArray(next)) return false;
+      const clean = {}; for (const [k, v] of Object.entries(next).slice(0, 200)) if (typeof v === 'string' && k.length <= 80 && v.length <= 20) clean[k] = v;
+      if (JSON.stringify(clean) === JSON.stringify(ROUTES)) return false;
+      ROUTES = clean; writeJson(ROUTE_KEY, ROUTES); rerouted(); loadItems(); return true;
+    },
+    route: id => route(id),
+    installed: () => installed(),
+    changed: () => { paint(); attentionChanged(); window.dispatchEvent(new CustomEvent('wizard:notify-route')); },
+    mark: (ids, marks) => mark(ids, marks),
+  });
 
   function html() {
     if (!installed()) return '';
-    // Routed to Chats (or its window is open): the count already shows in one place, so no bell.
-    if (inChats('notifications') || (typeof window.WizAppOpen === 'function' && window.WizAppOpen('notifications'))) return '<button type="button" class="ch-bell" data-chbell hidden aria-hidden="true" tabindex="-1"></button>';
+    // Routed to Chats (or its window is open): the count already shows in one place, so no bell. Quiet: nowhere.
+    if (inChats('notifications') || isOff('notifications') || (typeof window.WizAppOpen === 'function' && window.WizAppOpen('notifications'))) return '<button type="button" class="ch-bell" data-chbell hidden aria-hidden="true" tabindex="-1"></button>';
     const n = S.unread, lbl = n ? `Notifications, ${n} unread` : 'Notifications';
     return `<button type="button" class="ch-bell${S.needs ? ' needs' : ''}" data-chbell aria-label="${lbl}">${BELL}${n ? `<b>${n > 99 ? '99+' : n}</b>` : ''}</button>`;
   }
   function paint() {
-    // The raw count; workspace-navigation shows it as a badge only while Notifications is set to Badge.
-    window.WizCore?.workspaceNav?.setCount('notifications', S.unread);
+    // The raw count; workspace-navigation shows it as a badge only while Notifications is set to Badge. Items the part
+    // routes as another source (none for the stock part) count there instead, never here.
+    window.WizCore?.workspaceNav?.setCount('notifications', Math.max(0, S.unread - away()));
     for (const b of document.querySelectorAll('[data-chbell]')) {
       const h = html(); if (!h) { b.remove(); continue; }
       const t = document.createElement('div'); t.innerHTML = h; const nb = t.firstElementChild;
@@ -70,10 +141,18 @@
    * while something watches, on the bell's own cadence. Text stays data; the tweak renders it with textContent.
    * Only what is routed to Chats is listed: Notifications' items, and the items of apps set to Chats. */
   const IN = { items: [], subs: new Set(), seq: 0 };
+  // Notifications' own list as last read (every item, not only what Chats lists), for the part's other sources.
+  const NOTES = { all: [] };
+  const away = () => NOTES.all.reduce((n, i) => n + (!i.read && !i.archived && routeIdOf(i) !== 'notifications' ? 1 : 0), 0);
+  function gotNotes(items) {
+    NOTES.all = Object.freeze(items.filter(i => i && i.id).map(cleanItem));
+    P.notes(NOTES.all); paint(); attentionChanged();
+  }
   const str = (v, n) => String(v == null ? '' : v).slice(0, n);
   // The editor's short message is a preview, not the source. Keep the complete original separately, including
   // paragraphs and long diagnostic output. Legacy items without editor details use their complete body.
   const cleanItem = i => Object.freeze({ id: str(i.id, 128), title: str(i.title, 300), message: str(i.message, 8000), details: String(i.details || i.message || ''), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000), read: !!i.read, archived: !!i.archived,
+    ...(Array.isArray(i.tags) ? { tags: Object.freeze(i.tags.slice(0, 8).map(t => str(t, 40))) } : {}),
     ...(i.app ? { app: str(i.app, 64), appName: str(i.appName, 80), key: str(i.key, 200), open: str(i.open, 500) } : {}) });
 
   /* App inbox feeds (Wizard OS inbox feed v1): an installed app that serves GET /<app>/api/inbox → { inbox: 1, items }
@@ -157,18 +236,26 @@
     if (out.length) await loadMarks();
     return withMarks(out.filter(it => inChats(it.app)));
   }
+  const readNotes = () => fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => null);
   async function loadItems() {
-    if (!IN.subs.size) return;
+    if (!IN.subs.size) {
+      // Nothing lists them, but the part reads the whole list for its own sources (never the stock part).
+      if (installed() && P.readsAll() === true) { const d = await readNotes().catch(() => null); if (d && Array.isArray(d.items)) gotNotes(d.items); }
+      return;
+    }
     const seq = ++IN.seq;
     try {
-      const wantNotes = installed() && route('notifications') === 'chats';
+      const all = P.readsAll() === true, wantNotes = installed() && (all || route('notifications') === 'chats');
       const [notes, apps] = await Promise.all([
-        wantNotes ? fetch('/notifications/api/items?view=all&limit=200', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null, () => null) : null,
+        wantNotes ? readNotes() : null,
         loadFeeds().catch(() => []),
       ]);
       if (seq !== IN.seq) return;
-      // A failed Notifications read keeps its last items; Notifications set to Badge lists none.
-      const base = !wantNotes ? [] : notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app);
+      if (wantNotes && notes && Array.isArray(notes.items)) gotNotes(notes.items);
+      // A failed Notifications read keeps its last items; Notifications set to Badge lists none. With the whole list
+      // read, only what routes to Chats is listed there.
+      const got = notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app);
+      const base = !wantNotes ? [] : !all ? got : got.filter(i => i && (routeIdOf(i) === 'notifications' ? route('notifications') === 'chats' : inChats(routeIdOf(i))));
       const before = JSON.stringify(IN.items);
       IN.items = Object.freeze([...base, ...apps].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
       for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
@@ -209,6 +296,7 @@
   // An owner action (mark) forces a read; one landing during an in-flight read reruns once right after it.
   let inflight = false, nextAt = 0, again = false;
   async function refresh(force) {
+    P.tick(force === true);
     if (!installed()) { if (IN.subs.size && (force === true || Date.now() >= nextAt)) { nextAt = Date.now() + 10000; loadItems(); } return; }
     if (inflight) { if (force === true) again = true; return; }
     if (force !== true && Date.now() < nextAt) return;
@@ -241,7 +329,7 @@
   addEventListener('storage', e => { if (e && e.key === ROUTE_KEY) { ROUTES = readJson(ROUTE_KEY, {}); rerouted(); loadItems(); } });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
-  const nameOf = id => { const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
+  const nameOf = id => { const own = P.name(id); if (own) return String(own); const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
   /* The list Settings › Notifications shows: Notifications (when installed), then every app with a feed, by name. */
   function routes() {
     const out = [];
@@ -258,15 +346,25 @@
     chats: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5z"/></svg>',
   };
   const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  // A part's own icon: an optional circle and one path on its own grid (data only; no markup crosses).
+  const num = v => Number.isFinite(+v) && +v >= 0 && +v <= 1024 ? String(+v) : null;
+  const partIcon = ic => {
+    if (!ic || !/^[0-9 .]{3,40}$/.test(String(ic.viewBox || '')) || !/^[MmLlHhVvCcSsQqTtAaZz0-9 ,.\-]{1,4000}$/.test(String(ic.d || ''))) return '';
+    const c = Array.isArray(ic.circle) && ic.circle.length === 3 && ic.circle.every(num) ? `<circle cx="${num(ic.circle[0])}" cy="${num(ic.circle[1])}" r="${num(ic.circle[2])}"/>` : '';
+    return `<svg class="wos-route-ic${/^[a-z0-9-]{1,30}$/.test(String(ic.cls || '')) ? ' ' + ic.cls : ''}" viewBox="${ic.viewBox}" aria-hidden="true">${c}<path d="${ic.d}"/></svg>`;
+  };
+  const TOID = /^[a-z][a-z0-9-]{0,19}$/;
   function picker(id, { name, off = false } = {}) {
-    id = String(id || ''); const nm = name || nameOf(id), cur = off ? 'badge' : route(id);
-    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['badge', 'Badge'], ['chats', 'Chats']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
+    id = String(id || ''); const nm = name || nameOf(id), now = route(id), cur = off && now === 'chats' ? 'badge' : now;
+    const got = P.choices(id, nm), list = (Array.isArray(got) ? got : STOCK.choices()).filter(c => c && TOID.test(String(c.to))).slice(0, 6);
+    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${list.map(c => { const to = String(c.to); return `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${(to === 'chats' && off) || c.disabled === true ? ' disabled' : ''}${c.title ? ` title="${escH(String(c.title).slice(0, 200))}"` : ''}>${ROUTE_ICON[to] && !c.icon ? ROUTE_ICON[to] : partIcon(c.icon)}<span>${escH(String(c.label || to).slice(0, 40))}</span></button>`; }).join('')}</div>`;
   }
   /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
    * Undo, which puts the app back on Chats. `toast` is the shell's toast(icon, text, ms); the button is added here. */
-  function movedToast(id, toast, ms = 5000) {
-    id = String(id || ''); const back = route(id) === 'badge' ? 'chats' : 'badge';
-    const text = `${nameOf(id)} moved to ${back === 'chats' ? 'badges' : 'Chats'} · `;
+  function movedToast(id, toast, ms = 5000, from) {
+    id = String(id || ''); let m = P.moved(id, route(id), from, nameOf(id));
+    if (!m || typeof m.text !== 'string' || !P.accepts(id, m.back)) m = STOCK.moved(id, route(id), from, nameOf(id));
+    const back = m.back, text = m.text.slice(0, 200);
     try { toast?.('●', '', ms); } catch (e) {}
     const t = document.getElementById?.('toast'); if (!t) return null;
     const spans = t.querySelectorAll('span'); const tx = spans[spans.length - 1];
@@ -276,5 +374,25 @@
     t.append(b);
     return b;
   }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, routes, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  /* Settings › Notifications reads these from the part (stock: the Badge | Chats wording, no extra groups). */
+  const text = (v, n) => String(v == null ? '' : v).slice(0, n);
+  const describe = (r, off) => text(P.describe(r, off) ?? STOCK.describe(r, off), 120);
+  const ask = (id, name) => text(P.ask(id, name) || STOCK.ask(id, name), 120);
+  function intro() {
+    const i = P.intro(); const ok = i && Array.isArray(i.lead) && i.lead.every(x => Array.isArray(x) && typeof x[0] === 'string');
+    const v = ok ? i : STOCK.intro();
+    return Object.freeze({ lead: v.lead.slice(0, 16).map(([t, b]) => Object.freeze([text(t, 300), b === true])), foot: text(v.foot, 300) });
+  }
+  function groups() {
+    const g = P.groups(); if (!Array.isArray(g)) return [];
+    return g.slice(0, 4).filter(x => x && typeof x.title === 'string').map(x => Object.freeze({
+      title: text(x.title, 60), hint: text(x.hint, 300), key: /^[a-z][a-z0-9-]{0,19}$/.test(String(x.key || '')) ? x.key : 'more',
+      rows: (Array.isArray(x.rows) ? x.rows : []).map(String).filter(id => /^[a-z0-9][a-z0-9:-]{0,80}$/.test(id)).slice(0, 12).map(id => Object.freeze({ id, name: nameOf(id), route: route(id), chats: inChats(id) })),
+      list: x.list && Array.isArray(x.list.items) ? Object.freeze({ title: text(x.list.title, 60), items: x.list.items.slice(0, 20).map(i => Object.freeze({ title: text(i?.title, 300), text: text(i?.text, 160), time: Number(i?.time) || 0, fresh: i?.fresh === true, needs: i?.needs === true })) }) : null,
+    }));
+  }
+  const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, routes, discover, picker, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+    entered: () => { P.entered(); }, left: () => { P.left(); },
+    get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
