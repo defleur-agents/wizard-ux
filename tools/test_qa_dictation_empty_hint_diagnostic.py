@@ -5,12 +5,37 @@ import hashlib
 from pathlib import Path
 import tempfile
 import json
+import re
 import unittest
 import qa_dictation_empty_hint_diagnostic as diag
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST = ROOT/'android/app/src/androidTest/java/ai/wizards/os/everywhere/DictationInsertionE2eTest.java'
 FIXTURE = ROOT/'android/app/src/debug/java/ai/wizards/os/everywhere/DictationEditorFixture.java'
+
+
+def original_assertions(text):
+    """Project only the explicit five additions and strengthened clipboard assertion.
+
+    Keep the original 27-case hash frozen, rather than hashing the evolving tail
+    or blessing a new hash. All original assertion bytes must still be present.
+    """
+    from qa_dictation_empty_hint_acceptance import EXTRA
+    chunks = re.split(r'(?=    @Test public void )', text[text.index('@Test public void '):])
+    matches = [re.search(r'@Test public void (\w+)\(', part) for part in chunks]
+    if not all(matches): raise ValueError('test-method boundary differs')
+    methods = [match.group(1) for match in matches if match is not None]
+    if len(methods) != 32 or len(set(methods)) != 32 or not EXTRA.issubset(methods):
+        raise ValueError('current 32-case census differs')
+    tail = ''.join(part for name, part in zip(methods, chunks) if name not in EXTRA)
+    added = ('        final String[] clip = {null};\n'
+             '        onMain(() -> clip[0] = context.getSystemService(ClipboardManager.class).getPrimaryClip().getItemAt(0).getText().toString());\n'
+             '        assertEquals("saved clipboard",clip[0]);\n')
+    start = tail.index('@Test public void hintIsNotExistingTextAndSentenceCapitalizationSurvives')
+    end = tail.index('    @Test public void ', start + 1)
+    body = tail[start:end]
+    if body.count(added) != 1: raise ValueError('strengthened hint clipboard assertion differs')
+    return tail[:start] + body.replace(added, '', 1) + tail[end:]
 
 
 def sample():
@@ -64,10 +89,21 @@ class DiagnosticTests(unittest.TestCase):
             with self.assertRaises(AssertionError):diag.observations(p,f)
 
     def test_original_27_assertion_bodies_are_byte_exact(self):
-        text=TEST.read_text();tail=text[text.index('@Test public void '):]
+        tail=original_assertions(TEST.read_text())
         self.assertEqual(hashlib.sha256(tail.encode()).hexdigest(),
                          '84dc90484b424b5233ca38b6bd2945e6c671042f348e580aca3094ad6a6631bf')
         self.assertEqual(tail.count('@Test public void '),27)
+
+    def test_projection_never_hides_original_or_new_assertion_drift(self):
+        text=TEST.read_text()
+        with self.assertRaises(ValueError):
+            original_assertions(text.replace('emptyHintLatePasteRetainsTakeWithoutSecondWrite', 'unreviewedReplacement'))
+        with self.assertRaises(ValueError):
+            original_assertions(text.replace('assertEquals("saved clipboard",clip[0]);', 'assertEquals("changed",clip[0]);'))
+        changed=original_assertions(text.replace('terminal(true); inserted("Hello world ",0,1);',
+                                                'terminal(false); inserted("Hello world ",0,1);', 1))
+        self.assertNotEqual(hashlib.sha256(changed.encode()).hexdigest(),
+                            '84dc90484b424b5233ca38b6bd2945e6c671042f348e580aca3094ad6a6631bf')
 
     def test_selected_methods_have_one_original_editor(self):
         contract=diag.editor_contract(ROOT,diag.METHODS)

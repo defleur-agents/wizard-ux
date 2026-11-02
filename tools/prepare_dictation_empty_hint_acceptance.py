@@ -9,6 +9,7 @@ import shlex
 import subprocess
 
 import qa_dictation_empty_hint_acceptance as qa
+from qa_orb_phone_packet import signing_paths
 
 ROOT=Path(__file__).resolve().parents[1]
 OS_SIGNER='3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
@@ -17,7 +18,8 @@ OS_SIGNER='3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
 def git(*args):return subprocess.check_output(['git',*args],cwd=ROOT,text=True).strip()
 
 
-def prepare(output, review, review_prompt, reviewed_revision):
+def prepare(output, review, review_prompt, reviewed_revision, owner_config=None, signing_env=None):
+    owner_config, signing_env = signing_paths(owner_config, signing_env)
     if git('status','--porcelain'):raise RuntimeError('commit and push before freezing')
     revision=git('rev-parse','HEAD')
     if git('ls-remote','origin','refs/heads/'+git('branch','--show-current')).split()[0]!=revision:
@@ -55,8 +57,8 @@ def prepare(output, review, review_prompt, reviewed_revision):
     if json.loads(readback)!=spec:raise ValueError('native spec read-back differs')
     qa.write(output/'parent-only-acceptance-spec.json',spec)
     subprocess.run(['android-build-forum','--prepare-only','--project',str(ROOT),'--gradle-dir','android',
-                    '--owner-config','/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties',
-                    '--signing-env','/home/james/.wizard-secure/wizard-os/signing.env','--expected-signer',OS_SIGNER,
+                    '--owner-config',owner_config,
+                    '--signing-env',signing_env,'--expected-signer',OS_SIGNER,
                     '--output',str(output/'owner-release'),'--',':app:assembleRelease'],check=True)
     release=json.loads((output/'owner-release/job.json').read_text())
     if release['source_revision']!=revision:raise ValueError('release source revision differs')
@@ -68,8 +70,8 @@ def prepare(output, review, review_prompt, reviewed_revision):
     remote_release=json.loads(subprocess.check_output(['ssh','forum',shlex.join(['/usr/bin/python3','-c',program,release['job']])],text=True))
     config=remote_release['config']
     if (not remote_release['unexecuted'] or config['revision']!=revision or config['tasks']!=[':app:assembleRelease']
-            or config['owner_config']!='/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties'
-            or config['signing_env']!='/home/james/.wizard-secure/wizard-os/signing.env'
+            or config['owner_config']!=owner_config
+            or config['signing_env']!=signing_env
             or config['expected_signer']!=OS_SIGNER or config['manifest_sha256']!=debug['source_manifest_sha256']):
         raise ValueError('exact owner-configured OS-signer release metadata differs')
     qa.write(output/'release-inputs-readback.json',remote_release)
@@ -82,5 +84,9 @@ def prepare(output, review, review_prompt, reviewed_revision):
 if __name__=='__main__':
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--review',type=Path,required=True);p.add_argument('--review-prompt',type=Path,required=True)
-    p.add_argument('--reviewed-revision',required=True);a=p.parse_args()
-    prepare(a.output.resolve(),a.review.resolve(),a.review_prompt.resolve(),a.reviewed_revision)
+    p.add_argument('--reviewed-revision',required=True)
+    p.add_argument('--owner-config',help='absolute owner properties path on the worker; or WIZARD_OWNER_CONFIG')
+    p.add_argument('--signing-env',help='absolute signing environment path on the worker; or WIZARD_OS_SIGNING_ENV')
+    a=p.parse_args()
+    prepare(a.output.resolve(),a.review.resolve(),a.review_prompt.resolve(),a.reviewed_revision,
+            a.owner_config,a.signing_env)

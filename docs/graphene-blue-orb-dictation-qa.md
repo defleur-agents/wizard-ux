@@ -2,6 +2,15 @@
 
 Reuse: **EXTEND** `WizardKeyboardService`, `EverywhereService.onDictated`, `EverywhereOutbox` and `CaptureJournal`; **REUSE** existing cleanup, capitalization, clipboard ownership and custody policy. No new recorder, STT route, private data source, UI skin or delivery adapter.
 
+Latest accepted Android tree: `a2369ace7fe2c79255fac1f3607a7ea03dd96f45`, shared by
+signed `6ffb1b98` and validated `4923ed0d`: 417 unit tests, 80 controller tests,
+32 candidate native PASS, two baseline PASS and two exact expected rejected
+failures. The 23-case description below is the earlier protocol, expanded to 27
+ownership cases and then five empty-hint regressions without weakening original
+assertions. See [the diagnostic chronology](dictation-empty-hint-diagnostic.md).
+Offline upgrade acceptance is separate from this full native gate; neither
+alone authorizes publishing or claims physical Graphene acceptance.
+
 ## What this revision fixes
 
 The rejected candidate stopped after an unverifiable input-connection commit, even when native paste would work. Its changed-plus-contains check could claim success for punctuation/case/substring changes, and its node-dependent readback disabled a working surrounding-text connection when no readable editable node existed. These are source-confirmed problems, not a diagnosis of James's handset.
@@ -59,6 +68,6 @@ Only the lightweight Python protocol-controller tests run at preparation time. T
 The old mixed debug/release artifact audit failed because the worker applied the OS release pin to the first debug artifact. Preserve that historical receipt; do not relabel it as this revision's result.
 
 1. Candidate full unit/lint/debug/test APK and both source controls: **no signing environment and no expected release signer**.
-2. Separate release-only worker: `:app:assembleRelease`, `/home/james/.wizard-secure/wizard-os/signing.env`, exact OS pin `3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd`. No default/debug task or artifact may enter this job.
+2. Separate release-only worker: `:app:assembleRelease`, explicit absolute worker paths in `WIZARD_OS_SIGNING_ENV` and `WIZARD_OWNER_CONFIG` (or preparation flags `--signing-env` / `--owner-config`), exact OS pin `3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd`. Paths are metadata only; controllers never read the credential files. Missing/relative paths fail before preparation. No default/debug task or artifact may enter this job.
 
 Parent owns heavy admission, independent exact-head review, native result evaluation, any further owner/Graphene QA and release decision. Keep candidate version 88 unpublished until those gates pass.

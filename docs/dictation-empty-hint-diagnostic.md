@@ -1,5 +1,29 @@
 # Empty hint fields: diagnostic gate before a product decision
 
+## Historical protocol; later outcome
+
+The sections below preserve the pre-fix diagnostic plan, not the state of the
+current branch. The executed diagnostic receipt at source `bc9e87ef` has SHA-256
+`78f90cdafb8403bdef2a907cc16874a12b5dfa3590993ed910189e64651be3df`:
+both failing empty-hint methods observed a real 0/0 caret but a focused, editable,
+hint-bearing node with -1/-1 selection and an invalid snapshot, no Wizard clip,
+and exactly one IC dispatch. The nonempty control passed through paste.
+`qa_dictation_empty_hint_acceptance.diagnostic_closure` checks these observations
+and every raw evidence hash; it does not relabel diagnostic failures as success.
+
+Only after that observation, `35ba3d29` normalized the narrowly defined empty,
+hint-bearing, fully unknown node selection; generic unknown selections still
+fail closed. Five additional cases and a strengthened saved-clipboard assertion
+extend, rather than replace, the original 27 assertions. Full acceptance at
+`4923ed0d` subsequently passed: 417 unit tests, 80 controller tests, 32 candidate
+native cases, two baseline controls and two expected-failure rejected controls.
+The old empty-hint and substring failures are retained and now pass. The complete
+Android tree is `a2369ace7fe2c79255fac1f3607a7ea03dd96f45`, identical to the signed
+`6ffb1b98` product. This is synthetic API35 evidence, not physical Graphene proof
+or release authorization. No private owner data was used.
+
+## Preserved pre-fix plan
+
 REUSE `WizardKeyboardService` / `DictationCommit` unchanged at c07c16af;
 EXTEND the debug synthetic editor and test-only observation; REUSE the controller
 files verbatim from isolated QA 772c1424 (including fresh processes and

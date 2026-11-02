@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 HERE = Path(__file__).parent
@@ -15,6 +16,26 @@ native = importlib.util.module_from_spec(spec2); spec2.loader.exec_module(native
 
 
 class PacketTests(unittest.TestCase):
+    def test_signing_paths_are_explicit_remote_metadata(self):
+        with patch.dict(packet.os.environ, {}, clear=True):
+            with self.assertRaises(ValueError): packet.signing_paths()
+            for owner, signing in [('relative', '/secure/signing'), ('/secure/owner', '~/signing')]:
+                with self.assertRaises(ValueError): packet.signing_paths(owner, signing)
+            # These deliberately nonexistent remote paths must not be opened locally.
+            self.assertEqual(('/worker/owner', '/worker/signing'),
+                             packet.signing_paths('/worker/owner', '/worker/signing'))
+        with patch.dict(packet.os.environ, {'WIZARD_OWNER_CONFIG':'/worker/owner',
+                                           'WIZARD_OS_SIGNING_ENV':'/worker/signing'}, clear=True):
+            self.assertEqual(('/worker/owner', '/worker/signing'), packet.signing_paths())
+            self.assertEqual(('/explicit/owner', '/explicit/signing'),
+                             packet.signing_paths('/explicit/owner', '/explicit/signing'))
+
+    def test_preparation_resolves_paths_before_any_remote_or_git_action(self):
+        import prepare_dictation_empty_hint_acceptance as preparation
+        with patch.dict(packet.os.environ, {}, clear=True), patch.object(preparation, 'git') as git:
+            with self.assertRaises(ValueError): preparation.prepare(None, None, None, 'unused')
+            git.assert_not_called()
+
     def test_scopes(self):
         self.assertEqual(packet.SIGNED_TASKS, [':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRelease'])
         self.assertEqual(packet.DEBUG_TASKS, [':app:assembleDebug'])

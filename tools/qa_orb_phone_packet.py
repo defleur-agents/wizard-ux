@@ -25,6 +25,17 @@ SIGNED_TASKS = [':app:assembleRelease', ':app:testReleaseUnitTest', ':app:lintRe
 DEBUG_TASKS = [':app:assembleDebug']
 
 
+def signing_paths(owner_config=None, signing_env=None) -> tuple[str, str]:
+    """Explicit remote worker paths only; never read the credential files here."""
+    owner_config = owner_config or os.environ.get('WIZARD_OWNER_CONFIG')
+    signing_env = signing_env or os.environ.get('WIZARD_OS_SIGNING_ENV')
+    if not all(isinstance(p, str) and p and Path(p).is_absolute()
+               for p in (owner_config, signing_env)):
+        raise ValueError('absolute worker owner-config and signing-env paths are required')
+    assert isinstance(owner_config, str) and isinstance(signing_env, str)
+    return owner_config, signing_env
+
+
 def sha(p):
     with Path(p).open('rb') as f:
         return hashlib.file_digest(f, 'sha256').hexdigest()
@@ -40,8 +51,9 @@ def verify_job(root, entry, signed):
     assert cfg['host'] == 'forum' and cfg['java'] == '21' and not cfg['cap_sync']
     assert cfg['tasks'] == (SIGNED_TASKS if signed else DEBUG_TASKS)
     assert cfg['expected_signer'] == (SIGNER if signed else None)
-    assert cfg['signing_env'] == ('/home/james/.wizard-secure/wizard-os/signing.env' if signed else None)
-    assert cfg['owner_config'] == ('/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties' if signed else None)
+    owner_config, signing_env = signing_paths() if signed else (None, None)
+    assert cfg['signing_env'] == signing_env
+    assert cfg['owner_config'] == owner_config
     assert cfg['revision'] == entry['revision'] and cfg['manifest_sha256'] == entry['manifest_sha256']
     members = {}
     with tarfile.open(root / 'source.tar.gz') as tar:
