@@ -33,6 +33,8 @@
     return (desk.wins || []).some(id => { const a = wins[id] && appOf(wins[id]); return !!(a && more.has(a.id) && counts[a.id] > 0); });
   }
   const fmt = (n, plus) => n > 99 ? '99+' : plus ? n + '+' : String(n);
+  // One app's badge as shown: '' when none, '50+' when the app lists only its newest items.
+  const label = id => { const n = counts[id] || 0; return n > 0 ? fmt(n, more.has(id)) : ''; };
   function icon(desk, wins, appOf) {
     const S = window.WizSigil;
     if (!S) return '';
@@ -49,5 +51,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, rerouted, deskCount, deskMore, fmt, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, rerouted, deskCount, deskMore, fmt, label, counts });
 })();
