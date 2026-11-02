@@ -232,11 +232,11 @@ test('Pinned home-screen apps keep the floating orb', async () => {
   }
  });
 
-// Miguel's release (25 Oct 2026): hold = arrange (drag to reorder, ✕ to close), never the copy-link sheet. A small
-// download button beside ✕ (one-app desks only) opens the same Add to home screen flow.
-test('Arrange/download tweak: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
+// Overview arrange mode (a package holds api.overview.use({hold:'arrange', appAction:'home-screen'})): hold = arrange
+// (drag to reorder, ✕ to close), never the copy-link sheet. A small download button beside ✕ (one-app desks only)
+// opens the same Add to home screen flow. The shared shell owns this; no shipped package asks for it now.
+test('Overview arrange mode: hold arranges desks; download button beside ✕ opens Add to home screen', () => {
   const app = read('app.js');
-  assert.doesNotMatch(app, /miguel\/arrange-download/);
   assert.match(app, /if \(arrangeDesks\(\) && OV\.drag && !OV\.reordered\) \{ endDrag\(false\); el\.classList\.add\('editing'\);[^\n]*return; \}/);
   const releaseHold = app.indexOf("if (arrangeDesks() && OV.drag && !OV.reordered)"), stockOffer = app.lastIndexOf('if (a) window.WizHomeScreenApps?.offer(a);');
   assert.ok(releaseHold > 0 && releaseHold < stockOffer, 'release hold returns before the stock hold-to-offer path');
@@ -250,10 +250,6 @@ test('Arrange/download tweak: hold arranges desks; download button beside ✕ op
   assert.match(app, /!e\.target\.closest\('\.ov-x, \.ov-dl'\)\) OV\.hold/);
   const click = app.slice(app.indexOf("const dl = e.target.closest('[data-ovdl]')"));
   assert.ok(click.indexOf('offer(a); return; }') < click.indexOf("closest('[data-ovx]')"), 'download handled before ✕');
-  const css = fs.readFileSync(root + '/web/tweaks/miguel/arrange-download/tweak.css', 'utf8');
-  assert.match(css, /\.ov \.ov-dl \{[^}]*display: none;/); assert.match(css, /\.ov\.editing \.ov-dl \{ display: grid; \}/);
-  assert.match(css, /\.ov\.ov-pill\.editing \.ov-cell \.ov-ic \.dbg \{ display: none; \}/);
-  assert.match(css, /\.ov \.ov-dl::before \{[^}]*width: 44px; height: 44px;/);
   assert.match(read('core/home-screen-apps.js'), /canOffer: a => pinnable\(a\)/);
 });
 test('canOffer accepts registered frontends only (multi-app/system/shell items get no download button)', () => {
