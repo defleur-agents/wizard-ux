@@ -27,9 +27,9 @@ test('every skin keeps the stored layout and the By day default (an old miguel/l
   }
 });
 
-test('the Filter sheet always offers the Layout picker and the Yesterday filter', () => {
+test('the Filter sheet always offers the Group by day switch and the Yesterday filter', () => {
   const src = read('../web/core/chats.js');
-  assert.match(src, /\n      <h5>Layout<\/h5><div class="ch-fopts">/);
+  assert.match(src, /data-chpins>Pins\$\{pinsOn\(\) \? '<b>✓<\/b>' : ''\}<\/button><button type="button" class="ch-fopt\$\{byStatus\(\) \? '' : ' on'\}" data-chgroupday/);
   assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(snoozeLast\(\) && k === 'deferred'\)\);/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });
