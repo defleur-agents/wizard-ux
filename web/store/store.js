@@ -10,9 +10,6 @@ await window.WosAppSetup.ready;
 const Setup = window.WosAppSetup;
 import {sourceLabel, installedOnlyApps} from './store-source.js';
 import {parseInstallLink, installShareLink} from './install-link.js';
-import {installRelease} from './store-install.js';
-await window.WosAppSetup.ready;
-const Setup = window.WosAppSetup;
 import {adoptAppearance} from './store-appearance.js';
 import {renderInstallResult, successMessage} from './store-install-result.js';
 (() => {
@@ -114,8 +111,6 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     // ?kind=apps|agent-apps|agents|connections: the launcher's "+ Get ..." tiles open that section.
     const reqKind = new URLSearchParams(location.search).get('kind');
     if (reqKind && !S.stack.length && KINDS.some(k => k.id === reqKind)) openKind(reqKind);
-    const initialQuery = new URLSearchParams(location.search).get('q');
-    if (initialQuery && !S.stack.length) { $('q').value = initialQuery; search(initialQuery); }
     const requested = new URLSearchParams(location.search).get('app');
     if (requested && !S.stack.length && S.apps.some(a => a.id === requested)) {
       const a=find(requested), source=new URLSearchParams(location.search).get('source'), r=a.releases.find(r=>r.source===source);

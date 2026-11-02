@@ -124,7 +124,7 @@
     if (action === 'troubleshoot') { window.WizReach?.open(); return; }
     if (origin === 'everywhere') {
       if (action === 'retry') native()?.retryUnsent?.(id);
-      if (action === 'delete') native()?.deleteUnsent?.(id);
+      if (action === 'delete') { for (const row of ctx.root?.querySelectorAll('[data-ubid]') || []) if (row.dataset.ubid === id) { const b = row.querySelector('[data-ub="delete"]'); if (b) { b.disabled = true; b.textContent = 'Deleting…'; } } native()?.deleteUnsent?.(id); }
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
@@ -144,7 +144,12 @@
       const ext = /aac/.test(it.audioType) ? 'aac' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /wav/.test(it.audioType) ? 'wav' : /ogg/.test(it.audioType) ? 'ogg' : 'webm';
       a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); return;
     }
-    if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
+    if (action === 'delete') {
+      // Custody deletes must be durable before losing the original; acknowledge the tap now.
+      const buttons = [...(ctx.root?.querySelectorAll('[data-ubid]') || [])].filter(row => row.dataset.ubid === id).map(row => row.querySelector('[data-ub="delete"]')).filter(Boolean);
+      for (const b of buttons) { if (b.disabled) return; b.disabled = true; b.textContent = 'Deleting…'; }
+      Promise.resolve(ctx.outbox.remove(id)).then(ok => { ctx.render?.(); ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400); }, () => { for (const b of buttons) { b.disabled = false; b.textContent = 'Delete'; } ctx.toast?.('!', 'Could not save deletion · original kept', 2400); });
+    }
     if (action === 'open') ctx.openThread(it.sessionId);
     // Moving an audio-bearing/in-flight record to a text composer would lose custody. Never do it.
     if (action === 'edit') {
@@ -253,21 +258,64 @@
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
     if (!s.tweaks.length && !s.error) return '';
-    const fam = (S.families || []).find(f => f.id === S.familyOf?.(S.current)), who = esc(fam?.name || 'This skin');
-    const rows = tweakSwitches(s.tweaks, 'data-tweak-toggle', s.busy);
-    if (own) return `<div class="tw-set"><h4>Tweaks</h4>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</div>`;
-    const on = s.tweaks.filter(t => t.on).length;
-    return `<details class="tw-set" data-tweakset${tweaksOpen ? ' open' : ''}><summary class="st-row wz-row"><span class="st-tx"><b>${s.owner ? who + ' also changes how things work' : 'How things work'}</b><small>${on} of ${s.tweaks.length} changes on · tap to choose</small></span><span class="st-go" aria-hidden="true">›</span></summary>${s.error ? `<p role="alert">${esc(s.error)}</p>` : ''}${rows}</details>`;
+    if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
+    const name = who => who === 'wizard' ? 'Wizard' : (authorList || []).find(a => a.id === who)?.name || ({ miguel: 'Miguel', novaire: 'Novairecito' })[who] || who;
+    const exp = s.tweaks.filter(t => !t.builtin);
+    const label = who => own?.name || name(who);
+    const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
+    const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
+    // Group only this skin's available tweaks: another author's All switch never promotes their taste to core.
+    const who = S.families?.find(f => f.id === S.familyOf?.(S.current))?.tweaks || s.owner || 'wizard';
+    if (!own && s.owner && s.owner !== who) return '<div class="tw-group"><h4>Tweaks</h4><p role="status">Loading this skin’s tweaks…</p></div>';
+    const groups = [who].map(who => {
+      const mine = exp; if (!mine.length) return '';
+      const on = mine.filter(t => t.on).length, all = on === mine.length;
+      const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(label(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
+      return `<div class="tw-author" role="group" aria-label="${esc(label(who))}’s tweaks"><h5>${esc(label(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
+    }).join('');
+    // Core defaults keep their individual off-switches; author All never changes those release-wide choices.
+    const core = s.tweaks.filter(t => t.builtin);
+    const coreRows = core.length ? `<div class="tw-author"><h5>Built-in choices</h5>${rows(core)}</div>` : '';
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">The picked skin brings these ideas. Switch each one on or off.</p>${err}${groups}${coreRows}</div>`;
   }
-  let tweaksOpen = false;
+  let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
   }
-  function ownTiles(S) {
+  // One pending receipt for every Appearance choice. Patch the tapped node before any work,
+  // then yield a paint for local/heavy changes too. Background events cannot erase the receipt.
+  const lookControls = '[data-skinfamily], [data-skinpick], [data-ownskin], [data-newskin], [data-tweak-toggle], [data-tweakauthor]';
+  function paintLookPending(ctx) {
+    const pending = ctx.lookPending; if (!pending) return;
+    ctx.root.querySelectorAll?.(lookControls).forEach(b => { b.disabled = true; });
+    const b = (pending.selector && ctx.root.querySelector(pending.selector)) || pending.el;
+    b.setAttribute?.('aria-busy', 'true'); b.classList?.add('st-pending');
+  }
+  function lookAction(ctx, el, action, done = () => {}, rollback = () => {}) {
+    if (ctx.lookPending) return;
+    const attr = ['skinfamily', 'skinpick', 'ownskin', 'newskin', 'tweak-toggle', 'tweakauthor'].find(k => el.hasAttribute?.('data-' + k));
+    const selector = attr ? `[data-${attr}="${CSS.escape(el.getAttribute('data-' + attr))}"]` : '';
+    ctx.lookError = ''; ctx.lookPending = { el, selector }; paintLookPending(ctx);
+    const finish = () => { ctx.lookPending = null; ctx.render?.(); };
+    const fail = async e => {
+      ctx.lookError = e.message || 'Could not change appearance. Try again.';
+      try { await rollback(); } catch (restore) { ctx.lookError += '. Could not restore the previous skin: ' + restore.message; }
+      finish(); ctx.toast?.('!', ctx.lookError, 3000);
+    };
+    const pending = ctx.lookPending;
+    const run = () => { if (pending.cancelled) return; pending.started = true; skinAction(action, result => { ctx.lookPending = null; done(result); ctx.render?.(); }, fail); };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(run));
+    else run(); // non-rendering hosts/tests
+  }
+  async function skinSettled() {
+    await window.WosExperience?.chooseSkin?.();
+    if (window.WosExperience?.state.error) throw new Error(window.WosExperience.state.error);
+  }
+  function ownTiles(S, removing) {
     const M = window.WosMySkin;
-    return (M?.recipes || []).map(skin => {
+    return (M?.recipes || []).filter(skin => skin.id !== removing).map(skin => {
       const palette = S.list.find(k => k.id === skin.base);
       return `<button type="button" class="skp-card" data-ownskin="${esc(skin.id)}" aria-pressed="${M.active?.id === skin.id}" aria-label="${esc(skin.name)}">${palette ? mini(palette) : ''}<span class="skp-nm">${esc(skin.name)}</span></button>`;
     }).join('');
@@ -310,17 +358,20 @@
       const k = S.list.find(k => k.id === (S.lastIn?.(f.id) || f.palettes[0]));
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
-    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S)}${newTile()}</div>`;
+    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
     const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${ctx.lookError ? `<p role="alert">${esc(ctx.lookError)}</p>` : ''}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
     return lookHtml(S, ctx);
-  }, deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove),
-  leave(ctx) { ctx.skinDraft = null; ctx.skinRemove = null; },
+  }, painted: ctx => paintLookPending(ctx), deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove || ctx.lookPending),
+  leave(ctx) {
+    if (ctx.lookPending && !ctx.lookPending.started) { ctx.lookPending.cancelled = true; ctx.lookPending = null; }
+    ctx.skinDraft = null; ctx.skinRemove = null;
+  },
   back(ctx) {
     if (ctx.skinRemove) { ctx.skinRemove = null; ctx.render(); return true; }
     if (!ctx.skinDraft) return false;
@@ -333,23 +384,27 @@
     }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
+    if (ctx.lookPending) return true;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
       if (ctx.skinSaving) return true; ctx.skinSaving = true;
-      skinAction(() => M.remove(ctx.skinRemove.id), snapshot => { ctx.skinSaving = false; ctx.skinUndo = snapshot; ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
+      const removed = ctx.skinRemove; ctx.skinRemoving = removed.id; ctx.skinRemove = null; ctx.render();
+      skinAction(() => M.remove(removed.id), snapshot => { ctx.skinSaving = false; ctx.skinRemoving = null; ctx.skinUndo = snapshot; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.skinRemoving = null; if (!ctx.skinRemove) ctx.skinRemove = removed; ctx.render(); ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
     }
     if (ctx.skinRemove) return true;
     if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }
     if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
-    if (el.closest('[data-newskin]')) {
-      ctx.skinDraft = { name: '', items: [], tweaks: {} };
-      void draftDefaults(ctx, S.families.find(f => f.id === S.familyOf(S.current)) || S.families[0]);
-      ctx.root.querySelector('[data-skin-name]')?.focus(); return true;
+    const fresh = el.closest('[data-newskin]');
+    if (fresh) {
+      lookAction(ctx, fresh, () => {
+        ctx.skinDraft = { name: '', items: [], tweaks: {} };
+        return draftDefaults(ctx, S.families.find(f => f.id === S.familyOf(S.current)) || S.families[0]);
+      }, () => { ctx.render(); ctx.root.querySelector('[data-skin-name]')?.focus(); }); return true;
     }
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
       if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
-      if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
+      if (colour) { lookAction(ctx, colour, () => { draft.base = colour.dataset.skinpick; }); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, S.families.find(f => f.id === draft.family)); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
         if (draft.saving) return true; draft.saving = true; ctx.render();
@@ -359,21 +414,36 @@
     }
     const remove = el.closest('[data-ownskin-remove]');
     if (remove) { ctx.skinRemove = M.recipes.find(s => s.id === remove.dataset.ownskinRemove); ctx.render(); ctx.root.querySelector('[data-skin-remove-cancel]')?.focus(); return true; }
+    const previous = { palette: S.current, own: M?.active?.id || null };
+    const restorePick = async () => {
+      let restored = false;
+      if ((M?.active?.id || null) !== previous.own) {
+        if (previous.own) await M.wear(previous.own); else if (M?.active) await M.leave();
+        restored = true;
+      }
+      if (S.current !== previous.palette) {
+        if (M?.active) await M.update({ base: previous.palette }); else S.set(previous.palette);
+        restored = true;
+      }
+      if (restored) { await window.WosExperience?.refresh?.(); await skinSettled(); }
+    };
     const own = el.closest('[data-ownskin]');
-    if (own) { skinAction(() => M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
+    if (own) { lookAction(ctx, own, async () => { await M.wear(own.dataset.ownskin); await skinSettled(); }, () => {}, restorePick); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
-    if (tweak) { tweaksOpen = true; void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
-    const set = el.closest('[data-tweakset] > summary');
-    if (set) { event?.preventDefault?.(); tweaksOpen = !set.parentElement.open; set.parentElement.open = tweaksOpen; return true; }
+    if (tweak) { lookAction(ctx, tweak, async () => { await window.WosExperience.toggle(tweak.dataset.tweakToggle); await skinSettled(); }); return true; }
+    const quick = el.closest('[data-tweakauthor]');
+    if (quick) { lookAction(ctx, quick, async () => { await window.WosExperience.chooseAuthor(quick.dataset.tweakauthor); await skinSettled(); }); ctx.haptic?.(8); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const family = el.closest('[data-skinfamily]');
-    if (family) { skinAction(() => M?.leave?.(), () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); ctx.render?.(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
+    if (family) {
+      lookAction(ctx, family, async () => { if (M?.active && !M.overlay) await M.leave(); S.setFamily(family.dataset.skinfamily); await skinSettled(); }, () => ctx.haptic?.(8), restorePick); return true;
+    }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
-    skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
-      void window.WosExperience?.chooseSkin?.();
-      for (const m of mounts) m.render(); ctx.haptic?.(8);
-    }, e => ctx.toast?.('!', e.message, 3000)); return true;
+    lookAction(ctx, b, async () => {
+      if (M?.active && !M.overlay) await M.update({ base: b.dataset.skinpick }); else S.set(b.dataset.skinpick);
+      await skinSettled();
+    }, () => { for (const m of mounts) m.render(); ctx.haptic?.(8); }, restorePick); return true;
   } });
   // Window opacity: one slider for the glass behind every window (Chats and every app). Per device, like the skin.
   const glassPct = S => Math.round((S.glass ?? S.skinGlass) * 100);
@@ -497,6 +567,10 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   // Desktop bar: one mic by default; the other three voice buttons live in its menu and on their keys, and this puts
   // them back in the bar (James, 31 Oct 2026: fewer icons on the right, nothing new in their place).
+  // Phone shell only (core/orb-switcher.js is not loaded on the desktop): the row opens the Orb switcher sheet.
+  register({ id: 'orb-switcher', page: 'phone', aliases: ['orb-switcher', 'orb-radial'], available: () => !!window.WosOrbSwitcher?.available,
+    html: () => window.WosOrbSwitcher.settingsRow(),
+    act: (ctx, el) => { if (!el.closest('[data-orbsw-open]')) return false; window.WosOrbSwitcher.openSettings(); return true; } });
   register({ id: 'bar-voice-buttons', page: 'voice', available: ctx => !!ctx?.barMics?.(),
     html: ctx => { const on = !!ctx.barMics().get(), k = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt+';
       return `<div class="st-group" data-bar-mics><h4>Top bar</h4><button class="st-row" data-bar-mics-set role="switch" aria-checked="${on}"><span class="st-tx"><b>Show every voice button</b><small>${esc(`New voice chat, Dictate and Tell the computer beside the mic. Off, they are in the mic’s menu (right-click or hold) and on ${k}V, ${k}D and ${k}C.`)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`; },

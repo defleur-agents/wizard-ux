@@ -403,6 +403,10 @@
       ],
       "note": "Phone orb meeting-loan coordinator; desktop admission not yet claimed."
     },
+    "core/orb-switcher.js": {
+      "loadedBy": [],
+      "note": "Lazy opt-in pins-only Orb radial via the phone skin-host orb adapter. Neither entrypoint imports it; desktop does not mount it. Open desktops remain on the existing swipe-up path."
+    },
     "core/os-updates.js": {
       "loadedBy": [
         "phone",

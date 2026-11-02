@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { webcrypto } from 'node:crypto';
+import { createSkinFixture } from '../tools/qa-legacy-skin-fixture.cjs';
 const source = readFileSync(new URL('../web/core/my-skin.js', import.meta.url), 'utf8');
 const copy = x => JSON.parse(JSON.stringify(x));
 function box() {
@@ -29,13 +30,13 @@ function box() {
   };
   return { data, calls, fetch, set fail(n) { fail = n; }, trash };
 }
-async function boot(server, store = new Map()) {
+async function boot(server, store = new Map(), current = 'nebula') {
   const listeners = {};
   const ctx = { fetch: server.fetch, crypto: webcrypto, Event, URLSearchParams, location: { search: '' },
     localStorage: { getItem: k => store.get(k) || null, setItem: (k, v) => store.set(k, String(v)), removeItem: k => store.delete(k) },
     addEventListener: (name, fn) => { (listeners[name] ||= []).push(fn); },
     dispatchEvent: e => { for (const fn of listeners[e.type] || []) fn(e); },
-    WosSkin: { current: 'nebula', list: [{ id: 'nebula' }, { id: 'obsidian-light' }], set(id) { this.current = id; ctx.dispatchEvent(new Event('wos:skin')); } },
+    WosSkin: { current, list: [{ id: 'nebula' }, { id: 'grove' }, { id: 'obsidian-light' }], set(id) { this.current = id; ctx.dispatchEvent(new Event('wos:skin')); } },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx); await ctx.WosMySkin.refresh();
   return { M: ctx.WosMySkin, ctx, store };
@@ -107,4 +108,150 @@ test('404/405 old boxes use local fallback quietly; denied/offline writes never 
   const offline = { fetch: async () => { throw new Error('offline'); } }, cached = await boot(offline, b.store);
   assert.equal(cached.M.active.name, 'Cached'); await assert.rejects(cached.M.create({ name: 'Offline', base: 'nebula', tweaks: {} }));
   assert.equal(cached.M.recipes.length, 1);
+});
+
+test("James's legacy Miguel selector overlay survives palette switches, refresh and fresh-client reload", async () => {
+  const server = box(); server.data.active = 'My skin';
+  Object.assign(server.data.skins[0], { empty: false, bytes: 9646, has_recipe: false });
+  const b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, true);
+  assert.equal(b.ctx.WosSkin.current, 'grove', 'default nebula metadata is not an owner-selected base');
+  for (const palette of ['nebula', 'grove', 'obsidian-light']) {
+    b.ctx.WosSkin.set(palette); await b.M.refresh();
+    assert.equal(server.data.active, 'My skin'); assert.equal(b.M.active.id, 'My skin');
+    assert.equal(b.ctx.WosSkin.current, palette);
+  }
+  assert.ok(server.calls.every(c => c.method === 'GET'), 'palette changes must never clear the box active pointer');
+  const again = await boot(server, new Map(), 'grove');
+  assert.equal(again.M.active.id, 'My skin'); assert.equal(again.ctx.WosSkin.current, 'grove');
+  await again.M.leave(); assert.equal(server.data.active, null);
+  const off = await boot(server); assert.equal(off.M.active, null, 'explicit opt-out never resurrects the overlay');
+});
+
+test('cached CSS with cleared recipe caches migrates without reactivating the already-active box skin', async () => {
+  const server = box(); server.data.active = 'My skin'; server.data.skins[0].empty = false;
+  const store = new Map([['wos.myskin.v1', ':root{--wos-orb-swipe-up:pill}']]);
+  const fetch = server.fetch, journal = [];
+  server.fetch = async (url, init = {}) => {
+    journal.push({ url, method: init.method || 'GET', stack: new Error('request initiator').stack,
+      legacy: store.has('wos.own-skins.v1') ? JSON.parse(store.get('wos.own-skins.v1')) : null });
+    return fetch(url, init);
+  };
+  const b = await boot(server, store, 'grove');
+  assert.ok(journal.some(c => c.legacy?.skins[0]?.legacy), 'first-paint cached CSS really traversed migrate -> persist');
+  assert.equal(b.M.active.id, 'My skin'); assert.equal(b.M.overlay, true);
+  assert.equal(store.has('wos.own-skins.v1'), false, 'migration checkpoint still completes');
+  console.log('CACHED_CSS_REQUESTS', JSON.stringify(journal));
+  assert.deepEqual(server.calls.filter(c => c.method !== 'GET').map(c => ({ method: c.method, input: c.input })), [], 'reload is not an explicit activation');
+  for (let i = 0; i < 2; i++) {
+    store.delete('wos.own-skins.cache.v1'); store.delete('wos.own-skins.v1');
+    await boot(server, store, 'grove');
+  }
+  assert.equal(server.calls.filter(c => c.method !== 'GET').length, 0, 'repeated cache-free reload performs zero active writes');
+  await b.M.leave(); const off = await boot(server, store);
+  assert.equal(off.M.active, null, 'explicit leave stays off on the same device');
+  assert.ok(!store.get('wos.myskin.v1'), 'leave clears CSS cache instead of resurrecting migration');
+  await off.M.wear('My skin'); assert.equal(server.data.active, 'My skin', 'a different explicit activation still writes');
+  assert.deepEqual(server.calls.filter(c => c.method === 'PUT').map(c => c.input), [{ id: null }, { id: 'My skin' }]);
+});
+test('migration still activates a different matched preview recipe', async () => {
+  const server = box(); server.data.active = 'My skin';
+  server.data.skins.push({ id: 'Imported', name: 'Imported', base: 'grove', tweaks: {}, has_recipe: true });
+  const store = new Map([['wos.own-skins.v1', JSON.stringify({ version: 1, active: 'local-import', skins: [{ id: 'local-import', name: 'Imported', base: 'grove', tweaks: {} }] })]]);
+  const b = await boot(server, store, 'grove');
+  assert.equal(b.M.active.id, 'Imported');
+  assert.deepEqual(server.calls.filter(c => c.method === 'PUT').map(c => c.input), [{ id: 'Imported' }]);
+  assert.equal(store.has('wos.own-skins.v1'), false);
+});
+
+test('old boxes resolve legacy recipe presence through Files, never infer it from a name or missing field', async () => {
+  for (const [status, present] of [[404, false], [200, true], [403, undefined]]) {
+    const server = box(); server.data.active = 'My skin';
+    Object.assign(server.data.skins[0], { empty: false }); delete server.data.skins[0].has_recipe;
+    const fetch = server.fetch; server.fetch = async (url, init) => {
+      if (url.startsWith('/wizard/v1/user-files/content')) {
+        assert.equal(url, '/wizard/v1/user-files/content?path=Skins%2FMy%20skin%2Fskin.json');
+        assert.equal(init.credentials, 'same-origin'); assert.equal(init.cache, 'no-store');
+        return { ok: status === 200, status, json: async () => ({ error: status === 404 ? 'not_found' : 'denied' }) };
+      }
+      return fetch(url, init);
+    };
+    const b = await boot(server, new Map(), 'grove');
+    assert.equal(b.M.overlay, present === false);
+    assert.equal(b.ctx.WosSkin.current, present === true ? 'nebula' : 'grove');
+    b.ctx.WosSkin.set('obsidian-light'); await new Promise(resolve => setTimeout(resolve, 5));
+    assert.equal(server.data.active, present === true ? null : 'My skin');
+  }
+});
+
+test('restricted selector fixture models real tweak-only PATCH metadata and rejects unrelated writes', () => {
+  const f = createSkinFixture({ active: 'My skin', skins: [{ id: 'My skin', base: 'nebula', empty: false }] });
+  assert.equal(f.recipe().status, 404);
+  const path = '/wizard/v1/skins/My%20skin';
+  assert.equal(f.handle(path, 'PATCH', { tweaks: { 'wizard/two-orbs': true } }).status, 200);
+  assert.equal(f.data.skins[0].has_recipe, true, 'real PATCH creates a recipe even without a base');
+  assert.deepEqual(f.recipe().body, { name: 'My skin', tweaks: { 'wizard/two-orbs': true } });
+  assert.equal(Object.hasOwn(f.recipe().body, 'base'), false, 'list default must not become explicit base');
+  f.handle(path, 'PATCH', { base: 'grove' });
+  f.handle(path, 'PATCH', { tweaks: { 'wizard/two-orbs': false } });
+  assert.deepEqual(f.recipe().body, { name: 'My skin', base: 'grove', tweaks: { 'wizard/two-orbs': false } });
+  for (const [p, m, v] of [[path, 'DELETE', {}], ['/wizard/v1/skins', 'POST', {}], ['/wizard/v1/skins/Other', 'PATCH', { base: 'grove' }], [path, 'PATCH', { has_recipe: false }], [path, 'PATCH', { base: 'unknown' }], [path, 'PATCH', { tweaks: { 'wizard/unknown': true } }], [path, 'PATCH', { tweaks: { 'wizard/two-orbs': 1 } }], ['/wizard/v1/skins/active', 'PUT', { id: 'Other' }]]) {
+    assert.equal(f.handle(p, m, v).status, 403);
+  }
+  assert.equal(f.activeWrites.length, 0); assert.equal(f.recipeWrites.length, 3); assert.equal(f.data.active, 'My skin');
+});
+test('restored-profile radial opt-in uses the same real recipe PATCH contract as two-orbs', () => {
+  const f = createSkinFixture({ active: 'My skin', skins: [{ id: 'My skin', name: 'My skin', base: 'nebula', empty: false, has_recipe: false }] });
+  const result = f.handle('/wizard/v1/skins/My%20skin', 'PATCH', { tweaks: { 'wizard/orb-radial': true } });
+  assert.equal(result.status, 200, 'ready() clicks Appearance radial while a box recipe is active');
+  assert.equal(f.data.active, 'My skin');
+  assert.deepEqual(f.activeWrites, []);
+  assert.deepEqual(f.recipe().body, { name: 'My skin', tweaks: { 'wizard/orb-radial': true } });
+  f.handle('/wizard/v1/skins/My%20skin', 'PATCH', { tweaks: { 'wizard/two-orbs': true } });
+  assert.deepEqual(f.recipe().body.tweaks, { 'wizard/orb-radial': true, 'wizard/two-orbs': true });
+});
+function strictBox(id = 'My skin', metadata = null) {
+  const f = createSkinFixture({ active: id, skins: [{ id, name: id, base: metadata?.base || 'nebula', empty: false, has_recipe: metadata !== null, tweaks: metadata?.tweaks || {} }] }, { id, metadata });
+  f.fetch = async (url, init = {}) => {
+    let r;
+    if (url.startsWith('/wizard/v1/skins')) r = f.handle(url, init.method || 'GET', init.body ? JSON.parse(init.body) : undefined);
+    else if (url.startsWith('/wizard/v1/user-files/content')) r = f.recipe();
+    else if (url.includes('format=json')) r = { status: 200, body: { script: { exists: false } } };
+    else return { ok: true, status: 200, headers: { get: () => 'text/css' }, text: async () => f.data.active ? ':root{--wos-orb-swipe-up:pill}' : '' };
+    return { ok: r.status === 200, status: r.status, headers: { get: () => 'application/json' }, json: async () => copy(r.body) };
+  };
+  return f;
+}
+test('tweak-only Files recipe preserves legacy overlay through PATCH, palettes and cache-free reload', async () => {
+  const server = strictBox(), b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, true);
+  await b.M.update({ tweaks: { 'wizard/two-orbs': true } });
+  assert.equal(server.data.skins[0].has_recipe, true);
+  assert.equal(b.M.overlay, true, 'saving tweaks must not convert an owner layer into a palette-bound skin');
+  assert.equal(b.ctx.WosSkin.current, 'grove');
+  for (const palette of ['nebula', 'grove']) { b.ctx.WosSkin.set(palette); await b.M.refresh(); assert.equal(server.data.active, 'My skin'); }
+  const fresh = await boot(server, new Map(), 'grove');
+  assert.equal(fresh.M.overlay, true); assert.equal(fresh.ctx.WosSkin.current, 'grove');
+  assert.equal(fresh.M.active.tweaks['wizard/two-orbs'], true);
+  assert.deepEqual(server.activeWrites, []); assert.deepEqual(server.recipeWrites, [{ tweaks: { 'wizard/two-orbs': true } }]);
+  await fresh.M.leave(); const off = await boot(server); assert.equal(off.M.active, null);
+});
+test('tweak-only overlay metadata is id-independent, while explicit bases remain authoritative', async () => {
+  for (const id of ['My skin', 'Renamed owner layer']) {
+    const server = strictBox(id, { name: id, tweaks: { 'wizard/two-orbs': true } });
+    const b = await boot(server, new Map(), 'grove');
+    assert.equal(b.M.overlay, true); assert.equal(b.ctx.WosSkin.current, 'grove');
+    await b.M.update({ base: 'nebula' });
+    assert.equal(b.M.overlay, false); assert.equal(b.ctx.WosSkin.current, 'nebula');
+    b.ctx.WosSkin.set('grove'); await new Promise(resolve => setTimeout(resolve, 5)); assert.equal(server.data.active, null);
+  }
+});
+
+test('a named My skin recipe still selects its base and leaves on an outside built-in change', async () => {
+  const server = box(); server.data.active = 'My skin';
+  Object.assign(server.data.skins[0], { empty: false, has_recipe: true });
+  const b = await boot(server, new Map(), 'grove');
+  assert.equal(b.M.overlay, false); assert.equal(b.ctx.WosSkin.current, 'nebula');
+  b.ctx.WosSkin.set('grove'); await new Promise(resolve => setTimeout(resolve, 5));
+  assert.equal(server.data.active, null);
 });

@@ -52,7 +52,7 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)`; while searching Archive is last and every section collapses (`c.sOpen`, never the saved state) | duplicate Chats/Focus |
+| Chats: Focus/Filter/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); paint first; alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)`; while searching Archive is last and every section collapses (`c.sOpen`, never the saved state) | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
@@ -68,11 +68,11 @@ Reuse:
 | Share to Wizard | `WizShareWizard` (`share-wizard.js`); Back guard `WizSheetBack` (`sheetback.js`) | one opaque sheet; `share.wizard`; `durable`; own double-Back timer |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
-| Settings in both shells | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
+| Settings, instant Appearance receipt | `WosSettings.register/focus`, `lookAction` (rounded art + inline busy), `hasSystem`, `WosFeatures` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App glyph tiles | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
 | Brand hat | `WizBrand` (`brand.js`) | redrawn logos |
@@ -94,11 +94,12 @@ Reuse:
 
 | Need | Use | Never hand-roll |
 |---|---|---|
-| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); mirrored Android assist; ordered shader ramps and context restore preserve mode/level/sleep | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); mirrored Android assist `android/app/src/main/assets/assist/everywhere.html`; ordered shader ramps and context restore preserve mode/level/sleep | PNG + CSS spin, Lottie, SVG |
+| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; orb adapter `api.orb.switcher()` with awaited lazy readiness + one fresh-URL retry; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off; legacy overlays survive palettes), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases, palettes or colour constants |
+| Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) | desk wedges |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
-| Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
-| Install prompt (banner; `hold(on, owner?)` while a tour or overlay owns the top controls) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |
+| Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
+| Install prompt; `hold(on, owner?)` during tours/overlays | `WizardPwaInstall` (`web/pwa-install.js`) | own `beforeinstallprompt` listener |
 | First run (Welcome: name, AI, colour, hello; Setup app) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) | shell-specific first-run checks, a second tour launcher |
 
 ## App voice/audio

@@ -9,24 +9,26 @@
     "novaire"
   ],
   "tweaks": [
-    "miguel/switch-row-actions",
     "miguel/swipe-strip",
     "miguel/send-and-go",
     "miguel/model-pills",
+    "miguel/hidden-pin",
     "wizard/pin-buttons",
     "miguel/snooze-someday",
-    "miguel/home-bars",
     "miguel/machines-home",
     "wizard/two-orbs",
     "miguel/arrange-download",
     "wizard/app-borders",
     "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "wizard/orb-radial"
   ],
   "defaults": [
     "wizard/unified-inbox"
   ],
   "aliases": {
-    "miguel/unified-inbox": "wizard/unified-inbox"
+    "miguel/unified-inbox": "wizard/unified-inbox",
+    "wizard/machines-home": "miguel/machines-home",
+    "miguel/switch-row-actions": "miguel/model-pills"
   }
 }

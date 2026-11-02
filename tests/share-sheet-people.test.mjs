@@ -29,6 +29,22 @@ function boot({ installed = true, cached = targets, recent = [] } = {}) {
   return { S: window.WosShareSheet, ops, opened, map, el: () => el, click,
     tick: t => {now = t;}, person: id => ({closest: selector => selector === '.shs-b' ? {} : selector === '[data-shs-app]' ? {dataset: {shsApp: 'messenger', shsTarget: id}} : null}) };
 }
+test('People: name-derived avatar hue survives cached restore and live target updates', async () => {
+  const expectedHue = name => { let hash = 0; for (const ch of name.trim()) hash = (hash * 31 + ch.codePointAt(0)) >>> 0; return hash % 360; };
+  const avatars = html => [...html.matchAll(/class="shs-av" style="--h:(\d+)"/g)].map(m => Number(m[1]));
+  const names = ['Test Person A', 'Synthetic Ada', 'Synthetic Zoë', '🧙 Synthetic'];
+  const cached = names.map((name, i) => ({id: String(i), name}));
+  const b = boot({cached});
+  let result = b.S.show({text:'Synthetic'}, () => 'unsupported');
+  const hues = avatars(b.el().innerHTML);
+  assert.deepEqual(hues, names.map(expectedHue)); assert.equal(new Set(hues).size, names.length);
+  assert.match(b.el().innerHTML, /shs-badge/);
+  b.S.back(); assert.equal(await result, 'cancelled');
+  b.ops.setTargets('messenger', [...cached].reverse());
+  result = b.S.show({text:'Synthetic'}, () => 'unsupported');
+  assert.deepEqual(avatars(b.el().innerHTML), [...hues].reverse(), 'same names keep their hues after live update/reorder');
+  b.S.back(); assert.equal(await result, 'cancelled');
+});
 test('People: recent shares outrank Messenger activity, then keep its published alphabetical tail', () => {
   const b = boot({recent: ['messenger|a']});
   assert.deepEqual([...b.S._people('text')], ['a', 'c', 'b']);

@@ -19,10 +19,17 @@ test('the thread row menu carries Pin and no Open; alert Open is separate', () =
   assert.match(sheet, /\$\{nid \? '<button type="button" data-rsopen/, 'only alerts offer Open');
   assert.match(js, /closest\('\[data-rsopen\]'\) && rowSheet\?\.nid/);
 });
-test('Show pin buttons is off for Wizard and Mizel, on for Novairecito; the old Hide tweak is retired', () => {
+test('Show pin buttons is off for Wizard and Mizel, on for Novairecito; Miguel keeps his pin-free chats', () => {
   const cat = json('web/tweaks/catalog.json');
-  assert.ok(cat.tweaks.includes('wizard/pin-buttons')); assert.ok(!cat.tweaks.includes('miguel/hidden-pin'));
-  assert.ok(!existsSync(new URL('../web/tweaks/miguel/hidden-pin/manifest.json', import.meta.url)));
+  assert.ok(cat.tweaks.includes('wizard/pin-buttons')); assert.ok(cat.tweaks.includes('miguel/hidden-pin'));
+  assert.ok(existsSync(new URL('../web/tweaks/miguel/hidden-pin/manifest.json', import.meta.url)));
+  assert.ok(json('web/tweaks/miguel/profile.json').tweaks.includes('miguel/hidden-pin'));
+  const css = read('web/tweaks/miguel/hidden-pin/tweak.css');
+  assert.match(css, /html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-sheet \[data-part="pin-action"\], html\[data-tweaks~="miguel\/hidden-pin"\] \.ch-row-wrap \.ch-pin-toggle \{ display:none; \}/, 'outranks Show pin buttons');
+  assert.match(css, /\.ch-row-wrap\.diagnosed > \.ch-row\.ch-row \{ padding-right:90px; \}/);
+  assert.match(css, /\.ch-row-wrap \.ch-row-signin \{ right:10px; \}/);
+  assert.ok(!cat.defaults.includes('miguel/hidden-pin'));
+  assert.ok(!json('web/tweaks/wizard/profile.json').tweaks.includes('miguel/hidden-pin'));
   assert.ok(!(cat.defaults || []).includes('wizard/pin-buttons'));
   for (const who of ['wizard', 'miguel']) {
     const p = json(`web/tweaks/${who}/profile.json`);

@@ -19,13 +19,15 @@ test('the six v1 slot names remain in core markup; removing / renaming requires 
 test('incompatible API disables only that tweak, toasts, and finishes loading the rest', async () => {
   const id = 'wizard/pin-buttons'; const bad = { ...JSON.parse(read(`web/tweaks/${id}/manifest.json`)), apiVersion: 999 };
   const f = fixture({ manifests: { [id]: bad } });
-  await f.host.loadTweaks([id, 'miguel/home-bars'], f.slots, { teamAuthors: ['miguel'] });
-  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/home-bars']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
+  await f.host.loadTweaks([id, 'miguel/send-and-go'], f.slots, { teamAuthors: ['miguel'] });
+  assert.deepEqual(Array.from(f.host.tweakState), ['miguel/send-and-go']); assert.match(f.toasts[0], /turned off.*Incompatible API/); await f.clear();
 });
 test('capabilities are namespace gated; author metadata alone cannot grant model/data access', async () => {
-  const f = fixture(); let api;
+  // An untrusted package that asks for data.read (as the retired home-bars did) still gets no data.
+  const asks = { ...JSON.parse(read('web/tweaks/miguel/swipe-strip/manifest.json')), capabilities: ['layout', 'data.read'] };
+  const f = fixture({ manifests: { 'miguel/swipe-strip': asks } }); let api;
   f.host._test.setImporter(async () => ({ default: value => { api = value; return () => {}; } }));
-  await f.host.loadTweaks(['miguel/home-bars'], f.slots);
+  await f.host.loadTweaks(['miguel/swipe-strip'], f.slots);
   assert.ok(api.slot); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); assert.equal(api.thread, undefined);
   await f.host.loadTweaks(['miguel/model-pills'], f.slots, { trustedAuthors: ['miguel'] });
   assert.ok(api.models); assert.ok(api.thread); assert.equal(api.data, undefined); assert.equal(api.nav, undefined); await f.clear();
@@ -44,10 +46,10 @@ test('a skin brings its tweaks; offs are remembered per skin; another skin drops
   await E.refresh(); assert.equal(E.state.owner, null); assert.equal(active.length, 0);
   skin = 'obsidian'; await E.chooseSkin(); assert.equal(E.state.owner, 'miguel'); assert.deepEqual(Array.from(active), ['wizard/pin-buttons']);
   await E.toggle('wizard/pin-buttons'); assert.equal(active.length, 0); assert.equal(E.state.tweaks[0].on, false);
-  published = { ...published, version:2, tweaks: ['miguel/home-bars','wizard/pin-buttons'] }; await E.refresh();
-  assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  published = { ...published, version:2, tweaks: ['miguel/send-and-go','wizard/pin-buttons'] }; await E.refresh();
+  assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
   skin = 'grove'; await E.chooseSkin(); assert.equal(E.state.owner, null); assert.equal(active.length, 0); assert.equal(E.state.tweaks.filter(t => !['wizard/unified-inbox', 'wizard/machines-home'].includes(t.id)).length, 0);
-  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/home-bars']);
+  skin = 'landscapes'; await E.chooseSkin(); assert.deepEqual(Array.from(active), ['miguel/send-and-go']);
 });
 
 test('event access is capability-gated, render payloads have no DOM, stale model and nav APIs are inert', async () => {
@@ -62,7 +64,7 @@ test('event access is capability-gated, render payloads have no DOM, stale model
   await f.clear(); assert.equal(await api.thread.model({id:'test-model',provider:'test'}),null); assert.deepEqual(Array.from(await api.models.list()),[]);
 });
 test('a core repaint removes the origin marker: teardown never resurrects stale duplicate actions', async () => {
-  const f=fixture(); await f.mount('miguel/switch-row-actions');
+  const f=fixture(); await f.mount('miguel/model-pills');
   const marker=f.thread.children.find(n=>n.tagName==='comment'); assert.ok(marker); marker.remove();
   const replacement=f.doc.createElement('div'); replacement.setAttribute('data-part','thread-actions'); f.thread.append(replacement);
   await f.clear(); assert.equal(f.thread.querySelector('[data-part="thread-actions"]'),replacement); assert.equal(f.thread.children.filter(n=>n.dataset.part==='thread-actions').length,1);
@@ -81,7 +83,7 @@ function wizardExperience(storage = new Map()) {
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);
   await f.E.toggle('wizard/two-orbs'); assert.deepEqual(f.active(), ['wizard/two-orbs']);
-  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders', 'wizard/pin-buttons']);
+  assert.deepEqual(JSON.parse(f.storage.get('wos.skin-tweaks.v1')).off.wizard, ['wizard/app-borders', 'wizard/pin-buttons', 'wizard/orb-radial']);
   f = wizardExperience(f.storage); await f.E.refresh(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
   f.skin('novairecito'); await f.E.chooseSkin(); assert.deepEqual(f.active(), []);
   f.skin('nebula'); await f.E.chooseSkin(); assert.deepEqual(f.active(), ['wizard/two-orbs']);
@@ -318,4 +320,43 @@ test('Show pin buttons stays off for a device that saved tweak choices before it
   assert.ok(f.all().includes('wizard/app-borders'), 'the earlier deliberate App borders on is untouched');
   await f.E.toggle('wizard/pin-buttons'); assert.ok(f.all().includes('wizard/pin-buttons'));
   f = wizardExperience(saved); await f.E.refresh(); assert.ok(f.all().includes('wizard/pin-buttons'), 'the migration runs once');
+});
+
+test('Settings › Look: one All switch belongs to the worn skin owner, not package namespaces', () => {
+  const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
+  assert.match(rows, /class="tw-author"/, 'one section per author');
+  assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
+  assert.doesNotMatch(rows, /exp\.filter\(t => t\.author === who\)/, 'carried shared tweaks remain in the worn set');
+  assert.doesNotMatch(rows, /wizard: 'James'/);
+  assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
+  assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
+});
+
+
+test('Orb radial is default-off on fresh, legacy saved mixes and inherited My skin recipes; later opt-in persists', async () => {
+  const mixes = [new Map(), new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{wizard:[]} })], ['wos.app-borders.migrated.v1','true'], ['wos.pin-buttons.migrated.v1','true']])];
+  for (const storage of mixes) {
+    let f=wizardExperience(storage); await f.E.refresh();
+    assert.equal(f.E.state.tweaks.find(t=>t.id==='wizard/orb-radial').on,false);
+    assert.ok(!f.all().includes('wizard/orb-radial'));
+    assert.equal((await f.E.defaults('nebula'))['wizard/orb-radial'],false);
+    const skin={tweaks:{}}; f.window.WosMySkin={active:skin, update(v){Object.assign(skin.tweaks,v.tweaks);}};
+    await f.E.refresh(); assert.ok(!f.all().includes('wizard/orb-radial'),'missing old recipe key inherits OFF');
+    f.window.WosMySkin.active=null; await f.E.refresh();
+    await f.E.toggle('wizard/orb-radial'); assert.ok(f.all().includes('wizard/orb-radial'));
+    f=wizardExperience(storage); await f.E.refresh(); assert.equal(f.E.state.tweaks.find(t=>t.id==='wizard/orb-radial').on,true);
+    await f.E.toggle('wizard/orb-radial'); assert.ok(!f.all().includes('wizard/orb-radial'));
+  }
+});
+test('Orb radial is trusted layout+nav only; late lazy import and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api, resolveModule, starts=0, disposed=0;
+  f.host._test.setImporter(async url => url.includes('/core/') ? new Promise(resolve=>{resolveModule=resolve;}) : {default:a=>{api=a;return()=>{};}});
+  await f.host.loadTweaks(['wizard/orb-radial'],f.slots); assert.equal(api.orb,undefined);
+  await f.mount('wizard/orb-radial'); const stale=api.orb;
+  const off=stale.switcher(); await f.clear();
+  resolveModule({default:()=>{starts++;return{dispose(){disposed++;}};}}); await Promise.resolve(); await Promise.resolve();
+  assert.equal(starts,0); off(); stale.switcher()(); assert.equal(starts,0);
+  f.host._test.setImporter(async url=>url.includes('/core/')?{default:()=>{starts++;return{dispose(){disposed++;}};}}:{default:a=>{api=a;return()=>{};}});
+  await f.mount('wizard/orb-radial'); const release=api.orb.switcher(); await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(starts,1); release(); release(); await f.clear(); assert.equal(disposed,1);
 });

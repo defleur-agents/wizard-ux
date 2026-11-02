@@ -10,20 +10,20 @@ test('a same-origin wizard:apps-changed message re-reads the box app list; other
  const storage=new Map();
  const window={WizCore:{norm:s=>String(s).toLowerCase()},WizConfig:{endpoint:()=>'/apps'},dispatchEvent(){},localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)}};
  const ctx={window,CustomEvent:class{},URL,location:new URL('https://wizard.example/'),
-  fetch:async()=>{calls++;return {ok:true,json:async()=>({apps:apps.slice()})};},AbortSignal,setTimeout,clearTimeout,setInterval(){},
+  fetch:async(url)=>{if(String(url).includes('/app-logos'))return {ok:false};calls++;return {ok:true,json:async()=>({apps:apps.slice()})};},AbortSignal,setTimeout,clearTimeout,setInterval(){},
   addEventListener:(type,fn)=>listeners.push([type,fn]),document:{addEventListener(){},visibilityState:'visible'},localStorage:window.localStorage};
  vm.runInNewContext(source,ctx);await window.WizCore.appsLoaded();
  const R=window.WizCore.apps('desktop');
- assert.equal(R.APP['wizard-connection-router'],undefined);
- apps.push({id:'wizard-connection-router',name:'Connection Router',url:'/wizard-connection-router/'});
+ assert.equal(R.APP['habit-tracker'],undefined);
+ apps.push({id:'habit-tracker',name:'Habit Tracker',url:'/habit-tracker/'});
  const send=async (origin,data)=>{for(const [t,fn] of listeners) if(t==='message') fn({origin,data});await new Promise(r=>setTimeout(r,0));await new Promise(r=>setTimeout(r,0));};
  const before=calls;
  await send('https://evil.example',{type:'wizard:apps-changed'});
  await send('https://wizard.example',{type:'something-else'});
  assert.equal(calls,before);
- assert.equal(R.APP['wizard-connection-router'],undefined);
- await send('https://wizard.example',{type:'wizard:apps-changed',id:'wizard-connection-router'});
+ assert.equal(R.APP['habit-tracker'],undefined);
+ await send('https://wizard.example',{type:'wizard:apps-changed',id:'habit-tracker'});
  assert.equal(calls,before+1);
- assert.equal(R.APP['wizard-connection-router'].url,'/wizard-connection-router/');
- assert.equal(R.APP['wizard-connection-router'].kind,'wizard');
+ assert.equal(R.APP['habit-tracker'].url,'/habit-tracker/');
+ assert.equal(R.APP['habit-tracker'].kind,'wizard');
 });

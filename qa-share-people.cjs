@@ -15,6 +15,22 @@ fs.mkdirSync(OUT,{recursive:true});
     assert.equal(await p.locator('iframe[src*="messenger"]').count(),0,'People loads before Messenger opens');
     for (const skin of ['nebula','sepia']) {
       await p.evaluate(k=>WosSkin.set(k),skin); await p.waitForTimeout(800);
+      const avatars=await p.locator('[data-shs-people] .shs-av').evaluateAll(els=>els.map(el=>{
+        const cs=getComputedStyle(el), canvas=document.createElement('canvas'); canvas.width=canvas.height=1;
+        const c=canvas.getContext('2d'); c.fillStyle=cs.backgroundColor; c.fillRect(0,0,1,1);
+        const rgba=Array.from(c.getImageData(0,0,1,1).data);
+        const linear=rgba.slice(0,3).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;});
+        const lum=linear[0]*.2126+linear[1]*.7152+linear[2]*.0722;
+        return {hue:el.style.getPropertyValue('--h'),fg:cs.color,rgba,contrast:1.05/(lum+.05)};
+      }));
+      assert.equal(avatars.length,3); assert.equal(new Set(avatars.map(a=>a.hue)).size,3);
+      for(const a of avatars) {
+        assert.equal(a.fg,'rgb(255, 255, 255)','white initials on '+skin);
+        assert.equal(a.rgba[3],255,'opaque avatar');
+        assert.ok(Math.max(...a.rgba.slice(0,3))-Math.min(...a.rgba.slice(0,3))>30,'avatar is coloured, not grey');
+        assert.ok(a.contrast>=4.5,'readable initials '+skin+' contrast='+a.contrast);
+      }
+      console.log('PASS avatar colours '+skin,JSON.stringify(avatars));
       await p.screenshot({path:path.join(OUT,`share-people-phone-${skin}.png`)});
       const geom=await p.locator('.shs-b').evaluate(el=>({w:el.getBoundingClientRect().width,h:el.getBoundingClientRect().height,bg:getComputedStyle(el).backgroundColor}));
       assert.ok(geom.w<=390&&geom.h<=844); assert.ok(!geom.bg.includes('rgba('),'solid sheet '+geom.bg);
