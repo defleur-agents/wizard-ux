@@ -214,3 +214,7 @@ test('Orbs: every satellite shows its name, always (Miguel, 2 Nov 2026); the rin
   assert.match(js, /const SP = 86;/);
   const n = /\.ob-sat-n \{([^}]*)\}/.exec(css)[1]; assert.match(n, /opacity: \.9/); assert.doesNotMatch(n, /opacity: 0/, 'shown without a hover');
 });
+
+test('phone Orb: press and hold a satellite = Open · Close (stays installed), the Apps view\'s own menu', () => {
+  assert.match(read('web/layouts/orb/phone.js'), /chrome\.menuOn\(b, a, \{ onOpen: \(\) => api\.apps\.open\(a\.id\), onClosed: \(\) => api\.after\(60, paintApps\) \}\);/);
+});

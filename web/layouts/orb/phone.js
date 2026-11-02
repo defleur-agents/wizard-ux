@@ -121,6 +121,8 @@ export default function phone(api) {
     // its name always under it (Miguel, 2 Nov 2026), small; a long one ends in …
     b.append(face, count, el('i', 'ob-sat-run', { 'aria-hidden': 'true' }), el('b', 'obp-sat-n', { 'aria-hidden': 'true', text: softName(a.name) }));
     api.listen(b, 'click', () => api.apps.open(a.id));
+    // press and hold: Open · Close (stays installed), the same menu as the Apps view (Miguel, 2 Nov 2026)
+    chrome.menuOn(b, a, { onOpen: () => api.apps.open(a.id), onClosed: () => api.after(60, paintApps) });
     api.apps.logo(a.id).then(url => {
       if (!url) return;
       const im = el('img', 'ob-logo', { alt: '', src: url, draggable: 'false' });
