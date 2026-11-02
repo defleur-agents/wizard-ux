@@ -45,10 +45,10 @@ function boot({ storage = new Map() } = {}) {
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const ids = B => [...B.items()].map(i => i.id);
 
-test('the picker has three choices, Chats · Badge · Off, everywhere it is drawn', () => {
+test('the picker has three choices, Chats · Badge · Daily · Off, everywhere it is drawn', () => {
   const w = boot(), h = w.WosBell.picker('notifications');
-  assert.deepEqual([...h.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats', 'badge', 'off'], 'loudest to quietest');
-  assert.match(w.WosBell.picker('system:app-updates'), /data-notify-route="system:app-updates" data-notify-to="off" aria-checked="true"/, 'System rows default to Off');
+  assert.deepEqual([...h.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats', 'badge', 'daily', 'off'], 'loudest to quietest');
+  assert.match(w.WosBell.picker('system:app-updates'), /data-notify-route="system:app-updates" data-notify-to="daily" aria-checked="true"/, 'System rows default to Daily');
 });
 
 test('System notices are classified by tags or known titles; needs-you ones route as Notifications', () => {
@@ -64,7 +64,7 @@ test('default: routine System notices leave Chats and the Notifications badge; t
   const w = boot(), B = w.WosBell;
   B.watch(() => {}); await B.refresh(true); await settle();
   assert.deepEqual(ids(B), ['u2', 'n1']);
-  assert.equal(B.systemCount, 0, 'Off: nothing on the Settings cog');
+  assert.equal(B.systemCount, 0, 'Daily: nothing on the Settings cog');
   B.setRoute('notifications', 'badge'); await settle();
   assert.equal(w.WizCore.workspaceNav.counts.notifications, 2, 'Notifications badge counts only its own (4 unread − 2 System)');
 });

@@ -27,7 +27,7 @@
    * update, a connection waiting for his OK) never goes quiet: it follows Notifications' own choice instead.
    * A System row set to Badge counts on the Settings cog, and Settings lists them under Notifications. */
   const ROUTE_KEY = 'wos.notify.route.v1', ROUTE_DEFAULT = Object.freeze({ notifications: 'chats' });
-  const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/, TO = ['badge', 'chats', 'off'];
+  const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/, TO = ['chats', 'badge', 'daily', 'off'];
   const SYSTEM = Object.freeze([
     { kind: 'app-updates', name: 'App updates', what: 'Apps updated overnight',
       title: /^(\d+ apps? updated|App updates need a look)$/i },
@@ -40,7 +40,33 @@
   const sysOf = id => { const m = SYSID.exec(String(id || '')); return m ? SYSTEM.find(k => k.kind === m[1]) || null : null; };
   const validId = id => APPID.test(id) || !!sysOf(id);
   let ROUTES = readJson(ROUTE_KEY, {});
-  const route = id => { id = String(id || ''); const r = Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : sysOf(id) ? 'off' : ROUTE_DEFAULT[id]; return TO.includes(r) ? r : 'badge'; };
+  // Daily (one line in the Morning Report) is for Notifications' alerts and System notices only: an app's own items
+  // (Mail, Messenger) would lose their point waiting a day, so its Daily is shown greyed out.
+  const dailyOk = id => id === 'notifications' || !!sysOf(id);
+  const route = id => { id = String(id || ''); const r = Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : sysOf(id) ? 'daily' : ROUTE_DEFAULT[id]; return TO.includes(r) && (r !== 'daily' || dailyOk(id)) ? r : 'badge'; };
+  /* Saved on the box (Notifications /api/routes), so every device shows the same choice; this device keeps a copy for
+   * a cold start or while Notifications is unreachable. A choice made offline is sent on the next sync. The first
+   * sync on a box with nothing saved yet uploads this device's choices once. */
+  const SYNC = { at: 0, pending: {}, busy: false, server: false };
+  async function syncRoutes(force) {
+    if (!installed() || SYNC.busy || (!force && Date.now() - SYNC.at < 30e3)) return;
+    SYNC.busy = true; SYNC.at = Date.now();
+    try {
+      const up = Object.keys(SYNC.pending).length ? SYNC.pending : null;
+      if (up) { const r = await fetch('/notifications/api/routes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routes: up }) }); if (r.ok) SYNC.pending = {}; }
+      const r = await fetch('/notifications/api/routes', { cache: 'no-store', credentials: 'same-origin' });
+      if (!r.ok) return;
+      const d = await r.json(); if (!d || typeof d.routes !== 'object') return;
+      SYNC.server = true;
+      if (!d.saved && Object.keys(ROUTES).length) {
+        const keep = {}; for (const [k, v] of Object.entries(ROUTES)) if (validId(k) && TO.includes(v) && (v !== 'daily' || dailyOk(k))) keep[k] = v;
+        if (Object.keys(keep).length) await fetch('/notifications/api/routes', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routes: keep }) });
+        return;
+      }
+      const next = { ...d.routes, ...SYNC.pending };
+      if (JSON.stringify(next) !== JSON.stringify(ROUTES)) { ROUTES = next; writeJson(ROUTE_KEY, ROUTES); rerouted(); loadItems(); }
+    } catch (e) {} finally { SYNC.busy = false; }
+  }
   // Which System kind a Notifications item is: the sender's tags (`wizard-system` + kind), else its known title.
   function sysKind(it) {
     if (!it || it.app) return null;
@@ -63,11 +89,13 @@
     return id === 'notifications' || sysOf(id) ? installed() : known()[id]?.s === 'yes';
   }
   // Off: no badge anywhere and nothing in Chats (Notifications keeps it in its history).
-  const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && route(id) === 'off'; };
+  // Off or Daily: no badge here and nothing in Chats (Daily waits for the Morning Report instead).
+  const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && (route(id) === 'off' || route(id) === 'daily'); };
   function setRoute(id, to) {
-    id = String(id || ''); if (!validId(id) || id === 'wizard' || !TO.includes(to)) return false;
+    id = String(id || ''); if (!validId(id) || id === 'wizard' || !TO.includes(to) || (to === 'daily' && !dailyOk(id))) return false;
     if (route(id) === to) return true;
     ROUTES = { ...ROUTES, [id]: to }; writeJson(ROUTE_KEY, ROUTES);
+    SYNC.pending = { ...SYNC.pending, [id]: to }; void syncRoutes(true);
     rerouted(); loadItems();
     return true;
   }
@@ -277,6 +305,7 @@
   // An owner action (mark) forces a read; one landing during an in-flight read reruns once right after it.
   let inflight = false, nextAt = 0, again = false;
   async function refresh(force) {
+    void syncRoutes(force === true);
     if (!installed()) { if (IN.subs.size && (force === true || Date.now() >= nextAt)) { nextAt = Date.now() + 10000; loadItems(); } return; }
     if (inflight) { if (force === true) again = true; return; }
     if (force !== true && Date.now() < nextAt) return;
@@ -327,18 +356,19 @@
   const ROUTE_ICON = {
     badge: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg>',
     chats: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5z"/></svg>',
+    daily: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12.5h12M4.5 12.5a3.5 3.5 0 0 1 7 0M8 3.5v2M3.2 6.7l1.4 1.4M12.8 6.7l-1.4 1.4"/></svg>',
     off: '<svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.5"/><path d="M4.2 11.8l7.6-7.6"/></svg>',
   };
   const escH = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   function picker(id, { name, off = false } = {}) {
     id = String(id || ''); const nm = name || nameOf(id), cur = off && route(id) === 'chats' ? 'badge' : route(id);
-    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['chats', 'Chats'], ['badge', 'Badge'], ['off', 'Off']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${to === 'chats' && off ? ' disabled' : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
+    return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${[['chats', 'Chats'], ['badge', 'Badge'], ['daily', 'Daily'], ['off', 'Off']].map(([to, label]) => `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${(to === 'chats' && off) || (to === 'daily' && !dailyOk(id)) ? ' disabled' : ''}${to === 'daily' ? ` title="${dailyOk(id) ? 'One line in tomorrow’s Morning Report' : `${escH(nm)} would lose its point waiting a day`}"` : ''}>${ROUTE_ICON[to]}<span>${label}</span></button>`).join('')}</div>`;
   }
   /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
    * Undo, which puts the app back on Chats. `toast` is the shell's toast(icon, text, ms); the button is added here. */
   function movedToast(id, toast, ms = 5000, from) {
     id = String(id || ''); const now = route(id), back = TO.includes(from) && from !== now ? from : now === 'badge' ? 'chats' : 'badge';
-    const text = now === 'off' ? `${nameOf(id)} turned off · ` : `${nameOf(id)} moved to ${now === 'badge' ? 'badges' : 'Chats'} · `;
+    const text = now === 'off' ? `${nameOf(id)} turned off · ` : now === 'daily' ? `${nameOf(id)} moved to the Morning Report · ` : `${nameOf(id)} moved to ${now === 'badge' ? 'badges' : 'Chats'} · `;
     try { toast?.('●', '', ms); } catch (e) {}
     const t = document.getElementById?.('toast'); if (!t) return null;
     const spans = t.querySelectorAll('span'); const tx = spans[spans.length - 1];
@@ -348,5 +378,5 @@
     t.append(b);
     return b;
   }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routes, systemRoutes, systemItems, seenSystem, routeIdOf, get systemCount() { return SY.badge; }, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, dailyOk, syncRoutes, routes, systemRoutes, systemItems, seenSystem, routeIdOf, get systemCount() { return SY.badge; }, discover, picker, movedToast, nameOf, get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
