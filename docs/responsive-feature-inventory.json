@@ -336,13 +336,15 @@
     },
     "core/home-screen-apps.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
     },
     "core/home-screen-policy.js": {
       "loadedBy": [
-        "phone"
+        "phone",
+        "desktop"
       ],
       "note": "Android pinned app-only task policy (home-screen shortcut sessions)"
     },
@@ -738,21 +740,6 @@
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
     },
-    "core/home-screen-policy.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android launcher-shortcut task policy; desktop has no home-screen pinning."
-    },
-    "core/home-screen-apps.css": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen sheet styling; native ShortcutManager only."
-    },
-    "core/home-screen-apps.js": {
-      "shell": "phone",
-      "classification": "native",
-      "reason": "Android Add to home screen via ShortcutManager pin request; no desktop equivalent."
-    },
     "core/single-app-session.js": {
       "shell": "phone",
       "classification": "native",
@@ -822,6 +809,9 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/home-screen-apps.css",
+    "core/home-screen-apps.js",
+    "core/home-screen-policy.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",

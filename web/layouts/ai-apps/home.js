@@ -54,8 +54,29 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks }) {
     ic.append(tile(a), n);
     b.append(ic, el('span', 'ah-name', { text: a.name }));
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
-    api.listen(b, 'click', () => goApp(a.id));
+    api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id); });
+    holdable(b, a.id);
     return b;
+  }
+  /* Round 7 (Miguel): a hold on an app icon (phone) or a right click (desktop) offers it for the home screen, exactly as
+   * the Desks' hold on an app tile does: the stock sheet (core/home-screen-apps.js through api.apps.homeScreen; native
+   * pin on the Android app, the two-step Add to Home Screen / Install app guide elsewhere), never a copy. Apps the stock
+   * sheet would not offer (system apps, no frontend) keep a plain tap. */
+  const HOLD = 450;   // the stock hold (home-screen-apps.js)
+  let swallow = 0, hold = null;
+  const canPin = id => !!api.apps.homeScreen?.can?.(id);
+  function offer(id) { swallow = Date.now() + 700; return !!api.apps.homeScreen?.offer?.(id); }
+  function holdable(b, id) {
+    api.listen(b, 'pointerdown', e => {
+      if (e.button > 0 || !canPin(id)) return;
+      const h = { x: e.clientX, y: e.clientY, pid: e.pointerId };
+      h.off = api.after(HOLD, () => { if (hold !== h) return; hold = null; offer(id); });
+      hold = h;
+    });
+    const end = () => { if (hold) { hold.off?.(); hold = null; } };
+    api.listen(b, 'pointermove', e => { if (hold && e.pointerId === hold.pid && Math.hypot(e.clientX - hold.x, e.clientY - hold.y) > 8) end(); });
+    api.listen(b, 'pointerup', end); api.listen(b, 'pointercancel', end);
+    api.listen(b, 'contextmenu', e => { if (!canPin(id)) return; e.preventDefault?.(); end(); if (Date.now() >= swallow) offer(id); });
   }
   function moreCell() {
     const b = el('button', 'ah-app ah-more', { type: 'button', role: 'listitem', 'aria-label': 'Get more apps' });
