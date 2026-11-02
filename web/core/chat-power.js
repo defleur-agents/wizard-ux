@@ -224,7 +224,7 @@ window.WosChatPower = function chatPower(A) {
 
   /* ================= #11 models ================= */
   function threadModel(s) {
-    return M?.currentRoute(s?.id || '') || { model: '', provider: '' };
+    return (M?.publicRoute?.(s?.id, s?.agent) ? M.currentRoute(s?.id || '', null, s?.agent || 'hermes') : M?.currentRoute(s?.id || '')) || { model: '', provider: '' };
   }
   // Agents MVP: the agent a window or thread belongs to (null = the main agent).
   const agentOfWin = (w, s) => { const AG = window.WosAgents; const id = s ? (LIVE.agentOf?.(s.id) || (typeof s.agent === 'string' ? s.agent : s.agent?.id) || '') : A.winAgent(w); return AG && id && AG.isOther(id) ? AG.get(id) || { id, label: id, missing: true } : null; };
@@ -315,7 +315,7 @@ window.WosChatPower = function chatPower(A) {
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
-    if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
+    if (M?.isPending?.(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
@@ -328,7 +328,7 @@ window.WosChatPower = function chatPower(A) {
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
       let route;
-      try { route = await M.setThreadModel(sh.sid, o); }
+      try { route = await M.setThreadModel(sh.sid, o, M.publicRoute(sh.sid, s.agent) ? s.agent || 'hermes' : undefined); }
       catch (e) { toast('!', 'Couldn’t change the model · try again', 2600); return; }
       if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
@@ -370,8 +370,8 @@ window.WosChatPower = function chatPower(A) {
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
   const retrying = new Map();
   async function retryThread(wid, sid, o, sourceId, alive) {
-    let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
-    if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
+    let s = LIVE.session(sid), pickedRoute; if (!s || !OUTBOX) return false;
+    if (retrying.has(sid) || M?.isPending?.(sid, s.agent) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
     const savedId = sourceId || s.retryRunId;
     const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
     retrying.set(sid, o ? `Retrying on ${o.name}…` : 'Retrying…');
@@ -390,10 +390,12 @@ window.WosChatPower = function chatPower(A) {
       }
       if (o) {
         const cur = threadModel(s);
+        if (M.publicRoute?.(sid, s.agent)) pickedRoute = cur;
         if (cur.model !== o.value || (o.provider && cur.provider !== o.provider)) {
           let route;
-          try { route = await M.setThreadModel(sid, o); }
+          try { route = await M.setThreadModel(sid, o, M.publicRoute(sid, s.agent) ? s.agent || 'hermes' : undefined); }
           catch (_) { toast('!', 'Couldn’t change the model · try again', 2600); return false; }
+          if (M.publicRoute?.(sid, s.agent)) pickedRoute = route;
           if (alive && !alive()) return false;
           Object.assign(s, route);
           // Saving can take seconds. Hydrate again ONLY across that await; a
@@ -408,10 +410,10 @@ window.WosChatPower = function chatPower(A) {
       const note = noteTurn(w && w.thread === sid ? w : null, s);
       const text = s?.retryRunId ? s.request || RETRY_WORD : note ? RETRY_WORD : s?.request || (FAILED.has(s?.status) ? RETRY_WORD : '');
       if (!text) { toast('!', 'This thread has no request to send again · open it to reply', 2600); return false; }
-      const cur = o ? { model: o.value, provider: o.provider } : threadModel(s);
+      const cur = o ? pickedRoute || { model: o.value, provider: o.provider } : threadModel(s);
       await OUTBOX.enqueue({ kind: 'reply', sessionId: sid, agent: s.agent || A.winAgent?.(w) || '', text, retryRunId: s.retryRunId || '', wid: w && w.thread === sid ? wid : '', how: 'retry', source: 'chat',
         instructions: `${window.WizConfig.owner() || 'The owner'} pressed Retry on this thread after the last request failed${o ? `, choosing ${o.name}` : ''}. ${text === RETRY_WORD ? 'Carry out the last request in this thread again (it may be a follow-through note rather than a typed message).' : 'This is the same request again.'}`,
-        ...(cur.model ? { model: cur.model, provider: cur.provider } : {}) });
+        ...(cur.model ? { model: cur.model, provider: cur.provider, ...(M.publicRoute?.(sid, s.agent) ? { selection_version: cur.selection_version } : {}) } : {}) });
       E?.cleared.set(sid, Date.now());
       toast('↻', o ? `Retrying on ${o.name}` : 'Retrying', 1600);
       if (c) follow(wid);

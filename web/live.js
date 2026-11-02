@@ -115,6 +115,7 @@
       // The thread's model route (chat-models.js shows and changes it).
       model: typeof item.model === 'string' ? item.model : '', provider: typeof item.provider === 'string' ? item.provider : '',
       modelLockAt: Number(item.wizard_model_lock_updated_at) || 0,
+      ...(window.WosModels?.publicRoute?.(item.id, typeof item.agent === 'object' ? item.agent?.id : item.agent) ? {selection: item.wizard_selection || null} : {}),
       // The last thing asked (Retry on a failed thread sends it again: controller.ts retryServerFailedSession).
       retryRunId: typeof item.wizard_retry_run_id === 'string' ? item.wizard_retry_run_id : '',
       request: typeof item.wizard_retry_input === 'string' ? item.wizard_retry_input : userText,
@@ -1022,7 +1023,8 @@
     async reply(id, input, opts = {}) {
       const M = window.WosModels;
       if (!M) throw new Error('Model selector unavailable · reload Wizard');
-      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider } : null));
+      const route = await M.resolveRoute(M.snapshot(id, opts.model ? { model: opts.model, provider: opts.provider,
+        ...(M.publicRoute?.(id) ? { selection_version: opts.selection_version } : {}) } : null));
       const s = this.session(id);
       if (s && WORKING.has(s.status) && s.runId) {
         try {
@@ -1144,7 +1146,7 @@
       // was preloaded or opened, until the next list read put it back. A status the detail does report still wins.
       const run = s.status ? { queueReason: s.queueReason, status: s.status } : {};
       if (i >= 0) list[i] = { ...list[i], title: s.title, request: s.request, retryRunId: s.retryRunId, ...run, safeError: s.safeError, reconnect: s.reconnect, renames: s.renames, detailNeeded: false,
-        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt } : {}) };
+        ...(s.model ? { model: s.model, provider: s.provider, modelLockAt: s.modelLockAt, ...(window.WosModels?.publicRoute?.(id, agent) ? {selection: s.selection} : {}) } : {}) };
       else if (this.windows[agent || 'hermes']) DETAIL.set(id, { ...s, detailNeeded: false });
       else list.push({ ...s, detailNeeded: false });
       applyLocal(i >= 0 ? list[i] : DETAIL.get(id) || s);
