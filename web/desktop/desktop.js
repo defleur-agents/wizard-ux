@@ -672,21 +672,33 @@
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
    * Host-window fullscreen keeps this readable width; explicit monocle remains immersive. */
   function layout() {
-    const host = wsEl(cur), d = ws[cur];
+    const d = ws[cur];
     // Apply chrome before measuring, including a single app, reload and workspace switches.
-    const full = !homeOpen && !!d.mono && !!d.wins.length;
+    const full = !homeOpen && !!d?.mono && !!d.wins.length;
     document.body.classList.toggle('desktop-fullscreen', full);
     // Opinionated: a visible way out of full screen (the title bar and its ⤢ are hidden there).
     let ex = document.getElementById('exitFull');
     if (!ex) { ex = document.createElement('button'); ex.id = 'exitFull'; ex.type = 'button'; ex.className = 'exit-full'; ex.title = `Exit full screen (Esc / ${MOD}F)`; ex.setAttribute('aria-label', 'Exit full screen');
       ex.innerHTML = '⤡<span>Exit full screen</span>'; ex.addEventListener('click', () => { if (ws[cur].mono) toggleMono(); }); document.body.appendChild(ex); }
     ex.hidden = !full;
-    const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
-    const n = d.wins.length;
-    const rects = {};
-    if (!n || homeOpen) return;
     const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
     const maxWidth = configuredMax > 0 ? configuredMax : 1200;
+    // Restored background apps must load at their eventual size, including while Home is open.
+    // Hidden hosts use their own chrome mode, never the foreground desk's stage height.
+    const hosts = ws.map((dk, i) => {
+      const host = wsEl(i);
+      host?.classList.toggle('desk-fullscreen', !!dk.mono && !!dk.wins.length);
+      return host;
+    });
+    // Apply host modes first, then read every size before writing any window geometry.
+    const sizes = hosts.map((host, i) => host && ws[i].wins.length ? [host.clientWidth, host.clientHeight] : null);
+    ws.forEach((dk, i) => {
+      const size = sizes[i];
+      if (size && size[0] > 0 && size[1] > 0) tile(dk, size[0], size[1], !!dk.mono, maxWidth);
+    });
+  }
+  function tile(d, W_, H_, full, maxWidth) {
+    const g = full ? 0 : 8, n = d.wins.length, rects = {};
     // Columns on request: a window that sets `share` (Video Editor's video + Feedback pair) lays the desktop out as
     // side-by-side columns in window order; windows without a share split what is left equally.
     const shared = !d.mono && n >= 2 && n <= 4 && d.wins.some(id => W[id]?.share > 0);
