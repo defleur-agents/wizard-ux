@@ -379,14 +379,57 @@
   /* Room a layout's floating orb takes at the bottom of every app window (px): each hosted app document gets it as
    * --wos-inset-b on its <html> (like the camera's --wos-cutout) and one rule that adds that much room after a kit
    * scroll area's last item (.wz-scroll), so every list still scrolls clear of the orb. 0 = nothing (stock). */
-  let frameInset = 0;
-  const insetHolders = new Map(), insetSheets = new WeakMap();
+  let frameInset = 0, frameOrb = null;
+  const insetHolders = new Map(), insetOrbs = new Map(), insetSheets = new WeakMap(), insetWatch = new WeakMap();
+  /* The orb bar (Miguel, 2 Nov 2026; the Wizard standard for every full-screen app): the orb has ONE fixed spot, bottom
+   * centre, and an app's own bottom tab bar is laid out around it, its tabs split evenly left and right of the orb (an
+   * empty slot as wide as the orb in the middle), all on the orb's row; never under it, never covering it. Without an
+   * orb over the frame's bottom centre (desktop), the bar is lifted clear of the orb instead, as before. */
+  const ORB_BAR = 'html.wos-orb-bar [data-wos-inset-bar]{height:auto!important;min-height:0!important;padding-bottom:0!important;margin-bottom:0!important}'
+    + 'html.wos-orb-bar [data-wos-tabs]{display:flex!important;flex-flow:row nowrap!important;align-items:center!important;justify-content:flex-start!important;gap:0!important;'
+    + 'box-sizing:border-box!important;min-height:calc(2*var(--wos-orb-cy,40px))!important;height:auto!important;padding-top:0!important;padding-bottom:0!important;padding-left:0!important;padding-right:0!important;margin-bottom:0!important}'
+    + 'html.wos-orb-bar [data-wos-tabs="inner"]{background:none!important;border-color:transparent!important;box-shadow:none!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important;width:100%!important;max-width:none!important;margin-left:0!important;margin-right:0!important}'
+    + 'html.wos-orb-bar [data-wos-tabs]::after{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var(--wos-orb-slot,80px)!important;align-self:stretch!important;background:none!important;border:0!important}'
+    + 'html.wos-orb-bar [data-wos-flat]{display:contents!important}'
+    + 'html.wos-orb-bar [data-wos-tab]{order:1!important;flex:0 0 calc((100% - var(--wos-orb-slot,80px))/2/var(--wos-tab-n,1))!important;min-width:0!important;max-width:none!important;margin-left:0!important;margin-right:0!important;box-sizing:border-box!important;flex-direction:column!important;justify-content:center!important;align-items:center!important;row-gap:2px!important;column-gap:0!important;text-align:center!important}'
+    + 'html.wos-orb-bar [data-wos-tab="r"]{order:3!important}'
+    + [1, 2, 3, 4].map(n => `html.wos-orb-bar [data-wos-tabs][data-wos-nl="${n}"] [data-wos-tab="l"],html.wos-orb-bar [data-wos-tabs][data-wos-nr="${n}"] [data-wos-tab="r"]{--wos-tab-n:${n}}`).join('');
   const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after{content:"";display:block;flex:none;height:var(--wos-inset-b,0px);pointer-events:none}'
-    + '[data-wos-inset-bar]{height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}';
+    + 'html:not(.wos-orb-bar) [data-wos-inset-bar]{height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}' + ORB_BAR;
+  const setAttr = (n, k, v) => { if (v == null) { if (n.hasAttribute(k)) n.removeAttribute(k); } else if (n.getAttribute(k) !== v) n.setAttribute(k, v); };
+  /* The tabs of a bottom bar: its buttons / links / tabs on the bar's lowest row (2 to 8 of them, none full width). Their
+   * nearest common box becomes the tab row; wrappers in between flatten (display: contents), so the tabs themselves are
+   * what gets split, whatever groups the app put them in. Returns false when the bar has no such row. */
+  function orbTabs(d, bar, vw) {
+    const old = [...d.querySelectorAll('[data-wos-tabs],[data-wos-tab],[data-wos-flat]')];
+    const vis = n => n.getClientRects().length > 0 && d.defaultView.getComputedStyle(n).visibility !== 'hidden';
+    let tabs = [...bar.querySelectorAll('button,a[href],[role="tab"],[role="radio"]')].filter(n => vis(n) && !n.parentElement.closest('button,a[href],[role="tab"],[role="radio"]'))
+      .map(n => ({ n, r: n.getBoundingClientRect() })).filter(t => t.r.width < vw * .7 && t.r.height >= 20);
+    const low = Math.max(...tabs.map(t => t.r.top + t.r.height / 2));
+    tabs = tabs.filter(t => Math.abs(t.r.top + t.r.height / 2 - low) < 16).sort((x, y) => x.r.left - y.r.left);
+    if (tabs.length < 2 || tabs.length > 8) { for (const n of old) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null); return false; }
+    let row = tabs[0].n.parentElement;
+    while (row && row !== bar && !tabs.every(t => row.contains(t.n))) row = row.parentElement;
+    if (!row || !bar.contains(row) && row !== bar) return false;
+    const nl = Math.ceil(tabs.length / 2), keep = new Set([row]);
+    tabs.forEach((t, i) => {
+      keep.add(t.n); setAttr(t.n, 'data-wos-tab', i < nl ? 'l' : 'r');
+      for (let p = t.n.parentElement; p && p !== row; p = p.parentElement) { keep.add(p); setAttr(p, 'data-wos-flat', ''); }
+    });
+    setAttr(row, 'data-wos-tabs', row === bar ? 'bar' : 'inner'); setAttr(row, 'data-wos-nl', String(nl)); setAttr(row, 'data-wos-nr', String(tabs.length - nl));
+    for (const n of old) if (!keep.has(n)) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null);
+    return true;
+  }
   function insetFrame(f) {
     let d = null; try { d = f.contentDocument; } catch (_) { return; }
     if (!d?.documentElement) return;
     d.documentElement.style.setProperty('--wos-inset-b', frameInset + 'px');
+    // an app re-draws its bar (a tab picked, a list loaded): look again once it settles (one watcher per document)
+    if (frameInset && d.body && !insetWatch.has(d) && d.defaultView?.MutationObserver) {
+      let t = 0; const mo = new d.defaultView.MutationObserver(() => { if (t) return; t = setTimeout(() => { t = 0; if (frameInset && f.isConnected && f.contentDocument === d) insetFrame(f); }, 180); });
+      mo.observe(d.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'class'] });
+      insetWatch.set(d, mo);
+    }
     if (frameInset) {
       // a kit scroll area (most apps) or, when the page itself scrolls, the page: room after the last item; an app's own
       // bottom tab bar is lifted clear of the orb instead (its background runs on under the orb, like a phone's home bar).
@@ -411,14 +454,34 @@
       }
     }
     if (!frameInset) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
+    // the orb bar: the orb sits over this frame's bottom centre (a full-screen app under a view's orb), so the bar's tabs
+    // go either side of it, on its row; else (no orb there, no tabs) the lifted bar above
+    let split = false;
+    if (frameInset && bar?.isConnected) {
+      let o = null; try { o = frameOrb?.(); } catch (_) {}
+      const fr = f.getBoundingClientRect(), cy = o ? fr.bottom - o.y : 0;
+      // the frame spans the screen (an app alone on its desk; its desk may still be sliding in) and the orb is centred
+      const vwTop = globalThis.innerWidth || fr.width;
+      if (o && o.d > 0 && cy > o.d / 2 && cy < 160 && fr.width >= vwTop * .9 && Math.abs(vwTop / 2 - o.x) < 8) {
+        d.documentElement.style.setProperty('--wos-orb-cy', Math.round(cy) + 'px');
+        d.documentElement.style.setProperty('--wos-orb-slot', Math.round(o.d + 16) + 'px');
+        split = orbTabs(d, bar, d.documentElement.clientWidth);
+      }
+    }
+    if (!split) for (const n of d.querySelectorAll('[data-wos-tabs],[data-wos-tab],[data-wos-flat]')) for (const k of ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr']) setAttr(n, k, null);
+    if (d.documentElement.classList.contains('wos-orb-bar') !== split) d.documentElement.classList.toggle('wos-orb-bar', split);
     f.closest('.win')?.classList.toggle('wos-inset-bar', !!frameInset && !!bar?.isConnected);
   }
   function insetSync() {
     frameInset = Math.max(0, ...insetHolders.values());
+    frameOrb = [...insetOrbs.values()].pop() || null;
     if (isDoc) for (const f of document.querySelectorAll('.win iframe')) insetFrame(f);
   }
   // an app fills its page after it loads: look again a little later (once its list is there)
   if (isDoc) document.addEventListener?.('load', e => { if (!frameInset || e.target?.tagName !== 'IFRAME') return; const f = e.target; insetFrame(f); for (const ms of [1500, 5000]) setTimeout(() => { if (frameInset) insetFrame(f); }, ms); }, true);
+  // a turn of the phone moves the orb: lay the bars out around it again
+  let insetResize = 0;
+  if (isDoc) globalThis.addEventListener?.('resize', () => { if (!frameInset || insetResize) return; insetResize = setTimeout(() => { insetResize = 0; if (frameInset) insetSync(); }, 250); });
   function shellApi(a, base) {
     const live = () => !a.dead && !!shell;
     return {
@@ -485,11 +548,15 @@
          * which opens that app's page in the App Store window (its own Get; once installed it opens right away). */
         store: () => live() ? storeApps(shell.apps?.()?.map(x => x.id) || []) : Promise.resolve([]),
         get: id => live() && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) ? !!shell.openStore?.(id) : false,
-        // Room the layout's floating orb takes at the bottom of app windows (px); released on teardown.
-        inset(px) {
+        /* Room the layout's floating orb takes at the bottom of app windows (px); released on teardown. orb(), when given,
+         * says where that orb is ({ x, y, d }: its centre and size, viewport px): an app's own bottom tab bar is then
+         * laid out around it (the orb bar: tabs split left and right of the orb, on its row), else lifted above it. */
+        inset(px, orb = null) {
           if (!live()) return () => {};
-          insetHolders.set(a, Math.max(0, Math.min(240, +px || 0))); insetSync();
-          const off = () => { insetHolders.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
+          insetHolders.set(a, Math.max(0, Math.min(240, +px || 0)));
+          if (typeof orb === 'function') insetOrbs.set(a, () => { const o = orb(); return o && [o.x, o.y, o.d].every(Number.isFinite) ? { x: +o.x, y: +o.y, d: +o.d } : null; }); else insetOrbs.delete(a);
+          insetSync();
+          const off = () => { insetHolders.delete(a); insetOrbs.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
         },
         all: () => { if (live()) shell.openPicker?.(); },
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.

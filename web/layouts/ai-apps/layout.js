@@ -7,15 +7,21 @@
  *     in front, a thread's title or an app's name, under it); on the right the workspace switcher, in the slot where
  *     they put Temporary / Incognito (this Wizard, then the Wizards he manages; Manage = Settings › Your network).
  *   - Drawer from the left (☰, or a swipe from the left edge; a swipe right in a thread too, which in Chats would have
- *     gone back to the list): the name and 🔍 (searches chats and apps), then app rows where they list Projects / GPTs /
- *     Spaces (the open apps, then All apps = the three-level sheet: Open · Installed · Get more, chrome.js), then
- *     Recents = the chats Working and Ready (a long press opens the row menu: Pin, Rename, Mark unread, Snooze,
- *     Archive / Restore, through Chats' own actions), View all = the stock Chats list; Settings and New chat at the foot.
+ *     gone back to the list): the name and 🔍 (searches chats and apps), then where they list Projects / GPTs / Spaces
+ *     a compact grid of EVERY open app (a small icon with its name under it, like ChatGPT's GPT grid; desk order, apps
+ *     with a badge first as in the Orb view, the badge on the icon), ending in All apps = the three-level sheet (Open ·
+ *     Installed · Get more, chrome.js); then Recents = the chats Working and Ready (a long press opens the row menu:
+ *     Pin, Rename, Mark unread, Snooze, Archive / Restore, through Chats' own actions), View all = the stock Chats
+ *     list. At the foot (round 2): New chat = a big round + where ChatGPT puts its compose button, Settings = a cog.
  *   - Main screen = the real Chats window, without its list (the list lives in the drawer): a New chat or the thread
  *     picked, with the real composer: + (attach) on the left, the model chip, the mic, and on the right one round
  *     button: Send when there are words, else the voice button (it hands the press to the dock orb, so tap talks and
  *     hold gives a command, exactly as in every view). A take shows the stock voice controls at the bottom.
- *   - An app = its desk, filling the screen under the same top bar, the dock orb floating over it (chrome.js inset).
+ *   - An app = its desk, filling the screen under the same top bar, with the orb bar at the bottom: the dock orb in its
+ *     one fixed spot, bottom centre, and the app's own tabs (if it has a bottom tab bar) split either side of it
+ *     (chrome.js inset → skin-host's orb bar).
+ * Shapes (round 2, measured on the native apps): round discs for the top-bar buttons, a 16 px end radius on the drawer,
+ * 12 px row pills, 18 px menus, 28 px sheets, full pills for the composer, search and chips; icons as rounded squares.
  * Every list comes from the shell (open apps = desks, the same as the Apps view's icons and the Orb's satellites;
  * chats = Chats' own Working / Ready), so switching views loses nothing. Colours are skin tokens (layout.css). */
 import { viewChrome, openApps, matches, CHATS } from '../apps/chrome.js';
@@ -36,12 +42,13 @@ const ICON = {
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
   newchat: ['M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12', 'M17.5 4.5l2 2L13 13l-3 1 1-3z'],
+  // a cogwheel (the Lucide settings outline, ISC licence)
+  cog: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
 };
 /* The row menu (long press on a chat), in the order they use (Pin, Rename, …, the filing action last), Wizard's words. */
 const ACTS = [['pin', 'Pin'], ['rename', 'Rename'], ['unread', 'Mark unread'], ['snooze', 'Snooze'], ['restore', 'Restore'], ['done', 'Archive']];
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
 const EDGE = 24;            // px from the left edge where a swipe opens the drawer
-const MAX_OPEN = 4;         // open apps listed before "N more"
 
 export default function setup(api) {
   if (api.env.shell !== 'phone') return () => {};
@@ -92,12 +99,11 @@ export default function setup(api) {
   const cancelBtn = el('button', 'aa-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
   head.append(word, findBtn, searchBox, cancelBtn);
   const scroll = el('div', 'aa-scroll');
+  // the foot: New chat = a big round + (ChatGPT's compose spot, bottom left), Settings = a cog (bottom right); icons only
   const foot = el('div', 'aa-foot');
-  const acct = el('button', 'aa-acct', { type: 'button', 'aria-label': 'Settings' });
-  const acctDisc = el('span', 'aa-av', { 'aria-hidden': 'true' }), acctName = el('span', 'aa-acct-n', { text: 'Settings' });
-  acct.append(acctDisc, acctName);
-  const newBtn = el('button', 'aa-new', { type: 'button' }); newBtn.append(icon('plus'), el('span', '', { text: 'New chat' }));
-  foot.append(acct, newBtn);
+  const newBtn = el('button', 'aa-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); newBtn.append(icon('plus'));
+  const setBtn = el('button', 'aa-set', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); setBtn.append(icon('cog'));
+  foot.append(newBtn, setBtn);
   drawer.append(head, scroll, foot);
   layer.append(scrim, drawer);
   api.mount(layer);
@@ -131,7 +137,7 @@ export default function setup(api) {
   api.listen(cancelBtn, 'click', () => setSearch(false));
   api.listen(field, 'input', () => { q = field.value; paintDrawer(); });
   api.listen(newBtn, 'click', () => { closeDrawer(); api.sessions.newChat(); });
-  api.listen(acct, 'click', () => { closeDrawer(); api.desk.settings(); });
+  api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
 
   /* rows: an app (its logo, else the dock's own mark for it), a chat (Working spinner / Ready dot, title, pin) */
   function appTile(id) {
@@ -145,28 +151,36 @@ export default function setup(api) {
     });
     return t;
   }
-  const badgeText = id => { const n = badgeMap[id] || 0; return n ? (n > 99 ? '99+' : String(n)) : ''; };
-  function appRow(a, go) {
-    const b = el('button', 'aa-row aa-app', { type: 'button', 'data-app': a.id });
-    const n = el('b', 'aa-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
-    b.append(appTile(a.id), el('span', 'aa-row-t', { text: a.name }), n);
+  // the badge as the shell shows it (50+ for an app that lists only its newest items), else the count
+  const badgeText = id => { const n = badgeMap[id] || 0; if (!n) return ''; const t = api.apps.badgeText?.(id); return t || (n > 99 ? '99+' : String(n)); };
+  const lit = id => (badgeMap[id] || 0) > 0;
+  /* the open apps as a grid of small icons with their names under them; badged apps first (the Orb view's rule), then
+   * the rest, each in desk order */
+  const litFirst = list => [...list.filter(a => lit(a.id)), ...list.filter(a => !lit(a.id))];
+  function appCell(a, go) {
+    const b = el('button', 'aa-gi aa-app', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name });
+    const ic = el('span', 'aa-gt'), n = el('b', 'aa-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
+    ic.append(appTile(a.id), n);
+    b.append(ic, el('span', 'aa-gn', { text: a.name }));
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
     api.listen(b, 'click', () => { closeDrawer(); go(); });
     return b;
   }
-  function plainRow(cls, ico, label, go) {
-    const b = el('button', 'aa-row ' + cls, { type: 'button' });
-    const t = el('span', 'aa-tile is-plain', { 'aria-hidden': 'true' }); t.append(icon(ico));
-    b.append(t, el('span', 'aa-row-t', { text: label }));
+  function plainCell(cls, ico, label, go) {
+    const b = el('button', 'aa-gi ' + cls, { type: 'button', role: 'listitem', 'aria-label': label });
+    const ic = el('span', 'aa-gt'), t = el('span', 'aa-tile is-plain', { 'aria-hidden': 'true' }); t.append(icon(ico)); ic.append(t);
+    b.append(ic, el('span', 'aa-gn', { text: label, 'aria-hidden': 'true' }));
     api.listen(b, 'click', () => { closeDrawer(); go(); });
     return b;
   }
+  const grid = (label, cells) => { const g = el('div', 'aa-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
   const goApp = id => { const d = desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
   function chatRow(s, here) {
     const b = el('button', 'aa-row aa-chat', { type: 'button', 'data-sid': s.id, 'data-kind': s.kind, ...(s.id === here ? { 'aria-current': 'page' } : {}) });
-    const st = el('i', 'aa-st', { 'aria-hidden': 'true' }); if (s.kind === 'ready' && s.unread) st.classList.add('is-new');
-    b.append(st, el('span', 'aa-row-t', { text: s.title }));
+    // plain titles like theirs; a pin, then the state at the end only when there is one (Working turns, Ready new = a dot)
+    b.append(el('span', 'aa-row-t', { text: s.title }));
     if (s.pinned) b.append(icon('pin', 'aa-ico aa-pin'));
+    if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aa-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.title}${s.kind === 'working' ? ', working' : s.unread ? ', ready, new' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     pressable(b, s);
     return b;
@@ -176,25 +190,22 @@ export default function setup(api) {
   function paintDrawer(force = false) {
     if (!open) return;
     const name = agentName(); word.textContent = name;
-    const ws = api.workspaces?.list()[0] || {};
-    acctDisc.textContent = initial(ws.owner || name);
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
-    const sig = JSON.stringify([q, here, dk.map(d => d.id + d.desk), apps.length, ['working', 'ready', ...(q ? ['archive'] : [])].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.actions.join()]))]);
+    const sig = JSON.stringify([q, here, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, ['working', 'ready', ...(q ? ['archive'] : [])].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.actions.join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     if (q) {
       const hitsA = apps.filter(a => a.id !== CHATS && !a.agent && !a.connector && !a.dev && matches(a, q));
       const seen = new Set(), hitsC = ['working', 'ready', 'archive'].flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
-      if (hitsA.length) out.push(label('Apps'), ...hitsA.map(a => appRow(a, () => goApp(a.id))));
+      if (hitsA.length) out.push(label('Apps'), grid('Apps', hitsA.map(a => appCell(a, () => goApp(a.id)))));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, here)));
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aa-empty', { text: 'No chat or app by that name.' }));
     } else {
-      const openList = openApps(apps, dk);
-      out.push(...openList.slice(0, MAX_OPEN).map(a => appRow(a, () => goApp(a.id))));
-      if (openList.length > MAX_OPEN) out.push(plainRow('aa-more', 'apps', `${openList.length - MAX_OPEN} more open`, () => chrome.open()));
-      out.push(plainRow('aa-all', 'apps', 'All apps', () => chrome.open()));
+      // every open app (none hidden behind "N more"), then All apps as the grid's last cell
+      const openList = litFirst(openApps(apps, dk));
+      out.push(grid('Open apps', [...openList.map(a => appCell(a, () => goApp(a.id))), plainCell('aa-all', 'apps', 'All apps', () => chrome.open())]));
       out.push(el('hr', 'aa-div'));
       const rows = [...(s.working || []), ...(s.ready || [])];
       out.push(label('Recents'));
@@ -207,7 +218,12 @@ export default function setup(api) {
     scroll.replaceChildren(...out);
   }
   function paintBadges() {
-    for (const n of scroll.querySelectorAll('[data-badge]')) { n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent; }
+    if (open) paintDrawer();   // a badge that comes or goes reorders the grid (badged first); the signature skips the rest
+    for (const n of scroll.querySelectorAll('[data-badge]')) {
+      n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent;
+      const b = n.closest('.aa-gi'), nm = b?.querySelector('.aa-gn')?.textContent || '';
+      if (b && nm) b.setAttribute('aria-label', nm + (n.textContent ? `, ${n.textContent} new` : ''));
+    }
     const ready = badgeMap[CHATS] || 0;
     menuDot.hidden = !ready || open;
     menuBtn.setAttribute('aria-label', ready ? `Open menu, ${ready} ready` : 'Open menu');
