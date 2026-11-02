@@ -190,7 +190,7 @@ public class WizardKeyboardService extends AccessibilityService {
                         // Get surrounding text for context-aware behavior
                         SurroundingText surrounding = ic.getSurroundingText(50, 50, 0);
                         
-                        if (surrounding != null) {
+                        if (surrounding != null && surrounding.getText() != null) {
                             CharSequence before = surrounding.getText().subSequence(
                                 0, surrounding.getSelectionStart());
                             CharSequence after = surrounding.getText().subSequence(
@@ -219,36 +219,29 @@ public class WizardKeyboardService extends AccessibilityService {
                                 }
                             }
                         } else {
-                            // No surrounding text — capitalize first letter
-                            text = capitalizeFirst(text);
+                            // A connection object may exist without a working editor text channel.
+                            // Do not treat a void commitText call as a successful insertion.
+                            throw new Exception("InputConnection has no surrounding text");
                         }
                         
-                        ic.commitText(text, 1, null);
-                        
-                        // Verify insertion via accessibility node (not InputConnection which may be stale)
-                        try {
-                            Thread.sleep(100); // Wait for field to update
-                        } catch (InterruptedException ie) { /* ignore */ }
-                        
-                        // Re-find the editable node to get fresh text
-                        AccessibilityNodeInfo freshNode = findEditable();
-                        if (freshNode == null) freshNode = lastFocusedNode;
-                        String fieldTextAfter = null;
-                        if (freshNode != null) {
-                            freshNode.refresh(); // Force refresh from the view
-                            if (freshNode.getText() != null) {
-                                fieldTextAfter = freshNode.getText().toString();
+                        final String beforeCommit = fieldTextBefore;
+                        final AccessibilityNodeInfo editor = target;
+                        DictationCommit.Result result = DictationCommit.insert(new DictationCommit.Connection() {
+                            @Override public CharSequence before() { return beforeCommit; }
+                            @Override public void commit(String value) { ic.commitText(value, 1, null); }
+                            @Override public CharSequence after() {
+                                // Preserve the existing editor-update grace before inspecting its node.
+                                android.os.SystemClock.sleep(100);
+                                // Re-read the same editor, never a different newly focused field.
+                                return editor != null && editor.refresh() ? editor.getText() : null;
                             }
+                        }, text);
+                        if (result != DictationCommit.Result.UNAVAILABLE) {
+                            Log.i(TAG, "InputConnection delivery=" + result);
+                            // An ambiguous commit might have typed already: copy for recovery in
+                            // onDictated, rather than issuing a second insertion with ACTION_PASTE.
+                            return result == DictationCommit.Result.VERIFIED;
                         }
-                        
-                        // If we can verify and text didn't change, commitText silently failed
-                        if (fieldTextBefore != null && fieldTextAfter != null 
-                                && fieldTextBefore.equals(fieldTextAfter)) {
-                            Log.w(TAG, "commitText silently failed — field text unchanged. Falling through to clipboard.");
-                            throw new Exception("Stale InputConnection — field text unchanged after commitText");
-                        }
-                        
-                        return true;
                     }
                 }
             } catch (Exception e) {
