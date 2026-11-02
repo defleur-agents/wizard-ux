@@ -30,10 +30,10 @@
  *     the top row; every desktop key still works (⌥ keys, ⌥1–9 desks, ⌥` = Home = the chat here).
  * Everything through the layout API; no timers of its own beyond api.after, no innerHTML, no storage of its own
  * beyond api.storage. Colours are skin tokens (desktop.css). */
-import { viewChrome, openApps, matches, CHATS } from '../apps/chrome.js';
+import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen } from './parts.js';
+import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
@@ -105,8 +105,10 @@ export default function desktop(api) {
   const orbBox = el('div', 'aad-orb');
   const cv = el('canvas', 'aad-orbc', { width: '128', height: '128', 'aria-hidden': 'true' });
   const fb = el('img', 'aad-orbfb', { alt: '', src: 'robert-thread-orb.png', draggable: 'false' }); fb.hidden = true;
-  const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Click to talk, hold for a command, drag up for a new chat to type in.' });
-  orbBox.append(cv, fb, orbBtn);
+  const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb (the microphone). Click to talk, hold for a command, drag up for a new chat to type in.' });
+  // round 6: the orb IS the microphone, so it wears a small one (in the composer, where the mic was, and on its own spot)
+  const micG = el('span', 'aad-mic', { 'aria-hidden': 'true' }); micG.append(svgIcon(doc, 'mic', 'aad-mic-i'));
+  orbBox.append(cv, fb, micG, orbBtn);
 
   const scene = el('div', 'aad');
   scene.append(shade, side, top, orbBox);
@@ -265,7 +267,8 @@ export default function desktop(api) {
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
     } else {
-      out.push(label('Apps'), grid('Open apps', [...litFirst(openApps(apps, dk)).map(appCell), allCell()]));
+      // real apps only (round 6: the sheet's Apps; never agent apps, agents, connectors, system / Wizard or in-development apps)
+      out.push(label('Apps'), grid('Open apps', [...litFirst(realApps(openApps(apps, dk), api.apps.kinds?.())).map(appCell), allCell()]));
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         const rows = s[k] || [], on = !!secOpen[k];
@@ -284,7 +287,7 @@ export default function desktop(api) {
     scroll.replaceChildren(...out);
   }
   function paintRail(force = false) {
-    const dk = desks(), list = litFirst(openApps(api.apps.list(), dk)), h = here();
+    const dk = desks(), list = litFirst(realApps(openApps(api.apps.list(), dk), api.apps.kinds?.())), h = here();
     const sig = JSON.stringify([h.app, list.map(a => a.id + (lit(a.id) ? '*' : ''))]);
     if (!force && sig === railDrawn && rApps.childElementCount) return;
     railDrawn = sig;
@@ -382,8 +385,20 @@ export default function desktop(api) {
   api.listen(orbBtn, 'pointerup', () => up(true)); api.listen(orbBtn, 'pointercancel', () => up(false));
   api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
-  // the composer (Miguel, 2 Nov 2026): no voice button of its own; its round Send shows only with words (desktop.css),
-  // the mic dictates as everywhere, and the orb below is the one way to talk
+  /* the composer (round 6, Miguel: the orb replaces the microphone): the orb sits INSIDE it, in the slot where the mic
+   * was (desktop.css: the grid's 'orb' column, right, before the round Send that shows with words); off a chat, back to
+   * its own spot at the bottom centre of the main area (or the end of an app's bottom row: skin-host via chrome) */
+  function orbSlot() {
+    if (root.dataset.aiFront !== 'chat') return null;
+    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
+    const row = c?.querySelector('.ch-row2');
+    return row ? gridSlot(row, 3) : null;
+  }
+  const syncOrb = () => api.frame(() => chrome.orbIn(orbSlot()));
+  api.listen(globalThis, 'resize', syncOrb);
+  api.listen(orbBox, 'transitionend', syncOrb);
+  api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) syncOrb(); }, true);
+  api.listen(doc, 'focusin', syncOrb, true);
   /* ---------- the main area: the chat (Home and the bare list become it), or an app ---------- */
   function here(r = api.route()) {
     const d = desks().find(x => x.desk === r.desk), id = r.home ? '' : d?.id || '';
@@ -409,8 +424,9 @@ export default function desktop(api) {
     word.setAttribute('aria-label', `${nm}: Home (a new chat)`);
     paintWs();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
+    syncOrb();
   }
-  api.on('route', onRoute);
+  api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   // Settings opens as the centred panel over the page (Claude's settings modal), never as a window beside the chat

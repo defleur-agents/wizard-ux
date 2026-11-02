@@ -140,7 +140,7 @@ test('scoped and quiet: every rule needs the worn layout on the phone; skin toke
   for (const sel of [...tw.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim())) assert.ok(/^html\[data-shell="phone"\]\[data-layout="ai-apps"\]/.test(sel), `tweak.css reaches past the view: ${sel}`);
   const js = noComments(read('web/layouts/ai-apps/layout.js'));
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
-  assert.match(js, /import \{ viewChrome, openApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the Orb and Apps views\' own chrome: one + sheet, one app list');
+  assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the Orb and Apps views\' own chrome: one + sheet, one app list');
 });
 
 test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sections, + New chat, cog) that folds to a rail; the top row; the orb', async () => {
@@ -232,13 +232,13 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
   const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
   assert.match(css, new RegExp(P + ' \\{\\s*--aad-side: 288px;'), 'a 288 px sidebar (Claude; ChatGPT\'s panel)');
   assert.match(css, new RegExp(P + '\\[data-aad-side="rail"\\],\\s*' + P + '\\[data-aad-side="over"\\] \\{ --aad-side: 52px; \\}'), 'a 52 px rail (ChatGPT)');
-  assert.match(css, /\.ch-compose \{\s*width: min\(768px, calc\(100% - 48px\)\); box-sizing: border-box; margin: 0 auto 84px;/, 'a 768 px column, the composer docked 24 px above the orb');
+  assert.match(css, /\.ch-compose \{\s*width: min\(768px, calc\(100% - 48px\)\); box-sizing: border-box; margin: 0 auto 24px;/, 'a 768 px column, the composer docked 24 px from the bottom (round 6: the orb is inside it)');
   assert.match(css, /\.ch-compose:not\(\.has-text\) \.ch-row2 > \.ch-send \{ display: none !important; \}/, 'Send only with words; no voice button of its own');
   assert.match(css, /:is\(\.ch-newchat, \.nc-classic\) \{ display: none !important; \}/, 'Home has no greeting');
-  assert.match(css, /\.ch-row2 \{\s*display: flex !important; align-items: center; gap: 2px; min-height: 52px;[^}]*border-radius: 26px;/, 'a 52 px pill composer (r 26)');
+  assert.match(css, /\.ch-row2 \{\s*display: grid !important;[^}]*min-height: 52px;[^}]*border-radius: 26px;/, 'a 52 px pill composer (r 26)');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/Math\.random|innerHTML|localStorage|setTimeout|setInterval|fetch\(/.test(js), 'no timers, markup strings, storage or fetches of its own');
-  assert.match(js, /import \{ viewChrome, openApps, matches, CHATS \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
+  assert.match(js, /import \{ viewChrome, openApps, realApps, matches, CHATS, MIC \} from '\.\.\/apps\/chrome\.js';/, 'the shared sheet and app list');
   assert.match(js, /export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;/);
 });
 
@@ -254,7 +254,7 @@ test('desktop core hooks: the adapter lists chats with Chats\' own actions, show
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
   assert.match(dj, /showChats: \(\) => !!skinShowChats\(\),\n    newChat: \(\) => \{ const w = skinShowChats\(\); if \(!w\) return false; newChat\(\); return true; \},/);
   assert.match(dj, /const settingsOver = \(\) => document\.documentElement\.hasAttribute\('data-settings-over'\);/); assert.match(dj, /if \(homeOpen \|\| settingsOver\(\)\) \{  \/\/ from Home/, 'a layout may keep Settings over the page');
-  assert.match(read('web/layouts/apps/chrome.js'), /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], orb \|\| \(shell === 'phone' \? orbSpot : null\)\)/, 'a view drawing its own orb says where it is');
+  assert.match(read('web/layouts/apps/chrome.js'), /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'a view drawing its own orb says where it is');
 });
 
 test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
@@ -380,7 +380,7 @@ test('round 4: Home has no greeting: only the skin background, the composer and 
   assert.ok(!/\.nc-hi \{|\.nc-sub \{|\.nc-mark \{/.test(css), 'no greeting styles left');
   assert.match(css, /\[data-ai-new\] \.aa-top \{ background: transparent !important;/, "Home lets the skin's background through");
   assert.ok(!/:not\(\[data-ai-front="app"\]\) #device[^{]*#dock \{ opacity: 0/.test(css), 'the dock orb is no longer hidden over the chat');
-  assert.match(css, /\.win\.app-chats \.ch-compose:not\(:has\(textarea:focus\)\) \{ padding-bottom: calc\(var\(--aa-orb-room, 72px\) \+ 4px\) !important; \}/, "the composer sits above the orb's row");
+  assert.ok(!/--aa-orb-room/.test(css + read('web/layouts/ai-apps/layout.js')), "round 6: no row of its own for the orb under the composer (it sits inside it)");
 });
 
 test("round 4 + 5: the home button (in place of the name) goes Home from an app (and from a thread); so does the drawer's +", async () => {
@@ -413,9 +413,10 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
   const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + ' .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }'), 'the round Send is hidden with no words');
   assert.ok(!/:not\(\.has-text\) \.ch-row2 > \.ch-send::before/.test(css), 'no voice-wave mark on an empty Send');
-  assert.match(css, /:is\(\.ch-attach, \.ch-mic, \.ch-stop, \.ch-send\) \{/, 'the mic keeps its place in the pill');
-  assert.ok(!/\.ch-compose[^{]*\.ch-mic[^{]*\{[^}]*display: none/.test(css), 'the mic is never hidden by the view');
-  assert.match(css, /:has\(\.win\.app-chats \.ch-compose textarea:focus\) #device:not\(\[data-voice\]:not\(\[data-voice="idle"\]\)\) #dock \{ opacity: 0;/, 'while typing the orb steps aside (a take keeps it)');
+  // round 6 (Miguel): the orb replaces the microphone: the composer's mic gives way and the orb takes its slot; the orb
+  // no longer steps aside while typing (it stays in the composer, Send to its right, like ChatGPT's mic + send)
+  assert.ok(css.includes(P + ' .win.app-chats .ch-row2 > .ch-mic { display: none !important; }'), 'the mic gives way to the orb');
+  assert.ok(!/textarea:focus\) #device[^{]*#dock \{ opacity: 0/.test(css), 'the orb stays while typing');
 });
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
@@ -456,9 +457,9 @@ test('round 2 shapes: rounded like the native apps (measured), icon-only drawer 
   assert.match(rule('.aa-search'), /height: 44px;[^}]*border-radius: 22px;/, 'search is a full pill');
   assert.match(rule('.aa-new'), /width: 56px; height: 56px;[^}]*border-radius: 50%;/, 'New chat = a big round +');
   assert.match(rule('.aa-set'), /width: 48px; height: 48px;[^}]*border-radius: 50%;/, 'Settings = a round cog');
-  assert.match(rule('.aa-tile'), /width: 44px; height: 44px;[^}]*border-radius: 10px;/, 'app icons: rounded squares (≈ 23 %)');
-  assert.match(rule('.aa-grid'), /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\);/, 'five small icons a row');
-  assert.match(rule('.aa-gi'), /min-height: 72px;/, 'cells stay >= 44 px targets');
+  assert.match(rule('.aa-tile'), /width: 64px; height: 64px;[^}]*border-radius: 15px;/, 'round 6: big app icons, rounded squares (≈ 23 %, the iPhone\'s)');
+  assert.match(rule('.aa-grid'), /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/, 'round 6: four a row, like the iPhone home screen');
+  assert.match(rule('.aa-gt'), /width: 64px; height: 64px;/, 'cells stay >= 44 px targets');
   assert.ok(!/\.aa-acct|\.aa-av\b|aa-more/.test(css + read('web/layouts/ai-apps/layout.js')), 'the avatar letter, the Settings word and "N more open" are gone');
   const chrome = read('web/layouts/apps/chrome.css');
   assert.match(chrome, /max-height: 88%; border-radius: 28px 28px 0 0;/, 'the shared app sheet matches');
@@ -618,4 +619,76 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && inboxAct\(action, id\.slice\(NOTE_ID\.length\)\)/);
   ctx.inboxThreads.get('wizard/unified-inbox').list = false;
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.withNoteRows([]))), [], 'none while no package lists the inbox in Chats');
+});
+
+/* Round 6 (Miguel, 2 Nov 2026): big icons for real apps only; the orb IS the microphone (inside the composer in the
+ * mic's slot, a small mic on it everywhere); a compact spot for the orb in an app's own bottom row; a tidy composer
+ * (the model chip a control on the right, never a centred label on its own row; Snooze / Archive never half-hidden). */
+test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never agent apps, connectors, system or in-development apps', async () => {
+  const w = world();
+  w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }], wiz: [{ id: 'notes', name: 'Notes' }], agents: [], conns: [], dev: [{ id: 'music', name: 'Music' }] });
+  (await layout()).default(w.api);
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.q('.aa-grid').children.map(b => b.dataset.app || 'all'), ['money', 'mail', 'all'], 'Notes (agent app), Music (in development), Maps (system) are left out');
+  const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
+  assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
+  const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(dj, /grid\('Open apps', \[\.\.\.litFirst\(realApps\(openApps\(apps, dk\), api\.apps\.kinds\?\.\(\)\)\)\.map\(appCell\), allCell\(\)\]\)/, 'the desktop sidebar too');
+  assert.match(dj, /const dk = desks\(\), list = litFirst\(realApps\(openApps\(api\.apps\.list\(\), dk\), api\.apps\.kinds\?\.\(\)\)\)/, 'and its rail');
+  const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
+  assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
+  assert.match(dcss, /\.aad-tile \{\s*--c:[^}]*width: 52px; height: 52px;/, 'desktop: 52 px icons four a row');
+  assert.match(dcss, /\.aad-tile\.is-logo \{ background: none;/);
+});
+
+test('round 6: the orb moves to the spot it is given (an app\'s row) and back; its own spot reads through the move', async () => {
+  const w = world();
+  let place = null, home = null;
+  w.api.apps.inset = (px, orb, pl) => { home = orb; place = pl; return () => {}; };
+  // the real browser: the orb's box includes the move (translate), its size does not (offsetWidth)
+  const st = w.html.style;
+  w.orbWrap.getBoundingClientRect = () => { const dx = parseFloat(st.getPropertyValue('--vc-orb-dx')) || 0, dy = parseFloat(st.getPropertyValue('--vc-orb-dy')) || 0; return { left: 162 + dx, top: 773 + dy, width: 66, height: 66, x: 162 + dx, y: 773 + dy, right: 228 + dx, bottom: 839 + dy }; };
+  w.orbWrap.offsetWidth = 66;
+  (await layout()).default(w.api);
+  assert.equal(typeof place, 'function', 'the view hears where the app in front wants the orb');
+  assert.ok(w.orbWrap.children.some(c => c.className === 'vc-mic'), 'the orb wears a small microphone');
+  place({ x: 356, y: 790, d: 44 });
+  assert.equal(w.html.dataset.vcOrb, 'row');
+  assert.equal(st.getPropertyValue('--vc-orb-dx'), '161px'); assert.equal(st.getPropertyValue('--vc-orb-dy'), '-16px'); assert.equal(st.getPropertyValue('--vc-orb-k'), '0.667');
+  assert.deepEqual(home(), { x: 195, y: 806, d: 66 }, 'the bars still go around its own spot');
+  place(null);
+  assert.equal(w.html.dataset.vcOrb, undefined); assert.equal(st.getPropertyValue('--vc-orb-dx'), '', 'back to its own spot');
+  const css = read('web/layouts/apps/chrome.css');
+  assert.match(css, /html\[data-view-chrome="phone"\]\[data-vc-orb\] #dock > #orbWrap \{ translate: var\(--vc-orb-dx, 0px\) var\(--vc-orb-dy, 0px\); scale: var\(--vc-orb-k, 1\); \}/);
+  assert.match(css, /#orbWrap\[data-mode\]:not\(\[data-mode="idle"\]\) > \.vc-mic \{ opacity: 0; \}/, 'a take shows the orb\'s own state');
+  assert.match(read('web/layouts/ai-apps/desktop.css'), /\[data-vc-orb\] \.aad-orb \{ translate: var\(--vc-orb-dx, 0px\) var\(--vc-orb-dy, 0px\); scale: var\(--vc-orb-k, 1\); \}/, 'the desktop orb moves the same way');
+});
+
+test('round 6: the composer\'s orb slot is read from the grid\'s real tracks (one line, or words over the controls)', async () => {
+  const { gridSlot } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+  const row = (cols, rows) => ({ ownerDocument: { defaultView: { getComputedStyle: () => ({ gridTemplateColumns: cols, gridTemplateRows: rows, columnGap: '0px', rowGap: 'normal', paddingLeft: '4px', paddingTop: '4px', borderLeftWidth: '0px', borderTopWidth: '0px' }) } },
+    getBoundingClientRect: () => ({ left: 12, top: 780, width: 366, height: 52 }) });
+  assert.deepEqual(gridSlot(row('44px 203px 67px 44px 0px 0px', '44px'), 3), { x: 12 + 4 + 44 + 203 + 67 + 22, y: 780 + 4 + 22, d: 44 }, 'one line: right of the model chip');
+  assert.deepEqual(gridSlot(row('44px 170px 56px 44px 0px 44px', '40px 44px'), 3), { x: 12 + 4 + 44 + 170 + 56 + 22, y: 780 + 4 + 40 + 22, d: 44 }, 'two lines: on the controls\' line, Send to its right');
+  assert.equal(gridSlot(row('none', 'none'), 3), null, 'not a grid: no slot');
+  const js = noComments(read('web/layouts/ai-apps/layout.js'));
+  assert.match(js, /return gridSlot\(row, 3\);/); assert.match(js, /chrome\.orbIn\(orbSlot\(\)\)/);
+  assert.match(js, /if \(\(api\.voice\?\.state\?\.\(\)\?\.state \|\| 'idle'\) !== 'idle'\) return null;/, 'a take: the orb back in its own spot, among the stock voice controls');
+  assert.match(js, /micGlyph: true/);
+});
+
+test('round 6: a tidy composer: the model chip is a control on the right (never a centred label), the orb in the mic\'s slot, Snooze / Archive never clipped', () => {
+  for (const [file, P, slot] of [['web/layouts/ai-apps/layout.css', 'html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats', '44px'], ['web/layouts/ai-apps/desktop.css', 'html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main', '40px']]) {
+    const css = read(file);
+    const rule = sel => { const i = css.indexOf(P + ' ' + sel + ' {'); assert.ok(i >= 0, `${file}: ${sel}`); return css.slice(i, css.indexOf('}', i)); };
+    assert.match(rule('.ch-row2'), new RegExp(`display: grid !important; grid-template-columns: auto minmax\\(0, 1fr\\) auto ${slot} auto auto; grid-template-areas: "att field chip orb stop send";`), `${file}: one line: + · words · chip · orb`);
+    assert.match(rule('.ch-compose.has-text .ch-row2'), /grid-template-areas: "field field field field field field" "att \. chip orb stop send";/, `${file}: with words: the words on top, the controls under them, chip · orb · Send on the right`);
+    assert.match(rule('.ch-row2 > .ch-field'), /display: contents !important;/, `${file}: the field's box steps aside, so the chip is a control of the row`);
+    assert.match(rule('.ch-field .ch-mlabel'), /grid-area: chip; position: static !important; justify-self: end;/, `${file}: the chip in its column on the right`);
+    assert.match(rule('.ch-row2::after'), /grid-area: orb;/, `${file}: the orb's slot`);
+    assert.ok(css.includes(P + ' .ch-row2 > .ch-mic { display: none !important; }'), `${file}: the orb replaces the mic`);
+    assert.match(rule('.ch-msgs > .ch-tacts'), /position: sticky; bottom: 0;/, `${file}: Snooze / Archive: a row right above the composer, never half under it`);
+    assert.match(rule('.ch-thread > .ch-latest'), /position: relative !important; inset: auto !important;[^}]*margin: -46px/, `${file}: ↓ Latest just above the composer, never on it`);
+  }
 });

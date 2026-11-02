@@ -139,30 +139,33 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-count {
   font: 800 0.625rem / 1 var(--wz-font-ui);
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-count[hidden] { display: none; }
-/* the open apps: a compact grid of small icons with their names (the phone drawer's grid, four to a row here) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 2px 0 4px; }
+/* the open apps (round 6, Miguel: "icons as big as possible", like the iPhone's home screen): four a row, the app's own
+ * logo filling its tile (no plate around a small icon), the name under it, tight spacing; real apps only */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 0; padding: 2px 0 6px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi {
-  position: relative; min-width: 0; min-height: 64px; margin: 0; padding: 6px 0 4px; border: 0; border-radius: 12px; box-sizing: border-box; cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--aad-ink); background: none;
+  position: relative; min-width: 0; margin: 0; padding: 6px 0 4px; border: 0; border-radius: 14px; box-sizing: border-box; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--aad-ink); background: none;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] { background: var(--aad-hover); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi:active .aad-tile { transform: scale(.92); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-gt { position: relative; width: 36px; height: 36px; flex: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gt { position: relative; width: 52px; height: 52px; flex: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile {
   --c: var(--wz-accent, var(--aad-ink));
-  width: 36px; height: 36px; flex: none; border-radius: 9px; overflow: hidden; display: grid; place-items: center; box-sizing: border-box;
-  background: color-mix(in srgb, var(--aad-ink) 7%, var(--aad-canvas)); box-shadow: inset 0 0 0 1px var(--aad-line); transition: transform 120ms ease;
+  width: 52px; height: 52px; flex: none; border-radius: 12px; overflow: hidden; display: grid; place-items: center; box-sizing: border-box;
+  background: linear-gradient(165deg, color-mix(in oklab, var(--c) 30%, var(--aad-canvas)), color-mix(in oklab, var(--c) 12%, var(--aad-canvas)));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c) 24%, var(--aad-line)), 0 1px 3px color-mix(in srgb, black 14%, transparent); transition: transform 120ms ease;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s { width: 28px; height: 28px; border-radius: 8px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-logo { background: var(--aad-canvas); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile .sgi { width: 22px; height: 22px; -webkit-mask-size: contain; mask-size: contain; background: color-mix(in oklab, var(--c) 80%, var(--aad-ink)) !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s .sgi { width: 18px; height: 18px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain { color: var(--aad-ink); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain .aad-ico { width: 18px; height: 18px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-gn { max-width: 100%; padding: 0 3px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; font: 500 0.6875rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s { width: 36px; height: 36px; border-radius: 9px; }
+/* the app's sigil fills its tile (the tinted tile is the icon); a picture logo IS the icon: no plate, no ring */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile .sgi { width: 68%; height: 68%; -webkit-mask-size: contain; mask-size: contain; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-logo { background: none; box-shadow: 0 1px 3px color-mix(in srgb, black 18%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain { color: var(--aad-ink); background: color-mix(in srgb, var(--aad-ink) 7%, var(--aad-canvas)); box-shadow: inset 0 0 0 1px var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-plain .aad-ico { width: 24px; height: 24px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-s.is-plain .aad-ico { width: 18px; height: 18px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-logo { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: inherit; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-gn { max-width: 100%; padding: 0 2px; box-sizing: border-box; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center; font: 500 0.75rem / 1.3 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-badge {
-  position: absolute; top: -6px; left: calc(100% - 12px); min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px;
+  position: absolute; z-index: 1; top: -6px; left: calc(100% - 14px); min-width: 20px; height: 20px; padding: 0 6px; box-sizing: border-box; border-radius: 10px;
   display: grid; place-items: center; white-space: nowrap; color: var(--aad-canvas); background: var(--amber, var(--aad-ink)); box-shadow: 0 0 0 2px var(--aad-panel);
   font: 700 0.6875rem / 1 var(--wz-font-ui);
 }
@@ -210,10 +213,10 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-set:hover { background: c
 /* the rail (collapsed): 36 px icons at x 8 (ChatGPT) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rdiv { width: 24px; height: 1px; margin: 6px 0; border: 0; background: var(--aad-line); flex: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rapps { display: flex; flex-direction: column; align-items: center; gap: 4px; min-height: 0; overflow: hidden; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri { position: relative; flex: none; width: 36px; height: 36px; margin: 0; padding: 0; border: 0; border-radius: 10px; cursor: pointer; display: grid; place-items: center; background: none; color: var(--aad-ink); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri[aria-current="page"] { background: var(--aad-hover); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-gt { width: 28px; height: 28px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-tile { width: 28px; height: 28px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri { position: relative; flex: none; width: 40px; height: 40px; margin: 0; padding: 0; border: 0; border-radius: 11px; cursor: pointer; display: grid; place-items: center; background: none; color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri:hover .aad-tile, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri[aria-current="page"] .aad-tile { box-shadow: 0 0 0 2px var(--aad-panel), 0 0 0 4px var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-gt { width: 36px; height: 36px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-tile { width: 36px; height: 36px; border-radius: 9px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ri .aad-gn { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rdot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber, var(--aad-ink)); box-shadow: 0 0 0 2px var(--aad-panel); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rgap { flex: 1; }
@@ -247,51 +250,70 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) .w
 html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .win .dchats > .pane-list { flex: 1; border-right: 0; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-ai-front="list"] .win .dchats > :is(.pane-split, .pane-main) { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-head { display: none !important; }
-/* one column, 768 px at most, centred (ChatGPT): the messages, the Snooze / Done row and the composer, docked just above
- * the orb (24 px over its 60 px at 10 px from the bottom: the orb is the one way to talk, so it never hides) */
+/* one column, 768 px at most, centred (ChatGPT): the messages, the Snooze / Archive row and the composer, docked 24 px
+ * from the bottom (round 6: the orb is inside the composer now, no row of its own under it) */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs { padding: 20px max(24px, calc((100% - 768px) / 2)) 12px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs .msg.a .bub { max-width: 100%; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main :is(.ch-swrow, .ch-latest) { width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin-left: auto; margin-right: auto; }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose {
-  width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin: 0 auto 84px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important;
+/* ↓ Latest (round 6): never on the composer however tall it grows: in the thread's flow just above it, centred */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-thread > .ch-latest {
+  position: relative !important; inset: auto !important; transform: none !important; flex: none; align-self: center; width: auto; margin: -46px auto 14px !important; z-index: 3;
 }
+/* Snooze / Archive (round 6, Miguel: they peeked half-hidden behind the composer's top edge when it grew): a clean row
+ * right above the composer, right-aligned, that stays there (sticky) when the composer grows or the chat scrolls */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-msgs > .ch-tacts {
+  position: sticky; bottom: 0; z-index: 2; margin: 4px 0 0; padding: 12px 0 4px; background: linear-gradient(to top, var(--aad-main) 62%, transparent);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose {
+  width: min(768px, calc(100% - 48px)); box-sizing: border-box; margin: 0 auto 24px; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important;
+}
+/* The composer (round 6, Miguel: tidy, like ChatGPT): one grid. Empty = one line: + · the field · the model chip · the orb
+ * (the mic's slot); with words = the words on top, the controls under them: + on the left, the model chip, the orb and
+ * the round Send on the right. The field's own box steps aside (display: contents), so the chip is a control of the row,
+ * never a centred label on a line of its own. */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 {
-  display: flex !important; align-items: center; gap: 2px; min-height: 52px; padding: 4px 6px 4px 4px; box-sizing: border-box; border-radius: 26px;
+  display: grid !important; grid-template-columns: auto minmax(0, 1fr) auto 40px auto auto; grid-template-areas: "att field chip orb stop send";
+  align-items: center; gap: 0 2px; min-height: 52px; padding: 4px 6px 4px 4px; box-sizing: border-box; border-radius: 26px;
   background: var(--aad-surface) !important; box-shadow: inset 0 0 0 1px var(--aad-line), 0 4px 16px color-mix(in srgb, black 8%, transparent) !important;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose:focus-within .ch-row2 { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aad-ink) 22%, transparent), 0 4px 16px color-mix(in srgb, black 8%, transparent) !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-field,
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.lab-row .ch-field {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important;
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.has-text .ch-row2 {
+  grid-template-areas: "field field field field field field" "att . chip orb stop send"; border-radius: 24px; padding: 8px 8px 6px 6px;
 }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2::after { content: ""; grid-area: orb; width: 40px; height: 40px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose:focus-within .ch-row2 { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--aad-ink) 22%, transparent), 0 4px 16px color-mix(in srgb, black 8%, transparent) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-field { display: contents !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field textarea {
-  flex: 1; min-width: 0; min-height: 44px !important; padding: 10px 4px !important; margin: 0; border: 0 !important; background: none !important; box-shadow: none !important;
+  grid-area: field; min-width: 0; min-height: 44px !important; padding: 10px 8px !important; margin: 0; border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important;
   color: var(--aad-ink); font: 400 1rem / 1.5 var(--wz-font-ui) !important;
 }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.has-text .ch-field textarea { padding: 4px 12px 2px !important; min-height: 32px !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field textarea::placeholder { color: var(--aad-ink-2); opacity: 1; }
-/* the model chip, in the composer like theirs ("Medium ⌄"): a quiet pill */
+/* the model chip, among the controls on the right like theirs ("Medium ⌄"): a quiet pill */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field .ch-mlabel {
-  position: static !important; flex: none; align-self: center; height: 36px; min-width: 44px; padding: 0 12px !important; margin: 0 !important; border: 0 !important; border-radius: 18px;
+  grid-area: chip; position: static !important; justify-self: end; align-self: center; height: 36px; min-width: 44px; max-width: 200px; padding: 0 12px !important; margin: 0 2px 0 0 !important; border: 0 !important; border-radius: 18px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   color: var(--aad-ink-2) !important; background: none !important; font: 500 0.875rem / 1 var(--wz-font-ui) !important;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-field .ch-mlabel:hover { background: var(--aad-hover) !important; color: var(--aad-ink) !important; }
-/* + · mic · stop · the round button: 36 px marks (ChatGPT's composer toolbar) */
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop, .ch-send) {
-  position: relative; flex: none; width: 40px !important; height: 40px !important; min-width: 40px; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 50%;
+/* + · stop · the round Send: 40 px (ChatGPT's composer toolbar); the composer's own mic gives way to the orb */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-mic { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-attach { grid-area: att; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-stop { grid-area: stop; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > .ch-send { grid-area: send; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-stop, .ch-send) {
+  position: relative; width: 40px !important; height: 40px !important; min-width: 40px; padding: 0 !important; margin: 0 !important; border: 0 !important; border-radius: 50%;
   display: grid !important; place-items: center; color: var(--aad-ink); background: none !important; box-shadow: none !important; cursor: pointer;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop, .ch-send) svg { position: relative; z-index: 1; width: 20px; height: 20px; stroke: currentColor !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-stop, .ch-send) svg { position: relative; z-index: 1; width: 20px; height: 20px; stroke: currentColor !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-attach > svg { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-attach::before {
   content: ""; position: relative; z-index: 1; width: 22px; height: 22px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>") center / contain no-repeat;
   mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'><path d='M12 5v14M5 12h14'/></svg>") center / contain no-repeat;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop)::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: transparent; transition: background 120ms ease; }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-mic, .ch-stop):hover::after { background: var(--aad-hover); }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-mic.on { color: var(--aad-canvas); }
-html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-mic.on::after { background: var(--aad-ink); }
-/* the round Send: a filled disc in the skin's ink, only when there are words (no voice button of its own: the orb talks) */
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-stop)::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: transparent; transition: background 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-row2 > :is(.ch-attach, .ch-stop):hover::after { background: var(--aad-hover); }
+/* the round Send: a filled disc in the skin's ink, only with words, right of the orb (ChatGPT's mic + send) */
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose.has-text .ch-row2 > .ch-send { display: grid !important; color: var(--aad-canvas) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .win .dchats .pane-main .ch-compose .ch-row2 > .ch-send::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--aad-ink); transition: transform 120ms ease; }
@@ -316,6 +338,13 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbfb { position: absolut
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbfb[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb:has(.is-pressed) .aad-orbc { transform: scale(.94); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orbbtn { pointer-events: auto; position: absolute; inset: 0; margin: 0; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; touch-action: none; }
+/* round 6: the orb's compact spot (in the composer where the mic was; the end of an app's bottom row), moved and sized
+ * there by the shared view chrome (--vc-orb-*); never animated (its own spot is read through the move) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-vc-orb] .aad-orb { translate: var(--vc-orb-dx, 0px) var(--vc-orb-dy, 0px); scale: var(--vc-orb-k, 1); }
+/* the orb IS the microphone: a small mic in it while it rests (a take shows the orb's own state) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-mic { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; pointer-events: none; color: white; transition: opacity 150ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-mic-i { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px color-mix(in srgb, black 55%, transparent)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb[data-mode]:not([data-mode="idle"]) .aad-mic { opacity: 0; }
 
 @keyframes aad-spin { to { transform: rotate(360deg); } }
 @keyframes aad-pop { from { opacity: 0; transform: scale(.97); } }
