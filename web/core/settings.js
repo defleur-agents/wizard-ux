@@ -566,17 +566,17 @@
       const B = window.WosBell, list = B?.routes?.() || [], off = !B?.chatsAvailable;
       if (!B?.routes) return '';
       void B.discover?.();
-      const where = r => r.route === 'daily' ? 'Daily · one line in the Morning Report' : r.route === 'off' ? 'Off · kept in its own history' : r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats';
+      const where = r => r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · kept in its own history' : r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats';
       const rows = list.map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${where(r)}</small></span>${routeSeg(r, off)}</div>`).join('');
       // System: notices about Wizard itself, not an app. Problems always reach you through Notifications' choice.
-      const sysWhere = r => r.route === 'daily' ? 'Daily · one line in the Morning Report' : r.route === 'off' ? 'Off · listed below' : r.route === 'chats' && !off ? 'In Chats' : 'Badge on the Settings cog';
+      const sysWhere = r => r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · listed below' : r.route === 'chats' && !off ? 'In Chats' : 'Badge on the Settings cog';
       const sysRows = (B.systemRoutes?.() || []).map(r => `<div class="st-nr" data-notify-app="${esc(r.id)}"><span class="st-tx"><b>${esc(r.name)}</b><small>${sysWhere(r)}</small></span>${routeSeg(r, off)}</div>`).join('');
       const recent = SEEN.list || B.systemItems?.() || [];
       const ago = t => { const m = Math.max(0, Math.round((Date.now() / 1000 - t) / 60)); return m < 60 ? `${m || 1}m` : m < 1440 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`; };
       const recentHtml = recent.length ? `<h4>Recent</h4><ul class="st-sys-list">${recent.map(i => `<li class="${i.read || i.archived ? '' : 'new'}${i.needs ? ' needs' : ''}"><span class="st-tx"><b>${esc(i.title || i.kindName)}</b><small>${esc(String(i.message || '').slice(0, 160))}</small></span><time>${esc(ago(i.time))}</time></li>`).join('')}</ul>` : '';
       const system = sysRows ? `<div class="st-group st-sys"><h4>System</h4><p class="st-hint">About Wizard itself, not your apps. Anything that needs you, like a failed update, still reaches you as Notifications do.</p>${sysRows}${recentHtml}</div>` : '';
       const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. Turn on Notifications in Chats to choose Chats:</p>${settingRow('wizard/unified-inbox')}` : '';
-      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a thread in <b>Chats</b> that waits with Archive and Snooze, a <b>Badge</b> on its icon, one line in the <b>Daily</b> Morning Report, or <b>Off</b>. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. The same on every device.</p></div>${system}`;
+      return `<div class="st-group"><p class="st-hint">Each app tells you in one place: a thread in <b>Chats</b> that waits with Archive and Snooze, a <b>Badge</b> on its icon, a line in the <b>Morning report</b>, or <b>Off</b>. The Chats badge counts everything waiting in Chats.</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">Apps not listed here only show badges. The same on every device.</p></div>${system}`;
     },
     act(ctx, el) {
       const b = el.closest('[data-notify-route]');

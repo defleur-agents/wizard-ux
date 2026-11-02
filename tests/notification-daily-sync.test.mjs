@@ -44,7 +44,7 @@ const settle = async () => { for (let i = 0; i < 10; i++) await new Promise(r =>
 
 test('Daily is greyed out for an app like Mail and refused if asked; Notifications and System can take it', () => {
   const B = boot().WosBell;
-  assert.match(B.picker('mail'), /data-notify-to="daily" aria-checked="false" disabled title="Mail would lose its point waiting a day"/);
+  assert.match(B.picker('mail'), /data-notify-to="daily" aria-checked="false" disabled title="Mail would lose its point waiting for the Morning Report"/);
   assert.doesNotMatch(B.picker('notifications'), /data-notify-to="daily"[^>]*disabled/);
   assert.equal(B.setRoute('mail', 'daily'), false);
   assert.equal(B.setRoute('notifications', 'daily'), true);
@@ -82,4 +82,9 @@ test('offline: the choice holds on this device and is sent once Notifications an
   const vmFetch = w.fetch; w.fetch = async (url, o) => { if (url === '/notifications/api/routes') { if (o?.method === 'POST') { Object.assign(server.routes, JSON.parse(o.body).routes); return { ok: true, json: async () => ({}) }; } return { ok: true, json: async () => ({ routes: { ...server.routes }, saved: true }) }; } return vmFetch(url, o); };
   await w.WosBell.syncRoutes(true); await settle();
   assert.deepEqual(server.routes, { 'system:app-updates': 'off' });
+});
+
+test('the fourth choice is called Morning report and wears its coffee cup', () => {
+  const h = boot().WosBell.picker('notifications');
+  assert.match(h, /data-notify-to="daily"[^>]*><svg class="wos-route-ic wos-route-mr" viewBox="0 0 512 512"[^]*?<span>Morning report<\/span>/);
 });
