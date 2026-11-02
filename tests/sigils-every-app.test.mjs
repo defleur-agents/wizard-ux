@@ -39,7 +39,11 @@ test('Home wears the approved 12%-wider hat while the main Hermes agent wears th
   assert.match(hermesBadge[1], /border-radius:\s*50%;/, 'Hermes badge is circular');
   assert.match(hermesBadge[1], /mask:\s*none;/, 'Hermes is not reversed into the app hue');
   assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
-  assert.match(css, /\.sgi\.sg-hermes::after\s*\{[^}]*background:\s*#08070A;[^}]*mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/s, 'the Hermes portrait is black inside the badge');
+  const hermesPortrait = css.match(/\.sgi\.sg-hermes::after\s*\{([^}]*)\}/s);
+  assert.ok(hermesPortrait, 'Hermes portrait layer exists');
+  assert.match(hermesPortrait[1], /inset:\s*2%;/, 'the portrait fills more of the circle');
+  assert.match(hermesPortrait[1], /background:\s*#08070A;/, 'the portrait stays black');
+  assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
   assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
   assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
   for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
