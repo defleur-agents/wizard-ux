@@ -886,6 +886,19 @@
       }
     } catch (e) {}
     we.classList.toggle('edge-own', own);
+    // The heading shows `top`, else `bg`: say when that colour is light so its title takes a dark ink (skin-frame.css).
+    let light = false;
+    if (top || bg) try {
+      // Computed colours can use sRGB, display-p3 or oklch coordinates, not just legacy RGB notation.
+      // Reuse the browser's canvas conversion to sRGB instead of parsing coordinates.
+      const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+      const x = cv.getContext('2d', { willReadFrequently: true });
+      x.fillStyle = top || bg; x.fillRect(0, 0, 1, 1);
+      const rgb = x.getImageData(0, 0, 1, 1).data;
+      const lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+      light = rgb[3] >= 128 && .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]) > .18;
+    } catch (e) {} // Inaccessible or unmeasurable apps retain light ink on the dark fallback.
+    we.classList.toggle('edge-light', light);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
     if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
