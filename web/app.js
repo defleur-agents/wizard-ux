@@ -3707,6 +3707,10 @@
     if (idx !== HOME) { goDesk(HOME); return 'home'; }
     return null;
   }
+  /* A browser or OS back swipe (iOS Safari's left edge, Chrome's overscroll, Android's edge) that starts under a finger
+   * a skin gesture has claimed (api.gesture.claim, e.g. a layout's edge drawer) belongs to that gesture: it is not
+   * also a Back step. Nothing claims a finger in Desks, so every Back there is unchanged. */
+  const ownedSwipe = () => !!window.WosSkinHost?.claimedLately?.();
   function onBack() {
     const did = backStep();
     window.__backLog = (window.__backLog || []).concat(did || 'root').slice(-30);
@@ -3717,7 +3721,7 @@
     if (!win || !('CloseWatcher' in win)) return null;
     try {
       const w = new win.CloseWatcher();
-      w.onclose = () => { watchers.delete(w); onBack(); setTimeout(rearm, 0); };
+      w.onclose = () => { watchers.delete(w); if (!ownedSwipe()) onBack(); setTimeout(rearm, 0); };
       watchers.add(w); return w;
     } catch (e) { return null; }
   }
@@ -3745,6 +3749,8 @@
     guardOn = e.state?.wos === 'guard';
     if (ignorePop) { ignorePop--; dropUntil = 0; return; }
     if (Date.now() < dropUntil) { dropUntil = 0; return; } // our own guard drop surfacing late (counts once)
+    // a back swipe of the browser / OS under a finger a skin gesture owns (a layout's edge drawer) is that gesture's
+    if (ownedSwipe()) { ensureGuard(true); return; }
     onBack();
     // A consumed step re-arms at once, so the next Back (even with no tap in
     // between) is caught too, including at Home.
