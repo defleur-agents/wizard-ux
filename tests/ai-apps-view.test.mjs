@@ -164,7 +164,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   // round 10: no apps sidebar on the right; Home's grid (open first, badged first; installed; Get more), paged
   assert.equal(w.q('.aad-apps'), null, 'round 10: the right apps sidebar is gone'); assert.equal(w.html.dataset.aadApps, undefined);
   assert.equal(w.html.dataset.aadHome, '', 'Home shows its grid');
-  assert.deepEqual(w.qa('.aad-hg .ah-app').map(b => b.dataset.app || 'more'), ['money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'the phone\'s order: open apps (badged first), installed, Get more');
+  assert.deepEqual(w.qa('.aad-hg .ah-app').map(b => b.dataset.app || 'more'), ['wizard', 'money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'the phone\'s order: open apps (badged first), installed, Get more');
   assert.equal(w.q('.aad-hg .ah-app[data-app="money"] .ah-badge').textContent, '3');
   assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'ready:true']);
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
@@ -294,7 +294,7 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   assert.deepEqual(w.q('.aa-chat[data-sid="r1"]').children.map(c => c.className.split(' ').pop()), ['aa-row-t', 'aa-pin', 'is-new'], 'title first, the state at the end');
   // Home: the apps above the composer, open first (badged first), then the rest installed, then Get more
   w.q('.aa-scrim').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'open apps (badged first, desk order), then installed, then Get more');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['wizard', 'money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'open apps (badged first, desk order), then installed, then Get more');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-badge').textContent, '3', 'the shell\'s own count, on the icon');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-name').textContent, 'Money');
   assert.equal(w.q('.ah-app[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new');
@@ -633,11 +633,14 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const w = world();
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }], wiz: [{ id: 'notes', name: 'Notes' }], agents: [], conns: [], dev: [{ id: 'music', name: 'Music' }] });
   (await layout()).default(w.api);
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['money', 'mail', 'movies', 'more'], 'phone Home: Notes (agent app), Music (in development), Maps (system) are left out');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || 'more'), ['wizard', 'money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'round 12: every desk is on Home (Chats, agent app, in development, system), then only real apps not open yet');
+  const { homeApps } = await import(new URL('web/layouts/ai-apps/home.js', root).href);
+  assert.deepEqual(homeApps([{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'notes', name: 'Notes' }, { id: 'music', name: 'Music' }], [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }], w.api.apps.kinds(), () => false).rest.map(a => a.id),
+    ['money', 'movies'], 'not open: Notes (agent app), Music (in development) and Maps (system) stay out');
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /const home = homeView\(api, \{ goApp: id => goApp\(id\), getMore: \(\) => api\.apps\.openDesk\('app-store'\), lit, badgeText, desks, paged: true,/, 'round 10: the desktop\'s Home grid: the same list as the phone\'s Home (home.js), paged');
+  assert.match(dj, /const home = homeView\(api, \{ goApp: \(id, desk\) => goApp\(id, desk\), getMore: \(\) => api\.apps\.openDesk\('app-store'\), lit, badgeText, desks, paged: true,/, 'round 10: the desktop\'s Home grid: the same list as the phone\'s Home (home.js), paged');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -725,7 +728,7 @@ test('Home apps: open first (badged first), then the rest installed, real apps o
   const kinds = { apps: apps.filter(a => ['mail', 'money', 'movies', 'maps'].includes(a.id)), wiz: [apps[3]], dev: [] };
   const desks = [{ id: 'chats', desk: 0 }, { id: 'mail', desk: 1 }, { id: 'money', desk: 2 }, { id: 'notes', desk: 3 }];
   const { open, rest } = homeApps(apps, desks, kinds, id => id === 'money');
-  assert.deepEqual(open.map(a => a.id), ['money', 'mail']); assert.deepEqual(rest.map(a => a.id), ['movies']);
+  assert.deepEqual(open.map(a => a.id), ['money', 'chats', 'mail', 'notes'], 'round 12: every desk'); assert.deepEqual(rest.map(a => a.id), ['movies']);
   for (const k of 'CDFGHILNOPRSTVWXZ') assert.ok(!APP_LETTERS.includes(k), `⌥${k} keeps its meaning`);
   const ks = appKeys([{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }]);
   assert.deepEqual(ks, { mail: 'M', money: 'E', movies: 'A' }, 'the first free letter of the name, else the first free one');
@@ -1063,9 +1066,18 @@ test('round 11: Home order = the desks\' order (badged first), no arrangement ke
   const apps = ['mail', 'money', 'music', 'movies', 'news'].map(id => ({ id, name: id }));
   const desks = [{ desk: 0, id: 'wizard' }, { desk: 1, id: 'music' }, { desk: 2, id: 'mail' }, { desk: 3, id: 'money' }];
   const { open, rest } = H.homeApps(apps, desks, null, id => id === 'money');
-  assert.deepEqual(open.map(a => a.id), ['money', 'music', 'mail'], 'the desks in their order, the badged one first');
+  assert.deepEqual(open.map(a => a.id), ['money', 'wizard', 'music', 'mail'], 'the desks in their order, the badged one first');
   assert.deepEqual(rest.map(a => a.id), ['movies', 'news'], 'then the apps not open yet');
-  assert.deepEqual(H.homeApps(apps, desks, null, () => false).open.map(a => a.id), ['music', 'mail', 'money'], 'exactly the desk order');
+  assert.deepEqual(H.homeApps(apps, desks, null, () => false).open.map(a => a.id), ['wizard', 'music', 'mail', 'money'], 'exactly the desk order');
+  // round 12 (Miguel: "all"): one icon per desk, the Desks view one to one: a second Chats desk, Files, the App Store,
+  // Claude (system / connector apps with a desk) with the stock desk names; keyed per desk, so a click opens THAT desk
+  const all = [{ id: 'files', name: 'Files', system: true }, { id: 'app-store', name: 'App Store', system: true }, { id: 'claude', name: 'Claude', connector: true }, ...apps];
+  const ds = [{ desk: 0, id: 'wizard', name: 'Chats' }, { desk: 1, id: 'files', name: 'Files' }, { desk: 2, id: 'mail', name: 'Mail' }, { desk: 3, id: 'wizard', name: 'Chats' }, { desk: 4, id: 'app-store', name: 'App Store' }, { desk: 5, id: 'claude', name: 'Claude' }];
+  const r12 = H.homeApps(all, ds, null, () => false);
+  assert.deepEqual(r12.open.map(a => `${a.desk}:${a.name}`), ['0:Chats', '1:Files', '2:Mail', '3:Chats', '4:App Store', '5:Claude'], 'every desk in desk order, the stock names');
+  assert.deepEqual(r12.open.map(a => a.key), ['desk:0', 'desk:1', 'desk:2', 'desk:3', 'desk:4', 'desk:5'], 'one cell per desk');
+  assert.deepEqual(r12.rest.map(a => a.id), ['money', 'movies', 'music', 'news'], 'then installed apps not open yet');
+  assert.deepEqual(H.homeApps(all, ds, null, id => id === 'wizard').open.map(a => a.desk), [0, 3, 1, 2, 4, 5], 'badged first (both Chats desks), else desk order');
   assert.deepEqual(H.pageFit(1104, 520, 124, 128), { cols: 7, rows: 4, per: 28 }, '1440 wide: 7 × 4');
   assert.deepEqual(H.pageFit(944, 300, 124, 128), { cols: 7, rows: 2, per: 14 });
   assert.equal(H.pageFit(900, 90, 124, 128).rows, 2, 'never a single row');
@@ -1126,4 +1138,18 @@ test('round 11 phone Home: no rearranging (the desks\' order), a hold still offe
   assert.equal(w.q('.ah-grid').children[0].dataset.app, first, 'nothing moved');
   const css = read('web/layouts/ai-apps/layout.css');
   assert.ok(!/\.ah-app\.is-drag|\.ah\.is-arranging/.test(css), 'no rearranging styles left');
+});
+
+test('round 12: Home = the Desks view one to one: a second Chats desk opens itself (no app panel), each icon its own desk', async () => {
+  const { w } = deskWorld();
+  w.st.desks = null;
+  w.api.desks.list = () => [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }, { desk: 3, id: 'wizard', name: 'Chats' }, { desk: 4, id: 'files', name: 'Files' }];
+  (await layout()).default(w.api);
+  const cells = w.qa('.aad-hg .ah-app[data-app]');
+  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '3:Chats', '2:Mail', '4:Files'], 'every desk, badged (Chats) first, stock names');
+  assert.ok(w.q('.aad-hg .ah-app[data-desk="3"] .sg-chats'), 'a Chats desk wears the chats glyph');
+  w.q('.aad-hg .ah-app[data-desk="3"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.gone.at(-1), 3, 'the second Chats desk itself'); assert.equal(w.q('.aad-pload').hidden, true, 'no app placeholder for Chats');
+  w.q('.aad-hg .ah-app[data-desk="4"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.gone.at(-1), 4, 'Files (a system app) opens its desk');
 });

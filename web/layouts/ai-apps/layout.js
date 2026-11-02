@@ -110,7 +110,7 @@ export default function setup(api) {
   api.mount(layer);
 
   /* ---------- Home: the app grid above the composer (home.js) ---------- */
-  const home = homeView(api, { goApp: id => goApp(id), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
+  const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
   api.mount(home.el);
 
   let open = false, offBack = null, q = '';
@@ -189,7 +189,8 @@ export default function setup(api) {
     return b;
   }
   const grid = (label, cells) => { const g = el('div', 'aa-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
-  const goApp = id => { const d = desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
+  // round 12: a Home icon is a desk: that desk (a second Chats desk too); a search hit: its app's first desk
+  const goApp = (id, desk = null) => { const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
   function chatRow(s, here) {
     const b = el('button', 'aa-row aa-chat', { type: 'button', 'data-sid': s.id, 'data-kind': s.kind, ...(s.id === here ? { 'aria-current': 'page' } : {}) });
     // plain titles like theirs; a pin, then the state at the end only when there is one (Working turns, Ready new = a dot);
