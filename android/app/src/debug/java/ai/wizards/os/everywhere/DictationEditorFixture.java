@@ -45,7 +45,7 @@ public final class DictationEditorFixture extends Activity {
         TextView label = new TextView(this); label.setText("Synthetic dictation editor · " + mode); layout.addView(label);
         editor = new Editor(); editor.setId(View.generateViewId()); editor.setSingleLine(false);
         editor.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        editor.setHint("Synthetic hint");
+        editor.setHint(mode.equals("noHint") ? null : "Synthetic hint");
         String text = getIntent().getStringExtra("text"); editor.setText(text == null ? "prefix " : text);
         editor.setSelection(getIntent().getIntExtra("start", editor.length()), getIntent().getIntExtra("end", editor.length()));
         layout.addView(editor, new LinearLayout.LayoutParams(-1, 240));

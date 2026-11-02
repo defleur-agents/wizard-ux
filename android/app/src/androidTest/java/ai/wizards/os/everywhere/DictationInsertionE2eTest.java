@@ -257,6 +257,12 @@ public class DictationInsertionE2eTest {
     }
     @Test public void hintIsNotExistingTextAndSentenceCapitalizationSurvives() throws Exception {
         editor("noopIc","",0,0); dispatch("hello world"); terminal(true); inserted("Hello world ",0,1);
+        final String[] clip = {null};
+        onMain(() -> clip[0] = context.getSystemService(ClipboardManager.class).getPrimaryClip().getItemAt(0).getText().toString());
+        assertEquals("saved clipboard",clip[0]);
+    }
+    @Test public void emptyWithoutHintUnknownSelectionUsesOnlyKnownInputConnection() throws Exception {
+        editor("noHint","",0,0); dispatch("hello world"); terminal(true); inserted("Hello world ",1,0);
     }
     @Test public void emptyHintNoopPasteRetainsTakeWithoutSecondWrite() throws Exception {
         editor("noopPaste","",0,0); dispatch("hello world"); terminal(false); inserted("",0,1);
