@@ -33,10 +33,11 @@
  * 12 px row pills, 18 px menus, 28 px sheets, full pills for the composer, search and chips; icons as rounded squares.
  * Every list comes from the shell (open apps = desks, the same as the Apps view's icons and the Orb's satellites;
  * chats = Chats' own Working / Ready), so switching views loses nothing. Colours are skin tokens (layout.css). */
-import { viewChrome, openApps, matches, CHATS } from '../apps/chrome.js';
+import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.js';
+import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen } from './parts.js';
+import { ICON, ACTS, SVG, initial, SECTIONS, sectionsOpen, gridSlot } from './parts.js';
 import desktop from './desktop.js';
 
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
@@ -58,7 +59,8 @@ export default function setup(api) {
   // the + sheet in three levels, the dock without its desk switcher, the orb's swipes (up = Home, here the chat) and
   // room under every hosted app for the floating orb: the Orb and Apps views' own chrome, so all three agree
   // (round 5: a swipe up on the orb is a New chat with the keyboard up here, 'new', not Home)
-  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id), swipes: { up: 'new', side: null, down: null } });
+  // (round 6: the orb wears a small microphone, the orb IS the microphone)
+  const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id), swipes: { up: 'new', side: null, down: null }, micGlyph: true });
 
   /* ---------- data ---------- */
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
@@ -136,10 +138,13 @@ export default function setup(api) {
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
 
   /* rows: an app (its logo, else the dock's own mark for it), a chat (Working spinner / Ready dot, title, pin) */
+  // round 6: the app's own icon filling its tile like an iPhone icon (its sigil on a tile tinted by its colour, or its
+  // picture logo edge to edge), never a small mark on a grey plate
+  const metaOf = id => api.apps.list().find(a => a.id === id) || desks().find(d => d.id === id) || { id, name: id };
   function appTile(id) {
-    const t = el('span', 'aa-tile', { 'aria-hidden': 'true' });
-    const mark = api.phone.mark(id);
-    if (mark) { mark.querySelector?.('.dbg')?.remove(); mark.classList?.add('aa-mark'); t.append(mark); }
+    const a = metaOf(id), t = el('span', 'aa-tile', { 'aria-hidden': 'true' });
+    t.style.setProperty('--c', colourOf(a));
+    t.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
     api.apps.logo(id).then(url => {
       if (!url || !t.isConnected) return;
       const im = el('img', 'aa-logo', { alt: '', src: url, draggable: 'false' });
@@ -201,8 +206,9 @@ export default function setup(api) {
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, here)));
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aa-empty', { text: 'No chat or app by that name.' }));
     } else {
-      // every open app (none hidden behind "N more"), then All apps as the grid's last cell
-      const openList = litFirst(openApps(apps, dk));
+      // every open app (none hidden behind "N more"), then All apps as the grid's last cell; real apps only (round 6:
+      // the sheet's Apps, never agent apps, agents, connectors, system / Wizard apps or apps in development)
+      const openList = litFirst(realApps(openApps(apps, dk), api.apps.kinds?.()));
       out.push(grid('Open apps', [...openList.map(a => appCell(a, () => goApp(a.id))), plainCell('aa-all', 'apps', 'All apps', () => chrome.open())]));
       out.push(el('hr', 'aa-div'));
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
@@ -387,16 +393,24 @@ export default function setup(api) {
   /* ---------- Home: a New chat (the drawer's +, the name in the top bar, the orb's swipe up all land here) ---------- */
   function goHome() { closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
 
-  /* ---------- the composer above the orb: room for the dock orb's row (its untransformed size) under the composer ---------- */
-  let room = -1;
-  function paintRoom() {
-    const o = api.phone.orb?.(); if (!o?.getBoundingClientRect) return;
-    const r = o.getBoundingClientRect(), d = o.offsetHeight || r.height, H = globalThis.innerHeight || 0;
-    if (!r.height || !H) return;
-    const px = Math.max(0, Math.round(H - (r.top + r.height / 2 - d / 2)));
-    if (px !== room) { room = px; root.style.setProperty('--aa-orb-room', px + 'px'); }
+  /* ---------- the orb in the composer (round 6, Miguel: the orb replaces the microphone) ----------
+   * The composer keeps an empty slot where the mic was (layout.css: the grid's 'orb' column, right, before Send); the
+   * dock orb moves into it at that size (chrome.orbIn), so tap talks / dictates and hold gives a command, as everywhere.
+   * Off a chat, during a take (the stock voice controls around the orb's own spot) or with no composer on screen: back
+   * to its own spot. */
+  function orbSlot() {
+    if (root.dataset.aiFront !== 'chat') return null;
+    if ((api.voice?.state?.()?.state || 'idle') !== 'idle') return null;
+    const W = globalThis.innerWidth || 0;
+    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const row = c?.querySelector('.ch-row2'); if (!row) return null;
+    return gridSlot(row, 3);
   }
-  api.listen(globalThis, 'resize', () => api.frame(paintRoom));
+  const syncOrb = () => api.frame(() => chrome.orbIn(orbSlot()));
+  api.listen(globalThis, 'resize', syncOrb);
+  if (globalThis.visualViewport) { api.listen(globalThis.visualViewport, 'resize', syncOrb); api.listen(globalThis.visualViewport, 'scroll', syncOrb); }
+  api.listen(doc, 'input', e => { if (e.target?.closest?.('.ch-compose')) syncOrb(); }, true);
+  api.listen(doc, 'focusin', syncOrb, true); api.listen(doc, 'focusout', () => api.after(60, syncOrb), true);
 
   /* ---------- the main screen: the chat (Home and the bare list become it), or an app ---------- */
   let last = { view: '', thread: null, desk: -1 }, pending = false;
@@ -419,10 +433,10 @@ export default function setup(api) {
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
     // the workspace switcher only on Home (round 5): never over a chat or an app
     wsBtn.hidden = !home; if (!home) closeSheet();
-    paintRoom();
+    syncOrb();
     paintWs();
   }
-  api.on('route', onRoute);
+  api.on('route', r => { onRoute(r); api.after(420, syncOrb); });   // again once the chat's desk has slid in
   api.on('render', () => { if (open) { readSessions(); paintDrawer(); } paintTop(); });
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   api.on('voice', () => paintTop());
@@ -433,6 +447,5 @@ export default function setup(api) {
     closeMenu(); closeSheet(); closeDrawer();
     top.remove(); layer.remove(); chrome.dispose();
     for (const k of ['aiApps', 'aiFront', 'aaDrawer', 'aiNew']) delete root.dataset[k];
-    root.style.removeProperty('--aa-orb-room');
   };
 }

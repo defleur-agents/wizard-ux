@@ -24,6 +24,8 @@ export const ICON = {
   restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
+  // a microphone: the orb wears it (round 6: the orb IS the microphone)
+  mic: ['M12 3.5a2.75 2.75 0 0 0-2.75 2.75v5.5a2.75 2.75 0 0 0 5.5 0v-5.5A2.75 2.75 0 0 0 12 3.5z', 'M6.5 11.25a5.5 5.5 0 0 0 11 0', 'M12 16.75v3.75'],
   newchat: ['M12 5H6.5A1.5 1.5 0 0 0 5 6.5v11A1.5 1.5 0 0 0 6.5 19h11a1.5 1.5 0 0 0 1.5-1.5V12', 'M17.5 4.5l2 2L13 13l-3 1 1-3z'],
   // a cogwheel (the Lucide settings outline, ISC licence)
   cog: ['M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
@@ -47,4 +49,18 @@ export function sectionsOpen(stored) {
   const o = { archive: false, working: false, ready: true };
   if (stored && typeof stored === 'object') for (const k of Object.keys(o)) if (typeof stored[k] === 'boolean') o[k] = stored[k];
   return o;
+}
+/** The box of one column of a grid row (the composer's orb slot, round 6): its middle in viewport px and its size
+ * ({ x, y, d }), on the grid's last row. Read from the resolved tracks, so it is right whether the composer is one line
+ * or two (words on top, the controls under them). null when the row is not a grid or the column is empty. */
+export function gridSlot(row, col) {
+  const cs = row?.ownerDocument?.defaultView?.getComputedStyle(row); if (!cs) return null;
+  const cols = String(cs.gridTemplateColumns).split(' ').map(parseFloat), rows = String(cs.gridTemplateRows).split(' ').map(parseFloat);
+  if (cols.length <= col || cols.some(Number.isNaN) || !rows.length || rows.some(Number.isNaN)) return null;
+  const r = row.getBoundingClientRect(), px = k => parseFloat(cs[k]) || 0, cg = px('columnGap'), rg = px('rowGap');
+  let x = r.left + px('borderLeftWidth') + px('paddingLeft'), y = r.top + px('borderTopWidth') + px('paddingTop');
+  for (let i = 0; i < col; i++) x += cols[i] + cg;
+  for (let i = 0; i < rows.length - 1; i++) y += rows[i] + rg;
+  const w = cols[col], h = rows[rows.length - 1];
+  return w > 0 && h > 0 ? { x: x + w / 2, y: y + h / 2, d: Math.min(w, h) } : null;
 }

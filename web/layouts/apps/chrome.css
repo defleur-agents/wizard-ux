@@ -12,6 +12,14 @@ html[data-view-chrome="phone"] #dock {
 }
 html[data-view-chrome="phone"] #dock::before { display: none !important; }
 html[data-view-chrome="phone"] #dock > #orbWrap { pointer-events: auto; }
+/* round 6 (Miguel, 2 Nov 2026): the orb's compact spot. A view's composer (the slot where the mic was) or the app in front
+ * (the end of its bottom row of controls) gives it a spot; it moves there and takes that size. Never animated: the
+ * bars around it read its own spot through the move. */
+html[data-view-chrome="phone"][data-vc-orb] #dock > #orbWrap { translate: var(--vc-orb-dx, 0px) var(--vc-orb-dy, 0px); scale: var(--vc-orb-k, 1); }
+/* the orb IS the microphone: a small mic in it wherever the view shows it (resting only; a take shows the orb's own state) */
+html[data-view-chrome="phone"] #orbWrap > .vc-mic { position: absolute; inset: 0; z-index: 6; display: grid; place-items: center; pointer-events: none; color: white; transition: opacity 150ms ease; }
+html[data-view-chrome="phone"] #orbWrap > .vc-mic .vc-mic-i { width: 40%; height: 40%; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 1px 2px color-mix(in srgb, black 55%, transparent)); }
+html[data-view-chrome="phone"] #orbWrap[data-mode]:not([data-mode="idle"]) > .vc-mic { opacity: 0; }
 
 /* ---------- icons (the + and the sheet's ✕) ---------- */
 html[data-view-chrome] .vc-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; }

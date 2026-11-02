@@ -82,7 +82,7 @@ test('no tab row (one wide button, a mini player above the tabs): nothing is spl
 
 test('the shell wiring: the CSS around the orb, gated on the orb being over the frame; the views hand over the dock orb', () => {
   // the split rules apply only while html.wos-orb-bar is set; without it the old lift (room above the orb) stays
-  assert.match(host, /'html:not\(\.wos-orb-bar\) \[data-wos-inset-bar\]:not\(\[data-wos-lift="self"\]\)\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}'/);
+  assert.match(host, /'html:not\(\.wos-orb-bar\):not\(\.wos-orb-end\) \[data-wos-inset-bar\]:not\(\[data-wos-lift="self"\]\)\{height:auto!important;padding-bottom:calc\(var\(--wos-inset-b,0px\) - 12px\)!important\}'/);
   assert.match(host, /html\.wos-orb-bar \[data-wos-tabs\]::after\{content:""!important;display:block!important;position:static!important;order:2!important;flex:0 0 var\(--wos-orb-slot,80px\)!important/, 'an empty slot as wide as the orb in the middle');
   assert.match(host, /min-height:calc\(2\*var\(--wos-orb-cy,40px\)\)!important/, 'the tabs sit on the orb\'s row');
   assert.match(host, /html\.wos-orb-bar \[data-wos-tab\]\{order:1!important;flex:0 0 calc\(\(100% - var\(--wos-orb-slot,80px\)\)\/2\*var\(--wos-tab-f,1\)\)!important/, 'each side gets half the rest, shared by its tabs (tabFit\'s shares)');
@@ -90,10 +90,11 @@ test('the shell wiring: the CSS around the orb, gated on the orb being over the 
   assert.match(host, /if \(row\) fitTabs\(d, row\);/, 'the split bar is measured and shared by its labels');
   assert.match(host, /if \(o && o\.d > 0 && cy > o\.d \/ 2 && cy < 160 && \(fr\.width >= vwTop \* \.9 && Math\.abs\(vwTop \/ 2 - o\.x\) < 8 \|\| fr\.width >= vwTop \* \.6 && Math\.abs\(fr\.left \+ fr\.width \/ 2 - o\.x\) < 8\)\) \{/, 'only a screen-wide frame with the orb centred over its bottom (or the desktop AI apps frame beside its sidebar, the orb centred over it)');
   assert.match(host, /d\.documentElement\.style\.setProperty\('--wos-orb-slot', Math\.round\(o\.d \+ 16\) \+ 'px'\);/);
-  assert.match(host, /inset\(px, orb = null\) \{/, 'api.apps.inset(px, orb): the layout says where its orb is');
+  assert.match(host, /inset\(px, orb = null, place = null\) \{/, 'api.apps.inset(px, orb, place): the layout says where its orb is (and hears where the app wants it)');
   assert.match(host, /new d\.defaultView\.MutationObserver\(/, 'an app that redraws its bar is laid out again');
   const chrome = read('web/layouts/apps/chrome.js');
-  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], orb \|\| \(shell === 'phone' \? orbSpot : null\)\)/, 'phone views hand over the dock orb; a view drawing its own orb says where it is (desktop AI apps); else the lift');
+  assert.match(chrome, /const rawSpot = orb \|\| \(shell === 'phone' \? orbSpot : null\);/, 'phone views hand over the dock orb; a view drawing its own orb says where it is (desktop AI apps); else the lift');
+  assert.match(chrome, /api\.apps\.inset\(inset \?\? FLOAT_INSET\[shell\], rawSpot \? home : null, s => \{ appSpot = s \|\| null; placeOrb\(\); \}\)/, 'the orb\'s own spot (untransformed) is what the bars go around; the app\'s spot moves it');
   assert.match(chrome, /d = o\.offsetWidth \|\| r\.width;/, 'the untransformed size: pressing the orb never reflows the bar');
 });
 
@@ -222,6 +223,63 @@ test('round 5: content that scrolls is never the bar; a composer footer is lifte
   const host2 = host;
   assert.match(host2, /bar\.setAttribute\('data-wos-lift', bar\.matches\(CONTROLS\) \? 'self' : 'block'\)/, 'found this way = lifted (a lone control by a margin)');
   assert.match(host2, /split = !\/\^\(block\|self\)\$\/\.test\(bar\.getAttribute\('data-wos-lift'\) \|\| ''\) && isTabBar\(bar\) && !hasEntry\(d, bar\) && orbTabs\(/, 'only a real tab bar with no field splits');
-  assert.match(host2, /'html:not\(\.wos-orb-bar\) \[data-wos-float\]\{translate:0 calc\(-1 \* var\(--wos-lift,0px\)\)!important\}'/);
+  assert.match(host2, /'html:not\(\.wos-orb-bar\):not\(\.wos-orb-end\) \[data-wos-float\]\{translate:0 calc\(-1 \* var\(--wos-lift,0px\)\)!important\}'/);
   assert.match(host2, /\[data-wos-inset-scroll\]::after\{content:""/, 'a plain scroller under the orb gets room after its last item');
+});
+
+/* Round 6 (Miguel, 2 Nov 2026: "never waste a whole band at the bottom of the phone screen"): a block that is not a tab
+ * bar keeps its place; the orb takes a compact spot at the end of its lowest row of controls (Messenger's composer:
+ * after its mic; its chips: after Filters), the row making room for it; if the row has no room, the old lift. */
+const ectx = {}; vm.runInNewContext(bb + ';globalThis.endRow = endRow; globalThis.orbEnd = orbEnd; globalThis.endSize = endSize;', ectx);
+const live = (d, n) => { n.css.paddingRight ||= '0px'; n.css.paddingBottom ||= '0px'; n.css.marginBottom ||= '0px'; return n; };
+function pageWith(kids) {
+  const d = pageOf(kids), cls = new Set();
+  d.documentElement.classList = { add: c => cls.add(c), remove: c => cls.delete(c), contains: c => cls.has(c) };
+  d.documentElement.clientWidth = 390; d.querySelectorAll = sel => d.body.querySelectorAll(sel); d.cls = cls;
+  return d;
+}
+const styled = (n, onSet) => { const st = {}; n.style = { setProperty: (k, v) => { st[k] = v; onSet?.(k, v); }, removeProperty: k => { delete st[k]; onSet?.(k, null); }, getPropertyValue: k => st[k] || '' }; n.scrollWidth = n.clientWidth = n.rect?.width || 0; return n; };
+
+test('round 6: the lowest row of controls: a composer row, the chips under the filters, a lone Load more', () => {
+  const att = new B('button', {}, R(8, 707, 44, 44)), ta = new B('textarea', {}, R(58, 707, 274, 44)), mic = new B('button', {}, R(338, 707, 44, 44));
+  const form = new B('form', {}, R(0, 700, 390, 58), [att, ta, mic]), d = pageWith([form]);
+  const p = ectx.endRow(d, form); assert.equal(p.row, form); assert.equal(p.self, false); assert.equal(p.ctrls.length, 3);
+  const seg = new B('div', { role: 'radiogroup' }, R(12, 627, 366, 38), [new B('button', { role: 'radio' }, R(15, 630, 89, 32)), new B('button', { role: 'radio' }, R(106, 630, 89, 32))]);
+  const c1 = new B('button', {}, R(12, 668, 36, 36)), c2 = new B('button', {}, R(311, 668, 67, 36)), chips = new B('div', {}, R(12, 664, 366, 44), [c1, c2]);
+  const filters = new B('div', { id: 'u-filters' }, R(0, 615, 390, 100), [seg, chips]), d2 = pageWith([filters]);
+  const p2 = ectx.endRow(d2, filters); assert.equal(p2.row, chips, 'the chips\' row, not the filters above it'); assert.equal(p2.ctrls.length, 2); assert.equal(p2.ctrls[0], c1); assert.equal(p2.ctrls[1], c2);
+  const more = new B('button', { class: 'wz-button' }, R(12, 660, 366, 44)), d3 = pageWith([more]);
+  assert.equal(ectx.endRow(d3, more).self, true, 'a lone control is its own row');
+  assert.deepEqual(JSON.parse(JSON.stringify(ectx.endSize(36, 66))), { D: 44, slot: 52 }, 'the orb as tall as the row\'s controls plus a little');
+  assert.deepEqual(JSON.parse(JSON.stringify(ectx.endSize(80, 66))), { D: 66, slot: 74 }, 'never over its own size');
+});
+
+test('round 6: Messenger\'s composer: the orb at the row\'s end (no band, no lift); a row with no room falls back to the lift', () => {
+  const fr = { left: 0, top: 56 }, o = { x: 195, y: 806, d: 66 };
+  const att = live(null, new B('button', {}, R(8, 707, 44, 44))), ta = live(null, new B('textarea', {}, R(58, 707, 274, 44))), mic = live(null, new B('button', {}, R(338, 707, 44, 44)));
+  // the row makes room: the field gives up what the orb's spot takes (a flex row), the mic moves left with it
+  const form = styled(live(null, new B('form', {}, R(0, 700, 390, 58), [att, ta, mic])), (k, v) => { if (k !== '--wos-end-pad') return; const pad = v ? parseFloat(v) : 0; ta.rect = R(58, 707, 274 - pad, 44); mic.rect = R(338 - pad, 707, 44, 44); });
+  const d = pageWith([form]);
+  const spot = ectx.orbEnd(d, form, o, fr);
+  assert.equal(form.attrs['data-wos-end'], 'row'); assert.equal(form.style.getPropertyValue('--wos-end-pad'), '64px', 'room for a 52 px orb, its gap and 4 px from the edge');
+  assert.ok(d.cls.has('wos-orb-end'), 'the lift is off: the app keeps its own height');
+  assert.deepEqual(JSON.parse(JSON.stringify(spot)), { x: 360, y: 56 + 729, d: 52 }, 'the orb after the mic, on the row\'s line');
+  // a row that cannot give up room (nothing moves): no spot, nothing left marked, the lift comes back
+  const btns = [0, 1, 2, 3, 4, 5, 6].map(i => live(null, new B('button', {}, R(4 + i * 54, 707, 50, 44))));
+  const full = styled(live(null, new B('div', {}, R(0, 700, 390, 58), btns))), d2 = pageWith([full]);
+  assert.equal(ectx.orbEnd(d2, full, o, fr), null);
+  assert.equal(full.attrs['data-wos-end'], undefined); assert.ok(!d2.cls.has('wos-orb-end'));
+  assert.match(host, /if \(!split\) \{ try \{ spot = orbEnd\(d, bar, o, fr\); \} catch \(_\) \{ spot = null; \} \}/, 'every bar that is not split around the orb tries the row\'s end first');
+  assert.match(host, /'html\.wos-orb-end\{--wos-inset-b:0px!important\}'/, 'no room under the list either: the bar is the end of the page');
+  assert.match(host, /function placeSync\(\) \{/, 'the app in front decides where the orb goes');
+});
+
+test('round 6: the desktop Messenger: its thread\'s composer beside its list (not page-wide) is found right under the orb', () => {
+  const list = new B('div', {}, R(0, 0, 322, 844), [new B('button', {}, R(6, 790, 300, 52))], { overflowY: 'auto', sh: 4000 });
+  const att = new B('button', {}, R(330, 792, 44, 44)), ta = new B('textarea', {}, R(380, 792, 700, 44)), mic = new B('button', {}, R(1096, 792, 44, 44));
+  const form = new B('form', {}, R(322, 784, 830, 60), [att, ta, mic]), pane = new B('section', {}, R(322, 0, 830, 844), [new B('div', {}, R(322, 0, 830, 784), [], { overflowY: 'auto', sh: 3000 }), form]);
+  const d = pageWith([list, pane]);
+  assert.equal(bctx.bottomBar(d, 1152, 844), null, 'not page-wide: no bar for the stock pass');
+  assert.equal(bctx.bottomBar(d, 1152, 844, (864 - 288) / 1152), form, 'right under the orb: the composer is the bar');
+  assert.equal(bctx.bottomBar(d, 1152, 844, .1), null, 'under the list: content, never a bar');
 });

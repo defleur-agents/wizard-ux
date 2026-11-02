@@ -297,6 +297,8 @@
     if (k === lastRoute) return; lastRoute = k;
     emit('route', r);
     if (frameInset) insetSync();   // the app now in front may have drawn its bottom bar out of sight
+    // the orb's spot follows the app in front once its desk has slid in
+    if (insetPlaces.size) for (const ms of [380, 760]) setTimeout(placeSync, ms);
   }
 
   /* ---------- layout layer ---------- */
@@ -373,7 +375,7 @@
    * --wos-inset-b on its <html> (like the camera's --wos-cutout) and one rule that adds that much room after a kit
    * scroll area's last item (.wz-scroll), so every list still scrolls clear of the orb. 0 = nothing (stock). */
   let frameInset = 0, frameOrb = null;
-  const insetHolders = new Map(), insetOrbs = new Map(), insetSheets = new WeakMap(), insetWatch = new WeakMap(), insetFonts = new WeakSet();
+  const insetHolders = new Map(), insetOrbs = new Map(), insetPlaces = new Map(), frameSpots = new WeakMap(), insetSheets = new WeakMap(), insetWatch = new WeakMap(), insetFonts = new WeakSet();
   /* The orb bar (Miguel, 2 Nov 2026; the Wizard standard for every full-screen app): the orb has ONE fixed spot, bottom
    * centre, and an app's own bottom tab bar is laid out around it, its tabs split evenly left and right of the orb (an
    * empty slot as wide as the orb in the middle), all on the orb's row; never under it, never covering it. Without an
@@ -394,11 +396,21 @@
     + 'html.wos-orb-bar [data-wos-fs][data-wos-wrap]{white-space:normal!important;overflow-wrap:normal!important;word-break:normal!important;text-align:center!important;line-height:1.15!important}'
     // equal parts until tabFit has measured the labels (it then sets --wos-tab-f on each tab: its share of its side)
     + [1, 2, 3, 4].map(n => `html.wos-orb-bar [data-wos-tabs][data-wos-nl="${n}"] [data-wos-tab="l"],html.wos-orb-bar [data-wos-tabs][data-wos-nr="${n}"] [data-wos-tab="r"]{--wos-tab-f:${+(1 / n).toFixed(4)}}`).join('');
+  /* Round 6 (Miguel, 2 Nov 2026: "never waste a whole band at the bottom"): a block of controls along the bottom that is
+   * not a tab bar (Messenger's composer and filter chips, Notes' footer, the Troubleshooter's composer, Mail's Load more)
+   * keeps its own place and height; the orb takes a compact spot of its own at the END of the block's lowest row of
+   * controls (the row makes room for it: data-wos-end), so no band is added under the app. html.wos-orb-end turns the
+   * old lift off; the lift stays only as the fallback when the row has no room for the orb. */
+  const ORB_END = 'html.wos-orb-end{--wos-inset-b:0px!important}'
+    + 'html.wos-orb-end [data-wos-end="row"]{padding-right:var(--wos-end-pad)!important;box-sizing:border-box!important}'
+    + 'html.wos-orb-end [data-wos-end="self"]{margin-right:var(--wos-end-pad)!important;max-width:calc(100% - var(--wos-end-pad))!important}'
+    + 'html.wos-orb-end [data-wos-endpad="p"]{padding-bottom:var(--wos-end-pb)!important}'
+    + 'html.wos-orb-end [data-wos-endpad="m"]{margin-bottom:var(--wos-end-pb)!important}';
   const INSET_CSS = '.wz-scroll::after,html.wos-inset-doc>body::after,[data-wos-inset-scroll]::after{content:"";display:block;flex:none;grid-column:1/-1;height:var(--wos-inset-b,0px);pointer-events:none}'
-    + 'html:not(.wos-orb-bar) [data-wos-inset-bar]:not([data-wos-lift="self"]){height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
+    + 'html:not(.wos-orb-bar):not(.wos-orb-end) [data-wos-inset-bar]:not([data-wos-lift="self"]){height:auto!important;padding-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
     // a lone control along the bottom (Mail's Load more) keeps its own shape and is pushed up by a margin instead
-    + 'html:not(.wos-orb-bar) [data-wos-inset-bar][data-wos-lift="self"]{margin-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
-    + 'html:not(.wos-orb-bar) [data-wos-float]{translate:0 calc(-1 * var(--wos-lift,0px))!important}' + ORB_BAR;
+    + 'html:not(.wos-orb-bar):not(.wos-orb-end) [data-wos-inset-bar][data-wos-lift="self"]{margin-bottom:calc(var(--wos-inset-b,0px) - 12px)!important}'
+    + 'html:not(.wos-orb-bar):not(.wos-orb-end) [data-wos-float]{translate:0 calc(-1 * var(--wos-lift,0px))!important}' + ORB_BAR + ORB_END;
   const setAttr = (n, k, v) => { if (v == null) { if (n.hasAttribute(k)) n.removeAttribute(k); } else if (n.getAttribute(k) !== v) n.setAttribute(k, v); };
   const WOS_MARKS = ['data-wos-tabs', 'data-wos-tab', 'data-wos-flat', 'data-wos-nl', 'data-wos-nr', 'data-wos-fs', 'data-wos-small', 'data-wos-wrap'];
   const WOS_MARKED = '[data-wos-tabs],[data-wos-tab],[data-wos-flat],[data-wos-fs]';
@@ -507,13 +519,15 @@
   const isTabBar = n => /^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || '');
   const shownIn = (d, n) => n.getClientRects().length > 0 && d.defaultView.getComputedStyle(n).visibility !== 'hidden';
   const hasEntry = (d, bar) => [...bar.querySelectorAll(ENTRY)].some(n => shownIn(d, n));
-  function bottomBar(d, vw, vh) {
+  /* (round 6) at = the orb's x in the page (0-1): a narrower block right under the orb counts too (at least 35 % of the
+   * page wide), e.g. the desktop Messenger's thread composer beside its list */
+  function bottomBar(d, vw, vh, at = null) {
     const win = d.defaultView, cs = n => win.getComputedStyle(n), se = d.scrollingElement;
     const scrolls = n => /(auto|scroll)/.test(cs(n).overflowY) && n.scrollHeight > n.clientHeight + 2;
     const docScrolls = !!se && se.scrollHeight > se.clientHeight + 4;
-    const fits = r => r.width >= vw * .8 && r.height > 0 && r.height <= vh * .45 && r.top >= vh * .45 && r.bottom >= vh - 24 && r.bottom <= vh + 2;
+    const fits = r => r.width >= vw * (at == null ? .8 : .35) && r.height > 0 && r.height <= vh * .45 && r.top >= vh * .45 && r.bottom >= vh - 24 && r.bottom <= vh + 2;
     let best = null;
-    for (const fx of [.5, .2, .8]) for (const dy of [3, 16, 32, 56]) {
+    for (const fx of at == null ? [.5, .2, .8] : [at]) for (const dy of [3, 16, 32, 56]) {
       let cand = null, pinned = false;
       for (let n = d.elementFromPoint(vw * fx, vh - dy); n && n !== d.body && n !== d.documentElement; n = n.parentElement) {
         if (scrolls(n)) { cand = null; break; }   // inside a list: content, not controls
@@ -545,6 +559,68 @@
     const lift = Math.max(0, Math.round(top0 - bar.getBoundingClientRect().top));
     d.documentElement.style.setProperty('--wos-lift', lift + 'px');
     for (const n of near) n.setAttribute('data-wos-float', '');
+  }
+  /* Round 6: the lowest row of controls in a bottom block, where the orb takes the row's end. A lone control (Mail's Load
+   * more) is its own row ('self'); else the controls whose middles sit within 16 px of the lowest one, and their
+   * nearest common box is the row. Pure on the DOM it is given (tests run it on a fake one). */
+  const NESTED = 'button,a[href],[role="button"],[role="tab"],[role="radio"]';
+  function endRow(d, bar) {
+    if (bar.matches(CONTROLS)) return { row: bar, self: true, ctrls: [bar] };
+    let ctrls = [...bar.querySelectorAll(CONTROLS)].filter(n => shownIn(d, n) && !n.parentElement?.closest(NESTED))
+      .map(n => ({ n, r: n.getBoundingClientRect() })).filter(c => c.r.height >= 20 && c.r.width > 0);
+    if (!ctrls.length) return null;
+    const low = Math.max(...ctrls.map(c => c.r.top + c.r.height / 2));
+    ctrls = ctrls.filter(c => Math.abs(c.r.top + c.r.height / 2 - low) < 16).sort((x, y) => x.r.left - y.r.left);
+    let row = ctrls.length === 1 ? ctrls[0].n.parentElement : ctrls[0].n.parentElement;
+    while (row && row !== bar && !ctrls.every(c => row.contains(c.n))) row = row.parentElement;
+    if (!row || (row !== bar && !bar.contains(row))) return null;
+    return { row, self: false, ctrls: ctrls.map(c => c.n) };
+  }
+  /* The orb's size and room in that row: as tall as the row's controls plus a little (never under 40 px, never over the
+   * orb's own size), and an 8 px gap before it. */
+  const endSize = (h, od) => { const D = Math.round(Math.max(40, Math.min(od, h + 8))); return { D, slot: D + 8 }; };
+  function clearEnd(d) {
+    for (const n of d.querySelectorAll('[data-wos-end],[data-wos-endpad]')) { n.removeAttribute('data-wos-end'); n.removeAttribute('data-wos-endpad'); n.style?.removeProperty?.('--wos-end-pad'); n.style?.removeProperty?.('--wos-end-pb'); }
+  }
+  /* Put the orb at the end of the bar's lowest row (viewport spot { x, y, d } for the view's orb), or null when the row
+   * has no room for it (the bar is then lifted, as before). o = the orb's own spot (untransformed), fr = the frame. */
+  function orbEnd(d, bar, o, fr) {
+    const html = d.documentElement, win = d.defaultView;
+    html.classList.add('wos-orb-end');   // no lift while measuring: the bar where the app put it
+    clearEnd(d);
+    const p = endRow(d, bar);
+    const fail = () => { clearEnd(d); html.classList.remove('wos-orb-end'); return null; };
+    if (!p) return fail();
+    const { row, self, ctrls } = p, vw = html.clientWidth;
+    const h = Math.max(...ctrls.map(c => c.getBoundingClientRect().height)), { D, slot } = endSize(h, o.d);
+    // the orb takes the row's own end padding too (4-8 px left between it and the edge), so the row gives up as little
+    // as it can (Messenger's chips keep every chip whole)
+    const pr = Math.min(8, Math.max(4, parseFloat(self ? win.getComputedStyle(row).marginRight : win.getComputedStyle(row).paddingRight) || 0));
+    row.style.setProperty('--wos-end-pad', (pr + slot) + 'px');
+    row.setAttribute('data-wos-end', self ? 'self' : 'row');
+    // the row's middle on the orb's own line: a row lower than the orb rises by the difference (the bar's bottom padding,
+    // the room a phone keeps over its home bar); a row higher than it takes the orb up to it
+    const mid = () => { const rs = ctrls.map(c => c.getBoundingClientRect()); return rs.reduce((n, r) => n + r.top + r.height / 2, 0) / rs.length; };
+    const oy = o.y - fr.top, below = mid() - oy;
+    if (below > 1) {
+      // (a lone control rises by a margin, keeping its own shape)
+      const pb = parseFloat(self ? win.getComputedStyle(bar).marginBottom : win.getComputedStyle(bar).paddingBottom) || 0;
+      bar.style.setProperty('--wos-end-pb', Math.round(pb + below) + 'px'); bar.setAttribute('data-wos-endpad', self ? 'm' : 'p');
+    }
+    const rr = row.getBoundingClientRect(), cx = self ? rr.right + 8 + D / 2 : rr.right - pr - D / 2;   // (a lone control: its own margin stays past the orb)
+    // room check: the row's controls end before the orb's spot, nothing spills, the spot is on the page
+    const left = cx - D / 2 - 4;
+    if (cx + D / 2 > vw - 1 || cx - D / 2 < 0) return fail();
+    for (const c of ctrls) {
+      const r = c.getBoundingClientRect(); if (r.right > left + 1 || r.left < -1) return fail();
+      // nor cut by a strip that scrolls or clips (a chip half under its neighbour)
+      for (let n = c.parentElement; n && n !== row.parentElement; n = n.parentElement) {
+        if (win.getComputedStyle(n).overflowX === 'visible') continue;
+        const b = n.getBoundingClientRect(); if (r.right > b.right + 1 || r.left < b.left - 1) return fail();
+      }
+    }
+    if (!self && row.scrollWidth > row.clientWidth + 1) return fail();
+    return { x: fr.left + cx, y: fr.top + mid(), d: D };
   }
   // the list a page scrolls in (no kit scroll area): the scroller under the middle of the page, nearly full width
   function mainScroller(d, vw, vh) {
@@ -591,7 +667,10 @@
         if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
       }
       // a block found this way is never a tab bar: it is lifted above the orb's row (data-wos-lift set from the start)
-      if (!bar) { try { bar = bottomBar(d, vw, vh); } catch (_) { bar = null; } if (bar) { bar.setAttribute('data-wos-lift', bar.matches(CONTROLS) ? 'self' : 'block'); bar.setAttribute('data-wos-inset-bar', ''); } }
+      if (!bar) { try { bar = bottomBar(d, vw, vh); } catch (_) { bar = null; } }
+      // round 6: else a narrower block of controls right under the orb (a pane's composer beside a list)
+      if (!bar) { try { const o0 = frameOrb?.(), r0 = f.getBoundingClientRect(), at = o0 && r0.width ? (o0.x - r0.left) / vw : -1; if (at > 0 && at < 1) bar = bottomBar(d, vw, vh, at); } catch (_) { bar = null; } }
+      if (bar && !bar.hasAttribute('data-wos-inset-bar')) { bar.setAttribute('data-wos-lift', bar.matches(CONTROLS) ? 'self' : 'block'); bar.setAttribute('data-wos-inset-bar', ''); }
       if (bar) floatsOver(d, bar, vw);
     }
     // a list that scrolls under the orb without a kit scroll area (Mail): room after its last item too
@@ -601,7 +680,7 @@
     if (!frameInset) d.querySelector('[data-wos-inset-bar]')?.removeAttribute('data-wos-inset-bar');
     // the orb bar: the orb sits over this frame's bottom centre (a full-screen app under a view's orb), so the bar's tabs
     // go either side of it, on its row; else (no orb there, no tabs) the lifted bar above
-    let split = false;
+    let split = false, spot = null;
     if (frameInset && bar?.isConnected) {
       let o = null; try { o = frameOrb?.(); } catch (_) {}
       const fr = f.getBoundingClientRect(), cy = o ? fr.bottom - o.y : 0;
@@ -615,8 +694,14 @@
         // composer or any other block of controls is lifted above the orb's row instead, its own surface running on
         // under the orb, so the two read as one bar (Miguel, round 5: never the orb layered over an app's controls)
         split = !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '') && isTabBar(bar) && !hasEntry(d, bar) && orbTabs(d, bar, d.documentElement.clientWidth);
+        // round 6: any other bar keeps its place and the orb takes the end of its lowest row (no band under the app)
+        if (!split) { try { spot = orbEnd(d, bar, o, fr); } catch (_) { spot = null; } }
+        else spot = { x: o.x, y: o.y, d: o.d, split: true };
       }
     }
+    if (!spot) { clearEnd(d); d.documentElement.classList.remove('wos-orb-end'); }
+    // kept in the frame's own coordinates: a desk still sliding in when this ran is placed where it comes to rest
+    { const r0 = f.getBoundingClientRect(); frameSpots.set(f, spot && !spot.split ? Object.freeze({ fx: spot.x - r0.left, fy: spot.y - r0.top, d: spot.d }) : null); }
     if (bar?.isConnected && !/^(block|self)$/.test(bar.getAttribute('data-wos-lift') || '')) setAttr(bar, 'data-wos-lift', frameInset && !split ? '' : null);
     if (!frameInset || split) for (const n of d.querySelectorAll('[data-wos-float]')) n.removeAttribute('data-wos-float');
     if (!split) for (const n of d.querySelectorAll(WOS_MARKED)) unmark(n);
@@ -627,11 +712,30 @@
       if (!insetFonts.has(d) && d.fonts?.ready) { insetFonts.add(d); d.fonts.ready.then(() => { if (frameInset && f.isConnected && f.contentDocument === d) insetFrame(f); }, () => {}); }
     }
     f.closest('.win')?.classList.toggle('wos-inset-bar', !!frameInset && !!bar?.isConnected);
+    placeSync();
+  }
+  /* Where the view's orb goes (round 6): the spot the app in front gave it (the end of its bottom row), else its own
+   * fixed spot (null). The app in front = the widest app frame that is on screen (a desk still sliding in is not yet). */
+  let placed = null;
+  function placeSync() {
+    if (!isDoc || !insetPlaces.size) return;
+    let best = null, bw = 0;
+    const vw = globalThis.innerWidth || 0;
+    if (frameInset) for (const f of document.querySelectorAll('.win iframe')) {
+      const r = f.getBoundingClientRect(), w = f.closest('.win');
+      if (!r.width || r.left < -8 || r.right > vw + 8 || !w || w.classList.contains('gone') || getComputedStyle(w).visibility === 'hidden') continue;
+      if (r.width > bw) { best = f; bw = r.width; }
+    }
+    const fs = best ? frameSpots.get(best) || null : null, br = fs ? best.getBoundingClientRect() : null;
+    const spot = fs ? { x: Math.round(br.left + fs.fx), y: Math.round(br.top + fs.fy), d: fs.d } : null;
+    if (spot === placed || (spot && placed && spot.x === placed.x && spot.y === placed.y && spot.d === placed.d)) return; placed = spot;
+    for (const fn of [...insetPlaces.values()]) { try { fn(spot); } catch (_) {} }
   }
   function insetSync() {
     frameInset = Math.max(0, ...insetHolders.values());
     frameOrb = [...insetOrbs.values()].pop() || null;
     if (isDoc) for (const f of document.querySelectorAll('.win iframe')) insetFrame(f);
+    placeSync();
   }
   // an app fills its page after it loads: look again a little later (once its list is there)
   if (isDoc) document.addEventListener?.('load', e => { if (!frameInset || e.target?.tagName !== 'IFRAME') return; const f = e.target; insetFrame(f); for (const ms of [1500, 5000]) setTimeout(() => { if (frameInset) insetFrame(f); }, ms); }, true);
@@ -712,12 +816,15 @@
         /* Room the layout's floating orb takes at the bottom of app windows (px); released on teardown. orb(), when given,
          * says where that orb is ({ x, y, d }: its centre and size, viewport px): an app's own bottom tab bar is then
          * laid out around it (the orb bar: tabs split left and right of the orb, on its row), else lifted above it. */
-        inset(px, orb = null) {
+        /* place(spot), when given (round 6), is told where the app in front wants the orb: { x, y, d } (the end of its
+         * bottom row of controls, viewport px, the orb's size there), or null = the orb's own fixed spot. */
+        inset(px, orb = null, place = null) {
           if (!live()) return () => {};
           insetHolders.set(a, Math.max(0, Math.min(240, +px || 0)));
           if (typeof orb === 'function') insetOrbs.set(a, () => { const o = orb(); return o && [o.x, o.y, o.d].every(Number.isFinite) ? { x: +o.x, y: +o.y, d: +o.d } : null; }); else insetOrbs.delete(a);
+          if (typeof place === 'function') { insetPlaces.set(a, guard(a, 'apps.inset place', place)); placed = undefined; } else insetPlaces.delete(a);
           insetSync();
-          const off = () => { insetHolders.delete(a); insetOrbs.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
+          const off = () => { insetHolders.delete(a); insetOrbs.delete(a); insetPlaces.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
         },
         all: () => { if (live()) shell.openPicker?.(); },
         /* Every app by kind, as the launcher groups them (core/app-kinds.js): { apps, wiz (agent apps), agents, conns

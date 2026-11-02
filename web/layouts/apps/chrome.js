@@ -24,6 +24,8 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 export const CHATS = 'wizard';
+/** A microphone (one path): the glyph the orb wears in the AI apps view (round 6: the orb is the microphone). */
+export const MIC = 'M12 3.5a2.75 2.75 0 0 0-2.75 2.75v5.5a2.75 2.75 0 0 0 5.5 0v-5.5A2.75 2.75 0 0 0 12 3.5zM6.5 11.25a5.5 5.5 0 0 0 11 0M12 16.75v3.75';
 
 /** Level 2, Installed: the picker's apps minus Chats and every app already open (ids of the open desks). */
 export function notOpen(apps, openIds) {
@@ -35,6 +37,13 @@ export function openApps(apps, desks) {
   const meta = new Map((apps || []).map(a => [a.id, a])), seen = new Set();
   return (desks || []).filter(d => d && d.id && d.id !== CHATS && !seen.has(d.id) && seen.add(d.id))
     .map(d => meta.get(d.id) || { id: d.id, name: d.name || d.id, icon: '' });
+}
+/** Real apps only (Miguel, round 6: the drawer / sidebar grid): the open apps that are Apps in the launcher's grouping
+ * (kinds.apps; the shared sheet's Apps), not system / Wizard apps; never agent apps, agents, connectors or apps in
+ * development. Without kinds (an older shell): the open apps minus anything flagged agent / connector / dev. */
+export function realApps(list, kinds) {
+  if (kinds && Array.isArray(kinds.apps)) { const ok = new Set(kinds.apps.filter(a => a && a.id && !a.system).map(a => a.id)); return (list || []).filter(a => ok.has(a.id)); }
+  return (list || []).filter(a => a && !a.agent && !a.connector && !a.dev && !a.system);
 }
 /** The sheet's one search field: a case-insensitive match on the name (and a Store app's summary). */
 export const matches = (a, q) => { const n = String(q || '').trim().toLowerCase(); return !n || String(a.name || '').toLowerCase().includes(n) || String(a.summary || '').toLowerCase().includes(n); };
@@ -48,7 +57,7 @@ export const FLOAT_INSET = Object.freeze({ phone: 96, desktop: 84 });
  * the stock ones. Desks declares nothing, so the dock keeps every stock swipe there. */
 export const ORB_SWIPES = Object.freeze({ up: 'home', side: null, down: null });
 
-export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = null, swipes = null }) {
+export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = null, swipes = null, micGlyph = false }) {
   const doc = document, root = doc.documentElement, shell = api.env.shell === 'desktop' ? 'desktop' : 'phone';
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (d, cls) => {
@@ -74,8 +83,32 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     const r = o.getBoundingClientRect(), d = o.offsetWidth || r.width;   // untransformed size: a press never reflows the bar
     return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, d } : null;
   };
-  // orb: a view drawing its own floating orb says where it is (the desktop AI apps view), so the bars go around it too
-  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell], orb || (shell === 'phone' ? orbSpot : null)) : null;
+  /* Round 6 (Miguel, 2 Nov 2026): the orb has a compact spot of its own wherever there is a row to sit in. The view's
+   * composer (orbIn: the slot where the mic was) or the app in front (skin-host: the end of its bottom row of controls)
+   * says where; the orb moves there and takes that size (--vc-orb-dx / -dy / -k on <html>, read by chrome.css for the
+   * dock orb and by the view's own CSS for its own orb); null = its own fixed spot. home() is the orb's untransformed
+   * spot (what the bars are laid out around), whatever move is applied. */
+  let moved = { dx: 0, dy: 0, k: 1 }, appSpot = null, ownSpot = null;
+  const rawSpot = orb || (shell === 'phone' ? orbSpot : null);
+  const home = () => { const o = rawSpot?.(); return o ? { x: o.x - moved.dx, y: o.y - moved.dy, d: o.d } : null; };
+  function placeOrb() {
+    const want = ownSpot || appSpot, h = want ? home() : null;
+    const t = want && h && h.d > 0 ? { dx: Math.round(want.x - h.x), dy: Math.round(want.y - h.y), k: Math.round(Math.min(1, want.d / h.d) * 1000) / 1000 } : { dx: 0, dy: 0, k: 1 };
+    const at = want ? (ownSpot ? 'composer' : 'row') : '';
+    if (t.dx === moved.dx && t.dy === moved.dy && t.k === moved.k && (root.dataset.vcOrb || '') === at) return;
+    moved = t;
+    if (at) { root.style.setProperty('--vc-orb-dx', t.dx + 'px'); root.style.setProperty('--vc-orb-dy', t.dy + 'px'); root.style.setProperty('--vc-orb-k', String(t.k)); root.dataset.vcOrb = at; }
+    else { for (const k of ['--vc-orb-dx', '--vc-orb-dy', '--vc-orb-k']) root.style.removeProperty(k); delete root.dataset.vcOrb; }
+  }
+  const sameSpot = (a, b) => a === b || (!!a && !!b && Math.abs(a.x - b.x) < .5 && Math.abs(a.y - b.y) < .5 && Math.abs(a.d - b.d) < .5);
+  const offInset = api.apps.inset ? api.apps.inset(inset ?? FLOAT_INSET[shell], rawSpot ? home : null, s => { appSpot = s || null; placeOrb(); }) : null;
+  // the small microphone in the orb (round 6: the orb IS the microphone, everywhere the view shows it): the dock orb's;
+  // a view drawing its own orb draws its own
+  let glyph = null;
+  if (micGlyph && shell === 'phone') {
+    const o = api.phone?.orb?.();
+    if (o?.append) { glyph = el('span', 'vc-mic', { 'aria-hidden': 'true' }); glyph.append(icon(MIC, 'vc-mic-i')); o.append(glyph); }
+  }
 
   /* ---------- the + sheet: Open · Installed · Get more ---------- */
   let sheet = null, offBack = null, offMount = null, q = '', store = null, storeErr = false, body = null, closing = false;
@@ -274,6 +307,10 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     plus, open, close, list, menuOn, appMenu, menuClose,
     get isOpen() { return !!sheet; },
     get closing() { return closing; },
-    dispose() { close(); menuClose(); offSwipes?.(); offInset?.(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
+    /** The view's own spot for the orb ({ x, y, d } viewport px: its composer's orb slot), or null; it wins over an app's. */
+    orbIn(spot) { const s = spot && [spot.x, spot.y, spot.d].every(Number.isFinite) ? { x: +spot.x, y: +spot.y, d: +spot.d } : null; if (sameSpot(s, ownSpot)) return; ownSpot = s; placeOrb(); },
+    /** The orb's own fixed spot (untransformed), whatever move is applied. */
+    orbHome: home,
+    dispose() { close(); menuClose(); offSwipes?.(); offInset?.(); ownSpot = appSpot = null; placeOrb(); glyph?.remove(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
   };
 }
