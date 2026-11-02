@@ -33,6 +33,9 @@ test('pinned host supplies the shared Chats callback and live visibility, not a 
  assert.match(pinned,/isVisible: \(\) => !!frame\?\.isConnected && !chats\?\.isHosted\(wid\)/);
  assert.match(pinned,/chats\.threadBack\(threadWindow\)/);
  assert.match(pinned,/const wid = 'single-app'/);
+ assert.match(pinned,/WizChatsHost\?\.replyRecorder\?\./);
+ assert.match(pinned,/chats\?\.PW\?\.paintMic\(/);
+ assert.match(pinned,/recordReply:\(wid, sid\) => replyVoice\?\.recordReply\(wid, sid\)/);
  assert.doesNotMatch(pinned,/<textarea|createElement\(['"]textarea/);
 });
 test('Manager owns only marked canonical links, preserving ordinary link handling',()=>{const f=fixture(),a={href:'https://wizard.example/wizard-os-home/?session=thread%2Fone',dataset:{wizardNativeThread:'thread/one'}};assert(f.host.ownsThreadLink(f.child,a));a.dataset.wizardNativeThread='thread/two';assert.equal(f.host.ownsThreadLink(f.child,a),false);a.dataset={};assert.equal(f.host.ownsThreadLink(f.child,a),false);});

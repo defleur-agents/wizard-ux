@@ -25,7 +25,10 @@
   // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
   const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
   const replyVoice = window.WizChatsHost?.replyRecorder?.({appId:id, chats:() => chats,
-    repaint:() => chats?.refreshCompose(wid), toast});
+    repaint:() => {
+      chats?.refreshCompose(wid);
+      chats?.PW?.paintMic(!!replyVoice?.recordingFor(), replyVoice?.recordingFor());
+    }, toast});
   const chats = window.WizChatsHost?.create({
     recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
     recordingFor:() => replyVoice?.recordingFor(),
