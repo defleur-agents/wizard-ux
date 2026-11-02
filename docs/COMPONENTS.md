@@ -37,9 +37,9 @@ Reuse:
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
-| Offline replica, edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable fail |
+| Offline replica, edits | `WizOffline.create` / `.presentation` (`core/offline-kit.js`); strict Wisdom pin snapshots | app outbox or second position DB | recoverable fail; strict commit before child boot |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
-| Offline shell | `web/sw.js` | API cache | offline reload |
+| Offline shell | `web/sw.js` + `core/offline-session-config.js`; reviewed Wisdom-only `core/offline-apps.js` | app-specific shell or broad API cache | offline pin reload; workspace/sibling caches survive |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
 | Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own springs/haptics | — |
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
