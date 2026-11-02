@@ -1256,6 +1256,15 @@
     if (!CHATS.setFilter(w, '')) CHATS.renderChats(w);
     requestAnimationFrame(() => { const sc = winEl(here)?.querySelector('.ch-scroll'); if (sc) sc.scrollTop = 0; });
   }
+  // The Chats window in front as it is (its thread kept; opened if there is none): the AI apps view's main screen.
+  function showChats() {
+    closeSheets(true);
+    let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
+    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) return null;
+    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    focusWin(here); return W[here];
+  }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
    * and returns to the desk the card was tapped on. */
   function openChatsFiltered(f, opts = {}) {
@@ -4102,6 +4111,25 @@
     phoneDesks: () => desks.map((d, i) => { if (d.home || !d.wins.length) return null; const w = W[d.focus] || W[d.wins[0]]; if (!w) return null; const a = winApp(w); return { desk: i, id: w.appId || a.id || '', name: a.name || w.title || '' }; }).filter(Boolean),
     // An app's mark exactly as the dock draws it (its logo or sigil, its colour): the Apps view's icons.
     phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
+    /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
+     * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
+    sessionList: () => {
+      const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
+      const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
+      const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
+          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you',
+          actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
+      return { working: (G.working || []).map(s => row(s, 'working')), ready: (G.ready || []).map(s => row(s, 'ready')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
+    },
+    sessionAct: (sid, act) => {
+      if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
+      const w = showChats(); if (!w) return false;
+      if (act === 'rename') { CHATS.openRenameSheet(w.id, sid); return true; }
+      CHATS.threadAct(w.id, sid, act); return true;
+    },
+    showChats: () => !!showChats(),
+    newChat: () => { const w = showChats(); if (!w) return false; CHATS.openChat(w.id, '__new__'); return true; },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
   });

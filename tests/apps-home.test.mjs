@@ -264,7 +264,8 @@ test('the phone adapter lists one entry per desk (Home and empty desks left out)
   assert.deepEqual(JSON.parse(JSON.stringify(run())), [{ desk: 1, id: 'mail', name: 'Mail' }, { desk: 3, id: 'wizard', name: 'Chats' }]);
   assert.match(host, /desks: \(\) => \{ const l = live\(\) \? shell\.phoneDesks\?\.\(\) : null;/);
   assert.match(host, /Object\.freeze\(\{ id: 'apps', name: 'Apps',/);
-  assert.match(host, /if \(\(layoutId === 'orb' \|\| layoutId === 'apps'\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored Apps layout goes back to Desks');
+  assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored Apps layout goes back to Desks');
   assert.ok(!/Math\.random/.test(read('web/layouts/apps/layout.js')));
 });
 

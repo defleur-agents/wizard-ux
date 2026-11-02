@@ -79,9 +79,9 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
-  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'list', 'open', 'openList']);
+  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'close', 'get', 'inset', 'list', 'logo', 'open', 'openDesk', 'search', 'store']);
-  assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look']);
+  assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
@@ -95,7 +95,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const L = api.sessions.list(); assert.equal(L.ready[0].id, 'r1'); L.ready[0].title = 'changed';
   assert.equal(api.sessions.list().ready[0].title, 'Ready one', 'a copy, never the shell\'s rows');
   assert.equal(api.sessions.act('r1', 'snooze'), true); assert.equal(api.sessions.act('r1', 'done'), true);
-  assert.equal(api.sessions.act('r1', 'restore'), false, 'only Snooze and Done'); assert.equal(api.sessions.act('', 'done'), false);
+  assert.equal(api.sessions.act('r1', 'delete'), false, 'only the row sheet\'s own actions (Snooze, Done, Mark unread, Restore, Pin, Rename)'); assert.equal(api.sessions.act('', 'done'), false);
   api.sessions.open('r1'); api.sessions.openList('ready'); api.sessions.openList('archive');
   assert.deepEqual({ ...api.apps.badges() }, {}, 'no counts without the shell nav'); assert.ok(Object.isFrozen(api.apps.badges()));
   assert.equal(api.apps.list()[0].id, 'files'); api.apps.open('files'); api.apps.all(); api.desk.home(); api.desk.look();
