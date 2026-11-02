@@ -36,9 +36,10 @@ the unchanged exact insertion assertion. Setup failures never count as rejection
   literal editor and selection precedes focus. In a fresh target/editor process,
   the first matching package belongs to that sole editor, not a previous case.
   Existing real InputConnection/package readiness and product fences remain.
-- Audit the actual first framework EditorInfo (fieldId=1 and initial selection)
+- Audit the real keyboard's first onStartInput EditorInfo (fieldId=1 and initial selection)
   and final fixture mode per case; reject audit mismatch and retain raw logs.
-  This is **not** an explicit pre-dispatch fieldId/selection probe. No such probe
+  Accessibility logs supply lifecycle events, not these fields. This is **not**
+  an explicit accessibility pre-dispatch fieldId/selection probe. No such probe
   can be added controller-only to these exact APKs. An isolated failure still
   needs a minimal actual reproduction/timestamp before product attribution.
 - Preserve raw protocol and diagnostics before teardown, then prove process

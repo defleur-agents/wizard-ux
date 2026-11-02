@@ -94,26 +94,31 @@ def editor_contract(source, methods):
     return found
 
 
-def audit_editor(case_out, lane, expected):
-    """Read actual per-case EditorInfo and fixture; never relabel a mismatch as PASS.
+def editor_sessions(log):
+    sessions = []
+    # API 35 A11yInputMethod prints lifecycle only, NOT EditorInfo fields.
+    # The real installed keyboard logs its actual onStartInput EditorInfo in one
+    # line. Audit that editor identity; do not pretend it is an accessibility probe.
+    for line in log.splitlines():
+        if 'GoogleInputMethodService.onStartInput()' not in line: continue
+        pkg = re.search(r'packageName=([^,}]+)', line)
+        field = re.search(r'fieldId=([^,}]+)', line)
+        selection = re.search(r'initialSelStart=(-?\d+), initialSelEnd=(-?\d+)', line)
+        if pkg and pkg[1] == 'ai.wizards.os.qa' and field and selection:
+            sessions.append({'package':pkg[1], 'field_id':field[1], 'start':int(selection[1]), 'end':int(selection[2])})
+    return sessions
 
-    This post-run audit is not an explicit pre-dispatch field/selection probe. The
-    before-dispatch identity argument depends on process absence + sole editor launch.
-    Preserve the exact IME trace so remaining restart/generation failures stay visible.
-    """
+
+def audit_editor(case_out, lane, expected):
+    """Post-run audit, not an explicit accessibility pre-dispatch field probe."""
     fixture = json.loads((case_out/(lane+'-editor.json')).read_text())
     if fixture.get('mode') != expected['mode']:
         raise AssertionError('fixture belongs to another case: '+repr(fixture))
     log = (case_out/(lane+'-logcat.txt')).read_text()
-    payload = '\n'.join(line.split('A11yInputMethod:',1)[1].strip()
-                        for line in log.splitlines() if 'A11yInputMethod:' in line)
-    sessions = []
-    for block in payload.split('editorInfo:')[1:]:
-        pkg = re.search(r'packageName=(\S+) fieldId=(\S+)', block)
-        selection = re.search(r'initialSelStart=(-?\d+) initialSelEnd=(-?\d+)', block)
-        if pkg and pkg[1] == 'ai.wizards.os.qa' and selection:
-            sessions.append({'package':pkg[1], 'field_id':pkg[2], 'start':int(selection[1]), 'end':int(selection[2])})
+    sessions = editor_sessions(log)
     save(case_out/'real-editor-sessions.json', {'sessions':sessions, 'expected':expected,
+         'source':'real GoogleInputMethodService onStartInput log; not accessibility EditorInfo probe',
+         'accessibility_lifecycle':[line for line in log.splitlines() if 'A11yInputMethod:' in line],
          'explicit_pre_dispatch_field_probe':False, 'identity_basis':'fresh processes and one editor before dispatch'})
     if not sessions or sessions[0] != {'package':'ai.wizards.os.qa','field_id':'1','start':expected['start'],'end':expected['end']}:
         raise AssertionError('first real editor field/selection did not match new fixture: '+repr(sessions))

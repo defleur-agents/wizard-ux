@@ -28,7 +28,7 @@ def diagnose(old_root):
             start, end = starts[0], ends[0]
             ime = [{'line':i+1,'raw':lines[i]} for i in range(start,end+1)
                 if 'A11yInputMethod:' in lines[i] and any(t in lines[i] for t in
-                    ('onStartInput()', 'onFinishInput()', 'packageName=', 'initialSelStart='))]
+                    ('onStartInput', 'onFinishInput', 'startInput()'))]
             failures.append({'method':name,'start':lines[start],'failure':lines[end],
                 'expected_fixture':contract[name],'observed_fixture_modes':re.findall(r'"mode":"([^"]+)"',stack),
                 'assertion_excerpt':stack[:1800],'ime_events_during_case':ime})

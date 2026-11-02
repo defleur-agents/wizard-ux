@@ -108,9 +108,11 @@ class IsolationTests(unittest.TestCase):
                                       ('missingNode','2',7,False), ('missingNode','1',0,False)]:
             (self.out/'candidate-editor.json').write_text(json.dumps({'mode':mode}))
             (self.out/'candidate-logcat.txt').write_text(
-                'V A11yInputMethod: editorInfo: android.view.inputmethod.EditorInfo@123\n'
-                'V A11yInputMethod: packageName=ai.wizards.os.qa fieldId='+field+' fieldName=null\n'
-                'V A11yInputMethod: initialSelStart='+str(start)+' initialSelEnd=7 initialCapsMode=0\n')
+                'V A11yInputMethod: CALL: onStartInput\n'
+                'I GoogleInputMethodService: GoogleInputMethodService.onStartInput():1986 '
+                'onStartInput(EditorInfo{EditorInfo{packageName=ai.wizards.os.qa, inputType=20001, '
+                'initialSelStart='+str(start)+', initialSelEnd=7, initialCapsMode=0, '
+                'fieldId='+field+', fieldName=null}}, false)\n')
             if ok: isolation.audit_editor(self.out, 'candidate', expected)
             else:
                 with self.assertRaises(AssertionError): isolation.audit_editor(self.out, 'candidate', expected)
