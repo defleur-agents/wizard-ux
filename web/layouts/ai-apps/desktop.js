@@ -113,7 +113,11 @@ export default function desktop(api) {
   const pX = el('button', 'aad-ib aad-px', { type: 'button', 'aria-label': 'Close the app panel (Esc)', title: 'Close (Esc)' }); pX.append(icon('x'));
   // round 7: wider (the whole main area) and back to a third, like the Orb desktop's panel (⌥F, the desktop's full screen key)
   const pW = el('button', 'aad-ib aad-pw', { type: 'button', 'aria-pressed': 'false' });
-  pTop.append(pIcon, pName, pW, pX);
+  /* the app's own title-bar tools (WizardApp.titlebar: Morning Report's ‹ date › PDF) in the panel's top row: the
+   * window's title bar is out of sight here, so its tools show beside the name; a tap or a pick goes to the window's own
+   * tool (the app's own channel), and they follow the app's changes */
+  const pTools = el('span', 'aad-ptools'); pTools.hidden = true;
+  pTop.append(pIcon, pName, pTools, pW, pX);
   top.append(cTop, pTop);
   // a placeholder in the panel's place from the first frame while a slow app loads (never a blank third)
   const pLoad = el('div', 'aad-pload', { role: 'status' }); pLoad.hidden = true;
@@ -463,6 +467,20 @@ export default function desktop(api) {
    * the app keeps running as it was; ✕ or Esc hides the panel (the app keeps running on its desk, as in the Orb view).
    * Short slides + fades (desktop.css). */
   const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
+  let toolsMo = null, toolsSrc = null;
+  const srcTools = () => pane?.el?.querySelector(':scope > .win:not(.gone) > .wbar > .wtools') || null;
+  function paintTools() {
+    const src = srcTools();
+    if (src !== toolsSrc) {
+      toolsMo?.disconnect(); toolsMo = null; toolsSrc = src;
+      if (src && globalThis.MutationObserver) { toolsMo = new MutationObserver(() => api.frame(paintTools)); toolsMo.observe(src, { childList: true, subtree: true, attributes: true }); }
+    }
+    pTools.replaceChildren(...(src ? [...src.children].map(c => { const n = c.cloneNode(true); if (c.tagName === 'SELECT') n.value = c.value; return n; }) : []));
+    pTools.hidden = !pTools.children.length;
+  }
+  const srcTool = n => { const id = n?.dataset?.tool; return id && /^[a-z0-9-]{1,32}$/.test(id) ? srcTools()?.querySelector(`[data-tool="${id}"]`) || null : null; };
+  api.listen(pTools, 'click', e => { const n = e.target?.closest?.('button[data-tool]'); if (n && !n.disabled) srcTool(n)?.click(); });
+  api.listen(pTools, 'change', e => { const n = e.target?.closest?.('select[data-tool]'), o = srcTool(n); if (!o) return; o.value = n.value; o.dispatchEvent(new Event('change', { bubbles: true })); });
   const NOTE = '__note__';
   let noteWant = false, docked = false, wide = false;
   const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
@@ -488,6 +506,7 @@ export default function desktop(api) {
     if (was !== `${!!root.dataset.aadSplit}${docked}`) api.frame(() => globalThis.dispatchEvent?.(new Event('resize')));
     pTop.hidden = !pane; cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Close ${appName(pane.id)} (Esc)`); }
+    paintTools();
     if (loadId && (!want || want !== loadId) && (!pane || pane.id !== loadId)) { if (!want) doneLoading(); }
     else if (loadId && pane?.id === loadId) waitLoaded(pane.el);
   }
@@ -639,6 +658,7 @@ export default function desktop(api) {
   return () => {
     closeMenu(); closeWs(); offSearch?.(); offPeek?.(); doneLoading();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
+    toolsMo?.disconnect();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadHome', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
     root.style.removeProperty?.('--ah-bottom');
     for (const w of wsps()) delete w.dataset.aadRole;

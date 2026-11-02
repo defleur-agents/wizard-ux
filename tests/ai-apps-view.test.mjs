@@ -884,3 +884,14 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
   const dh = read('web/desktop.html');
   assert.ok(dh.includes('<script src="core/home-screen-apps.js"></script>') && dh.includes('<script src="core/home-screen-policy.js"></script>') && dh.includes('href="core/home-screen-apps.css"'), 'the desktop loads the same sheet');
 });
+
+test('desktop panel: an app\'s title-bar tools (Morning Report\'s ‹ date › PDF) show in the panel\'s top row; its own title bar stays laid out (titlebar.shown is true), out of sight', () => {
+  const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.ok(!/> \.wbar \{ display: none; \}/.test(css), 'never display: none (an app would think its tools are gone, or never see them)');
+  assert.match(css, /> \.wbar \{ display: flex; position: absolute;[^}]*visibility: hidden; pointer-events: none; \}/);
+  assert.match(js, /pTop\.append\(pIcon, pName, pTools, pW, pX\)/, 'the tools sit between the name and ✕');
+  assert.match(js, /querySelector\(':scope > \.win:not\(\.gone\) > \.wbar > \.wtools'\)/, 'mirrored from the window\'s own tools');
+  assert.match(js, /srcTool\(n\)\?\.click\(\)/, 'a tap goes to the window\'s own tool (the app\'s channel)');
+  assert.match(js, /o\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'a pick too');
+  assert.match(js, /toolsMo\?\.disconnect\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
+});

@@ -47,7 +47,9 @@ html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) {
   border-radius: 0; border-color: transparent !important; box-shadow: none !important; outline: none; background: var(--aad-main);
 }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) > .wbar { display: none; }
+/* the window's title bar is out of sight (the top row shows the name, ✕ and the app's title-bar tools), but kept laid out
+ * so an app asking whether its tools show (WizardApp.titlebar.shown) is told yes, and never doubles them in a bar of its own */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone) > .wbar { display: flex; position: absolute; top: 0; right: 0; width: 1px; height: 1px; overflow: hidden; visibility: hidden; pointer-events: none; }
 /* an app with no bottom tab bar fades out toward the bottom under the floating orb (the Apps view's fade) */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not(:has(> .win:not(.gone) ~ .win:not(.gone))) > .win:not(.gone):has(iframe[data-own-app]):not(.wos-inset-bar)::after {
   content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 110px; z-index: 4; pointer-events: none;
@@ -357,7 +359,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] {
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] { inset: 0 var(--aad-app-w) 0 var(--aad-side) !important; transition: right 220ms ease, left 200ms ease; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] { inset: 0 0 0 calc(100% - var(--aad-app-w)) !important; transition: left 240ms cubic-bezier(.2, .8, .2, 1); box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); }
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) { inset: 0 !important; width: auto !important; height: auto !important; border-radius: 0; border-color: transparent !important; box-shadow: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) > .wbar { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) > .wbar { display: flex; position: absolute; top: 0; right: 0; width: 1px; height: 1px; overflow: hidden; visibility: hidden; pointer-events: none; }
 /* no orb over the panel: no fade at its bottom either (its own bottom controls stay crisp) */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] > .win:not(.gone)::after { display: none !important; }
 /* the chat column fits its narrower middle */
@@ -373,6 +375,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptn { flex: 1; min-width:
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-pti { display: grid; flex: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-xs { width: 24px; height: 24px; border-radius: 6px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-px { margin-left: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > :is(.wtool, .wtool-pick) { height: 32px; min-width: 32px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > .wtool-pick { max-width: 160px; padding: 0 8px; }
+
 /* the open app lit in the sidebar grid (and the rail): a ring round its icon */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] .aad-tile { box-shadow: 0 0 0 2px var(--aad-panel), 0 0 0 4px var(--wz-accent, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-gi[aria-current="page"] .aad-gn { font-weight: 700; }
