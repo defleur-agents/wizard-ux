@@ -157,19 +157,19 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadSide, 'open', 'open from 900 px up');
   assert.ok(w.html.attrs['data-settings-over'] === '', 'Settings opens over the page (a centred panel), never beside the chat');
   // the sidebar: wordmark · 🔍 · ◫; Apps grid (badged first, All apps last); the sections (round 5: Ready open)
-  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name');
+  assert.deepEqual(w.q('.aad-sh').children.filter(c => !c.hidden).map(c => c.className.split(' ').pop()), ['aad-ws', 'aad-homeb', 'aad-find', 'aad-tog'], 'round 7: the workspace switcher in place of the name; round 15: ⌂ Home beside 🔍');
   assert.equal(w.q('.aad-sh .aad-wsn').textContent, 'Miguel');
   assert.equal(w.q('.aad-sh .aad-wsd'), null, 'round 8: the name is text only (and a small chevron), no disc');
   assert.equal(w.q('.aad-grid'), null, 'the sidebar is the chat list only: no app grid');
   // round 10: no apps sidebar on the right; Home's grid (open first, badged first; installed; Get more), paged
   assert.equal(w.q('.aad-apps'), null, 'round 10: the right apps sidebar is gone'); assert.equal(w.html.dataset.aadApps, undefined);
   assert.equal(w.html.dataset.aadHome, '', 'Home');
-  // round 13: Home is clean (no grid); + opens the New tab page with the grid
-  assert.equal(w.html.dataset.aadNtp, undefined, 'Home: no New tab page');
-  w.q('.aad-tplus').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.html.dataset.aadNtp, '', '+ = the New tab page'); assert.equal(w.st.newChats, 1, 'its composer: a new chat');
-  w.st.newChats = 0;
-  assert.deepEqual(w.qa('.aad-hg .ah-app').map(b => b.dataset.app || 'more'), ['wizard', 'money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'the phone\'s order: open apps (badged first), installed, Get more');
+  // round 15: Home is clean (no grid, no tab strip); All apps (⊞ in the open-apps column, the pinned row's last icon) is the grid
+  assert.equal(w.html.dataset.aadAll, undefined, 'Home: no grid');
+  assert.equal(w.q('.aad-strip'), null, 'round 15: no tab strip'); assert.equal(w.q('.aad-tplus'), null, 'no New tab +');
+  w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.html.dataset.aadAll, '', 'All apps'); assert.equal(w.st.newChats, 0, 'no new chat for it');
+  assert.deepEqual(w.qa('.aad-hg .ah-app').map(b => b.dataset.app || 'more'), ['money', 'mail', 'music', 'notes', 'maps', 'movies', 'more'], 'open apps (badged first), installed, Get more; Chats is Home, not an app here');
   assert.equal(w.q('.aad-hg .ah-app[data-app="money"] .ah-badge').textContent, '3');
   assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'snoozed:false', 'ready:true']);
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
@@ -182,10 +182,10 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.q('.aad-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aad-set', 'Settings', ''], ['aad-fuel', null, ''], ['aad-new', 'New chat', '']], 'round 7: cog left, the fuel gauge between, + right');
   w.q('.aad-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
   w.q('.aad-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
-  w.q('.aad-tplus').dispatchEvent(new FakePointerEvent('click'));
-  w.q('.aad-hg .ah-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk (its tab)');
-  assert.equal(w.html.dataset.aadNtp, undefined, 'a pick ends the New tab page');
-  w.q('.aad-tplus').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-hg .ah-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk (the panel)');
+  assert.equal(w.html.dataset.aadAll, undefined, 'a pick closes All apps');
+  w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aad-hg .ah-more').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'app-store', 'Get more = the App Store');
   assert.equal(keys[2].down({ altKey: true, shiftKey: true, code: 'Backslash' }), false, 'round 10: ⌥⇧\\ is free again (no apps sidebar)');
   // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
@@ -205,24 +205,23 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.st.guides.length, 2, 'two hold-⌥ hint guides: the view\'s targets and Home\'s app letters');
   const chips = w.st.guides[0]();
   assert.ok(Array.isArray(chips), 'the guide lists chips');
-  assert.equal(keys[1].down({ key: 'Escape' }), true, 'round 13: Esc closes the New tab page'); assert.equal(w.html.dataset.aadNtp, undefined);
-  assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc with no New tab page: not the layout\'s');
+  w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(keys[1].down({ key: 'Escape' }), true, 'round 15: Esc closes All apps'); assert.equal(w.html.dataset.aadAll, undefined);
+  assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc with nothing open: not the layout\'s');
   assert.equal(keys[0].down({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' }), true); assert.equal(w.html.dataset.aadSide, 'open');
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
-  // round 13: the top row is the tab strip (tabs, +) and the app's title-bar tools
-  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-strip', 'aad-ptools']);
-  assert.deepEqual(w.q('.aad-strip').children.map(c => c.className), ['aad-tabs', 'aad-ib aad-tplus']);
+  // round 15: the top row holds a docked chat's title + ✕ and the app panel's header (no tab strip)
+  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']);
   assert.equal(w.q('.aad-top .aad-ws'), null, 'the switcher lives in the sidebar header');
   assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
   w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-wr b').map(b => b.textContent), ['Miguel', 'Carlos']); assert.ok(w.q('.aad-wm'));
   w.q('.aad-wm').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings.at(-1), 'network');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
-  assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aad-tab.is-on .aad-tlab').textContent, 'Money', 'its tab in front');
+  assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aad-vtab.is-on').dataset.app, 'money', 'its tab on the right in front');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(w.html.dataset.aiFront, 'chat'); assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'home', 'a chat opens in the Home tab');
-  assert.equal(w.q('.aad-tab.is-on .aad-tlab').textContent, 'Ready one', 'the Home tab names its chat');
+  assert.equal(w.html.dataset.aiFront, 'chat'); assert.equal(w.html.dataset.aadChat, undefined, 'round 15: no Chats desk on the stage here, nothing to dock (the docking: below)');
   // Home = the empty new chat: + goes there (round 7: no name button, no home button in the top row)
   const before = w.st.newChats;
   assert.equal(w.q('.aad-home'), null); assert.equal(w.q('.aad-word'), null);
@@ -592,8 +591,8 @@ test('round 5 + 7 desktop: no home button in the top row (round 7), the switcher
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/\.aad-home\b|\btHome\b/.test(css + js), 'round 7: the top row has no home button (Home = its tab, +, ⌥1)');
   assert.ok(!/aad-tname|aad-viewall/.test(css + js), 'the name in the top row and View all are gone');
-  assert.match(js, /top\.append\(strip, pTools\);/, 'round 13: the tab strip, the app\'s tools on the right');
-  assert.match(js, /head\.append\(wsBtn, findBtn, searchBox, cancelBtn, togBtn\);/, 'round 7: the switcher is the sidebar header');
+  assert.match(js, /top\.append\(cTop, pTop\);/, 'round 15: no tab strip; the docked chat\'s title and the app panel\'s header');
+  assert.match(js, /head\.append\(wsBtn, homeBtn, findBtn, searchBox, cancelBtn, togBtn\);/, 'round 7: the switcher is the sidebar header; round 15: ⌂ Home beside 🔍');
   assert.match(js, /drag up for a new chat to type in/);
 });
 test('round 5: notifications in the list: Chats\' own items as plain rows with a small bell, their actions kept', async () => {
@@ -649,7 +648,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /const home = homeView\(api, \{ goApp: \(id, desk\) => goApp\(id, desk\), getMore: \(\) => api\.apps\.openDesk\('app-store'\), lit, badgeText, desks, paged: true,/, 'round 10: the desktop\'s Home grid: the same list as the phone\'s Home (home.js), paged');
+  assert.match(dj, /const home = homeView\(api, \{ goApp: \(id, desk\) => goApp\(id, desk\), getMore: \(\) => \{ closeAll\(\); api\.apps\.openDesk\('app-store'\); \}, lit, badgeText, desks: oneEach, paged: true,/, 'round 15: All apps = the same grid (home.js), paged, one icon per app');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -711,13 +710,14 @@ test('round 6: a tidy composer: the model chip is a control on the right (never 
 /* Round 7 (Miguel, 2 Nov 2026, desktop): an app opens as a panel on the RIGHT (about a third) with the chat in the
  * middle (the Orb desktop's thirds), a thread slides in from the left, calm slide + fade, the open app lit in the grid,
  * Esc / ✕ close it; the AI fuel gauge at the top of the sidebar; no home button in the top row. */
-test('round 7 desktop (round 13: no app panel): calm transitions, the fuel gauge in the sidebar, the orb in the middle of the main area', () => {
+test('round 7 + 15 desktop: the app panel and the docked chat are back (Arc), calm transitions, the fuel gauge in the sidebar, the orb in the middle of the main area', () => {
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.ok(!/data-aad-split|data-aad-wide|data-aad-chat\b|aad-in-right|aad-pload|aad-ptop|aad-ctop|--aad-app-w|--aad-chat-w/.test(css), 'round 13: no app panel, no docked chat column');
-  assert.ok(!/\b(closeSide|setWide|closeChat|docked)\b|\bpane\b(?!-)/.test(js), 'nor their code');
+  for (const k of ['data-aad-split', 'data-aad-wide', 'data-aad-chat', 'aad-in-right', 'aad-pload', 'aad-ptop', 'aad-ctop', '--aad-app-w', '--aad-chat-w']) assert.ok(css.includes(k), `round 15: ${k}`);
+  for (const k of ['hidePanel', 'setWide', 'closeChat', 'docked']) assert.ok(js.includes(k), `round 15: ${k}`);
+  assert.ok(!/aad-tplus|aad-strip|aadNtp|openNtp/.test(css + js), 'round 15: no tab strip, no New tab page');
   assert.match(css, /#stage > \.wsp\[data-aad-anim="thread"\] \.win \.dchats \.pane-main \.ch-thread \{ animation: aad-in-left 220ms/, 'a thread from the left');
   assert.ok(css.includes('html[data-shell="desktop"][data-layout="ai-apps"] #bar .mh-gauge { display: none !important; }'), 'round 8: one fuel gauge, the sidebar foot\'s');
-  assert.match(css, /left: calc\(var\(--aad-side\) \+ \(100vw - var\(--aad-side\)\) \/ 2 - 30px\)/, 'the orb stays in the middle of the main area');
+  assert.match(css, /\.aad-orb \{ left: calc\(var\(--aad-side\) \+ var\(--aad-chat-w, 0px\) \+ \(100vw - var\(--aad-side\) - var\(--aad-chat-w, 0px\) - var\(--aad-app-w, 0px\) - var\(--aad-rs\)\) \/ 2 - 30px\); \}/, 'the orb stays in the middle of the room left between the panels');
 });
 /* Miguel, 2 Nov 2026: apps live on Home (Grid or the Orb scene); every desktop ⌥ key keeps working, with hold-⌥ hints. */
 test('Home apps: open first (badged first), then the rest installed, real apps only; app letters avoid the desktop\'s own ⌥ keys', async () => {
@@ -735,17 +735,19 @@ test('Home apps: open first (badged first), then the rest installed, real apps o
   const src = read('web/layouts/ai-apps/home.js');
   assert.ok(!/paintSky|starsFor|palettes|homeStyle|ah-scene|ah-sw/.test(src), 'no orb Home scene left in home.js');
 });
-test('desktop ⌥ keys in the AI apps view: ⌥\\\\ sidebar, round 13 the tab keys (⌥T ⌥W ⌥1–9 ⌥[ ⌥]), ⌥ + letter an app; hints on their targets', () => {
+test('desktop ⌥ keys in the AI apps view: ⌥\\ sidebar, round 15 ⌥T All apps, ⌥W closes what is in front, ⌥F wider, ⌥` Home, ⌥ + letter an app; hints on their targets', () => {
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(e\.code === 'Backslash' && !e\.shiftKey\) \{ if \(!e\.repeat\) toggleSide\(\); return true; \}/);
-  assert.match(js, /if \(e\.code === 'KeyT' && !e\.shiftKey\) \{ if \(!e\.repeat\) openNtp\(\); return true; \}/, '⌥T: a new tab');
-  assert.match(js, /if \(e\.code === 'KeyW' && !e\.shiftKey\) \{ const t = tabsNow\(\)\.find\(x => x\.key === activeKey\(\)\); if \(!t \|\| t\.home\) return false;/, '⌥W closes the tab in front (Home: the desktop\'s ⌥W)');
-  assert.ok(!/KeyH|toggleStyle|Grid ⇄ Orb|KeyF/.test(js), 'no ⌥H, no ⌥F (no wide panel)');
+  assert.match(js, /if \(e\.code === 'KeyT' && !e\.shiftKey\) \{ if \(!e\.repeat\) \(allOpen \? closeAll : openAll\)\(\); return true; \}/, '⌥T: All apps');
+  assert.match(js, /if \(e\.code === 'KeyW' && !e\.shiftKey && pane\) \{ if \(!e\.repeat\) \{ const d = desks\(\)\.find\(x => x\.desk === pane\.desk\); if \(d && !pins\.includes\(d\.id\)\) closeDesk\(d\); else hidePanel\(\); \} return true; \}/, '⌥W closes the panel\'s app (a pinned one hides)');
+  assert.match(js, /if \(e\.code === 'KeyW' && !e\.shiftKey && docked\) \{ if \(!e\.repeat\) closeChat\(\); return true; \}/, '⌥W: the docked chat back to Home');
+  assert.ok(!/KeyH|toggleStyle|Grid ⇄ Orb/.test(js), 'no ⌥H');
   assert.match(js, /id = k && !e\.shiftKey && appFor\(k\);/);
-  assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar, no ⌥⇧\\\\');
+  assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
-  for (const [k, w] of [['\\\\', 'Sidebar'], ['N', 'New chat'], [',', 'Settings'], ['␣', 'Search'], ['S', 'Talk'], ['C', 'Command'], ['W', 'Close tab'], ['T', 'New tab']]) assert.ok(js.includes(`'${k}', '${w}'`) || js.includes(`'${k}', open ? 'Close sidebar' : '${w}'`), `hint ${k} ${w}`);
-  assert.match(js, /api\.keys\.guide\(\(\) => appChips\(\)\);/); assert.match(js, /const appChips = \(\) => home\.chips\(\)\.filter\(c => shown\(c\.el\)\);/, 'the app letters on the New tab grid\'s icons');
+  for (const [k, w] of [['\\\\', 'Sidebar'], ['N', 'New chat'], [',', 'Settings'], ['␣', 'Search'], ['S', 'Talk'], ['C', 'Command'], ['T', 'All apps'], ['`', 'Home']]) assert.ok(js.includes(`'${k}', '${w}'`) || js.includes(`'${k}', open ? 'Close sidebar' : '${w}'`), `hint ${k} ${w}`);
+  assert.match(js, /for \(const b of \[\.\.\.side\.querySelectorAll\('\.aad-pa\[data-app\]'\), \.\.\.vtList\.querySelectorAll\('\.aad-vtab\[data-app\]'\)\]\)/, 'the app letters on the pinned icons and the open tabs');
+  assert.match(js, /api\.keys\.guide\(\(\) => appChips\(\)\);/);
 });
 
 /* Round 7 (Miguel, 2 Nov 2026): the switcher is the sidebar / drawer header; the fuel gauge between cog (left) and +
@@ -761,7 +763,7 @@ const deskWorld = () => {
   w.api.apps.inset = () => () => {};
   return { w, store, keys };
 };
-test('round 7 + 13 desktop: a chat opens in the Home tab (no docked column); tallies; the rail by status in the expanded order', async () => {
+test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W back Home); tallies; the rail by status in the expanded order', async () => {
   const { w, keys } = deskWorld();
   const stage = new El('div'); stage.id = 'stage'; const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats';
   chatDesk.append(dchats); stage.append(chatDesk); w.html.children[0].append(stage);
@@ -771,11 +773,18 @@ test('round 7 + 13 desktop: a chat opens in the Home tab (no docked column); tal
   assert.equal(w.q('.aad-sec[data-sec="working"] .aad-tally').getAttribute('data-n'), '1');
   assert.equal(w.q('.aad-sec[data-sec="archive"] .aad-tally'), null);
   assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-tally'), null, 'an open section shows its rows, no tally');
-  // a thread: in the Home tab's main area (the Atlas way: the current tab), no column, no ✕ of its own
+  // a thread: round 15 (round 7's column) docked beside the sidebar, its title and ✕ over it; Esc / ⌥W / ✕ back Home
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(w.html.dataset.aadChat, undefined, 'no docked column'); assert.equal(w.q('.aad-cx'), null);
-  assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'home'); assert.equal(w.q('.aad-tab.is-on .aad-tlab').textContent, 'Ready one');
-  assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc stays the chat\'s');
+  assert.equal(w.html.dataset.aadChat, 'on', 'the docked column'); assert.equal(w.q('.aad-cx').hidden, false);
+  assert.equal(w.q('.aad-tt').textContent, 'Ready one'); assert.equal(chatDesk.dataset.aadRole, 'chat');
+  const n0 = w.st.newChats;
+  assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc closes the column'); assert.equal(w.st.newChats, n0 + 1, 'Home = a new chat');
+  w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aadChat, undefined, 'Home: no column');
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
+  assert.equal(keys[2].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 3, 'and its ✕');
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
@@ -807,7 +816,7 @@ test('round 7: a notification opens as a chat (never Home), its route choice in 
   (await layout()).default(w.api);
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aiFront, 'chat', 'a chat'); assert.equal(w.html.dataset.aadNew, 'false', 'not Home (no see-through)');
-  assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'home'); assert.equal(w.q('.aad-tab.is-on .aad-tlab').textContent, 'Card payment due', 'round 13: the Home tab names it');
+  assert.equal(w.html.dataset.aadChat, 'on', 'round 15: docked like a chat'); assert.equal(w.q('.aad-tt').textContent, 'Card payment due', 'its title over the column');
   // phone: the same thread is a chat, not Home
   const p = world({ route: { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' } });
   const pw = new El('div'); pw.className = 'win app-chats'; const pt = new El('div'); pt.className = 'ch-thread ch-notif-thread'; pw.append(pt); p.device.append(pw);
@@ -858,17 +867,17 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
     w.api.apps.homeScreen = { can: id => id !== 'maps', offer: id => { offered.push(id); return true; } };
     w.api.apps.get = id => { stored.push(id); return true; }; w.api.apps.close = id => { closed.push(id); return true; };
     (await layout()).default(w.api);
-    w.q('.aad-tplus').dispatchEvent(new FakePointerEvent('click'));   // round 13: the grid lives on the New tab page
+    w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));   // round 15: the grid lives in All apps
     const e = new FakePointerEvent('contextmenu', { clientX: 400, clientY: 300 }); w.q('.aad-hg .ah-app[data-app="mail"]').dispatchEvent(e);
     assert.ok(e.defaultPrevented);
-    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act + ':' + b.textContent), ['open:Open', 'pin:Add to Home Screen', 'store:App Store page', 'close:Close'], 'desktop: the quick actions of an open app');
+    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act + ':' + b.textContent), ['unpin:Unpin', 'open:Open', 'home:Add to Home Screen', 'store:App Store page', 'close:Close'], 'desktop: the quick actions of an open app (round 15: Mail is pinned by default, Unpin first)');
     assert.equal(w.q('.aad-appmenu .aad-pop-h').textContent, 'Mail');
-    w.q('.aad-appmenu .aad-pop-i[data-act="pin"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(offered, ['mail'], 'the Desks\' own sheet'); assert.equal(w.q('.aad-appmenu'), null);
+    w.q('.aad-appmenu .aad-pop-i[data-act="home"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(offered, ['mail'], 'the Desks\' own sheet'); assert.equal(w.q('.aad-appmenu'), null);
     w.q('.aad-hg .ah-app[data-app="movies"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
-    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act), ['open', 'pin', 'store'], 'not open: no Close');
+    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act), ['pin', 'open', 'home', 'store'], 'not open: no Close; not pinned: Pin');
     w.q('.aad-appmenu .aad-pop-i[data-act="store"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(stored, ['movies'], 'its App Store page');
     w.q('.aad-hg .ah-app[data-app="maps"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
-    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act), ['open', 'store', 'close'], 'an app the stock sheet would not offer: no Add to Home Screen');
+    assert.deepEqual(w.qa('.aad-appmenu .aad-pop-i').map(b => b.dataset.act), ['pin', 'open', 'store', 'close'], 'an app the stock sheet would not offer: no Add to Home Screen');
     w.q('.aad-appmenu .aad-pop-i[data-act="open"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone.at(-1), 6, 'Open = its desk');
   }
   for (const shell of ['phone']) {
@@ -898,11 +907,11 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
   assert.ok(dh.includes('<script src="core/home-screen-apps.js"></script>') && dh.includes('<script src="core/home-screen-policy.js"></script>') && dh.includes('href="core/home-screen-apps.css"'), 'the desktop loads the same sheet');
 });
 
-test('desktop app tab: an app\'s title-bar tools (Morning Report\'s ‹ date › PDF) show at the tab strip\'s right end; its own title bar stays laid out (titlebar.shown is true), out of sight', () => {
+test('desktop app panel: an app\'s title-bar tools (Morning Report\'s ‹ date › PDF) show in the panel\'s header; its own title bar stays laid out (titlebar.shown is true), out of sight', () => {
   const css = read('web/layouts/ai-apps/desktop.css'), js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.ok(!/> \.wbar \{ display: none; \}/.test(css), 'never display: none (an app would think its tools are gone, or never see them)');
   assert.match(css, /> \.wbar \{ display: flex; position: absolute;[^}]*visibility: hidden; pointer-events: none; \}/);
-  assert.match(js, /top\.append\(strip, pTools\);/, 'round 13: the tools at the tab strip\'s right end');
+  assert.match(js, /pTop\.append\(pIcon, pName, pTools, pW, pX\);/, 'round 15: the tools in the app panel\'s header');
   assert.match(js, /querySelector\(':scope > \.win:not\(\.gone\) > \.wbar > \.wtools'\)/, 'mirrored from the window\'s own tools');
   assert.match(js, /srcTool\(n\)\?\.click\(\)/, 'a tap goes to the window\'s own tool (the app\'s channel)');
   assert.match(js, /o\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'a pick too');
@@ -914,9 +923,9 @@ test('round 9 desktop: no veil over the skin\'s background (Home, beside a panel
   const win = P + ':not([data-ai-front="list"]) #stage > .wsp > .win:not(.gone):has(.dchats .ch-newchat)';
   assert.ok(css.includes(win + ' {\n  background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;\n}'), 'the new chat\'s window (Home, or the middle beside an app panel) paints nothing');
   assert.ok(css.includes(win + ' :is(.wbody, .dchats, .pane-main, .ch-thread, .ch-msgs) { background: none !important; }'), 'nor anything inside it');
-  // round 13: the tab strip keeps the sidebar's surface (ChatGPT's tab row; the tabs read on any wallpaper); nothing else
+  // round 15: no tab strip; the top row paints nothing on Home (only a docked chat's title and the panel's header have surfaces)
   const last = sel => { const i = css.lastIndexOf(P + ' ' + sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
-  assert.match(last('.aad-top'), /background: var\(--aad-panel\);/, 'the tab strip: the sidebar\'s surface');
+  assert.match(last('.aad-top'), /background: none;/, 'the top row: no surface of its own');
   assert.equal(css.includes('.aad-back'), false, 'no room beside a docked chat any more');
 });
 
@@ -925,8 +934,8 @@ test('round 9 desktop: the sidebar resizable by drag (round 13: the only panel; 
   (await layout()).default(w.api);
   const g = id => w.q(`.aad-grip[data-grip="${id}"]`), st = w.html.style;
   assert.equal(g('apps'), null, 'round 10: no apps sidebar, no grip for it');
-  assert.equal(g('chat'), null, 'round 13: no chat column'); assert.equal(g('app'), null, 'round 13: no app panel (apps are tabs)');
-  for (const id of ['side']) {
+  assert.equal(g('chat'), null, 'the docked chat keeps its width'); assert.ok(g('app') && g('tabs'), 'round 15: the app panel and the open-apps column resize too');
+  for (const id of ['side', 'tabs', 'app']) {
     assert.ok(g(id), id); assert.equal(g(id).getAttribute('role'), 'separator'); assert.equal(g(id).getAttribute('aria-orientation'), 'vertical');
     assert.equal(g(id).getAttribute('tabindex'), '0', 'keyboard-reachable'); assert.match(g(id).title, /double-click: back to default/);
   }
@@ -950,12 +959,12 @@ test('round 9 desktop: the sidebar resizable by drag (round 13: the only panel; 
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + '[data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }'), 'the rail keeps its own width');
   assert.ok(!css.includes('data-aad-apps') && !css.includes('.aad-apps'), 'round 10: no apps sidebar styles left');
-  assert.match(css, /--aad-rs: 0px;/, 'round 10: nothing on the right');
+  assert.match(css, /\[data-aad-tabs="rail"\] \{ --aad-rs: 52px; \}/, 'round 15: the open apps on the right');
   assert.match(css, /\.aad-grip \{\s*position: fixed;[^}]*cursor: col-resize;/, 'col-resize');
   assert.match(css, /\.aad-grip:is\(:hover, \.is-drag\)::after \{ opacity: \.55; \}/, 'a hairline on hover');
   assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important; \}/, 'apps never swallow the drag');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /export const SIZE_LIMITS = \{ side: \[220, 440\] \};/);
+  assert.match(js, /export const SIZE_LIMITS = \{ side: \[220, 440\], tabs: \[160, 320\], app: \[360, 1400\] \};/);
 });
 
 test('round 10 desktop: a drag is smooth (one write a frame, no page resize, no storage until the release; windows follow by CSS)', async () => {
@@ -1025,13 +1034,13 @@ test('round 11: Home order = the desks\' order (badged first), no arrangement ke
   assert.ok(!/startDrag|moveDrag|is-arranging|appOrder', \[/.test(js), 'no drag code, no order written');
 });
 
-test('round 10 + 13 desktop New tab page: the grid above the composer, paged (dots, wheel, keys), no rearranging; Home has none', async () => {
+test('round 10 + 15 desktop All apps: the grid over the main area, paged (dots, wheel, keys), no rearranging; Home has none', async () => {
   const { w, store, keys } = deskWorld();
   (await layout()).default(w.api);
   const hg = w.q('.aad-hg');
-  assert.ok(hg.hidden, 'round 13: Home shows no grid');
-  w.q('.aad-tplus').dispatchEvent(new FakePointerEvent('click'));
-  assert.ok(hg && !hg.hidden && hg.classList.contains('ah-paged'), 'the New tab page\'s grid, paged');
+  assert.ok(hg.hidden, 'Home shows no grid');
+  w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(hg && !hg.hidden && hg.classList.contains('ah-paged'), 'All apps: the grid, paged');
   assert.equal(hg.parentNode, w.device, 'mounted on the stage itself, not in the layout\'s scene');
   // the fake page fits 2 × 2: seven icons (six apps + Get more) = two pages, dots for them
   const pgs = w.qa('.aad-hg .ah-page'); assert.equal(pgs.length, 2); assert.equal(w.q('.aad-hg .ah-dots').hidden, false); assert.equal(w.qa('.aad-hg .ah-dot').length, 2);
@@ -1056,7 +1065,8 @@ test('round 10 + 13 desktop New tab page: the grid above the composer, paged (do
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + '[data-aad-home] .win .dchats .pane-main .ch-thread:has(.ch-newchat) { justify-content: flex-end; padding-top: 0; padding-bottom: 0; }'), 'round 11: the composer at the bottom centre, under the grid');
   assert.match(css, /\.ah\.aad-hg \{\n  position: fixed; z-index: 2; top: 76px; bottom: 100px; left: var\(--aad-side\); right: 0;/, 'round 13: the grid\'s box: the main area under the tab strip');
-  assert.ok(css.includes(P + ':not([data-aad-ntp]) .ah.aad-hg { display: none !important; }'), 'round 13: the grid on the New tab page only');
+  assert.ok(css.includes(P + ':not([data-aad-all]) .ah.aad-hg { display: none !important; }'), 'round 15: the grid in All apps only');
+  assert.ok(css.includes(P + ' .ah.aad-hg { z-index: 6; top: 72px; bottom: 32px; right: var(--aad-rs); }'), 'round 15: All apps\' box, left of the open apps');
   assert.ok(!/\.aad-hg \.ah-app:hover \.ah-ic \{[^}]*transform/.test(css), 'icons stay static (no hover lift)');
   assert.ok(!/transition:[^;]*\b(width|left|right) \d/.test(css), 'round 11: no width / left / right animation anywhere (transforms only)');
   assert.match(css, /\.aad-hg \.ah-name \{[^}]*text-shadow:/, 'names readable on photos');
@@ -1082,61 +1092,87 @@ test('round 11 phone Home: no rearranging (the desks\' order), a hold still offe
   assert.ok(!/\.ah-app\.is-drag|\.ah\.is-arranging/.test(css), 'no rearranging styles left');
 });
 
-test('round 12 + 13: one tab per desk (Home pinned first, then badged first, stock names); a second Chats desk is its own tab; the New tab grid lists every desk', async () => {
-  const { w, keys } = deskWorld();
-  w.st.desks = null;
-  const closed = [];
-  w.api.desks.list = () => [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }, { desk: 3, id: 'wizard', name: 'Chats' }, { desk: 4, id: 'money', name: 'Money' }, { desk: 5, id: 'files', name: 'Files' }];
-  w.api.desks.close = d => { closed.push(d); return true; };
+test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), auto-tidy on a fake clock, 1:1 with the desks', async () => {
+  const parts = await import('../web/layouts/ai-apps/parts.js');
+  const { pinsFrom, togglePin, tidyPlan, seedUsed, tidyWords, TIDY } = parts;
+  assert.deepEqual(pinsFrom(null, ['money', 'wizard-mail', 'wizard-music', 'notes']), ['wizard-music', 'wizard-mail', 'money'], 'defaults: Music, Mail, Messenger, Calendar, Money when installed (wizard- ids too)');
+  assert.deepEqual(pinsFrom(['notes', 'gone', 'notes', 'money'], ['money', 'notes']), ['notes', 'money'], 'the owner\'s order; unknown and repeated dropped');
+  assert.deepEqual(pinsFrom([], ['money']), [], 'an emptied row stays empty');
+  assert.deepEqual(togglePin(['a', 'b'], 'c'), ['a', 'b', 'c'], 'pin appends'); assert.deepEqual(togglePin(['a', 'b'], 'a'), ['b'], 'unpin');
+  const H = 3600e3, now = 100 * H;
+  const desks = [{ desk: 1, id: 'wizard' }, { desk: 2, id: 'maps' }, { desk: 3, id: 'money' }, { desk: 4, id: 'notes' }, { desk: 5, id: 'movies' }];
+  const used = { wizard: 0, maps: now - 30 * H, money: now - 30 * H, notes: now - 2 * H, movies: now - 25 * H };
+  const plan = o => tidyPlan(desks, { pins: ['money'], used, now, limit: TIDY['24h'], ...o }).map(d => d.desk);
+  assert.deepEqual(plan(), [5, 2], 'unused for 24 h, highest desk first; never pinned (Money), never Chats, never a recent one');
+  assert.deepEqual(plan({ keep: [5] }), [2], 'never the one on screen');
+  assert.deepEqual(plan({ limit: TIDY['12h'] }), [5, 2]); assert.deepEqual(plan({ limit: TIDY.week }), []); assert.deepEqual(plan({ limit: TIDY.off }), [], 'Off');
+  assert.deepEqual(seedUsed({ maps: 5, gone: 1 }, desks.slice(0, 3), now), { wizard: now, maps: 5, money: now }, 'never-seen apps count from now; closed ones forgotten');
+  assert.equal(tidyWords(6, '24h'), 'Closed 6 apps you hadn\'t used today'); assert.equal(tidyWords(1, 'week'), 'Closed 1 app you hadn\'t used this week');
+  // the view: the pinned row (sidebar and rail), a right click Pin / Unpin kept per device; ⌥T All apps; the tidy closes + toast + Undo
+  const { w, store, keys } = deskWorld();
+  w.st.desks = null; const closed = [];
+  let list = [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'maps', name: 'Maps' }, { desk: 4, id: 'money', name: 'Money' }, { desk: 5, id: 'movies', name: 'Movies' }];
+  w.api.desks.list = () => list; w.api.desks.close = d => { closed.push(d); list = list.filter(x => x.desk !== d); return true; };
+  store.used = { maps: Date.now() - 30 * H, movies: Date.now() - 2 * H, money: Date.now() - 40 * H };
   (await layout()).default(w.api);
-  const tabs = () => w.qa('.aad-tab').map(b => b.dataset.tab + (b.classList.contains('is-on') ? '*' : ''));
-  assert.deepEqual(tabs(), ['home*', 'desk:3', 'desk:4', 'desk:2', 'desk:5'], 'Home first (the first Chats desk), then badged first (Chats, Money), then desk order');
-  assert.deepEqual(w.qa('.aad-tab .aad-tlab').map(n => n.textContent), ['Home', 'Chats', 'Money', 'Mail', 'Files']);
-  assert.equal(w.q('.aad-tab[data-tab="desk:4"] .aad-tbadge').textContent, '3', 'the badge on the tab');
-  assert.equal(w.q('.aad-tab[data-tab="home"] .aad-tbadge').textContent, '2', 'Home (the Chats desk) carries its own');
-  assert.equal(w.q('.aad-tab[data-tab="home"] .aad-tx'), null, 'Home is pinned: no ✕');
-  assert.ok(w.q('.aad-tab[data-tab="desk:3"] .sg-chats'), 'a second Chats desk wears the chats glyph');
-  w.q('.aad-tab[data-tab="desk:3"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.at(-1), 3, 'its own desk');
-  w.st.route = { home: false, view: 'list', thread: null, desk: 3 }; w.emit('route', w.st.route);
-  assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'desk:3', 'its tab in front'); assert.equal(w.html.dataset.aiFront, 'list', 'showing that desk\'s chats (never turned into Home\'s new chat)');
-  w.q('.aad-tab[data-tab="desk:5"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.at(-1), 5, 'Files (a system app) opens its desk');
-  w.st.route = { home: false, view: 'desk', thread: null, desk: 5 }; w.emit('route', w.st.route);
-  assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'desk:5');
-  // ✕ = the stock close of that desk; a middle click too
-  w.q('.aad-tab[data-tab="desk:2"] .aad-tx').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(closed, [2]);
-  w.q('.aad-tab[data-tab="desk:4"]').dispatchEvent(new FakePointerEvent('auxclick', { button: 1 })); assert.deepEqual(closed, [2, 4]);
-  // keys: ⌥1 Home, ⌥9 the last, ⌥[ ⌥] the neighbours (no wrap), ⌥W the tab in front (never Home), ⌥T the New tab page
-  const k = code => keys[2].down({ altKey: true, code });
-  assert.equal(k('BracketLeft'), true); assert.equal(w.st.gone.at(-1), 2, '⌥[ the tab before');
-  assert.equal(k('Digit1'), true); assert.equal(w.st.gone.at(-1), 1, '⌥1 Home');
-  assert.equal(k('Digit9'), true); assert.equal(w.st.gone.at(-1), 5, '⌥9 the last');
-  assert.equal(k('KeyW'), true); assert.deepEqual(closed, [2, 4, 5], '⌥W closes the tab in front');
-  w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(k('KeyW'), false, 'on Home ⌥W stays the desktop\'s'); assert.equal(k('BracketLeft'), false, 'no wrap');
-  assert.equal(k('KeyT'), true); assert.equal(w.html.dataset.aadNtp, ''); assert.equal(w.q('.aad-tab.is-on').dataset.tab, 'new', 'the New tab, at the end');
-  assert.equal(w.q('.aad-tab[data-tab="new"] .aad-tlab').textContent, 'New tab');
-  // the New tab grid: every desk, badged first, stock names; a pick opens it as a tab
-  const cells = w.qa('.aad-hg .ah-app[data-app]');
-  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '4:Money', '2:Mail', '3:Chats', '5:Files'], 'every desk, badged first, stock names (round 14: Chats\' count once)');
-  assert.equal(w.q('.aad-hg .ah-app[data-desk="3"] .ah-badge').hidden, true, 'round 14: no second Chats count on the grid');
-  w.q('.aad-hg .ah-app[data-desk="4"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.st.gone.at(-1), 4); assert.equal(w.html.dataset.aadNtp, undefined, 'the pick replaces the New tab');
-  // ✕ on the New tab goes back to where it came from
-  k('KeyT'); w.q('.aad-tab[data-tab="new"] .aad-tx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadNtp, undefined);
+  const pinsNow = () => w.qa('.aad-pins .aad-pa[data-app]').map(b => b.dataset.app);
+  assert.ok(pinsNow().includes('money') && pinsNow().includes('mail'), 'the installed defaults pinned');
+  assert.ok(w.q('.aad-pins .aad-pa-all'), 'All apps at the row\'s end');
+  assert.equal(w.q('.aad-pa[data-app="maps"]'), null, 'Maps is not pinned');
+  w.q('.aad-vtab[data-desk="2"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
+  w.q('.aad-appmenu .aad-pop-i[data-act="pin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(pinsNow().at(-1), 'maps', 'Pin: at the row\'s end'); assert.equal(store.pins.at(-1), 'maps', 'kept on this device');
+  assert.ok(w.q('.aad-vtab[data-desk="2"]').classList.contains('is-pinned'), 'its open tab moves up with the pins');
+  w.q('.aad-pa[data-app="maps"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
+  w.q('.aad-appmenu .aad-pop-i[data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(!pinsNow().includes('maps'), 'Unpin');
+  assert.equal(keys[2].down({ altKey: true, code: 'KeyT' }), true); assert.equal(w.html.dataset.aadAll, '', '⌥T All apps');
+  keys[1].down({ key: 'Escape' });
+  // the tidy (6 s after load): Maps (30 h) closes, Money is pinned, Movies is recent
+  for (const tm of w.st.timers.filter(x => x.ms === 6000)) tm.fn();
+  assert.deepEqual(closed, [2], 'only the stale unpinned one');
+  assert.equal(w.q('.aad-toast').hidden, false); assert.equal(w.q('.aad-toast-w').textContent, 'Closed 1 app you hadn\'t used today');
+  const opened = w.st.opened.length; w.q('.aad-toast-u').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.opened.at(-1), 'maps', 'Undo opens it again'); assert.ok(w.st.opened.length > opened); assert.equal(w.q('.aad-toast').hidden, true);
+  // the setting: Off stops it
+  w.q('.aad-tidy').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-tidypop [data-tidy="off"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(store.tidy, 'off');
+  assert.match(w.q('.aad-tidy-w').textContent, /Tidy: Off/);
 });
 
-/* Round 13 (Miguel, 2 Nov 2026): the tab strip (the ChatGPT desktop app's pill tabs; Atlas's compressing strip): many tabs
- * shrink to icons, then scroll; the core closes a desk as its ✕ does; no app panel, no docked column. */
-test('round 13 desktop: the tab strip shrinks to icons, then scrolls; + right after the last tab; core desks.close = the stock close', () => {
-  const css = read('web/layouts/ai-apps/desktop.css');
-  assert.match(css, /\.aad-strip \{\n  flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; gap: 2px; overflow-x: auto;/, 'the strip scrolls sideways once the tabs are at their smallest');
-  assert.match(css, /\.aad-tab \{\n  position: relative; flex: 0 1 200px; min-width: 40px; height: 30px;[^}]*border-radius: 8px;[^}]*container-type: inline-size;/, 'pills up to 200 px, down to a 40 px icon');
-  assert.match(css, /@container \(max-width: 72px\) \{\n  [^\n]*\.aad-tab \.aad-tlab \{ display: none; \}/, 'narrow: icon only');
-  assert.match(css, /:is\(\.aad-tab\.is-on, \.aad-tab:hover, \.aad-tab:focus-within\) \.aad-tx \{ opacity: 1; \}/, '✕ on the tab in front and on hover');
-  assert.match(css, /\.aad-tabs \{ flex: 0 1 calc\(var\(--aad-tabs-n, 1\) \* 202px\); min-width: min-content;/, '+ follows the last tab, never over one');
+test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with the desks), the app panel docked left of them; ✕ = the stock close', async () => {
+  const { w, store } = deskWorld();
+  w.st.desks = null;
+  const closed = [];
+  w.api.desks.list = () => [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'maps', name: 'Maps' }, { desk: 3, id: 'wizard', name: 'Chats' }, { desk: 4, id: 'money', name: 'Money' }, { desk: 5, id: 'mail', name: 'Mail' }, { desk: 6, id: 'notes', name: 'Notes' }];
+  w.api.desks.close = d => { closed.push(d); return true; };
+  (await layout()).default(w.api);
+  // pins (defaults installed here: music, mail, money): the open ones first in pin order, no ✕; then badged first, then desk order
+  const tabs = () => w.qa('.aad-vtab').map(b => (b.classList.contains('is-pinned') ? '^' : '') + b.dataset.desk + ':' + b.dataset.app);
+  assert.deepEqual(tabs(), ['^5:mail', '^4:money', '2:maps', '3:wizard', '6:notes'], 'one tab per desk (Home\'s Chats desk aside); a second Chats desk carries no count');
+  assert.ok(w.q('.aad-vtsep'), 'a hairline between the pinned and the others');
+  assert.equal(w.q('.aad-vtab[data-desk="5"] .aad-vtx'), null, 'pinned: no ✕ (never closed for you)');
+  assert.equal(w.q('.aad-vtab[data-desk="4"] .aad-vtb').textContent, '3', 'the badge on its tab');
+  assert.equal(w.q('.aad-vtt').textContent, 'Open · 5');
+  w.q('.aad-vtab[data-desk="2"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.at(-1), 2, 'a tab opens its desk (the panel)');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 2 }; w.emit('route', w.st.route);
+  assert.equal(w.q('.aad-vtab.is-on').dataset.desk, '2');
+  const g0 = w.st.newChats; w.q('.aad-vtab[data-desk="2"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(w.st.newChats > g0 || w.st.gone.at(-1) === 1, 'the tab in front again: hidden, back Home');
+  w.q('.aad-vtab[data-desk="6"] .aad-vtx').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(closed, [6], '✕ = the stock close of that desk');
+  w.q('.aad-vtab[data-desk="3"]').dispatchEvent(new FakePointerEvent('auxclick', { button: 1 })); assert.deepEqual(closed, [6, 3], 'a middle click too');
+  // folds to a 52 px icon column, kept on this device
+  w.q('.aad-vtog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadTabs, 'rail'); assert.equal(store.tabsFolded, true);
+  w.q('.aad-vtog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadTabs, 'open');
+  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
+  assert.ok(css.includes(`${P}[data-aad-tabs="open"] { --aad-rs: var(--aad-tabs-px, 200px); }`) && css.includes(`${P}[data-aad-tabs="rail"] { --aad-rs: 52px; }`), '200 px, 52 px folded');
+  assert.ok(css.includes(`${P}[data-aad-split] #stage > .wsp[data-aad-role="app"] { z-index: 3; inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important;`), 'the panel docked left of the column');
   assert.ok(!/transition:[^;]*\b(width|left|right|flex)\b/.test(css), 'no layout animation (transforms / colours only)');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /if \(!\(api\.desks\.close\?\.\(t\.desk\)\)\) api\.apps\.close\?\.\(t\.id\);/, '✕: the stock close of that desk');
+  assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
+  assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
+  assert.ok(css.includes(`${P}[data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }`), 'a docked chat and the panel never overlap');
+  assert.ok(css.includes(`${P}[data-aad-all] .win .dchats .pane-main .ch-compose { visibility: hidden; }`), 'no composer ghost under All apps');
   const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);
   assert.match(dj, /closeDesk: i => Number\.isInteger\(i\) && i >= 0 && i < ws\.length \? closeDesktop\(i\) : false,/, 'the desktop\'s own closeDesktop (its ✕)');

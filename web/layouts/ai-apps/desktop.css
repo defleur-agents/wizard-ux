@@ -516,76 +516,176 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-h { margin: 4px 10px 
 }
 
 
-/* ---------- round 13 (Miguel, 2 Nov 2026): open apps are tabs across the top of the main area ----------
- * The current ChatGPT desktop app's tab strip (its built-in browser): flat pill tabs on the sidebar's surface, a 44 px
- * row, 30 px tabs (r 8) with a 16 px icon and a 13 px label; the one in front a soft fill, the others quiet ink; ✕ on
- * the one in front and on hover (never on the pinned Home tab); a bare + right after the last tab. Many tabs compress
- * (Atlas's classic strip) to icons only, then the strip scrolls sideways (its scrolling strip). Transforms only. */
+/* ---------- round 15 (Miguel, 3 Nov 2026: Arc's layout) ----------
+ * Left: the sidebar with a row of pinned apps; right: the open apps as vertical tabs (--aad-rs, folds to 52 px); an app
+ * is a panel docked left of that column (--aad-app-w); a chat a column docked beside the sidebar (--aad-chat-w); Home
+ * the skin's background and the composer. Transforms only for the motion (flip in desktop.js, short keyframes here). */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="open"] { --aad-rs: var(--aad-tabs-px, 200px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] { --aad-rs: 52px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] { --aad-app-w: var(--aad-app-px, 560px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-wide] { --aad-app-w: calc(100vw - var(--aad-side) - var(--aad-rs)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-loading]:not([data-aad-split]) { --aad-app-w: var(--aad-app-px, 560px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] { --aad-chat-w: clamp(400px, 33.333vw, 560px); }
+html[data-shell="desktop"][data-layout="ai-apps"] #bar { right: var(--aad-rs); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb { left: calc(var(--aad-side) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px); }
+
+/* the top row over the main area: a docked chat's title and ✕ on the left, the app panel's header on the right; nothing on Home */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-top {
-  position: fixed; top: 0; right: 0; left: var(--aad-side); height: 44px; box-sizing: border-box; z-index: 1; pointer-events: auto;
-  display: flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--aad-ink); background: var(--aad-panel); box-shadow: inset 0 -1px 0 var(--aad-line);
+  position: fixed; top: 0; right: var(--aad-rs); left: var(--aad-side); height: 44px; box-sizing: border-box; z-index: 1; pointer-events: none;
+  display: flex; align-items: center; color: var(--aad-ink); background: none;
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-strip {
-  flex: 1 1 auto; min-width: 0; height: 100%; display: flex; align-items: center; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain;
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop { flex: none; width: var(--aad-chat-w, 0px); min-width: 0; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 20px; pointer-events: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-chat]) .aad-ctop { visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .aad-ctop { background: var(--aad-main); box-shadow: 1px 0 0 var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-cx[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop {
+  pointer-events: auto; position: absolute; top: 0; right: 0; bottom: 0; width: var(--aad-app-w, 0px); box-sizing: border-box; padding: 0 6px 0 14px;
+  display: flex; align-items: center; gap: 8px; background: var(--aad-main); box-shadow: -1px 0 0 var(--aad-line), inset 0 -1px 0 var(--aad-line);
 }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-strip::-webkit-scrollbar { display: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tabs { flex: 0 1 calc(var(--aad-tabs-n, 1) * 202px); min-width: min-content; height: 100%; display: flex; align-items: center; gap: 2px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab {
-  position: relative; flex: 0 1 200px; min-width: 40px; height: 30px; box-sizing: border-box; padding: 0 6px 0 8px; border-radius: 8px; cursor: pointer;
-  display: flex; align-items: center; gap: 6px; container-type: inline-size; color: var(--aad-ink-2); background: none; transition: background 120ms ease, color 120ms ease; user-select: none;
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab:hover { background: color-mix(in srgb, var(--aad-ink) 5%, transparent); color: var(--aad-ink); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab.is-on { background: color-mix(in srgb, var(--aad-ink) 9%, transparent); color: var(--aad-ink); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tic { position: relative; flex: none; width: 18px; height: 18px; display: grid; place-items: center; }
-/* a tab's icon: the app's logo, else its full-colour plate with a white glyph (the New tab grid's icon, small: a favicon) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-tab { width: 18px; height: 18px; border-radius: 5px; background: linear-gradient(165deg, color-mix(in oklab, var(--c) 82%, white), var(--c) 55%, color-mix(in oklab, var(--c) 82%, black)); box-shadow: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-tab > .sgi:not(.sgb) { width: 72%; height: 72%; background: white !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-tab.is-logo { box-shadow: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tico { display: grid; place-items: center; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tico .aad-ico { width: 17px; height: 17px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tlab { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 500 0.8125rem / 1.2 var(--wz-font-ui); }
-/* the badge on the tab: Chats' amber count after the name; on the icon's corner once the tab is icon only (Atlas keeps
- * an alert visible however small a tab gets) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tbadge {
-  flex: none; min-width: 16px; height: 16px; padding: 0 5px; box-sizing: border-box; border-radius: 8px; display: grid; place-items: center;
-  white-space: nowrap; pointer-events: none; color: color-mix(in srgb, black 88%, var(--amber, var(--aad-ink))); background: var(--amber, var(--aad-ink));
-  font: 800 0.625rem / 1 var(--wz-font-ui);
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tx {
-  flex: none; width: 20px; height: 20px; margin: 0 0 0 auto; padding: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
-  color: inherit; background: none; opacity: 0; transition: opacity 100ms ease, background 100ms ease;
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tx-i { width: 13px; height: 13px; stroke-width: 2.2; }
-html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-tab.is-on, .aad-tab:hover, .aad-tab:focus-within) .aad-tx { opacity: 1; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tx:hover { background: color-mix(in srgb, var(--aad-ink) 12%, transparent); }
-/* compressed (many tabs): icon only; the one in front keeps its ✕ (Chrome / Atlas) */
-@container (max-width: 72px) {
-  html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab .aad-tlab { display: none; }
-  html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab:not(.is-on) .aad-tx { display: none; }
-  html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab .aad-tbadge { position: absolute; top: 1px; left: 19px; min-width: 14px; height: 14px; padding: 0 3px; font-size: 0.5625rem; box-shadow: 0 0 0 1.5px var(--aad-panel); }
-}
-@container (max-width: 52px) {
-  html[data-shell="desktop"][data-layout="ai-apps"] .aad-tab.is-on .aad-tx { display: none; }
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tplus { flex: none; width: 30px; height: 30px; margin-left: 2px; border-radius: 8px; color: var(--aad-ink-2); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tplus .aad-ico { width: 18px; height: 18px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tplus:hover { color: var(--aad-ink); }
-/* the app's own title-bar tools at the strip's right end */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools { flex: 0 0 auto; min-width: 0; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pti { display: grid; flex: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-xs { width: 22px; height: 22px; border-radius: 6px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptn { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 600 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop > .aad-ib { width: 32px; height: 32px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop > .aad-ib .aad-ico { width: 18px; height: 18px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 4px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools[hidden] { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > :is(.wtool, .wtool-pick) { height: 30px; min-width: 30px; border-radius: 8px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptools > .wtool-pick { max-width: 160px; padding: 0 8px; }
-/* an app tab: the app's desk fills the main area; the Home tab's composer floats over its bottom (the Chats desk above
- * it with everything but the composer out of sight, the shell's own hidden desk: visibility only, never a veil) */
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] { z-index: 4; opacity: 1 !important; transform: none !important; pointer-events: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] .win { background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-compose { visibility: visible; pointer-events: auto; }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main :is(.ch-tacts, .ch-latest, .ch-swrow) { visibility: hidden !important; }
-/* the composer floats at the bottom on every tab (Home, a chat, an app): the new chat's thread keeps it there */
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-thread { justify-content: flex-end; }
-/* the New tab page: the grid between the strip and the composer (home.js); Home itself shows none */
-html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-ntp]) .ah.aad-hg { display: none !important; }
+
+/* the desks as panels (round 7's thirds, on the desks as they are): the Chats desk and the app's desk both shown */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] { visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; transform: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] { inset: 0 var(--aad-rs) 0 var(--aad-side) !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] { z-index: 3; inset: 0 var(--aad-rs) 0 calc(100% - var(--aad-app-w) - var(--aad-rs)) !important; background: var(--aad-canvas); box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) { inset: 0 !important; width: auto !important; height: auto !important; max-width: none !important; margin: 0 !important; border-radius: 0; border-color: transparent !important; box-shadow: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role] > .win:not(.gone) > .wbar { display: flex; position: absolute; top: 0; right: 0; width: 1px; height: 1px; overflow: hidden; visibility: hidden; pointer-events: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] #stage > .wsp[data-aad-role="app"] > .win:not(.gone)::after { display: none !important; }
+/* the Home composer moves into the room left of the panel (never under it) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-chat]):not([data-aad-wide]) #stage > .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-compose {
+  width: min(768px, calc(100% - var(--aad-app-w) - 48px)); margin-left: max(24px, calc((100% - var(--aad-app-w) - min(768px, calc(100% - var(--aad-app-w) - 48px))) / 2)); margin-right: 0;
+}
+/* a chat docked beside the sidebar (round 7's column): about a third, on its own surface; Home stays in view beside it */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] #stage > .wsp[data-aad-role="chat"] {
+  z-index: 3; inset: 0 auto 0 var(--aad-side) !important; width: var(--aad-chat-w) !important; background: var(--aad-canvas); box-shadow: 1px 0 0 var(--aad-line), 12px 0 32px color-mix(in srgb, black 8%, transparent);
+}
+html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-split], [data-aad-chat]) .wsp[data-aad-role="chat"] .win .dchats .pane-main .ch-msgs { padding-left: max(20px, calc((100% - 768px) / 2)); padding-right: max(20px, calc((100% - 768px) / 2)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .wsp[data-aad-role="chat"] .win .dchats .pane-main :is(.ch-compose, .ch-swrow) { width: min(768px, calc(100% - 40px)); }
+/* motion: the panel slides in from the right, the column from the left; one short slide and fade */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"][data-aad-anim="app"] { animation: aad-in-right 220ms cubic-bezier(.2, .8, .2, 1) both; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[data-aad-anim="app"] { animation: aad-fade 220ms ease both; }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"], html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop[data-aad-anim="dock"] { animation: aad-col-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes aad-in-right { from { translate: min(100%, 480px) 0; opacity: .3; } }
+@keyframes aad-col-in { from { translate: -48px 0; opacity: 0; } }
+/* a slow app: its placeholder in the panel's place (its icon, "Opening …", a thin spinner), faded in after a beat */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload {
+  position: fixed; z-index: 2; top: 0; bottom: 0; right: var(--aad-rs); width: var(--aad-app-w, 560px); box-sizing: border-box; pointer-events: auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: var(--aad-ink-2); background: var(--aad-main);
+  box-shadow: -1px 0 0 var(--aad-line), -12px 0 32px color-mix(in srgb, black 10%, transparent); animation: aad-fade 220ms ease 140ms both;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload-i { display: grid; opacity: .9; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload-t { font: 500 0.875rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pload-s { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--aad-ink) 18%, transparent); border-top-color: var(--wz-accent, var(--aad-ink)); animation: aad-spin 800ms linear infinite; }
+/* the grips: the open-apps column's inner edge, the app panel's left edge */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="open"] .aad-grip[data-grip="tabs"] { display: block; left: calc(100vw - var(--aad-rs)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-wide]) .aad-grip[data-grip="app"] { display: block; left: calc(100vw - var(--aad-rs) - var(--aad-app-w)); }
+
+/* ---------- the pinned apps: one row of 40 px icons under the sidebar's header (two at most), All apps last ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pins { flex: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 2px 12px 10px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pins:empty { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pins.is-rail { width: 100%; justify-content: center; padding: 10px 0 4px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa {
+  position: relative; flex: none; width: 40px; height: 40px; margin: 0; padding: 0; border: 0; border-radius: 11px; cursor: pointer; background: none; display: grid; place-items: center;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-pin { width: 40px; height: 40px; border-radius: 11px; transition: filter 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-pin.is-plain .aad-ico { width: 20px; height: 20px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa:hover .aad-tile { filter: brightness(1.08); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa:active .aad-tile { filter: brightness(.92); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa.is-open::after { content: ""; position: absolute; left: 50%; bottom: -5px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa.is-on .aad-tile { box-shadow: 0 0 0 2px var(--aad-panel), 0 0 0 4px var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa.is-held .aad-tile { filter: brightness(1.08); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa .aad-badge { top: -6px; left: calc(100% - 12px); min-width: 18px; height: 18px; padding: 0 5px; font-size: 0.625rem; color: color-mix(in srgb, black 88%, var(--amber, var(--aad-ink))); }
+
+/* ---------- the open apps: vertical tabs on the right (Arc / Chrome), folding to a 52 px icon column ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vt {
+  pointer-events: auto; position: fixed; z-index: 3; top: 0; right: 0; bottom: 0; width: var(--aad-rs); box-sizing: border-box; overflow: hidden;
+  display: flex; flex-direction: column; color: var(--aad-ink); background: var(--aad-panel); box-shadow: -1px 0 0 var(--aad-line);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vth { flex: none; height: 52px; display: flex; align-items: center; gap: 2px; padding: 0 8px 0 14px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtt { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--aad-ink-2); font: 600 0.8125rem / 1.4 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtog { transform: scaleX(-1); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtl { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; scrollbar-width: thin; display: flex; flex-direction: column; gap: 2px; padding: 2px 8px 12px; box-sizing: border-box; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab {
+  position: relative; flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 6px 0 8px; box-sizing: border-box; border-radius: 10px; cursor: pointer;
+  color: var(--aad-ink); background: none; transition: background 120ms ease; user-select: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab:hover { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab.is-on { background: var(--aad-held); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab.is-on .aad-vtn { font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vti { position: relative; flex: none; width: 24px; height: 24px; display: grid; place-items: center; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-vt { width: 24px; height: 24px; border-radius: 7px; box-shadow: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tile.is-vt.is-logo { box-shadow: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtn { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.3 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtb {
+  flex: none; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; display: grid; place-items: center; white-space: nowrap; pointer-events: none;
+  color: color-mix(in srgb, black 88%, var(--amber, var(--aad-ink))); background: var(--amber, var(--aad-ink)); font: 800 0.625rem / 1 var(--wz-font-ui);
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtx { flex: none; width: 22px; height: 22px; margin: 0; padding: 0; border: 0; border-radius: 50%; cursor: pointer; display: none; place-items: center; color: var(--aad-ink-2); background: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtx-i { width: 14px; height: 14px; stroke-width: 2.2; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtx:hover { color: var(--aad-ink); background: color-mix(in srgb, var(--aad-ink) 12%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-vtab:hover, .aad-vtab:focus-within) .aad-vtx { display: grid; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-vtab:hover, .aad-vtab:focus-within) .aad-vtb { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtsep { flex: none; width: calc(100% - 16px); height: 1px; margin: 6px 8px; border: 0; background: var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtnone { margin: 8px; color: var(--aad-ink-2); font: 400 0.8125rem / 1.4 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtf { flex: none; padding: 8px; box-shadow: inset 0 1px 0 var(--aad-line); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; margin: 0; padding: 0 8px; border: 0; border-radius: 10px; box-sizing: border-box; cursor: pointer;
+  color: var(--aad-ink-2); background: none; font: 500 0.8125rem / 1 var(--wz-font-ui); text-align: left; transition: background 120ms ease, color 120ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy[aria-expanded="true"] { color: var(--aad-ink); background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy-i { width: 16px; height: 16px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy-w { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidypop { right: 8px; bottom: 52px; width: 220px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidypop .aad-pop-i { justify-content: space-between; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-tidy, .aad-vtx, .aad-allx):focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+/* folded: the icons only, the count on the icon's corner */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vth { flex-direction: column; justify-content: flex-start; height: auto; padding: 8px 0 6px; gap: 4px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] :is(.aad-vtt, .aad-vtn, .aad-vtx, .aad-tidy-w, .aad-vtnone) { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtl { align-items: center; padding: 2px 0 12px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtab { width: 40px; height: 40px; padding: 0; justify-content: center; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtb { position: absolute; top: 0; right: -2px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 0.5625rem; box-shadow: 0 0 0 2px var(--aad-panel); display: grid !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtsep { width: 24px; margin: 6px auto; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vtf { display: flex; justify-content: center; padding: 8px 0; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-tidy { width: 36px; justify-content: center; padding: 0; }
+
+/* ---------- All apps: the full grid as a sheet over the main area (home.js), a soft veil under it ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-allbg { position: fixed; z-index: 5; top: 0; bottom: 0; left: var(--aad-side); right: var(--aad-rs); pointer-events: auto;
+  background: color-mix(in srgb, var(--aad-canvas) 55%, transparent); -webkit-backdrop-filter: blur(18px) saturate(1.1); backdrop-filter: blur(18px) saturate(1.1); animation: aad-fade 160ms ease both; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-allbg[hidden], html[data-shell="desktop"][data-layout="ai-apps"] .aad-allh[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-allh { position: fixed; z-index: 6; top: 0; left: var(--aad-side); right: var(--aad-rs); height: 64px; box-sizing: border-box; padding: 0 16px 0 32px; display: flex; align-items: center; justify-content: space-between; pointer-events: auto; color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-allt { margin: 0; font: 650 1.0625rem / 1.2 var(--wz-font-display, var(--wz-font-ui)); letter-spacing: -.01em; }
+html[data-shell="desktop"][data-layout="ai-apps"] .ah.aad-hg { z-index: 6; top: 72px; bottom: 32px; right: var(--aad-rs); }
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-all]) .ah.aad-hg { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-all] .aad-hg .ah-name { color: var(--aad-ink); text-shadow: none; }
+
+/* ---------- the tidy toast: above the composer, centred in the main area ---------- */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-toast {
+  pointer-events: auto; position: fixed; z-index: 7; bottom: 96px; left: calc(var(--aad-side) + (100vw - var(--aad-side) - var(--aad-rs)) / 2); translate: -50% 0;
+  display: flex; align-items: center; gap: 12px; max-width: min(520px, calc(100vw - var(--aad-side) - var(--aad-rs) - 32px)); padding: 8px 8px 8px 16px; box-sizing: border-box; border-radius: 14px;
+  color: var(--aad-canvas); background: color-mix(in srgb, var(--aad-ink) 92%, var(--aad-canvas)); box-shadow: 0 8px 28px color-mix(in srgb, black 24%, transparent);
+  font: 500 0.8125rem / 1.3 var(--wz-font-ui); animation: aad-toast-in 200ms cubic-bezier(.2, .8, .2, 1) both;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-toast[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-toast-u { flex: none; height: 30px; padding: 0 12px; border: 0; border-radius: 9px; cursor: pointer; color: inherit; background: color-mix(in srgb, var(--aad-canvas) 18%, transparent); font: 600 0.8125rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-toast-u[hidden] { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-toast-u:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-canvas)); outline-offset: 2px; }
+@keyframes aad-toast-in { from { opacity: 0; translate: -50% 12px; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-shell="desktop"][data-layout="ai-apps"] :is(#stage > .wsp, .aad-ptop, .aad-ctop)[data-aad-anim], html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-pload, .aad-allbg, .aad-toast) { animation: none !important; }
+}
 
 /* ---------- round 14 (Miguel, 3 Nov 2026: "perfect"): the sidebar's polish ---------- */
 /* a long list fades out under the header and above the foot (ChatGPT's sidebar) instead of rows cut flat by the foot */
@@ -593,4 +693,21 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll { -webkit-mask-ima
 /* desks out of sight keep the open sidebar's geometry: folding the sidebar re-lays out only what shows (it re-laid out
  * all of his 22 apps, ~100 layouts and a 100 ms frame); a desk coming into view takes the current width then */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]) { left: var(--aad-side-w, 288px); }
-html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px -8px -8px calc(var(--aad-side-w, 288px) - 8px); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]) { right: var(--aad-tabs-px, 200px); }
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[hidden]:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) { inset: -8px calc(var(--aad-tabs-px, 200px) - 8px) -8px calc(var(--aad-side-w, 288px) - 8px); }
+/* round 15 polish */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa.aad-pa-all { width: 28px; align-self: center; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa-all .aad-tile.is-pin { width: 28px; height: 28px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pa-all .aad-tile.is-pin.is-plain .aad-ico { width: 16px; height: 16px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pins.is-rail .aad-pa.aad-pa-all { width: 40px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-all] .aad-orb { opacity: 0; visibility: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-tile.is-vt { width: 28px; height: 28px; border-radius: 8px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vti { width: 28px; height: 28px; }
+/* a docked chat is narrow: ↓ Latest on the left, Snooze / Archive keep the right (they met in the middle) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .win .dchats .pane-main .ch-thread > .ch-latest { align-self: flex-start; margin-left: max(20px, calc((100% - 768px) / 2)) !important; margin-right: 0 !important; }
+/* both docked (a chat and an app): the chat a little narrower and the app the rest, never over each other */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }
+/* All apps: the Home composer goes under the sheet entirely (no ghost of it through the veil) */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-all] .win .dchats .pane-main .ch-compose { visibility: hidden; }
+/* the folded rail: the pinned icons in one column */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pins.is-rail { flex-direction: column; flex-wrap: nowrap; align-items: center; gap: 8px; }

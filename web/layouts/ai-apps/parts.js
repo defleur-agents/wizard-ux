@@ -24,6 +24,8 @@ export const ICON = {
   restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
+  unpin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7', 'M4 4l16 16'],
+  hide: ['M6 12h12'],
   // the app panel wider / back to a third (round 7, the Orb desktop's panel)
   expand: ['M14 4h6v6', 'M20 4l-7 7', 'M10 20H4v-6', 'M4 20l7-7'],
   shrink: ['M4 14h6v6', 'M10 14l-6 6', 'M20 10h-6V4', 'M14 10l6-6'],
@@ -141,3 +143,42 @@ export function gridSlot(row, col) {
   const w = cols[col], h = rows[rows.length - 1];
   return w > 0 && h > 0 ? { x: x + w / 2, y: y + h / 2, d: Math.min(w, h) } : null;
 }
+
+/* ---------- round 15 (Miguel, 3 Nov 2026: Arc-style desktop): pinned apps and auto-tidy ---------- */
+/** The pinned row's first pins (only the ones installed), in this order; afterwards the owner's own order. */
+export const DEFAULT_PINS = Object.freeze(['music', 'mail', 'messenger', 'calendar', 'money']);
+/** The pins to show: the owner's stored list (kept order, unknown or uninstalled ids dropped, no repeats), else the
+ * defaults that are installed. */
+export function pinsFrom(stored, installed) {
+  const have = new Set(installed || []), seen = new Set();
+  // (a default names the app; its installed id may carry the stock "wizard-" prefix)
+  const list = Array.isArray(stored) ? stored : DEFAULT_PINS.map(n => have.has(n) ? n : 'wizard-' + n);
+  return list.filter(id => typeof id === 'string' && have.has(id) && !seen.has(id) && seen.add(id));
+}
+/** Pin or unpin one app (pinning appends: pin order = the owner's order). */
+export const togglePin = (pins, id) => pins.includes(id) ? pins.filter(x => x !== id) : [...pins, id];
+/** Auto-tidy (Arc): how long an open, unpinned app may sit unused before its desk closes. */
+export const TIDY = Object.freeze({ off: 0, '12h': 12 * 3600e3, '24h': 24 * 3600e3, week: 7 * 24 * 3600e3 });
+export const TIDY_WORDS = Object.freeze({ off: 'Off', '12h': '12 hours', '24h': '24 hours', week: '1 week' });
+export const TIDY_DEFAULT = '24h';
+/** The desks auto-tidy closes now: open, not pinned, not a Chats desk, not on screen, last used longer ago than the
+ * limit (an app never seen yet counts from now: seed `used` first). Highest desk first, so closing one never shifts
+ * the next one's number. Pure: the clock and the usage are passed in. */
+export function tidyPlan(desks, { pins = [], used = {}, now = 0, limit = 0, keep = [] } = {}) {
+  if (!(limit > 0)) return [];
+  const pinned = new Set(pins), kept = new Set(keep);
+  return (desks || []).filter(d => d && d.id && d.id !== 'wizard' && !pinned.has(d.id) && !kept.has(d.desk) && typeof used[d.id] === 'number' && now - used[d.id] > limit)
+    .sort((a, b) => b.desk - a.desk);
+}
+/** Usage seeded for apps never seen (they count from now), and forgotten for apps no longer open. */
+export function seedUsed(used, desks, now) {
+  const out = {}, open = new Set((desks || []).map(d => d.id));
+  for (const id of open) out[id] = typeof used?.[id] === 'number' ? used[id] : now;
+  return out;
+}
+/** The toast's words for a tidy: "Closed 6 apps you hadn't used today". */
+export function tidyWords(n, key) {
+  const when = key === '12h' ? 'in 12 hours' : key === 'week' ? 'this week' : 'today';
+  return `Closed ${n} app${n === 1 ? '' : 's'} you hadn't used ${when}`;
+}
+
