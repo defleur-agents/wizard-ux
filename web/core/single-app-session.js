@@ -91,7 +91,9 @@
     if (window.WizLinks?.backMenu?.()) return 'link-menu';
     if (links?.back()) return 'link';
     if (replyVoice?.back()) return 'recording';
-    if (chats?.isHosted(wid)) { if (chats.closeOverlay()) return 'chat-overlay'; if (chats.beforeLeave(wid)) chats.threadBack(threadWindow); return 'thread'; }
+    // Same shared Back path as the Chats Back button: saves the draft and closes
+    // the hosted layer. beforeLeave belongs to the separate Incognito feature.
+    if (chats?.isHosted(wid)) { if (chats.closeOverlay()) return 'chat-overlay'; chats.threadBack(threadWindow); return 'thread'; }
     if (!frame || !loaded) return 'root';
     const step = window.WizAppServices?.back(frame);
     if (['handled','pending','stay'].includes(step)) { checkpoint(); return 'app'; }
