@@ -373,6 +373,6 @@ test('Orb radial is trusted layout+nav only; late lazy import and stale handles 
   resolveModule({default:()=>{starts++;return{dispose(){disposed++;}};}}); await Promise.resolve(); await Promise.resolve();
   assert.equal(starts,0); off(); stale.switcher()(); assert.equal(starts,0);
   f.host._test.setImporter(async url=>url.includes('/core/')?{default:()=>{starts++;return{dispose(){disposed++;}};}}:{default:a=>{api=a;return()=>{};}});
-  await f.mount('wizard/orb-radial'); const release=api.orb.switcher(); await Promise.resolve(); await Promise.resolve();
+  await f.mount('wizard/orb-radial'); const release=api.orb.switcher(); await new Promise(resolve=>setImmediate(resolve));
   assert.equal(starts,1); release(); release(); await f.clear(); assert.equal(disposed,1);
 });
