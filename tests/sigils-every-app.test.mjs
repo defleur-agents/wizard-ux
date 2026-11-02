@@ -32,7 +32,15 @@ test('every known Wizard App Store app has a designed sigil (no letter fallback)
 test('Home wears the approved 12%-wider hat while the main Hermes agent wears the Hermes logo', () => {
   const S = sigil();
   assert.ok(S.has('hermes'), 'Hermes is available as a first-class mask sigil');
-  assert.match(read('web/core/sigils.css'), /\.sg-hermes\s*\{\s*--sg:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\)/);
+  const css = read('web/core/sigils.css');
+  const hermesBadge = css.match(/\.sgi\.sg-hermes\s*\{([^}]*)\}/s);
+  assert.ok(hermesBadge, 'Hermes badge rule exists');
+  assert.match(hermesBadge[1], /background:\s*#F7F5FF;/, 'Hermes uses a light circle');
+  assert.match(hermesBadge[1], /border-radius:\s*50%;/, 'Hermes badge is circular');
+  assert.match(hermesBadge[1], /mask:\s*none;/, 'Hermes is not reversed into the app hue');
+  assert.match(hermesBadge[1], /transform:\s*scale\(\.68\);/, 'the circular badge matches the hat\'s 68% optical height');
+  assert.match(css, /\.sgi\.sg-hermes::after\s*\{[^}]*background:\s*#08070A;[^}]*mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/s, 'the Hermes portrait is black inside the badge');
+  assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
   assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
   for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
     const src = read(p);
