@@ -7,7 +7,8 @@ function fixture(){
  const s={id:'synthetic',status:'queued',queueReason:'provider_access',retryRunId:'wizardq_source',request:'  Complete synthetic request\nwith all words  ',model:'original',provider:'anthropic'};
  const state={files:[{id:'draft-file'}],draft:'An unrelated unsent draft'},sent=[],notices=[],changes=[];
  let detail=()=>s,change=async o=>({model:o.value,provider:o.provider});
- const w={id:'win',thread:s.id},M={failureHtml:x=>x,pending:new Map(),currentRoute:()=>({model:s.model,provider:s.provider}),setThreadModel:async(id,o)=>{changes.push(o);return change(o)}};
+ // Model API added agent-qualified pending keys; keep the original retry checks.
+ const w={id:'win',thread:s.id},M={failureHtml:x=>x,pending:new Map(),publicRoute:()=>true,isPending:sid=>M.pending.has(sid),currentRoute:()=>({model:s.model,provider:s.provider}),setThreadModel:async(id,o)=>{changes.push(o);return change(o)}};
  const ctx={console,URL,Intl,Date,setTimeout,clearTimeout,location:{origin:'https://fixture.invalid'},navigator:{},localStorage:{getItem:()=>null,setItem(){},removeItem(){}},document:{addEventListener(){},querySelector:()=>null},addEventListener(){},WizCore:{esc:String,clip:s=>s},WizConfig:{owner:()=> 'Owner'},WizLive:{session:()=>s,sessionInfo:async()=>detail()},WosModels:M,WosOutbox:{unsent:()=>sent,enqueue:async it=>{sent.push(it);return it}}};ctx.window=ctx;
  vm.runInNewContext(source.replace('return { tweakModels, tweakModel,','return { pickModel, tweakModels, tweakModel,'),ctx);
  const api=ctx.WosChatPower({ch:()=>state,toast:(...x)=>notices.push(x),H:{win:()=>w},CH:{win:state},owner:()=>w.id,winAgent:()=>'',renderChats(){},renderThreadNow(){}});
