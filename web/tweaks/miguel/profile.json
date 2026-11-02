@@ -11,7 +11,8 @@
     "miguel/orb-shell",
     "miguel/apps-home",
     "miguel/ai-apps",
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/group-by-day"
   ],
   "flags": {},
   "off": [
