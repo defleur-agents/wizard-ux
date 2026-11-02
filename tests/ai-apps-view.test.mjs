@@ -4,8 +4,9 @@
 //     his profile; phone wears layout 'ai-apps'; the desktop wears nothing (stock desktop until its layout comes);
 //   - the layout: a top bar (☰ · the Wizard's name · workspaces), a drawer (open apps, All apps = the shared three-level
 //     sheet, Recents = Working then Ready, View all, Settings, New chat), a long-press row menu mapped to Chats' own
-//     actions, Home and the bare list become the chat, the composer's round button hands its press to the dock orb
-//     (tap talks, hold commands, the same as every view) unless there are words (then it is Send);
+//     actions, Home and the bare list become the chat; round 4: Home = a New chat with no greeting (the skin's
+//     background, the composer, the orb), reached from anywhere by the name in the top bar, the orb's swipe up and the
+//     drawer's +; the composer has no voice button (the dock orb stays under it), Send only with words;
 //   - the core hooks it needs: the phone adapter's sessionList / sessionAct / showChats / newChat, the layout API's
 //     sessions.act actions, sessions.chats / newChat, workspaces, desk.settings;
 //   - Desks / Orb / Apps untouched: every rule is scoped to the worn layout, no literal colours, no timers of its own.
@@ -240,33 +241,74 @@ test('search covers chats (archive too) and apps; a chat row opens its thread; a
 test('main screen: Home and the bare list become the chat; a thread left for the list opens the drawer; View all keeps the list; an app is "app"', async () => {
   const w = world({ route: { home: true, view: 'desk', thread: null, desk: 0, app: null } });
   (await layout()).default(w.api);
-  w.run(); assert.equal(w.st.chats, 1, 'Home → the chat');
+  w.run(); assert.equal(w.st.newChats, 1, 'Home → a New chat (round 4: Home and New chat are one screen)'); assert.equal(w.st.chats, 0);
   w.st.route = { home: false, view: 'thread', thread: 't9', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aiFront, 'chat');
   w.st.route = { home: false, view: 'list', thread: null, desk: 1, app: 'chats' }; w.emit('route', w.st.route); w.run();
-  assert.equal(w.st.newChats, 1, 'the bare list becomes a New chat'); assert.equal(w.html.dataset.aaDrawer, 'open', 'and the drawer (the list lives there)');
+  assert.equal(w.st.newChats, 2, 'the bare list becomes a New chat'); assert.equal(w.html.dataset.aaDrawer, 'open', 'and the drawer (the list lives there)');
   w.q('.aa-scrim').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); w.q('.aa-viewall').dispatchEvent(new FakePointerEvent('click'));
   w.emit('route', { ...w.st.route, thread: 'x' }); w.st.route = { home: false, view: 'list', thread: null, desk: 1, app: 'chats' }; w.emit('route', w.st.route); w.run();
-  assert.equal(w.st.newChats, 1, 'View all keeps the stock list'); assert.equal(w.html.dataset.aiFront, 'list');
+  assert.equal(w.st.newChats, 2, 'View all keeps the stock list'); assert.equal(w.html.dataset.aiFront, 'list');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 4, app: 'money' }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aa-sub').textContent, 'Money', 'the top bar names the app');
 });
 
-test('the round button: with no words it hands the press to the dock orb (tap talks, hold commands); with words it is Send', async () => {
+/* Round 4 (Miguel, 2 Nov 2026): Home is the empty New chat with no greeting; the Wizard's name in the top bar goes Home
+ * from anywhere (an app included), as do the orb's swipe up and the drawer's +; the composer's own voice button is
+ * gone (the dock orb under the composer talks), the mic stays, Send shows only with words. */
+test('round 4: Home has no greeting: only the skin background, the composer and the orb', async () => {
+  const w = world({ route: { home: true, view: 'desk', thread: null, desk: 0, app: null } });
+  (await layout()).default(w.api);
+  w.run(); assert.equal(w.st.newChats, 1, 'Home = a New chat'); assert.equal(w.html.dataset.aiNew, 'on', 'flagged as Home');
+  w.emit('home'); w.run(); assert.equal(w.st.newChats, 2, "the shell's Home (the orb's swipe up) lands on a New chat too");
+  w.st.route = { home: false, view: 'thread', thread: 't9', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aiNew, undefined, 'a thread is not Home');
+  w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aiNew, 'on', 'a New chat is Home');
+  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
+  assert.ok(css.includes(P + ' .win.app-chats :is(.ch-newchat, .nc-classic) { display: none !important; }'), 'no greeting, no mark, no boxed hint');
+  assert.ok(!/\.nc-hi \{|\.nc-sub \{|\.nc-mark \{/.test(css), 'no greeting styles left');
+  assert.match(css, /\[data-ai-new\] \.aa-top \{ background: transparent !important;/, "Home lets the skin's background through");
+  assert.ok(!/:not\(\[data-ai-front="app"\]\) #device[^{]*#dock \{ opacity: 0/.test(css), 'the dock orb is no longer hidden over the chat');
+  assert.match(css, /\.win\.app-chats \.ch-compose:not\(:has\(textarea:focus\)\) \{ padding-bottom: calc\(var\(--aa-orb-room, 72px\) \+ 4px\) !important; \}/, "the composer sits above the orb's row");
+});
+
+test("round 4: a tap on the Wizard's name goes Home from an app (and from a thread); so does the drawer's +", async () => {
+  const w = world({ route: { home: false, view: 'desk', thread: null, desk: 3, app: 'music' } });
+  (await layout()).default(w.api);
+  assert.equal(w.html.dataset.aiFront, 'app'); assert.equal(w.q('.aa-sub').textContent, 'Music');
+  const mid = w.q('.aa-mid');
+  assert.equal(mid.tagName, 'BUTTON'); assert.equal(mid.getAttribute('type'), 'button'); assert.match(mid.getAttribute('aria-label'), /^Oscar, Music\. Home: a new chat$/);
+  mid.dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, 1, 'the name → Home (a New chat) from inside Music');
+  w.st.route = { home: false, view: 'thread', thread: 't9', desk: 1, app: 'chats' }; w.emit('route', w.st.route);
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aaDrawer, 'open');
+  mid.dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, 2, 'from a thread too'); assert.equal(w.html.dataset.aaDrawer, undefined, 'the drawer closes');
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click')); w.q('.aa-new').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, 3, "the drawer's round + is the same Home");
+  assert.deepEqual(w.st.swipes, { up: 'home', side: null, down: null }, 'a swipe up on the orb = Home (lands on the New chat above)');
+  const css = read('web/layouts/ai-apps/layout.css');
+  assert.ok(!/\.aa-mid \{[^}]*pointer-events: none/.test(css), 'the name takes taps');
+});
+
+test('round 4: the composer: no voice button of its own (the orb talks), the mic stays, Send only with words', async () => {
   const w = world();
   (await layout()).default(w.api);
   const form = new El('form'); form.className = 'ch-compose'; const row2 = new El('div'); row2.className = 'ch-row2'; const send = new El('button'); send.className = 'ch-send';
   form.append(row2); row2.append(send); w.device.append(form);
   const e = w.fire('pointerdown', send, { pointerId: 11 });
-  assert.ok(e.defaultPrevented); assert.deepEqual(w.st.orbDown, [11], 'the dock orb gets the same pointer (its own tap / hold / swipe)');
-  const c = w.fire('click', send, { detail: 1 }); assert.ok(c.defaultPrevented, 'no empty submit');
-  form.classList.add('has-text');
-  const e2 = w.fire('pointerdown', send, { pointerId: 12 });
-  assert.ok(!e2.defaultPrevented); assert.deepEqual(w.st.orbDown, [11], 'with words: the stock Send');
-  const css = read('web/layouts/ai-apps/layout.css');
-  assert.match(css, /\.ch-compose:not\(\.has-text\) \.ch-row2 > \.ch-send > svg \{ display: none; \}/, 'the arrow only with words');
-  assert.match(css, /:not\(\[data-ai-front="app"\]\) #device:not\(\[data-voice\]:not\(\[data-voice="idle"\]\)\) #dock \{ opacity: 0; pointer-events: none !important;/, 'the dock steps aside over the chat, back for a take or an app');
+  assert.ok(!e.defaultPrevented); assert.deepEqual(w.st.orbDown, [], 'an empty composer never hands a press to the orb');
+  const c = w.fire('click', send, { detail: 1 }); assert.ok(!c.defaultPrevented);
+  const js = noComments(read('web/layouts/ai-apps/layout.js'));
+  assert.ok(!/new PointerEvent|api\.voice\.tap|Talk to /.test(js), 'no forwarding to the orb, no voice label on Send');
+  const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
+  assert.ok(css.includes(P + ' .win.app-chats .ch-compose:not(.has-text) .ch-row2 > .ch-send { display: none !important; }'), 'the round Send is hidden with no words');
+  assert.ok(!/:not\(\.has-text\) \.ch-row2 > \.ch-send::before/.test(css), 'no voice-wave mark on an empty Send');
+  assert.match(css, /:is\(\.ch-attach, \.ch-mic, \.ch-stop, \.ch-send\) \{/, 'the mic keeps its place in the pill');
+  assert.ok(!/\.ch-compose[^{]*\.ch-mic[^{]*\{[^}]*display: none/.test(css), 'the mic is never hidden by the view');
+  assert.match(css, /:has\(\.win\.app-chats \.ch-compose textarea:focus\) #device:not\(\[data-voice\]:not\(\[data-voice="idle"\]\)\) #dock \{ opacity: 0;/, 'while typing the orb steps aside (a take keeps it)');
 });
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
