@@ -60,8 +60,21 @@ def prepare(output, review, review_prompt, reviewed_revision):
                     '--output',str(output/'owner-release'),'--',':app:assembleRelease'],check=True)
     release=json.loads((output/'owner-release/job.json').read_text())
     if release['source_revision']!=revision:raise ValueError('release source revision differs')
+    release_spec={'host':'forum','lane':'heavy','key':'dictation-empty-hint-owner-release-'+revision,
+                  'cwd':release['cwd'],'argv':release['argv'],'timeout_seconds':3600}
+    qa.write(output/'parent-only-release-spec.json',release_spec)
+    # Metadata-only readback: never open the private owner properties/signing environment.
+    program='import json,sys,hashlib;from pathlib import Path;p=Path(sys.argv[1]);c=json.loads((p/"job.json").read_text());print(json.dumps({"config":{k:v for k,v in c.items() if k!="files"},"inputs":{n:hashlib.sha256((p/n).read_bytes()).hexdigest() for n in ("job.json","worker.py","source.tar.gz")},"unexecuted":not (p/"receipt.json").exists() and not (p/"source").exists()}))'
+    remote_release=json.loads(subprocess.check_output(['ssh','forum',shlex.join(['/usr/bin/python3','-c',program,release['job']])],text=True))
+    config=remote_release['config']
+    if (not remote_release['unexecuted'] or config['revision']!=revision or config['tasks']!=[':app:assembleRelease']
+            or config['owner_config']!='/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties'
+            or config['signing_env']!='/home/james/.wizard-secure/wizard-os/signing.env'
+            or config['expected_signer']!=OS_SIGNER or config['manifest_sha256']!=debug['source_manifest_sha256']):
+        raise ValueError('exact owner-configured OS-signer release metadata differs')
+    qa.write(output/'release-inputs-readback.json',remote_release)
     qa.write(output/'parent-only-jobs.json',{'source_revision':revision,'native_acceptance':spec,
-        'owner_release_preparation':release,'submitted':False,'published':False,'phone_installed':False,
+        'owner_release':release_spec,'owner_release_preparation':release,'submitted':False,'published':False,'phone_installed':False,
         'release_requires_native_acceptance_before_any_publication':True})
     print(json.dumps(json.loads((output/'parent-only-jobs.json').read_text()),indent=2))
 
