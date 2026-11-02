@@ -215,6 +215,44 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
     offBack?.(); offBack = null; offMount?.(); offMount = null; s.remove();
     delete root.dataset.vcSheet;
   }
+  /* ---------- an open app's menu: right-click (desktop) or a long press (phone) on its icon (Miguel, 2 Nov 2026) ----------
+   * Open, or Close · stays installed: off the grid and stopped (its desk goes); the + opens it again. Two states only:
+   * on the grid = running, otherwise installed. Chats never closes. */
+  let menuEl = null, menuOff = null, menuUnmount = null;
+  function menuClose() { if (!menuEl) return; const m = menuEl; menuEl = null; menuOff?.(); menuOff = null; menuUnmount?.(); menuUnmount = null; m.remove(); }
+  function appMenu(a, x, y, { onOpen, onClosed } = {}) {
+    menuClose(); if (!a || !a.id || a.id === CHATS) return;
+    const m = el('div', 'vc-menu', { role: 'menu', 'aria-label': a.name });
+    const scrim = el('div', 'vc-menu-scrim', { 'aria-hidden': 'true' });
+    const card = el('div', 'vc-menu-card');
+    const item = (label, fn, cls = '') => { const b = el('button', 'vc-menu-i' + cls, { type: 'button', role: 'menuitem', text: label }); api.listen(b, 'click', () => { menuClose(); fn(); }); return b; };
+    card.append(el('div', 'vc-menu-h', { text: a.name }), item('Open', () => onOpen?.()), item('Close · stays installed', () => { api.apps.close?.(a.id); onClosed?.(); }, ' is-close'));
+    m.append(scrim, card);
+    api.listen(scrim, 'pointerdown', e => { e.preventDefault?.(); menuClose(); });
+    api.listen(scrim, 'contextmenu', e => { e.preventDefault?.(); menuClose(); });
+    api.listen(card, 'keydown', e => { const k = { ArrowDown: 1, ArrowUp: -1 }[e.key]; if (!k) return; e.preventDefault(); const bs = [...card.children].filter(n => n.tagName === 'BUTTON'), i = bs.indexOf(doc.activeElement); bs[(i + k + bs.length) % bs.length]?.focus(); });
+    menuUnmount = api.mount(m); menuEl = m;
+    menuOff = api.back?.push ? api.back.push(menuClose) : null;
+    // at the pointer, kept on screen (the phone: centred under the finger)
+    const W = globalThis.innerWidth || 0, H = globalThis.innerHeight || 0, w = card.offsetWidth || 200, h = card.offsetHeight || 120;
+    card.style.left = Math.round(Math.max(8, Math.min((+x || 0) - (shell === 'phone' ? w / 2 : 0), W - w - 8))) + 'px';
+    card.style.top = Math.round(Math.max(8, Math.min(+y || 0, H - h - 8))) + 'px';
+    card.children[1]?.focus?.({ preventScroll: true });
+  }
+  /* Wire an icon: right-click, or a still press held HOLD ms, opens its menu; the click that ends a long press is eaten. */
+  const HOLD = 520;
+  function menuOn(b, a, opts) {
+    if (!b || !a || a.id === CHATS) return;
+    api.listen(b, 'contextmenu', e => { e.preventDefault(); const r = b.getBoundingClientRect(); appMenu(a, e.clientX || r.x + r.width / 2, e.clientY || r.y + r.height, opts); });
+    if (shell !== 'phone') return;
+    let p = null;
+    api.listen(b, 'pointerdown', e => { if (e.button) return; const t = { x: e.clientX, y: e.clientY, fired: false }; p = t;
+      t.cancel = api.after(HOLD, () => { if (p !== t) return; t.fired = true; const r = b.getBoundingClientRect(); appMenu(a, r.x + r.width / 2, r.y + r.height + 6, opts); }); });
+    api.listen(b, 'pointermove', e => { if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 10) { p.cancel?.(); p = null; } });
+    const up = () => { if (p && !p.fired) p.cancel?.(); };
+    api.listen(b, 'pointerup', up); api.listen(b, 'pointercancel', () => { p?.cancel?.(); p = null; });
+    api.listen(b, 'click', e => { if (p?.fired) { e.preventDefault(); e.stopImmediatePropagation?.(); p = null; } }, true);
+  }
   /** A + button (Apps: the grid's last tile; Orb: beside the Chats pill). */
   function plus(cls, label = 'Open an app', build = null) {
     const b = el('button', cls, { type: 'button', 'aria-label': label, title: label }), ico = icon('M12 5v14M5 12h14', 'vc-ico');
@@ -224,9 +262,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null }) {
   }
 
   return {
-    plus, open, close, list,
+    plus, open, close, list, menuOn, appMenu, menuClose,
     get isOpen() { return !!sheet; },
     get closing() { return closing; },
-    dispose() { close(); offSwipes?.(); offInset?.(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
+    dispose() { close(); menuClose(); offSwipes?.(); offInset?.(); unmountCss(); css.remove(); delete root.dataset.viewChrome; },
   };
 }

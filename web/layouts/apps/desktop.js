@@ -59,10 +59,12 @@ export default function desktop(api) {
     tile.append(el('i', `sgi sg-${item.id === CHATS ? 'chats' : glyphOf(meta || { id: item.id, name: item.name })}`, { 'aria-hidden': 'true' }));
     const count = el('b', 'apd-badge', { 'aria-hidden': 'true' }); count.hidden = true;
     b.append(tile, count, el('span', 'apd-label', { text: item.name }));
-    api.listen(b, 'click', () => {
+    const go = () => {
       if (item.id === CHATS) { if (item.desk != null) api.nav.goDesk(item.desk); else api.apps.openDesk(CHATS); }
       else if (item.desk != null) api.nav.goDesk(item.desk);
-    });
+    };
+    api.listen(b, 'click', go);
+    chrome.menuOn(b, item, { onOpen: go, onClosed: () => api.after(60, paint) });   // right-click: Open · Close (stays installed)
     if (item.id !== CHATS) api.apps.logo(item.id).then(url => {
       if (!url || !b.isConnected) return;
       const im = el('img', 'apd-logo', { alt: '', src: url, draggable: 'false' });

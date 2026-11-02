@@ -50,10 +50,12 @@ export default function setup(api) {
     const c = mark?.style?.getPropertyValue?.('--c'); if (c) b.style.setProperty('--c', c);
     const count = el('b', 'ap-badge', { 'aria-hidden': 'true' }); count.hidden = true;
     b.append(tile, count, el('span', 'ap-label', { text: item.name }));
-    api.listen(b, 'click', () => {
+    const go = () => {
       if (item.id === CHATS) api.sessions.openList('ready');
       else if (item.desk != null) api.nav.goDesk(item.desk);
-    });
+    };
+    api.listen(b, 'click', go);
+    chrome.menuOn(b, item, { onOpen: go, onClosed: () => api.after(60, paint) });   // long press: Open · Close (stays installed)
     if (item.id !== CHATS) api.apps.logo(item.id).then(url => {
       if (!url || !b.isConnected) return;
       const im = el('img', 'ap-logo', { alt: '', src: url, draggable: 'false' });

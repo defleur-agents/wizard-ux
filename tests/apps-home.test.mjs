@@ -348,3 +348,13 @@ test('Apps view grid (both shells): Chats first, badged apps next, the rest in d
   }
   assert.match(read('web/layouts/apps/chrome.css'), /html\[data-view-chrome\] \.vc-born \{ animation: vc-born/);
 });
+
+test('Apps view icons: right-click (desktop) / long press (phone) = Open · Close · stays installed; Chats never closes', () => {
+  const c = read('web/layouts/apps/chrome.js');
+  assert.match(c, /item\('Open', \(\) => onOpen\?\.\(\)\), item\('Close · stays installed', \(\) => \{ api\.apps\.close\?\.\(a\.id\); onClosed\?\.\(\); \}, ' is-close'\)/);
+  assert.match(c, /if \(!b \|\| !a \|\| a\.id === CHATS\) return;/, 'no menu on Chats');
+  assert.match(c, /if \(shell !== 'phone'\) return;/, 'the long press is the phone\'s; the desktop uses right-click');
+  assert.match(c, /if \(p\?\.fired\) \{ e\.preventDefault\(\); e\.stopImmediatePropagation\?\.\(\); p = null; \}/, 'the click ending a long press does not also open the app');
+  assert.match(c, /dispose\(\) \{ close\(\); menuClose\(\);/);
+  for (const f of ['web/layouts/apps/desktop.js', 'web/layouts/apps/layout.js']) assert.match(read(f), /chrome\.menuOn\(b, item, \{ onOpen: go, onClosed: \(\) => api\.after\(60, paint\) \}\);/, f);
+});

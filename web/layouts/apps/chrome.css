@@ -177,3 +177,20 @@ html[data-view-chrome] .vc-sec-h.vc-sub-h { margin-top: 10px; font-size: calc(va
 html[data-view-chrome] .vc-born { animation: vc-born 640ms cubic-bezier(.2, .9, .25, 1.25) both; }
 @keyframes vc-born { from { transform: scale(.3); opacity: 0; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { html[data-view-chrome] .vc-born { animation: none; } }
+/* an open app's menu (right-click / long press on its icon): Open · Close (stays installed) */
+html[data-view-chrome] .vc-menu { position: fixed; inset: 0; z-index: 420; }
+html[data-view-chrome] .vc-menu-scrim { position: absolute; inset: 0; background: transparent; }
+html[data-view-chrome="phone"] .vc-menu-scrim { background: color-mix(in srgb, var(--wz-base, var(--bg)) 30%, transparent); }
+html[data-view-chrome] .vc-menu-card {
+  position: absolute; min-width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 6px; box-sizing: border-box; border-radius: 14px;
+  color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 96%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 12%, transparent), 0 16px 44px color-mix(in srgb, var(--wz-base, var(--bg)) 55%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3); backdrop-filter: blur(22px) saturate(1.3); animation: vc-up 140ms ease;
+}
+html[data-view-chrome] .vc-menu-h { padding: 6px 10px 4px; color: var(--wz-text-secondary, var(--ink-2, var(--wz-text))); font: 650 calc(var(--wz-text-sm, 0.8125rem) * .85) / 1.2 var(--wz-font-ui); }
+html[data-view-chrome] .vc-menu-i {
+  min-height: 40px; padding: 0 10px; border: 0; border-radius: 9px; background: none; color: inherit; text-align: left; cursor: pointer;
+  font: 550 var(--wz-text-sm, 0.8125rem) / 1.2 var(--wz-font-ui); -webkit-tap-highlight-color: transparent;
+}
+html[data-view-chrome="phone"] .vc-menu-i { min-height: 46px; font-size: 1rem; }
+html[data-view-chrome] .vc-menu-i:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent); outline: none; }
