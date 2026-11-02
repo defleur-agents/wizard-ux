@@ -6,20 +6,25 @@
  *     and the collapse toggle ◫ in its header; where they list Projects / GPTs / Spaces, the open apps as a grid of
  *     small icons with their names (every open app = desks, badged first then desk order, the badge on the icon; the
  *     same list as the phone drawer, the Apps icons and the Orb satellites), ending in All apps = the three-level
- *     sheet (chrome.js); then Recents = the chats Working and Ready (⋯ on hover or a right click: Pin, Rename, Mark
- *     unread, Snooze, Archive / Restore, through Chats' own actions) and View all (the stock list); at its foot a round
- *     + (New chat) and a cog (Settings), icons only, as on the phone.
+ *     sheet (chrome.js); then the chats in Wizard's own sections (round 5, in place of Recents and View all: the
+ *     sidebar IS the chat list), in the stock Chats order Archive, Working, Ready, each header like their Recents label
+ *     and a click folds it (Ready open, Working and Archive folded at first; kept on this device; ⋯ on hover or a right
+ *     click on a row: Pin, Rename, Mark unread, Snooze, Archive / Restore, through Chats' own actions); at its foot a
+ *     round + (New chat) and a cog (Settings), icons only, as on the phone. Its ◫ toggle (and the rail's) carries the
+ *     Ready count (round 5, the phone's ☰ count).
  *   - Collapsed, it is a 52 px icon rail (ChatGPT / Perplexity): ◫, +, 🔍, the open apps' icons, All apps, and the cog
  *     at the bottom. ◫ or Ctrl / ⌘ + Shift + S (ChatGPT's key) toggles it; the choice is kept on this device. It stays
  *     open from 900 px up (none of them fold it there); narrower it rests as the rail and opens over the page.
- *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; on the
- *     right the workspace switcher, where they put Temporary / Incognito), then the chat or the app.
+ *   - The main area beside it: a 52 px top row (what is in front on the left, a thread's title or an app's name; a small
+ *     home button in its middle, always there (round 5, as on the phone); on the right, on Home only (round 5), the
+ *     workspace switcher, where they put Temporary / Incognito), then the chat or the app.
  *       · The chat = the real Chats window without its list or its header (both live in the sidebar): one column, at
  *         most 768 px, centred (ChatGPT). A new chat shows the greeting with the composer centred under it; in a chat
  *         the composer docks 24 px from the bottom. The real composer: + · field · model chip · mic · one round button
  *         (Send with words, else the voice button: click talks, hold gives a command, as in every view).
  *       · An app = its desk, filling the main area under the same top row, and the orb floating at the bottom centre of
- *         the main area (the phone's standard): click talks, hold commands, a drag up goes Home (here: the chat). An
+ *         the main area (the phone's standard): click talks, hold commands, a drag up opens a New chat with the cursor
+ *         in its composer (round 5, the phone's swipe up: talk or type). An
  *         app's own bottom tab bar is laid out either side of it (the orb bar, skin-host), else lifted clear of it.
  *   - The stock bar keeps only what is not a desk switcher (the AI fuel gauge, warnings, update notices) and moves into
  *     the top row; every desktop key still works (⌥ keys, ⌥1–9 desks, ⌥` = Home = the chat here).
@@ -28,7 +33,7 @@
 import { viewChrome, openApps, matches, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial } from './parts.js';
+import { ACTS, svgIcon, initial, SECTIONS, sectionsOpen } from './parts.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
@@ -61,6 +66,8 @@ export default function desktop(api) {
   const word = el('button', 'aad-word', { type: 'button', title: 'Home' });
   const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
+  // the Ready count (round 5): on the sidebar's ◫ and on the rail's, like the phone's ☰
+  const togCount = el('b', 'aad-count', { 'aria-hidden': 'true' }); togCount.hidden = true; togBtn.append(togCount);
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
   const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
@@ -74,6 +81,7 @@ export default function desktop(api) {
   // the rail (collapsed): ◫ · + · 🔍 · the open apps · All apps … the cog
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
+  const rCount = el('b', 'aad-count', { 'aria-hidden': 'true' }); rCount.hidden = true; rTog.append(rCount);
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); rNew.append(icon('plus'));
   const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); rFind.append(icon('search'));
   const rApps = el('div', 'aad-rapps', { role: 'list', 'aria-label': 'Open apps' });
@@ -85,18 +93,19 @@ export default function desktop(api) {
 
   /* ---------- the top row of the main area: what is in front · the workspace switcher ---------- */
   const top = el('header', 'aad-top');
-  const tName = el('button', 'aad-tname', { type: 'button', title: 'Home' });   // the Wizard's name, shown here while the sidebar is the rail
+  // Home (round 5): a small home button in the middle of the top row, always there, in place of the Wizard's name
+  const tHome = el('button', 'aad-home', { type: 'button', 'aria-label': 'Home', title: 'Home' }); tHome.append(icon('home'));
   const tt = el('b', 'aad-tt');
   const wsBtn = el('button', 'aad-ws', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
   const wsDisc = el('span', 'aad-wsd', { 'aria-hidden': 'true' }), wsName = el('span', 'aad-wsn');
   wsBtn.append(wsDisc, wsName, icon('down', 'aad-ico aad-wsc'));
-  top.append(tName, tt, wsBtn);
+  top.append(tt, tHome, wsBtn);
 
   /* ---------- the orb: bottom centre of the main area, always (Home, a chat, an app): the one way to talk ---------- */
   const orbBox = el('div', 'aad-orb');
   const cv = el('canvas', 'aad-orbc', { width: '128', height: '128', 'aria-hidden': 'true' });
   const fb = el('img', 'aad-orbfb', { alt: '', src: 'robert-thread-orb.png', draggable: 'false' }); fb.hidden = true;
-  const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Click to talk, hold for a command, drag up for Home.' });
+  const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb. Click to talk, hold for a command, drag up for a new chat to type in.' });
   orbBox.append(cv, fb, orbBtn);
 
   const scene = el('div', 'aad');
@@ -115,7 +124,7 @@ export default function desktop(api) {
     const mode = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
     const was = root.dataset.aadSide; root.dataset.aadSide = mode;
     const open = mode !== 'rail';
-    togBtn.setAttribute('aria-label', 'Close sidebar'); togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
+    togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
     rTog.title = 'Open sidebar (Ctrl+Shift+S)';
     if (open) paintList(); else paintRail();
@@ -129,6 +138,8 @@ export default function desktop(api) {
     paintSide();
   }
   let offPeek = null;
+  // which sections are open (Ready open, Working and Archive folded at first), kept on this device
+  const secOpen = sectionsOpen(api.storage.get('sections'));
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
@@ -152,7 +163,7 @@ export default function desktop(api) {
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. The
   // Wizard's name (sidebar header, or the top row while the sidebar is the rail) and + both go there, from anywhere.
   const newChat = () => { unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); api.sessions.newChat(); };
-  api.listen(word, 'click', () => newChat()); api.listen(tName, 'click', () => newChat());
+  api.listen(word, 'click', () => newChat()); api.listen(tHome, 'click', () => newChat());
   const settings = () => { unpeek(); api.desk.settings(); };
   api.listen(newBtn, 'click', newChat); api.listen(rNew, 'click', newChat);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
@@ -193,10 +204,12 @@ export default function desktop(api) {
   function chatRow(s, cur) {
     const wrap = el('div', 'aad-rw' + (s.id === cur ? ' is-cur' : ''), { 'data-sid': s.id, 'data-kind': s.kind });
     const b = el('button', 'aad-row aad-chat', { type: 'button', ...(s.id === cur ? { 'aria-current': 'page' } : {}) });
+    // a notification (round 5): the same row with a small bell before its title, nothing yellow
+    if (s.note) { wrap.dataset.note = ''; b.append(icon('bell', 'aad-ico aad-bell')); }
     b.append(el('span', 'aad-row-t', { text: s.title }));
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
-    b.setAttribute('aria-label', `${s.title}${s.kind === 'working' ? ', working' : s.unread ? ', ready, new' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
+    b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -235,13 +248,13 @@ export default function desktop(api) {
 
   /* ---------- paint the sidebar (only when what it lists changed: renders come often while a chat works) ---------- */
   const label = text => el('h3', 'aad-lab', { text });
-  let drawn = '', railDrawn = '', listWanted = false;
+  let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
     word.textContent = agentName();
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
     const sig = JSON.stringify([q, h.thread, h.app, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')), apps.length,
-      ['working', 'ready', ...(q ? ['archive'] : [])].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
+      secOpen, ['working', 'ready', 'archive'].map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     const out = [];
@@ -253,13 +266,19 @@ export default function desktop(api) {
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
     } else {
       out.push(label('Apps'), grid('Open apps', [...litFirst(openApps(apps, dk)).map(appCell), allCell()]));
-      const rows = [...(s.working || []), ...(s.ready || [])];
-      out.push(label('Recents'));
-      if (rows.length) out.push(...rows.map(r => chatRow(r, h.thread)));
-      else out.push(el('p', 'aad-empty', { text: sessions ? 'Nothing working or ready.' : 'Loading your chats…' }));
-      const all = el('button', 'aad-viewall', { type: 'button' }); all.append(el('span', '', { text: 'View all' }), icon('chev', 'aad-ico aad-chev'));
-      api.listen(all, 'click', () => { unpeek(); listWanted = true; api.sessions.openList('ready'); });
-      out.push(all);
+      // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
+      for (const [k, word0] of SECTIONS) {
+        const rows = s[k] || [], on = !!secOpen[k];
+        const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
+        hd.append(el('span', '', { text: word0 }), icon('down', 'aad-ico aad-sec-c'));
+        api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
+        const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
+        if (on) {
+          if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
+          else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : k === 'ready' ? 'Nothing ready.' : k === 'working' ? 'Nothing working.' : 'Nothing archived.' }));
+        }
+        out.push(hd, body);
+      }
     }
     closeMenu();
     scroll.replaceChildren(...out);
@@ -281,6 +300,10 @@ export default function desktop(api) {
   function paintBadges() {
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     for (const n of scroll.querySelectorAll('[data-badge]')) { n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent; }
+    const rt = badgeText(CHATS);
+    for (const c of [togCount, rCount]) { c.textContent = rt; c.hidden = !rt; }
+    togBtn.setAttribute('aria-label', rt ? `Close sidebar, ${rt} ready` : 'Close sidebar');
+    rTog.setAttribute('aria-label', rt ? `Open sidebar, ${rt} ready` : 'Open sidebar');
   }
 
   /* ---------- workspaces (top right): this Wizard, then the ones he manages ---------- */
@@ -370,17 +393,19 @@ export default function desktop(api) {
   const soon = fn => { if (pending) return; pending = true; api.after(0, () => { pending = false; fn(); }); };
   function onRoute(r) {
     if (r.home) soon(() => { if (api.route().home) api.sessions.newChat(); });
-    else if (r.view === 'list') { if (!listWanted) soon(() => { if (api.route().view === 'list' && !listWanted) api.sessions.newChat(); }); }
-    else listWanted = false;
+    else if (r.view === 'list') soon(() => { if (api.route().view === 'list') api.sessions.newChat(); });
     paintTop(r);
   }
   function paintTop(r = api.route()) {
     const h = here(r);
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     root.dataset.aadNew = String(r.view === 'thread' && r.thread === '__new__');
+    // the workspace switcher only on Home (round 5): never over a chat or an app
+    const home = !h.app && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    wsBtn.hidden = !home; if (!home) closeWs();
     const t = h.app ? appName(h.app) : h.thread ? titleOf(h.thread) : '';
     tt.textContent = t; tt.title = t;
-    const nm = agentName(); tName.textContent = nm; tName.setAttribute('aria-label', `${nm}: Home (a new chat)`);
+    const nm = agentName();
     word.setAttribute('aria-label', `${nm}: Home (a new chat)`);
     paintWs();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
@@ -390,7 +415,7 @@ export default function desktop(api) {
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   // Settings opens as the centred panel over the page (Claude's settings modal), never as a window beside the chat
   root.dataset.settingsOver = '';
-  readSessions(); paintSide(false); paintTop();
+  readSessions(); paintSide(false); paintTop(); paintBadges();
   globalThis.dispatchEvent?.(new Event('resize'));
   if (api.route().home) soon(() => api.sessions.newChat());
 
