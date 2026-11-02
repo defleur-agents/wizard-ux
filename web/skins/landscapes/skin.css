@@ -8,9 +8,7 @@ html[data-skin^="landscapes"] .now-card { background: rgba(16, 14, 22, .42); bor
 html[data-skin^="landscapes"] .dock { border-top-color: transparent; }
 
 /* New chat greeting (moved from core/chats.css). */
-:is(html[data-skin^="landscapes"][data-tweaks~="miguel/layout"]) .ch-empty.nc-classic { display: none; }
 :is(html[data-skin^="landscapes"]) .ch-newchat { text-align: center; animation: ncIn .32s ease-out both; }
-:is(html[data-skin^="landscapes"][data-tweaks~="miguel/layout"]) .ch-newchat { margin: auto; padding: 28px 16px 36px; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: 440px; }
 
 /* Desktop (moved from desktop/desktop.css). */
 html[data-skin^="landscapes"] .keys-card { background: #0d1210; }
@@ -203,7 +201,6 @@ html[data-skin^="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tile
 
 
 html[data-skin^="landscapes"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { background: linear-gradient(to top, color-mix(in srgb, var(--bg) 72%, transparent) 0, color-mix(in srgb, var(--bg) 45%, transparent) var(--pill-top), transparent 100%); }
-html[data-skin^="landscapes"][data-tweaks~="miguel/layout"][data-shell="phone"] .device:not(.orb-corner) .tiles:not(.has-full) .win.solo.app-chats:has(.ch-list)::after { height: calc(var(--pill-top) + 44px); }
 /* Opinionated (phone): just the orb. No ring, spinning arcs, orbit dots, halo or handle line; the count badge and the
  * tap ripple stay. Gestures unchanged (the scrub strip still works, it just draws nothing at rest). */
 
@@ -306,7 +303,6 @@ html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corne
 
 /* Miguel 21 Oct: the New desk app page sat straight on the photo; names vanished over snow and rocks. Same frosted panel as the launcher. */
 html[data-skin^="landscapes"] .new-desk { border-radius: 24px; background: linear-gradient(180deg, rgba(24, 21, 34, .76), rgba(12, 10, 18, .82)); border: 1px solid rgba(255, 255, 255, .1); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 18px 40px rgba(0, 0, 0, .3); -webkit-backdrop-filter: blur(22px) saturate(1.25); backdrop-filter: blur(22px) saturate(1.25); }
-html[data-skin^="landscapes"][data-tweaks~="miguel/layout"] .new-desk { height: auto; min-height: 0; align-self: start; margin: 10px; padding: 14px 12px 6px; }
 html[data-skin^="landscapes"] .new-desk .nd-head span { color: var(--ink-2); }
 html[data-skin^="landscapes"] .new-desk .lgroup h4 { color: var(--ink-2); }
 html[data-skin^="landscapes"] .new-desk .lapp .nm { color: var(--ink); font-size: 12px; font-weight: 600; letter-spacing: -.01em; text-shadow: 0 1px 2px rgba(0, 0, 0, .45); }
@@ -328,9 +324,6 @@ html[data-skin^="landscapes"] .new-desk .lapp .ic.sgt { background-color: #0f0c1
 html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsL:has(> .ddot[data-goto]:not(.dhome):nth-last-child(3))::before,
 html[data-skin^="landscapes"]:not([data-shell="desktop"]) .device:not(.orb-corner) #dotsR:has(> .ddot[data-goto]:nth-child(3))::after { border-radius: 50%; background: color-mix(in srgb, var(--ink) 40%, transparent); }
 
-
-/* App kinds on New desk (Apps · Wizard apps · Connectors): the panel stops above the pill dock and scrolls inside. */
-html[data-skin^="landscapes"][data-tweaks~="miguel/layout"]:not([data-shell="desktop"]) .new-desk.kinds { height: calc(100% - 20px); max-height: none; overflow-y: auto; padding-bottom: 78px; } /* the desk already stops above the pill dock: fill all of it */
 
 /* App kinds: the Apps sheet uses the whole screen between the status bar and the pill dock, same as New desk. */
 

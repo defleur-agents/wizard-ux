@@ -1,47 +1,34 @@
-// Skins are colours only; layout is a tweak (James and Miguel, 1 Nov 2026). Picking Dark, Light or Landscapes must never
-// change the Chats list, dock, Home or launcher on its own: Miguel's layout is the miguel/layout tweak, which any skin
-// can switch on and which his devices keep once through a one-time migration.
+// Skins are colours only (James and Miguel, 1 Nov 2026). Picking Dark, Light or Landscapes must never change the Chats
+// list, dock, Home or launcher on its own. Miguel's old Mizel layout is retired (2 Nov 2026): no tweak carries it, so
+// every skin runs the stock shell.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
-const SHELL = ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/core/resources.js', 'web/desktop/desktop.js'];
-const GATE = ':where([data-tweaks~="miguel/layout"])';
+const SHELL = ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/core/chat-models.js', 'web/core/resources.js', 'web/core/experience.js', 'web/desktop/desktop.js'];
 
 test('no shell file picks a layout from the worn skin', () => {
   for (const f of SHELL) assert.doesNotMatch(read(f), /'obsidian'|'landscapes'|"obsidian"|"landscapes"/, f);
-  for (const f of ['web/app.js', 'web/live.js', 'web/core/chats.js', 'web/desktop/desktop.js']) assert.match(read(f), /includes\('miguel\/layout'\)/, f);
 });
 
-test("Miguel's layout lives in its tweak, not in his skins, and works with every skin", () => {
-  const tw = read('web/tweaks/miguel/layout/tweak.css');
-  assert.doesNotMatch(tw, /data-skin[\^=\]]/, 'the tweak names no skin');
-  const T = 'html[data-tweaks~="miguel/layout"]';
-  assert.ok(tw.includes(`${T}:not([data-shell="desktop"]) .ch-list .ch-scroll { display: flex; flex-direction: column-reverse; }`), 'phone list order');
-  assert.ok(tw.includes(`${T} :is(.home-date, .home-time) { display: none; }`), 'Home clock');
-  assert.ok(tw.includes(`${T}[data-shell="phone"] .win .wb[data-wact="full"] { display: none; }`), 'full button');
-  assert.ok(tw.includes(`${T} { --safe-b-low: calc(var(--safe-b) * .45); }`), 'spacing tokens travel with it');
+test('the retired miguel/layout tweak is gone: no package, no catalog or profile entry, no shell gate', () => {
+  assert.ok(!existsSync(new URL('../web/tweaks/miguel/layout', import.meta.url)), 'package removed');
+  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
+  assert.ok(!cat.tweaks.includes('miguel/layout') && !(cat.defaults || []).includes('miguel/layout'));
+  assert.ok(!prof.tweaks.includes('miguel/layout'));
+  for (const f of SHELL) assert.doesNotMatch(read(f), /miguel\/layout|miguelLayoutMoved/, f);
+});
+
+test('Mizel skins carry colours only: no layout rule, gated or not', () => {
   for (const [d, p] of [['obsidian', 'html[data-skin^="obsidian"]'], ['landscapes', 'html[data-skin^="landscapes"]']]) {
     const css = read(`web/skins/${d}/skin.css`);
-    assert.ok(!css.includes(':where([data-tweaks~="miguel/layout"])'), `${d}: no half-moved rules`);
+    assert.ok(!css.includes('miguel/layout'), `${d}: nothing gated on the retired layout tweak`);
     // Markup only another tweak renders (model switch, dials, dock back) keeps its own rules; nothing else ungated moves things.
     const OTHER = /\.(ms-[\w-]+|rs-[\w-]+|mz-[\w-]+)/;
     const ungated = css.split('\n').filter(l => l.startsWith(p) && !l.includes('[data-tweaks~=') && !l.slice(0, l.indexOf('{')).replace(/\([^()]*\)/g, '').replace(/\([^()]*\)/g, '').split(',').every(s => OTHER.test(s)));
     for (const l of ungated) assert.doesNotMatch(l, /\{[^}]*\b(display|order|flex-direction|position)\s*:/, `${d}: ungated layout: ${l.slice(0, 140)}`);
   }
-});
-
-test('switching the layout tweak repaints the dock and Home without a reload', () => {
-  assert.match(read('web/app.js'), /wasLayout = on; try \{ renderDots\(\); renderHome\(\); \}/);
-  assert.match(read('web/desktop/desktop.js'), /wasLayout = on; try \{ render\(\); \}/);
-});
-
-test('the tweak is Miguel\'s, listed for everyone, never a default', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
-  assert.ok(cat.tweaks.includes('miguel/layout')); assert.ok(!cat.defaults.includes('miguel/layout'));
-  assert.ok(prof.tweaks.includes('miguel/layout'));
-  assert.equal(JSON.parse(read('web/tweaks/miguel/layout/manifest.json')).author, 'miguel');
 });
 
 async function boot(skin, saved) {
@@ -53,15 +40,10 @@ async function boot(skin, saved) {
   return { active, mix: JSON.parse(storage.get('wos.skin-tweaks.v1')).mix || {} };
 }
 
-test("Miguel's device keeps his layout once; Dark alone brings none; an explicit off stays off", async () => {
+test('a Mizel skin with Miguel\'s tweaks on (or an old miguel/layout switch saved) loads no layout tweak', async () => {
   const his = await boot('obsidian-light', { mix: { 'miguel/model-pills': true } });
-  assert.ok(his.active.includes('miguel/layout'), 'his device keeps the layout');
-  const dark = await boot('obsidian', { mix: {} });
-  assert.ok(!dark.active.includes('miguel/layout'), 'picking Dark with no Miguel tweaks changes no layout');
-  const other = await boot('nebula', { mix: { 'miguel/model-pills': true } });
-  assert.ok(!other.active.includes('miguel/layout'), 'a James skin is not migrated');
-  const off = await boot('landscapes', { mix: { 'miguel/model-pills': true, 'miguel/layout': false } });
-  assert.ok(!off.active.includes('miguel/layout'), 'explicit off wins');
-  const done = await boot('landscapes', { mix: { 'miguel/model-pills': true }, miguelLayoutMoved: true });
-  assert.ok(!done.active.includes('miguel/layout'), 'migration runs once');
+  assert.ok(his.active.includes('miguel/model-pills'), 'his other tweaks still load');
+  assert.ok(!his.active.includes('miguel/layout'), 'no layout migration');
+  const old = await boot('landscapes', { mix: { 'miguel/model-pills': true, 'miguel/layout': true } });
+  assert.ok(!old.active.includes('miguel/layout'), 'a saved switch for the retired id does nothing');
 });

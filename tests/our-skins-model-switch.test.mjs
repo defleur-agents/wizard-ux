@@ -4,8 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { withLayout } from './fixtures/mizel-layout-css.mjs';
-const read = p => withLayout(p, readFileSync(new URL(`../${p}`, import.meta.url), 'utf8'));
+const read = p => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 function models(skin) {
   const document = { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/model-pills' : '' } } };
   const window = { WosAgents: { lock: () => '<svg class="ag-lock"></svg>' } };
@@ -52,20 +51,8 @@ test('the switch row is gated on the skin in chat-power and chats', () => {
   assert.doesNotMatch(css, /\.ms-track/);
 });
 
-test("Miguel's skins default the chat list to compact; an explicit Filter choice still wins", () => {
+test('the compact chat list is off until chosen in Filter, on every skin', () => {
   const cj = read('web/core/chats.js');
-  assert.match(cj, /const ourSkin = \(\) => \(document\.documentElement\.dataset\.tweaks \|\| ''\)\.split\(' '\)\.includes\('miguel\/layout'\);/);
-  assert.match(cj, /return v == null \? ourSkin\(\) : v === '1';/);
-});
-
-test('the model switch folds into one chip (current model + ⋯ opening the menu) when squeezed, in every Miguel skin', () => {
-  for (const d of ['obsidian', 'landscapes']) {
-    const css = read(`web/skins/${d}/skin.css`);
-    assert.match(css, /\.ms \{ container: ms \/ inline-size;/);
-    const q = css.match(/@container ms \(max-width: (\d+)px\) \{([\s\S]*?)\n\}/);
-    assert.ok(q, `${d}: compact container query`);
-    assert.match(q[2], /\.ms-o:not\(\.on\) \{ display: none; \}|\.ms-o:not\(\.on\)/);
-    assert.match(q[2], /\.ms-track \{[^}]*pointer-events: none/, 'a tap on the chip must not pick a slot by position');
-    assert.match(q[2], /\.ms-more::after \{ content: ""; position: absolute; inset: 0;/, 'the whole chip opens the model menu');
-  }
+  assert.doesNotMatch(cj, /ourSkin|miguel\/layout/);
+  assert.match(cj, /const compactOn = \(\) => \{ try \{ const v = localStorage\.getItem\(COMPACT_KEY\); return v === '1'; \}/);
 });

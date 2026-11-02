@@ -5,7 +5,7 @@ import vm from 'node:vm';
 
 const src = fs.readFileSync(new URL('../web/core/resources.js', import.meta.url), 'utf8');
 function render(skin) {
-  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars miguel/layout' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
   vm.runInNewContext(src, ctx);
@@ -25,17 +25,6 @@ test('Miguel skins: bare gear, round Ready/Working, see-through dock', () => {
   }
 });
 
-test('Ready / Working show glyph + one dot per chat only on Miguel skins', () => {
-  const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
-  const body = app.slice(app.indexOf('function homeDots('), app.indexOf('function renderHome('));
-  const run = skin => new Function('document', `${body}; return homeDots;`)({ documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars miguel/layout' : '' } } });
-  for (const s of ['obsidian', 'obsidian-light', 'landscapes']) {
-    const h = run(s)('working', 3); assert.equal((h.match(/<i /g) || []).length, 3, s);
-    assert.match(run(s)('ready', 20), /<em>\+<\/em>/, `${s}: capped with +`);
-  }
-  for (const s of ['nebula', 'grove', 'tide', 'ember', 'signal']) assert.equal(run(s)('ready', 3), '', s);
-});
-
 test('devices sheet draws capacity bars sized by real capacity', () => {
   const injected = src.replace("devices:null,devicesAt:0", "devices:{devices:[{id:'this',kind:'this',group:'agent',name:'Big',status:'online',cpus:8,cpu:10,memory:50,memoryTotalGB:32,disks:[{label:'System disk',sizeGB:1000,freeGB:500,pct:50}]},{id:'s',kind:'ssh',group:'agent',name:'Small',status:'online',cpus:4,cpu:95,memory:20,memoryTotalGB:8,disks:[{label:'System disk',sizeGB:250,freeGB:200,pct:20}]}],network:{available:true,peers:[]}},devicesAt:0");
   assert.notEqual(injected, src, 'devices state literal found');
@@ -52,7 +41,7 @@ test('devices sheet draws capacity bars sized by real capacity', () => {
 function homeWith(skin, state) {
   let s = src;
   for (const [a, b] of state) { assert.ok(s.includes(a), a); s = s.replace(a, b); }
-  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars miguel/layout' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
+  const ctx = { window: {}, document: { documentElement: { dataset: { skin, tweaks: ['obsidian','obsidian-light','landscapes'].includes(skin) ? 'miguel/home-bars' : '' } }, addEventListener() {}, querySelectorAll: () => [], hidden: false },
     localStorage: { getItem: () => null, setItem() {} }, queueMicrotask() {}, setTimeout, clearTimeout, fetch: async () => ({ ok: false }), AbortController };
   ctx.window = ctx; ctx.window.addEventListener = () => {};
   vm.runInNewContext(s, ctx); return ctx.WosResources.home();
