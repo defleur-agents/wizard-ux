@@ -39,6 +39,12 @@
  * actions: Open, Add to Home Screen, App Store page, Close). An app slides in from the right OVER Home as the panel
  * (resizable, ⤢ wider, ✕ / Esc back to the grid); the grid and the composer stay where they are. ⌥ app letters sit on
  * the grid's icons.
+ * Round 11 (Miguel, 2 Nov 2026): the desktop like the phone. The composer sits at the BOTTOM centre under the app grid;
+ * the grid is always there on the background (Home, and with a chat column or an app panel open: it stays exactly
+ * where it is, the panels slide over it; closing a chat is Home again). Its order is the desks' order (badged first),
+ * nothing to drag. Opening or closing anything never touches the wallpaper (core/skins.js no longer re-renders on a
+ * same-size resize) and moves things with short transforms only (flip below: no width or left transitions; one
+ * re-tile after a change has settled, never one per frame).
  * Everything through the layout API; no timers of its own beyond api.after, no innerHTML, no storage of its own
  * beyond api.storage. Colours are skin tokens (desktop.css). */
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
@@ -59,6 +65,33 @@ export default function desktop(api) {
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
+  /* Round 11 (Miguel: opening and closing panels must be smooth): a change of layout snaps at once and its pieces glide
+   * from where they were with a short transform (FLIP: translate only, never width / left), 220 ms. */
+  const FLIP_MS = 220, EASE = 'cubic-bezier(.2, .8, .2, 1)';
+  const reduced = () => !!globalThis.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches;
+  let flipping = 0, glideUntil = 0;
+  function flip(nodes, change) {
+    if (flipping) { change(); return; }   // (one flip at a time: a nested change rides the outer one)
+    flipping++;
+    try { flipNow(nodes, change); } finally { flipping--; }
+  }
+  function flipNow(nodes, change) {
+    const list = nodes.filter(n => n && n.isConnected !== false && typeof n.getBoundingClientRect === 'function');
+    const before = list.map(n => n.getBoundingClientRect());
+    change();
+    // the orb goes to its new spot first (measured on the final layout, before anything glides), then glides with the rest
+    if (list.includes(orbBox)) placeOrb(true);
+    if (reduced() || typeof list[0]?.animate !== 'function') return;
+    list.forEach((n, i) => {
+      const a = before[i], b = n.getBoundingClientRect(); if (!a.width || !b.width) return;
+      const dx = Math.round(a.left - b.left), dy = Math.round(a.top - b.top); if (!dx && !dy) return;
+      // (added to the element's own translate: the orb keeps its --vc-orb move underneath)
+      n.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0px 0px' }], { duration: FLIP_MS, easing: EASE, composite: 'add' });
+      glideUntil = Date.now() + FLIP_MS + 10;
+    });
+  }
+  const shownDesks = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden])')];
+  const homeComposer = () => [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0) || null;
   root.dataset.aiApps = 'desktop';
   const css = el('link', '', { rel: 'stylesheet', href: api.asset('desktop.css') || '' });
   const unmountCss = api.mount(css);
@@ -157,13 +190,19 @@ export default function desktop(api) {
   // spot (its centre, its size) lets an app's own bottom tabs go either side of it
   const orbSpot = () => { const r = orbBox.getBoundingClientRect?.(); return r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, d: orbBox.offsetWidth || r.width } : null; };
   const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id), orb: orbSpot });
+  const near = (a, b) => a === b || (!!a && !!b && Math.abs(a.x - b.x) < .5 && Math.abs(a.y - b.y) < .5 && Math.abs(a.d - b.d) < .5);
+  const orbAt = { done: false, slot: null, home: null };   // where placeOrb last put the orb (round 11)
 
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
   const narrow = () => (globalThis.innerWidth || 1440) < DOCKED_FROM;
   function paintSide(relayout = true) {
     const mode = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
-    const was = root.dataset.aadSide; root.dataset.aadSide = mode;
+    const was = root.dataset.aadSide;
+    if (relayout && was && was !== mode) flip([top, orbBox, ...shownDesks()], () => { root.dataset.aadSide = mode; });
+    else root.dataset.aadSide = mode;
+    // the sidebar opens with a short reveal (clip, no width animation); folding snaps to the rail
+    if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
     togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
@@ -171,7 +210,7 @@ export default function desktop(api) {
     if (open) paintList(); else paintRail();
     applySizes();
     // the desks' windows are laid out in pixels: lay them out again for the new width
-    if (relayout && was !== mode && (was === 'open') !== (mode === 'open')) { globalThis.dispatchEvent?.(new Event('resize')); api.after(260, () => syncOrb()); }
+    if (relayout && was !== mode && (was === 'open') !== (mode === 'open')) retileSoon();
   }
   function toggleSide() {
     if (narrow()) { peek = !peek; if (peek) offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); else { offPeek?.(); offPeek = null; } }
@@ -233,8 +272,12 @@ export default function desktop(api) {
     const sig = Object.keys(SIZE_VARS).map(id => s[id][0]).join(',');
     if (sig !== laidOut) { laidOut = sig; if (!sizing || !root.dataset.aadResizing) relayoutSoon(); }
   }
-  let relayoutAsked = false;
-  function relayoutSoon() { if (relayoutAsked) return; relayoutAsked = true; api.frame(() => { relayoutAsked = false; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
+  /* One re-tile (the shell's own: a page resize) once a change has settled, coalesced: the windows of the shown panels
+   * follow their desks by CSS meanwhile (desktop.css), so nothing re-lays out per frame and the wallpaper is untouched
+   * (core/skins.js ignores a resize that leaves the page its size). */
+  let retileOff = null;
+  function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
+  const relayoutSoon = () => retileSoon();
   function setSize(id, w, keep) {
     sized = { ...sized, [id]: Math.round(w) }; applySizes();
     // what shows is what is kept (the panel that gave way too, so it never springs back over the middle)
@@ -383,17 +426,20 @@ export default function desktop(api) {
   }
   /** The app icons on screen with their letters (for the hold-⌥ hints): Home's page in view. */
   const appChips = () => home.chips().filter(c => shown(c.el));
-  // Home's grid shows with Home (the new chat, an app panel over it), never beside a docked chat or the list
+  // round 11: Home's grid is always on the background (Home, a docked chat, an app panel: they slide over it), never
+  // moved or re-laid out by them; only the stock list (the bare Chats list) replaces it
   function paintHome() {
-    const on = !chatThread && root.dataset.aiFront !== 'list';
+    const on = root.dataset.aiFront !== 'list';
     if (on) root.dataset.aadHome = ''; else delete root.dataset.aadHome;
     home.show(on);
   }
-  // where the grid starts: under the composer (it grows with words), the composer floating in the upper middle
+  // the grid's box is fixed (desktop.css); a composer grown tall with words clips its lowest row instead of moving it
+  let clipShown = '';
   function placeHome() {
     if (home.el.hidden) return;
-    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
-    const r = c?.getBoundingClientRect(); if (r && r.bottom > 0) home.top(r.bottom + 28);
+    const c = !docked ? homeComposer() : null, r = c?.getBoundingClientRect(), g = home.el.getBoundingClientRect();
+    const px = r && r.top > 0 && r.top - 12 < g.bottom ? Math.max(0, Math.round(g.bottom - (r.top - 12))) + 'px' : '0px';
+    if (px !== clipShown) { clipShown = px; home.el.style.setProperty('--aad-hg-clip', px); }
   }
 
   /* ---------- a chat row: click opens it; ⋯ (on hover) or a right click opens its menu ---------- */
@@ -612,14 +658,21 @@ export default function desktop(api) {
    * its own spot at the bottom centre of the main area (or the end of an app's bottom row: skin-host via chrome) */
   function orbSlot() {
     if (root.dataset.aiFront !== 'chat' && !pane) return null;   // (beside an app panel the chat stays in view)
-    if (pane && !docked) return null;   // (round 10: the panel slides over Home, maybe over the composer: the orb takes its own spot)
+    if (pane && wide) return null;   // (the wide panel covers the chat: the orb takes its own spot; round 11: else the composer is always clear of the panel)
     const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
   }
   // (round 8: placed afresh each time: the orb's own spot moves too, sliding when the chat column or a sidebar changes,
   // while the slot can stay put; a same-slot call would keep a move measured mid-slide)
-  const placeOrb = () => { chrome.orbIn(null); chrome.orbIn(orbSlot()); };
+  // (round 11, Miguel: panels must open smoothly): only when the slot or the orb's own spot really moved. Every call
+  // used to clear and re-set the orb's variables on <html>, a whole-page style recalc twice a call, ~20 calls an open.
+  function placeOrb(force = false) {
+    if (!force && Date.now() < glideUntil) return;   // (mid-glide the boxes are moving: the settle places it)
+    const s = orbSlot(), h = chrome.orbHome?.() || null;
+    if (!force && orbAt.done && near(s, orbAt.slot) && near(h, orbAt.home)) return;
+    Object.assign(orbAt, { done: true, slot: s, home: h }); chrome.orbIn(null); chrome.orbIn(s);
+  }
   const syncOrb = () => api.frame(() => { placeOrb(); placeHome(); watchComposer(); });
   /* round 8: the composer moves without a resize of the page (the Chats window laid out again after the sidebars settle,
    * the model chip filled in late): follow its box and its window's, so the orb never sits on the chip */
@@ -678,12 +731,16 @@ export default function desktop(api) {
     for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
     docked = !!(chatOn && chat);
-    if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
-    if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
+    const setState = () => {
+      if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
+      if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
+    };
+    // (the Home composer moves into the room the panel leaves it: it glides there; round 11)
+    if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
     if (docked && !wasDocked) anim('dock');
     applySizes();
     // the windows are laid out in pixels and the app's bottom bar around the orb: again for the new widths
-    if (was !== `${!!root.dataset.aadSplit}${docked}`) api.frame(() => globalThis.dispatchEvent?.(new Event('resize')));
+    if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
     pTop.hidden = !pane; cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Close ${appName(pane.id)} (Esc)`); }
     paintTools();
@@ -691,11 +748,22 @@ export default function desktop(api) {
     else if (loadId && pane?.id === loadId) waitLoaded(pane.el);
   }
   // the panel goes (the app keeps running on its desk); the chat takes the room back and the keyboard
+  let closing = null;
   function closeSide() {
-    if (!pane) return false;
-    const was = pane; pane = null; setWide(false); doneLoading(); anim('close');
-    if (here().app === was.id) api.sessions.chats(); else paintSplit(!!chatThread);
-    paintTop(); return true;
+    if (!pane || closing) return !!pane;
+    const was = pane, el0 = was.el, w0 = el0.getBoundingClientRect?.().width || 480;
+    const finish = () => {
+      closing = null; if (pane !== was) return;
+      pane = null; setWide(false); doneLoading(); anim('close');
+      const c = homeComposer();
+      flip([c, orbBox], () => { if (here().app === was.id) api.sessions.chats(); else paintSplit(!!chatThread); paintTop(); });
+      api.frame(() => { out?.cancel?.(); fade?.cancel?.(); });
+    };
+    // the panel slides back out to the right (a transform), then the app goes back to running behind Home
+    const out = !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 200, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    let fade = null;
+    if (out) { closing = api.after(200, finish); fade = pTop.animate?.([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: 'forwards' }) || null; } else finish();
+    return true;
   }
   // the chat column goes: back to the list and Home (a new chat), the app panel (if any) stays
   function closeChat() {
@@ -706,9 +774,9 @@ export default function desktop(api) {
   // the app panel: a third, or the whole main area (the Orb desktop's panel, wider and back)
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) return; wide = w;
-    if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide;
+    flip([pane?.el, pTop], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
     paintWide();
-    api.after(260, () => globalThis.dispatchEvent?.(new Event('resize')));
+    retileSoon();
   }
   function paintWide() {
     pW.setAttribute('aria-pressed', String(wide)); pW.replaceChildren(icon(wide ? 'shrink' : 'expand'));
@@ -736,7 +804,15 @@ export default function desktop(api) {
     const f = w.querySelector('iframe'); loadWait = api.listen(f, 'load', () => { if (frameReady(w)) doneLoading(); });
   }
   let animOff = null;
-  function anim(kind) { animOff?.(); root.dataset.aadAnim = kind; animOff = api.after(320, () => { delete root.dataset.aadAnim; animOff = null; }); }
+  // (round 11: on the pieces that move, never on <html>: a root attribute restyles the whole page twice an open)
+  let animOn = [];
+  function anim(kind) {
+    animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
+    const chatDesk = wsps().find(w => w.querySelector('.dchats'));
+    animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
+    for (const n of animOn) n.dataset.aadAnim = kind;
+    animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
+  }
   api.listen(pX, 'click', closeSide);
   api.listen(cX, 'click', closeChat);
   api.listen(pW, 'click', () => setWide(!wide));
@@ -840,8 +916,8 @@ export default function desktop(api) {
     closeMenu(); closeWs(); offSearch?.(); offPeek?.(); doneLoading(); ro?.disconnect();
     scene.remove(); unmountHome(); home.el.remove(); chrome.dispose(); unmountCss(); css.remove();
     toolsMo?.disconnect();
-    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadHome', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadAnim', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
-    for (const w of wsps()) delete w.dataset.aadRole;
+    for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadHome', 'aadNew', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
+    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };
