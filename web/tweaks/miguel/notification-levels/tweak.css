@@ -1,0 +1,24 @@
+/* Notification levels: the four-choice picker, the System group's Recent list, and the Settings cog's count. */
+/* Columns sized to their words (Morning report is the long one), so every label stays whole; outranks the desktop
+ * 360px cap on segmented controls (.st-desktop .st-seg) and the 1fr columns of .st-seg. */
+.st-seg.st-nr-seg.wos-route { flex: none; width: auto; max-width: none; grid-auto-columns: auto; }
+.st-nr-seg.wos-route button span { white-space: nowrap; }
+/* The Morning Report's coffee cup is a filled glyph (512 grid), not a line icon. */
+.st-nr-seg.wos-route svg.wos-route-ic.wos-route-mr { fill: currentColor; stroke: none; width: 16px; height: 16px; }
+.st-nr-seg.wos-route button:disabled { opacity: .35; }
+
+/* Settings › Notifications › System › Recent: notices about Wizard itself, newest first; unseen ones carry a dot. */
+.st-sys-list { list-style: none; margin: 0; padding: 0; }
+.st-sys-list li { display: flex; align-items: flex-start; gap: 10px; padding: 10px 4px; border-bottom: 1px solid var(--wz-border); }
+.st-sys-list li .st-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.st-sys-list li b { font-weight: 600; color: var(--wz-text); overflow-wrap: anywhere; }
+.st-sys-list li small { color: var(--wz-text-secondary); font-size: var(--wz-text-sm); overflow-wrap: anywhere; }
+.st-sys-list li time { flex: none; color: var(--wz-text-secondary); font-size: var(--wz-text-sm); }
+.st-sys-list li.new b::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: var(--wz-accent); vertical-align: middle; }
+
+/* Narrow: words only, so the four choices stay whole on one row. */
+@media (max-width: 520px) { .st-nr { flex-wrap: wrap; } .st-nr-seg.wos-route { width: 100%; grid-auto-columns: auto; justify-content: stretch; } .st-nr-seg.wos-route button { padding: 6px 8px; } .st-nr-seg.wos-route .wos-route-ic { display: none; } }
+
+/* Desktop: the Settings cog's count (System notices set to Badge). The phone cog reuses its own .gear-n. */
+#settingsBtn { position: relative; }
+#settingsBtn .cog-n { position: absolute; top: -3px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: var(--wz-accent, #f5b942); color: var(--wz-base, #111); font-size: 10px; font-weight: 800; line-height: 16px; text-align: center; pointer-events: none; }

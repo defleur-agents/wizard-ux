@@ -199,5 +199,5 @@ test('Badge from inside a notification: out of Chats at once, toast "<App> moved
   assert.ok(B.items().some(i => i.app === 'messenger'), 'and its items are back');
   assert.ok(!t.classList.set.has('show'), 'the toast goes');
   const c = read('web/core/chats.js');
-  assert.match(c, /if \(to === 'badge'\) \{[^]*chatsBack\(w\);[^]*B\.movedToast\?\.\(app, toast\);/, 'picking Badge in Chats closes the notification and shows the toast');
+  assert.match(c, /if \(to !== 'chats'\) \{[^]*chatsBack\(w\);[^]*B\.movedToast\?\.\(app, toast, 5000, from\);/, 'picking Badge in Chats closes the notification and shows the toast');
 });
