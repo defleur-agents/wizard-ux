@@ -46,6 +46,8 @@ test('Home wears the approved 12%-wider hat while the main Hermes agent wears th
   assert.match(hermesPortrait[1], /mask:\s*url\("\/wizard-os-home\/brand\/apps\/hermes\.svg"\) center \/ contain no-repeat;/, 'the portrait uses the Hermes source mark');
   assert.doesNotMatch(css, /\.sg-hermes\s*\{\s*--sg:/, 'the rejected reversed Hermes mark is gone');
   assert.match(read('web/core/agents.js'), /a\?\.is_default\s*\?\s*'hermes'\s*:\s*A\.isPrivate\(a\)\s*\?\s*'hat-private'\s*:\s*'hat'/);
+  assert.equal(S.of({ id: 'wizard', name: 'Chats' }).glyph, 'hermes', 'main Chats uses the Hermes badge in dock and active-orb navigation');
+  assert.match(S.html({ id: 'wizard', name: 'Chats' }), /class="sgi sg-hermes"/, 'main Chats renders the full-colour circled Hermes mark');
   for (const p of ['web/app.js', 'web/core/workspace-navigation.js', 'web/desktop.html']) {
     const src = read(p);
     assert.match(src, /class="sgi sg-hat"/, `${p}: Home uses the hat`);

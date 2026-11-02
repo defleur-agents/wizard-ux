@@ -56,7 +56,7 @@ HOUSE = {
     'files':         ('files',    232, None),
     'wizard-search': ('search',   256, None),
     'projects':      ('projects', 276, None),
-    'wizard':        ('hat',      '#7A5CFF', None),   # brand ultraviolet (Robert, 30 Oct 2026)
+    'wizard':        ('hermes',   '#7A5CFF', None),   # main Chats is Hermes; Home owns the company hat
     'social':        ('social',   322, None),
     'wizard-music':  ('music',    344, None),
     'iching':        ('iching',   75,  0.06),
