@@ -265,7 +265,11 @@ export default function desktop(api) {
    * follow their desks by CSS meanwhile (desktop.css), so nothing re-lays out per frame and the wallpaper is untouched
    * (core/skins.js ignores a resize that leaves the page its size). */
   let retileOff = null;
-  function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
+  /* round 14 (Miguel: the fold must feel instant): a shown desk's lone window follows it by CSS and the desks out of
+   * sight keep the open sidebar's geometry (desktop.css), so a fold needs no re-tile; only a desk tiling two or more
+   * windows side by side does. The shell's re-tile re-laid out every desk's app (~100 layouts) right after each fold. */
+  const needsTile = () => [...doc.querySelectorAll('#stage > .wsp')].some(w => w.querySelectorAll(':scope > .win:not(.gone)').length > 1);
+  function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; if (needsTile()) globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
   const relayoutSoon = () => retileSoon();
   function setSize(id, w, keep) {
     sized = { ...sized, [id]: Math.round(w) }; applySizes();
@@ -484,9 +488,11 @@ export default function desktop(api) {
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
-    const sig = JSON.stringify([q, h.thread, h.app, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')), apps.length,
+    // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
+    // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
+    const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
       secOpen, only, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
-    if (!force && sig === drawn && scroll.childElementCount) return;
+    if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
@@ -522,6 +528,15 @@ export default function desktop(api) {
     }
     closeMenu();
     scroll.replaceChildren(...out);
+  }
+  /** the chat in front, marked in the list where it already is (round 14: no rebuild for it) */
+  function markCurrent(id) {
+    for (const w of scroll.querySelectorAll('.aad-rw')) {
+      const on = !!id && w.dataset.sid === id;
+      if (w.classList.contains('is-cur') === on) continue;
+      w.classList.toggle('is-cur', on);
+      const b = w.querySelector('.aad-row'); if (on) b?.setAttribute('aria-current', 'page'); else b?.removeAttribute('aria-current');
+    }
   }
   /* The rail (round 12, Miguel: the icon tiles were unreadable): words in the expanded list's type, no status icons or
    * coloured dots. Working n, Ready n and under Ready, indented, each stock Chats status with chats in it (STATES:

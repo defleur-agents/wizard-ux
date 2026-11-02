@@ -38,14 +38,17 @@ const byName = (x, y) => String(x.name).localeCompare(String(y.name), undefined,
  * then the other installed real apps by name ({ ...app, key }). */
 export function homeApps(apps, desks, kinds, lit = () => false) {
   const meta = new Map([...(kinds && Array.isArray(kinds.apps) ? kinds.apps : []), ...(apps || [])].filter(a => a && a.id).map(a => [a.id, a]));
+  // round 14: Chats' count is one inbox: only the first Chats desk carries it (a second one is `dupe`: no badge, not first)
+  let chats = 0;
   const open = (desks || []).filter(d => d && d.id).map(d => {
     const a = meta.get(d.id) || { id: d.id, icon: '' };
-    return { ...a, id: d.id, name: d.name || (d.id === CHATS ? 'Chats' : a.name || d.id), desk: d.desk, key: `desk:${d.desk}` };
+    return { ...a, id: d.id, name: d.name || (d.id === CHATS ? 'Chats' : a.name || d.id), desk: d.desk, key: `desk:${d.desk}`, ...(d.id === CHATS && chats++ ? { dupe: true } : {}) };
   });
   const openIds = new Set(open.map(a => a.id));
   const pool = kinds && Array.isArray(kinds.apps) ? kinds.apps : apps || [];
   const rest = realApps(pool.filter(a => a && a.id && a.id !== CHATS && !openIds.has(a.id)), kinds && Array.isArray(kinds.apps) ? { apps: pool } : null).sort(byName).map(a => ({ ...a, key: a.id }));
-  return { open: [...open.filter(a => lit(a.id)), ...open.filter(a => !lit(a.id))], rest };
+  const on = a => !a.dupe && lit(a.id);
+  return { open: [...open.filter(on), ...open.filter(a => !on(a))], rest };
 }
 
 /** Round 10's per-device arrangement (retired in round 11: cleared once, never read). */
@@ -79,7 +82,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   }
   function cell(a, cls = 'ah-app') {
     const b = el('button', cls, { type: 'button', role: 'listitem', 'data-app': a.id, 'data-desk': a.desk == null ? null : String(a.desk), title: a.name });
-    const ic = el('span', 'ah-ic'), n = el('b', 'ah-badge', { 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
+    const ic = el('span', 'ah-ic'), n = el('b', 'ah-badge', { 'aria-hidden': 'true', text: a.dupe ? '' : badgeText(a.id) }); n.hidden = !n.textContent;
     ic.append(tile(a), n);
     b.append(ic, el('span', 'ah-name', { text: a.name }));
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
@@ -136,13 +139,15 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
   function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
-    if (!paged) grid.replaceChildren(...nodes);
+    const put = (box0, want) => { const now = box0.children; if (now.length !== want.length || want.some((n, k) => now[k] !== n)) box0.replaceChildren(...want); };
+    if (!paged) put(grid, nodes);
     else {
       const n = Math.max(1, Math.ceil(nodes.length / fitNow.per));
       while (track.children.length < n) track.append(el('div', 'ah-grid ah-page', { role: 'list' }));
       while (track.children.length > n) track.lastElementChild.remove();
-      pages().forEach((pg, i) => { pg.setAttribute('aria-label', n > 1 ? `Apps, page ${i + 1} of ${n}` : 'Apps'); pg.replaceChildren(...nodes.slice(i * fitNow.per, (i + 1) * fitNow.per)); });
-      box.style.setProperty('--ah-cols', String(fitNow.cols)); box.style.setProperty('--ah-rows', String(fitNow.rows));
+      pages().forEach((pg, i) => { pg.setAttribute('aria-label', n > 1 ? `Apps, page ${i + 1} of ${n}` : 'Apps'); put(pg, nodes.slice(i * fitNow.per, (i + 1) * fitNow.per)); });
+      if (box.style.getPropertyValue('--ah-cols') !== String(fitNow.cols)) box.style.setProperty('--ah-cols', String(fitNow.cols));
+      if (box.style.getPropertyValue('--ah-rows') !== String(fitNow.rows)) box.style.setProperty('--ah-rows', String(fitNow.rows));
       paintDots(n); showPage(Math.min(page, n - 1), false);
     }
   }
@@ -152,10 +157,15 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit);
     const list = [...open, ...rest];
     fitNow = fit();
-    const sig = JSON.stringify([list.map(a => [a.key, a.id, a.name, badgeText(a.id)]), fitNow.per]);
+    const cellSig = a => JSON.stringify([a.id, a.name, a.desk, a.dupe ? '' : badgeText(a.id)]);
+    const sig = JSON.stringify([list.map(a => [a.key, cellSig(a)]), fitNow.per]);
     if (!force && sig === drawn) return;
     drawn = sig;
-    cells = new Map(list.map(a => [a.key, cell(a)])); order = list.map(a => a.key); more ||= moreCell();
+    // round 14 (the New tab page must open instantly): a cell is kept while what it shows is the same (no rebuild, no
+    // logo decoded again, no flash from the sigil to the logo); only a changed or new one is made
+    const was = cells; cells = new Map();
+    for (const a of list) { const s = cellSig(a), c = was.get(a.key); cells.set(a.key, c && c.__sig === s ? c : Object.assign(cell(a), { __sig: s })); }
+    order = list.map(a => a.key); more ||= moreCell();
     place();
   }
 

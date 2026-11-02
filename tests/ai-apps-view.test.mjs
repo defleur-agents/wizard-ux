@@ -795,7 +795,7 @@ test('round 7 + 13 desktop: a chat opens in the Home tab (no docked column); tal
   assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="working"]').getAttribute('aria-expanded'), 'true');
   assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2'], 'the filter went with the fold');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .6; }'), 'Archive a step quieter');
+  assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }'), 'Archive a step quieter');
   assert.match(css, /\.aad-tally::after \{ content: attr\(data-n\);/);
 });
 test('round 7: a notification opens as a chat (never Home), its route choice in the action row, a bell on its message', async () => {
@@ -835,7 +835,7 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
   assert.equal(w.q('.aa-sec[data-sec="working"] .aa-tally').getAttribute('data-n'), '2');
   assert.equal(w.q('.aa-sec[data-sec="working"]').textContent, 'Working', 'the tally is drawn, not read out twice');
   const css = read('web/layouts/ai-apps/layout.css'), P = 'html[data-shell="phone"][data-layout="ai-apps"]';
-  assert.ok(css.includes(P + ' .aa-sec[data-sec="archive"] > :is(span, .aa-sec-c) { opacity: .6; }'));
+  assert.ok(css.includes(P + ' .aa-sec[data-sec="archive"] > :is(span, .aa-sec-c) { opacity: .85; }'));
   const { stateOf, stateGroups, gaugeInto } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   assert.equal(stateOf({ state: 'check' }), 'check'); assert.equal(stateOf({ needs: true }), 'needs'); assert.equal(stateOf({ note: true }), 'fyi'); assert.equal(stateOf({ state: 'odd' }), 'none');
   assert.deepEqual(stateGroups([{ id: 'a', state: 'done' }, { id: 'b', state: 'needs' }, { id: 'c' }]).map(g => g.state + ':' + g.rows.map(r => r.id)), ['needs:b', 'done:a', 'none:c']);
@@ -1014,7 +1014,10 @@ test('round 11: Home order = the desks\' order (badged first), no arrangement ke
   assert.deepEqual(r12.open.map(a => `${a.desk}:${a.name}`), ['0:Chats', '1:Files', '2:Mail', '3:Chats', '4:App Store', '5:Claude'], 'every desk in desk order, the stock names');
   assert.deepEqual(r12.open.map(a => a.key), ['desk:0', 'desk:1', 'desk:2', 'desk:3', 'desk:4', 'desk:5'], 'one cell per desk');
   assert.deepEqual(r12.rest.map(a => a.id), ['money', 'movies', 'music', 'news'], 'then installed apps not open yet');
-  assert.deepEqual(H.homeApps(all, ds, null, id => id === 'wizard').open.map(a => a.desk), [0, 3, 1, 2, 4, 5], 'badged first (both Chats desks), else desk order');
+  // round 14: Chats' count is one inbox: only the first Chats desk carries it (a second is `dupe`: no badge, not first)
+  const lit14 = H.homeApps(all, ds, null, id => id === 'wizard').open;
+  assert.deepEqual(lit14.map(a => a.desk), [0, 1, 2, 3, 4, 5], 'the first Chats desk badged (already first), the second keeps its desk place');
+  assert.deepEqual(lit14.filter(a => a.dupe).map(a => a.desk), [3], 'the second Chats desk is the duplicate');
   assert.deepEqual(H.pageFit(1104, 520, 124, 128), { cols: 7, rows: 4, per: 28 }, '1440 wide: 7 × 4');
   assert.deepEqual(H.pageFit(944, 300, 124, 128), { cols: 7, rows: 2, per: 14 });
   assert.equal(H.pageFit(900, 90, 124, 128).rows, 2, 'never a single row');
@@ -1114,7 +1117,8 @@ test('round 12 + 13: one tab per desk (Home pinned first, then badged first, sto
   assert.equal(w.q('.aad-tab[data-tab="new"] .aad-tlab').textContent, 'New tab');
   // the New tab grid: every desk, badged first, stock names; a pick opens it as a tab
   const cells = w.qa('.aad-hg .ah-app[data-app]');
-  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '3:Chats', '4:Money', '2:Mail', '5:Files'], 'every desk, badged first, stock names');
+  assert.deepEqual(cells.map(b => `${b.dataset.desk}:${b.getAttribute('title')}`).filter(x => !x.startsWith('undefined')), ['1:Chats', '4:Money', '2:Mail', '3:Chats', '5:Files'], 'every desk, badged first, stock names (round 14: Chats\' count once)');
+  assert.equal(w.q('.aad-hg .ah-app[data-desk="3"] .ah-badge').hidden, true, 'round 14: no second Chats count on the grid');
   w.q('.aad-hg .ah-app[data-desk="4"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.st.gone.at(-1), 4); assert.equal(w.html.dataset.aadNtp, undefined, 'the pick replaces the New tab');
   // ✕ on the New tab goes back to where it came from
@@ -1172,3 +1176,48 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(p.qa('.aa-sec').map(h => h.dataset.sec), ['archive', 'working', 'snoozed', 'ready']);
 });
+
+/* Round 14 (Miguel, 3 Nov 2026: "perfect"): phone, sidebar and skin fixes (the desktop tab strip is on hold for a new
+ * design). Each guard failed on round 13's build. */
+test('round 14: the phone Home grid shows Chats\' count once (on the first Chats desk); its cells are kept, not rebuilt, on a repaint', async () => {
+  const w = world();
+  w.st.desks = [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }, { desk: 3, id: 'wizard', name: 'Chats' }];
+  (await layout()).default(w.api);
+  w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
+  const chats = w.qa('.ah-grid .ah-app[data-app="wizard"]');
+  assert.equal(chats.length, 2, 'both Chats desks (the Desks view one to one)');
+  assert.deepEqual(chats.map(b => b.querySelector('.ah-badge').hidden), [false, true], 'the count once');
+  const before = w.qa('.ah-grid .ah-app');
+  w.emit('render'); w.emit('route', w.st.route);
+  const after = w.qa('.ah-grid .ah-app');
+  assert.ok(before.length === after.length && before.every((n, i) => n === after[i]), 'the same cells (no logo re-decoded, no sigil-to-logo flash)');
+});
+test('round 14: the sidebar marks the chat in front without rebuilding; a fold never re-tiles every desk; the hidden desks keep their geometry', async () => {
+  const { w } = deskWorld();
+  (await layout()).default(w.api);
+  const rows = w.qa('.aad-rw');
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
+  const rows2 = w.qa('.aad-rw');
+  assert.ok(rows.length === rows2.length && rows.every((n, i) => n === rows2[i]), 'the same rows');
+  assert.ok(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur')); assert.equal(w.q('.aad-rw[data-sid="r1"] .aad-row').getAttribute('aria-current'), 'page');
+  w.st.route = { home: false, view: 'thread', thread: 'r2', desk: 1 }; w.emit('route', w.st.route);
+  assert.equal(w.q('.aad-rw[data-sid="r1"]').classList.contains('is-cur'), false); assert.ok(w.q('.aad-rw[data-sid="r2"]').classList.contains('is-cur'));
+  const js = noComments(read('web/layouts/ai-apps/desktop.js')), css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(js, /if \(needsTile\(\)\) globalThis\.dispatchEvent\?\.\(new Event\('resize'\)\);/, 'the shell re-tiles only when a desk tiles several windows');
+  const P = 'html\\[data-shell="desktop"\\]\\[data-layout="ai-apps"\\]';
+  assert.match(css, new RegExp(P + ' #stage > \\.wsp\\[hidden\\]:not\\(\\[data-aad-role\\]\\) \\{ left: var\\(--aad-side-w, 288px\\); \\}'), 'desks out of sight keep their geometry when the sidebar folds');
+  assert.match(css, new RegExp(P + ' \\.aad-scroll \\{ -webkit-mask-image: linear-gradient\\(to bottom, transparent 0, black 10px'), 'a long list fades under the header and above the foot');
+});
+test('round 14: Archive stays quieter but readable on the light skins (sidebar, rail, phone drawer)', () => {
+  const d = read('web/layouts/ai-apps/desktop.css'), p = read('web/layouts/ai-apps/layout.css');
+  assert.match(d, /\.aad-sec\[data-sec="archive"\] > :is\(span, \.aad-sec-c\) \{ opacity: \.85; \}/);
+  assert.match(d, /\.aad-rk\[data-k="archive"\] > \* \{ opacity: \.9; \}/);
+  assert.match(p, /\.aa-sec\[data-sec="archive"\] > :is\(span, \.aa-sec-c\) \{ opacity: \.85; \}/);
+});
+test('round 14: a full-width footer along an app\'s bottom is lifted clear of the orb even when its body covers the probe point (Wisdom\'s page count)', () => {
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /querySelectorAll\('nav, footer, \[role="navigation"\], \[role="tablist"\]'\)\]\.find\(n => \{ const r = n\.getBoundingClientRect\(\); return r\.width >= vw \* \.8 && r\.height > 0 && r\.height < 160 && r\.bottom >= vh - 2 && r\.bottom <= vh \+ 2 && shownIn\(d, n\); \}\)/);
+  const i = host.indexOf("querySelectorAll('nav, footer"), j = host.indexOf('bar = bottomBar(d, vw, vh)');
+  assert.ok(i > 0 && i < j, 'looked for before the controls-block fallback (a footer of plain text has no controls)');
+});
+

@@ -677,6 +677,9 @@
         const r = n.getBoundingClientRect();
         if (r.width >= vw * .8 && r.height < 160 && r.bottom >= vh - 2 && (/^(NAV|FOOTER)$/.test(n.tagName) || /^(navigation|tablist)$/.test(n.getAttribute('role') || ''))) { bar = n; n.setAttribute('data-wos-inset-bar', ''); break; }
       }
+      // (round 14) a full-width footer along the bottom that something else covers at the probe point (Wisdom's reader:
+      // its page count and time left sat in the orb's row, under its body's flow): found by what it is, lifted the same
+      if (!bar) { try { bar = [...d.querySelectorAll('nav, footer, [role="navigation"], [role="tablist"]')].find(n => { const r = n.getBoundingClientRect(); return r.width >= vw * .8 && r.height > 0 && r.height < 160 && r.bottom >= vh - 2 && r.bottom <= vh + 2 && shownIn(d, n); }) || null; if (bar) bar.setAttribute('data-wos-inset-bar', ''); } catch (_) { bar = null; } }
       // a block found this way is never a tab bar: it is lifted above the orb's row (data-wos-lift set from the start)
       if (!bar) { try { bar = bottomBar(d, vw, vh); } catch (_) { bar = null; } }
       // round 6: else a narrower block of controls right under the orb (a pane's composer beside a list)
