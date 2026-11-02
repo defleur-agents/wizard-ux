@@ -73,8 +73,11 @@ export const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
  * badge joins that group, one that loses it goes back among the rest. `counts` only reorders: a count never floats an
  * app that is not open. */
 export function orbitApps(api, counts = {}) {
-  const meta = new Map(api.apps.list().map(a => [a.id, a])), names = new Map((api.desks?.list?.() || []).map(d => [d.id, d.name])), seen = new Set();
+  const desks = api.desks?.list?.() || [], meta = new Map(api.apps.list().map(a => [a.id, a])), names = new Map(desks.map(d => [d.id, d.name])), seen = new Set();
+  // desk order, never "the one shown first": opening an app must not move it on the ring
+  const at = new Map(desks.map((d, i) => [d.id, i])), rank = id => at.has(id) ? at.get(id) : Infinity;
   const open = api.panel.running().filter(r => r.id && r.id !== 'wizard' && !seen.has(r.id) && seen.add(r.id))
+    .map((r, i) => ({ r, i })).sort((x, y) => rank(x.r.id) - rank(y.r.id) || x.i - y.i).map(({ r }) => r)
     .map(r => ({ ...(meta.get(r.id) || { id: r.id, name: names.get(r.id) || r.id, icon: '' }), run: r }));
   const lit = a => (counts?.[a.id] || 0) > 0;
   return [...open.filter(lit), ...open.filter(a => !lit(a))];

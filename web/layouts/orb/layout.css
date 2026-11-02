@@ -260,7 +260,6 @@ html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transfor
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
 /* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 60%, transparent)); }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opacity: 1; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
@@ -348,3 +347,19 @@ html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-fle
 html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i b { color: var(--ob-ink); font-weight: 700; }
 /* The list wide (⌥⇧\): its column reaches to the orb's edge (widths from layout.js). */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-fold="wide"] ~ .ob-grips .ob-grip[data-grip="list"] { display: none; }
+
+/* ---------- the thin list (Miguel, 2 Nov 2026): dragged narrow, the docked Chats list snaps to a column of each thread's
+ * status icon, just wide enough to click (layout.js sets html[data-ob-list="thin"]). Bold/unread becomes a dot; the
+ * search, sort chips and section words step aside; New chat stays. Drag it wider (or ⌥⇧\\) for the full list. ---------- */
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] :is(.ch-top, .ch-ptr, .ch-rdy-bar, .ch-row .bd, .ch-sec-h > span, .ch-sec-h > b, .ch-sec-h > i) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-scroll { padding-left: 0; padding-right: 0; scrollbar-width: none; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-scroll::-webkit-scrollbar { display: none; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-sec-h { justify-content: center; padding: 10px 0 4px; min-height: 0; gap: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-sec-h > small { margin: 0; font-size: calc(var(--wz-text-sm) * .8); opacity: .7; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row-wrap { margin: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row { position: relative; justify-content: center; padding: 7px 0; margin: 0 6px; gap: 0; min-height: 44px; border-radius: 12px; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row .emo { margin: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row.unread::after {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--violet-2, var(--wz-accent)); box-shadow: 0 0 0 2px var(--sk-win, var(--wz-base));
+}
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-fab { left: 50%; right: auto; transform: translateX(-50%); width: 44px; height: 44px; }

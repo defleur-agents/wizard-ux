@@ -45,7 +45,7 @@ export default function setup(api) {
   if (api.env.shell === 'phone') return phone(api);
   if (api.env.shell !== 'desktop') return () => {};
   const doc = document, root = doc.documentElement;
-  const HOLD_MS = 420, STRIP = 46;
+  const HOLD_MS = 420, STRIP = 46, THIN = 64, SNAP = 170;   // THIN: the list as a column of status icons (Miguel, 2 Nov 2026)
   const SVG = 'http://www.w3.org/2000/svg';
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
@@ -498,6 +498,7 @@ export default function setup(api) {
     const orbR = W / 2 + r * k;
     G = { L, chatR, appL, k, r, chat, app, pinX: Math.round((orbR + appL) / 2) };
     cx = W / 2;
+    if (!folded && !wide && listW <= THIN + 8) root.dataset.obList = 'thin'; else delete root.dataset.obList;
     root.style.setProperty('--ob-col-w', listW + 'px'); root.style.setProperty('--ob-chat-w', C + 'px');
     root.style.setProperty('--ob-beside-left', L + 'px'); root.style.setProperty('--ob-app-w', A + 'px');
     const left = (folded ? STRIP : listW) + (chat ? C : 0);
@@ -516,7 +517,7 @@ export default function setup(api) {
   const defaults = () => { const r = O * .3, L = folded ? STRIP : Math.round(clamp(W * .22, 280, 400));
     let C = W / 2 - L - r - GAP; C = C >= 360 ? Math.min(C, W / 3, 520) : clamp(W / 2 - L - r * .7 - GAP, 300, 360);
     return { list: Math.round(clamp(W * .22, 280, 400)), chat: Math.round(C), app: Math.round(Math.max(360, Math.min(W / 3, W / 2 - r - 120))) }; };
-  const limits = () => ({ list: [260, 520], chat: [Math.min(360, W * .45), Math.max(360, W * .45)], app: [Math.min(360, W * .6), Math.max(360, W * .6)] });
+  const limits = () => ({ list: [THIN, 520], chat: [Math.min(360, W * .45), Math.max(360, W * .45)], app: [Math.min(360, W * .6), Math.max(360, W * .6)] });
   const grips = el('div', 'ob-grips');
   const NAMES = { list: 'Resize the conversations list', chat: 'Resize the chat', app: 'Resize the app' };
   const grip = {};
@@ -536,10 +537,17 @@ export default function setup(api) {
       if (e.key === 'Enter') { e.preventDefault(); delete sized[id]; save(); aim(); return; }
       if (!dir) return; e.preventDefault();
       const cur = id === 'list' ? G.L : id === 'chat' ? G.chatR - G.L : W - G.appL;
+      // the thin list steps straight out to a readable width (small steps would snap back to thin)
+      if (id === 'list' && dir > 0 && cur <= THIN + 8) { set(id, 260, true); return; }
       set(id, cur + dir * (id === 'app' ? -1 : 1) * (e.shiftKey ? 48 : 16), true);
     });
   }
-  function set(id, w, keep) { const [lo, hi] = limits()[id]; sized = { ...sized, [id]: Math.round(clamp(w, lo, hi)) }; aim(); if (keep) save(); }
+  function set(id, w, keep) {
+    const [lo, hi] = limits()[id];
+    // the list narrower than a readable row snaps to the thin icon column (and back out past the snap point)
+    if (id === 'list') w = w < SNAP ? THIN : Math.max(w, 260);
+    sized = { ...sized, [id]: Math.round(clamp(w, lo, hi)) }; aim(); if (keep) save();
+  }
   function save() { api.storage.set('widths', sized); }
   function placeGrips(listW, L, C, A, chatOpen, appOpen) {
     const lim = limits(), show = (id, on, x, now) => { const g = grip[id]; g.hidden = !on; if (!on) return;
@@ -580,7 +588,7 @@ export default function setup(api) {
   function stroke(pts, w, col) { sx.lineWidth = w; sx.strokeStyle = col; sx.beginPath(); sx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) sx.lineTo(pts[i][0], pts[i][1]); sx.stroke(); }
   function glowAt(x, y, rad, col, a) { const g = sx.createRadialGradient(x, y, 0, x, y, rad); g.addColorStop(0, A(col, a)); g.addColorStop(1, A(col, 0)); sx.fillStyle = g; sx.fillRect(x - rad, y - rad, rad * 2, rad * 2); }
   function bolt(x1, y1, x2, y2, t, strength, seed, P) {
-    if (strength <= .01 || Math.abs(x2 - x1) < 6) return;
+    if (strength <= .01 || Math.hypot(x2 - x1, y2 - y1) < 6) return;
     const c = P.c, len = Math.hypot(x2 - x1, y2 - y1), amp = Math.max(9, Math.min(30, len * .34));
     const main = jag(x1, y1, x2, y2, seed, amp), twin = jag(x1, y1, x2, y2, seed * 7 + 3, amp * 1.15), third = jag(x1, y1, x2, y2, seed * 13 + 5, amp * .7);
     sx.lineCap = 'round'; sx.lineJoin = 'round';
@@ -612,9 +620,13 @@ export default function setup(api) {
     if (bolts.chat) bolt(cx - R, cy, G.chatR, cy, t, bolts.chat * .62 * flick, seed + 11, P);
     if (bolts.app) {
       const s = sats.find(x => x.id === G.app?.id), half = 24 * (s?.sc || 1.1);
-      // straight from the orb to the panel; the app's own satellite glows where it sits
-      bolt(cx + R, cy, G.appL, cy, t, bolts.app * flick, seed + 23, P);
-      if (s && s.pk > .6) glowAt(s.x, s.y, 46 * (half / 26), P.c[0], .22 * smooth(Math.min(1, (s.pk - .6) / .4)) * bolts.app);
+      // from the orb to the open app's own satellite, where it sits on the ring (Miguel, 2 Nov 2026); the panel opens on
+      // the right with no bolt of its own. No satellite (opened beyond the ring): no bolt.
+      if (s) {
+        const dx = s.x - cx, dy = s.y - cy, d = Math.hypot(dx, dy) || 1, ux = dx / d, uy = dy / d;
+        bolt(cx + ux * R, cy + uy * R, s.x - ux * half, s.y - uy * half, t, bolts.app * flick, seed + 23, P);
+        glowAt(s.x, s.y, 46 * (half / 26), P.c[0], .22 * bolts.app);
+      }
     }
     sx.restore();
   }
@@ -687,5 +699,5 @@ export default function setup(api) {
   paint();
   onVoice(voice);
 
-  return () => { running = false; cancel?.(); chrome.dispose(); delete root.dataset.orbScene; for (const v of ['--ob-col-w', '--ob-chat-w', '--ob-beside-left', '--ob-app-w']) root.style.removeProperty(v); };
+  return () => { running = false; cancel?.(); chrome.dispose(); delete root.dataset.orbScene; delete root.dataset.obList; for (const v of ['--ob-col-w', '--ob-chat-w', '--ob-beside-left', '--ob-app-w']) root.style.removeProperty(v); };
 }

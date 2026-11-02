@@ -231,7 +231,10 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   // bolts in the orb's colour run orb → app panel edge (and orb → chat column), drawn on the sky canvas in the same
   // ~30 fps loop; reduced motion = one still line (fixed seed, no spark).
   assert.match(js, /const want = pinId && s\.id === pinId \? 1 : 0;/); assert.match(js, /s\.el\.classList\.toggle\('is-pinned', k > \.5\);/);
-  assert.match(js, /bolt\(cx \+ R, cy, G\.appL, cy, t, bolts\.app \* flick, seed \+ 23, P\);/);
+  // the app bolt lands on the open app's own still satellite, not the panel (Miguel, 2 Nov 2026)
+  assert.match(js, /bolt\(cx \+ ux \* R, cy \+ uy \* R, s\.x - ux \* half, s\.y - uy \* half, t, bolts\.app \* flick, seed \+ 23, P\);/);
+  assert.doesNotMatch(js, /bolt\([^)]*G\.appL/, 'no bolt to the app panel');
+  assert.match(js, /if \(strength <= \.01 \|\| Math\.hypot\(x2 - x1, y2 - y1\) < 6\) return;/, 'a straight-up bolt (the top satellite) still draws');
   assert.doesNotMatch(js, /G\.pinX - x/, 'the open app\'s satellite is never flown out of the ring');
   assert.match(js, /if \(bolts\.chat\) bolt\(cx - R, cy, G\.chatR, cy,/);
   assert.match(js, /const seed = reduced \? 977 : boltSeed/); assert.match(js, /if \(!reduced\) \{ const u = /, 'the running spark only with motion');
@@ -394,7 +397,7 @@ test('Orbs view satellites are exactly the open apps (= desks, = the Apps view\'
 
 test('Orbs view: the list, chat and app panels resize from thin grips, kept per device, never overlapping', () => {
   const js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
-  assert.match(js, /const limits = \(\) => \(\{ list: \[260, 520\], chat: \[Math\.min\(360, W \* \.45\), Math\.max\(360, W \* \.45\)\], app: \[Math\.min\(360, W \* \.6\), Math\.max\(360, W \* \.6\)\] \}\);/);
+  assert.match(js, /const limits = \(\) => \(\{ list: \[THIN, 520\], chat: \[Math\.min\(360, W \* \.45\), Math\.max\(360, W \* \.45\)\], app: \[Math\.min\(360, W \* \.6\), Math\.max\(360, W \* \.6\)\] \}\);/);
   assert.match(js, /if \(C \+ A > room\) \{ C = Math\.max\(lim\.chat\[0\], room - A\);/, 'never overlapping');
   assert.match(js, /el\('div', 'ob-grip', \{ role: 'separator', 'aria-orientation': 'vertical', tabindex: '0'/, 'keyboard-reachable separators');
   assert.match(js, /function save\(\) \{ api\.storage\.set\('widths', sized\); \}/); assert.match(js, /api\.listen\(g, 'dblclick', \(\) => \{ delete sized\[id\]; save\(\); aim\(\); \}\);/);
@@ -474,6 +477,9 @@ test('Orbs satellites: open apps with a badge first, in desk order, then the res
   assert.deepEqual(orbitApps(api).map(a => a.id), ['a', 'b', 'c', 'd'], 'no counts: desk order');
   assert.deepEqual(orbitApps(api, { c: 3, a: 0, e: 9, d: 1 }).map(a => a.id), ['c', 'd', 'a', 'b'], 'badged first in desk order; e is not open, so it never floats');
   assert.deepEqual(orbitApps(api, { b: 1 }).map(a => a.id), ['b', 'a', 'c', 'd'], 'gaining a badge moves an app into the first group');
+  // the shell lists the app shown in the panel first: the ring keeps desk order, so opening an app never moves it
+  const shown = { ...api, desks: { list: () => ['a', 'b', 'c', 'd'].map((id, desk) => ({ desk, id, name: id })) }, panel: { running: () => ['d', 'a', 'b', 'c'].map(id => ({ id, open: id === 'd' })) } };
+  assert.deepEqual(orbitApps(shown).map(a => a.id), ['a', 'b', 'c', 'd'], 'the open app keeps its place');
 });
 
 test('Orbs desktop: an app panel is docked flush on the right edge, never a floating card', () => {
@@ -481,4 +487,19 @@ test('Orbs desktop: an app panel is docked flush on the right edge, never a floa
   assert.match(css, /\.panel-layer > \.win\.panel\[data-side="right"\]\[data-panel="app"\] \{\n  top: 0; right: 0; bottom: 0; border-radius: 0; border: 0; border-left: 1px solid var\(--ob-dock-line\); box-shadow: none; outline: none;/);
   assert.ok(css.indexOf('[data-side="right"][data-panel="app"] {') > css.indexOf('.win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px'), 'after the rounded panel rule, so it wins');
   assert.match(js, /const appL = W - A;/); assert.match(js, /show\('app', appOpen, W - A, A\)/);
+});
+
+test('Orbs desktop: the docked list drags down to a thin column of status icons (Miguel, 2 Nov 2026)', () => {
+  const css = read('web/layouts/orb/layout.css'), js = read('web/layouts/orb/layout.js');
+  assert.match(js, /STRIP = 46, THIN = 64, SNAP = 170;/); assert.match(js, /list: \[THIN, 520\]/);
+  assert.match(js, /if \(id === 'list'\) w = w < SNAP \? THIN : Math\.max\(w, 260\);/, 'between a readable row and the icon column it snaps');
+  assert.match(js, /if \(!folded && !wide && listW <= THIN \+ 8\) root\.dataset\.obList = 'thin'; else delete root\.dataset\.obList;/);
+  assert.match(js, /delete root\.dataset\.orbScene; delete root\.dataset\.obList;/, 'turning the Orb off leaves nothing behind');
+  assert.match(css, /\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\] :is\(\.ch-top, \.ch-ptr, \.ch-rdy-bar, \.ch-row \.bd, /);
+  assert.match(css, /\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\] \.ch-row\.unread::after/, 'unread stays visible as a dot');
+  for (const rule of css.split('\n').filter(l => l.startsWith('html') && l.includes('data-ob-list'))) assert.match(rule, /^html\[data-shell="desktop"\]\[data-layout="orb"\]\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\]/, 'only the docked list, only in the Orb desktop');
+});
+
+test('Orbs desktop: → on the thin list grip steps straight out to a readable list', () => {
+  assert.match(read('web/layouts/orb/layout.js'), /if \(id === 'list' && dir > 0 && cur <= THIN \+ 8\) \{ set\(id, 260, true\); return; \}/);
 });
