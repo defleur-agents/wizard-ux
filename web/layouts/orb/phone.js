@@ -131,7 +131,7 @@ export default function phone(api) {
     return { b, count: el('b'), name: a.name };
   }
   function paintApps() {
-    const every = orbitApps(api), cap = W ? ringCap() : every.length, over = every.length > cap ? every.length - cap + 1 : 0;
+    const every = orbitApps(api, badgeMap), cap = W ? ringCap() : every.length, over = every.length > cap ? every.length - cap + 1 : 0;
     const apps = over ? [...every.slice(0, cap - 1), { id: '+more', name: `${over} more`, icon: '', more: over }] : every;
     const sig = apps.map(a => a.id + ':' + a.name + ':' + (a.icon || '').length).join('|') + '|' + (W ? ringCap() : 0);
     if (sig !== appSig) {

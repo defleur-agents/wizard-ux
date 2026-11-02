@@ -234,6 +234,12 @@ html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { bo
 /* ---------- the panels (no desks): the docked list (above) and an app from the left, holding the real windows ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-caption { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+/* An app (Miguel, 2 Nov 2026): never a floating card. It is docked flush on the right edge, full height under the bar,
+ * the mirror of the list on the left, and it slides in from the right. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="app"] {
+  top: 0; right: 0; bottom: 0; border-radius: 0; border: 0; border-left: 1px solid var(--ob-dock-line); box-shadow: none; outline: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="app"].focus { border-color: var(--ob-dock-line); box-shadow: none; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }

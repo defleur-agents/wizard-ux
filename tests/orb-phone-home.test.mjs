@@ -140,7 +140,7 @@ test('phone: the same stored Style × Colour and drawing code as the desktop, ne
   const strip = f => read(f).replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
   const ph = strip('web/layouts/orb/phone.js'), lay = read('web/layouts/orb/layout.js');
   assert.match(ph, /import \{ renderer \} from '\.\/styles\.js';/); assert.match(ph, /import \{ lookOf, palettes, starsFor, paintSky, orbitApps, glyphOf, colourOf \} from '\.\/shared\.js';/);
-  assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /const every = orbitApps\(api\)/, 'the shared list: every open app');
+  assert.match(ph, /const look = lookOf\(api\);/); assert.match(ph, /const every = orbitApps\(api, badgeMap\)/, 'the shared list: every open app, badged first');
   assert.ok(!/--ob-look-|createRadialGradient|16807/.test(ph), 'no colours or sky of its own');
   assert.match(lay, /if \(api\.env\.shell === 'phone'\) return phone\(api\);\n  if \(api\.env\.shell !== 'desktop'\) return \(\) => \{\};/, 'the desktop path is unchanged below the phone hand-off');
   // the rejected round stays gone: no bottom bar slots, no spin pad or drift, no bolt, no flight between centre and dock

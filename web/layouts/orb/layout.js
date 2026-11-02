@@ -318,9 +318,12 @@ export default function setup(api) {
    * search away (the search pill / ⌥O, ⌥Space, a command, the ⌥ letters); no All apps satellite. Nothing running and nothing new: just the orb. */
   const orbitApps = () => orbitList(api, badgeMap);   // shared.js: the one list the phone floats too
   let satScale = 1;
+  // the ring: round, clear of the orb's sphere, wider for more apps (64 px apart), never past the bar or the hint line
+  const ringMin = () => O * .3 * (G.k || 1) + 64, ringMax = () => Math.max(ringMin(), Math.min(H * .46 - 64, H * .54 - 96));
+  const ringFor = n => Math.max(ringMin(), Math.min(ringMax(), n * 64 * satScale / (2 * Math.PI)));
   function fits(n) {
     if (!W) return { cap: n, scale: 1 };
-    const perim = r => 2 * Math.PI * Math.sqrt((r * r + (r * .34) ** 2) / 2), cap = s => Math.floor((perim(O * 1.65) + perim(O * 1.65 / 1.32)) / (64 * s));
+    const cap = s => Math.floor(2 * Math.PI * ringMax() / (64 * s));
     for (const sc of [1, .86, .74]) if (n <= cap(sc)) return { cap: n, scale: sc };
     return { cap: Math.max(1, cap(.74) - 1), scale: .74 };
   }
@@ -336,10 +339,10 @@ export default function setup(api) {
     // more than fit: the rest stay one search away (the pill), never an All apps satellite
     const items = apps.map(a => ({ id: a.id, el: sat(a) }));
     field.replaceChildren(...items.map(i => i.el));
-    // the concept's two rings, apps alternating between them at even steps round the orb, all drifting the same slow
-    // way: neighbours always sit on different rings and two apps never slide onto each other
+    // still, like the phone (Miguel, 2 Nov 2026): one round ring, evenly from the top, clockwise, in orbitApps order
+    // (badged apps first); a satellite never drifts out from under the pointer
     const was = new Map(sats.map(s => [s.id, s]));
-    sats = items.map((it, i) => ({ ...it, a: i / items.length * Math.PI * 2 + .4, ring: i % 2 ? 1 : 1.32, speed: .035, pk: was.get(it.id)?.pk || 0 }));
+    sats = items.map((it, i) => ({ ...it, a: -Math.PI / 2 + i / items.length * Math.PI * 2, ring: 1, speed: 0, pk: was.get(it.id)?.pk || 0 }));
     extra = null; paintState(); paintKeys();
     placeSats(0);
   }
@@ -423,18 +426,17 @@ export default function setup(api) {
   const smooth = v => v * v * (3 - 2 * v);
   function placeSats(dt) {
     if (!W) return;
-    const cy = H * .46, pinId = G.app ? G.app.id : null;
+    const cy = H * .46, pinId = G.app ? G.app.id : null, R = ringFor(sats.filter(s => s !== extra).length);
     for (const s of sats) {
-      if (!reduced) s.a += s.speed * dt;
-      const rx = O * 1.65 * s.ring / 1.32 * fit, ry = rx * .34 / Math.max(.5, fit);
-      let x = cx + Math.cos(s.a) * rx, y = cy + Math.sin(s.a) * ry - O * .12;
-      const depth = Math.sin(s.a); // >0 in front of the orb, <0 behind it
-      let sc = (.78 + .22 * (depth + 1) / 2) * satScale, op = .55 + .45 * (depth + 1) / 2;
+      let x = cx + Math.cos(s.a) * R, y = cy + Math.sin(s.a) * R;
+      const depth = 1;   // one flat ring: every satellite in front, full size and bright
+      let sc = satScale, op = 1;
       const want = pinId && s.id === pinId ? 1 : 0;
       s.pk = reduced ? want : (s.pk || 0) + (want - (s.pk || 0)) * Math.min(1, dt * 5);
       if (s.pk < .002) s.pk = 0;
       const k = smooth(Math.min(1, s.pk));
-      if (k > 0) { x += (G.pinX - x) * k; y += (cy - y) * k; sc += (1.1 - sc) * k; op += (1 - op) * k; }
+      // the open app's satellite stays in its place on the ring (Miguel, 2 Nov 2026: nothing moves); it only lights up
+      if (k > 0) { sc += (1.1 - sc) * k; op += (1 - op) * k; }
       s.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) scale(${sc.toFixed(3)})`;
       s.el.style.zIndex = k > 0 ? 8 : depth > 0 ? 7 : 4;
       s.el.style.opacity = op.toFixed(3);
@@ -487,12 +489,12 @@ export default function setup(api) {
     let C = Math.round(sized.chat ? clamp(sized.chat, lim.chat[0], lim.chat[1]) : D.chat);
     let A = Math.round(sized.app ? clamp(sized.app, lim.app[0], lim.app[1]) : D.app);
     // never overlapping: the chat column gives way first, then the app panel
-    const room = W - 12 - L - 8;
+    const room = W - L - 8;
     if (C + A > room) { C = Math.max(lim.chat[0], room - A); if (C + A > room) A = Math.max(240, room - C); }
     const chat = st?.chat || null, app = st?.app || null;
     const chatR = L + C;
     const k = chat ? clamp((W / 2 - chatR - GAP) / r, .45, 1) : 1;   // the orb fits beside an open chat, in place
-    const appL = W - 12 - A;
+    const appL = W - A;
     const orbR = W / 2 + r * k;
     G = { L, chatR, appL, k, r, chat, app, pinX: Math.round((orbR + appL) / 2) };
     cx = W / 2;
@@ -513,7 +515,7 @@ export default function setup(api) {
   let sized = { ...(api.storage.get('widths') || {}) };
   const defaults = () => { const r = O * .3, L = folded ? STRIP : Math.round(clamp(W * .22, 280, 400));
     let C = W / 2 - L - r - GAP; C = C >= 360 ? Math.min(C, W / 3, 520) : clamp(W / 2 - L - r * .7 - GAP, 300, 360);
-    return { list: Math.round(clamp(W * .22, 280, 400)), chat: Math.round(C), app: Math.round(Math.max(360, Math.min(W / 3 - 12, W / 2 - r - 120))) }; };
+    return { list: Math.round(clamp(W * .22, 280, 400)), chat: Math.round(C), app: Math.round(Math.max(360, Math.min(W / 3, W / 2 - r - 120))) }; };
   const limits = () => ({ list: [260, 520], chat: [Math.min(360, W * .45), Math.max(360, W * .45)], app: [Math.min(360, W * .6), Math.max(360, W * .6)] });
   const grips = el('div', 'ob-grips');
   const NAMES = { list: 'Resize the conversations list', chat: 'Resize the chat', app: 'Resize the app' };
@@ -523,7 +525,7 @@ export default function setup(api) {
     g.hidden = true; grips.append(g); grip[id] = g;
     // a drag: the pointer's x against the panel's fixed edge (the list and chat grow right, the app grows left)
     let drag = null;
-    const widthAt = x => id === 'list' ? x : id === 'chat' ? x - G.L : (W - 12) - x;
+    const widthAt = x => id === 'list' ? x : id === 'chat' ? x - G.L : W - x;
     api.listen(g, 'pointerdown', e => { if (e.button) return; e.preventDefault(); try { g.setPointerCapture(e.pointerId); } catch (_) {} drag = { left: grips.getBoundingClientRect().left }; g.classList.add('is-drag'); scene.dataset.resizing = id; });
     api.listen(g, 'pointermove', e => { if (!drag) return; set(id, widthAt(e.clientX - drag.left), false); });
     const end = () => { if (!drag) return; drag = null; g.classList.remove('is-drag'); delete scene.dataset.resizing; save(); };
@@ -533,7 +535,7 @@ export default function setup(api) {
       const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
       if (e.key === 'Enter') { e.preventDefault(); delete sized[id]; save(); aim(); return; }
       if (!dir) return; e.preventDefault();
-      const cur = id === 'list' ? G.L : id === 'chat' ? G.chatR - G.L : W - 12 - G.appL;
+      const cur = id === 'list' ? G.L : id === 'chat' ? G.chatR - G.L : W - G.appL;
       set(id, cur + dir * (id === 'app' ? -1 : 1) * (e.shiftKey ? 48 : 16), true);
     });
   }
@@ -542,7 +544,7 @@ export default function setup(api) {
   function placeGrips(listW, L, C, A, chatOpen, appOpen) {
     const lim = limits(), show = (id, on, x, now) => { const g = grip[id]; g.hidden = !on; if (!on) return;
       g.style.left = Math.round(x) + 'px'; g.setAttribute('aria-valuenow', String(Math.round(now))); g.setAttribute('aria-valuemin', String(Math.round(lim[id][0]))); g.setAttribute('aria-valuemax', String(Math.round(lim[id][1]))); };
-    show('list', !folded && !(maxed && !chatOpen), L, listW); show('chat', chatOpen, L + C, C); show('app', appOpen, W - 12 - A, A);
+    show('list', !folded && !(maxed && !chatOpen), L, listW); show('chat', chatOpen, L + C, C); show('app', appOpen, W - A, A);
   }
   function paintPanel() {
     const st = api.panel.state(), k = st?.kind || null;
@@ -610,12 +612,9 @@ export default function setup(api) {
     if (bolts.chat) bolt(cx - R, cy, G.chatR, cy, t, bolts.chat * .62 * flick, seed + 11, P);
     if (bolts.app) {
       const s = sats.find(x => x.id === G.app?.id), half = 24 * (s?.sc || 1.1);
-      if (s && s.pk > .6) {
-        const pin = smooth(Math.min(1, (s.pk - .6) / .4)) * bolts.app * flick;
-        bolt(cx + R, cy, s.x - half, s.y, t, pin, seed + 23, P);
-        bolt(s.x + half, s.y, G.appL, cy, t, pin, seed + 41, P);
-        glowAt(s.x, s.y, 46, P.c[0], .22 * pin);
-      } else if (!s) bolt(cx + R, cy, G.appL, cy, t, bolts.app * flick, seed + 23, P);
+      // straight from the orb to the panel; the app's own satellite glows where it sits
+      bolt(cx + R, cy, G.appL, cy, t, bolts.app * flick, seed + 23, P);
+      if (s && s.pk > .6) glowAt(s.x, s.y, 46 * (half / 26), P.c[0], .22 * smooth(Math.min(1, (s.pk - .6) / .4)) * bolts.app);
     }
     sx.restore();
   }
