@@ -943,3 +943,57 @@ test('desktop panel: an app\'s title-bar tools (Morning Report\'s ‹ date › P
   assert.match(js, /o\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'a pick too');
   assert.match(js, /toolsMo\?\.disconnect\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
 });
+
+test('round 9 desktop: no veil over the skin\'s background (Home, beside a panel); only panels and the composer have surfaces', () => {
+  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
+  const win = P + ':not([data-aad-chat]):not([data-ai-front="list"]) #stage > .wsp > .win:not(.gone):has(.dchats .ch-newchat)';
+  assert.ok(css.includes(win + ' {\n  background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;\n}'), 'the new chat\'s window (Home, or the middle beside an app panel) paints nothing');
+  assert.ok(css.includes(win + ' :is(.wbody, .dchats, .pane-main, .ch-thread, .ch-msgs) { background: none !important; }'), 'nor anything inside it');
+  assert.ok(css.includes(P + ' .aad-top, ' + P + ' .aad-ctop { background: none; }'), 'the top row paints nothing');
+  assert.ok(css.includes(P + ':is([data-aad-chat], [data-ai-front="list"]) .aad-ctop { background: var(--aad-main); }'), 'only over a docked chat (its scrolling messages) does the top row keep the column\'s surface');
+  assert.ok(css.includes(P + ' .aad-back { background: none; }'), 'the room beside a docked chat stays clear');
+  // the last word on each: nothing later paints them again
+  const last = sel => { const i = css.lastIndexOf(P + ' ' + sel + ' {'); return i < 0 ? '' : css.slice(i, css.indexOf('}', i)); };
+  assert.match(last('.aad-back'), /background: none;/);
+});
+
+test('round 9 desktop: every panel resizable by drag (sidebar, chat column, app panel, apps sidebar), keyboard too, kept per device, within limits', async () => {
+  const { w, store } = deskWorld();
+  (await layout()).default(w.api);
+  const g = id => w.q(`.aad-grip[data-grip="${id}"]`), st = w.html.style;
+  for (const id of ['side', 'chat', 'app', 'apps']) {
+    assert.ok(g(id), id); assert.equal(g(id).getAttribute('role'), 'separator'); assert.equal(g(id).getAttribute('aria-orientation'), 'vertical');
+    assert.equal(g(id).getAttribute('tabindex'), '0', 'keyboard-reachable'); assert.match(g(id).title, /double-click: back to default/);
+  }
+  assert.equal(st.getPropertyValue('--aad-side-w'), '288px', 'the defaults'); assert.equal(st.getPropertyValue('--aad-rs-w'), '232px');
+  // a drag: the sidebar grows to the right, the apps sidebar to the left
+  g('side').dispatchEvent(new FakePointerEvent('pointerdown', { clientX: 288, pointerId: 1 })); assert.equal(w.html.dataset.aadResizing, 'side');
+  g('side').dispatchEvent(new FakePointerEvent('pointermove', { clientX: 340 })); assert.equal(st.getPropertyValue('--aad-side-w'), '340px', 'follows the pointer');
+  g('side').dispatchEvent(new FakePointerEvent('pointerup', {})); assert.equal(w.html.dataset.aadResizing, undefined);
+  assert.equal(store.widths.side, 340, 'kept on this device');
+  g('apps').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowLeft' })); assert.equal(store.widths.apps, 248, '← widens the right sidebar');
+  g('apps').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight', shiftKey: true })); assert.equal(store.widths.apps, 184, '⇧ bigger steps');
+  // limits: never past them, whatever the drag
+  g('side').dispatchEvent(new FakePointerEvent('pointerdown', { clientX: 340, pointerId: 1 }));
+  g('side').dispatchEvent(new FakePointerEvent('pointermove', { clientX: 1300 })); g('side').dispatchEvent(new FakePointerEvent('pointerup', {}));
+  assert.equal(st.getPropertyValue('--aad-side-w'), '440px', 'at most 440'); assert.equal(g('side').getAttribute('aria-valuenow'), '440'); assert.equal(g('side').getAttribute('aria-valuemax'), '440');
+  for (let i = 0; i < 20; i++) g('apps').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' }));
+  assert.equal(store.widths.apps, 180, 'at least 180');
+  // a double click (or Enter) goes back to the default
+  g('side').dispatchEvent(new FakePointerEvent('dblclick')); assert.equal(st.getPropertyValue('--aad-side-w'), '288px'); assert.equal('side' in store.widths, false);
+  g('apps').dispatchEvent(new FakePointerEvent('keydown', { key: 'Enter' })); assert.equal(st.getPropertyValue('--aad-rs-w'), '232px');
+  // the chat column and the app panel: within the middle (the orb keeps its room)
+  g('chat').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowRight' })); assert.equal(store.widths.chat, 496, 'a third of 1440 + 16');
+  for (let i = 0; i < 80; i++) g('app').dispatchEvent(new FakePointerEvent('keydown', { key: 'ArrowLeft' }));
+  assert.equal(store.widths.app, 1440 - 288 - 232 - 200, 'the app panel never shuts the middle');
+  const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
+  assert.ok(css.includes(P + '[data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }'), 'the rail keeps 52');
+  assert.ok(css.includes(P + '[data-aad-apps="open"] { --aad-rs: var(--aad-rs-w, 232px); }'));
+  assert.ok(css.includes(P + '[data-aad-chat] { --aad-chat-w: var(--aad-chat-px, clamp(400px, 33.333vw, 560px)); }'));
+  assert.ok(css.includes(P + '[data-aad-split]:not([data-aad-wide]), ' + P + '[data-aad-loading]:not([data-aad-wide]) { --aad-app-w: var(--aad-app-px, clamp(380px, 33.333vw, 600px)); }'), 'wide keeps the whole main area');
+  assert.match(css, /\.aad-grip \{\s*position: fixed;[^}]*cursor: col-resize;/, 'col-resize');
+  assert.match(css, /\.aad-grip:is\(:hover, \.is-drag\)::after \{ opacity: \.55; \}/, 'a hairline on hover');
+  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important; \}/, 'apps never swallow the drag');
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(js, /export const SIZE_LIMITS = \{ side: \[220, 440\], apps: \[180, 360\], panel: 340 \}, MIDDLE = 200;/);
+});

@@ -88,14 +88,14 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-wsc { width: 16px; height
 
 /* ---------- the sidebar ---------- */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-side {
-  pointer-events: auto; position: fixed; z-index: 3; top: 0; bottom: 0; left: 0; width: 288px; box-sizing: border-box; overflow: hidden;
+  pointer-events: auto; position: fixed; z-index: 3; top: 0; bottom: 0; left: 0; width: var(--aad-side-w, 288px); box-sizing: border-box; overflow: hidden;
   color: var(--aad-ink); background: var(--aad-panel); box-shadow: 1px 0 0 var(--aad-line); transition: width 200ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-side { width: 52px; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] .aad-side { box-shadow: 1px 0 0 var(--aad-line), 8px 0 32px color-mix(in srgb, black 22%, transparent); border-radius: 0 16px 16px 0; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-shade { position: fixed; inset: 0; z-index: 2; display: none; pointer-events: auto; background: color-mix(in srgb, black 30%, transparent); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] .aad-shade { display: block; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel { position: absolute; inset: 0 auto 0 0; width: 288px; display: flex; flex-direction: column; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-panel { position: absolute; inset: 0 auto 0 0; width: var(--aad-side-w, 288px); display: flex; flex-direction: column; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rail { position: absolute; inset: 0 auto 0 0; width: 52px; display: none; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 12px; box-sizing: border-box; overflow: hidden; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-panel { display: none; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"] .aad-rail { display: flex; }
@@ -566,3 +566,41 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-apps="rail"] .aad-ai[
 /* the app panel grows out of the switcher toward the middle */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-anim="app"] #stage > .wsp[data-aad-role="app"] { transform-origin: right center; }
 @media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-apps { transition: none; } }
+
+/* ---------- round 9 (Miguel, 2 Nov 2026): no veil over the skin's background ----------
+ * Home (the empty new chat, alone or beside the app panel) is the skin's background exactly as the skin draws it: the
+ * Chats window under it, the top row and the room beside a docked chat paint nothing. Only the panels (the sidebars or
+ * their rails, a docked chat, an app panel) and the composer have surfaces of their own. */
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-chat]):not([data-ai-front="list"]) #stage > .wsp > .win:not(.gone):has(.dchats .ch-newchat) {
+  background: none !important; box-shadow: none !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"]:not([data-aad-chat]):not([data-ai-front="list"]) #stage > .wsp > .win:not(.gone):has(.dchats .ch-newchat) :is(.wbody, .dchats, .pane-main, .ch-thread, .ch-msgs) { background: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-top, html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop { background: none; }
+html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-chat], [data-ai-front="list"]) .aad-ctop { background: var(--aad-main); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-back { background: none; }
+
+/* ---------- round 9 (Miguel, 2 Nov 2026): every panel resizable by drag (desktop.js, the Orb desktop's grips) ----------
+ * The widths are the owner's (kept per device), set by desktop.js as --aad-side-w / --aad-rs-w / --aad-chat-px /
+ * --aad-app-px; folded rails and the wide panel keep theirs. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-apps="open"] { --aad-rs: var(--aad-rs-w, 232px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] { --aad-chat-w: var(--aad-chat-px, clamp(400px, 33.333vw, 560px)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-wide]), html[data-shell="desktop"][data-layout="ai-apps"][data-aad-loading]:not([data-aad-wide]) { --aad-app-w: var(--aad-app-px, clamp(380px, 33.333vw, 600px)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grips { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip {
+  position: fixed; top: 0; bottom: 0; z-index: 5; width: 10px; margin-left: -5px; display: none; cursor: col-resize; pointer-events: auto; touch-action: none; outline: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip::after {
+  content: ""; position: absolute; left: 4px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: var(--wz-accent, var(--aad-ink)); opacity: 0; transition: opacity 160ms ease;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip:is(:hover, .is-drag)::after { opacity: .55; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip:focus-visible::after { opacity: .9; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="open"] .aad-grip[data-grip="side"] { display: block; left: var(--aad-side); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .aad-grip[data-grip="chat"] { display: block; left: calc(var(--aad-side) + var(--aad-chat-w)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split]:not([data-aad-wide]) .aad-grip[data-grip="app"] { display: block; left: calc(100vw - var(--aad-rs) - var(--aad-app-w)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-apps="open"] .aad-grip[data-grip="apps"] { display: block; left: calc(100vw - var(--aad-rs)); }
+/* while dragging: the panels follow the pointer at once, no text gets selected, app pages never swallow the pointer */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] { cursor: col-resize; user-select: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] :is(.aad-side, .aad-panel, .aad-apps, .aad-top, .aad-ctop, .aad-ptop, .aad-orb, .aad-pload, #bar, #stage > .wsp) { transition: none !important; animation: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-resizing] iframe { pointer-events: none !important; }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-grip::after { transition: none; } }
