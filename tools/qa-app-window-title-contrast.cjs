@@ -77,7 +77,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         for (let i = 0; i < d.length; i += 4) px.push([d[i], d[i + 1], d[i + 2]]);
         px.sort((p, q) => (p[0] + p[1] + p[2]) - (q[0] + q[1] + q[2])); return px[Math.floor(px.length / 2)];
       }, bgShot.toString('base64'));
-      const text = t.text.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+      const text = t.text.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number).map(v => t.text.startsWith('color(') ? v * 255 : v); // color(srgb 0-1) from color-mix
       rows.push({ shell, skin, app: t.app, edgeLight: await page.evaluate(src => !![...document.querySelectorAll('.win.edge-light iframe')].find(f => f.getAttribute('src') === src), t.app), label: t.label, focus: t.focus, text: t.text, behind: `rgb(${bg.join(', ')})`, contrast: +ratio(text, bg).toFixed(2) });
     }
     await ctx.close();
