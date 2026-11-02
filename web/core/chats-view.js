@@ -146,11 +146,15 @@
     let take = null, pending = null, work = null;
     const paint = () => repaint?.();
     async function send(row, wid, sid) {
+      if (!row.blob?.size) throw Error('Recording recovery is incomplete · original kept');
       const outbox = window.WosOutbox, custody = 'hosted-' + row.id;
       if (!outbox) throw Error('Recording kept · shared outbox unavailable');
-      const existing = outbox._items?.get(custody);
+      // Recover durable receipts before capture can write this id. Sent tombstones
+      // remain owned even after their audio/kind is compacted out of the store.
+      await outbox.load();
+      if (!outbox.recoveryComplete || outbox.quarantined(custody)) throw Error('Recording kept · device recovery incomplete');
       // Lost capture acknowledgements must not seal another draft or send twice.
-      if (!(existing?.durable && existing.kind === 'reply')) {
+      if (!outbox.handedOff(custody)) {
         const held = await outbox.capture(row.blob, custody);
         if (!held?.durable || held.storageError) throw Error('Recording kept · device save failed');
         const it = await chats().sendVoiceTo(wid, sid, row.blob, [], true, row.meta.route, null, custody, row.meta.runId);
@@ -172,9 +176,9 @@
         const resource = window.WizAppCapture;
         if (!resource) throw Error('Shared microphone unavailable');
         if (pending && (pending.meta?.appId !== appId || pending.meta?.sessionId !== sid)) throw Error('A recording is kept in its original thread');
-        const saved = pending || (await resource.pending(owner)).find(r => r.meta?.appId === appId && r.meta?.sessionId === sid);
+        if (pending && !pending.blob?.size) pending = null; // retain original in the capture store
+        const saved = pending || (await resource.pending(owner)).find(r => r.meta?.appId === appId && r.meta?.sessionId === sid && r.blob?.size);
         if (saved) {
-          if (!saved.blob?.size) throw Error('Recording recovery is incomplete · original kept');
           const confirmed = pending === saved;
           pending = saved; take = null;
           if (!confirmed) { toast?.('◉', 'Recording kept · tap again to send to this thread'); return 'kept'; }
