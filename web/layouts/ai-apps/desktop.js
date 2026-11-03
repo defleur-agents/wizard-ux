@@ -1130,7 +1130,9 @@ export default function desktop(api) {
     return plan;
   }
   let tidyOff = null;
-  const tidyLoop = () => { tidyOff = api.after(TIDY_EVERY, () => { tidy(); tidyLoop(); }); };
+  // (Codex review on #888: api.after caps every timer at 10 s, so the hourly tidy counts to its deadline)
+  let tidyAt = Date.now() + TIDY_EVERY;
+  const tidyLoop = () => { tidyOff = api.after(10e3, () => { if (Date.now() >= tidyAt) { tidyAt = Date.now() + TIDY_EVERY; tidy(); } tidyLoop(); }); };
   api.after(6000, tidy); tidyLoop();
   // the setting: the column's foot. Round 18 (Miguel, 3 Nov 2026: the setting reads as a sentence): a small 'Tidy: 24h'
   // line that expands in place into 'Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps always stay

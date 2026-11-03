@@ -1541,3 +1541,12 @@ test('round 18 item 3c desktop: the ⌥ keys audited: ⌥O / ⌥T the picker, �
   assert.ok(alt('Minus') && alt('Equal'), '⌥− / ⌥= taken (the app panel\'s width when one shows)');
   assert.ok(g0 >= 0 && o0 >= 0);
 });
+
+// Codex review (PR #888/#889): api.after caps every timer at 10 s, so an hourly tidy must count to its deadline.
+test('auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)', () => {
+  for (const f of ['desktop.js', 'layout.js']) {
+    const js = readFileSync(new URL(`../web/layouts/ai-apps/${f}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(js, /api\.after\((TIDY_EVERY|3600e3),/, f + ': no hour-long api.after (it would fire after 10 s)');
+    assert.match(js, /const tidyLoop = \(\) => \{ tidyOff = api\.after\(10e3, \(\) => \{ if \(Date\.now\(\) >= tidyAt\) \{ tidyAt = Date\.now\(\) \+ (TIDY_EVERY|3600e3); tidy\(\); \} tidyLoop\(\); \}\); \};/, f);
+  }
+});

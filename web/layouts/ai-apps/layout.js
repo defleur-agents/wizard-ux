@@ -191,7 +191,9 @@ export default function setup(api) {
     return plan;
   }
   let tidyOff = null;
-  const tidyLoop = () => { tidyOff = api.after(3600e3, () => { tidy(); tidyLoop(); }); };
+  // (Codex review on #888: api.after caps every timer at 10 s, so the hourly tidy counts to its deadline)
+  let tidyAt = Date.now() + 3600e3;
+  const tidyLoop = () => { tidyOff = api.after(10e3, () => { if (Date.now() >= tidyAt) { tidyAt = Date.now() + 3600e3; tidy(); } tidyLoop(); }); };
   api.after(6000, tidy); tidyLoop();
 
   // round 18 item 3: Ready's order = the stock Chats Filter's saved choice (api.sessions.order), so both views agree
