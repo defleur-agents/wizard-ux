@@ -20,7 +20,8 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "wizard/orb-radial"
   ],
   "defaults": [
     "wizard/unified-inbox"
