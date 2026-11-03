@@ -1,4 +1,4 @@
-// James, repeated: no flattening colours into skins.
+// James, 31 Oct and 1 Nov 2026; #801/#803: keep Skin and Color separate, never flatten colors into skins.
 // Exercise the real Settings renderer and dispatch, not a parallel picker or a source-only label check.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -91,7 +91,7 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base sk
   for (let tick = 0; tick < 10 && !h.view.context.skinDraft.items.length; tick++) await Promise.resolve();
   assert.equal(h.view.context.skinDraft.loading, false);
   assert.match(h.root.innerHTML, /Base skin<select data-skin-base>/);
-  assert.match(h.root.innerHTML, /<h4>Colour<\/h4>/);
+  assert.match(h.root.innerHTML, /<h4>Color<\/h4>/);
   assert.match(h.root.innerHTML, /data-skinpick="grove" aria-pressed="true"/, 'starts from worn colour');
   h.input('data-skin-name', 'Quiet morning');
   h.act('data-draft-tweak', 'sample');
