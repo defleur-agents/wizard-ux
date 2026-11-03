@@ -26,7 +26,7 @@ const flush=()=>fs.writeFileSync(path.join(OUT,'browser-results.json'),JSON.stri
    await p.waitForFunction(()=>!!(window.__wos||window.__wux)&&window.WosExperience&&!WosExperience.state.busy&&window.WosSettings);
    check(await p.evaluate(phone=>phone?!!window.__wos&&!window.__wux:!!window.__wux&&!window.__wos,phone),'actual responsive shell entrypoint');
    const experience=await p.evaluate(()=>WosExperience.state.tweaks.map(({id,on})=>({id,on})));row.experience=experience;
-   check(experience.some(t=>t.id==='wizard/orb-radial'&&t.on===optional),'optional radial matches explicit recipe, not shared defaults',experience);
+   for(const tweak of ['wizard/orb-radial','wizard/new-send-list','miguel/group-by-day'])check(experience.some(t=>t.id===tweak&&t.on===optional),'optional tweak matches explicit recipe '+tweak,experience);
    if(!optional)check(await p.evaluate(()=>!window.WosOrbSwitcher&&!performance.getEntriesByType('resource').some(r=>/orb-switcher\.js/.test(r.name))),'OFF does not import orb handler');
    else if(phone)await p.waitForFunction(()=>window.WosOrbSwitcher?.active());
    await shot('shell-nebula');
