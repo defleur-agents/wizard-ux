@@ -162,10 +162,12 @@ async function picker(p, chord, i = 0) {
     });
     for (const skin of ['nebula', 'landscapes']) await check('in-shell skin proof and opaque picker: ' + skin, async () => {
       const i = await cur(page); await field(page, i).fill('skin change keeps this unsent text');
-      await page.locator('#settingsBtn').click(); await page.locator('#dsettings [data-st-page="look"]').click();
+      await page.locator('#settingsBtn').click(); await page.locator('#dsettings [data-st-page="appearance"]').click();
       await page.locator(`#dsettings [data-skinfamily="${skin === 'nebula' ? 'wizard' : 'mizel'}"]`).click();
       await page.locator(`#dsettings [data-skinpick="${skin}"]`).click();
-      await page.waitForFunction(skin => WosSkin.current === skin, skin); await stable(page);
+      await page.waitForFunction(skin => WosSkin.current === skin && !document.querySelector('#dsettings [aria-busy="true"]') && !window.WosExperience?.state?.busy, skin);
+      await page.locator('.mz-intro').waitFor({ state: 'detached' }); await stable(page);
+      assert.equal(await page.locator(`#dsettings [data-skinpick="${skin}"]`).getAttribute('aria-pressed'), 'true');
       await page.screenshot({ path: path.join(OUT, 'settings-' + skin + '.png'), animations: 'disabled', caret: 'hide' });
       await page.keyboard.press('Alt+,'); await stable(page);
       assert.equal(await field(page, i).inputValue(), 'skin change keeps this unsent text');

@@ -78,4 +78,8 @@ test('real browser oracle remains exact; no force clicks or alternate expected d
   assert(harness.includes("'Alt+2 from focused app input must switch without a desktop click'"));
   assert(harness.includes('trusted chord must reach the app')); assert(harness.includes('baseline Document adapter must specifically be stranded'));
   assert(!harness.includes('force: true')); assert(harness.includes('real Welcome controller must be inactive'));
+  const settings = fs.readFileSync(new URL('../web/core/settings.js', import.meta.url), 'utf8');
+  assert(settings.includes("{ id: 'appearance', title: 'Appearance'"));
+  assert(harness.includes('[data-st-page="appearance"]')); assert(!harness.includes('[data-st-page="look"]'));
+  assert(harness.includes("page.locator('.mz-intro').waitFor({ state: 'detached' })"));
 });
