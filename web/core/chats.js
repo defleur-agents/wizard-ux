@@ -435,8 +435,7 @@ window.WizCore.chats = function createChats(H) {
       ]);
     } finally { clearTimeout(timer); }
   }
-  function morningProject() {
-    if (!morningCanonical) return;
+  function morningSnapshot() {
     const d = JSON.parse(JSON.stringify(morningCanonical));
     for (const op of morningOps.values()) if (op.day === d.day) {
       if (op.kind === 'hide') d.hidden = op.body.hidden;
@@ -445,23 +444,28 @@ window.WizCore.chats = function createChats(H) {
     d.done = morningSteps.filter(s => d.steps[s].done).length;
     d.next = morningSteps.find(s => !d.steps[s].done) || null;
     d.next_label = morningLabels[d.next] || null;
+    return d;
+  }
+  function morningProject() {
+    if (!morningCanonical) return;
+    const d = morningSnapshot();
     MORNING.pending = morningOps.size > 0; MORNING.failure = morningFailures.values().next().value || null; MORNING.epoch++; MORNING.at = Date.now();
     // Failure text changes must repaint even when the counters are unchanged.
     MORNING.data = null; morningSet(d);
   }
   const morningEffect = (st, op) => st.day === op.day && (op.kind === 'hide' ? st.hidden === op.body.hidden : st.steps[op.body.step].done === op.body.done);
   function morningAdmit(kind, input, before) {
-    if (MORNING.uncertain) throw new Error('Check Morning status before retrying');
+    if (MORNING.uncertain) throw Object.assign(new Error('Check Morning status before retrying'), { morningStatus: morningSnapshot(), uncertain: true });
     const body = kind === 'step' ? { step: input.step, done: input.done, how: input.how } : { hidden: input.hidden };
     if (!(kind === 'step' && morningSteps.includes(body.step) && typeof body.done === 'boolean' && ['tap', 'sheet', 'timer', 'silent-timer'].includes(body.how)) && !(kind === 'hide' && typeof body.hidden === 'boolean')) throw new Error('Invalid Morning write');
     const snapshot = morningDTO(before), key = kind === 'hide' ? 'hide' : body.step;
     if (!morningCanonical) morningCanonical = snapshot; // bootstrap only; never reseed established truth
-    if (snapshot.day !== morningCanonical.day) throw new Error('Morning day changed · reopen Morning');
+    if (snapshot.day !== morningCanonical.day) throw Object.assign(new Error('Morning day changed · reopen Morning'), { morningStatus: morningSnapshot(), rollover: true });
     body.expected_day = snapshot.day;
     const prior = morningOps.get(key);
     if (prior) {
       if (JSON.stringify(prior.body) === JSON.stringify(body)) return prior.promise;
-      throw new Error('Morning is saving that item · try again afterwards');
+      throw Object.assign(new Error('Morning is saving that item · try again afterwards'), { morningStatus: morningSnapshot() });
     }
     const op = { kind, body, day: snapshot.day };
     morningOps.set(key, op); MORNING.epoch++; morningRead++; morningProject();

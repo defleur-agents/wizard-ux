@@ -21,7 +21,7 @@ test('one writer: X then step cannot return out of order or resurrect hidden car
  f.reply(0);await flush();assert.equal(f.requests.length,2);f.reply(1);await b;assert.equal(f.c.current().data.hidden,true);assert.equal(f.c.current().data.done,1);assert.equal(f.html(),'');
 });
 test('same effect replays coalesce; opposite step and X/show-again explicitly refuse without false success',async()=>{
- const f=fixture();const a=f.write();assert.equal(f.write(),a);assert.throws(()=>f.write('workout',false),/saving/);
+ const f=fixture();const a=f.write();assert.equal(f.write(),a);assert.throws(()=>f.write('workout',false),e=>/saving/.test(e.message)&&e.morningStatus.steps.workout.done===true);
  f.c.hide();assert.throws(()=>f.c.WizMorningWrite(f.first.source,'hide',{hidden:false},state()),/saving/);
  await flush();assert.equal(f.requests.length,1);f.reply(0);await a;await flush();f.reply(1);await flush();assert.equal(f.requests.length,2);
 });
