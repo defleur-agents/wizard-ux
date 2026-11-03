@@ -381,14 +381,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub .aad-rk-n { fon
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub:hover { background: var(--aad-held); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk:not(.is-sub) + .aad-rk.is-sub { border-top-left-radius: 10px; border-top-right-radius: 10px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub:not(:has(+ .aad-rk.is-sub)) { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
-/* Ready showing one status (a click on it in the rail): its name and count, and Show all */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-only {
-  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 10px; box-sizing: border-box; cursor: pointer;
-  text-align: left; color: var(--aad-ink); background: var(--aad-hover); font: 500 0.8125rem / 1 var(--wz-font-ui);
-}
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-only:hover { background: var(--aad-held); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-only-w { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-only-x { flex: none; color: var(--aad-ink-2); font-weight: 400; }
 
 /* a notification opens as a chat (round 7): the thread's solid surface, its header, the composer at the bottom; the note is
  * the agent's first message with a small bell; its Badge | Chats choice sits first in the sticky action row with its actions (parts.js noteRouteIntoActions) */
@@ -573,8 +565,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy {
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy[aria-expanded="true"] { color: var(--aad-ink); background: var(--aad-hover); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy-i { width: 16px; height: 16px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidy-w { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidypop { right: 8px; bottom: 52px; width: 220px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidypop .aad-pop-i { justify-content: space-between; }
 
 /* folded: the icons only, the count on the icon's corner */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vth { flex-direction: column; justify-content: flex-start; height: auto; padding: 8px 0 6px; gap: 4px; }
@@ -624,7 +614,6 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-chat]
  * All apps as the last row under the list (kept in view), Tidy under it. An open pin wears a small dot on its left. */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab.is-closed .aad-vtn { color: var(--aad-ink-2); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab.is-run::before { content: ""; position: absolute; left: 2px; top: 50%; width: 4px; height: 4px; margin-top: -2px; border-radius: 50%; background: var(--aad-ink-2); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtab.is-run.is-on::before { background: var(--wz-accent, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vtf { display: flex; flex-direction: column; gap: 2px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-vall {
   display: flex; align-items: center; gap: 10px; width: 100%; height: 36px; margin: 0; padding: 0 6px 0 8px; border: 0; border-radius: 10px; box-sizing: border-box; cursor: pointer;
@@ -669,3 +658,28 @@ html[data-shell="desktop"][data-layout="ai-apps"]:is([data-skin$="-light"], [dat
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-tidy, .aad-vtx):focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
 /* the picker over the page: the orb steps aside (round 15's All apps rule, for the shared sheet) */
 html[data-shell="desktop"][data-layout="ai-apps"][data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }
+
+/* ---------- round 18 (Miguel, 3 Nov 2026) ----------
+ * Item 1: the running dot = the phone Home's (4 px, muted ink, round), on an open pin's row; the same in front.
+ * Item 2: Tidy at the column's foot: a small 'Tidy: 24h' line that expands in place into the setting's sentence.
+ * Item 3: Ready's order (the stock Chats Filter choice) on Ready's header.
+ * Item 4: the open sidebar built on the folded rail: Ready's count on its header (the rail's amber disc), its statuses as
+ * sub-headers with counts in the rail's order, Snoozed only when it holds chats; the headers sit where the rail's items
+ * sit (the rail's list starts at the open list's first header under Archive and Working), so a toggle only widens. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidyx { margin: 0 0 4px; padding: 10px 10px 12px; border-radius: 12px; background: var(--aad-hover); animation: aad-pop 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidys { margin: 0; color: var(--aad-ink); font: 400 0.8125rem / 1.6 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidys > b { font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tidys-sel { height: 26px; margin: 0 2px; padding: 0 4px; border: 0; border-radius: 7px; color: inherit; background: var(--aad-canvas); box-shadow: inset 0 0 0 1px var(--aad-line); font: 600 0.8125rem / 1 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-tidyx { position: absolute; right: 56px; bottom: 8px; width: 240px; z-index: 5; background: var(--aad-canvas); box-shadow: var(--aad-menu); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sech { display: flex; align-items: center; gap: 4px; margin: 10px 0 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sech > .aad-sec { flex: 1; min-width: 0; margin: 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-n { min-width: 22px; height: 20px; margin-left: 4px; padding: 0 6px; box-sizing: border-box; border-radius: 10px; display: inline-grid; place-items: center; color: color-mix(in srgb, black 88%, var(--amber, var(--aad-ink))); background: var(--amber, var(--aad-ink)); font: 800 0.75rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sort { flex: none; height: 26px; max-width: 96px; margin: 0 4px 0 0; padding: 0 4px; border: 0; border-radius: 8px; color: var(--aad-ink-2); background: none; font: 500 0.75rem / 1 var(--wz-font-ui); cursor: pointer; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sort:hover { color: var(--aad-ink); background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sort:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp { display: flex; align-items: center; gap: 6px; height: 26px; margin: 8px 0 0; padding: 0 10px; border-radius: 8px; color: var(--aad-ink-2); font: 600 0.75rem / 1 var(--wz-font-ui); transition: background 400ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-b > .aad-grp:first-child { margin-top: 13px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp-n { font-variant-numeric: tabular-nums; font-weight: 500; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp.is-flash { color: var(--aad-ink); background: color-mix(in srgb, var(--wz-accent, var(--amber, var(--aad-ink))) 22%, transparent); transition: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist { padding-top: 22px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="snoozed"] { margin-bottom: 0; }

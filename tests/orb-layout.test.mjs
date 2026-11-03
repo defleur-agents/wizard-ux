@@ -79,7 +79,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
-  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList']);
+  assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList', 'order', 'setOrder']);
   assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'homeScreen', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'search', 'store']);
   assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);

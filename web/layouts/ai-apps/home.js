@@ -21,6 +21,10 @@
  *   menu), then the open apps that are not pinned (smaller, same icons; auto-tidy) in the same grid flow, the first one
  *   marked by a tiny 'Open' caption chip (round 17: no divider line), then a + tile:
  *   the picker of installed apps neither pinned nor open (chrome.js), its last tile + Get more = the App Store.
+ * Round 18 (Miguel, 3 Nov 2026: the Mac dock's model): no chip and no line. Every app that is open (pinned or not) wears
+ *   a small running dot under its name, like the dock's; a pin not open has none (no pin badge either: the hold menu
+ *   says Pin / Unpin). The open apps not pinned start on a new row after a slightly larger gap that holds only a tiny
+ *   muted 'Open' caption on the left (.ah-cap); then +; then the caller's foot (the phone's tidy line).
  * No timers beyond api.after, no markup strings; everything through the layout API. */
 import { realApps, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
@@ -91,7 +95,10 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const ic = el('span', 'ah-ic'), n = el('b', 'ah-badge', { 'aria-hidden': 'true', text: a.dupe ? '' : badgeText(a.id) }); n.hidden = !n.textContent;
     ic.append(tile(a), n);
     b.append(ic, el('span', 'ah-name', { text: a.name }));
-    b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
+    // round 18: the running dot (layers: every open app, pinned or not; none on a pin not open)
+    const running = !!layers && a.desk != null;
+    if (running) { b.classList.add('is-run'); b.append(el('i', 'ah-run', { 'aria-hidden': 'true' })); }
+    b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : '') + (running ? ', open' : ''));
     api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id, a.desk); });
     if (layers) holdable(b, a); else pressable(b, a);
     return b;
@@ -190,16 +197,17 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return pageFit(Math.max(0, r.width - 24), Math.max(0, r.height), CELL.w, CELL.h);
   }
   /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
-  let plusCell = null, splitAt = -1;
+  let plusCell = null, cap = null, splitAt = -1;
   function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
     if (layers) {
-      // round 16 item 7: the pins, then the open apps, then +. Round 17 (Miguel, 3 Nov 2026: no full-width line, no new
-      // block): the open apps carry on in the same grid flow right after the pins; only the first of them wears a tiny
-      // 'Open' caption chip in the row gap above it (CSS, .is-open-first).
+      // round 16 item 7: the pins, then the open apps, then +. Round 18 (Miguel, 3 Nov 2026: the Mac dock): no chip, no
+      // line; the open apps not pinned start on a new row under a tiny muted 'Open' caption (a full-row grid item), then
+      // + and the caller's foot (the phone's tidy line)
       const list = order.map(id => cells.get(id)).filter(Boolean);
-      list.forEach((c, i) => c.classList.toggle('is-open-first', i === splitAt));
-      nodes.splice(0, nodes.length, ...list, plusCell ||= plusTile());
+      cap ||= el('div', 'ah-cap', { 'aria-hidden': 'true', text: 'Open' });
+      if (splitAt > 0 && splitAt < list.length) list.splice(splitAt, 0, cap);
+      nodes.splice(0, nodes.length, ...list, plusCell ||= plusTile(), ...(layers.foot ? [layers.foot] : []));
     }
     const put = (box0, want) => { const now = box0.children; if (now.length !== want.length || want.some((n, k) => now[k] !== n)) box0.replaceChildren(...want); };
     if (!paged) put(grid, nodes);

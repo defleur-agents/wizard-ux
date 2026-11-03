@@ -75,6 +75,7 @@ export const RAIL_WORDS = Object.freeze({ snoozed: 'Snoozed', ready: 'Ready', ne
 export function stateOf(r) {
   const s = r && typeof r.state === 'string' ? r.state : '';
   if (KNOWN.has(s)) return s;
+  if (r?.note && r.snoozed) return 'deferred';   // round 18: a read (kept) notification sits with the snoozed, as in stock
   return r?.needs ? 'needs' : r?.note ? 'fyi' : 'none';
 }
 /** Ready grouped by status in STATES order: [{ state, word, rows }], empty groups left out. */
@@ -182,10 +183,72 @@ export function seedUsed(used, desks, now) {
   for (const id of open) out[id] = typeof used?.[id] === 'number' ? used[id] : now;
   return out;
 }
-/** The toast's words for a tidy: "Closed 6 apps you hadn't used today". */
+/** The toast's words for a tidy (round 18, Miguel: the setting's own words): "Closed 3 apps you hadn't used in 24 hours". */
 export function tidyWords(n, key) {
-  const when = key === '12h' ? 'in 12 hours' : key === 'week' ? 'this week' : 'today';
-  return `Closed ${n} app${n === 1 ? '' : 's'} you hadn't used ${when}`;
+  return `Closed ${n} app${n === 1 ? '' : 's'} you hadn't used in ${TIDY_WORDS[key] || TIDY_WORDS[TIDY_DEFAULT]}`;
+}
+/** Round 18: the short forms (the desktop column's foot 'Tidy: 24h', the phone Home's line). */
+export const TIDY_SHORT = Object.freeze({ off: 'Off', '12h': '12h', '24h': '24h', week: '1 week' });
+/** The phone Home's quiet line under +: "Unused apps close after 24h" (Off: they stay open). */
+export const tidyLine = key => key === 'off' ? 'Unused apps stay open' : `Unused apps close after ${TIDY_SHORT[key] || TIDY_SHORT[TIDY_DEFAULT]}`;
+/** Round 18 (Miguel, 3 Nov 2026: the setting reads as a sentence, desktop and phone alike): "Tidy up: close apps you
+ * haven't used in [24 hours ▾]. Pinned apps always stay open." as a <p> of the given class, its [..] a <select> of
+ * Off / 12 hours / 24 hours / 1 week; onPick(key) on a change. */
+export function tidySentence(doc, key, onPick, cls) {
+  const p = doc.createElement('p'); p.className = cls;
+  const sel = doc.createElement('select'); sel.className = cls + '-sel'; sel.setAttribute('aria-label', 'Close apps you haven\'t used in');
+  for (const k of Object.keys(TIDY)) { const o = doc.createElement('option'); o.value = k; o.textContent = TIDY_WORDS[k]; if (k === key) o.setAttribute('selected', ''); sel.append(o); }
+  sel.value = key;
+  sel.addEventListener('change', () => onPick(Object.prototype.hasOwnProperty.call(TIDY, sel.value) ? sel.value : TIDY_DEFAULT));
+  const b = doc.createElement('b'); b.textContent = 'Tidy up:';
+  const w = t => { const n = doc.createElement('span'); n.textContent = t; return n; };
+  p.append(b, w(' close apps you haven\'t used in '), sel, w('. Pinned apps always stay open.'));
+  return p;
+}
+
+/* ---------- round 18 item 3 (Miguel, 3 Nov 2026): Ready's order, the stock Chats Filter choice ----------
+ * The same three orders and the same saved choice as stock Chats (api.sessions.order / setOrder: its
+ * wos.chats.readyOrder.v1, shared across devices through the box preferences), so both views always agree. A stored
+ * 'subject' (stock's By subject) reads as Priority here (the view has no subject groups). Notifications sort in the
+ * same list by the same rule (never appended separately); read ones (snoozed) stay at the end, by time. */
+export const READY_SORTS = Object.freeze([['priority', 'Priority'], ['newest', 'Newest'], ['oldest', 'Oldest']]);
+export const sortOf = o => o === 'newest' || o === 'oldest' ? o : 'priority';
+export const PRIORITY_TIP = 'Priority: needs approval first, then Needs you, Your call, FYI, Done, then the rest; newest first within each. ' +
+  'Notifications rank by their own priority (4–5 with Needs you, 3 with Your call, the rest with FYI).';
+const atOf = r => Date.parse(r?.at) || 0;
+/** A row's Priority rank (stock live.js readyRank: 0 approval, 1 needs you, 2 your call, 3 FYI, 4 done, 5 no status,
+ * 9 snoozed at the bottom); the shell sends it as row.rank, else it is read from the row's status. */
+export function rankOf(r) {
+  if (Number.isFinite(r?.rank)) return r.rank;
+  if (r?.note) return r.needs ? 1 : 3;
+  return { approval: 0, needs: 1, failed: 1, check: 2, fyi: 3, done: 4, deferred: 9 }[r?.state] ?? 5;
+}
+/** Ready in the chosen order (pure). Newest / Oldest: approvals first and snoozed last (stock's pins), time in
+ * between; Priority: by rank, newest first inside each. Read notifications last, newest first (Oldest: oldest). */
+export function readySort(rows, order) {
+  const o = sortOf(order), list = (rows || []).slice(), later = list.filter(r => r.note && r.snoozed), main = list.filter(r => !(r.note && r.snoozed));
+  const t = (a, b) => (o === 'oldest' ? atOf(a) - atOf(b) : atOf(b) - atOf(a)) || String(a.title || '').localeCompare(String(b.title || ''));
+  const pin = r => { const k = rankOf(r); return k === 0 ? 0 : k === 9 ? 2 : 1; };
+  main.sort(o === 'priority' ? (a, b) => rankOf(a) - rankOf(b) || t(a, b) : (a, b) => pin(a) - pin(b) || t(a, b));
+  later.sort(t);
+  return [...main, ...later];
+}
+/** Round 18 item 4 (Miguel, 3 Nov 2026: the open sidebar built on the folded rail): Ready grouped by status exactly
+ * as the rail counts it (stateGroups: STATES order), each group's rows in the chosen order (group first, then the sort
+ * inside it); plain chats last under 'No status'. [{ state, word, rows }]. Pure. */
+export function readyGroups(rows, order) {
+  return stateGroups(rows).map(g => ({ ...g, word: g.state === 'none' ? 'No status' : g.word, rows: readySort(g.rows, order) }));
+}
+/** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
+export const readyFlat = (rows, order) => readyGroups(rows, order).flatMap(g => g.rows);
+/** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
+ * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
+export function readyStep(ids, cur, dir) {
+  const n = (ids || []).length; if (!n) return null;
+  const i = cur == null ? -1 : ids.indexOf(cur);
+  if (i < 0) return { id: ids[0], wrapped: false };
+  const j = (i + (dir < 0 ? -1 : 1) + n) % n;
+  return { id: ids[j], wrapped: dir > 0 ? j < i : j > i };
 }
 
 /* ---------- round 16 item 6 (Miguel, 3 Nov 2026): drag to rearrange the right column ---------- */
