@@ -7,9 +7,9 @@ const read=p=>readFileSync(new URL('../'+p,import.meta.url),'utf8');
 class FixtureCustomEvent extends Event {
  constructor(type,init={}) { super(type,init);this.detail=init.detail??null; }
 }
-async function registry({native=false,ids=['food']}={}) {
+async function registry({native=false,ids=['food'],web=false}={}) {
  const data=new Map(),target=new EventTarget(),document=Object.assign(new EventTarget(),{hidden:false});
- const apps=ids.map(id=>({id,name:id==='food'?'Food':'Usuals',url:'/fixture-app/'+id+'/',source:'apps.json'}));
+ const apps=ids.map(id=>({id,name:id==='food'?'Food':'Usuals',url:web?'/fixture-app/'+id+'/':'/'+id+'/',source:'apps.json'}));
  // Browser globals and window.* share listeners; document owns a separate target.
  const window=vm.createContext({WizCore:{norm:s=>String(s).toLowerCase()},WizConfig:{endpoint:()=>'/wizard/v1/apps'},
   addEventListener:target.addEventListener.bind(target),removeEventListener:target.removeEventListener.bind(target),dispatchEvent:target.dispatchEvent.bind(target),
@@ -45,4 +45,9 @@ test('native compatibility records keep their real IDs even when lookup aliases 
  // Aliases fill missing lookups; they do not overwrite two present native records.
  if(w.WizCore.appIdAliases)assert.equal(w.WizCore.appIdAliases.usuals,'food');
  assert.equal(w.WizCore.apps('desktop').APP.usuals,undefined);
+});
+
+test('independent web surfaces sharing a native compatibility id stay reachable on both shells',async()=>{
+ const w=await registry({web:true});
+ for(const shell of ['mobile','desktop']){const r=w.WizCore.apps(shell);assert.equal(r.APP.food.url,'/fixture-app/food/');assert.equal(r.APP.food.phoneOnly,false);}
 });
