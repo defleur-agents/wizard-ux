@@ -124,12 +124,23 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
    }
    // Open the real Notes app with an empty synthetic vault; never inspect owner notes.
    await page.locator(row).click();
-   await page.waitForSelector('iframe.appframe');
-   await page.waitForFunction(()=>[...document.querySelectorAll('iframe.appframe')].some(f=>f.contentDocument?.querySelector('#tree')));
+   const frameSelector='iframe[title="Notes"]';
+   await page.waitForSelector(frameSelector);
+   await page.waitForFunction(()=>[...document.querySelectorAll('iframe[title="Notes"]')].some(f=>f.contentDocument?.querySelector('#tree')));
    const frames=page.frames().filter(f=>f.url().startsWith(origin+'/notes/'));assert.ok(frames.length,'real Notes view loaded');
-   await frames.at(-1).waitForSelector('#tree');
-   await shot(page,[v,shell,'notes-view'].join('-'),'iframe.appframe');
-   report.cases.push({v,shell,surface:'notes-view',iframe:frames.at(-1).url(),screenshot:[v,shell,'notes-view'].join('-')+'.png'});
+   const frame=frames.at(-1);await frame.waitForSelector('#tree');
+   await frame.evaluate(()=>window.__qaDocument=document);
+   const appearances=[];
+   for(const skin of ['obsidian','obsidian-light']) {
+    await page.evaluate(s=>window.WosSkin.set(s),skin);
+    await frame.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
+    assert.equal(await frame.evaluate(()=>window.__qaDocument===document),true,'live skin change preserves the Notes document');
+    appearances.push(await frame.evaluate(()=>({skin:document.documentElement.dataset.skin,scheme:document.documentElement.dataset.colorScheme,base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base')})));
+    await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
+    await shot(page,[v,shell,'notes-view',skin].join('-'),frameSelector);
+   }
+   assert.deepEqual(appearances.map(a=>a.scheme),['dark','light']);
+   report.cases.push({v,shell,surface:'notes-view',iframe:frame.url(),appearances,screenshots:['obsidian','obsidian-light'].map(s=>[v,shell,'notes-view',s].join('-')+'.png')});
    await context.close();
   }
  }
