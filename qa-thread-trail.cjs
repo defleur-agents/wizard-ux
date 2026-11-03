@@ -83,8 +83,8 @@ async function sendReturnChecks(b) {
   const close = async c => { const journal=evidence.find(x=>x.context===contexts.get(c)); if(journal) { journal.final=await Promise.race([c.pages()[0]?.evaluate(()=>({receipts:window.__qaReceipts,models:window.WosModels&&{ready:WosModels.ready,options:WosModels.options,error:WosModels.error,loading:!!WosModels.loading,defaultOption:WosModels.defaultOption()},items:[...(window.WosOutbox?._items?.values()||[])].map(x=>({id:x.id,sessionId:x.sessionId,state:x.state,text:x.text,error:x.error,runId:x.runId}))})).catch(()=>null),sleep(1500).then(()=>({diagnosticTimeout:true}))]); } clearTimeout(contexts.get(c)); contexts.delete(c); await c.close(); flush(); };
   const closeAll = async () => { for (const c of [...contexts.keys()]) await close(c).catch(()=>{}); };
   try {
-  async function boot(mobile, skin, half = false, desktopWidth = 1200) {
-    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:desktopWidth,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block',permissions:mobile?[]:['microphone']});
+  async function boot(mobile, skin, half = false, desktopWidth = 1200, screenshotCase = '') {
+    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:desktopWidth,height:screenshotCase?945:900},deviceScaleFactor:screenshotCase?2:1,userAgent:screenshotCase?'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36':undefined,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block',permissions:mobile?[]:['microphone']});
     contexts.set(c,setTimeout(()=>{void c.close().catch(()=>{});},60000)); // hard per-context case cap
     const intercepted = [], errors = [], heldRuns = [], receipts = [], requests = []; let holdAck = true;
     const journal={mobile,skin,half,desktopWidth,writes:intercepted,errors,receipts,requests,models:[],requestFailures:[],externalRequests:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
@@ -117,7 +117,7 @@ async function sendReturnChecks(b) {
       if (u.origin !== origin) { journal.externalRequests.push(q.url()); flush(); return r.abort(); }
       if (!['GET','HEAD'].includes(q.method())) {
         const bytes=q.postDataBuffer(), media=/\/(?:transcribe|files\/upload)$/.test(u.pathname);
-        const write={method:q.method(),path:u.pathname,body:media?'[synthetic audio bytes]':q.postData() || '',bytes:bytes?.length||0,key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
+        const write={method:q.method(),path:u.pathname,query:u.search,body:media?'[synthetic audio bytes]':q.postData() || '',bytes:bytes?.length||0,key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
         if (u.pathname.endsWith('/v1/runs')) {
           if (holdAck) await new Promise(resolve => heldRuns.push(resolve));
           write.ack={run_id:'qa_return_'+write.key,session_id:JSON.parse(write.body).session_id,status:'queued'}; flush(); return json(202,write.ack);
@@ -125,13 +125,17 @@ async function sendReturnChecks(b) {
         if (u.pathname === '/wizard/thread-seen') return json(200,{state:JSON.parse(q.postData() || '{}').state || {initializedAt:1,threads:{}}});
         if (u.pathname.endsWith('/transcribe')) return json(200,{text:'QA tiled voice'});
         if (u.pathname.endsWith('/files/upload')) { write.response={file:{id:'qa_tiled_voice',filename:'voice.webm',mime:'audio/webm',bytes:write.bytes}};flush();return json(200,write.response); }
+        if(screenshotCase && !['/wizard/hermes/api/sessions','/wizard/hermes/api/model/options','/wizard-os-home/api/ui-preferences'].includes(u.pathname)) {
+          journal.unlistedWrites=(journal.unlistedWrites||[]).concat(write);flush();return json(405,{error:'fixture write refused'});
+        }
         return json(200,{ok:true});
       }
       // chat-models.normalize/resolveRoute require a confirmed default. An empty
       // {} lets enqueue persist a durable FAILED item without ever posting a run.
       if (u.pathname === '/wizard/hermes/api/model/options') return json(200,{model:'qa-model',provider:'qa-provider',providers:[{slug:'qa-provider',authenticated:true,models:['qa-model']}]});
       if (u.pathname === '/wizard/v1/setup') return json(200,{first_run:false});
-      if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:'QA Agent',is_default:true,status:'running',model:{model:'qa-model',provider:'qa-provider'}}]});
+      if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:screenshotCase?'Archimedes':'QA Agent',is_default:true,status:'running',privacy:'standard',runtime:'hermes',appearance:{},permissions:{wizard_apps:[],agent_apps:[]},bound_apps:[],model:{model:'qa-model',provider:'qa-provider',fallback:false}}]});
+      if (screenshotCase && u.pathname === '/wizard/v1/bootstrap') return json(200,{bootstrap:1,settings:{owner:{name:'Fixture owner'},agent:{name:'Archimedes'},clock:{timezone:'UTC'},voice:{language:'en',vocabulary:[]}},capabilities:{voice:true,files:true,router:true,steer:true},endpoints:{transcribe:'/wizard/transcribe',upload:'/wizard/files/upload',route:'/wizard/route'}});
       if (u.pathname === '/wizard/hermes/api/sessions') return json(200,{object:'list',data:!u.searchParams.get('agent')||u.searchParams.get('agent')==='hermes'?Object.keys(FIX).map(fixSession):[],has_more:false,limit:100,offset:0,snapshot:'synthetic-return'});
       const m = u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/);
       if (m && FIX[m[1]]) return json(200,m[2] ? {object:'list',data:FIX[m[1]].rows().map(x=>({...x,session_id:m[1]})),pagination:{limit:500,offset:0}} : {session:fixSession(m[1])});
@@ -144,7 +148,14 @@ async function sendReturnChecks(b) {
       const mime = rel.endsWith('.html') ? 'text/html' : rel.endsWith('.css') ? 'text/css' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.svg') ? 'image/svg+xml' : rel.endsWith('.png') ? 'image/png' : 'application/javascript';
       return r.fulfill({status:200,contentType:mime,body:fs.readFileSync(file)});
     });
-    await c.addInitScript(skin => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.welcome.v1','done'); localStorage.setItem('wos.skin',skin); },skin);
+    await c.addInitScript(({skin,screenshotCase}) => {
+      localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.tour.v1','true'); localStorage.setItem('wos.welcome.v1','done'); localStorage.setItem('wos.skin',skin);
+      if(screenshotCase==='saved-focus') {
+        // Source-supported saved Focus, not a guessed legacy w.agent window.
+        const id='qasaved';localStorage.setItem('wux.desk.wins',JSON.stringify({[id]:{id,app:'chats',thread:null,focus:{kind:'agent',key:'hermes'},chatsProvider:'wizard-chats'}}));
+        localStorage.setItem('wux.desk.ws',JSON.stringify([{id:'dqasaved',wins:[id],focus:id,mono:false}]));localStorage.setItem('wux.desk.cur','0');localStorage.setItem('wux.desk.homeOpen','false');
+      }
+    },{skin,screenshotCase});
     const p = await c.newPage(); p.setDefaultTimeout(8000); p.setDefaultNavigationTimeout(12000); p.on('pageerror',e=>{errors.push(String(e));flush();});
     p.on('requestfailed',q=>{journal.requestFailures.push({method:q.method(),path:new URL(q.url()).pathname,error:q.failure()?.errorText});flush();});
     await p.goto(URL_+(URL_.includes('?')?'&':'?')+'shell='+(mobile?'phone':'desktop'),{waitUntil:'load'});
@@ -185,6 +196,13 @@ async function sendReturnChecks(b) {
       window.__qaReceipts=[];
       WosOutbox.onSent((it,res)=>{const value={id:it.id,sessionId:it.sessionId,kind:it.kind,text:it.text,model:it.model,provider:it.provider,body:it.body,state:it.state,runId:res.runId};__qaReceipts.push(value);void window.__qaReceipt(value);});
     },mobile);
+    if(screenshotCase) {
+      await p.evaluate(async()=>{await WosAgents.load();await WizConfig.ready;});
+      // Both the actual main-agent launcher tile and saved Focus are supported.
+      // The screenshot title alone cannot tell them apart.
+      await p.keyboard.press('Alt+o');
+      await p.locator('#palette .pal-app').filter({has:p.getByText('Archimedes Main Agent',{exact:true})}).click();
+    }
     if (half) await p.evaluate(()=>__wux.newWin({app:'settings'}));
     const id = await p.evaluate(mobile=>Object.values((mobile ? __wos : __wux).wins).find(w=>w.app==='chats'&&!w.agent).id,mobile);
     if (!mobile) await p.evaluate(id=>__wux.focusWin(id),id);
@@ -194,7 +212,7 @@ async function sendReturnChecks(b) {
       const w=(mobile ? __wos : __wux).wins[id], el=document.querySelector(`.win[data-win="${id}"]`);
       const box=el.querySelector('.dchats'), list=el.querySelector(mobile ? '.ch-list' : '.pane-list');
       const desk=mobile?null:__wux.ws.find(d=>d.wins.includes(id));
-      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,viewport:innerWidth,desktop:desk&&{wins:[...desk.wins],mono:desk.mono,split:desk.split??null},list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
+      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,viewport:innerWidth,height:innerHeight,dpr:devicePixelRatio,shell:document.documentElement.dataset.shell,focus:w.focus||null,legacyAgent:w.agent||'',sendAgent:mobile?'':__wux.chats.winAgent(w),title:el.querySelector('.agent-titlebar .t')?.textContent,hint:el.querySelector('.nc-classic')?.textContent,placeholder:el.querySelector('.ch-compose textarea')?.placeholder,back:!!el.querySelector('.pane-main .ch-back')&&getComputedStyle(el.querySelector('.pane-main .ch-back')).display!=='none',desktop:desk&&{wins:[...desk.wins],mono:desk.mono,split:desk.split??null},list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
     },{id,mobile});
     const newChat = async () => { await p.locator(list+' [data-chnew]').first().click(); await p.waitForSelector(root+' .ch-compose textarea',{state:'visible'}); };
     const send = async (text, enter = false) => {
@@ -223,8 +241,42 @@ async function sendReturnChecks(b) {
     };
     return {c,p,id,root,list,state,phase,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors,journal};
   }
-  // James's desktop half-width means TWO REAL TILES, including at >620px.
-  // These cases deliberately use shell newWin/layout, never forced CSS widths.
+  // The supplied screenshot is a SINGLE narrow OS/browser window. Retain the
+  // earlier two-tile regression below, but never substitute it for this surface.
+  if(process.env.QA_SCREENSHOT_NEW==='1') {
+    for(const skin of ['nebula','grove']) for(const entry of ['launcher','saved-focus']) for(const mode of ['enter','composer-mic']) {
+      let t;
+      try {
+        t=await boot(false,skin,false,595,entry);const {p}=t;
+        t.journal.case={skin,width:595,height:945,dpr:2,entry,mode};flush();
+        await t.newChat();const before=await t.state();t.journal.before=before;flush();
+        check(before.shell==='desktop'&&before.desktop.wins.length===1&&!before.desktop.mono&&before.viewport===595&&before.height===945&&before.dpr===2,`${entry}/${mode}: one narrow Mac desktop window`,before);
+        check(before.thread==='__new__'&&!before.list&&before.back&&before.title==='Archimedes Main Agent'&&before.hint.includes('Type below and press Enter')&&before.placeholder==='Message Archimedes',`${entry}/${mode}: screenshot-matched visible New chat`,before);
+        check(before.legacyAgent===''&&before.sendAgent===''&&(entry!=='saved-focus'||before.focus?.key==='hermes'),`${entry}/${mode}: actual main-agent Focus normalizes transport route`,before);
+        await p.screenshot({path:path.join(OUT,`before-${skin}-${entry}-${mode}.png`)});
+        await t.holdSave();let text='QA screenshot '+entry;
+        if(mode==='enter') await t.send(text,true);
+        else {
+          text='QA tiled voice';await p.locator(t.root+' [data-chmic]').click();
+          await p.waitForFunction(()=>__wux.voiceState==='listen');
+          await p.waitForFunction(()=>{const r=__qaRecorders.at(-1);return r&&!r.stopped&&performance.now()-r.started>=450&&r.bytes>=1200&&[...WosOutbox._items.values()].some(x=>x.kind==='capture'&&x.audio?.size>=1200);});
+          await t.phase('native-take-ready');await p.locator(t.root+' [data-chmic]').click();
+        }
+        await p.waitForFunction(()=>window.__qaResume);await t.phase('delivery-enqueue-held');await p.waitForTimeout(450);
+        const held=await t.state();t.journal.held=held;t.journal.reproduced=held.thread==='__new__';flush();
+        check(held.thread===null&&held.attr===''&&held.list,`${entry}/${mode}: list remains visible with save held`,held);
+        await p.screenshot({path:path.join(OUT,`held-${skin}-${entry}-${mode}.png`)});
+        await t.release(false);await(await t.sent(text))();await p.waitForTimeout(450);
+        const after=await t.state();check(after.thread===null&&after.attr===''&&after.list,`${entry}/${mode}: exact persisted run ACK retains list`,after);
+        const create=t.intercepted.filter(x=>x.path==='/wizard/hermes/api/sessions'),runs=t.intercepted.filter(x=>x.path.endsWith('/v1/runs'));
+        check(create.length===1&&runs.length===1&&[...create,...runs].every(x=>!new URLSearchParams(x.query).get('agent')&&!JSON.parse(x.body).agent&&JSON.parse(x.body).model==='qa-model'&&JSON.parse(x.body).provider==='qa-provider'),`${entry}/${mode}: create and run retain normalized main agent and locked model`,{create,runs});
+        check(!t.errors.length&&!t.journal.externalRequests.length&&!t.journal.unlistedWrites?.length,`${entry}/${mode}: no errors, escaped traffic or unknown writes`,t.journal.unlistedWrites||t.errors);
+      }catch(e){if(t)await t.phase('exception').catch(()=>{});check(false,`${skin}/${entry}/${mode}: exception`,String(e.stack||e));return;}
+      finally{if(t)await close(t.c);else await closeAll();}
+    }
+    return;
+  }
+  // Earlier regressions: two actual shell tiles, including at >620px.
   if (process.env.QA_SEND_TILING === '1') {
     const verifyVoice = async t => {
       await t.phase('native-ack-persisted');

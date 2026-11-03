@@ -8,8 +8,8 @@ import vm from 'node:vm';
 // This is a browser-free branch regression, not proof of James's client geometry.
 const root = process.env.QA_POLICY_TREE || path.resolve(import.meta.dirname, '..');
 const source = fs.readFileSync(path.join(root, 'web/desktop/desktop.js'), 'utf8');
-function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false } = {}) {
-  const timers = [], w = { id: 'qa', app: 'chats', thread: sid }, desk = { wins: count === 2 ? ['qa', 'other'] : ['qa'], mono };
+function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false, focus = null } = {}) {
+  const timers = [], w = { id: 'qa', app: 'chats', thread: sid, focus }, desk = { wins: count === 2 ? ['qa', 'other'] : ['qa'], mono };
   const width = narrow ? 580 : count === 2 && !mono ? Math.min(1200, (viewport - 24) / 2) : Math.min(1200, viewport - 16);
   let submit, attr = sid;
   const el = { dataset: { win: 'qa' }, contains: () => true, querySelector: () => ({ getBoundingClientRect: () => ({ width }) }) };
@@ -17,7 +17,7 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
   const context = vm.createContext({
     W: { qa: w }, ws: [desk], wsOf: () => 0, winEl: () => el,
     stage: { addEventListener: (_name, fn) => { submit = fn; } },
-    mainChats: x => x?.app === 'chats', focused: () => w, hud: null, homeOpen: false,
+    mainChats: x => x?.app === 'chats' && !x.agent, focused: () => w, hud: null, homeOpen: false,
     document: { activeElement: null }, setTimeout: (fn, ms) => timers.push({ fn, ms }),
     CHATS: { openNewDraft: () => { w.thread = '__new__'; }, sendVoiceTo: () => { w.thread = null; } },
     syncChatsPane() { attr = w.thread || ''; }, focusInside() {}, log() {}, toast() {},
@@ -60,3 +60,13 @@ test('existing tiled reply keeps the established shell shortcut', () => {
 test('pre-existing narrow new-text guard is retained', () => {
   const f = fixture({ narrow: true }); f.text(); f.drain(); assert.equal(f.w.thread, null);
 });
+for (const mode of ['text', 'voice']) for (const focus of [null, { kind: 'agent', key: 'hermes' }]) {
+  test(`single narrow OS window ${mode}, ${focus ? 'saved main-agent Focus' : 'main launcher'}: does not reopen New chat`, () => {
+    const f = fixture({ count: 1, viewport: 595, narrow: true, focus });
+    f[mode](); f.drain();
+    assert.equal(f.w.thread, null);
+    assert.equal(f.attr, '');
+    assert.equal(f.desk.wins.length, 1, 'an OS-window regression must not silently use two shell tiles');
+    assert.deepEqual(f.w.focus, focus, 'list return must retain saved Focus');
+  });
+}
