@@ -1,10 +1,10 @@
-// Off and System (Miguel, 2 Nov 2026), now the miguel/notification-levels tweak: a quiet choice, Off (no badge, nothing
-// in Chats, kept in Notifications' own history), and System rows for notices about Wizard itself (app updates, app
-// connections, Wizard updates), default Morning report, that count on the Settings cog when set to Badge. A System
-// notice that needs the owner is never silenced. With the tweak off, core is PR #841's Badge | Chats, unchanged.
+// Off and System (Miguel, 2 Nov 2026), built into core since 4 Nov 2026 (was the opt-in miguel/notification-levels
+// tweak, #855): a quiet choice, Off (no badge, nothing in Chats, kept in Notifications' own history), and System rows
+// for notices about Wizard itself (app updates, app connections, Wizard updates), default Morning report, that count
+// on the Settings cog when set to Badge. A System notice that needs the owner is never silenced.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { core, wear, settle, read } from './fixtures/notification-levels.mjs';
+import { core, settle, read } from './fixtures/notification-levels.mjs';
 
 const NOTES = [
   { id: 'u1', time: 30, title: '1 app updated', message: 'Updated Notifications (2.29.0).', priority: 3, tags: [] },
@@ -12,7 +12,7 @@ const NOTES = [
   { id: 'c1', time: 28, title: 'App connection added', message: 'Money can read SimpleFIN.', priority: 2, tags: ['link', 'wizard-system', 'connections'] },
   { id: 'n1', time: 20, title: 'Backup failed', message: 'Disk full', priority: 3, tags: ['cron'] },
 ];
-function boot({ storage = new Map(), tweak = true } = {}) {
+function boot({ storage = new Map() } = {}) {
   const calls = [], listeners = {}, events = [], read = new Set();
   const json = (body, status = 200) => ({ ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => body });
   const fetch = async (url, opts = {}) => {
@@ -36,7 +36,6 @@ function boot({ storage = new Map(), tweak = true } = {}) {
     CustomEvent: class { constructor(type, o = {}) { this.type = type; this.detail = o.detail; } },
     setTimeout: () => 0, setInterval: () => 0, fetch, calls, listeners, storage, events,
   });
-  if (tweak) ctx.tweak = wear(ctx);
   return ctx;
 }
 const ids = B => [...B.items()].map(i => i.id);
@@ -120,33 +119,26 @@ test('unknown routes and ids are refused', () => {
   assert.equal(B.route('messenger'), 'off');
 });
 
-/* ---- Tweak off: PR #841's core, unchanged ---- */
-test('tweak off: the picker is the two-choice Badge | Chats, nothing on the cog, no System group', async () => {
-  const w = boot({ tweak: false }), B = w.WosBell;
-  const h = B.picker('notifications');
-  assert.deepEqual(choices(h), ['badge', 'chats']);
-  assert.equal(h, '<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where Notifications notifications go"><button type="button" role="radio" data-notify-route="notifications" data-notify-to="badge" aria-checked="false"><svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="4.5"/></svg><span>Badge</span></button><button type="button" role="radio" data-notify-route="notifications" data-notify-to="chats" aria-checked="true"><svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h10A1.5 1.5 0 0 1 14.5 4v6a1.5 1.5 0 0 1-1.5 1.5H7.5L4.5 14v-2.5H3A1.5 1.5 0 0 1 1.5 10V4A1.5 1.5 0 0 1 3 2.5z"/></svg><span>Chats</span></button></div>', 'byte for byte the #841 markup');
-  B.watch(() => {}); await B.refresh(true); await settle();
-  assert.equal(B.attention(), null); assert.equal(B.groups().length, 0);
-  assert.ok(!w.events.includes('wizard:notify-attention'));
-  assert.deepEqual(ids(B), ['u1', 'u2', 'c1', 'n1'], 'every Notifications item is in Chats, as in #841');
-  assert.equal(B.setRoute('notifications', 'off'), false, 'no Off');
-  assert.equal(B.setRoute('system:app-updates', 'badge'), false, 'no System rows');
-  assert.equal(B.routeIdOf(NOTES[0]), 'notifications');
-  assert.equal(B.ask('notifications', 'Notifications'), 'Notifications notifications go to');
-  assert.equal(B.describe({ id: 'notifications', route: 'chats' }, false), 'In Chats · no badge on its icon');
-  assert.ok(!w.calls.some(([, u]) => u === '/notifications/api/routes'), 'no box routes read or written');
+/* ---- Built in: no tweak, no Badge | Chats-only core left ---- */
+test('core is the levels: four choices with no tweak worn, stored Morning report / Off values hold as saved', async () => {
+  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ notifications: 'daily', messenger: 'off' })]]);
+  const w = boot({ storage }), B = w.WosBell;
+  assert.equal(B.routing.owner, null, 'the stock part, nobody replaced it');
+  assert.deepEqual(choices(B.picker('messenger')), ['chats', 'badge', 'daily', 'off']);
+  assert.equal(B.route('notifications'), 'daily'); assert.equal(B.isOff('notifications'), true);
+  assert.equal(B.route('messenger'), 'off'); assert.equal(B.isOff('messenger'), true);
+  assert.equal(B.routeLabel('notifications'), 'Morning report');
+  assert.equal(B.routeLabel('mail'), 'Chats', 'an app with no saved choice starts in Chats (#895)');
 });
 
-test('stored Off / Morning report values read as Badge with the tweak off, and come back when it is on again', async () => {
-  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ notifications: 'daily', messenger: 'off' })]]);
-  const w = boot({ storage, tweak: false }), B = w.WosBell;
-  assert.equal(B.route('notifications'), 'badge'); assert.equal(B.isOff('notifications'), false);
-  const t = wear(w); await settle();
-  assert.equal(B.route('notifications'), 'daily'); assert.equal(B.isOff('notifications'), true);
-  t.off(); await settle();
-  assert.equal(B.route('notifications'), 'badge');
-  assert.equal(JSON.parse(storage.get('wos.notify.route.v1')).notifications, 'daily', 'switching off never rewrites the saved choices');
+test('the retired tweak is gone: no package, not in the catalog or Miguel\'s profile', () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
+  assert.ok(!cat.tweaks.includes('miguel/notification-levels')); assert.ok(!prof.tweaks.includes('miguel/notification-levels'));
+  assert.throws(() => read('web/tweaks/miguel/notification-levels/manifest.json'));
+  // Its styles live in core now.
+  assert.match(read('web/core/settings.css'), /\.st-sys-list li\.new b::before/);
+  assert.match(read('web/core/settings.css'), /\.st-seg\.st-nr-seg\.wos-route \{ width: auto; max-width: none; grid-auto-columns: auto; \}/);
+  assert.match(read('web/desktop/desktop.css'), /#settingsBtn \.cog-n \{/);
 });
 
 test('cog and attention hooks: the phone gear, the desktop cog and the Settings row read WosBell.attention', () => {
@@ -156,20 +148,4 @@ test('cog and attention hooks: the phone gear, the desktop cog and the Settings 
   assert.match(st, /if \(at\?\.n\) items\.push\(\{ title: `\$\{at\.n\} \$\{at\.label\}`, feature: 'notification-routing' \}\)/);
   for (const f of ['web/app.js', 'web/desktop/desktop.js', 'web/core/settings.js', 'web/core/notif-bell.js', 'web/core/chats.js', 'web/core/skin-host.js'])
     assert.doesNotMatch(read(f), /notification-levels/, `${f} never names the tweak`);
-});
-
-test('the package: listed, on in Miguel\'s profile, off for everyone else, and uses only the tweak API', () => {
-  const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
-  const man = JSON.parse(read('web/tweaks/miguel/notification-levels/manifest.json'));
-  assert.ok(cat.tweaks.includes(man.id)); assert.ok(!(cat.defaults || []).includes(man.id), 'opt-in: not a default');
-  assert.ok(prof.tweaks.includes(man.id)); assert.ok(!(prof.off || []).includes(man.id));
-  assert.deepEqual(man.capabilities, ['notify']);
-  assert.equal(man.name, 'Notification levels: Chats, Badge, Morning report or Off');
-  const src = read('web/tweaks/miguel/notification-levels/tweak.js').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-  for (const b of ['addEventListener', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'fetch(', 'XMLHttpRequest', '__wos', '__wux', 'localStorage', 'sessionStorage', 'innerHTML', 'outerHTML', 'document.', 'window.', 'eval(', 'new Function', 'import('])
-    assert.ok(!src.includes(b), `tweak.js uses ${b}`);
-  assert.match(src, /export default function setup\(api\)/);
-  // Its styles never leak into core: the four-choice widths and the Recent list live only in the package.
-  assert.doesNotMatch(read('web/core/settings.css'), /st-sys-list|wos-route-mr|grid-auto-columns: auto/);
-  assert.doesNotMatch(read('web/desktop/desktop.css'), /cog-n/);
 });

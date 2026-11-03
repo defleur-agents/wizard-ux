@@ -11,8 +11,7 @@
     "miguel/snooze-someday",
     "miguel/machines-home",
     "miguel/arrange-download",
-    "miguel/refresh-button",
-    "miguel/notification-levels"
+    "miguel/refresh-button"
   ],
   "flags": {}
 }
