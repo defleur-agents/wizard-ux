@@ -75,7 +75,7 @@
           const publish = rows => {
             if (r.ctrl.signal.aborted || runs[wid] !== r) return;
             for (const s of rows || []) {
-              const hit = match([visibleSnippet(s.searchSnippet), s.preview, s.title].filter(Boolean), ws);
+              const hit = match([visibleSnippet(s.searchSnippet), visibleSnippet(s.preview), s.title].filter(Boolean), ws);
               if (!hit) continue;
               r.rows.set(s.id,s); window.WizLive.rememberSearch?.(s); r.hits.set(s.id,hit);
             }
@@ -111,10 +111,10 @@
   function seed(r, prev) {
     const ws = words(r.q);
     if (prev && prev.agent === r.agent && r.q.includes(prev.q)) for (const [id, s] of prev.rows) {
-      const m = match([s.title, s.preview, visibleSnippet(s.searchSnippet)].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
+      const m = match([s.title, visibleSnippet(s.preview), visibleSnippet(s.searchSnippet)].filter(Boolean), ws); if (m) { r.rows.set(id, s); r.hits.set(id, m); }
     }
     for (const s of candidates(r.agent)) {
-      const title=match([s.title,s.preview].filter(Boolean),ws);
+      const title=match([s.title,visibleSnippet(s.preview)].filter(Boolean),ws);
       if(title) { r.rows.set(s.id,s); r.hits.set(s.id,title); }
       const hit = cache.get(`${s.agent || 'hermes'}:${s.id}`);
       if (hit && hit.sig === sigOf(s) && !r.hits.has(s.id)) { const m = match(hit.texts, ws); if (m) { r.rows.set(s.id,s); r.hits.set(s.id, m); } }

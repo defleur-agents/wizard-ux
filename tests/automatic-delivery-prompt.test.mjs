@@ -96,7 +96,7 @@ test('message search never exposes an automatic delivery prompt as its result sn
   const ctx = context();
   const raw = '[AUTO] Please share the complete Daily security considerations · Tue, Nov 3 report exactly as save…';
   const rows = [
-    { id: 'prompt-only', title: 'Security', preview: '', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
+    { id: 'prompt-only', title: 'Security', preview: raw, searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
     { id: 'visible-match', title: 'Daily Brief', preview: 'Daily Report link', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
   ];
   ctx.WizLive = {
