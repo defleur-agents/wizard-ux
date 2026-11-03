@@ -4,14 +4,15 @@ import fs from 'node:fs';
 import { listFixture, sectionKeys } from './fixtures/chats-list-render.mjs';
 const css = fs.readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
 const skins = Object.fromEntries(['obsidian', 'landscapes'].map(k => [k, fs.readFileSync(new URL(`../web/skins/${k}/skin.css`, import.meta.url), 'utf8')]));
+const archiveTop = fs.readFileSync(new URL('../web/tweaks/miguel/archive-top/tweak.css', import.meta.url), 'utf8');
 
 // Bounded CSS cascade model: only the actual direct-result section/footer and scroll rules.
 // It evaluates selectors, specificity and source order, then flex order + DOM order. It is not browser geometry QA.
 function matches(part, node) {
   let s = part.replace(/:not\(([^()]+)\)/g, (_, neg) => matches(neg, node) ? '__never__' : '');
-  s = s.replace(/\[([\w-]+)(\^?=)?(?:"([^"]*)")?\]/g, (_, key, op, value) => {
+  s = s.replace(/\[([\w-]+)([\^~]?=)?(?:"([^"]*)")?\]/g, (_, key, op, value) => {
     const got = node.attrs[key];
-    return (op === '^=' ? got?.startsWith(value) : op ? got === value : got !== undefined) ? '' : '__never__';
+    return (op === '^=' ? got?.startsWith(value) : op === '~=' ? got?.split(/\s+/).includes(value) : op ? got === value : got !== undefined) ? '' : '__never__';
   });
   s = s.replace(/\.([\w-]+)/g, (_, cls) => node.classes.includes(cls) ? '' : '__never__');
   return s === '' || s === node.tag;
@@ -23,7 +24,7 @@ function cascade(text, chain, prop, fallback) {
     if (value === undefined) continue;
     for (const selector of selectors.trim().split(',')) {
       // Irrelevant widgets/pseudo-elements are intentionally outside this synthetic tree.
-      if (!/\.ch-(?:sec|bodysearch|scroll)(?:[.\s[:]|$)/.test(selector) || /::|[>+~]/.test(selector)) continue;
+      if (!/\.ch-(?:sec|bodysearch|scroll)(?:[.\s[:]|$)/.test(selector) || /::|[>+]|\s~\s/.test(selector)) continue;
       const parts = selector.trim().split(/\s+/);
       if (!matches(parts.pop(), chain.at(-1))) continue;
       let at = chain.length - 2, valid = true;
@@ -38,10 +39,10 @@ function cascade(text, chain, prop, fallback) {
   }
   return result;
 }
-function visual(html, { status, skin = '', desktop = false }) {
-  const text = css + '\n' + (skins[skin] || '');
+function visual(html, { status, skin = '', desktop = false, archiveFirst = false }) {
+  const text = css + '\n' + (skins[skin] || '') + '\n' + (archiveFirst ? archiveTop : '');
   const chain = [
-    { tag: 'html', classes: [], attrs: { 'data-skin': skin, 'data-shell': desktop ? 'desktop' : 'phone' } },
+    { tag: 'html', classes: [], attrs: { 'data-skin': skin, 'data-shell': desktop ? 'desktop' : 'phone', 'data-tweaks': archiveFirst ? 'miguel/archive-top' : '' } },
     { tag: 'div', classes: ['ch-list', ...(status ? ['by-status'] : [])], attrs: {} },
     { tag: 'div', classes: ['ch-scroll'], attrs: {} },
   ];
@@ -69,10 +70,15 @@ for (const status of [false, true]) for (const skin of ['', 'obsidian', 'landsca
     const html = listFixture({ status, footer: false }).render();
     assert.doesNotMatch(html, /ch-sec-last|ch-bodysearch/);
     const order = visual(html, { status, skin, desktop });
-    if (status || skin) assert.equal(order[0], 'archive');
+    // #810 removes skin-owned layout; shared grouping and explicit tweaks own ordering.
+    if (status) assert.equal(order[0], 'archive');
     else assert.equal(order.at(-1), 'archive');
-    if (skin && !desktop) assert.equal(order.at(-1), 'ready');
-    else if (status || skin) assert.equal(order[1], 'working');
+    if (status) assert.equal(order[1], 'working');
+    const reference = visual(html, { status, desktop });
+    assert.deepEqual(order, reference, 'a colour choice never changes the shared section order');
+    const optedIn = visual(html, { status, skin, desktop, archiveFirst: true });
+    assert.equal(optedIn[0], 'archive', 'Archive first remains available as an explicit tweak on every skin');
+    assert.deepEqual(optedIn.slice(1), reference.filter(id => id !== 'archive'), 'all other sections retain their original order');
   });
 }
 test('search ignores saved section collapse without mutating it; clearing restores the saved list', () => {
