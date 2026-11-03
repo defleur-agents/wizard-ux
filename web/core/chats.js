@@ -715,14 +715,21 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
+  function untouchedNotif(d) { return !!d && !(d.text || '').trim() && !(d.files || []).length && /^notifications:/.test(d.reply?.key || ''); }
   function rotateNew(resume) {
     const all = KIT.drafts.all(), cur = all.new;
     if (resume === 'new') return true;
     const resumed = resume ? all[resume] : null;
     if (resume && !resumed) return false;
-    if (cur && ((cur.text || '').trim() || (cur.files || []).length || cur.reply)) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
+    if (cur && ((cur.text || '').trim() || (cur.files || []).length || (cur.reply && !untouchedNotif(cur)))) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
     if (resumed) { all.new = { ...resumed, at: Date.now() }; delete all[resume]; } else delete all.new;
     try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); return true; } catch (e) { return false; }
+  }
+  // Remove legacy saved slots created just by opening a notification; preserve the live composer.
+  function dropOpenedNotifications() {
+    const all = KIT.drafts.all(); let n = 0;
+    for (const k of Object.keys(all)) if (k !== 'new' && SAVED_NEW.test(k) && untouchedNotif(KIT.drafts.get(k))) { delete all[k]; n++; }
+    if (n) try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); } catch (e) {}
   }
   function openNewDraft(wid, resume) {
     const w = W[wid]; if (!w) return;
@@ -775,6 +782,7 @@ window.WizCore.chats = function createChats(H) {
     return n;
   }
   migrateOldReplies();
+  dropOpenedNotifications();
   // The reply bubble above the composer: who it answers, one or two lines of it, and × to drop it.
   /* Notifications as threads (a live package holds WosSkinHost.inboxThreads): a New chat whose draft carries a
    * Notifications item is shown as that notification's one-message thread. Its title, one yellow message, Done /
@@ -2392,11 +2400,18 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
+      // Current answers paint before optional detail and approval metadata.
+      if (changed) { const el = elOf(w.id); if (el && current()) renderLive(w, el); }
+      changed = false;
+      const detail = LIVE.session(sid)?.detailNeeded ? LIVE.sessionInfo(sid).then(() => {
+        if (current()) { c.detailNav = nav; changed = true; }
+      }).catch(() => {}) : Promise.resolve();
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
+      await detail;
       if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
@@ -2420,7 +2435,7 @@ window.WizCore.chats = function createChats(H) {
           const saved = LIVE.savedMessages?.(sid);
           if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedNav: nav, savedAt: saved.at }); } catch (_) {}
         }
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
+        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
       }
