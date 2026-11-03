@@ -92,8 +92,8 @@ html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scroll
  * Keep a live recording's Send/Cancel pill visible so fullscreen never traps a take. */
 .desktop-fullscreen .bar { visibility: hidden; }
 .desktop-fullscreen .stage { inset: 0; }
-.desktop-fullscreen .win.full { border: 0; border-radius: 0; box-shadow: none; }
-.desktop-fullscreen .win.full .wbar { display: none; }
+.wsp .win.full { border: 0; border-radius: 0; box-shadow: none; }
+.wsp .win.full .wbar { display: none; }
 .wbody iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #05030c; }
 /* an unfocused window takes one click to focus without the click landing inside an iframe */
 .win:not(.focus) .wbody iframe { pointer-events: none; }
