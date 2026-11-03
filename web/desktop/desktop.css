@@ -431,6 +431,21 @@ html:is([data-skin^="obsidian"], [data-skin^="landscapes"]) .mine-home .home-uns
 .kh-legend kbd { min-width: 15px; height: 15px; padding: 0 3px; border-radius: 4px; display: grid; place-items: center; font: inherit; font-weight: 700; background: var(--bg); color: var(--ink); }
 html.key-hints-on #clock { visibility: hidden; }
 .kh-foot.pinned { top: auto; bottom: 18px; }
+/* a layout's legend (api.keys.legend): one compact card of the keys valid now that have no single target */
+.kh-keys { position: fixed; z-index: 1; display: flex; flex-wrap: wrap; gap: 6px 20px; max-width: calc(100vw - 32px); padding: 10px 16px 12px; box-sizing: border-box; border-radius: 14px; background: color-mix(in oklab, var(--bg) 96%, var(--ink) 4%); border: 1px solid var(--line-2); box-shadow: 0 10px 30px color-mix(in srgb, black 22%, transparent); color: var(--ink-2); font: 400 0.75rem/1.25 var(--wz-font-ui, inherit); animation: pop 120ms var(--ease); }
+.kh-keys-h { flex: 1 0 100%; margin: 0 0 2px; font: 500 0.6875rem/1.2 var(--wz-font-ui, inherit); color: var(--ink-2); opacity: .8; }
+.kh-keys section { display: grid; grid-auto-rows: min-content; gap: 4px; min-width: 0; }
+.kh-keys h4 { margin: 0 0 1px; font: 600 0.6875rem/1.2 var(--wz-font-ui, inherit); color: var(--ink); letter-spacing: .02em; }
+.kh-keys span { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.kh-keys em { font-style: normal; margin-left: 5px; }
+.kh-keys kbd { min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 5px; display: inline-grid; place-items: center; font: 600 0.6875rem/1 var(--wz-font-ui, inherit); color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-bottom-width: 2px; }
+/* the last group (the layout's least-used keys) runs as one row under the others, so the card stays short */
+.kh-keys:not(.is-line) section:last-child:not(:nth-of-type(1)) { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; }
+.kh-keys:not(.is-line) section:last-child:not(:nth-of-type(1)) h4 { margin: 0 4px 0 0; }
+.kh-keys.is-line { flex-wrap: nowrap; align-items: center; gap: 16px; padding: 6px 12px; }
+.kh-keys.is-line .kh-keys-h { flex: none; margin: 0; }
+.kh-keys.is-line section { display: flex; align-items: center; gap: 12px; }
+.kh-keys.is-line h4 { display: none; }
 .bar-start { display: contents; }
 
 /* One mic: the other voice buttons fold into its menu (keys unchanged). */
