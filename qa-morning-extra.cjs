@@ -36,10 +36,47 @@ async function extra(o){
  const opacityProof=async()=>{
   await toastPaint();const b=await p.locator('#toast').boundingBox();assert.ok(b&&b.width>48&&b.height>20);
   const clip={x:Math.ceil(b.x+20),y:Math.ceil(b.y+8),width:Math.floor(b.width-40),height:Math.floor(b.height-16)};
-  const samples=[];
-  try{for(const loud of [false,true]){await p.evaluate(({b,loud})=>{let e=document.querySelector('#qa-under-toast');if(!e){e=document.createElement('div');e.id='qa-under-toast';document.body.append(e);}e.style.cssText=`position:fixed;pointer-events:none;left:${b.x}px;top:${b.y}px;width:${b.width}px;height:${b.height}px;z-index:2147483645;background:${loud?'#ff00ff':'#00ff00'};font:24px monospace;color:#fff`;e.textContent=loud?'LOUD TEXT LOUD TEXT LOUD TEXT':'';const t=document.querySelector('#toast');if(!('qaOldZ' in t.dataset))t.dataset.qaOldZ=t.style.zIndex;t.style.zIndex='2147483646';},{b,loud});const png=await p.screenshot({clip});fs.writeFileSync(path.join(out,`${label}-${mode}-opaque-${loud?'text':'blank'}.png`),png);samples.push(png);}
+  const samples=[],controls=[];let proof;
+  try{
+   proof=await p.evaluateHandle(b=>{
+    const toast=document.querySelector('#toast'),parent=toast.parentElement,style=toast.getAttribute('style');
+    if(document.querySelector('#qa-under-toast'))throw Error('opacity underlay already exists');
+    const underlay=document.createElement('div');underlay.id='qa-under-toast';
+    try{
+     // Phone #device isolates its descendants: a body-level high-z probe covers the toast.
+     // Same parent + same z + immediately preceding tree order puts this probe just below it.
+     const z=getComputedStyle(toast).zIndex;if(z==='auto')throw Error('toast needs an explicit stacking level');
+     underlay.style.cssText=`position:absolute;pointer-events:none;left:0;top:0;width:100px;height:100px;margin:0;padding:0;border:0;box-sizing:border-box;z-index:${z};font:24px monospace;color:#fff`;
+     parent.insertBefore(underlay,toast);
+     // Measure this containing block's viewport origin and axes, including ancestor scale/offset.
+     const origin=underlay.getBoundingClientRect();underlay.style.left='100px';const x=underlay.getBoundingClientRect();
+     underlay.style.left='0';underlay.style.top='100px';const y=underlay.getBoundingClientRect();
+     const sx=(x.x-origin.x)/100,sy=(y.y-origin.y)/100;
+     if(!(sx>0&&sy>0)||Math.abs(x.y-origin.y)>.01||Math.abs(y.x-origin.x)>.01)throw Error('unsupported rotated/skewed toast containing block');
+     Object.assign(underlay.style,{left:`${(b.x-origin.x)/sx}px`,top:`${(b.y-origin.y)/sy}px`,width:`${b.width/sx}px`,height:`${b.height/sy}px`});
+     const r=underlay.getBoundingClientRect();
+     if(['x','y','width','height'].some(k=>Math.abs(r[k]-b[k])>.1))throw Error('underlay does not match actual toast bounds');
+     return {toast,underlay,style};
+    }catch(error){underlay.remove();throw error;}
+   },b);
+   for(const loud of [false,true]){
+    await p.evaluate(({s,loud})=>{
+     if(s.underlay.nextSibling!==s.toast||s.underlay.parentElement!==s.toast.parentElement)throw Error('toast stacking siblings changed');
+     s.underlay.style.background=loud?'#ff00ff':'#00ff00';s.underlay.textContent=loud?'LOUD TEXT LOUD TEXT LOUD TEXT':'';
+    },{s:proof,loud});
+    await toastPaint();const png=await p.screenshot({clip});samples.push(png);
+    fs.writeFileSync(path.join(out,`${label}-${mode}-opaque-${loud?'text':'blank'}.png`),png);
+    // Positive control: same actual toast, same crop, no substitute foreground or excluded pixels.
+    await p.evaluate(s=>s.toast.style.setProperty('visibility','hidden','important'),proof);
+    try{
+     const control=await p.screenshot({clip});controls.push(control);
+     fs.writeFileSync(path.join(out,`${label}-${mode}-underlay-${loud?'text':'blank'}.png`),control);
+    }finally{await p.evaluate(s=>{if(s.style===null)s.toast.removeAttribute('style');else s.toast.setAttribute('style',s.style);},proof);}
+   }
+   must(!controls[0].equals(controls[1]),'hidden-toast positive control exposes changed loud text and blank underlays');
+   must(samples.every((png,i)=>!png.equals(controls[i])),'actual toast foreground changes both hidden-toast control crops');
    must(samples[0].equals(samples[1]),'floating failure text panel pixels unchanged over loud text and blank');
-  }finally{await p.evaluate(()=>{document.querySelector('#qa-under-toast')?.remove();const e=document.querySelector('#toast');e.style.zIndex=e.dataset.qaOldZ||'';delete e.dataset.qaOldZ;});}
+  }finally{if(proof){try{await p.evaluate(s=>{s.underlay.remove();if(s.style===null)s.toast.removeAttribute('style');else s.toast.setAttribute('style',s.style);},proof);}finally{await proof.dispose();}}}
  };
  const open=async()=>{await p.evaluate(()=>WizOpenApp('morning'));await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.__morning?.state()));return frame();};
  const chats=async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});};
