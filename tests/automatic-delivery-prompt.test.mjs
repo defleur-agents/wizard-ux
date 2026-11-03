@@ -37,7 +37,7 @@ const prompt = label => `[${label}] Please share the complete Daily Brief report
 
 test('the shared marker recognizes only automatic report-delivery prompts', () => {
   const { WizCore } = context();
-  for (const label of ['AUTO', 'Nebula:']) assert.equal(WizCore.isAutomaticPrompt(prompt(label)), true, label);
+  for (const label of ['AUTO', 'Nebula', 'Nebula:']) assert.equal(WizCore.isAutomaticPrompt(prompt(label)), true, label);
   for (const words of [
     '[AUTO] Keep this visible.',
     '[Nebula:] Keep this visible.',
@@ -49,7 +49,7 @@ test('the shared marker recognizes only automatic report-delivery prompts', () =
 test('automatic delivery prompts stay out of the transcript while the finished Nebula message remains', () => {
   const ctx = context();
   vm.runInContext(kit, ctx);
-  for (const label of ['AUTO', 'Nebula:']) {
+  for (const label of ['AUTO', 'Nebula', 'Nebula:']) {
     const turns = ctx.WosChat.parseRows([
       { role: 'user', content: prompt(label), timestamp: 1 },
       { role: 'assistant', content: 'Morning brief\n\nToday is clear.', timestamp: 2 },

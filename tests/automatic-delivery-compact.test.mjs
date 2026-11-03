@@ -36,7 +36,7 @@ const frozenRow = overrides => Object.freeze({
   ...overrides,
 });
 
-for (const label of ['AUTO', 'Nebula:']) {
+for (const label of ['AUTO', 'Nebula', 'Nebula:']) {
   test(`compact ${label} user delivery preview is hidden without mutating input or retry fields`, () => {
     const normalize = normalizer();
     const input = frozenRow({ preview: prompt(label) });
@@ -72,6 +72,26 @@ test('compact ordinary AUTO messages and unknown-role previews remain unchanged'
     assert.equal(row.previewRole, input.previewRole);
   }
 });
+test('author clipped-preview forms filter only compact user rows and preserve exact retry fields', () => {
+  const normalize = normalizer();
+  for (const label of ['AUTO', 'Nebula', 'Nebula:']) {
+    for (const ending of ['Daily Brief report exactly as save…', 'AXM · Ready for Samples ...']) {
+      const preview = `[${label}] Please share the complete ${ending}`;
+      for (const role of ['user', 'assistant', undefined]) {
+        const input = frozenRow({ preview, previewRole: role });
+        const before = JSON.stringify(input);
+        const row = normalize(input);
+        assert.equal(row.preview, role === 'user' ? '' : preview);
+        assert.equal(row.previewRole, role === 'user' ? undefined : role);
+        assert.equal(row.wizard_retry_input, input.wizard_retry_input);
+        assert.equal(row.retryRunId, input.retryRunId);
+        assert.equal(JSON.stringify(input), before);
+      }
+    }
+    const manual = frozenRow({ preview: `[${label}] Please share the complete migration plan tomorrow.` });
+    assert.equal(normalize(manual).preview, manual.preview);
+  }
+});
 test('full rows retain exact explicit retry input and assistant delivery text', () => {
   const raw = prompt('AUTO');
   const input = Object.freeze({ id: 'full-row', status: 'failed',
@@ -97,8 +117,8 @@ test('authoritative server body hits survive when not every query word fits in t
   assert.equal(result.hits.get('server-body-hit').snippet, rows[0].searchSnippet);
   ctx.WizCore.chatSearch.reset();
 });
-for (const excerpt of [prompt('AUTO'), '[AUTO] Please share the complete Daily security considerations report exactly as save…']) {
-  test(`server publication and cache seeding do not recover a concealed preview: ${excerpt.slice(-12)}`, async () => {
+for (const excerpt of [prompt('AUTO'), '[AUTO] Please share the complete Daily security considerations report exactly as save…', '[Nebula] Please share the complete Daily security considerations report exactly as save…', '[Nebula:] Please share the complete AXM · Ready for Samples ...']) {
+  test(`server publication and cache seeding do not recover a concealed preview: ${excerpt}`, async () => {
     const ctx = context();
     const rows = [
       { id: 'preview-only', title: 'Security', preview: excerpt, searchSnippet: '' },
