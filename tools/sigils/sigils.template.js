@@ -7,6 +7,7 @@
  *
  * An installed app that ships its own logo (Runtipi metadata/logo.jpg, served by the box and listed by core/apps.js)
  * shows that picture as a rounded tile (`<i class="sglogo">`) in every one of these places instead of a sigil.
+ * An approved HOUSE_ONLY identity keeps its house mask, even with a cached package logo.
  * Which sigil an app gets otherwise: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
  * silhouette, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
@@ -20,6 +21,7 @@
   const HOUSE = /*HOUSE*/;
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];
+  const HOUSE_ONLY = new Set(/*HOUSE_ONLY*/);
   const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
@@ -37,6 +39,9 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
+    // A legacy package picture must not replace Notes' approved page/pencil or
+    // bring an opaque image background into the skin's shared hover treatment.
+    if (HOUSE_ONLY.has(a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     const s = sigilOf(a), logo = logoOf(a);
     return logo ? { ...s, logo } : s;
   }
