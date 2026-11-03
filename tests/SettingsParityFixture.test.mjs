@@ -25,7 +25,27 @@ test('actual Welcome boot accepts setup first_run:false plus authenticated synth
   const bad=await boot({}, {}, '');assert.deepEqual(bad.opened,['ai']);assert.deepEqual(bad.log,['boot:false::false']);
 });
 test('Settings browser keeps original paths, real boot oracle and re-resolving trusted input',()=>{
-  for(const text of ["ctx.addInitScript(seedOwner)","window.__welcomeLog?.includes('boot:true:done:false')","assert.equal(welcome.active,false)","assert.equal(welcome.overlay,false)","phone?await el.tap():await el.click()","['nebula','obsidian-light']",'data-skinfamily','data-skinpick','nearest Back returns to categories','outside unwinds nearest page then dismisses','#1552 Settings centred over Home','missing route visible and fail-closed','read-only retry recovers verified mode','existing native check action preserved','Ask me action/readback','Automatic action/readback','original Install action intercepted'])assert(harness.includes(text),text);
+  for(const text of ["ctx.addInitScript(seedOwner)","window.__welcomeLog?.includes('boot:true:done:false')","assert.equal(welcome.active,false)","assert.equal(welcome.overlay,false)","phone?await el.tap():await el.click()","['nebula','obsidian-light']",'data-skinfamily','data-skinpick','nearest Back returns to categories','one outside tap dismisses Settings to Home','#1552 Settings centred over Home','missing route visible and fail-closed','read-only retry recovers verified mode','existing native check action preserved','Ask me action/readback','Automatic action/readback','original Install action intercepted'])assert(harness.includes(text),text);
   assert(!harness.includes('scrollIntoViewIfNeeded'));assert(!/wosWelcome[^\n]*remove\(/.test(harness));assert(!harness.includes('force:true'));assert(!harness.includes('force: true'));
   assert.equal(fixture.ownerRead('/wizard/v1/runs'),null);
 });
+
+test('category oracle awaits canonical state, selected navigation and matching heading, never invented data-page',()=>{
+  const body=harness.match(/const categoryReady=entry=>\{([\s\S]*?)\n\};/)[1];
+  const entry={id:'about',label:'About & updates'},heading={textContent:entry.label},pane={hidden:false,querySelector:()=>heading},root={dataset:{settingsPage:'about'},querySelector:s=>s==='.st-page'?pane:s==='[data-st-page="about"][aria-current="page"]'?{}:null};
+  const ready=()=>vm.runInNewContext(`(entry=>{${body}})(entry)`,{entry,document:{querySelector:s=>s==='#settingsBody'?root:null}});
+  assert.equal(ready(),true);root.dataset.settingsPage='look';assert.equal(ready(),false);root.dataset.settingsPage='about';
+  heading.textContent='Look';assert.equal(ready(),false);heading.textContent=entry.label;pane.hidden=true;assert.equal(ready(),false);pane.hidden=false;
+  const query=root.querySelector;root.querySelector=s=>s==='.st-page'?pane:null;assert.equal(ready(),false);root.querySelector=query;
+  assert(harness.includes('await p.waitForFunction(categoryReady,entry)'));assert(!harness.includes("getAttribute('data-page')"));
+});
+test('phone outside dismissal sends one trusted tap and awaits closed sheet; nearest Back and native evidence remain',async()=>{
+  const body=harness.match(/else \{(await p\.locator\('#scrim'\)[^\n]+)\}/)[1];
+  let taps=0,waits=0,checks=0;const state={sheet:'settings'};
+  const p={locator:s=>({tap:async()=>{assert.equal(s,'#scrim');assert.equal(++taps,1);state.sheet=null;},isHidden:async()=>{assert.equal(s,'#settings');return state.sheet===null;}}),waitForFunction:async predicate=>{++waits;assert.equal(predicate(),true);}};
+  await vm.runInNewContext(`(async()=>{${body}})()`,{p,__wos:state,skin:'fixture',ok:c=>{++checks;assert(c);}});
+  assert.equal(taps,1);assert.equal(waits,1);assert.equal(checks,1);
+  assert(harness.includes("await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0"));
+  assert(harness.includes("await shot(skin+'-about')"));assert(harness.includes('[data-settings-version="phone"]'));assert(harness.includes("await shot(skin+'-about-native')"));
+});
+
