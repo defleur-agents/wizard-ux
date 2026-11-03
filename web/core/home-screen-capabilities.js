@@ -28,5 +28,7 @@
   }
   /* The replica a pinned offline app keeps its presentation in: the app's WizOffline prefix, `<id>-`. */
   const replicaPrefix = id => /^[a-z][a-z0-9-]*$/.test(String(id)) ? id + '-' : '';
-  globalThis.WizHomeScreenCapabilities = Object.freeze({ sanitize, matcher, replicaPrefix });
+  const api = Object.freeze({ sanitize, matcher, replicaPrefix });
+  globalThis.WizHomeScreenCapabilities = api;
+  if (typeof window !== 'undefined') window.WizHomeScreenCapabilities = api;
 })();

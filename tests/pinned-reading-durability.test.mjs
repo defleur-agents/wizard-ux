@@ -110,7 +110,7 @@ test('a declaration naming another app\'s keys cannot widen: patterns need a lit
 });
 test('cold first mount awaits actual hydration, and a later mount cancels stale completion',async()=>{
  let release;const ready=new Promise(r=>{release=r});let mounted=0;
- const p={mode:true,id:'wisdom',key:()=>slot,configure:d=>d,preparePresentation:()=>ready,within:()=>true,isShell:()=>false,displayName:()=> 'Wisdom'};
+ const p={mode:true,id:'wisdom',key:()=>slot,configure:()=>({offline:true}),preparePresentation:()=>ready,within:()=>true,isShell:()=>false,displayName:()=> 'Wisdom'};
  const win={dataset:{},addEventListener(){},replaceChildren(){},appendChild(){mounted++},querySelector(){return null}};
  const document={addEventListener(){},documentElement:{setAttribute(){},style:{setProperty(){}}},getElementById:()=>({classList:{add(){}},appendChild(){}}),createElement:tag=>tag==='article'?win:{dataset:{},setAttribute(){},addEventListener(){}},querySelector:()=>null};
  const w={WizHomeScreenPolicy:p,WizCore:{apps:()=>({APP:{wisdom:{kind:'wizard',url:'/wisdom/'}},APPS:[]}),appsLoaded:()=>Promise.resolve()},WizAppServices:{attach:()=>()=>{},guardBack(){}},WizardOSNative:{immersive(){}}};

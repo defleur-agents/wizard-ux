@@ -87,13 +87,15 @@
   let mountGeneration = 0;
   async function mount() {
     const generation = ++mountGeneration;
-    const declared = policy.configure(registry.APP[id]?.homeScreen);
-    // The app's own reading state is hydrated before any of its scripts can read or write it.
-    await policy.preparePresentation();
-    if (generation !== mountGeneration) return;
-    // An app that declared offline: prepare the small host document before it can announce Ready offline.
-    if (declared?.offline) await window.WizOfflineSession?.ready(registry.APPS);
-    if (generation !== mountGeneration) return;
+    const declared = policy.configure?.(registry.APP[id]?.homeScreen);
+    // An app that declared offline: its own reading state is hydrated before any of its scripts can read or write
+    // it, and the small host document is prepared before it can announce Ready offline. Others mount at once.
+    if (declared?.offline) {
+      await policy.preparePresentation();
+      if (generation !== mountGeneration) return;
+      if (window.WizOfflineSession) await window.WizOfflineSession.ready(registry.APPS);
+      if (generation !== mountGeneration) return;
+    }
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
@@ -126,7 +128,7 @@
           if (!(own && state[own])) w.dispatchEvent(new w.PopStateEvent('popstate',{state}));
         }
         frame.contentWindow.WizardApp?.ready?.();
-        if (policy.presentationFailed) frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('wizard:presentation-save-failed'));
+        if (policy.presentationFailed) { try { frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('wizard:presentation-save-failed')); } catch (_) {} }
         safeInsets(); checkpoint();
         if (links) window.WizLinks.guardFrame(frame.contentWindow,app.url,links);
         const w = frame.contentWindow;
