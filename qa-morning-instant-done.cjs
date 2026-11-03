@@ -1,6 +1,7 @@
 // Actual Morning handlers + actual Chats host, synthetic APIs only. Never proxy owner data.
 // Runs on the queued Linux browser worker. QA_BASE_MORNING/QA_BASE_CHATS reproduce the live baseline.
 const {chromium}=require('./tools/qa-playwright.cjs');
+const {readySessionFixture}=require('./tools/qa-morning-session.cjs');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const web=path.resolve(process.env.QA_WEB_DIR||path.join(__dirname,'web'));
 const morning=path.resolve(process.env.QA_MORNING_WEB);
@@ -23,7 +24,8 @@ const check=(c,name,detail)=>{checks.push({pass:!!c,name,detail});c?passed++:fai
 async function scenario(browser,base,desktop,skin,extra){
  const profile={desktop,skin,setupPassed:false,regressionReproduced:false,phase:'setup'};profiles.push(profile);
  const label=`${desktop?'desktop':'phone'}-${skin}`,ctx=await browser.newContext({viewport:desktop?{width:1600,height:1000}:{width:412,height:892},isMobile:!desktop,hasTouch:!desktop,serviceWorkers:'block'});
- let model=initial(),requests=[],gates=[],statusReads=0;
+ const sessions=readySessionFixture(); // one stable raw page per context, including refreshes
+ let model=initial(),requests=[],gates=[],statusReads=0,sessionReads=0;
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url()),json=(d,status=200)=>r.fulfill({status,json:d}).catch(()=>{});
   if(u.origin!==new URL(base).origin)return r.abort('blockedbyclient');
@@ -41,7 +43,9 @@ async function scenario(browser,base,desktop,skin,extra){
   if(u.pathname==='/wizard/v1/apps')return json({apps:[{id:'morning',name:'Morning',url:'/morning/',source:'apps.json',type:'view'}]});
   if(u.pathname==='/wizard/hermes/api/model/options')return json({provider:'openai-codex',model:'fixture',providers:[{slug:'openai-codex',authenticated:true,models:[]}]});
   if(u.pathname==='/wizard/hermes/api/settings')return json({settings:{agent:{name:'Fixture Agent'},clock:{timezone:'UTC'}}});
-  if(u.pathname==='/wizard/hermes/api/sessions')return json({data:[],has_more:false});
+  if(u.pathname==='/wizard/hermes/api/sessions'){sessionReads++;return json(sessions.list);}
+  if(u.pathname===`/wizard/hermes/api/sessions/${sessions.id}`)return json(sessions.detail);
+  if(u.pathname===`/wizard/hermes/api/sessions/${sessions.id}/messages`)return json(sessions.messages);
   if(u.pathname==='/wizard/v1/agents')return json({agents:[{id:'hermes',label:'Wizard',is_default:true,harness:'hermes',status:'running',privacy:'standard'}]});
   if(u.pathname==='/wizard/thread-seen')return json({state:{initializedAt:1,threads:{}}});
   if(u.pathname==='/wizard/v1/ui-preferences')return json({spaces:[],pinnedChats:[],readyOrder:'newest',migrations:{'launcher.v1':true}});
@@ -60,10 +64,15 @@ async function scenario(browser,base,desktop,skin,extra){
   await p.goto(base+(desktop?'desktop.html':''),{waitUntil:'domcontentloaded'});
   await p.waitForFunction(()=> (window.__wux||window.__wos)?.live?.ok&&window.WizCanOpen?.('morning'));
   await p.waitForTimeout(150);
-  await p.evaluate(desktop=>{const a=window.__wux||window.__wos;if(desktop){window.__qaChat=a.newWin({app:'chats',thread:'__new__'});a.closeWin('wmain');}else{window.__qaChat=a.wins.wmain;a.chats.renderChats(a.wins.wmain);}},desktop);
+  // Both shells restore the same ordinary main Chats list; __new__ is a composer/draft,
+  // not a substitute for real session data, and would mask the empty-hit shortcircuit.
+  await p.evaluate(desktop=>{const a=window.__wux||window.__wos,w=a.wins.wmain;if(!w||w.thread)throw Error('fixture must restore main Chats list');window.__qaChat=w;a.focusWin(w.id);if(!desktop)a.chats.renderChats(w);},desktop);
   await p.locator('.ch-morning-w:visible').first().waitFor();
   await p.waitForFunction(()=>(window.__welcomeLog||[]).some(s=>s.startsWith('boot:')));
   await p.waitForFunction(()=>![...document.querySelectorAll('h2')].some(n=>n.getClientRects().length&&/Name your Wizard|Connect your AI/.test(n.textContent)));
+  profile.setupEvidence=await p.evaluate(id=>{const a=window.__wux||window.__wos,w=a.wins.wmain,c=a.chats.ch(w.id),lc=a.chats.ch(w.id+'::list'),s=a.live.session(id),root=document.querySelector(`[data-win="${w.id}"]`);return {id:s?.id,status:s?.status,agent:s?.agent,ready:a.live.workGroups().ready.map(s=>s.id),query:c.q,listQuery:lc.q,filter:!!c.filter||!!lc.filter,focus:a.chats.focusOf(w),thread:w.thread,readyOpen:!!root?.querySelector('[data-sec="ready"].open'),row:!!root?.querySelector(`[data-sec="ready"] [data-chopen="${id}"]`),cards:root?.querySelectorAll('.ch-morning-w').length};},sessions.id);
+  const se=profile.setupEvidence;se.sessionReads=sessionReads;
+  if(!(sessionReads>0&&se.id===sessions.id&&se.status==='completed'&&!se.agent&&se.ready.includes(sessions.id)&&!se.query&&!se.listQuery&&!se.filter&&!se.focus&&se.thread===null&&se.readyOpen&&se.row&&se.cards>0))throw Error('synthetic main Ready list did not mount normally: '+JSON.stringify(se));
   profile.setupPassed=true;profile.phase='mounted';
   check(await p.evaluate(d=>document.documentElement.dataset.shell===(d?'desktop':'phone'),desktop),`${label} actual shell kind`);
   await p.screenshot({path:path.join(out,label+'-mount-canary.png')});
@@ -120,7 +129,7 @@ async function scenario(browser,base,desktop,skin,extra){
   check(await p.locator('#toast').innerText().then(t=>t.includes('Morning wasn’t saved')),`${label} one visible failure notice after leaving Morning`);
   await p.screenshot({path:path.join(out,label+'-failure.png')});
   check(errors.length===0,`${label} no browser errors`,errors.join('; '));
- }catch(e){profile.error=String(e);profile.diagnostic=await p.evaluate(()=>({welcome:window.__welcomeLog,shell:document.documentElement.dataset.shell,canMorning:window.WizCanOpen?.('morning'),wins:Object.values((window.__wos||window.__wux)?.wins||{}).map(w=>({id:w.id,app:w.app,thread:w.thread})),cards:document.querySelectorAll('.ch-morning-w').length,body:document.body.innerText.slice(0,1800)})).catch(()=>({}));profile.diagnostic.statusReads=statusReads;profile.diagnostic.errors=errors;check(false,`${label} exception`,e.stack);await p.screenshot({path:path.join(out,label+'-exception.png')}).catch(()=>{});}
+ }catch(e){profile.error=String(e);profile.diagnostic=await p.evaluate(()=>{const a=window.__wos||window.__wux;return {welcome:window.__welcomeLog,shell:document.documentElement.dataset.shell,canMorning:window.WizCanOpen?.('morning'),wins:Object.values(a?.wins||{}).map(w=>({id:w.id,app:w.app,thread:w.thread,focus:w.focus,query:a.chats.ch(w.id).q,filter:a.chats.ch(w.id).filter})),sessions:a?.live?.sessions?.map(s=>({id:s.id,status:s.status,agent:s.agent})),ready:a?.live?.workGroups().ready.map(s=>s.id),cards:document.querySelectorAll('.ch-morning-w').length,body:document.body.innerText.slice(0,1800)};}).catch(()=>({}));profile.diagnostic.statusReads=statusReads;profile.diagnostic.sessionReads=sessionReads;profile.diagnostic.errors=errors;check(false,`${label} exception`,e.stack);await p.screenshot({path:path.join(out,label+'-exception.png')}).catch(()=>{});}
  finally{for(const g of gates)g.resolve(500);await ctx.close();}
 }
 const report=()=>({passed,failed,checks,profiles,measurements});
