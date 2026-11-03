@@ -36,7 +36,7 @@ Reuse:
 | Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
-| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | own ports | cancel keeps old |
+| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`); `WizAppServices` gates prompts on steady shell focus and keeps the shipped legacy adapter | caller-supplied app identity | background cannot prompt; cancel keeps old; late/reloaded document gets no secret |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable failures |
 | Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
 | Offline shell | `web/sw.js` | API cache | offline reload |
