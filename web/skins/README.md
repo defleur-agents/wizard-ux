@@ -65,6 +65,9 @@ whichever skin is picked. It starts empty, and empty means the picked skin exact
   pill panel (`.ov.ov-pill` markup); the stylesheet setting it carries the `.ov-pill` rules, as `obsidian/skin.css` does.
 - **Regenerate under replies:** `html[data-skin] { --wos-reply-regenerate: on; }` shows a Regenerate button under
   the last finished reply. Stock skins leave it off; scope the selector to your own palettes so nobody else gets it.
+- **Short answer first:** `--wos-reply-summary: on` makes a reply over 120 words open with the agent's own plain-words
+  ask (its status line, sent by the Agent Service as `wizard_ask`) and fold the full text under Details. Off by
+  default; Miguel's tweak `miguel/reply-summary` turns it on.
 - **Settings › Look:** a "My skin" row says what it sits on, with Edit (opens the file in Files) and Reset.
 - **Agents:** asked to "change my skin", an agent edits My skin only, never a skin in this folder
   (Agent Service run instructions and skill say so).

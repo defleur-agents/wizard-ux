@@ -1,0 +1,2 @@
+/* Long replies lead with the agent's own plain-words ask; core Chats folds the full text under Details (chats.js summaryOf). */
+html[data-tweaks~="miguel/reply-summary"] { --wos-reply-summary: on; }
