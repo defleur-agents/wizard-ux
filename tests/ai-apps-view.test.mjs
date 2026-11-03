@@ -173,14 +173,15 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['movies'], 'only installed apps neither pinned (Music, Mail, Money) nor open (Notes, Maps)');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
-  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'snoozed:false', 'ready:true']);
+  assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'ready:true'], 'round 18 item 4: Snoozed only when it holds chats (as on the rail)');
   assert.deepEqual(w.qa('.aad-rw').map(r => `${r.dataset.sid}:${r.dataset.kind}`), ['r1:ready', 'r2:ready']);
   assert.equal(w.q('.aad-viewall'), null, 'no View all: the sidebar is the chat list');
   w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rw').map(r => r.dataset.sid), ['w1', 'r1', 'r2'], 'Working opens above Ready');
   assert.deepEqual(store.sections, { archive: false, working: true, snoozed: false, ready: true }, 'kept on this device');
   w.q('.aad-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(w.q('.aad-tog .aad-count').textContent, '2', 'the Ready count on ◫');
+  assert.equal(w.q('.aad-tog .aad-count'), null, 'round 18 item 4a: no Ready count on ◫ any more');
+  assert.equal(w.q('.aad-sec[data-sec="ready"] .aad-sec-n').textContent, '2', 'round 18 item 4a: Ready\'s count on its own header (the rail\'s amber disc)');
   assert.deepEqual(w.q('.aad-foot').children.map(b => [b.className, b.getAttribute('aria-label'), b.textContent]), [['aad-set', 'Settings', ''], ['aad-fuel', null, ''], ['aad-new', 'New chat', '']], 'round 7: cog left, the fuel gauge between, + right');
   w.q('.aad-new').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, 1);
   w.q('.aad-set').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.settings, ['']);
@@ -298,7 +299,7 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
   const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(grid|app|more|all|div|sec|sec-b|chat|viewall|empty)$/.test(c)));
-  assert.deepEqual(rows, ['aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
+  assert.deepEqual(rows.map(c => c || 'aa-sech'), ['aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
   assert.equal(w.q('.aa-scroll .aa-grid'), null, 'no app grid and no All apps in the drawer');
   assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['r1:ready', 'r2:ready'], 'Ready open; Working and Archive folded at first');
   assert.ok(w.q('.aa-chat[data-sid="r1"] .aa-st').classList.contains('is-new') && w.q('.aa-chat[data-sid="r1"] .aa-pin'), 'new dot, pin mark');
@@ -306,10 +307,10 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   assert.deepEqual(w.q('.aa-chat[data-sid="r1"]').children.map(c => c.className.split(' ').pop()), ['aa-row-t', 'aa-pin', 'is-new'], 'title first, the state at the end');
   // Home: the apps above the composer, open first (badged first), then the rest installed, then Get more
   w.q('.aa-scrim').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app ? (b.classList.contains('is-open-first') ? '|' : '') + b.dataset.app : '+'), ['music', 'mail', 'money', '|notes', 'maps', '+'], 'round 16 item 7: Pinned (his pins), Open (not pinned) in the same flow (round 17: the first marked, no divider), +');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-cap') ? '|' : b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['music', 'mail', 'money', '|', 'notes', 'maps', '+', 'tidy'], 'round 16 item 7: Pinned (his pins), Open (not pinned) in the same flow (round 17: the first marked, no divider), +');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-badge').textContent, '3', 'the shell\'s own count, on the icon');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-name').textContent, 'Money');
-  assert.equal(w.q('.ah-app[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new');
+  assert.equal(w.q('.ah-app[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new, open', 'round 18: an open app says so (its running dot)');
   w.q('.ah-app[data-app="money"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.gone, [4], 'an app goes to its desk (full screen on the phone)');
   w.q('.ah-plus').dispatchEvent(new FakePointerEvent('click')); assert.ok(w.q('.vc-sheet.vc-pick'), '+ = the picker');
   w.q('.vc-pick .vc-app[data-app="movies"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'movies', 'an installed app opens on a desk of its own');
@@ -645,7 +646,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const w = world();
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }], wiz: [{ id: 'notes', name: 'Notes' }], agents: [], conns: [], dev: [{ id: 'music', name: 'Music' }] });
   (await layout()).default(w.api);
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app ? (b.classList.contains('is-open-first') ? '|' : '') + b.dataset.app : '+'), ['music', 'mail', 'money', '|notes', 'maps', '+'], 'round 16 item 7: his pins, then (round 17: no divider) the open apps not pinned (any kind: they are open), then +');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-cap') ? '|' : b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['music', 'mail', 'money', '|', 'notes', 'maps', '+', 'tidy'], 'round 16 item 7: his pins, then (round 17: no divider) the open apps not pinned (any kind: they are open), then +');
   const { homeApps } = await import(new URL('web/layouts/ai-apps/home.js', root).href);
   assert.deepEqual(homeApps([{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'notes', name: 'Notes' }, { id: 'music', name: 'Music' }], [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }], w.api.apps.kinds(), () => false).rest.map(a => a.id),
     ['money', 'movies'], 'not open: Notes (agent app), Music (in development) and Maps (system) stay out');
@@ -749,7 +750,7 @@ test('desktop ⌥ keys in the AI apps view: ⌥\\ sidebar, round 15 ⌥T All app
   assert.match(js, /id = k && !e\.shiftKey && appFor\(k\);/);
   assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
-  for (const [k, w] of [['\\\\', 'Sidebar'], ['N', 'New chat'], [',', 'Settings'], ['␣', 'Search'], ['S', 'Talk'], ['C', 'Command'], ['T', 'Add an app']]) assert.ok(js.includes(`'${k}', '${w}'`) || js.includes(`'${k}', open ? 'Close sidebar' : '${w}'`), `hint ${k} ${w}`);
+  for (const [k, w] of [['\\\\', 'Sidebar'], ['N', 'New chat'], [',', 'Settings'], ['I', 'Search'], ['S', 'Talk'], ['C', 'Command'], ['T', 'Add an app']]) assert.ok(js.includes(`'${k}', '${w}'`) || js.includes(`'${k}', open ? 'Close sidebar' : '${w}'`), `hint ${k} ${w}`);
   assert.match(js, /for \(const b of vtList\.querySelectorAll\('\.aad-vtab\[data-app\]'\)\)/, 'round 16: the app letters on the right column\'s rows (pins and open apps)');
   assert.match(js, /api\.keys\.guide\(\(\) => appChips\(\)\);/);
 });
@@ -818,16 +819,17 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
     ['Ready 2', '  Needs 1', '  Done 1'], 'round 16: Ready and its statuses, short words (no Archive, no Working)');
-  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^1 Needs you: show them in Ready$/);
-  // a status: one click opens the sidebar on Ready showing only that status, a chip shows all again
+  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^1 Needs you: open the sidebar there$/);
+  // round 18 item 4c: a status opens the sidebar on Ready, ALL of it, grouped like the rail; its group briefly marked
   w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="ready"]').getAttribute('aria-expanded'), 'true');
-  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1'], 'only Needs you');
-  assert.equal(w.q('.aad-only .aad-only-w').textContent, 'Needs you · 1 of 2');
-  w.q('.aad-only').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2'], 'Show all'); assert.equal(w.q('.aad-only'), null);
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2'], 'no filter: all of Ready');
+  assert.equal(w.q('.aad-only'), null, 'no filter chip');
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done1'], 'the rail\'s statuses as sub-headers with counts, in its order');
+  assert.ok(w.q('.aad-grp[data-state="needs"]').classList.contains('is-flash'), 'its group briefly highlighted');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); w.q('.aad-rk[data-k="done"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r2']);
+  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(n => n.dataset.sid), ['r1', 'r2']);
+  assert.ok(w.q('.aad-grp[data-state="done"]').classList.contains('is-flash'));
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
   w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aadSide, 'open'); assert.equal(w.q('.aad-sec[data-sec="ready"]').getAttribute('aria-expanded'), 'true');
@@ -1100,10 +1102,13 @@ test('round 16 item 7 phone: Home = Pinned (hold and drag to rearrange), Open (n
   w.api.apps.homeScreen = { can: () => true, offer: () => true };
   (await layout()).default(w.api);
   w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
-  const kids = () => w.q('.ah-grid').children.map(b => b.dataset.app ? (b.dataset.group === 'pin' ? '^' : '') + (b.classList.contains('is-open-first') ? '|' : '') + b.dataset.app : '+');
-  assert.deepEqual(kids(), ['^music', '^mail', '^money', '|notes', 'maps', '+']);
+  const kids = () => w.q('.ah-grid').children.map(b => b.dataset.app ? (b.dataset.group === 'pin' ? '^' : '') + b.dataset.app + (b.querySelector('.ah-run') ? '•' : '') : b.classList.contains('ah-cap') ? '|' + b.textContent : b.classList.contains('ah-tidy') ? 'tidy' : '+');
+  // round 18 (Miguel: the Mac dock): pins first in his order, then the open apps not pinned on a new row under a tiny
+  // 'Open' caption; every open app wears the running dot (Mail, Money, Music are open desks here), a pin not open none
+  assert.deepEqual(kids(), ['^music•', '^mail•', '^money•', '|Open', 'notes•', 'maps•', '+', 'tidy']);
   assert.equal(w.q('.ah-div'), null, 'round 17 (Miguel): no divider element, no full-width line');
-  assert.equal(w.qa('.ah-app.is-open-first').length, 1, 'only the first open app is marked');
+  assert.equal(w.qa('.is-open-first').length, 0, 'round 18: no Open chip');
+  assert.equal(w.qa('.ah-pinb, .ah-app .ah-pin').length, 0, 'round 18: no pin badge on pinned icons');
   assert.ok(w.q('.ah-app[data-app="notes"]').classList.contains('is-opensec'), 'Open: the smaller icons');
   // drag Money to the front: hold, move over Music, let go
   const cells = w.qa('.ah-app[data-group="pin"]');
@@ -1116,14 +1121,24 @@ test('round 16 item 7 phone: Home = Pinned (hold and drag to rearrange), Open (n
   assert.ok(money.classList.contains('is-lift') && w.q('.ah-app[data-app="music"]').classList.contains('is-drop'), 'it follows the finger; the spot is marked');
   doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 9 }));
   assert.deepEqual(w.st.store.pins, ['money', 'music', 'mail'], 'his pin order, kept (the same key as the desktop)');
-  assert.deepEqual(kids().slice(0, 3), ['^money', '^music', '^mail']);
+  assert.deepEqual(kids().slice(0, 3), ['^money•', '^music•', '^mail•']);
   // + = the picker: installed apps neither pinned nor open (a tap right after a drag is swallowed, so later)
   const realNow = Date.now; Date.now = () => realNow() + 2000;
   try { w.q('.ah-plus').dispatchEvent(new FakePointerEvent('click')); } finally { Date.now = realNow; }
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['movies']);
+  // a pin that is not open: no dot (round 18)
+  w.st.desks = w.st.desks.filter(d => d.id !== 'music'); w.emit('route', { ...w.st.route }); w.emit('render');
+  for (const tm of w.st.timers.splice(0)) if (!tm.dead && tm.ms < 1000) tm.fn();
+  const music = w.q('.ah-app[data-app="music"]');
+  assert.ok(music && !music.querySelector('.ah-run') && !music.classList.contains('is-run'), 'a pin not open: no running dot');
   const css = read('web/layouts/ai-apps/layout.css');
   assert.doesNotMatch(css, /\.ah-div\b/, 'round 17: no divider rule');
-  assert.match(css, /\.ah-app\.is-open-first::before \{\s*content: "Open"; position: absolute;/, 'a tiny Open caption chip over the first open app, out of the grid flow');
+  assert.doesNotMatch(css, /is-open-first/, 'round 18: no Open chip rule');
+  assert.match(css, /\.ah-cap \{ grid-column: 1 \/ -1;[^}]*font: 500 0\.6875rem/, 'round 18: the caption is a full row of its own, 11 px, no line');
+  assert.match(css, /\.ah-run \{ position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aa-ink-2/, 'round 18: the running dot, 4 px, muted, centred under the name');
+  const dcss = read('web/layouts/ai-apps/desktop.css');
+  assert.match(dcss, /\.aad-vtab\.is-run::before \{[^}]*width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aad-ink-2\); \}/, 'the desktop column\'s dot: the same 4 px muted dot');
+  assert.doesNotMatch(dcss, /\.aad-vtab\.is-run\.is-on::before/, 'identical in front too');
 });
 
 test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), auto-tidy on a fake clock, 1:1 with the desks', async () => {
@@ -1141,7 +1156,7 @@ test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), a
   assert.deepEqual(plan({ keep: [5] }), [2], 'never the one on screen');
   assert.deepEqual(plan({ limit: TIDY['12h'] }), [5, 2]); assert.deepEqual(plan({ limit: TIDY.week }), []); assert.deepEqual(plan({ limit: TIDY.off }), [], 'Off');
   assert.deepEqual(seedUsed({ maps: 5, gone: 1 }, desks.slice(0, 3), now), { wizard: now, maps: 5, money: now }, 'never-seen apps count from now; closed ones forgotten');
-  assert.equal(tidyWords(6, '24h'), 'Closed 6 apps you hadn\'t used today'); assert.equal(tidyWords(1, 'week'), 'Closed 1 app you hadn\'t used this week');
+  assert.equal(tidyWords(3, '24h'), 'Closed 3 apps you hadn\'t used in 24 hours'); assert.equal(tidyWords(1, 'week'), 'Closed 1 app you hadn\'t used in 1 week');
   // the view: the pinned row (sidebar and rail), a right click Pin / Unpin kept per device; ⌥T All apps; the tidy closes + toast + Undo
   const { w, store, keys } = deskWorld();
   w.st.desks = null; const closed = [];
@@ -1169,12 +1184,17 @@ test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), a
   // the tidy (6 s after load): Maps (30 h) closes, Money is pinned, Movies is recent
   for (const tm of w.st.timers.filter(x => x.ms === 6000)) tm.fn();
   assert.deepEqual(closed, [2], 'only the stale unpinned one');
-  assert.equal(w.q('.aad-toast').hidden, false); assert.equal(w.q('.aad-toast-w').textContent, 'Closed 1 app you hadn\'t used today');
+  assert.equal(w.q('.aad-toast').hidden, false); assert.equal(w.q('.aad-toast-w').textContent, 'Closed 1 app you hadn\'t used in 24 hours');
   const opened = w.st.opened.length; w.q('.aad-toast-u').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.st.opened.at(-1), 'maps', 'Undo opens it again'); assert.ok(w.st.opened.length > opened); assert.equal(w.q('.aad-toast').hidden, true);
   // the setting: Off stops it
+  // round 18: the foot's 'Tidy: 24h' line expands in place into the sentence
+  assert.equal(w.q('.aad-tidy-w').textContent, 'Tidy: 24h');
   w.q('.aad-tidy').dispatchEvent(new FakePointerEvent('click'));
-  w.q('.aad-tidypop [data-tidy="off"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(store.tidy, 'off');
+  const sent = w.q('.aad-vtf .aad-tidyx .aad-tidys');
+  assert.equal(sent.textContent, 'Tidy up: close apps you haven\'t used in Off12 hours24 hours1 week. Pinned apps always stay open.');
+  const sel = sent.querySelector('select'); assert.equal(sel.value, '24h');
+  sel.value = 'off'; sel.dispatchEvent(new FakePointerEvent('change')); assert.equal(store.tidy, 'off');
   assert.match(w.q('.aad-tidy-w').textContent, /Tidy: Off/);
 });
 
@@ -1241,7 +1261,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   w.st.sessions.snoozed = [{ id: 'z1', title: 'Later one', kind: 'snoozed', unread: false, pinned: false, actions: ['restore', 'done'] }, { id: 'z2', title: 'Later two', kind: 'snoozed', unread: false, pinned: false, actions: ['restore'] }];
   (await layout()).default(w.api);
   assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'snoozed:false', 'ready:true'], 'Archive, Working, Snoozed, Ready; Snoozed folded');
-  assert.equal(w.q('.aad-sec[data-sec="snoozed"] > span').textContent, 'Snoozed');
+  assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-sec-w').textContent, 'Snoozed');
   assert.equal(w.q('.aad-sec[data-sec="snoozed"] .aad-tally').getAttribute('data-n'), '2', 'its count when folded');
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rw[data-kind="snoozed"]').map(r => r.dataset.sid), ['z1', 'z2']); assert.equal(store.sections.snoozed, true);
@@ -1388,4 +1408,145 @@ test('auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)'
     assert.doesNotMatch(js, /api\.after\((TIDY_EVERY|3600e3),/, f + ': no hour-long api.after (it would fire after 10 s)');
     assert.match(js, /const tidyLoop = \(\) => \{ tidyOff = api\.after\(10e3, \(\) => \{ if \(Date\.now\(\) >= tidyAt\) \{ tidyAt = Date\.now\(\) \+ (TIDY_EVERY|3600e3); tidy\(\); \} tidyLoop\(\); \}\); \};/, f);
   }
+});
+
+/* ---------- round 18 (Miguel, 3 Nov 2026) ---------- */
+test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped like the rail, the ⌥↓ step; tidy words and sentence', async () => {
+  const P = await import('../web/layouts/ai-apps/parts.js');
+  const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
+  const rows = [
+    { id: 'c1', title: 'old fyi', state: 'fyi', rank: 3, at: at(1) },
+    { id: 'c2', title: 'needs', state: 'needs', rank: 1, at: at(2) },
+    { id: 'notif:n1', title: 'urgent note', note: true, needs: true, rank: 1, at: at(5) },
+    { id: 'c3', title: 'plain new', state: 'none', rank: 5, at: at(6) },
+    { id: 'c4', title: 'approve', state: 'approval', rank: 0, at: at(0) },
+    { id: 'notif:n2', title: 'read note', note: true, snoozed: true, rank: 3, at: at(7) },
+    { id: 'notif:n3', title: 'fyi note', note: true, rank: 3, at: at(4) },
+  ];
+  const ids = l => l.map(r => r.id);
+  assert.deepEqual(ids(P.readySort(rows, 'priority')), ['c4', 'notif:n1', 'c2', 'notif:n3', 'c1', 'c3', 'notif:n2'], 'Priority: rank, newest first inside; notifications among the chats; read ones last');
+  assert.deepEqual(ids(P.readySort(rows, 'newest')), ['c4', 'c3', 'notif:n1', 'notif:n3', 'c2', 'c1', 'notif:n2'], 'Newest: approvals pinned first, then time');
+  assert.deepEqual(ids(P.readySort(rows, 'oldest')), ['c4', 'c1', 'c2', 'notif:n3', 'notif:n1', 'c3', 'notif:n2'], 'Oldest: approvals pinned, then time reversed');
+  assert.equal(P.sortOf('subject'), 'priority', 'stock By subject reads as Priority here'); assert.equal(P.sortOf('newest'), 'newest');
+  assert.deepEqual(P.readyGroups(rows, 'newest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:notif:n1,c2', 'approval:c4', 'fyi:notif:n3,c1', 'deferred:notif:n2', 'none:c3'], 'grouped in the rail\'s order (STATES), the order inside');
+  assert.deepEqual(P.readyGroups(rows, 'oldest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:c2,notif:n1', 'approval:c4', 'fyi:c1,notif:n3', 'deferred:notif:n2', 'none:c3']);
+  assert.equal(P.readyGroups(rows, 'priority').at(-1).word, 'No status');
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest')), P.readyGroups(rows, 'newest').flatMap(g => ids(g.rows)));
+  assert.deepEqual(P.readyStep(['a', 'b', 'c'], null, 1), { id: 'a', wrapped: false }, 'from elsewhere: the top');
+  assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'x', -1), { id: 'a', wrapped: false });
+  assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'b', 1), { id: 'c', wrapped: false });
+  assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'c', 1), { id: 'a', wrapped: true }, 'past the end: back to the top');
+  assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'a', -1), { id: 'c', wrapped: true });
+  assert.equal(P.readyStep([], null, 1), null);
+  assert.ok(/needs approval first, then Needs you, Your call, FYI, Done/.test(P.PRIORITY_TIP), 'the Priority rule in words (the tooltip)');
+  assert.equal(P.tidyLine('24h'), 'Unused apps close after 24h'); assert.equal(P.tidyLine('week'), 'Unused apps close after 1 week'); assert.equal(P.tidyLine('off'), 'Unused apps stay open');
+  assert.equal(P.tidyWords(3, '24h'), 'Closed 3 apps you hadn\'t used in 24 hours');
+});
+
+test('round 18 item 3b + 4e desktop: ⌥↓ / ⌥↑ walk exactly the drawn Ready (grouped, chats and notifications, each sort), wrapping', async () => {
+  const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
+  const row = (id, title, state, h, extra = {}) => ({ id, title, kind: 'ready', state, at: at(h), unread: false, pinned: false, actions: ['snooze', 'done'], ...extra });
+  for (const order of ['priority', 'newest', 'oldest']) {
+    const { w, keys } = deskWorld();
+    let saved = order, sets = [];
+    w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
+    w.st.sessions.ready = [row('c1', 'Old fyi', 'fyi', 1), row('c2', 'Needs me', 'needs', 2), row('notif:n1', 'Urgent note', '', 5, { note: true, needs: true }), row('c3', 'Plain', 'none', 6),
+      row('c4', 'Approve', 'approval', 0), row('notif:n3', 'FYI note', '', 4, { note: true }), row('c5', 'Newer fyi', 'fyi', 8), row('notif:n2', 'Read note', '', 7, { note: true, snoozed: true })];
+    (await layout()).default(w.api);
+    const drawn = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
+    assert.equal(drawn.length, 8, order + ': every Ready row drawn');
+    assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state), ['needs', 'approval', 'fyi', 'deferred', 'none'], order + ': grouped like the rail');
+    assert.equal(w.q('.aad-sort').value, order, order + ': the stock Filter choice on Ready\'s header');
+    const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
+    const seq = [];
+    for (let i = 0; i < drawn.length; i++) {
+      assert.ok(alt('ArrowDown'), '⌥↓ handled by the view');
+      const id = w.st.opened.at(-1).replace(/^thread:/, ''); seq.push(id);
+      w.st.route = id.startsWith('notif:') ? { home: false, view: 'thread', thread: '__new__', desk: 1 } : { home: false, view: 'thread', thread: id, desk: 1 };
+    }
+    assert.deepEqual(seq, drawn, order + ': ⌥↓ = the drawn order, top to bottom');
+    alt('ArrowDown'); assert.equal(w.st.opened.at(-1), 'thread:' + drawn[0], order + ': past the end, back to the top');
+    assert.equal(w.q('.aad-toast-w').textContent, 'Back to the top of Ready');
+    w.st.route = { home: false, view: 'thread', thread: drawn[0], desk: 1 };
+    alt('ArrowUp'); assert.equal(w.st.opened.at(-1), 'thread:' + drawn.at(-1), order + ': ⌥↑ from the top wraps to the bottom');
+    // the choice goes through the stock Filter's saved order (api.sessions.setOrder)
+    const sel = w.q('.aad-sort'); sel.value = order === 'newest' ? 'oldest' : 'newest'; sel.dispatchEvent(new FakePointerEvent('change'));
+    assert.deepEqual(sets, [sel.value]);
+    const again = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
+    w.st.route = { home: true, view: 'desk', thread: null, desk: 1 }; alt('ArrowDown');
+    assert.equal(w.st.opened.at(-1).replace(/^thread:/, ''), again[0], 'from Home: the top of the new order');
+  }
+});
+
+test('round 18 phone: the tidy line under + opens the sentence sheet; the tidy toast has Undo; the drawer sorts Ready by the stock Filter choice', async () => {
+  const w = world();
+  let saved = 'newest'; const sets = [];
+  w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
+  const closed = []; w.api.apps.close = id => { closed.push(id); w.st.desks = w.st.desks.filter(d => d.id !== id); return true; };
+  w.st.store.used = { notes: Date.now() - 30 * 3600e3, maps: Date.now() - 40 * 3600e3, mail: Date.now() - 50 * 3600e3 };
+  (await layout()).default(w.api);
+  w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
+  const line = w.q('.ah-grid .ah-tidy');
+  assert.ok(line, 'the line at Home\'s end'); assert.equal(line.textContent, 'Unused apps close after 24h · Change');
+  line.dispatchEvent(new FakePointerEvent('click'));
+  const sheet = w.q('.aa-tsheet'); assert.ok(sheet, 'a small sheet');
+  assert.equal(sheet.querySelector('.aa-tidys').textContent, 'Tidy up: close apps you haven\'t used in Off12 hours24 hours1 week. Pinned apps always stay open.');
+  const sel = sheet.querySelector('select'); sel.value = 'week'; sel.dispatchEvent(new FakePointerEvent('change'));
+  assert.equal(w.st.store.tidy, 'week'); assert.equal(line.textContent, 'Unused apps close after 1 week · Change');
+  w.st.backs.at(-1)(); assert.equal(w.q('.aa-tsheet'), null, 'Back closes it');
+  w.st.store.tidy = '24h';
+  for (const tm of w.st.timers.filter(x => x.ms === 6000)) tm.fn();
+  assert.deepEqual(closed.sort(), ['maps', 'notes'], 'only unpinned, stale apps (Mail is pinned)');
+  assert.equal(w.q('.ah-toast').hidden, false); assert.equal(w.q('.ah-toast-w').textContent, 'Closed 2 apps you hadn\'t used in 24 hours');
+  assert.equal(w.q('.ah-toast-u').textContent, 'Undo');
+  const n0 = w.st.newChats; w.q('.ah-toast-u').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.st.opened.slice(-2).sort(), ['maps', 'notes'], 'Undo opens them again'); assert.equal(w.st.newChats, n0 + 1, 'and comes back Home');
+  // the drawer: Ready in the stock order, notifications among the chats
+  const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
+  w.st.sessions.ready = [{ id: 'r1', title: 'A', kind: 'ready', state: 'fyi', at: at(1), actions: [] }, { id: 'notif:x', title: 'N', kind: 'ready', note: true, needs: true, at: at(3), actions: [] }, { id: 'r2', title: 'B', kind: 'ready', state: 'needs', at: at(2), actions: [] }];
+  w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  const ready = () => w.qa('#aa-sec-ready [data-sid]').map(n => n.dataset.sid);
+  assert.deepEqual(ready(), ['notif:x', 'r2', 'r1'], 'Newest');
+  const sort = w.q('.aa-sort'); assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
+  sort.value = 'oldest'; sort.dispatchEvent(new FakePointerEvent('change'));
+  assert.deepEqual(sets, ['oldest']); assert.deepEqual(ready(), ['r1', 'r2', 'notif:x'], 'Oldest');
+});
+
+test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, the box preferences); rows carry the stock Priority rank', () => {
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
+  assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
+  assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
+  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /rank: Number\.isFinite\(LIVE\.readyRank\?\.\(s\)\) \? LIVE\.readyRank\(s\) : undefined/, f + ': the stock rank on each row');
+  assert.match(host, /note: true, rank: Number\(it\.priority\) >= 4 \? 1 : Number\(it\.priority\) === 3 \? 2 : 3/, 'notifications rank like stock Priority (4–5 / 3 / the rest)');
+});
+
+test('round 18 item 3c desktop: the ⌥ keys audited: ⌥O / ⌥T the picker, ⌥I the search, ⌥1–9 and ⌥[ ] the right column, ⌥⇧[ ] move a row, ⌥− / ⌥= the panel, ⌥W on Home and ⌥⇧digit inert', async () => {
+  const { w, keys, store } = deskWorld();
+  w.st.desks = null;
+  let list = [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'maps', name: 'Maps' }, { desk: 3, id: 'mail', name: 'Mail' }, { desk: 4, id: 'notes', name: 'Notes' }];
+  w.api.desks.list = () => list; w.api.desks.move = () => true; w.api.desks.close = () => true;
+  store.pins = ['mail', 'money'];
+  (await layout()).default(w.api);
+  const alt = (code, shift = false) => keys.some(h => h.down({ altKey: true, shiftKey: shift, code, key: code }) === true);
+  const rows = () => w.qa('.aad-vtab').map(b => b.dataset.app);
+  assert.deepEqual(rows(), ['mail', 'money', 'maps', 'notes']);
+  assert.ok(alt('KeyO')); assert.equal(w.html.dataset.vcSheet, 'open', '⌥O = the picker (as ⌥T)'); keys[1].down({ key: 'Escape' });
+  assert.ok(alt('KeyI')); assert.equal(w.q('.aad-search').hidden, false, '⌥I = the sidebar search');
+  const g0 = w.st.gone.length, o0 = w.st.opened.length;
+  assert.ok(alt('Digit1')); assert.equal(w.st.gone.at(-1), 3, '⌥1 = the first row (Mail, desk 3)');
+  assert.ok(alt('Digit2')); assert.equal(w.st.opened.at(-1), 'money', '⌥2 = the second row (a pin not open: it opens)');
+  assert.ok(alt('Digit3')); assert.equal(w.st.gone.at(-1), 2);
+  const g1 = w.st.gone.length; assert.ok(alt('Digit3', true)); assert.equal(w.st.gone.length, g1, '⌥⇧3 does nothing here');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 2 }; w.emit('route', w.st.route);
+  assert.ok(alt('BracketRight')); assert.equal(w.st.gone.at(-1), 4, '⌥] = the next row (Notes)');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
+  assert.ok(alt('BracketLeft')); assert.equal(w.st.gone.at(-1), 2, '⌥[ = the previous row (Maps)');
+  assert.ok(alt('BracketRight')); assert.equal(w.st.gone.at(-1), 3, 'past the last row: back to the first (Mail)');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
+  assert.ok(alt('BracketRight', true)); assert.ok(alt('BracketLeft', true), '⌥⇧[ ] move the row in front');
+  w.st.route = { home: true, view: 'desk', thread: null, desk: 1 }; w.emit('route', w.st.route);
+  const c0 = JSON.stringify(w.st.gone); assert.ok(alt('KeyW'), '⌥W on Home is taken'); assert.equal(JSON.stringify(w.st.gone), c0, 'and does nothing (it closed the Chats window behind Home)');
+  assert.ok(alt('Minus') && alt('Equal'), '⌥− / ⌥= taken (the app panel\'s width when one shows)');
+  assert.ok(g0 >= 0 && o0 >= 0);
 });

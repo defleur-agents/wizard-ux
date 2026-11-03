@@ -38,7 +38,8 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
 import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto,
-  pinsFrom, togglePin, appLayers, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT } from './parts.js';
+  pinsFrom, togglePin, appLayers, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
+  READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
 import desktop from './desktop.js';
 
@@ -129,24 +130,63 @@ export default function setup(api) {
     if (api.apps.homeScreen?.can?.(a.id)) extra.push(['Add to Home Screen', () => api.apps.homeScreen.offer(a.id)]);
     chrome.appMenu({ id: a.id, name: a.name }, at.x, at.y, { extra, running, onOpen: () => goApp(a.id, a.desk ?? null), onClosed: () => api.after(120, () => home.paint(true)) });
   }
+  /* round 18 (Miguel, 3 Nov 2026): the tidy setting on the phone too, at Home's end under +: a small muted line
+   * 'Unused apps close after 24h · Change' opening a small sheet with the desktop's sentence (parts.js tidySentence) */
+  const tidyKey = () => { const k = api.storage.get('tidy'); return Object.prototype.hasOwnProperty.call(TIDY, k) ? k : TIDY_DEFAULT; };
+  const tidyFoot = el('button', 'ah-tidy', { type: 'button', 'aria-haspopup': 'dialog' });
+  const tidyFootW = el('span', 'ah-tidy-w');
+  tidyFoot.append(tidyFootW, el('span', 'ah-tidy-c', { text: 'Change' }));
+  const paintTidyFoot = () => { const k = tidyKey(); tidyFootW.textContent = tidyLine(k) + ' · '; tidyFoot.setAttribute('aria-label', `${tidyLine(k)}. Change`); };
+  paintTidyFoot();
+  let tsheet = null, offTsheetBack = null;
+  function closeTidySheet() { if (!tsheet) return; tsheet.remove(); tsheet = null; offTsheetBack?.(); offTsheetBack = null; tidyFoot.setAttribute('aria-expanded', 'false'); }
+  function openTidySheet() {
+    if (tsheet) return;
+    tsheet = el('div', 'aa-sheet aa-tsheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Tidy up' });
+    const sc = el('div', 'aa-sh-scrim', { 'aria-hidden': 'true' }), card = el('div', 'aa-sh-card');
+    const hd = el('div', 'aa-sh-head'); const x = el('button', 'aa-tb aa-sh-x', { type: 'button', 'aria-label': 'Close' }); x.append(icon('x'));
+    hd.append(el('h3', 'aa-sh-t', { text: 'Tidy up' }), x);
+    const body = el('div', 'aa-sh-body');
+    body.append(tidySentence(doc, tidyKey(), k => { api.storage.set('tidy', k); paintTidyFoot(); }, 'aa-tidys'));
+    card.append(el('i', 'aa-sh-grip', { 'aria-hidden': 'true' }), hd, body);
+    tsheet.append(sc, card); api.mount(tsheet);
+    api.listen(sc, 'click', closeTidySheet); api.listen(x, 'click', closeTidySheet);
+    offTsheetBack = api.back.push(closeTidySheet); tidyFoot.setAttribute('aria-expanded', 'true');
+  }
+  api.listen(tidyFoot, 'click', openTidySheet);
   const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks,
-    layers: { model: layersNow, plus: () => chrome.open({ exclude: () => pinsNow(), people: 'For people' }), menu: appMenuFor,
+    layers: { model: layersNow, plus: () => chrome.open({ exclude: () => pinsNow(), people: 'For people' }), menu: appMenuFor, foot: tidyFoot,
       reorderPins: (from, to) => { const l = pinsNow(), [id] = l.splice(from, 1); l.splice(to, 0, id); setPins(l); } } });
   api.mount(home.el);
   /* auto-tidy on the phone too (the desktop's rule and setting): open apps not pinned and unused longer than the Tidy
-   * setting close by themselves (the stock close), with a toast */
+   * setting close by themselves (the stock close), with a toast; round 18: with Undo, as on the desktop */
   let used = seedUsed(api.storage.get('used') || {}, desks(), Date.now());
   api.storage.set('used', used);
   let usedAt = 0;
   function markUsed(r) { const d = desks().find(x => x.desk === r?.desk); if (!d || d.id === CHATS || r.home) return; const now = Date.now(); used = { ...used, [d.id]: now }; if (now - usedAt > 60e3) { usedAt = now; api.storage.set('used', used); } }
+  const toast = el('div', 'ah-toast', { role: 'status' }); toast.hidden = true;
+  const toastW = el('span', 'ah-toast-w'), toastU = el('button', 'ah-toast-u', { type: 'button', text: 'Undo' });
+  toast.append(toastW, toastU); api.mount(toast);
+  let toastOff = null, undoIds = [];
+  function showToast(text, undo) {
+    toastW.textContent = text; undoIds = undo || []; toastU.hidden = !undoIds.length; toast.hidden = false;
+    toastOff?.(); toastOff = api.after(8000, () => { toast.hidden = true; toastOff = null; });
+  }
+  api.listen(toastU, 'click', () => {
+    toast.hidden = true; toastOff?.(); toastOff = null;
+    const ids = undoIds; undoIds = []; const now = Date.now();
+    for (const id of ids) { used = { ...used, [id]: now }; api.apps.openDesk(id); }
+    api.storage.set('used', used);
+    goHome(); api.after(120, () => home.paint(true));
+  });
   function tidy() {
-    const k = api.storage.get('tidy'), key = Object.prototype.hasOwnProperty.call(TIDY, k) ? k : TIDY_DEFAULT, now = Date.now();
+    const key = tidyKey(), now = Date.now();
     used = seedUsed(used, desks(), now); api.storage.set('used', used);
     const plan = tidyPlan(desks(), { pins: pinsNow(), used, now, limit: TIDY[key], keep: [api.route().desk].filter(x => x != null) });
     if (!plan.length) return [];
     const ids = [...new Set(plan.map(d => d.id))];
     for (const id of ids) api.apps.close?.(id);
-    api.toast?.(tidyWords(ids.length, key));
+    showToast(tidyWords(ids.length, key), ids);
     api.after(120, () => home.paint(true));
     return plan;
   }
@@ -156,6 +196,9 @@ export default function setup(api) {
   const tidyLoop = () => { tidyOff = api.after(10e3, () => { if (Date.now() >= tidyAt) { tidyAt = Date.now() + 3600e3; tidy(); } tidyLoop(); }); };
   api.after(6000, tidy); tidyLoop();
 
+  // round 18 item 3: Ready's order = the stock Chats Filter's saved choice (api.sessions.order), so both views agree
+  const readyOrder = () => sortOf(api.sessions.order?.() || 'priority');
+  api.listen(globalThis, 'wos:prefs', () => { if (open) paintDrawer(); });
   let open = false, offBack = null, q = '';
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
   const secOpen = sectionsOpen(api.storage.get('sections'));
@@ -254,7 +297,7 @@ export default function setup(api) {
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
-    const sig = JSON.stringify([q, here, secOpen, dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.actions.join()]))]);
+    const sig = JSON.stringify([q, here, secOpen, readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     if (q) {
@@ -267,7 +310,8 @@ export default function setup(api) {
       // the drawer is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
-        const rows = s[k] || [], on = !!secOpen[k];
+        // round 18 item 3a: Ready in the stock Chats Filter's order (Priority / Newest / Oldest), notifications among it
+        const rows = k === 'ready' ? readySort(s[k] || [], readyOrder()) : s[k] || [], on = !!secOpen[k];
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
         h.append(el('span', '', { text: word0 }), icon('down', 'aa-ico aa-sec-c'));
         // folded (round 7): a minimal tally: Working its count with a tiny spinner, Ready its count
@@ -278,7 +322,13 @@ export default function setup(api) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, here)));
           else body.append(el('p', 'aa-empty', { text: !sessions ? 'Loading your chats…' : EMPTY[k] }));
         }
-        out.push(h, body);
+        if (k === 'ready') {
+          const row = el('div', 'aa-sech'), sort = el('select', 'aa-sort', { 'aria-label': 'Order Ready', title: `${PRIORITY_TIP}\nThe same choice as Chats' own Filter.` });
+          for (const [v, w0] of READY_SORTS) { const o = el('option', '', { value: v, text: w0 }); if (v === readyOrder()) o.setAttribute('selected', ''); sort.append(o); }
+          sort.value = readyOrder();
+          api.listen(sort, 'change', () => { api.sessions.setOrder?.(sort.value); paintDrawer(true); });
+          row.append(h, sort); out.push(row, body);
+        } else out.push(h, body);
       }
     }
     scroll.replaceChildren(...out);
@@ -515,7 +565,7 @@ export default function setup(api) {
 
   return () => {
     closeMenu(); closeSheet(); closeDrawer();
-    top.remove(); layer.remove(); chrome.dispose(); tidyOff?.();
+    top.remove(); layer.remove(); toast.remove(); closeTidySheet(); chrome.dispose(); tidyOff?.(); toastOff?.();
     for (const k of ['aiApps', 'aiFront', 'aaDrawer', 'aiNew']) delete root.dataset[k];
     home.el.remove(); root.style.removeProperty('--ah-bottom');
   };
