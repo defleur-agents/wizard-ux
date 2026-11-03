@@ -1,21 +1,21 @@
-// Morning report and the box-wide save (Miguel, 2 Nov 2026), now the miguel/notification-levels tweak: Chats · Badge ·
-// Morning report · Off, one place per source; Morning report (stored `daily`) only for Notifications and System (greyed
+// Morning report and the box-wide save (Miguel, 2 Nov 2026), built into core since 4 Nov 2026 (was the opt-in
+// miguel/notification-levels tweak, #855): Chats · Badge · Morning report · Off, one place per source; Morning report (stored `daily`) only for Notifications and System (greyed
 // out for an app like Mail); every device shows the same choice (Notifications /api/routes), this device's copy
 // covering a cold start, and a box with nothing saved takes this device's choices once.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import { core, wear, settle, read, ID } from './fixtures/notification-levels.mjs';
+import { core, settle, read } from './fixtures/notification-levels.mjs';
 import { fixture } from './fixtures/tweaks.mjs';
 
-function boot({ storage = new Map(), server = { routes: {}, saved: false }, up = true, tweak = true } = {}) {
+function boot({ storage = new Map(), server = { routes: {}, saved: false }, up = true, feeds = {}, notes = [] } = {}) {
   const calls = [], listeners = {};
   const json = (body, status = 200) => ({ ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => body });
   const ctx = {
     WosSkinHost: { inboxList: true }, CSS: { escape: s => s },
     localStorage: { getItem: k => storage.has(k) ? storage.get(k) : null, setItem: (k, v) => storage.set(k, String(v)) },
-    WizCanOpen: id => id === 'notifications' || id === 'mail',
-    WizCore: { apps: () => ({ APPS: [{ id: 'mail', kind: 'wizard', source: 'apps.json', url: '/mail/', name: 'Mail' }] }), backendApps: () => [{ id: 'notifications', url: '/notifications/' }], appMetadata: id => ({ mail: { name: 'Mail' }, notifications: { name: 'Notifications' } })[id] },
+    WizCanOpen: id => id === 'notifications' || id === 'mail' || id in feeds,
+    WizCore: { apps: () => ({ APPS: [{ id: 'mail', kind: 'wizard', source: 'apps.json', url: '/mail/', name: 'Mail' }, ...Object.keys(feeds).map(id => ({ id, kind: 'wizard', source: 'apps.json', url: `/${id}/`, name: id }))] }), backendApps: () => [{ id: 'notifications', url: '/notifications/' }], appMetadata: id => ({ mail: { name: 'Mail' }, notifications: { name: 'Notifications' } })[id] || { name: id } },
     document: { querySelectorAll: () => [], addEventListener() {}, hidden: false },
     location: { origin: 'https://wizard.test' },
     addEventListener: (t, fn) => { (listeners[t] ||= []).push(fn); },
@@ -32,12 +32,13 @@ function boot({ storage = new Map(), server = { routes: {}, saved: false }, up =
       return json({ routes: { ...server.routes }, saved: server.saved, defaults: {} });
     }
     if (url.startsWith('/notifications/api/count')) return json({ unread: 0, needs: 0 });
-    if (url.startsWith('/notifications/api/items')) return json({ items: [] });
+    if (url.startsWith('/notifications/api/items')) return json({ items: notes });
+    if (url.startsWith('/notifications/api/marks')) return json({ marks: {} });
     if (url === '/mail/api/inbox') return json({ inbox: 1, items: [] });
+    const m = /^\/([a-z0-9-]+)\/api\/inbox$/.exec(url); if (m && feeds[m[1]]) return json({ inbox: 1, items: feeds[m[1]] });
     return json({ error: 'not found' }, 404);
   };
   core(ctx);
-  if (tweak) ctx.tweak = wear(ctx);
   return ctx;
 }
 
@@ -87,31 +88,45 @@ test('the fourth choice is called Morning report and wears its coffee cup', () =
 });
 
 test('the coffee cup is the Morning Report sigil from sigils.css', () => {
-  const css = read('web/core/sigils.css'), js = read(`web/tweaks/${ID}/tweak.js`);
+  const css = read('web/core/sigils.css'), js = read('web/core/notif-bell.js');
   const d = js.match(/const CUP = '([^']+)'/)[1];
   assert.ok(css.includes(d.slice(0, 60)), 'same path as .sg-coffee');
 });
 
-test('tweak off: no box routes are read or written, choices stay on this device', async () => {
-  const server = { routes: { mail: 'badge' }, saved: true };
-  const w = boot({ server, tweak: false }); await settle();
-  await w.WosBell.refresh(true); await settle();
-  assert.equal(w.WosBell.route('mail'), 'chats', 'the box copy is not read (stock default: Chats)');
-  w.WosBell.setRoute('mail', 'badge'); await settle();
-  assert.ok(!w.calls.some(([, u]) => u === '/notifications/api/routes'));
+test('one-time move: only a box with nothing saved takes a device\'s choices; an empty device uploads nothing', async () => {
+  const server = { routes: {}, saved: false };
+  boot({ server }); await settle();
+  assert.ok(!server.saved, 'nothing chosen on this device: nothing written, the box stays empty');
+  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ 'wizard-mail': 'badge', 'system:nope': 'off', mail: 'daily' })]]);
+  boot({ storage, server }); await settle();
+  assert.deepEqual(server.routes, { 'wizard-mail': 'badge' }, 'only valid choices move (no unknown System kind, no Morning report for an app)');
+  const other = new Map([['wos.notify.route.v1', JSON.stringify({ 'wizard-mail': 'chats' })]]);
+  const w = boot({ storage: other, server }); await settle();
+  assert.deepEqual(server.routes, { 'wizard-mail': 'badge' }, 'a box with choices is never overwritten by another device');
+  assert.equal(w.WosBell.route('wizard-mail'), 'badge', 'the device takes the box\'s choice');
+  assert.deepEqual(JSON.parse(other.get('wos.notify.route.v1')), { 'wizard-mail': 'badge' }, 'and keeps it as its fallback copy');
 });
 
-test('switching the tweak off hands the part back: stock Badge | Chats at once', async () => {
-  const w = boot(); await settle();
-  assert.equal(w.WosBell.routing.owner, ID);
-  w.tweak.off(); await settle();
-  assert.equal(w.WosBell.routing.owner, null);
-  assert.deepEqual([...w.WosBell.picker('notifications').matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['badge', 'chats']);
+test('Miguel\'s box: only sources set to Chats are rows; Badge apps keep their count on their own icon', async () => {
+  const item = (key, t) => ({ key, title: key, text: key, time: t, priority: 3, open: '' });
+  const feeds = { 'wizard-mail': [item('m1', 50), item('m2', 49)], messenger: [item('chat', 48)], money: [item('bill', 47)], 'card-benefits': [item('perk', 46)], sniper: [item('scan', 45)] };
+  const notes = [{ id: 'n1', time: 60, title: 'Backup failed', message: 'x', priority: 3, tags: ['cron'] }, { id: 'u1', time: 59, title: '2 apps updated', message: 'x', priority: 3, tags: [] }];
+  const server = { saved: true, routes: { 'wizard-mail': 'badge', messenger: 'badge', money: 'badge', 'card-benefits': 'badge', notifications: 'chats', sniper: 'chats', 'system:app-updates': 'daily', 'system:connections': 'daily', 'system:wizard-updates': 'daily' } };
+  const w = boot({ server, feeds, notes }), B = w.WosBell;
+  await settle(); await B.discover(); await settle();
+  B.watch(() => {}); await B.refresh(true); await settle(20);
+  const src = [...new Set([...B.items()].map(i => i.app || B.routeIdOf(i)))].sort();
+  assert.deepEqual(src, ['notifications', 'sniper'], 'rows: Wizard\'s own alerts and Sniper, nothing from Badge apps, no System update');
+  assert.deepEqual([...B.items()].map(i => i.id).filter(id => !id.startsWith('a-')), ['n1'], 'the app-updates notice waits for the Morning report');
+  for (const id of ['wizard-mail', 'messenger', 'money', 'card-benefits']) { assert.equal(B.inChats(id), false, id); assert.equal(B.routeLabel(id), 'Badge', id); }
+  assert.equal(B.readyCount(), 2, 'the Chats badge counts exactly its rows');
+  assert.ok(!w.calls.some(([m, u]) => m === 'POST' && u === '/notifications/api/routes'), 'reading never writes the box');
 });
 
+const ID = 'miguel/levels-probe';
 /* ---- skin-host `notify` capability: trusted only, one URL, released on teardown ---- */
 test('notify capability: only Notifications /api/routes, trusted authors only, revoked on teardown', async () => {
-  const f = fixture({ manifests: { 'stranger/levels': { id: 'stranger/levels', name: 'x', version: '1.0.0', author: 'stranger', apiVersion: 1, capabilities: ['notify'], description: 'x' } } });
+  const f = fixture({ manifests: { 'stranger/levels': { id: 'stranger/levels', name: 'x', version: '1.0.0', author: 'stranger', apiVersion: 1, capabilities: ['notify'], description: 'x' }, [ID]: { id: ID, name: 'x', version: '1.0.0', author: 'miguel', apiVersion: 1, capabilities: ['notify'], description: 'x' } } });
   const w = f.ctx.window, seen = [], requests = [];
   let released = 0;
   w.WosBell.routing = { version: 1, replace(impl, o) { seen.push([o.owner, o.version, typeof impl.route]); return () => { released++; }; } };
@@ -121,8 +136,8 @@ test('notify capability: only Notifications /api/routes, trusted authors only, r
   f.host._test.setImporter(async url => url.includes('stranger/') ? vm.runInNewContext(`(() => { ${src.replace('export default function setup', 'function setup')}; return { default: setup }; })()`, f.ctx) : { default: () => () => {} });
   await f.host.loadTweaks(['stranger/levels'], f.slots, { teamAuthors: ['miguel'] });
   assert.equal(f.ctx.__got, false, 'untrusted: no api.notify');
-  // The shipped package, trusted.
-  const pkg = read(`web/tweaks/${ID}/tweak.js`).replace('export default function setup', 'function setup');
+  // A trusted package (a team author) that replaces the part.
+  const pkg = 'function setup(api) { api.notify.routing({ route: () => "badge", accepts: () => true, choices: () => [], quiet: () => false, carried: () => false, sourceOf: () => "notifications" }, { version: 1 }); return () => {}; }';
   let api = null;
   f.host._test.setImporter(async () => vm.runInNewContext(`(() => { ${pkg}; return { default: a => { globalThis.__api = a; return setup(a); } }; })()`, f.ctx));
   await f.host.loadTweaks([ID], f.slots, { teamAuthors: ['miguel'] });
