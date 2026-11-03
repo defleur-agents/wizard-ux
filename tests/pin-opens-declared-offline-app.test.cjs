@@ -66,9 +66,25 @@ test('the shell worker and its generated config name no app',()=>{
   for(const f of h)assert(!/wisdom|mizel|notes|outline|movies|messenger/i.test(readFileSync(f,'utf8')),f+' must stay app-agnostic');
   const src=readFileSync('web/core/apps.js','utf8');
   const policy=src.slice(src.indexOf('window.WizCore.appMigrations ='),src.indexOf('const PALETTE'));
-  assert(!/^\s*wisdom\s*:/m.test(policy),'legacy cleanup must not list an offline-capable reader');
+  // #892 P1: this historical migration remains until the companion declaration reaches each box.
+  assert(/^\s*wisdom\s*:/m.test(policy),'pre-declaration installs must still retire the exact legacy worker');
   assert.match(policy,/'wizard-signal'/,'unrelated reviewed legacy cleanup is preserved');
   assert.match(readFileSync('web/core/app-services.js','utf8'),/appHomeScreen\?\.\(st\.appId\)\?\.offline\) return \[\]/,'declared-offline apps are never cleaned up');
+});
+
+test('legacy cleanup retires only the exact pre-declaration worker and never an offline-declared worker',async()=>{
+ const src=readFileSync('web/core/apps.js','utf8'),policy=src.slice(src.indexOf('window.WizCore.appMigrations ='),src.indexOf('const PALETTE'));
+ const window={WizCore:{}};vm.runInNewContext(policy,{window});let declared=null,removed=0;
+ window.WizCore.appHomeScreen=()=>declared;
+ const make=(scope,scriptURL)=>({scope,active:{scriptURL},unregister:async()=>{removed++;return true}});
+ const regs=[make(origin+'/wisdom/',origin+'/wisdom/sw.js'),make(origin+'/',origin+'/sw.js'),make(origin+'/wisdom/',origin+'/wisdom/new-worker.js')];
+ const services=readFileSync('web/core/app-services.js','utf8');
+ const fn=services.slice(services.indexOf('  async function cleanupLegacy('),services.indexOf("  addEventListener('message'",services.indexOf('  async function cleanupLegacy(')));
+ const box={window,ORIGIN:origin,URL,valid:()=>true,within:(url,base)=>url.origin===base.origin&&url.pathname.startsWith(base.pathname),navigator:{serviceWorker:{getRegistrations:async()=>regs}}};
+ vm.runInNewContext(fn+';this.cleanupLegacy=cleanupLegacy',box);
+ const st={appId:'wisdom',url:new URL(origin+'/wisdom/')};
+ assert.deepEqual(Array.from(await box.cleanupLegacy(st)),[origin+'/wisdom/']);assert.equal(removed,1,'no root or replacement worker may be removed');
+ declared={offline:true};assert.deepEqual(Array.from(await box.cleanupLegacy(st)),[]);assert.equal(removed,1,'the identical legacy script is app-owned once offline is declared');
 });
 
 test('partial or denied pin-shell installation is rejected, without activating it',async()=>{

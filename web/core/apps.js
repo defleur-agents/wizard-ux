@@ -44,6 +44,8 @@
   // An app that declares home_screen.offline owns its worker (app-services.js skips these ids).
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
+    // Cross-repository rollout: retain exact legacy cleanup until the installed declaration arrives.
+    wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
     'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
     trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js', '/trackhunt/__pwa/service-worker.js'], caches: ['trackhunt-v1-20260711d'] },

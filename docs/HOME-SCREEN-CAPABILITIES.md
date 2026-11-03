@@ -1,6 +1,10 @@
 # App-declared home-screen capabilities
 
-The shell holds **no per-app table**. An installed app opts in itself in `wizard.md`:
+## Rollout correction (#892 P1)
+
+Retain the existing shared-main exact-script legacy cleanup migration until an installed app declares `home_screen.offline`; the generic declaration check then refuses cleanup. The earlier removal in this PR was premature: shell and companion app updates are not atomic. The feature-ID inventory for `web/core/apps.js:wisdom` therefore retains shared main's existing six occurrences, instead of this PR's premature reduction to three. This adds no app dispatch, changes no scanner rule and creates no broader allowance. Tests cover pre-declaration cleanup, declared-offline refusal, and root/replacement-worker confinement.
+
+The shell holds **no per-app capability table**. Reviewed historical cleanup migrations are not capability declarations. An installed app opts in itself in `wizard.md`:
 
 ```yaml
 home_screen:

@@ -20,10 +20,14 @@
   if (mode) document.documentElement.setAttribute('data-app-session', id || 'unavailable');
   // What the pinned app declared for itself (wizard.md `home_screen`, see home-screen-capabilities.js). Nothing here
   // names an app: until configure() is given a declaration, every app keeps the plain shared-storage contract.
-  let caps = null, matches = () => false, journal = null, preparing = null, presentationFailed = false;
+  let caps = null, matches = () => false, journal = null, preparing = null, presentationFailed = false, generation = 0;
   function configure(declared) {
-    if (!mode || !id || caps) return caps;
-    caps = window.WizHomeScreenCapabilities?.sanitize(declared) || null;
+    if (!mode || !id) return caps;
+    const next = window.WizHomeScreenCapabilities?.sanitize(declared) || null;
+    if (JSON.stringify(next) === JSON.stringify(caps)) return caps;
+    // A registry refresh can change or withdraw authority. Existing facades consult this live matcher;
+    // future route/position writes must never keep using a journal authorized by an older declaration.
+    generation++; caps = next; journal = null; preparing = null; presentationFailed = false;
     matches = window.WizHomeScreenCapabilities?.matcher(caps) || (() => false);
     return caps;
   }
@@ -42,7 +46,8 @@
     if (!caps?.offline || !prefix) return Promise.resolve();
     if (preparing) return preparing;
     if (!window.WizOffline?.presentation) { notifyPresentationFailure(); return Promise.resolve(false); }
-    journal = window.WizOffline.presentation({ prefix,slot:key(location.origin,id),onFailure:notifyPresentationFailure,
+    const epoch = generation;
+    journal = window.WizOffline.presentation({ prefix,slot:key(location.origin,id),onFailure:() => { if (epoch === generation) notifyPresentationFailure(); },
       initial:() => {
         let route = null; try { route = JSON.parse(localStorage.getItem(key(location.origin,id))); } catch (_) {}
         const positions = Object.create(null), pre = positionPrefix();
@@ -52,7 +57,7 @@
         return {route,positions:Object.fromEntries(Object.entries(positions).slice(-80))};
       }
     });
-    preparing = journal.ready.then(() => true, () => false);
+    preparing = journal.ready.then(() => epoch === generation, () => false);
     return preparing;
   }
   function presentationRoute() { return journal?.snapshot()?.route; }

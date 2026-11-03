@@ -120,3 +120,27 @@ test('cold first mount awaits actual hydration, and a later mount cancels stale 
  const later=events['wizard:apps']();assert.equal(mounted,0,'replacement mount also waits for hydration');
  release();await later;await settle();assert.equal(mounted,1,'only current mount generation can create the child');
 });
+test('registry withdrawal immediately revokes old position, route and journal authority in an existing frame',async()=>{
+ const db=diskIDB(),b=boot(db);await b.policy.preparePresentation();
+ const f={location:{origin},localStorage:b.ls,document:{}};b.policy.installPresentationStorage(f);
+ f.localStorage.setItem(pos,'0.4');await settle();const commits=db.commits;
+ b.policy.configure(null);assert.equal(b.policy.capabilities,null);assert.equal(b.policy.presentationRoute(),undefined);
+ f.localStorage.setItem(pos,'0.9');b.policy.savePresentationRoute(route('#/withdrawn'));await b.policy.preparePresentation();await settle();
+ assert.equal(b.ls.getItem(pos),'0.9','withdrawn keys return to shared app storage without remounting the facade');
+ assert.equal(db.commits,commits,'withdrawal must stop later writes to the old journal');
+ b.policy.configure({position_keys:['reader:*'],route_state:'reader'});
+ assert.equal(b.policy.capabilities.routeState,'reader');
+ f.localStorage.setItem('reader:position','0.2');assert.equal(b.ls.getItem('reader:position'),null);
+ assert.equal(b.ls.getItem(slot+':presentation:reader:position'),'0.2');
+ f.localStorage.setItem(pos,'0.7');assert.equal(b.ls.getItem(pos),'0.7','old matcher cannot survive a replacement declaration');
+ await b.policy.preparePresentation();assert.equal(db.commits,commits,'position-only declaration opens no offline journal');
+});
+test('unchanged declarations preserve hydration; late revoked hydration cannot poison the current declaration',async()=>{
+ const b=boot(diskIDB());let release,fail;const ready=new Promise(r=>{release=r});let creates=0;
+ b.window.WizOffline={presentation:opts=>{creates++;fail=opts.onFailure;return{ready,snapshot:()=>({route:route('#/old'),positions:{}})}}};
+ const old=b.policy.preparePresentation();b.policy.configure(DECL);
+ assert.equal(b.policy.preparePresentation(),old);assert.equal(creates,1,'same registry must not restart hydration');
+ b.policy.configure({position_keys:['reader:*'],route_state:'reader'});fail();release();
+ assert.equal(await old,false,'a revoked hydration completion is not ready');assert.equal(b.policy.presentationFailed,false,'old failure must not latch on the new authority');
+ assert.equal(b.policy.presentationRoute(),undefined);assert.equal(b.policy.capabilities.routeState,'reader');
+});
