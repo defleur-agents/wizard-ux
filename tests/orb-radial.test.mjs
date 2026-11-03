@@ -70,6 +70,19 @@ test('old showOpen setting is ignored and never saved; pin order persists with b
 test('late app registry changes repaint Customize and unsubscribe on teardown',()=>{
  const f=moduleFixture(),o=f.create();assert.equal(typeof f.listeners.get('wizard:apps'),'function');f.listeners.get('wizard:apps')();o.dispose();assert.equal(f.listeners.has('wizard:apps'),false);
 });
+test('orb picker admits arbitrary registry apps without feature-id branches',()=>{
+ const source=read('web/app.js');
+ const start=source.indexOf('apps: () =>',source.indexOf('const orbSwitcherHost'));
+ const end=source.indexOf('openItems:',start);
+ const block=source.slice(start,end);
+ assert.doesNotMatch(block,/a\.id\s*===|includes\(a\.id\)/);
+ const expression=block.match(/APPS\.filter\((a => .*?)\)\s*\n\s*\.map/)[1];
+ const predicate=vm.runInNewContext(expression,{window:{WizCore:{isMaintenanceApp:a=>a.maintenance===true}}});
+ for(const id of ['random-app','app-store','agents','totally-new-package'])assert.equal(predicate({id,kind:'wizard'}),true);
+ assert.equal(predicate({id:'random-app',kind:'wizard',maintenance:true}),false);
+ assert.equal(predicate({id:'random-app',kind:'native'}),false);
+});
+
 test('pinned app releases use shared placement, never a cached desk; empty and settings copy stay pins-only',()=>{
  const s=read('web/core/orb-switcher.js'),app=read('web/app.js');
  assert.match(s,/w\?\.kind === 'app'\) out = \{ kind: 'open', id: w\.item\.id \}/);

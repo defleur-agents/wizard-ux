@@ -93,7 +93,7 @@ export default function createOrbSwitcher(adapter) {
   }
 
   /* ---------------- the radial ---------------- */
-  const MIC = '<span class="dsg" style="--c:var(--wz-accent,#a78bfa)"><i class="sgi sg-mic" aria-hidden="true"></i></span>';
+  const MIC = '<span class="dsg" style="--c:var(--wz-accent)"><i class="sgi sg-mic" aria-hidden="true"></i></span>';
   const GEAR = '<svg class="wor-gear" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>';
   const isVoice = i => i != null && st?.wedges[i]?.kind === 'voice';
   function open({ x, y, fromX = x, fromY = y }) {

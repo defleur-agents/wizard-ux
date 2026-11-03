@@ -3492,7 +3492,7 @@
    * (openApp -> placeApp), the voice command is the ordinary startVoice('command') / finishVoice(). */
   const appGlyph = a => window.WizCore.workspaceNav.icon({ wins: ['_'], focus: '_' }, { _: {} }, () => a);
   const orbSwitcherHost = {
-    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && !window.WizCore.isMaintenanceApp(a) && !['app-store', 'agents'].includes(a.id) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'))
+    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && a.kind !== 'view' && !window.WizCore.isMaintenanceApp(a))
       .map(a => ({ id: a.id, name: a.name, html: appGlyph(a) }))),
     // Exactly one entry per desktop, in strip order (including empty desktops). All app ids
     // on a split desktop suppress duplicate outer pins, not just its focused window's id.
@@ -3713,9 +3713,9 @@
     return result || 'notReady';
   }
   function backStep(skipHosted) {
-    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // the Orb switcher's radial and sheet sit above everything: one layer per Back
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
+    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
     if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
