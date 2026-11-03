@@ -2,18 +2,9 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One implementation per capability. NEW: `web/core/` + row.
+Reuse declarations name an entry point below; NEW adds a shared owner and row. `Reuse: n/a` requires no UI changes.
 
-CI: [reuse gate](app-reuse-gate.md).
-
-```
-Reuse:
-- chat: REUSE WizardApp.nav.openThread
-- orb: EXTEND Orb.create
-- streak: NEW web/core/streaks.js + row
-```
-
-`Reuse: n/a (reason)` requires no `web/` or `android/` changes.
+| Optional temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict server capability + local opt-in (off) | durable transcript/draft/outbox |
 
 ## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
