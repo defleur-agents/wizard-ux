@@ -23,7 +23,8 @@
   const base = () => { try { return (window.WizConfig?.endpoint('sessions')) || '/wizard/hermes/api/sessions'; } catch (e) { return '/wizard/hermes/api/sessions'; } };
   const sigOf = s => [s.messageCount ?? '', s.activityAt || '', s.lastAssistantAt || '', s.updatedAt || ''].join('|');
   const words = q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
-  const visibleSnippet = s => C.isAutomaticPrompt?.(s) ? '' : s;
+  // Server search snippets are deliberately clipped, so they can lose the exact transport-prompt ending.
+  const visibleSnippet = s => C.isAutomaticPrompt?.(s) || /(?:\[AUTO\]|\[Nebula:\])[ \t]+Please share the complete /.test(String(s || '')) ? '' : s;
 
   async function textsOf(s, signal) {
     const key = `${s.agent || 'hermes'}:${s.id}`, sig = sigOf(s), hit = cache.get(key);

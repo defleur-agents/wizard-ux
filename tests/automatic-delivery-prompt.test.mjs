@@ -94,7 +94,7 @@ test('automatic delivery prompts stay out of chat-list previews but remain avail
 
 test('message search never exposes an automatic delivery prompt as its result snippet', async () => {
   const ctx = context();
-  const raw = prompt('AUTO');
+  const raw = '[AUTO] Please share the complete Daily security considerations · Tue, Nov 3 report exactly as save…';
   const rows = [
     { id: 'prompt-only', title: 'Security', preview: '', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
     { id: 'visible-match', title: 'Daily Brief', preview: 'Daily Report link', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
