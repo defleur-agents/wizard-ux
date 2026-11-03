@@ -638,7 +638,6 @@
     // ?embed=settings: the view drops its own title, sheet and canvas and takes the shell's skin (Appearance v1), so the
     // page head is the one title and the content sits straight on the Settings page, with no box around it.
     html: () => `<div class="st-embed" data-st-connections><iframe src="${esc(CONNECTIONS)}?embed=settings" title="Connections"></iframe></div>` });
-  register({ id: 'notifications-in-chats', page: 'chats', html: () => { const r = settingRow('wizard/unified-inbox'); return r ? `<div class="st-group"><h4>Notifications</h4>${r}</div>` : ''; }, act: settingAct });
   /* Settings › Notifications: one choice per app, Badge or Chats, never both (Miguel, 1 Nov 2026). Lists
    * Notifications and every installed app that has an inbox feed (only those can put items in Chats); every other app
    * shows a badge. Saved on this device. Chats needs Notifications in Chats (Settings › Chats) on. */
@@ -660,12 +659,13 @@
       const listHtml = (l, key) => l?.items.length ? `<h4>${esc(l.title)}</h4><ul class="st-${key}-list">${l.items.map(i => `<li class="${i.fresh ? 'new' : ''}${i.needs ? ' needs' : ''}"><span class="st-tx"><b>${esc(i.title)}</b><small>${esc(i.text)}</small></span><time>${esc(ago(i.time))}</time></li>`).join('')}</ul>` : '';
       const more = (B.groups?.() || []).filter(g => g.rows.length).map(g => `<div class="st-group st-${g.key}"><h4>${esc(g.title)}</h4>${g.hint ? `<p class="st-hint">${esc(g.hint)}</p>` : ''}${g.rows.map(row).join('')}${listHtml(g.list, g.key)}</div>`).join('');
       const intro = B.intro?.(), lead = intro ? intro.lead.map(([t, b]) => b ? `<b>${esc(t)}</b>` : esc(t)).join('') : '';
-      const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. Turn on Notifications in Chats to choose Chats:</p>${settingRow('wizard/unified-inbox')}` : '';
+      // This branch has no built-in tweak rows: Notifications in Chats is the wizard/unified-inbox tweak in Look › Tweaks.
+      const note = off ? `<p class="st-hint">Chats isn’t showing notifications on this device, so every app shows a badge. To choose Chats, turn on Notifications in Chats in Settings › Look › Tweaks.</p>` : '';
       return `<div class="st-group"><p class="st-hint">${lead}</p>${note}${rows || '<p class="st-hint">No apps send notifications yet.</p>'}<p class="st-hint">${esc(intro?.foot || '')}</p></div>${more}`;
     },
     act(ctx, el) {
       const b = el.closest('[data-notify-route]');
-      if (!b) return settingAct(ctx, el);
+      if (!b) return false;
       if (b.disabled) return true;
       window.WosBell?.setRoute?.(b.dataset.notifyRoute, b.dataset.notifyTo);
       ctx.render?.(); ctx.root?.querySelector?.(`[data-notify-route="${CSS.escape(b.dataset.notifyRoute)}"][data-notify-to="${CSS.escape(b.dataset.notifyTo)}"]`)?.focus?.({ preventScroll: true });
