@@ -15,6 +15,17 @@ const categoryReady=entry=>{
  return root?.dataset.settingsPage===entry.id&&!pane?.hidden&&heading?.textContent.trim()===entry.label&&root.querySelector('[data-st-page="'+entry.id+'"][aria-current="page"]')!==null;
 };
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
+// #880: one outside tap must finish the visual dismissal, not only clear model state.
+const phoneDismissed=()=>{
+ const settings=document.querySelector('#settings'),device=document.querySelector('#device'),backdrop=document.querySelector('#scrim');
+ if(!settings||!device||!backdrop)return false;
+ const box=settings.getBoundingClientRect(),rect={top:box.top,right:box.right,bottom:box.bottom,left:box.left,width:box.width,height:box.height};
+ const viewport={width:innerWidth,height:innerHeight},sheetNull=__wos.sheet===null,settingsOpen=settings.classList.contains('open'),deviceSheetOpen=device.classList.contains('sheet-open');
+ const opacity=getComputedStyle(settings).opacity,backdropPointerEvents=getComputedStyle(backdrop).pointerEvents;
+ const offViewport=rect.bottom<=0||rect.top>=viewport.height||rect.right<=0||rect.left>=viewport.width;
+ const pass=sheetNull&&!settingsOpen&&!deviceSheetOpen&&Number(opacity)===0&&offViewport&&backdropPointerEvents==='none';
+ return pass?{pass,sheetNull,settingsOpen,deviceSheetOpen,opacity,rect,viewport,offViewport,backdropPointerEvents}:false;
+};
 (async()=>{
  browser=await chromium.launch({headless:true,...(process.env.QA_CHROME?{executablePath:process.env.QA_CHROME}:{})});
  try {
@@ -134,16 +145,7 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
     else {
      await p.locator('#scrim').tap({position:{x:2,y:2}});
      await p.waitForFunction(()=>__wos.sheet===null);
-     const dismissal=await (await p.waitForFunction(()=>{
-      const settings=document.querySelector('#settings'),device=document.querySelector('#device'),backdrop=document.querySelector('#scrim');
-      if(!settings||!device||!backdrop)return false;
-      const box=settings.getBoundingClientRect(),rect={top:box.top,right:box.right,bottom:box.bottom,left:box.left,width:box.width,height:box.height};
-      const viewport={width:innerWidth,height:innerHeight},sheetNull=__wos.sheet===null,settingsOpen=settings.classList.contains('open'),deviceSheetOpen=device.classList.contains('sheet-open');
-      const opacity=getComputedStyle(settings).opacity,backdropPointerEvents=getComputedStyle(backdrop).pointerEvents;
-      const offViewport=rect.bottom<=0||rect.top>=viewport.height||rect.right<=0||rect.left>=viewport.width;
-      const pass=sheetNull&&!settingsOpen&&!deviceSheetOpen&&Number(opacity)===0&&offViewport&&backdropPointerEvents==='none';
-      return pass?{pass,sheetNull,settingsOpen,deviceSheetOpen,opacity,rect,viewport,offViewport,backdropPointerEvents}:false;
-     })).jsonValue();
+     const dismissal=await (await p.waitForFunction(phoneDismissed)).jsonValue();
      ok(dismissal.pass,skin+': one outside tap dismisses Settings to Home',dismissal);
     }
    }
