@@ -51,9 +51,13 @@ test('painted top edge wins over body background', () => {
   assert.ok(result.paints.includes('rgb(5, 6, 15)'));
   assert.equal(result.styles.get('--frame-top'), 'rgb(5, 6, 15)');
 });
-test('transparent, inaccessible and failed measurements retain safe dark-heading ink', () => {
+test('transparent app paint is flattened to the same opaque heading used for ink choice', () => {
   assert.equal(measure('rgba(255, 255, 255, 0.1)', [255, 255, 255, 26]).light, false);
-  assert.equal(measure('rgba(255, 255, 255, 0.49)', [255, 255, 255, 127]).light, false);
+  assert.equal(measure('rgba(255, 255, 255, 0.49)', [255, 255, 255, 127]).light, true);
+  const dark = measure('rgba(0, 0, 0, 0.1)', [0, 0, 0, 26]);
+  assert.equal(dark.light, false);
+  assert.equal(dark.styles.get('--frame-bg'), '#0d0e12', 'rendered heading must be opaque, not white ink over a light skin');
+  assert.equal(measure('rgba(255, 255, 255, 0.49)', [255, 255, 255, 127]).styles.get('--frame-bg'), '#878789');
   assert.equal(measure('rgba(255, 255, 255, 0.5)', [255, 255, 255, 128]).light, true);
   assert.equal(measure('color(srgb 1 1 1)', [255, 255, 255, 255], { canvasFails: true }).light, false);
   assert.equal(measure('', [], { accessible: false }).light, false);

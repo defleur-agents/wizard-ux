@@ -23,7 +23,7 @@ html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed):not
   --ink: white; --ink-2: color-mix(in srgb, white 78%, transparent); --ink-3: color-mix(in srgb, white 58%, transparent);
 }
 html[data-skin-frame="borderless"] .win.edge-light:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar {
-  --ink: color-mix(in srgb, black 93%, white); --ink-2: color-mix(in srgb, black 76%, transparent); --ink-3: color-mix(in srgb, black 56%, transparent);
+  --ink: black; --ink-2: color-mix(in srgb, black 76%, transparent); --ink-3: color-mix(in srgb, black 56%, transparent);
 }
 /* Settings is not an app window: a page it embeds (.st-embed, Settings › Connections) leaves it the skin material. */
 html[data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed),

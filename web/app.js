@@ -885,9 +885,17 @@
       const cv = document.createElement('canvas'); cv.width = cv.height = 1;
       const x = cv.getContext('2d', { willReadFrequently: true });
       x.fillStyle = top || bg; x.fillRect(0, 0, 1, 1);
-      const rgb = x.getImageData(0, 0, 1, 1).data;
+      let rgb = x.getImageData(0, 0, 1, 1).data;
+      if (rgb[3] < 255) {
+        // Text-bearing headings must be opaque. Flatten translucent app paint over
+        // the phone frame's existing dark fallback, then paint exactly what we measured.
+        const alpha = rgb[3] / 255;
+        rgb = [15, 16, 20].map((base, i) => Math.round(rgb[i] * alpha + base * (1 - alpha)));
+        const opaque = '#' + rgb.map(c => c.toString(16).padStart(2, '0')).join('');
+        if (top) top = opaque; else bg = opaque;
+      }
       const lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
-      light = rgb[3] >= 128 && .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]) > .18;
+      light = .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]) > .18;
     } catch (e) {} // Inaccessible or unmeasurable apps retain light ink on the dark fallback.
     we.classList.toggle('edge-light', light);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');

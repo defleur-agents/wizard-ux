@@ -9,7 +9,7 @@ CI: [reuse gate](app-reuse-gate.md).
 ```
 Reuse:
 - chat: REUSE WizardApp.nav.openThread
-- orb: EXTEND Orb.create (row updated)
+- orb: EXTEND Orb.create
 - streak: NEW web/core/streaks.js + row
 ```
 
@@ -46,7 +46,7 @@ Reuse:
 | App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals |
 
 
-## Shell (`web/core/`): both shells/all agents; per-kind EXTEND.
+## Shell (`web/core/`): both shells/all agents.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
@@ -96,7 +96,7 @@ Reuse:
 | Need | Use | Never hand-roll |
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skin, scenery and tweak switches | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients/canvases/colours |
+| Skin, scenery and tweak switches | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) | own gradients/canvases/colours |
 | Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) | desk wedges |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
@@ -114,7 +114,7 @@ Reuse:
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
 
-`WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`web/device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`, items), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`, rig).
+`WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`; heading ink), `WosDevice` (`web/device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`, items), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`web/app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`, rig).
 
 AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
 
