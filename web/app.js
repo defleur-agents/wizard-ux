@@ -1199,7 +1199,7 @@
     CHATS.setFocus(w, { kind: 'agent', key: id });
     if (w && o.thread === '__new__') CHATS.openNewDraft(w.id, '');
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
-    return true;
+    return o.share ? { id: w.id, agentId: id } : true;
   }
   window.WizOpenAgentChats = openAgentChats;
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focusedWin()?.appId === id });

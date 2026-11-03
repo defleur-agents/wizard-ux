@@ -390,7 +390,7 @@
     CHATS.setFocus(w, { kind: 'agent', key: id });
     if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
-    return true;
+    return o.share ? { id: w.id, agentId: id } : true;
   }
   window.WizOpenAgentChats = openAgentChats;
   // Keep deep app links on the same admission path as Home and the launcher.
