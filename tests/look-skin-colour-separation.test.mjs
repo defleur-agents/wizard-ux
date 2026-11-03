@@ -63,6 +63,17 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and co
   h.view.destroy();
 });
 
+for (const shell of ['phone', 'desktop']) test(`${shell}: separate Skin/Color choices never replace the independent tweak mix (#801)`, async () => {
+  const h=look(shell,true), E=h.s.WosExperience, before=JSON.stringify(E.state), calls=[];
+  E.defaults=async()=>{calls.push('defaults');return {sample:false};};
+  E.apply=async()=>{calls.push('apply');};E.toggle=async()=>{calls.push('toggle');};
+  for(const [attr,id] of [['data-skinfamily','mizel'],['data-skinpick','obsidian'],['data-skinfamily','wizard'],['data-skinpick','nebula'],['data-skinfamily','mizel']]) {
+    h.act(attr,id);for(let n=0;n<5;n++)await Promise.resolve();
+  }
+  assert.equal(h.S.current,'obsidian');assert.deepEqual(calls,[]);assert.equal(JSON.stringify(E.state),before);
+  h.view.destroy();
+});
+
 for (const shell of ['phone', 'desktop']) test(`${shell}: installed own-skin API does not make plain family selection depend on the box`, async () => {
   const h = look(shell, true);
   h.s.WosMySkin.leave = () => { throw Error('offline: must not call leave without a worn own skin'); };
