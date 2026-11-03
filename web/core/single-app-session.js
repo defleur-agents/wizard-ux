@@ -139,13 +139,14 @@
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
-    const mountedFrame = frame;
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, readingStorage:localStorage,
-      openThread: (sid, opts) => chats?.openHosted(wid, mountedFrame, sid, opts) === true,
-      isVisible: () => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible',
-      isFront: () => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),
+    const mountedFrame = frame, currentFrame = () => frame;
+    // Capture this attachment's frame, not the mutable slot a later mount replaces.
+    detach = ((frame) => window.WizAppServices?.attach(frame, { appId:id, path:next.url, readingStorage:localStorage,
+      openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true,
+      isVisible: () => !!frame?.isConnected && !chats?.isHosted(wid) && frame === currentFrame() && document.visibilityState === 'visible',
+      isFront: () => frame === currentFrame() && frame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),
       back: () => { window.__wosNativeBack(); return true; },
-    });
+    }))(mountedFrame);
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
       try {

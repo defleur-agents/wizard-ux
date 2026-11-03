@@ -16,6 +16,19 @@ function desktopFixture(front) {
  return {ctx,calls,focus:f=>{front=f;ctx.W[f.id]=f;}};
 }
 test('desktop Manager pin survives focus change before finish',async()=>{const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});await f.ctx.talk('start');f.focus({id:'ch',app:'chats',thread:'other'});await f.ctx.talk('send');assert.equal(f.calls.length,1);assert.equal(f.calls[0][0],'manager');assert.equal(f.calls[0][1].conversation.token,'sealed');});
+test('desktop Incognito capability still blocks recording before route, files or recorder access',async()=>{
+ const f=desktopFixture({id:'ch',app:'chats',thread:'private-temporary'});let checked=[];
+ f.ctx.CHATS.incognitoActive=id=>{checked.push(id);return true;};
+ f.ctx.VOICE.start=()=>{throw Error('recorder must not start');};
+ f.ctx.commandSnapshot=()=>{throw Error('route must not be captured');};
+ f.ctx.window.WosCaptureTools.take=()=>{throw Error('files must not be captured');};
+ assert.equal(await f.ctx.talk('start'),'busy');assert.deepEqual(checked,['ch']);assert.equal(f.calls.length,0);
+ vm.runInContext(section(desktop,'  async function recordReply(','  // Dictation (Right'),f.ctx);
+ assert.equal(await f.ctx.recordReply('ch','private-temporary'),'busy');
+ const start=desktop.indexOf('  async function dictate('),end=desktop.indexOf('\n  }',start)+4;
+ vm.runInContext(desktop.slice(start,end),f.ctx);
+ assert.equal(await f.ctx.dictate('start'),'busy');assert.deepEqual(checked,['ch','ch','ch']);assert.equal(f.calls.length,0);
+});
 test('desktop explicit new gesture bypasses foreground Manager',async()=>{const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});await f.ctx.talk('start',true);await f.ctx.talk('send');assert.equal(f.calls.length,1);assert.equal(f.calls[0][0],'new');});
 test('missing shared host capability retains Manager intent rather than Chats',async()=>{const f=desktopFixture({id:'mgr',app:'frame',appId:'wizard-manager'});f.ctx.window.WizAppServices={};await f.ctx.talk('start');await f.ctx.talk('send');assert.equal(f.calls[0][0],'manager');assert.equal(f.calls[0][1].conversation.token,'unavailable');});
 test('desktop existing thread keeps reply route',async()=>{const f=desktopFixture({id:'ch',app:'chats',thread:'original'});await f.ctx.talk('start');f.focus({id:'mgr',app:'frame',appId:'wizard-manager'});await f.ctx.talk('send');assert.equal(f.calls[0][0],'reply');assert.equal(f.calls[0][2],'original');});

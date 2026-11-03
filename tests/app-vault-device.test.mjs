@@ -43,4 +43,7 @@ test('pinned app attachment admits only its current connected focused document',
  hosted=true;assert.equal(options.isFront(),false,'a hosted Chats view conceals the app');assert.equal(options.isVisible(),false);hosted=false;
  focused=false;assert.equal(options.isFront(),false);focused=true;ctx.document.visibilityState='hidden';assert.equal(options.isFront(),false);assert.equal(options.isVisible(),false);
  ctx.document.visibilityState='visible';original.isConnected=false;assert.equal(options.isFront(),false);original.isConnected=true;ctx.frame={isConnected:true};assert.equal(options.isFront(),false,'replacement app cannot inherit admission');
+ assert.equal(options.isVisible(),false,'replacement app cannot inherit visibility');
+ const targets=[];ctx.chats.openHosted=(_wid,target)=>{targets.push(target);return true;};
+ assert.equal(options.openThread('exact-thread'),true);assert.equal(targets[0],original,'even a retained host callback cannot target the replacement app');
 });
