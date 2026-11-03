@@ -131,7 +131,21 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
     const panel=await p.locator(phone?'#settings':'#dsettings').evaluate(el=>({color:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage}));
     ok(!/rgba\([^)]*,\s*0(?:\.\d+)?\)/.test(panel.color)&&panel.color!=='transparent',kind+' '+skin+': opaque text-bearing page', {opacity,panel});
     if(!phone){await p.locator('.dsettings-scrim').click({position:{x:2,y:2}});ok(await p.locator('#dsettings').isHidden(),skin+': outside dismiss leaves Home');}
-    else {await p.locator('#scrim').tap({position:{x:2,y:2}});await p.waitForFunction(()=>__wos.sheet===null);ok(await p.locator('#settings').isHidden(),skin+': one outside tap dismisses Settings to Home');}
+    else {
+     await p.locator('#scrim').tap({position:{x:2,y:2}});
+     await p.waitForFunction(()=>__wos.sheet===null);
+     const dismissal=await (await p.waitForFunction(()=>{
+      const settings=document.querySelector('#settings'),device=document.querySelector('#device'),backdrop=document.querySelector('#scrim');
+      if(!settings||!device||!backdrop)return false;
+      const box=settings.getBoundingClientRect(),rect={top:box.top,right:box.right,bottom:box.bottom,left:box.left,width:box.width,height:box.height};
+      const viewport={width:innerWidth,height:innerHeight},sheetNull=__wos.sheet===null,settingsOpen=settings.classList.contains('open'),deviceSheetOpen=device.classList.contains('sheet-open');
+      const opacity=getComputedStyle(settings).opacity,backdropPointerEvents=getComputedStyle(backdrop).pointerEvents;
+      const offViewport=rect.bottom<=0||rect.top>=viewport.height||rect.right<=0||rect.left>=viewport.width;
+      const pass=sheetNull&&!settingsOpen&&!deviceSheetOpen&&Number(opacity)===0&&offViewport&&backdropPointerEvents==='none';
+      return pass?{pass,sheetNull,settingsOpen,deviceSheetOpen,opacity,rect,viewport,offViewport,backdropPointerEvents}:false;
+     })).jsonValue();
+     ok(dismissal.pass,skin+': one outside tap dismisses Settings to Home',dismissal);
+    }
    }
    ok(journal.writes.every(w=>!w.path.endsWith('/v1/runs')),kind+': zero agent runs');
    await ctx.close();activePage=null;
