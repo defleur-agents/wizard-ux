@@ -499,7 +499,8 @@ test('final review 2: exposure dates must be real; an open warning from a last r
 });
 
 test('every Back path cancels a waiting System link', () => {
-  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  // #880 adds outside-dismiss options; every Back still cancels pending navigation.
+  assert.match(read('web/app.js'), /function backStep\(skipHosted(?:, \{ outside = false \} = \{\})?\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/core/settings.js'), /register, mount, route, cancelWait,/);
 });

@@ -2434,6 +2434,7 @@
   function tick() {
     const el = V.acc + (V.state === 'listen' || V.state === 'command' ? performance.now() - V.t0 : 0);
     $('#timer').textContent = fmtT(el);
+    paintQuickWindow(el);
     if (V.an) {
       const a = new Uint8Array(V.an.fftSize); V.an.getByteTimeDomainData(a);
       let s = 0; for (let k = 0; k < a.length; k++) { const v = (a[k] - 128) / 128; s += v * v; }
@@ -2829,6 +2830,18 @@
       toast('!', kept ? 'Dictation retained in Settings → Cancelled recordings · transcribe & copy' : nid ? 'Dictation kept on device · reopen recording recovery to retry' : 'Storage unavailable · kept only while this page stays open · retry saving in Settings', 6000);
     } finally { clearTimeout(timer); if (V.dictationOp === op) V.dictationOp = null; }
   }
+  /* Quick command (James, 25 Oct 2026): a tap take shorter than QUICK_MS is a command; longer goes to the agent.
+   * Only a plain tap take qualifies: replies pinned to a thread composer, app voice input, general takes, review
+   * feedback, captures and takes carrying files or composer text stay messages. A quick take with no command match
+   * still goes where a tap take always went (so a short "ship it" in a thread still reaches that thread).
+   * Opt-in (Orb switcher settings, default off): the live rule stays "a tap on the orb is a message to the agent". */
+  const QUICK_MS = 3000;
+  function quickTake(kind, snap, replyTo, target, ms) {
+    if (!window.WosOrbSwitcher?.active() || !window.WosOrbSwitcher.get().quickTakes) return false; // Orb switcher › "Short takes run as commands" (off: a tap is always a message)
+    if (kind !== 'auto' || replyTo || target != null || !snap || snap.general || snap.conversation || snap.meetingEventId || V.meetingLoan) return false;
+    if (snap.seal || V.seal || V.files?.length || snap.view?.review || snap.view?.mode === 'capture') return false;
+    return (ms || 0) < QUICK_MS;
+  }
   function finishVoice() {
     if(parking)return; // sealing the original is not a new Send gesture
     if(V.admitting){V.admitSend=true;return;}
@@ -2861,7 +2874,7 @@
       }
     } catch (e) { toast('!', String(e.message || e), 2200); return; }
     if (sealAt && !V.seal) { const t = CHATS.takeComposer(sealAt.wid, sealAt.sid); V.seal = t.text || t.files.length || t.reply ? t : null; }
-    leaveOnSend(V.snap);
+    if (!quickTake(V.kind, V.snap, V.replyTo, V.target, V.acc + (V.state !== 'paused' ? performance.now() - V.t0 : 0))) leaveOnSend(V.snap);
     if (V.native) {
       if (V.state !== 'paused') V.acc += performance.now() - V.t0;
       setVoice('think'); txPill(V.kind === 'command' ? '⚡' : '✦', 'Sending…', V.kind === 'command' ? 'command' : 'agent', 'Transcribing · Wizard Voice Core');
@@ -2971,7 +2984,7 @@
     // straight into the durable outbox (which transcribes it and keeps the recording as a voice note).
     const snap = V.snap || window.WosOrbHandoff?.takeSnap(nid) || sendSnap(); V.snap = null;
     snap.seal = V.seal || null; V.seal = null; // the composer read at the send tap (finishVoice)
-    const kind = V.kind, aimAt = V.target;
+    const kind = quickTake(V.kind, snap, V.replyTo, V.target, V.acc) ? 'quick' : V.kind, aimAt = V.target;
     // One immutable owner before STT/router awaits, including native handoffs. The native
     // copy is released only after the web copy is durable or a server receipt exists.
     const rt = V.replyTo;
@@ -3000,7 +3013,7 @@
     if(V.meetingLoan){if(!it.durable){setVoice('paused');toast('!','Save failed · original retained here; meeting remains paused');return;}await returnMeeting({status:'captured',voiceTakeId:nid||it.id,deliveryKey:it.id});}
     snap.seal?.done(it);
     // A tap take with a fixed destination is the outbox's from here: Reload no longer waits for upload + transcription.
-    V.handedOff = (!rt && aimAt == null && kind !== 'command' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
+    V.handedOff = (!rt && aimAt == null && kind !== 'command' && kind !== 'quick' && !snap.general && !snap.meetingEventId && !V.meetingLoan && !sv?.review && sv?.mode !== 'capture' && await OUTBOX.handOff?.(it.id)) ? it.id : null;
     // Released a moment after this take is handled: by then its outbox item (if any) has replaced the hold.
     const hold = V.hold; V.hold = null;
     const unhold = () => { if (hold) setTimeout(() => LIVE.releaseSend?.(hold), 1500); };
@@ -3029,7 +3042,7 @@
       if (!text) {
         // A silent held take is a quick command that never happened (James, 23 Oct 2026): nothing to recover,
         // so it finishes custody instead of piling up in Unsent. A take carrying composer text or files keeps them.
-        if (kind === 'command' && await OUTBOX.completeLocal(snap.custodyId)) {
+        if ((kind === 'command' || kind === 'quick') && await OUTBOX.completeLocal(snap.custodyId)) {
           releaseNative(); unhold(); setVoice('idle'); txHide(); toast('◌', 'No speech heard · nothing sent'); tourEv('nospeech'); return;
         }
         await OUTBOX.transition(snap.custodyId, 'empty', 'No speech detected · original recording and composer kept together');
@@ -3040,7 +3053,7 @@
       const outcome = await handleText(text, kind, false, j.ms, aimAt, snap);
       // A held take is a command, never a message: once routed, there is nothing left to deliver.
       // Executed, unmatched or declined commands finish custody instead of posing as failed sends.
-      const settled = kind === 'command' && (outcome === false || outcome == null || outcome?.outcome === 'unhandled' || (outcome?.outcome === 'local-pending' && !outcome.done));
+      const settled = (kind === 'command' || snap.quickRan) && (outcome === false || outcome == null || outcome?.outcome === 'unhandled' || (outcome?.outcome === 'local-pending' && !outcome.done));
       if (settled && OUTBOX.get(snap.custodyId)?.state === 'processing') await OUTBOX.completeLocal(snap.custodyId);
       if (OUTBOX.get(snap.custodyId)?.state === 'processing') {
         const completed = outcome?.outcome === 'local' && await OUTBOX.completeLocal(snap.custodyId);
@@ -3234,6 +3247,22 @@
       setVoice('idle'); txHide();
       toast(it.state === 'sent' ? '✦' : '!', it.state === 'sent' ? 'Sent to ' + snap.conversation.label : it.error, 5000);
       return it;
+    }
+    // Quick take (under QUICK_MS): try it as a command first (on-device grammar, then the router off-thread).
+    // No match: it continues below as an ordinary tap take, so nothing short is ever lost.
+    if (kind === 'quick') {
+      const qo = target == null ? { snap } : { desk: target, snap };
+      const loc = localParse(text, snap, 'command');
+      if (loc) { snap.quickRan = true; showRouted('command', `Quick command · on-device${sttNote}`); return finishCmd(loc, text, qo); }
+      if (window.WosTour?.isHelp(text) && snap.view?.kind !== 'chat thread') { snap.quickRan = true; setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
+      const routeUrl = snap.view?.kind !== 'chat thread' && window.WizConfig.endpoint('route');
+      if (routeUrl) try {
+        setVoice('think'); if (isPill()) tx.dataset.detail = 'Quick command? · routing'; else $('#txRouteText').textContent = 'Quick command? · routing';
+        const r = await fetch(routeUrl, { method: 'POST', signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, force: '', view: null, apps: APPS.filter(a => a.kind !== 'view').map(a => a.name) }) });
+        const j = await r.json(); const c = r.ok && j.cmd || {};
+        if (c.route === 'command' && !c.then_agent) { snap.quickRan = true; showRouted('command', `Quick command · ${j.ms} ms${sttNote}`); return finishCmd(c, text, qo); }
+      } catch (_) {}
+      kind = 'auto';
     }
     // A bare "help" is not special in a tapped voice message.
     if (!window.WosCommands.isMessageTake(kind, typed) && window.WosTour?.isHelp(text) && (kind === 'command' || snap.view?.kind !== 'chat thread')) { setVoice('idle'); txHide(0); return window.WosTour.openHelp(); }
@@ -3449,6 +3478,19 @@
   }
   paintVoiceDestination();
   window.addEventListener('wizard:config', paintVoiceDestination);
+  // The 3-second rule, visible while talking: "Quick command" until QUICK_MS, then the agent's name.
+  let quickShown = null;
+  function paintQuickWindow(ms) {
+    if (!window.WosOrbSwitcher?.active() && !quickShown) return; // OFF: no extra voice DOM work
+    const on = V.state === 'listen' && quickTake(V.kind, V.snap || {}, V.replyTo, V.target, 0);
+    const q = on ? (ms < QUICK_MS ? 'cmd' : 'agent') : null;
+    const was = quickShown; quickShown = q;
+    voiceDestination.classList.toggle('quick', q === 'cmd');
+    if (!q) { if (was) paintVoiceDestination(); return; }
+    const agent = window.WizConfig.agent();
+    const want = q === 'cmd' ? '⚡ Quick command · keep talking for ' + agent : 'To ' + (V.snap?.view?.kind === 'chat thread' ? 'this thread' : agent) + ' · tap to send';
+    if (voiceDestination.textContent !== want) voiceDestination.textContent = want;
+  }
   let G = null;
   function mayHoldCommand() {
     if (sheet) return false;
@@ -3458,7 +3500,7 @@
     return !focused || !!(capture?.recording && capture?.meetingId);
   }
   // The dock orb's level, also handed to a layout drawing its own orb (Two orbs' agent orb).
-  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); }
+  function orbLevel(v) { Orb.setLevel(v); window.WosSkinHost?.level?.(v); window.WosOrbSwitcher?.level(v); }
   function shock() { const s = $('.orb-shock'); s.classList.remove('go'); void s.offsetWidth; s.classList.add('go'); }
   /* A worn layout's own orb swipes (WosSkinHost.orbSwipes, e.g. the Orb and Apps views: up = Home, the rest nothing).
    * 'stock' = the dock's own swipe below; Desks declares none, so it is always 'stock' there. Tap and hold never ask. */
@@ -3493,13 +3535,51 @@
     Orb.press(true);
     G.corner = device.classList.contains('orb-corner'); G.ovWas = pillOvOpen(); G.upDesks = orbUpDesks(); G.swipes = window.WosSkinHost?.orbSwipes?.() || null;
     if (V.state === 'idle') G.warm = setTimeout(() => { if (G && G.mode === 'pending') warmMic(); }, MIC_WARM_MS);
-    if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
+    // Hold = Orb switcher radial (James, 31 Oct 2026): a semicircle of wedges above the thumb. Slide onto one, release to
+    // choose; the voice command lives in one wedge and needs a dwell. The corner orb (full-screen Chats) only talks:
+    // there a hold stays the plain hold-command it always was.
+    if (window.WosOrbSwitcher?.active() && !G.corner && !sheet && !G.ovWas) G.hold = setTimeout(() => { if (G && G.mode === 'pending') openRadial(G); }, window.WosOrbSwitcher.HOLD_OPEN_MS);
+    else if (mayHoldCommand()) G.hold = setTimeout(() => { if (G && G.mode === 'pending') { G.mode = 'hold'; G.holdAt = performance.now(); if(V.state==='idle'||(V.state==='paused'&&V.replyTo)){vib(18);G.start=startVoice('command');}else{G.refused=true;toast('⏸','Pause your reply before a command');} } }, 380);
   });
+  function openRadial(g) {
+    if (!window.WosOrbSwitcher?.active()) return;
+    g.mode = 'radial'; vib(18); closeMenu();
+    const r = orbWrap.getBoundingClientRect();
+    window.WosOrbSwitcher.open({ x: r.left + r.width / 2, y: r.top + r.height / 2, fromX: g.x, fromY: g.y });
+  }
+  /* Orb switcher host: what the radial needs from the shell, and nothing else. App placement stays the shell's
+   * (openApp -> placeApp), the voice command is the ordinary startVoice('command') / finishVoice(). */
+  const appGlyph = a => window.WizCore.workspaceNav.icon({ wins: ['_'], focus: '_' }, { _: {} }, () => a);
+  const orbSwitcherHost = {
+    apps: () => [{ id: 'home', name: 'Home', html: deskSigil(HOME) }].concat(APPS.filter(a => a.kind !== 'native' && a.kind !== 'view' && !window.WizCore.isMaintenanceApp(a))
+      .map(a => ({ id: a.id, name: a.name, html: appGlyph(a) }))),
+    // Exactly one entry per desktop, in strip order (including empty desktops). All app ids
+    // on a split desktop suppress duplicate outer pins, not just its focused window's id.
+    openItems: () => desks.map((d, i) => {
+      const fw = W[d.focus] || W[d.wins[0]];
+      return { id: d.home ? 'home' : fw ? winApp(fw).id || 'desk:' + d.id : 'desk:' + d.id,
+        name: d.home ? 'Home' : deskName(i), html: deskSigil(i), desk: i, cur: i === idx,
+        appIds: d.home ? ['home'] : d.wins.map(w => winApp(W[w]).id).filter(Boolean) };
+    }),
+    // The hovered desk slides in behind the radial so James sees where he will land. Parked desks (two+ away) render
+    // nothing, so the hovered one is woken first; release re-parks via goDesk / parkDesks.
+    hover: desk => { const w = track.getBoundingClientRect().width || innerWidth; if (desk != null && desk !== idx) secOf(desk)?.classList.remove('parked'); placeTrack(desk == null ? 0 : (idx - desk) * w, false); },
+    vib, armBack: () => armBack(), cancelGesture: () => endGesture(null, true),
+    voice: {
+      enabled: () => (V.state === 'idle' || (V.state === 'paused' && !!V.replyTo)) && mayHoldCommand(),
+      start: () => startVoice('command'),
+      active: () => V.kind === 'command' && V.state === 'command',
+      finish: () => finishVoice(),
+      cancel: () => cancelVoice(true),
+      pause: () => { V.stopAsked = true; pauseCommandCapture(); }, // capture lost: keep the take paused with controls, never discard
+    },
+  };
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
   orbWrap.addEventListener('pointermove', e => {
     if (!G || e.pointerId !== G.pointerId) return; G.dx = e.clientX - G.x; G.dy = e.clientY - G.y;
+    if (G.mode === 'radial') { window.WosOrbSwitcher.move(e.clientX, e.clientY); return; }
     // A hold that starts travelling right after it fired was really a swipe (slow frame ate the moves).
     if (G.mode === 'hold' && G.holdAt && performance.now() - G.holdAt < 600 && (Math.hypot(G.dx, G.dy) > 34 || (G.dy > 16 && G.dy > Math.abs(G.dx) * 1.4)) && !(G.dy < -20 && Math.abs(G.dx) < 100)) {
       cancelVoice(true); G.mode = 'pending';
@@ -3582,6 +3662,12 @@
       if(V.state==='paused'&&V.replyTo&&FIELDS.refresh())return startVoice('dictation');
       if (V.state === 'idle') return window.WosSkinHost?.orbTap?.() ? undefined : startOrbVoice();
       return orbTapBusy();
+    } else if (g.mode === 'radial') {
+      const out = window.WosOrbSwitcher?.release(cancelled) || { kind: 'none' };
+      placeTrack(0, true); parkDesks(false);
+      if (out.kind === 'open' && out.id === 'home') execute({ action: 'desk', to: 'home' });
+      else if (out.kind === 'open') { const a = APP[out.id]; if (a) openApp(a); } // every pin uses shared placement, including already-open apps
+      else if (out.kind === 'customize') window.WosOrbSwitcher.openSettings();
     } else if (g.mode === 'hold') {
 
       if(g.refused)return; // a refused hold always consumes its release; never sends a reply
@@ -3694,6 +3780,7 @@
   function backStep(skipHosted) {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
+    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
     if (window.WizShareWizard?.back()) return 'share-wizard';
     if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
     { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
@@ -3970,7 +4057,7 @@
     get links() { return LINKS; },
     get voiceBorrowing() { return parking || !!parkedReply || !!V.admitting; },
     openAgentChats,
-    live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText,
+    live: LIVE, openPeek, closePeek, openOverview, closeOverview, mergeDesks, splitDesk, reorderDesks, closeDesk, openLinkDesk, pinWin, openWizardThread, goDesk, openSheet, closeSheets, runUtterance, openApp, openWin, closeWin, moveWin, setFull, focusWin, openChat, sendChat, onBack, viewContext, viewOf, execute, handleText, quickTake, QUICK_MS,
     HOME, get idx() { return idx; }, get desks() { return desks; }, get ovLog() { return window.__ovLog || []; }, get wins() { return W; }, get voice() { return V.state; }, get voiceHandedOff() { return !!V.handedOff && OUTBOX.handedOff?.(V.handedOff); }, get sheet() { return sheet; },
     get back() { return { watchers: watchers.size, guardOn, exitArmed: false, log: window.__backLog || [] }; },
     openSearch,
@@ -4075,6 +4162,7 @@
   }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
+    orbSwitcher: orbSwitcherHost,
     overview: overviewAdapter,
     windowRefresh: windowRefreshAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0, home: idx === HOME }; },
