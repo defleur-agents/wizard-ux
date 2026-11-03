@@ -97,7 +97,7 @@ test('Apps on the desktop: a launchpad, one icon per desk (Chats first, + last),
   const off = setup(P.api);
   const grid = P.find('apd-grid')[0]; assert.ok(grid && P.find('apd')[0].parentNode === P.device, 'mounted on the stage');
   const ids = () => grid.children.map(b => b.attrs['data-app'] ?? '+');
-  assert.deepEqual(ids(), ['wizard', 'mail', 'music', '+'], 'Chats first, one icon per desk, + last');
+  assert.deepEqual(ids(), ['wizard', 'mail', 'music', '+add'], 'Chats first, one icon per desk, + last');
   assert.equal(grid.children[0].attrs['data-desk'], '1', 'Chats is the Chats desk');
   assert.equal(grid.children[0].attrs['aria-label'], 'Chats, 7 ready'); assert.equal(grid.children[1].attrs['aria-label'], 'Mail, 2 new');
   assert.equal(P.html.dataset.appsDesk, 'home'); assert.equal(P.html.dataset.viewChrome, 'desktop');
@@ -208,7 +208,7 @@ test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb st
   // the Orb view wears the same chrome (+ beside the Chats pill, the same swipes), and no Back either
   const ph = read('web/layouts/orb/phone.js');
   assert.match(ph, /import \{ viewChrome \} from '\.\.\/apps\/chrome\.js';/);
-  assert.match(ph, /const plus = chrome\.plus\('obp-plus', 'Open an app'\);\n  layer\.append\(field, orbBox, chats, plus\);/);
+  assert.match(ph, /const plus = chrome\.plus\('ob-sat obp-sat obp-add', 'Add an app'/);
   assert.ok(!/chrome\.back|paintBack|vc-back/.test(ph + read('web/layouts/apps/chrome.js') + read('web/layouts/apps/desktop.js') + read('web/layouts/apps/layout.js')), 'no Back anywhere');
   assert.ok(!/fly|FLY|animate\(/.test(ph), 'the orb never flies between the centre and the dock');
 });
@@ -288,4 +288,73 @@ test('three levels on both shells: close an app (its desk goes), an App Store pa
   assert.match(chrome, /> \.win\.solo\.app-frame:not\(\.wos-inset-bar\)::after \{/, 'phone: the fade, except over an app\'s own bottom bar');
   assert.match(lay, /#stage > \.wsp \{ bottom: 76px; \}/, 'desktop Apps: Chats and tiled windows still end above the orb');
   assert.match(lay, /:has\(> \.win:not\(\.gone\) iframe\[data-own-app\]\):not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) \{ inset: -8px; \}/, 'desktop Apps: an app alone on its desk is full screen');
+});
+
+test('the sheet by kind (Miguel, 2 Nov 2026): Already open and For agents fold to one row each; Apps (with apps made on this Wizard) open; no App Store list unless searching', async () => {
+  const P = appsWorld(), opened = [], got = [];
+  P.api.after = (ms, fn) => { fn(); return () => {}; };
+  const K = { apps: [{ id: 'files', name: 'Files', icon: '', system: true }, { id: 'mail', name: 'Mail', icon: '' }, { id: 'notes', name: 'Notes', icon: '' }],
+    wiz: [{ id: 'transcriber', name: 'Transcriber', icon: '', system: true }], agents: [{ id: 'carlos', name: 'Carlos', icon: '' }, { id: 'agents', name: 'Build agents', icon: '' }],
+    conns: [{ id: 'wizard-claude', name: 'Claude', icon: '', system: true }, { id: 'music', name: 'Music', icon: '' }], dev: [{ id: 'pr-board', name: 'PR board', icon: '' }] };
+  Object.assign(P.api.apps, { kinds: () => structuredClone(K), openAny: id => { opened.push(id); return true; }, get: id => { got.push(id); return true; },
+    store: () => Promise.resolve([{ id: 'movies', name: 'Movies', summary: 'Your watch queue' }, { id: 'old-notes', name: 'notes', summary: 'Notes under another Store id' }]) });
+  const { default: setup } = await import(new URL('web/layouts/apps/layout.js', root));
+  const off = setup(P.api);
+  P.find('ap-plus')[0].dispatchEvent({ type: 'click' }); await settle();
+  const heads = () => P.find('vc-sec-h').map(h => h.children[0].textContent), folds = () => P.find('vc-fold').map(h => h.children[0].textContent);
+  assert.deepEqual(folds(), ['Already open', 'For agents'], 'two folded rows'); assert.deepEqual(heads(), ['Apps'], 'only Apps is open');
+  assert.deepEqual(P.find('vc-app').map(b => b.attrs['data-app']), ['notes', 'pr-board'], 'an app made on this Wizard is just an app; open apps (mail, music, files) and Chats left out');
+  assert.equal(P.find('vc-fold')[1].children[1].textContent, '4', 'For agents counts what it holds');
+  assert.equal(P.find('vc-get').length, 0, 'no App Store list'); assert.equal(P.find('vc-store').length, 1, 'one row opens the App Store');
+  P.find('vc-fold')[1].dispatchEvent({ type: 'click' });
+  assert.deepEqual(heads(), ['Apps', 'Agent apps', 'Agents', 'Connectors']);
+  assert.deepEqual(P.find('vc-app').map(b => b.attrs['data-app']), ['notes', 'pr-board', 'transcriber', 'carlos', 'agents', 'wizard-claude']);
+  P.find('vc-fold')[1].dispatchEvent({ type: 'click' }); assert.deepEqual(heads(), ['Apps']);
+  P.find('vc-fold')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['mail', 'music', 'files'], 'unfolded: each open app with its ✕');
+  P.find('vc-fold')[0].dispatchEvent({ type: 'click' }); assert.equal(P.find('vc-open').length, 0);
+  const q = P.find('vc-q')[0]; q.value = 'mu'; q.dispatchEvent({ type: 'input' });
+  assert.deepEqual(P.find('vc-open').map(b => b.attrs['data-open']), ['music'], 'a search shows its open matches');
+  q.value = 'mov'; q.dispatchEvent({ type: 'input' });
+  assert.deepEqual(P.find('vc-get').map(b => b.attrs['data-store']), ['movies'], 'a search also looks in the App Store'); assert.ok(heads().includes('In the App Store'));
+  q.value = 'not'; q.dispatchEvent({ type: 'input' });
+  assert.equal(P.find('vc-get').length, 0, 'an app you already have, listed under another Store id, is not offered again');
+  q.value = 'trans'; q.dispatchEvent({ type: 'input' });
+  assert.deepEqual(heads(), ['Agent apps'], 'a search opens For agents to its matches');
+  P.find('vc-app')[0].dispatchEvent({ type: 'click' });
+  assert.deepEqual(opened, ['transcriber'], 'an agent app opens through openAny (its settings sheet)'); assert.equal(P.find('vc-sheet').length, 0);
+  off();
+});
+
+test('apps.kinds / openAny: the launcher kinds for layouts, shared by both shells', () => {
+  const ak = read('web/core/app-kinds.js'), host = read('web/core/skin-host.js'), app = read('web/app.js'), desk = read('web/desktop/desktop.js');
+  assert.match(ak, /const agents = K\.agents\.filter\(a => a\.id !== 'wizard'\)\.map\(row\);/, 'the main agent is Chats, never a tile');
+  assert.match(ak, /window\.WosAppRoute\?\.open\(a\.id, \{ name: a\.name \}\); return true;/, 'an agent app without a screen shows its settings');
+  for (const s of [app, desk]) assert.match(s, /appKinds: \(\) => window\.WosAppKinds\?\.rows \? window\.WosAppKinds\.rows\(APPS, APP, a => ico\('span', 'ic', a\)\) : null,/);
+  assert.match(app, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, open\),/);
+  assert.match(desk, /openAnyApp: \(id, open\) => !!window\.WosAppKinds\?\.openRow\?\.\(APPS, APP, id, globalThis\.WosSkinHost\?\.panelMode \? x => openApp\(APP\[x\]\) !== false : open\),/, 'the Orb opens it in its panel, never a fresh empty desk');
+  assert.match(host, /kinds: \(\) => \{ const k = live\(\) \? shell\.appKinds\?\.\(\) : null; return k \? structuredClone\(k\) : null; \},/);
+  assert.match(host, /openAny: id => live\(\) && typeof id === 'string' && \/\^\[a-z0-9\]\[a-z0-9-\]\{0,63\}\$\/\.test\(id\) && shell\.openAnyApp/);
+});
+
+test('Apps view grid (both shells): Chats first, badged apps next, the rest in desk order, + last labelled Add; a new app grows in', () => {
+  for (const f of ['web/layouts/apps/desktop.js', 'web/layouts/apps/layout.js']) {
+    const js = read(f);
+    assert.match(js, /const litFirst = out => \[out\[0\], \.\.\.out\.slice\(1\)\.filter\(i => \(badgeMap\[i\.id\] \|\| 0\) > 0\), \.\.\.out\.slice\(1\)\.filter\(i => !\(\(badgeMap\[i\.id\] \|\| 0\) > 0\)\)\];/, f);
+    assert.match(js, /return litFirst\(out\);/, f);
+    assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; paint\(\); \}\);/, f + ': a badge reorders');
+    assert.match(js, /bornIf\(!first, icon\(i/, f + ': only after the first paint');
+    assert.match(js, /text: 'Add' \}\)\); \}\);/, f);
+  }
+  assert.match(read('web/layouts/apps/chrome.css'), /html\[data-view-chrome\] \.vc-born \{ animation: vc-born/);
+});
+
+test('Apps view icons: right-click (desktop) / long press (phone) = Open · Close · stays installed; Chats never closes', () => {
+  const c = read('web/layouts/apps/chrome.js');
+  assert.match(c, /item\('Open', \(\) => onOpen\?\.\(\)\), \.\.\.\(running === false \? \[\] : \[item\('Close · stays installed', \(\) => \{ api\.apps\.close\?\.\(a\.id\); onClosed\?\.\(\); \}, ' is-close'\)\]\)/, 'Open · Close (AI apps round 16: extra items first, no Close for an app not running; both opt-in)');
+  assert.match(c, /if \(!b \|\| !a \|\| a\.id === CHATS\) return;/, 'no menu on Chats');
+  assert.match(c, /if \(shell !== 'phone'\) return;/, 'the long press is the phone\'s; the desktop uses right-click');
+  assert.match(c, /if \(p\?\.fired\) \{ e\.preventDefault\(\); e\.stopImmediatePropagation\?\.\(\); p = null; \}/, 'the click ending a long press does not also open the app');
+  assert.match(c, /dispose\(\) \{ close\(\); menuClose\(\);/);
+  for (const f of ['web/layouts/apps/desktop.js', 'web/layouts/apps/layout.js']) assert.match(read(f), /chrome\.menuOn\(b, item, \{ onOpen: go, onClosed: \(\) => api\.after\(60, paint\) \}\);/, f);
 });

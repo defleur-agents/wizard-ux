@@ -3,7 +3,7 @@
  *   - the orb's look: the Style × Colour kept per device (the same stored choice on both), its colours read from the
  *     wearing tweak's skin-layer tokens (--ob-look-<id>, --ob-white, …) and normalised to #rrggbb;
  *   - the night sky: the starfield and the soft glow behind the orb;
- *   - the satellites: which apps float round the orb (orbitApps). Change what floats here and both shells follow.
+ *   - the satellites: which apps float round the orb and in what order (orbitApps). Change it here and both shells follow.
  * No storage, network or DOM reads beyond the computed tokens; everything else goes through the layout API. */
 import { STYLES, RETIRED, mix, A } from './styles.js';
 
@@ -68,10 +68,19 @@ export function paintSky(sx, { W, H, gx, cy, t, lv, P, stars }) {
  * Installed apps that are not open and the App Store live behind the + (layouts/apps/chrome.js). The desktop and the
  * phone both float exactly this list. */
 export const regular = a => !a.system && !a.dev && !a.connector && !a.agent;
-export function orbitApps(api) {
-  const meta = new Map(api.apps.list().map(a => [a.id, a])), names = new Map((api.desks?.list?.() || []).map(d => [d.id, d.name])), seen = new Set();
-  return api.panel.running().filter(r => r.id && r.id !== 'wizard' && !seen.has(r.id) && seen.add(r.id))
+/* Order (Miguel, 2 Nov 2026): every open app with a badge comes first, then the rest, each group in desk order. Both
+ * shells lay them out clockwise from the top, so the badged ones always sit together at the top; an app that gains a
+ * badge joins that group, one that loses it goes back among the rest. `counts` only reorders: a count never floats an
+ * app that is not open. */
+export function orbitApps(api, counts = {}) {
+  const desks = api.desks?.list?.() || [], meta = new Map(api.apps.list().map(a => [a.id, a])), names = new Map(desks.map(d => [d.id, d.name])), seen = new Set();
+  // desk order, never "the one shown first": opening an app must not move it on the ring
+  const at = new Map(desks.map((d, i) => [d.id, i])), rank = id => at.has(id) ? at.get(id) : Infinity;
+  const open = api.panel.running().filter(r => r.id && r.id !== 'wizard' && !seen.has(r.id) && seen.add(r.id))
+    .map((r, i) => ({ r, i })).sort((x, y) => rank(x.r.id) - rank(y.r.id) || x.i - y.i).map(({ r }) => r)
     .map(r => ({ ...(meta.get(r.id) || { id: r.id, name: names.get(r.id) || r.id, icon: '' }), run: r }));
+  const lit = a => (counts?.[a.id] || 0) > 0;
+  return [...open.filter(lit), ...open.filter(a => !lit(a))];
 }
 
 /* An app's mark when it has no logo: its designed glyph (the sigil in its icon), else one guessed from its name, in its

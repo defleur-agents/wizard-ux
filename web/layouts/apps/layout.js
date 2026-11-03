@@ -31,9 +31,13 @@ export default function setup(api) {
   // the + sheet (every app not open yet) and the orb swipes (up = Home)
   const chrome = viewChrome(api, { openIds: () => desks().map(d => d.id) });
   // the grid's last tile: a + in a plain tile, labelled like the others
-  const plus = chrome.plus('ap-icon ap-plus', 'Open an app', (b, ico) => { const t = el('span', 'ap-tile', { 'aria-hidden': 'true' }); t.append(ico); b.append(t, el('span', 'ap-label', { text: 'Open app' })); });
+  const plus = chrome.plus('ap-icon ap-plus', 'Add an app', (b, ico) => { b.setAttribute('data-app', '+add'); const t = el('span', 'ap-tile', { 'aria-hidden': 'true' }); t.append(ico); b.append(t, el('span', 'ap-label', { text: 'Add' })); });
 
-  let badgeMap = api.apps.badges(m => { badgeMap = m; paintCounts(); });
+  // Chats first, then every app with a badge, then the rest, each in desk order (Miguel, 2 Nov 2026: the same order as
+  // the Orb's ring). A newly opened app grows into its place (chrome.css .vc-born) instead of just appearing.
+  const litFirst = out => [out[0], ...out.slice(1).filter(i => (badgeMap[i.id] || 0) > 0), ...out.slice(1).filter(i => !((badgeMap[i.id] || 0) > 0))];
+  const bornIf = (on, x) => { if (on && x?.b) { x.b.classList.add('vc-born'); api.after(800, () => x.b.classList.remove('vc-born')); } return x; };
+  let badgeMap = api.apps.badges(m => { badgeMap = m; paint(); });   // a badge can reorder the grid (badged apps first)
   let names = new Map(), sig = '', icons = [];
   const nameOf = (id, fallback) => names.get(id) || fallback || id;
 
@@ -46,10 +50,12 @@ export default function setup(api) {
     const c = mark?.style?.getPropertyValue?.('--c'); if (c) b.style.setProperty('--c', c);
     const count = el('b', 'ap-badge', { 'aria-hidden': 'true' }); count.hidden = true;
     b.append(tile, count, el('span', 'ap-label', { text: item.name }));
-    api.listen(b, 'click', () => {
+    const go = () => {
       if (item.id === CHATS) api.sessions.openList('ready');
       else if (item.desk != null) api.nav.goDesk(item.desk);
-    });
+    };
+    api.listen(b, 'click', go);
+    chrome.menuOn(b, item, { onOpen: go, onClosed: () => api.after(60, paint) });   // long press: Open · Close (stays installed)
     if (item.id !== CHATS) api.apps.logo(item.id).then(url => {
       if (!url || !b.isConnected) return;
       const im = el('img', 'ap-logo', { alt: '', src: url, draggable: 'false' });
@@ -62,12 +68,12 @@ export default function setup(api) {
     names = new Map(api.apps.list().map(a => [a.id, a.name]));
     const out = [{ id: CHATS, name: 'Chats', desk: null }];
     for (const d of desks()) if (d.id && d.id !== CHATS) out.push({ id: d.id, name: nameOf(d.id, d.name), desk: d.desk });
-    return out;
+    return litFirst(out);
   }
   function paintCounts() {
     for (const { b, count, item } of icons) {
       const n = badgeMap[item.id] || 0;
-      count.textContent = n > 99 ? '99+' : n ? String(n) : ''; count.hidden = !n;
+      count.textContent = n ? (api.apps.badgeText?.(item.id) || (n > 99 ? '99+' : n ? String(n) : '')) : ''; count.hidden = !n;
       b.setAttribute('aria-label', item.id === CHATS ? (n ? `Chats, ${n} ready` : 'Chats') : `${item.name}${n ? `, ${n} new` : ''}`);
     }
   }
@@ -77,7 +83,8 @@ export default function setup(api) {
     if (next !== sig) {
       sig = next;
       const was = new Map(icons.map(x => [`${x.item.id}@${x.item.desk}:${x.item.name}`, x]));
-      icons = list.map(i => was.get(`${i.id}@${i.desk}:${i.name}`) || icon(i));
+      const first = !icons.length;
+      icons = list.map(i => was.get(`${i.id}@${i.desk}:${i.name}`) || bornIf(!first, icon(i)));
       grid.replaceChildren(...icons.map(x => x.b), plus);
     }
     paintCounts();

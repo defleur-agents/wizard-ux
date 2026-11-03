@@ -335,23 +335,14 @@
    * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
    * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
   const emptyHomes = new Set();   // layouts that asked for desktop.js closeWin to go Home when a desk empties
-  /* An installed app's own logo, from the Store-data adapter's read-only route (store-data/logo/<id>: the logo the
-   * App Index lists for that app). The template / Runtipi placeholder pictures mean "no logo" (by sha256, the same
-   * list as tools/store-app-logos.mjs), so those apps keep their sigil. One read per app per page; a local blob URL. */
-  const LOGO_PLACEHOLDERS = new Set(['59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6', '41191af41f7a8e159a11abde437db1ad1f8776fd5388ef806cde74dbef1b9a7e']);
-  const logos = new Map();
+  /* An installed app's own logo: exactly the picture every other app-icon place shows (WizSigil.of(app).logo over the
+   * box's list of installed logos; placeholders already excluded, a designed sigil wins), so a layout never draws a different
+   * logo for the same app than the Desks view. A same-origin URL carrying the image's hash; null when it has none. */
   function appLogo(id) {
-    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id) || !isDoc || typeof fetch !== 'function') return Promise.resolve(null);
-    if (!logos.has(id)) logos.set(id, (async () => {
-      try {
-        const r = await fetch(new URL(`store-data/logo/${id}`, document.baseURI), { signal: AbortSignal.timeout(8000) });
-        if (!r.ok || !/^image\/(png|jpeg|gif|webp|svg\+xml)$/.test((r.headers.get('content-type') || '').split(';')[0].trim())) return null;
-        const blob = await r.blob(); if (!blob.size || blob.size > 1024 * 1024) return null;
-        const sum = [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))].map(b => b.toString(16).padStart(2, '0')).join('');
-        return LOGO_PLACEHOLDERS.has(sum) ? null : URL.createObjectURL(blob);
-      } catch (_) { logos.delete(id); return null; }
-    })());
-    return logos.get(id);
+    if (typeof id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(id)) return Promise.resolve(null);
+    // WizSigil decides: an app with a designed sigil keeps it even when it ships a picture.
+    const u = (typeof window !== 'undefined' && (window.WizSigil ? window.WizSigil.of({ id }).logo : window.WizCore?.appLogo?.(id))) || '';
+    return Promise.resolve(/^\/wizard-os-home\/store-data\/app-logo\/[a-z0-9][a-z0-9-]{0,63}\?v=[0-9a-f]{16}$/.test(u) ? u : null);
   }
   /* The App Store's own listing (the Store app's Store-data route, the same index it shows): Apps (type view) that are
    * not installed yet, for the Orb and Apps views' "Get more" section. Read-only; one read per page, refreshed when the
@@ -436,6 +427,10 @@
     let row = tabs[0].n.parentElement;
     while (row && row !== bar && !tabs.every(t => row.contains(t.n))) row = row.parentElement;
     if (!row || !bar.contains(row) && row !== bar) return false;
+    // a row that also holds another kind of control (a date picker, a field: Morning Report's ‹ date › PDF) is not a
+    // tab bar: splitting it would crush that control at the row's start; the orb takes the row's end instead
+    const isTab = new Set(tabs.map(t => t.n));
+    if ([...row.querySelectorAll('select,input,textarea')].some(n => n.getAttribute('type') !== 'hidden' && vis(n) && !isTab.has(n) && Math.abs(n.getBoundingClientRect().top + n.getBoundingClientRect().height / 2 - low) < 16)) { for (const n of old) unmark(n); return false; }
     const nl = Math.ceil(tabs.length / 2), keep = new Set([row]);
     tabs.forEach((t, i) => {
       keep.add(t.n); setAttr(t.n, 'data-wos-tab', i < nl ? 'l' : 'r');
@@ -847,6 +842,12 @@
           const off = () => { insetHolders.delete(a); insetOrbs.delete(a); insetPlaces.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
         },
         all: () => { if (live()) shell.openPicker?.(); },
+        /* Every app by kind, as the launcher groups them (core/app-kinds.js): { apps, wiz (agent apps), agents, conns
+         * (connectors), dev } of { id, name, icon, system }; null on a shell without kinds. openAny(id) opens any of them
+         * like openDesk (an agent app with no screen shows its settings sheet). */
+        kinds: () => { const k = live() ? shell.appKinds?.() : null; return k ? structuredClone(k) : null; },
+        openAny: id => live() && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) && shell.openAnyApp
+          ? !!shell.openAnyApp(id, x => !!(shell.openAppDesk ? shell.openAppDesk(x) : shell.openApp?.(x))) : false,
         // The shell's own search & launch (⌥Space / ⌘K), never a second search box.
         search: () => { if (live()) shell.openPalette?.(); },
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
@@ -854,6 +855,8 @@
         /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
          * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
          * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
+        // The badge text as the shell shows it ('50+' for an app that lists only its newest items); '' when none.
+        badgeText: id => live() && isDoc ? String(window.WizCore?.workspaceNav?.label?.(String(id)) || '') : '',
         badges(watch) {
           const read = () => { const c = isDoc ? window.WizCore?.workspaceNav?.counts : null, o = {}; if (c) for (const [k, v] of Object.entries(c)) if (v > 0) o[k] = v | 0; return Object.freeze(o); };
           if (live() && typeof watch === 'function' && isDoc) {
@@ -869,6 +872,17 @@
         look: () => { if (live()) shell.openSettings?.('look'); },
         // Settings (a page id such as 'network', or its first page).
         settings: page => { if (live()) shell.openSettings?.(typeof page === 'string' && /^[a-z-]{1,24}$/.test(page) ? page : undefined); },
+        /* What the Settings cog carries (WosBell.attention, the same count as the phone's gear and the desktop's cog):
+         * read-only { n, label } or null; watch(fn) is called again when it changes and is released on teardown. */
+        attention(watch) {
+          const read = () => { const at = isDoc ? window.WosBell?.attention?.() : null, n = Math.max(0, Math.min(999, Number(at?.n) | 0)); return n ? Object.freeze({ n, label: String(at.label || '') }) : null; };
+          if (live() && typeof watch === 'function' && isDoc) {
+            const g = guard(a, 'attention', watch), h = () => { if (live()) g(read()); };
+            window.addEventListener('wizard:notify-attention', h);
+            const off = () => { window.removeEventListener('wizard:notify-attention', h); a.offs.delete(off); }; a.offs.add(off);
+          }
+          return live() ? read() : null;
+        },
         /* Back to the Desks view for this device: switches off the tweak wearing this layout, the same way as its
          * Settings › Look switch (WosExperience mix, no reload), so the layout itself always offers a way back. */
         classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },

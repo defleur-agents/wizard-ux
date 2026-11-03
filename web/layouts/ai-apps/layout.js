@@ -127,8 +127,6 @@ export default function setup(api) {
     if (pinned && i > 0) extra.push(['Move up', () => { const l = pins.filter(x => x !== a.id); l.splice(i - 1, 0, a.id); setPins(l); }]);
     if (pinned && i < pins.length - 1) extra.push(['Move down', () => { const l = pins.filter(x => x !== a.id); l.splice(i + 1, 0, a.id); setPins(l); }]);
     if (api.apps.homeScreen?.can?.(a.id)) extra.push(['Add to Home Screen', () => api.apps.homeScreen.offer(a.id)]);
-    // (the shared app menu where this build has it; else the stock Add to Home Screen sheet, as before)
-    if (!chrome.appMenu) { if (api.apps.homeScreen?.can?.(a.id)) api.apps.homeScreen.offer(a.id); return; }
     chrome.appMenu({ id: a.id, name: a.name }, at.x, at.y, { extra, running, onOpen: () => goApp(a.id, a.desk ?? null), onClosed: () => api.after(120, () => home.paint(true)) });
   }
   const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks,
@@ -189,6 +187,10 @@ export default function setup(api) {
   api.listen(newBtn, 'click', goHome);
   api.listen(mid, 'click', goHome);
   api.listen(setBtn, 'click', () => { closeDrawer(); api.desk.settings(); });
+  // the cog's count (System notices set to Badge, …): the same WosBell.attention the phone's gear and the desktop's cog show
+  const setCount = el('b', 'aa-count aa-setn', { 'aria-hidden': 'true' }); setCount.hidden = true; setBtn.append(setCount);
+  const paintCog = at => { const n = at?.n | 0; setCount.textContent = !n ? '' : n > 99 ? '99+' : String(n); setCount.hidden = !n; setBtn.setAttribute('aria-label', n ? `Settings, ${n} ${at.label}` : 'Settings'); };
+  paintCog(api.desk.attention?.(paintCog));
 
   /* rows: an app (its logo, else the dock's own mark for it), a chat (Working spinner / Ready dot, title, pin) */
   // round 6: the app's own icon filling its tile like an iPhone icon (its sigil on a tile tinted by its colour, or its

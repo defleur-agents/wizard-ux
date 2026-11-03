@@ -401,6 +401,14 @@ export default function desktop(api) {
   const settings = () => { unpeek(); api.desk.settings(); };
   api.listen(newBtn, 'click', newChat); api.listen(rNew, 'click', newChat);
   api.listen(setBtn, 'click', settings); api.listen(rSet, 'click', settings);
+  // the cog's count (System notices set to Badge, …): WosBell.attention, as on the stock desktop's cog and the phone's gear
+  const setCounts = [setBtn, rSet].map(b => { const c = el('b', 'aad-count aad-setn', { 'aria-hidden': 'true' }); c.hidden = true; b.append(c); return c; });
+  const paintCog = at => {
+    const n = at?.n | 0, t = !n ? '' : n > 99 ? '99+' : String(n);
+    for (const c of setCounts) { c.textContent = t; c.hidden = !n; }
+    for (const b of [setBtn, rSet]) b.setAttribute('aria-label', n ? `Settings, ${n} ${at.label}` : 'Settings');
+  };
+  paintCog(api.desk.attention?.(paintCog));
 
   /* ---------- an app's icon: its logo, else its sigil in its colour (the sheet's own tile) ---------- */
   const metaOf = id => api.apps.list().find(a => a.id === id) || { id, name: appName(id) || id };

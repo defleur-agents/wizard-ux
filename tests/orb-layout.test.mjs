@@ -80,8 +80,8 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   const api = D.api; assert.ok(api, 'layout set up');
   assert.ok(Object.isFrozen(api) && Object.isFrozen(api.sessions) && Object.isFrozen(api.apps) && Object.isFrozen(api.desk) && Object.isFrozen(api.voice));
   assert.deepEqual(Object.keys(api.sessions).sort(), ['act', 'chats', 'list', 'newChat', 'open', 'openList']);
-  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badges', 'close', 'get', 'homeScreen', 'inset', 'list', 'logo', 'open', 'openDesk', 'search', 'store']);
-  assert.deepEqual(Object.keys(api.desk).sort(), ['classic', 'emptyHome', 'home', 'look', 'settings']);
+  assert.deepEqual(Object.keys(api.apps).sort(), ['all', 'badgeText', 'badges', 'close', 'get', 'homeScreen', 'inset', 'kinds', 'list', 'logo', 'open', 'openAny', 'openDesk', 'search', 'store']);
+  assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
   assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
@@ -110,6 +110,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.equal(D.host.emptyHome, false, 'desks behave as before once it is off');
   const n = D.calls.length;
   assert.equal(api.sessions.list(), null); assert.equal(api.sessions.act('r1', 'done'), false); api.apps.open('files'); api.desk.home(); api.voice.command();
+  assert.equal(api.desk.attention(() => {}), null, 'the cog count is gone too');
   assert.equal(api.apps.list().length, 0); assert.equal(D.calls.length, n, 'stale handles are inert');
   assert.equal(D.ls._['wos.layout'], undefined, 'nothing left stored');
 });
@@ -227,19 +228,28 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(js, /scene\.style\.setProperty\('--ob-cx', Math\.round\(cx\) \+ 'px'\)/);
   assert.match(js, /const k = chat \? clamp\(\(W \/ 2 - chatR - GAP\) \/ r, \.45, 1\) : 1;/);
   assert.ok(!/:is\(\.ob-orbwrap, \.ob-field\) \{ opacity/.test(read('web/layouts/orb/layout.css')), 'the orb is never dimmed behind a panel');
-  // The interconnection: an open app's satellite pins between the orb and its panel; electric bolts in the orb's colour
-  // run orb → app → panel edge (and orb → chat column), drawn on the sky canvas in the same ~30 fps loop; reduced
-  // motion = one still line (fixed seed, no spark).
+  // The interconnection: an open app's satellite lights up where it sits (it never moves, Miguel 2 Nov 2026); electric
+  // bolts in the orb's colour run orb → app panel edge (and orb → chat column), drawn on the sky canvas in the same
+  // ~30 fps loop; reduced motion = one still line (fixed seed, no spark).
   assert.match(js, /const want = pinId && s\.id === pinId \? 1 : 0;/); assert.match(js, /s\.el\.classList\.toggle\('is-pinned', k > \.5\);/);
-  assert.match(js, /bolt\(cx \+ R, cy, s\.x - half, s\.y, t, pin, seed \+ 23, P\);/); assert.match(js, /bolt\(s\.x \+ half, s\.y, G\.appL, cy, t, pin, seed \+ 41, P\);/);
+  // the app bolt lands on the open app's own still satellite, not the panel (Miguel, 2 Nov 2026)
+  assert.match(js, /bolt\(cx \+ ux \* R, cy \+ uy \* R, s\.x - ux \* half, s\.y - uy \* half, t, bolts\.app \* flick, seed \+ 23, P\);/);
+  assert.doesNotMatch(js, /bolt\([^)]*G\.appL/, 'no bolt to the app panel');
+  assert.match(js, /if \(strength <= \.01 \|\| Math\.hypot\(x2 - x1, y2 - y1\) < 6\) return;/, 'a straight-up bolt (the top satellite) still draws');
+  assert.doesNotMatch(js, /G\.pinX - x/, 'the open app\'s satellite is never flown out of the ring');
   assert.match(js, /if \(bolts\.chat\) bolt\(cx - R, cy, G\.chatR, cy,/);
   assert.match(js, /const seed = reduced \? 977 : boltSeed/); assert.match(js, /if \(!reduced\) \{ const u = /, 'the running spark only with motion');
   assert.match(js, /placeSats\(dt\);\n    drawBolts\(t, dt\);/);
   assert.match(js, /const awake = !!home && !doc\.hidden;/, 'asleep off Home and in hidden tabs');
   assert.match(js, /prefers-reduced-motion: reduce/);
   assert.ok(!js.includes('paper-shaders') && !existsSync(new URL('web/layouts/orb/vendor', root)), 'no vendored code');
-  // Apps: round satellites on two tilted orbits with depth; their own logo, else a designed glyph; never a letter tile.
-  assert.match(js, /ring: i % 2 \? 1 : 1\.32/); assert.match(js, /const depth = Math\.sin\(s\.a\)/);
+  // Apps: still, like the phone (Miguel, 2 Nov 2026): one round ring, evenly from the top, clockwise, in orbitApps order
+  // (badged apps first); no drift. Their own logo, else a designed glyph; never a letter tile.
+  assert.match(js, /const ta = -Math\.PI \/ 2 \+ i \/ items\.length \* Math\.PI \* 2, o = was\.get\(it\.id\);/);
+  assert.match(js, /\{ id: '\+add', el: plus, a0: '' \}\];/, 'the + is the ring\'s last place (Miguel, 2 Nov 2026)');
+  assert.match(js, /return \{ \.\.\.it, ta, a: o \? o\.a : first \? ta : from, g: o \|\| first \? 1 : 0, ring: 1, speed: 0,/, 'a new app grows out of the +\'s old place; the rest glide');
+  assert.doesNotMatch(js, /s\.a \+= s\.speed/, 'satellites never drift');
+  assert.match(js, /let x = cx \+ Math\.cos\(s\.a\) \* R, y = cy \+ Math\.sin\(s\.a\) \* R;/, 'a round ring, not a tilted ellipse');
   assert.match(js, /api\.apps\.logo\(a\.id\)/);
   // Clean marks: no glass plate behind an app (logo or glyph alone); the shell's own count badge on each, live; no
   // name label under the orb.
@@ -258,24 +268,24 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="right"\] \{ z-index: 2; width: var\(--ob-app-w\);/, 'an app: the right third');
   assert.match(lcss, /\.ob-dock \{\n  position: absolute; left: 50%; bottom: 22px; transform: translateX\(-50%\);/, 'search pill and Look on the orb\'s axis at the bottom');
   // The hint names the shell's real keys (⌥V new voice chat, ⌥N new chat; Right ⌘ in the Mac app).
-  assert.match(js, /native \? 'Right ⌘' : mod \+ 'V'/); assert.match(js, /el\('kbd', '', \{ text: mod \+ 'Space' \}\)/, 'the search pill names ⌥Space');
+  assert.match(js, /orbBtn\.title = 'Click to talk \(' \+ \(native \? 'Right ⌘' : mod \+ 'V'\) \+ '\) · hold \(or ⌥C\) for a command · search or ask: ' \+ mod \+ 'Space';/, 'the orb names the keys now the search pill is gone');
   const m = JSON.parse(read('web/tweaks/miguel/orb-shell/manifest.json'));
   assert.deepEqual(m.capabilities, ['layout']);
   const prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(prof.tweaks.includes('miguel/orb-shell') && prof.off.includes('miguel/orb-shell'), 'listed under Miguel, off by default');
 });
 
-test('apps.logo: the Store logo route, placeholders mean no logo, bad ids never fetch', async () => {
+test('apps.logo: the same installed logo the Desks view shows (WizCore.appLogo), nothing fetched, bad ids refused', async () => {
   const D = desk(); const asked = [];
-  const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-  D.ctx.fetch = async url => { asked.push(String(url)); return { ok: true, headers: { get: () => 'image/png' }, blob: async () => ({ size: png.length, arrayBuffer: async () => png.buffer }) }; };
-  D.ctx.crypto = globalThis.crypto; D.ctx.AbortSignal = AbortSignal; D.ctx.Uint8Array = Uint8Array; D.ctx.URL.createObjectURL = () => 'blob:logo';
+  D.ctx.fetch = async url => { asked.push(String(url)); throw new Error('no fetch'); };
+  const url = '/wizard-os-home/store-data/app-logo/files?v=0123456789abcdef';
+  D.ctx.WizCore = { ...(D.ctx.WizCore || {}), appLogo: id => ({ files: url, evil: 'https://evil.example/x.png' }[id] || '') };
   D.host.attach(D.adapter); D.host.setLayout('orb'); await settle();
-  assert.equal(await D.api.apps.logo('files'), 'blob:logo');
-  assert.equal(await D.api.apps.logo('files'), 'blob:logo'); assert.equal(asked.length, 1, 'one read per app per page');
-  assert.match(asked[0], /\/wizard-os-home\/store-data\/logo\/files$/);
-  assert.equal(await D.api.apps.logo('../x'), null); assert.equal(asked.length, 1);
-  assert.ok(read('web/core/skin-host.js').includes("'59b4d70aa80ab18cd3bcfa0e998d2f1b570bd86c2edac5be588f4a64626675c6'"), 'the template logo means no logo');
+  assert.equal(await D.api.apps.logo('files'), url);
+  assert.equal(await D.api.apps.logo('mail'), null, 'no logo: the layout draws the shared sigil');
+  assert.equal(await D.api.apps.logo('evil'), null, 'only the box\'s own logo route');
+  assert.equal(await D.api.apps.logo('../x'), null);
+  assert.equal(asked.length, 0, 'one source for every view: no separate Store logo read');
   D.host.setLayout('classic'); await settle();
 });
 
@@ -375,10 +385,12 @@ test('Orbs view satellites are exactly the open apps (= desks, = the Apps view\'
   const js = read('web/layouts/orb/layout.js'), shared = read('web/layouts/orb/shared.js'), desk = read('web/desktop/desktop.js'), css = read('web/desktop/desktop.css');
   assert.match(js, /const orbitApps = \(\) => orbitList\(api, badgeMap\);/, 'the shared list (the phone floats the same one)');
   assert.match(shared, /export const regular = a => !a\.system && !a\.dev && !a\.connector && !a\.agent;/);
-  assert.match(shared, /return api\.panel\.running\(\)\.filter\(r => r\.id && r\.id !== 'wizard' && !seen\.has\(r\.id\) && seen\.add\(r\.id\)\)/, 'one satellite per open app (Chats has its own pill / list)');
+  assert.match(shared, /const open = api\.panel\.running\(\)\.filter\(r => r\.id && r\.id !== 'wizard' && !seen\.has\(r\.id\) && seen\.add\(r\.id\)\)/, 'one satellite per open app (Chats has its own pill / list)');
   assert.doesNotMatch(shared.slice(shared.indexOf('export function orbitApps')), /badgeMap/, 'an unread count alone never floats an app that is not open (Miguel, 1 Nov 2026)');
+  // badged apps first (Miguel, 2 Nov 2026): a count only reorders the open apps
+  assert.match(shared, /return \[\.\.\.open\.filter\(lit\), \.\.\.open\.filter\(a => !lit\(a\)\)\];/);
   assert.match(desk, /system: !!AK\?\.isSystem\?\.\(a\), dev: !!AK\?\.inDev\?\.\(a\), connector: !!AK\?\.isConnector\?\.\(a\), agent: !!a\.agent \|\| a\.kind === 'chats'/, 'the shell\'s own kinds, no list of ids');
-  assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close', \(\) => \{ api\.panel\.quit\(a\.id\);/);
+  assert.match(js, /api\.panel\.park\(true\);/); assert.match(js, /item\('Close · stays installed', \(\) => \{ api\.panel\.quit\(a\.id\);/);
   assert.match(desk, /const wasApp = panelApp\?\.id === w\.id, park = wasApp && \(panelParks \|\| panelDeskApp\(w\)\) && !quit;/);
   assert.match(desk, /if \(park\) panelPark\(w\.id\); else if \(wasApp && panelDeskApp\(w\)\) \{ panelDeskClose\(w\.id\); panelApp = null; \}/, 'Close closes its desk');
   assert.match(desk, /trackOpenApps\?\.\(\(\) => \[\.\.\.ws\.flatMap\(d => d\.wins\)/, 'a hidden app is a desk window: it still counts as open (its mic and audio keep going)');
@@ -388,7 +400,7 @@ test('Orbs view satellites are exactly the open apps (= desks, = the Apps view\'
 
 test('Orbs view: the list, chat and app panels resize from thin grips, kept per device, never overlapping', () => {
   const js = read('web/layouts/orb/layout.js'), css = read('web/layouts/orb/layout.css');
-  assert.match(js, /const limits = \(\) => \(\{ list: \[260, 520\], chat: \[Math\.min\(360, W \* \.45\), Math\.max\(360, W \* \.45\)\], app: \[Math\.min\(360, W \* \.6\), Math\.max\(360, W \* \.6\)\] \}\);/);
+  assert.match(js, /const limits = \(\) => \(\{ list: \[THIN, 520\], chat: \[Math\.min\(360, W \* \.45\), Math\.max\(360, W \* \.45\)\], app: \[Math\.min\(360, W \* \.6\), Math\.max\(360, W \* \.6\)\] \}\);/);
   assert.match(js, /if \(C \+ A > room\) \{ C = Math\.max\(lim\.chat\[0\], room - A\);/, 'never overlapping');
   assert.match(js, /el\('div', 'ob-grip', \{ role: 'separator', 'aria-orientation': 'vertical', tabindex: '0'/, 'keyboard-reachable separators');
   assert.match(js, /function save\(\) \{ api\.storage\.set\('widths', sized\); \}/); assert.match(js, /api\.listen\(g, 'dblclick', \(\) => \{ delete sized\[id\]; save\(\); aim\(\); \}\);/);
@@ -404,9 +416,11 @@ test('Orbs view satellites stay minimal (Miguel, v8): just the mark, a dot not a
   const badge = /\.ob-sat-badge \{([^}]*)\}/.exec(css)[1];
   assert.doesNotMatch(badge, /0 0 0 \dpx/, 'the count dot has no ring');
   for (const sel of ['.ob-sat-key {', '.ob-keyrow-i b {']) { const i = css.indexOf(sel); assert.ok(i > 0, sel); assert.doesNotMatch(css.slice(i, css.indexOf('}', i)), /background: var\(--ob-glass|border: 1px/, sel + ' is a bare letter, no keycap'); }
-  assert.match(js, /el\('span', 'ob-search-l', \{ text: 'Search apps or ask…' \}\)/);
-  assert.match(js, /api\.listen\(hint, 'click', \(\) => api\.apps\.all\(\)\);/, 'the pill opens the launcher in its apps-first mode');
-  assert.match(js, /all apps: ' \+ MK \+ 'O'/, 'its tooltip names ⌥O');
+  assert.ok(!js.includes("'ob-search'"), 'no search pill: the + on the ring is the one way to add an app (Miguel, 2 Nov 2026)');
+  assert.match(js, /const plus = chrome\.plus\('ob-sat ob-add', 'Add an app \(' \+ MK \+ 'O\)'/);
+  assert.match(js, /dock\.append\(picker\);/);
+  assert.match(js, /if \(alt && !e\.shiftKey && e\.code === 'KeyO'\) \{ if \(!e\.repeat\) \{ if \(chrome\.isOpen\) chrome\.close\(\); else chrome\.open\(\); \} return true; \}/, '⌥O too');
+
 });
 
 test('Orbs view apps ARE desks (Miguel, v8): one app per desk, saved and synced like desks, so looking away or a reload never closes them', async () => {
@@ -459,4 +473,38 @@ test('Orbs view alone is never a dead end: the scene offers Back to the Desks vi
   assert.equal(await L.desk.classic(), true); assert.deepEqual(asked, ['miguel/orb-shell'], 'the same device switch as Settings › Look');
   await f.clear();
   assert.equal(await L.desk.classic(), false, 'inert once the layout is gone'); assert.deepEqual(asked, ['miguel/orb-shell']);
+});
+
+test('Orbs satellites: open apps with a badge first, in desk order, then the rest; a count never adds an app (Miguel, 2 Nov 2026)', async () => {
+  const { orbitApps } = await import(new URL('web/layouts/orb/shared.js', root));
+  const apps = ['a', 'b', 'c', 'd', 'e'].map(id => ({ id, name: id.toUpperCase(), icon: '' }));
+  const api = { apps: { list: () => apps }, desks: { list: () => [] }, panel: { running: () => ['a', 'b', 'wizard', 'c', 'd', 'b'].map(id => ({ id, open: id === 'a' })) } };
+  assert.deepEqual(orbitApps(api).map(a => a.id), ['a', 'b', 'c', 'd'], 'no counts: desk order');
+  assert.deepEqual(orbitApps(api, { c: 3, a: 0, e: 9, d: 1 }).map(a => a.id), ['c', 'd', 'a', 'b'], 'badged first in desk order; e is not open, so it never floats');
+  assert.deepEqual(orbitApps(api, { b: 1 }).map(a => a.id), ['b', 'a', 'c', 'd'], 'gaining a badge moves an app into the first group');
+  // the shell lists the app shown in the panel first: the ring keeps desk order, so opening an app never moves it
+  const shown = { ...api, desks: { list: () => ['a', 'b', 'c', 'd'].map((id, desk) => ({ desk, id, name: id })) }, panel: { running: () => ['d', 'a', 'b', 'c'].map(id => ({ id, open: id === 'd' })) } };
+  assert.deepEqual(orbitApps(shown).map(a => a.id), ['a', 'b', 'c', 'd'], 'the open app keeps its place');
+});
+
+test('Orbs desktop: an app panel is docked flush on the right edge, never a floating card', () => {
+  const css = read('web/layouts/orb/layout.css'), js = read('web/layouts/orb/layout.js');
+  assert.match(css, /\.panel-layer > \.win\.panel\[data-side="right"\]\[data-panel="app"\] \{\n  top: 0; right: 0; bottom: 0; border-radius: 0; border: 0; border-left: 1px solid var\(--ob-dock-line\); box-shadow: none; outline: none;/);
+  assert.ok(css.indexOf('[data-side="right"][data-panel="app"] {') > css.indexOf('.win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px'), 'after the rounded panel rule, so it wins');
+  assert.match(js, /const appL = W - A;/); assert.match(js, /show\('app', appOpen, W - A, A\)/);
+});
+
+test('Orbs desktop: the docked list drags down to a thin column of status icons (Miguel, 2 Nov 2026)', () => {
+  const css = read('web/layouts/orb/layout.css'), js = read('web/layouts/orb/layout.js');
+  assert.match(js, /STRIP = 46, THIN = 64, SNAP = 170;/); assert.match(js, /list: \[THIN, 520\]/);
+  assert.match(js, /if \(id === 'list'\) w = w < SNAP \? THIN : Math\.max\(w, 260\);/, 'between a readable row and the icon column it snaps');
+  assert.match(js, /if \(!folded && !wide && listW <= THIN \+ 8\) root\.dataset\.obList = 'thin'; else delete root\.dataset\.obList;/);
+  assert.match(js, /delete root\.dataset\.orbScene; delete root\.dataset\.obList;/, 'turning the Orb off leaves nothing behind');
+  assert.match(css, /\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\] :is\(\.ch-top, \.ch-ptr, \.ch-rdy-bar, \.ch-row \.bd, /);
+  assert.match(css, /\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\] \.ch-row\.unread::after/, 'unread stays visible as a dot');
+  for (const rule of css.split('\n').filter(l => l.startsWith('html') && l.includes('data-ob-list'))) assert.match(rule, /^html\[data-shell="desktop"\]\[data-layout="orb"\]\[data-ob-list="thin"\] \.panel-layer > \.win\.panel\[data-dock\]/, 'only the docked list, only in the Orb desktop');
+});
+
+test('Orbs desktop: → on the thin list grip steps straight out to a readable list', () => {
+  assert.match(read('web/layouts/orb/layout.js'), /if \(id === 'list' && dir > 0 && cur <= THIN \+ 8\) \{ set\(id, 260, true\); return; \}/);
 });

@@ -193,7 +193,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-new .aad-ico { width: 24p
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-new:hover { transform: scale(1.04); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-new:active { transform: scale(.94); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-set {
-  width: 40px; height: 40px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+  position: relative; width: 40px; height: 40px; padding: 0; margin: 0; border: 0; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
   color: var(--aad-ink); background: var(--aad-disc); box-shadow: var(--aad-lift); transition: background 120ms ease;
 }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-set:hover { background: color-mix(in srgb, var(--aad-ink) 13%, var(--aad-canvas)); }

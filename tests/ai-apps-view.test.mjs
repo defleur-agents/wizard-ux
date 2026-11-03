@@ -754,6 +754,31 @@ test('desktop ⌥ keys in the AI apps view: ⌥\\ sidebar, round 15 ⌥T All app
   assert.match(js, /api\.keys\.guide\(\(\) => appChips\(\)\);/);
 });
 
+test('the Settings cog carries the System count (WosBell.attention through api.desk.attention), phone and desktop, like the stock gear / cog', async () => {
+  for (const shell of ['phone', 'desktop']) {
+    const w = world({ shell });
+    let watch = null, at = { n: 3, label: 'new from Wizard' };
+    const desk = { settings: p => w.st.settings.push(p ?? ''), home: () => {}, attention: fn => { watch = fn; return at; } };
+    if (shell === 'desktop') Object.assign(w.api, { asset: n => '/wizard-os-home/layouts/ai-apps/' + n, storage: { get: () => null, set() {} }, keys: { on: () => () => {}, guide: () => () => {} },
+      orb: { ready: () => new Promise(() => {}), onLevel: () => () => {} }, voice: { state: () => ({ state: 'idle' }), talk() {}, command() {}, on: () => () => {} } });
+    w.api.desk = desk; w.api.apps.inset = () => () => {};
+    const off = (await layout()).default(w.api);
+    const cogs = w.qa(shell === 'phone' ? '.aa-set' : '.aad-set, .aad-rset');
+    assert.ok(cogs.length >= 1, shell + ': a cog');
+    for (const c of cogs) {
+      const n = c.querySelector('.' + (shell === 'phone' ? 'aa' : 'aad') + '-setn');
+      assert.ok(n && !n.hidden && n.textContent === '3', shell + ': the count on the cog');
+      assert.equal(c.getAttribute('aria-label'), 'Settings, 3 new from Wizard');
+    }
+    assert.equal(typeof watch, 'function', shell + ': it follows changes');
+    watch(null);
+    for (const c of cogs) { const n = c.querySelector('.' + (shell === 'phone' ? 'aa' : 'aad') + '-setn'); assert.ok(n.hidden && n.textContent === '', shell + ': none, no number'); assert.equal(c.getAttribute('aria-label'), 'Settings'); }
+    if (typeof off === 'function') off();
+  }
+  const host = read('web/core/skin-host.js');
+  assert.match(host, /attention\(watch\) \{[\s\S]*?window\.WosBell\?\.attention\?\.\(\)[\s\S]*?'wizard:notify-attention'/, 'the layout API reads WosBell.attention and its change event');
+});
+
 /* Round 7 (Miguel, 2 Nov 2026): the switcher is the sidebar / drawer header; the fuel gauge between cog (left) and +
  * (right); Archive quieter; folded tallies; a useful rail (Ready chats with their stock status); a chat docked beside the
  * list (✕ / Esc back to Home); the app panel wider and back (⌥F) with a loading placeholder; a notification opens as a

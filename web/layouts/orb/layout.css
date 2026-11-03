@@ -88,10 +88,13 @@ html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-tile .ob-logo { border-
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-logo .sglogo { width: 100%; height: 100%; }
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-n {
   position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 6px; white-space: nowrap; pointer-events: none;
-  font: 600 calc(var(--wz-text-sm) * .85) / 1 var(--wz-font-ui); letter-spacing: .04em; color: var(--ob-ink2); opacity: 0; transition: opacity 250ms;
-  text-shadow: 0 1px 4px var(--ob-core);
+  font: 600 11px / 1.15 var(--wz-font-ui); letter-spacing: .01em; color: var(--ob-ink2); opacity: .9; transition: opacity 250ms, color 250ms;
+  text-shadow: 0 1px 3px var(--ob-core), 0 0 8px var(--ob-core);
+  /* always shown (Miguel, 2 Nov 2026), small and kept to its own slot on the ring: a long name ends in … */
+  width: max-content; max-width: 96px; white-space: normal; overflow-wrap: normal; word-break: normal; text-align: center;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;   /* two short lines, never …'d mid-word */
 }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; }
+html[data-shell="desktop"][data-layout="orb"] .ob-sat:is(:hover, :focus-visible) .ob-sat-n { opacity: 1; color: var(--ob-ink); }
 /* The app's count (the shell's own badge: desk marks, dock), a small clean count dot top right: no ring, no glow. */
 html[data-shell="desktop"][data-layout="orb"] .ob-sat-badge {
   position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 99px;
@@ -234,6 +237,12 @@ html[data-shell="desktop"][data-layout="orb"] .ob-co[aria-checked="true"] i { bo
 /* ---------- the panels (no desks): the docked list (above) and an app from the left, holding the real windows ---------- */
 html[data-shell="desktop"][data-layout="orb"] .ob-caption { transition: top 380ms var(--wz-ease), opacity 300ms ease; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel:not([data-dock], [data-side="beside"]) { border-radius: 20px; border-color: var(--ob-panel-line); box-shadow: var(--ob-shadow); }
+/* An app (Miguel, 2 Nov 2026): never a floating card. It is docked flush on the right edge, full height under the bar,
+ * the mirror of the list on the left, and it slides in from the right. */
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="app"] {
+  top: 0; right: 0; bottom: 0; border-radius: 0; border: 0; border-left: 1px solid var(--ob-dock-line); box-shadow: none; outline: none;
+}
+html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel[data-side="right"][data-panel="app"].focus { border-color: var(--ob-dock-line); box-shadow: none; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar { flex-basis: 46px; padding: 0 10px 0 16px; gap: 10px; border-bottom-color: transparent; }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar .t { font-size: var(--wz-text-sm); color: var(--wz-text); }
 html[data-shell="desktop"][data-layout="orb"] .panel-layer > .win.panel > .wbar button { width: 30px; height: 30px; border-radius: 50%; }
@@ -254,7 +263,6 @@ html[data-shell="desktop"][data-layout="orb"] .ob-orbwrap { transition: transfor
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-chat="open"] .ob-fold { display: none; }
 /* The app's satellite, pinned between the orb and its panel while it is open: lit, in the orb's bolt. */
 html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-face { filter: drop-shadow(0 2px 6px var(--ob-core)) drop-shadow(0 0 14px color-mix(in srgb, var(--c) 60%, transparent)); }
-html[data-shell="desktop"][data-layout="orb"] .ob-sat.is-pinned .ob-sat-n { opacity: 1; }
 
 /* ---------- smaller windows: the same scene, packed tighter ---------- */
 @media (max-height: 800px) {
@@ -342,3 +350,28 @@ html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i { display: inline-fle
 html[data-shell="desktop"][data-layout="orb"] .ob-keyrow-i b { color: var(--ob-ink); font-weight: 700; }
 /* The list wide (⌥⇧\): its column reaches to the orb's edge (widths from layout.js). */
 html[data-shell="desktop"][data-layout="orb"] .ob-scene[data-fold="wide"] ~ .ob-grips .ob-grip[data-grip="list"] { display: none; }
+
+/* ---------- the thin list (Miguel, 2 Nov 2026): dragged narrow, the docked Chats list snaps to a column of each thread's
+ * status icon, just wide enough to click (layout.js sets html[data-ob-list="thin"]). Bold/unread becomes a dot; the
+ * search, sort chips and section words step aside; New chat stays. Drag it wider (or ⌥⇧\\) for the full list. ---------- */
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] :is(.ch-top, .ch-ptr, .ch-rdy-bar, .ch-row .bd, .ch-sec-h > span, .ch-sec-h > b, .ch-sec-h > i) { display: none !important; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-scroll { padding-left: 0; padding-right: 0; scrollbar-width: none; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-scroll::-webkit-scrollbar { display: none; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-sec-h { justify-content: center; padding: 10px 0 4px; min-height: 0; gap: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-sec-h > small { margin: 0; font-size: calc(var(--wz-text-sm) * .8); opacity: .7; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row-wrap { margin: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row { position: relative; justify-content: center; padding: 7px 0; margin: 0 6px; gap: 0; min-height: 44px; border-radius: 12px; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row .emo { margin: 0; }
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-row.unread::after {
+  content: ""; position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--violet-2, var(--wz-accent)); box-shadow: 0 0 0 2px var(--sk-win, var(--wz-base));
+}
+html[data-shell="desktop"][data-layout="orb"][data-ob-list="thin"] .panel-layer > .win.panel[data-dock] .ch-fab { left: 50%; right: auto; transform: translateX(-50%); width: 44px; height: 44px; }
+
+/* ---------- the + on the ring (Miguel, 2 Nov 2026): the ring's last place after the last app clockwise from the top; it
+ * opens the app sheet (the search pill and the separate + are gone). A quiet glass circle; its name on hover. ---------- */
+html[data-shell="desktop"][data-layout="orb"] .ob-add .ob-sat-face {
+  width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--ob-ink2);
+  background: var(--ob-glass); box-shadow: inset 0 0 0 1px var(--ob-line2); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+html[data-shell="desktop"][data-layout="orb"] .ob-add:is(:hover, :focus-visible) .ob-sat-face { color: var(--ob-ink); filter: none; }
+html[data-shell="desktop"][data-layout="orb"] .ob-add .vc-ico { width: 20px; height: 20px; }
