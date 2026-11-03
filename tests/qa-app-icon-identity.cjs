@@ -46,10 +46,44 @@ async function settle(page,selector){await page.locator(selector).first().waitFo
  throw Error(reason+' '+sel);
 },selector);}
 async function rowFor(page,shell,id){
- if(shell==='phone')return '#launcher.open [data-app="'+id+'"]';
- const name=apps.find(a=>a.id===id).name;
+ const resolved=await page.evaluate(({shell,id})=>{
+  const registry=window.WizCore.apps(shell==='phone'?'mobile':'desktop'),a=registry.APP[id];
+  return a?{id:a.id,name:a.name}:null;
+ },{shell,id});
+ assert.ok(resolved,'requested app must resolve through actual shell registry: '+shell+'/'+id);
+ if(shell==='phone')return '#launcher.open [data-app="'+resolved.id+'"]';
+ const name=resolved.name;
  const target=page.locator('#palette:not([hidden]) .pal-app').filter({has:page.locator('.nm',{hasText:new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$')})});
  await target.waitFor({state:'visible'});return '#palette:not([hidden]) #'+await target.getAttribute('id');
+}
+// Food is source-declared native/phone-only, never a desktop picker row.
+// Keep its desktop artwork + exact shared outline coverage as an explicitly
+// synthetic renderer control, not an injected production picker result.
+async function foodDesktopControl(page){
+ return page.evaluate(()=>{
+  const C=window.WizCore,desktop=C.apps('desktop');
+  if(desktop.APP.food||desktop.APPS.some(a=>a.id==='food'||a.id==='usuals'))throw Error('Food unexpectedly desktop-launchable');
+  const metadata=C.appMetadata('food');if(!metadata)throw Error('missing actual Food metadata');
+  const rule=window.WizDeviceLegacy.find(d=>d.appId==='food');
+  if(rule?.phoneOnly!==true||rule.probe!=='usuals')throw Error('Food platform contract changed');
+  const panel=document.createElement('section');panel.id='qa-food-desktop';
+  panel.style.cssText='position:fixed;right:16px;top:16px;z-index:2147483647;padding:16px;background:var(--wz-base);color:var(--wz-text);';
+  panel.innerHTML='<div class="pal-app sel">'+window.WizSigil.box('span','ic',metadata)+'<span class="nm">Food — shared renderer control (phone-only app)</span></div>';
+  document.body.append(panel);return {metadata,rule,desktopPickerAbsent:true,surface:'shared-renderer-control-not-launcher'};
+ });
+}
+async function switchSkin(page,shell,skin){
+ // Open the real shell Settings and use the real Look colour control.
+ if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('settings'));
+ else await page.evaluate(()=>window.__wux.openSettings('look'));
+ const root=shell==='phone'?'#settings':'#dsettings';
+ const look=page.locator(root+' [data-st-page="look"]');
+ if(await look.isVisible())await look.click();
+ await page.locator(root+' [data-skinpick="'+skin+'"]').click();
+ await page.waitForFunction(s=>document.documentElement.dataset.skin===s&&window.WosSkin.current===s,skin);
+ if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('launcher'));
+ else{await page.evaluate(()=>window.__wux.closeSettings());await page.keyboard.press('Alt+o');}
+ await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
 }
 async function shot(page,name,selector){await settle(page,selector);await page.screenshot({path:path.join(OUT,name+'.png')});return name+'.png';}
 async function gallery(page,v,shell,skin){
@@ -67,27 +101,29 @@ async function gallery(page,v,shell,skin){
  try{
  for(const v of ['candidate','baseline']){version=v;fresh=false;
   for(const shell of ['phone','desktop']){
-   const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},hasTouch:shell==='phone',isMobile:shell==='phone',deviceScaleFactor:1,serviceWorkers:'block'});
+   const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},hasTouch:shell==='phone',isMobile:shell==='phone',deviceScaleFactor:1,serviceWorkers:'block',...(shell==='phone'?{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'}:{})});
    try{
     await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
-    await context.addInitScript(({shell,logos})=>{localStorage.setItem('wux.shell',shell);localStorage.setItem('wos.skin','obsidian');localStorage.setItem('wos.welcome.v1','done');localStorage.setItem('wos.onboarded','1');localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wux.applogos.v1',JSON.stringify(Object.fromEntries(Object.entries(logos).map(([id,h])=>[id,'/wizard-os-home/store-data/app-logo/'+id+'?v='+h]))));},{shell,logos:logoData.logos});
+    await context.addInitScript(({shell,logos})=>{if(shell==='phone')window.WizardOSNative={usuals:()=>JSON.stringify([])};localStorage.setItem('wux.shell',shell);localStorage.setItem('wos.skin','obsidian');localStorage.setItem('wos.welcome.v1','done');localStorage.setItem('wos.onboarded','1');localStorage.setItem('wos.coached','true');localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wux.applogos.v1',JSON.stringify(Object.fromEntries(Object.entries(logos).map(([id,h])=>[id,'/wizard-os-home/store-data/app-logo/'+id+'?v='+h]))));},{shell,logos:logoData.logos});
     const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.pageErrors.push({v,shell,message:e.message}));
     await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?shell='+shell,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(shell=>document.documentElement.dataset.shell===shell&&(shell==='phone'?window.__wos?.openSheet:window.__wux?.openPicker)&&window.WizConfig?.live&&window.WizCore?.apps?.(shell==='phone'?'mobile':'desktop').APP?.messenger&&window.WizSigil&&window.WosSkin,shell);
     await page.evaluate(()=>window.WizCore.appsLoaded());
-    report.inventory.push({v,shell,rows:await page.evaluate(rows=>rows.map(r=>({id:r.id,result:window.WizSigil.of({id:r.id}),html:window.WizSigil.html({id:r.id})})),inventory)});
+    report.inventory.push({v,shell,rows:await page.evaluate(({rows,shell})=>rows.map(r=>{const a=window.WizCore.apps(shell==='phone'?'mobile':'desktop').APP[r.id],metadata=window.WizCore.appMetadata(r.id);return {id:r.id,registry:a?{id:a.id,name:a.name}:null,metadata:metadata||null,result:window.WizSigil.of(metadata||{id:r.id}),html:window.WizSigil.html(metadata||{id:r.id})};}),{rows:inventory,shell})});
     if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('launcher'));else{await page.keyboard.press('Alt+o');await page.locator('#palette:not([hidden])').waitFor({state:'visible'});}
     for(const skin of ['obsidian','obsidian-light']){
-     await page.evaluate(s=>window.WosSkin.set(s),skin);await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
+     await switchSkin(page,shell,skin);
      report.galleries.push({v,shell,skin,...await gallery(page,v,shell,skin)});
      for(const id of (v==='candidate'?changed:['messenger'])){
       // Move off the tile before every case/skin; hovering an already-hovered tile emits no event.
       const calendar=await rowFor(page,shell,'wizard-calendar');await page.locator(calendar).scrollIntoViewIfNeeded();await page.locator(calendar).hover();
-      const row=await rowFor(page,shell,id),ic=row+' .ic';await page.locator(row).scrollIntoViewIfNeeded();await settle(page,ic);const before=await page.locator(ic).evaluate(style);
+      const foodControl=shell==='desktop'&&id==='food'?await foodDesktopControl(page):null;
+      const row=foodControl?'#qa-food-desktop .pal-app':await rowFor(page,shell,id),ic=row+' .ic';await page.locator(row).scrollIntoViewIfNeeded();await settle(page,ic);const before=await page.locator(ic).evaluate(style);
       await page.locator(row).hover();await settle(page,ic);const hovered=await page.locator(ic).evaluate(style),screenshot=await shot(page,[v,shell,skin,id].join('-'),ic);
-      const isMask=/\bsgi\b/.test(hovered.child||'')&&!/\bsglogo\b/.test(hovered.child||'');report.cases.push({v,shell,skin,id,before,hovered,isMask,screenshot});
+      const isMask=/\bsgi\b/.test(hovered.child||'')&&!/\bsglogo\b/.test(hovered.child||'');report.cases.push({v,shell,skin,id,surface:foodControl?'shared-renderer-control-not-launcher':'picker',foodControl,before,hovered,isMask,screenshot});
       if(v==='baseline'){assert.equal(isMask,false,'baseline Messenger must reproduce package-logo override');assert.match(hovered.logo,/messenger\?v=/);}
       else{assert.equal(isMask,true,id+' uses existing shared mask');assert.ok(hovered.mask&&hovered.mask!=='none');assert.equal(hovered.logo,'');if(shell==='desktop'){assert.equal(await page.locator(row).evaluate(e=>e.classList.contains('sel')),true);assert.match(hovered.shadow,/^rgba\(225, 214, 255, 0\.8\) 0px 0px 0px 2px,/,'shared white hover outline');}}
+      if(foodControl)await page.locator('#qa-food-desktop').evaluate(e=>e.remove());
      }
     }
     if(v==='candidate'){
@@ -100,7 +136,7 @@ async function gallery(page,v,shell,skin){
      assert.match(windowIdentity.header||'',/sg-chats/,'real Messenger window header shares restored mask');assert.doesNotMatch(windowIdentity.header||'',/sglogo/);
      const screenshot=await shot(page,[v,shell,'messenger-window'].join('-'),frame);report.cases.push({v,shell,surface:'messenger-window',windowIdentity,screenshot});
     }
-   }catch(e){report.failures.push({v,shell,message:e.message,stack:e.stack});for(const p of context.pages())await p.screenshot({path:path.join(OUT,'REJECTED-'+v+'-'+shell+'.png')}).catch(()=>{});}
+   }catch(e){report.failures.push({v,shell,message:e.message,stack:e.stack,registry:await context.pages()[0]?.evaluate(()=>({mobile:window.WizCore?.apps('mobile').APPS.map(a=>({id:a.id,name:a.name})),desktop:window.WizCore?.apps('desktop').APPS.map(a=>({id:a.id,name:a.name})),deviceLegacy:window.WizDeviceLegacy})).catch(()=>null)});for(const p of context.pages())await p.screenshot({path:path.join(OUT,'REJECTED-'+v+'-'+shell+'.png')}).catch(()=>{});}
    finally{fs.writeFileSync(path.join(OUT,'progress.json'),JSON.stringify(report,null,2));await context.close();}
   }
  }
