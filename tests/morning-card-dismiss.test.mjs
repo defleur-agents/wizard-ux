@@ -29,8 +29,8 @@ test('the dismiss tap is handled before the open tap and posts to Morning withou
   const h = src.indexOf("closest('[data-chmorninghide]')"), o = src.indexOf("closest('[data-chmorning]')")
   assert.ok(h > 0 && h < o)
   const hide = fn('morningHide')
-  assert.match(hide, /\/morning\/api\/hide/)
-  assert.doesNotMatch(hide, /api\/step/)
+  assert.match(hide, /morningAdmit\('hide', \{ hidden: true \}, morningCanonical\)/)
+  assert.doesNotMatch(hide, /fetch\(/, 'dismiss uses the sole Morning writer')
   assert.match(src, /hidden: !!d\.hidden/, 'status carries the hidden flag')
 })
 
