@@ -5,10 +5,15 @@ import path from 'node:path';
 import vm from 'node:vm';
 
 // Execute the shipped capture handler and the actual composer-mic handoff branch.
-// This is a browser-free branch regression, not proof of James's client geometry.
+// Browser-free branch regression with James's return-to-list tweak explicitly ON, not proof of client geometry.
 const root = process.env.QA_POLICY_TREE || path.resolve(import.meta.dirname, '..');
+test('return-to-list is discoverable but excluded from defaults and legacy author recipes', () => {
+  const catalog=JSON.parse(fs.readFileSync(path.join(root,'web/tweaks/catalog.json'),'utf8'));
+  const profile=JSON.parse(fs.readFileSync(path.join(root,'web/tweaks/wizard/profile.json'),'utf8'));
+  assert.ok(catalog.tweaks.includes('wizard/new-send-list')); assert.equal(catalog.defaults.includes('wizard/new-send-list'),false); assert.equal(profile.tweaks.includes('wizard/new-send-list'),false);
+});
 const source = fs.readFileSync(path.join(root, 'web/desktop/desktop.js'), 'utf8');
-function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false, focus = null } = {}) {
+function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false, focus = null, optIn = true } = {}) {
   const timers = [], w = { id: 'qa', app: 'chats', thread: sid, focus }, desk = { wins: count === 2 ? ['qa', 'other'] : ['qa'], mono };
   const width = narrow ? 580 : count === 2 && !mono ? Math.min(1200, (viewport - 24) / 2) : Math.min(1200, viewport - 16);
   let submit, attr = sid;
@@ -18,7 +23,7 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     W: { qa: w }, ws: [desk], wsOf: () => 0, winEl: () => el,
     stage: { addEventListener: (_name, fn) => { submit = fn; } },
     mainChats: x => x?.app === 'chats' && !x.agent, focused: () => w, hud: null, homeOpen: false,
-    document: { activeElement: null }, setTimeout: (fn, ms) => timers.push({ fn, ms }),
+    document: { activeElement: null, documentElement: {} }, getComputedStyle: () => ({getPropertyValue: () => optIn ? 'on' : ''}), setTimeout: (fn, ms) => timers.push({ fn, ms }),
     CHATS: { openNewDraft: () => { w.thread = '__new__'; }, sendVoiceTo: () => { w.thread = null; } },
     syncChatsPane() { attr = w.thread || ''; }, focusInside() {}, log() {}, toast() {},
     rp: { wid: 'qa', sid }, r: { blob: {} }, extraFiles: [], sealed: false,
@@ -36,6 +41,9 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     drain() { for (let n = 0; n < timers.length; n++) timers[n].fn(); },
   };
 }
+for (const mode of ['text', 'voice']) test(`default OFF keeps shared-main ${mode} post-send shortcut`, () => {
+  const f = fixture({optIn:false, count:1, viewport:1920}); f[mode](); f.drain(); assert.equal(f.w.thread,'__new__'); assert.equal(f.attr,'__new__');
+});
 for (const viewport of [1280, 1920, 2560]) for (const mode of ['text', 'voice']) {
   test(`half-width desktop ${viewport}: new ${mode} keeps list past the shell timer`, () => {
     const f = fixture({ viewport }); f[mode](); f.drain();

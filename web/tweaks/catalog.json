@@ -22,7 +22,8 @@
     "wizard/unified-inbox",
     "miguel/archive-top",
     "wizard/orb-radial",
-    "miguel/group-by-day"
+    "miguel/group-by-day",
+    "wizard/new-send-list"
   ],
   "defaults": [
     "wizard/unified-inbox"
