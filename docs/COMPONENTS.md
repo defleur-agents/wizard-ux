@@ -1,5 +1,11 @@
 # Shared components
 
+## Desktop tiled Chats new-send return
+
+EXTEND `web/desktop/desktop.js`'s existing send adapter, not shared Chats navigation or a new setting. Shared Chats already leaves a new send synchronously. `keepNewSendList` uses the owning workspace's non-fullscreen tiling state (and preserves the existing narrow-window guard), rather than equating desktop half-width with the 620px single-pane CSS breakpoint. Apply it at both the real form submit and composer-mic handoff before either can schedule the legacy fresh-draft timer. Full-width desktop/reply shortcuts, shared wide replies and phone Back remain unchanged.
+
+Regression: `tests/desktop-tiled-new-send.test.mjs` executes both actual source branches without a browser. `QA_SEND_RETURN=1 QA_SEND_TILING=1` extends `qa-thread-trail.cjs` with real shell-created two-tile desktops at 1280/1920/2560, six send routes, two skins, held save, matching synthetic run ACK, failed-save recovery and newer navigation. `QA_EXPECT_TILING_RED=1` reproduces the old timer on unmodified serving sources first. This is synthetic candidate/deployed-source replay, not evidence of James's exact client dimensions or modality.
+
 [Appearance rules](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
 **One implementation per capability.** NEW: `web/core/` + row, never an app.
