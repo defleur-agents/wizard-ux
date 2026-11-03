@@ -147,20 +147,20 @@
   });
 })();
 
-/* Owner-installed Ready extensions. Like Chats views, these are trusted same-origin
- * app code, NOT a sandbox. Only a fresh installed registry declaration admits code. */
+/* Owner-installed Ready extensions are trusted same-origin code, not a sandbox.
+ * Registry admission and content-addressed app resources control their lifecycle. */
 (() => {
   'use strict';
-  const entries = new Map(); let host = null, generation = 0;
-  const CONTRACT = 'wizard.ready-extension/1';
+  const CONTRACT = 'wizard.ready-extension/1', entries = new Map();
+  let host = null, generation = 0;
   const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   function moduleURL(a) {
-    if (a.source !== 'apps.json' || !a.provides?.includes('ready-extension')) return null;
+    if (a?.source !== 'apps.json' || !Array.isArray(a.provides) || !a.provides.includes('ready-extension')) return null;
     try {
       const base = new URL(a.url, location.origin);
       if (base.origin !== location.origin || base.username || base.password || base.search || base.hash || /%(?:2f|5c|2e|25)/i.test(base.pathname)) return null;
       const prefix = base.pathname.endsWith('/') ? base.pathname : base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
-      return prefix !== '/' ? new URL(prefix + 'shell.js', location.origin) : null;
+      return prefix !== '/' ? new URL(prefix + 'ready.json', location.origin) : null;
     } catch (_) { return null; }
   }
   function frameFor(source, entry) {
@@ -172,56 +172,67 @@
         && [current,launch].every(u => u.origin === location.origin && !/%(?:2f|5c|2e|25)/i.test(u.pathname) && u.pathname.startsWith(entry.prefix));
     } catch (_) { return false; }
   }
+  const installed = e => entries.get(e.id) === e;
   function html() { return [...entries.values()].filter(e => e.instance).map(e => `<div data-app-ready="${esc(e.id)}">${e.instance.html()}</div>`).join(''); }
   function repaint() {
-    if (!host) return;
+    if (!host?.root?.()) return;
     for (const slot of host.root().querySelectorAll('[data-slot="ready-top"]')) {
-      const parent = slot.parentNode;
-      for (const old of parent.querySelectorAll(':scope > [data-app-ready]')) old.remove();
+      for (const old of slot.parentNode.querySelectorAll(':scope > [data-app-ready]')) old.remove();
       slot.insertAdjacentHTML('afterend', html());
     }
   }
-  function start(entry) {
-    if (!host || entry.loading) return;
+  function dispose(e) { try { e.instance?.dispose(); } finally { e.style?.remove(); } }
+  async function start(entry) {
+    if (!host || entry.instance || entry.loading) return;
     entry.loading = true;
-    import(entry.module.href).then(m => {
-      if (entries.get(entry.id) !== entry || m.contract !== CONTRACT || typeof m.default !== 'function') return;
-      const api = Object.freeze({
-        installed: () => entries.get(entry.id) === entry,
-        authorize: source => entries.get(entry.id) === entry && frameFor(source, entry),
-        changed: repaint,
-        open: target => host.openApp?.(entry.id, target) || window.WizOpenApp?.(entry.id),
-        toast: (...args) => host.toast(...args),
-      });
-      entry.instance = m.default(api);
-      if (!entry.instance || !['html','write','poll','handle','dispose'].every(k => typeof entry.instance[k] === 'function')) throw Error('Invalid Ready extension');
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = new URL('shell.css', entry.module).href;
+    try {
+      const m = await import(entry.module.href);
+      if (!installed(entry)) return;
+      if (m.contract !== CONTRACT || typeof m.default !== 'function') throw Error('Invalid Ready extension');
+      const api = Object.freeze({installed: () => installed(entry), authorize: source => installed(entry) && frameFor(source, entry),
+        changed: () => { if (installed(entry)) repaint(); },
+        open: target => installed(entry) && (host.openApp ? host.openApp(entry.id, target) : window.WizOpenApp?.(entry.id)),
+        toast: (...args) => host.toast(...args)});
+      const instance = m.default(api);
+      if (!instance || !['html','write','poll','handle','dispose'].every(k => typeof instance[k] === 'function')) { instance?.dispose?.(); throw Error('Invalid Ready extension'); }
+      entry.instance = instance;
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = entry.css.href;
       document.head.appendChild(link); entry.style = link;
-      entry.instance.poll(); repaint();
-    }).catch(() => { entry.instance = null; repaint(); });
+      instance.poll(); repaint();
+    } catch (_) { if (installed(entry)) { dispose(entry); entry.instance = null; repaint(); } }
+    finally { entry.loading = false; }
   }
-  function configure(snapshot) {
-    generation++;
-    const keep = new Set();
-    for (const a of snapshot.apps || []) {
-      const module = moduleURL(a);
-      if (!module || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) || keep.has(a.id)) continue;
-      keep.add(a.id);
-      let entry = entries.get(a.id);
-      if (entry && entry.module.href !== module.href) { entry.instance?.dispose(); entry.style?.remove(); entries.delete(a.id); entry = null; }
-      if (!entry) { entry = {id:a.id,module,prefix:module.pathname.slice(0,module.pathname.lastIndexOf('/')+1),generation}; entries.set(a.id,entry); }
-      start(entry);
+  async function configure(snapshot) {
+    const epoch = ++generation, wanted = new Map();
+    for (const a of Array.isArray(snapshot?.apps) ? snapshot.apps : []) {
+      const descriptor = moduleURL(a);
+      if (descriptor && /^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) && !wanted.has(a.id)) wanted.set(a.id, descriptor);
     }
-    for (const [id,e] of entries) if (!keep.has(id)) { entries.delete(id); e.instance?.dispose(); e.style?.remove(); }
+    // Revoke removed grants before any descriptor I/O. A pending import cannot resurrect one.
+    for (const [id,e] of entries) if (!wanted.has(id) || wanted.get(id).href !== e.descriptor) { entries.delete(id); dispose(e); }
     repaint();
+    await Promise.all([...wanted].map(async ([id, url]) => {
+      try {
+        const r = await fetch(url.href, {cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.timeout(12000)});
+        if (!r.ok) throw Error('Ready declaration unavailable');
+        const d = await r.json();
+        if (epoch !== generation) return;
+        if (d.contract !== CONTRACT || !/^[a-f0-9]{64}$/.test(d.module_sha256) || !/^[a-f0-9]{64}$/.test(d.style_sha256)) throw Error('Invalid Ready declaration');
+        const module = new URL('shell.js?sha256=' + d.module_sha256, url), css = new URL('shell.css?sha256=' + d.style_sha256, url);
+        let e = entries.get(id);
+        if (e && (e.module.href !== module.href || e.css.href !== css.href)) {
+          if (e.instance?.busy?.()) return; // app-owned pending writes retain custody until settlement
+          entries.delete(id); dispose(e); e = null;
+        }
+        if (!e) { e = {id,module,css,descriptor:url.href,prefix:url.pathname.slice(0,url.pathname.lastIndexOf('/')+1)}; entries.set(id,e); }
+        await start(e);
+      } catch (_) { /* Keep an admitted running extension on transient metadata failure, not a new grant. */ }
+    }));
   }
   window.WizAppExtensions = Object.freeze({contract:CONTRACT,moduleURL,configure,html,
     attach(H) { host = H; for (const e of entries.values()) start(e); },
     poll() { for (const e of entries.values()) e.instance?.poll(); },
-    handle(event) {
-      const id = event.target.closest('[data-app-ready]')?.dataset.appReady;
-      return entries.get(id)?.instance?.handle(event) || false;
-    },
+    handle(event) { return entries.get(event.target.closest('[data-app-ready]')?.dataset.appReady)?.instance?.handle(event) || false; },
     call(source,kind,input,before) {
       const entry = [...entries.values()].find(e => e.instance && frameFor(source,e));
       if (!entry) throw Error('Current shell-owned app frame required');

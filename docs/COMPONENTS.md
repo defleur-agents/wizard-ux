@@ -52,9 +52,8 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats + opt-in `--wos-new-send-list` desktop new-send return | `WizCore` (`chats.js`, `.css`); `WizLive.messages` scoped Ready preload; metadata-independent answer paint; notification-only draft rotation; alert hold sheet; Priority `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; `WizLive` seq resume; provider-access Errors; source-bound send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages` preload; early answers; notification drafts; `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; seq resume; provider-access Errors; send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
-| Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`) | domain code in core |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
