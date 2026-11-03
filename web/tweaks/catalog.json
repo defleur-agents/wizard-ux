@@ -21,8 +21,7 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
-    "wizard/orb-radial",
-    "miguel/notification-levels"
+    "wizard/orb-radial"
   ],
   "defaults": [
     "wizard/unified-inbox"

@@ -12,8 +12,7 @@
     "miguel/machines-home",
     "miguel/arrange-download",
     "miguel/refresh-button",
-    "wizard/unified-inbox",
-    "miguel/notification-levels"
+    "wizard/unified-inbox"
   ],
   "flags": {},
   "off": [
