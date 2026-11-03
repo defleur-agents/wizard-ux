@@ -173,7 +173,10 @@
     } catch (_) { return false; }
   }
   const installed = e => entries.get(e.id) === e;
-  function html() { return [...entries.values()].filter(e => e.instance).map(e => `<div data-app-ready="${esc(e.id)}">${e.instance.html()}</div>`).join(''); }
+  function html() { return [...entries.values()].filter(e => e.instance).map(e => {
+    try { const value = e.instance.html(); return typeof value === 'string' ? `<div data-app-ready="${esc(e.id)}">${value}</div>` : ''; }
+    catch (_) { return ''; }
+  }).join(''); }
   function repaint() {
     if (!host?.root?.()) return;
     for (const slot of host.root().querySelectorAll('[data-slot="ready-top"]')) {
@@ -181,7 +184,7 @@
       slot.insertAdjacentHTML('afterend', html());
     }
   }
-  function dispose(e) { try { e.instance?.dispose(); } finally { e.style?.remove(); } }
+  function dispose(e) { try { e.instance?.dispose(); } catch (_) {} finally { e.style?.remove(); } }
   async function start(entry) {
     if (!host || entry.instance || entry.loading) return;
     entry.loading = true;
@@ -231,8 +234,8 @@
   }
   window.WizAppExtensions = Object.freeze({contract:CONTRACT,moduleURL,configure,html,
     attach(H) { host = H; for (const e of entries.values()) start(e); },
-    poll() { for (const e of entries.values()) e.instance?.poll(); },
-    handle(event) { return entries.get(event.target.closest('[data-app-ready]')?.dataset.appReady)?.instance?.handle(event) || false; },
+    poll() { for (const e of entries.values()) { try { Promise.resolve(e.instance?.poll()).catch(() => {}); } catch (_) {} } },
+    handle(event) { try { return entries.get(event.target.closest('[data-app-ready]')?.dataset.appReady)?.instance?.handle(event) || false; } catch (_) { return false; } },
     call(source,kind,input,before) {
       const entry = [...entries.values()].find(e => e.instance && frameFor(source,e));
       if (!entry) throw Error('Current shell-owned app frame required');
