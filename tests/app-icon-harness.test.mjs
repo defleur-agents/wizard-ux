@@ -23,3 +23,14 @@ test('icon harness reuses working readiness, shortcut, selectors and skin hover 
   assert.match(source,/report\.writePolicy=assertReadOnlyFixture\(requests\)/);
   assert.match(source,/serviceWorkers:'block'/);
 });
+test('Food follows actual platform admission instead of fabricating a picker row', () => {
+  assert.match(source,/registry\.APP\[id\]/);
+  assert.match(source,/WizardOSNative=\{usuals:\(\)=>JSON\.stringify\(\[\]\)\}/);
+  assert.match(source,/shared-renderer-control-not-launcher/);
+  assert.match(source,/desktop\.APP\.food\|\|desktop\.APPS\.some/);
+  assert.match(source,/phoneOnly!==true/);
+  assert.doesNotMatch(source,/force:\s*true|APP\.food\s*=|APPS\.push/);
+  assert.match(source,/userAgent:'Mozilla\/5\.0 \(Linux; Android/);
+  assert.match(source,/data-skinpick/);
+  assert.doesNotMatch(source,/WosSkin\.set\(/);
+});
