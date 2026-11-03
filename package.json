@@ -4,6 +4,7 @@
   "scripts": {
     "test": "node --test tests/*.test.mjs tests/SheetBackTest.mjs",
     "qa:provider-wait": "node qa-provider-wait-recovery.cjs",
+    "qa:morning-done": "node qa-morning-instant-done.cjs",
     "test:opaque-overlays": "node tools/qa-opaque-overlays.cjs"
   }
 }
