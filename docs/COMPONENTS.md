@@ -45,7 +45,7 @@ Reuse:
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
 | App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals | two skins + My skin restyle `.wz-*` |
 
-## Shell (`web/core/`): both shells/all agents; per-kind EXTEND.
+## Shell (`web/core/`): both shells/all agents.
 
 | Need | Use | Never hand-roll |
 |---|---|---|
