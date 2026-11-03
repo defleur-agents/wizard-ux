@@ -134,7 +134,7 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     try { if (framed && parent.WizSigil) sigils = parent.WizSigil; } catch (_) {}
     const identity = { id: openId(a) || a.id, name: a.name };
     const mark = sigils?.of(identity);
-    if (mark && (mark.glyph || mark.img || sigils.brand[identity.id])) return sigils.box('span', `ic ic-${size}`, identity);
+    if (mark && (mark.glyph || mark.img || Object.prototype.hasOwnProperty.call(sigils.brand, identity.id))) return sigils.box('span', `ic ic-${size}`, identity);
     const [c1, c2] = hue(a.id);
     const letter = esc((a.name || a.id).trim().charAt(0).toUpperCase());
     const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
