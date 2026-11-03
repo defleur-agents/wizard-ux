@@ -134,6 +134,7 @@ async function sendReturnChecks(b) {
       // {} lets enqueue persist a durable FAILED item without ever posting a run.
       if (u.pathname === '/wizard/hermes/api/model/options') return json(200,{model:'qa-model',provider:'qa-provider',providers:[{slug:'qa-provider',authenticated:true,models:['qa-model']}]});
       if (u.pathname === '/wizard/v1/setup') return json(200,{first_run:false});
+      if (u.pathname === '/wizard/v1/ui-preferences') return json(200,{migrations:{'launcher-seed-v1':true},launcher:{}});
       if (u.pathname === '/wizard/v1/agents') return json(200,{agents:[{id:'hermes',label:screenshotCase?'Archimedes':'QA Agent',is_default:true,status:'running',privacy:'standard',runtime:'hermes',appearance:{},permissions:{wizard_apps:[],agent_apps:[]},bound_apps:[],model:{model:'qa-model',provider:'qa-provider',fallback:false}}]});
       if (screenshotCase && u.pathname === '/wizard/v1/bootstrap') return json(200,{bootstrap:1,settings:{owner:{name:'Fixture owner'},agent:{name:'Archimedes'},clock:{timezone:'UTC'},voice:{language:'en',vocabulary:[]}},capabilities:{voice:true,files:true,router:true,steer:true},endpoints:{transcribe:'/wizard/transcribe',upload:'/wizard/files/upload',route:'/wizard/route'}});
       if (u.pathname === '/wizard/hermes/api/sessions') return json(200,{object:'list',data:!u.searchParams.get('agent')||u.searchParams.get('agent')==='hermes'?Object.keys(FIX).map(fixSession):[],has_more:false,limit:100,offset:0,snapshot:'synthetic-return'});
