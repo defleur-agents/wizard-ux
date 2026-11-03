@@ -34,10 +34,15 @@ test('Home Ready counts unread and snoozed notification rows but not completed r
   await bell.mark(['unread','snoozed'],{archived:true}); assert.equal(bell.readyCount(),0);
 });
 
-test('phone and desktop Home and Chats badge use the notification Ready count and repaint when it changes', () => {
-  for(const file of ['web/app.js','web/desktop/desktop.js']) {
-    const src=read(file);
-    assert.equal((src.match(/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/g)||[]).length,2,file);
-    assert.match(src,/addEventListener\('wizard:notifications',/);
+test('phone and desktop nav badges use unread chats, never Ready or notification totals', () => {
+  const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js');
+  assert.match(phone, /workspaceNav\.setCount\(CHATS_APP\.id, window\.WizCore\.workspaceNav\.chatUnreadCount\(LIVE\)\)/);
+  assert.match(desktop, /workspaceNav\.setCount\(APP\.wizard\?\.id \|\| 'wizard', C\.workspaceNav\.chatUnreadCount\(LIVE\)\)/);
+  for (const src of [phone, desktop]) {
+    assert.doesNotMatch(src, /workspaceNav\.setCount\([^\n]*workGroups\(\)\.ready/);
+    assert.doesNotMatch(src, /workspaceNav\.setCount\([^\n]*WosBell\?\.readyCount/);
+    assert.match(src, /addEventListener\('wizard:notifications',/, 'notification changes still repaint Home');
   }
+  assert.match(phone, /const N = window\.WizCore\.workspaceNav, n = N\.countOf\(CHATS_APP\.id\);/,
+    'the orb keeps the global Chats unread count instead of adopting the focused app count');
 });

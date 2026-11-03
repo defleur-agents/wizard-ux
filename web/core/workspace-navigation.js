@@ -4,9 +4,17 @@
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
-  /* Per-app counts (Chats = Ready threads, Notifications = unread, later any app). The badge belongs to the
-   * app: each desk mark carries the count of the apps it holds, and the orb shows the desk in view. */
+  /* Per-app counts (Chats = visible unread threads, later any app). Desk marks may show their app counts;
+   * the orb's top-left badge always reads the global Chats count. */
   const counts = {};
+  const countOf = id => Math.max(0, counts[id] | 0);
+  function chatUnreadCount(live) {
+    if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function') return 0;
+    try {
+      const unread = live.visibleUnread(live.unified());
+      return Math.max(0, Array.isArray(unread) ? unread.length : 0);
+    } catch (_) { return 0; }
+  }
   function setCount(id, n) {
     n = Math.max(0, n | 0); if ((counts[id] || 0) === n) return;
     counts[id] = n; window.dispatchEvent(new CustomEvent('wizard:app-counts', { detail: { id, n } }));
@@ -34,5 +42,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, deskCount, fmt, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, countOf, chatUnreadCount, deskCount, fmt, counts });
 })();

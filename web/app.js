@@ -2040,12 +2040,12 @@
     moons.dataset.ready = String(L.ready.length);
     moons.innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
-    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0));
+    // The top-left navigation badge is unread Chats only. Working stays independent at top right via data-working.
+    window.WizCore.workspaceNav.setCount(CHATS_APP.id, window.WizCore.workspaceNav.chatUnreadCount(LIVE));
     paintOrbBadge();
   }
   function paintOrbBadge() {
-    const N = window.WizCore.workspaceNav, n = desks[idx] ? N.deskCount(desks[idx], W, winApp) : 0;
+    const N = window.WizCore.workspaceNav, n = N.countOf(CHATS_APP.id);
     $('#orbBadge').textContent = n ? N.fmt(n) : ''; $('#orbBadge').hidden = !n;
   }
   addEventListener('wizard:app-counts', () => { renderDots(); paintOrbBadge(); });
