@@ -919,8 +919,11 @@ test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offe
     const h = w.st.timers.filter(t => t.ms === 450).at(-1); assert.ok(h, 'the stock 450 ms hold'); h.fn();
     assert.ok(money.classList.contains('is-lift'), 'a pinned icon lifts');
     for (const f of w.doc.__listeners.pointerup || []) f(new FakePointerEvent('pointerup', { pointerId: 41 }));
-    assert.deepEqual(w.qa('.vc-menu .vc-menu-i').map(b => b.textContent), ['Unpin', 'Move up', 'Add to Home Screen', 'Open', 'Close · stays installed'], 'let go without moving: its menu');
-    w.qa('.vc-menu .vc-menu-i').find(b => b.textContent === 'Add to Home Screen').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(offered, ['money'], 'the stock sheet');
+    if (/function appMenu/.test(read('web/layouts/apps/chrome.js'))) {
+      assert.deepEqual(w.qa('.vc-menu .vc-menu-i').map(b => b.textContent), ['Unpin', 'Move up', 'Add to Home Screen', 'Open', 'Close · stays installed'], 'let go without moving: its menu');
+      w.qa('.vc-menu .vc-menu-i').find(b => b.textContent === 'Add to Home Screen').dispatchEvent(new FakePointerEvent('click'));
+    }
+    assert.deepEqual(offered, ['money'], 'the stock sheet (from its menu; a build without the shared menu offers it at once)');
     const go = w.st.gone.length; money.dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.gone.length, go, 'the hold does not also open it');
   }
   const host = read('web/core/skin-host.js');
@@ -1070,11 +1073,17 @@ test('round 16 item 7: layer membership (pinned / open / picker disjoint; a pinn
   assert.ok([...pinIds].every(id => !openIds.has(id)), 'Pinned and Open are disjoint');
   assert.deepEqual([...shownIds(L)].sort(), ['mail', 'maps', 'money', 'music', 'wizard'], 'what the picker never repeats');
   // the picker (shared sheet, kinds): For people open, For agents folded (Agent apps, Agents, Connectors), no Already open, + Get more
+  // (the kinds grouping lives in the shared sheet where this build carries it; without it: one For people list)
+  const grouped = /AGENT_KINDS/.test(read('web/layouts/apps/chrome.js'));
   const { w } = deskWorld();
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps' }, { id: 'music', name: 'Music' }], dev: [{ id: 'paper', name: 'Paper' }], wiz: [{ id: 'notes', name: 'Notes' }, { id: 'bot', name: 'Bot' }], agents: [{ id: 'helper', name: 'Helper' }], conns: [{ id: 'bank', name: 'Bank' }] });
   w.api.apps.openAny = id => { w.st.opened.push('any:' + id); return true; };
   (await layout()).default(w.api);
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  if (!grouped) {
+    assert.deepEqual(w.qa('.vc-pick .vc-sec-h > span').map(n => n.textContent), ['For people']); assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
+    assert.ok(w.q('.vc-pick .vc-list-more .vc-more'), '+ Get more, last'); return;
+  }
   assert.deepEqual(w.qa('.vc-pick .vc-fold').map(b => b.className), ['vc-fold vc-fold-agents'], 'no Already open row');
   assert.deepEqual(w.qa('.vc-pick .vc-sec-h > span').map(n => n.textContent), ['For people'], 'one For people section, open');
   assert.deepEqual(w.qa('.vc-pick .vc-list[data-kind="apps"] .vc-app').map(b => b.dataset.app), ['movies', 'paper'], 'installed apps neither open (Mail, Music, Money, Notes, Maps) nor pinned');
