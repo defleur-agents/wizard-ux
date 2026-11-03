@@ -44,7 +44,8 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   assert.doesNotMatch(w, /fam\.palettes/);
   assert.match(s, /data-tweakauthor=/, 'a quick button per author');
   assert.doesNotMatch(s, /data-tweakpreset/, 'no preset sets: everything starts off');
-  assert.match(e, /chooseSkin\(\) \{ if \(wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick never swaps the tweak set');
+  // #882 retries failed reconciliation without swapping a healthy tweak set.
+  assert.match(e, /chooseSkin\(\) \{ if \(error \|\| wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick keeps a healthy tweak set and retries failed reconciliation');
   for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');
 });
 
