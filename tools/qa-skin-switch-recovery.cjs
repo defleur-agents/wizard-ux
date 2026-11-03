@@ -63,7 +63,12 @@ const result = () => fs.writeFileSync(path.join(OUT, 'results.json'), JSON.strin
     await p.goto(url, { waitUntil: 'load' });
     await p.waitForFunction(({ skin, own }) => window.WosExperience && !WosExperience.state.busy && window.WosSkin?.current === skin && (window.WosMySkin?.active?.id || null) === (own ? 'My skin' : null), { skin, own }, { timeout: 30000 });
     assert.equal(await p.evaluate(() => document.documentElement.dataset.shell), shell, 'actual requested shell');
-    await p.waitForFunction(() => !window.WosWelcome?.active && !document.querySelector('.mz-intro'));
+    const settledWelcome = async () => {
+      await p.waitForFunction(() => window.WosWelcome?.log.some(s => s === 'deeplink' || s.startsWith('boot:true:done:false')));
+      assert.equal(await p.evaluate(() => WosWelcome.active), false, 'established owner Welcome settled, not hidden');
+      await p.waitForFunction(() => !document.querySelector('.mz-intro'));
+    };
+    await settledWelcome();
     assert.equal(await p.evaluate(() => WosExperience.state.error), '');
     const open = async () => {
       await p.evaluate(shell => { if (shell === 'desktop') __wux.openSettings('appearance'); else __wos.openSheet('settings'); }, shell);
@@ -113,6 +118,7 @@ const result = () => fs.writeFileSync(path.join(OUT, 'results.json'), JSON.strin
     const saved = await p.evaluate(() => ({ palette: WosSkin.current, own: WosMySkin.active?.id || null }));
     await p.reload({ waitUntil: 'load' });
     await p.waitForFunction(saved => window.WosSkin?.current === saved.palette && (window.WosMySkin?.active?.id || null) === saved.own && window.WosExperience && !WosExperience.state.busy, saved, { timeout: 30000 });
+    await settledWelcome();
     rows.push({ key: `${id}-persistence`, saved, passed: true });
     errors.push(...pageErrors.map(error => ({ id, error }))); result(); await ctx.close();
 
