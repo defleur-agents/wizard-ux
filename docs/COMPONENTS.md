@@ -36,7 +36,7 @@ Reuse:
 | Mic, camera, screen capture | `WizardApp.capture.start / current / settle / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`; `MediaRecorder` | pending survives Back; ack once |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | See notes | off on close |
 | Title-bar tools | `WizardApp.titlebar.set(tools)` | See notes | icons/dot in shell bar |
-| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`) | See notes | cancel keeps old |
+| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`); `WizAppServices` foreground admission + legacy adapter | See notes | background cannot prompt; late document denied |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | See notes | recoverable failures |
 | Protect unsaved work from updates | `WizardApp.update.hold` | See notes | release after save+readback |
 | Offline shell | `web/sw.js` | See notes | offline reload |
@@ -44,31 +44,6 @@ Reuse:
 | Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | See notes | — |
 | Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | See notes | legacy warns; changed lines fail |
 | App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | `.wz-field-row` | two skins + My skin restyle `.wz-*` |
-| Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` | app keys | `wizard-id-bridge.test.mjs` |
-| Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` | own chat UI/retries | shell `[data-chats]`; 503: one outbox item/message |
-| Home-screen identity + app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
-| Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
-| File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
-| Full-screen photo/video | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
-| Bound same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | app-specific desks/relays | `qa-companion-pane.cjs`: nested Back |
-| Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | nested Back stays; repair → source chat |
-| Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + live change keep state |
-| Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
-| Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach` | duplicate offline/address UI |
-| Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) | app transcriber | stale/foreign denied; unavailable explicit |
-| Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
-| Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |
-| Mic, camera, screen capture | `WizardApp.capture.start / pending / ack`, `WizardApp.voiceInput.register` | `getUserMedia`, `MediaRecorder`, mic AudioContext | pending survives Back; ack once |
-| Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) | own volume/FAB | off on close |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` | repeated header | icons/dot in shell bar |
-| Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, 2-slot `VaultSlots`); `WizAppServices` gates prompts on steady shell focus and keeps the shipped legacy adapter | caller-supplied app identity | background cannot prompt; cancel keeps old; late/reloaded document gets no secret |
-| Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) | app outbox | recoverable failures |
-| Protect unsaved work from updates | `WizardApp.update.hold` | app SW, forced reload | release after save+readback |
-| Offline shell | `web/sw.js` | API cache | offline reload |
-| App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic | app-local scroll store | reopen lands at the saved place |
-| Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) | own springs/haptics | — |
-| Canonical style admission | `check_style.py` (`wizard-os/style/`), mirrored in WAM | per-app lint forks | legacy warns; changed lines fail |
-| App kit: rows/sections/empty/add | `WizardApp`: `web/kit/wizard-ui.css` + `--wz-*`, then core/package/My skin | kit forks; `.wz-field-row` chat; literals | two skins + My skin restyle `.wz-*` |
 
 ## Shell (`web/core/`): both shells/all agents; per-kind EXTEND.
 
@@ -96,7 +71,6 @@ Reuse:
 | Uploads of any size | `WizUploads` (`uploads.js`) | See notes |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | See notes |
 | Settings in both shells (pages/versions) | `WosSettings.register` (`settings.js`; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | See notes |
-| Settings in both shells | `WosSettings.register` (`settings.js`; Wizards; System pages only from packages: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | See notes |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | See notes |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | See notes |
 | App agent routing, private-app note + setup (incl.… | `WosAppRoute` (`app-route.js`) | See notes |
