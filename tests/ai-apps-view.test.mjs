@@ -307,7 +307,8 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   assert.deepEqual(w.q('.aa-chat[data-sid="r1"]').children.map(c => c.className.split(' ').pop()), ['aa-row-t', 'aa-pin', 'is-new'], 'title first, the state at the end');
   // Home: the apps above the composer, open first (badged first), then the rest installed, then Get more
   w.q('.aa-scrim').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-cap') ? '|' : b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['music', 'mail', 'money', '|', 'notes', 'maps', '+', 'tidy'], 'round 16 item 7: Pinned (his pins), Open (not pinned) in the same flow (round 17: the first marked, no divider), +');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['notes', 'maps', '+', 'tidy'], 'round 19 item 4: the open apps not pinned, +, tidy');
+  assert.deepEqual(w.qa('.ah-dock .ah-app').map(b => b.dataset.app), ['music', 'mail', 'money'], 'round 19 item 4: his pins in the dock');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-badge').textContent, '3', 'the shell\'s own count, on the icon');
   assert.equal(w.q('.ah-app[data-app="money"] .ah-name').textContent, 'Money');
   assert.equal(w.q('.ah-app[data-app="money"]').getAttribute('aria-label'), 'Money, 3 new, open', 'round 18: an open app says so (its running dot)');
@@ -316,7 +317,7 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   w.q('.vc-pick .vc-app[data-app="movies"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'movies', 'an installed app opens on a desk of its own');
   w.q('.ah-plus').dispatchEvent(new FakePointerEvent('click')); w.q('.vc-pick .vc-more').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(w.st.opened.at(-1), 'app-store', 'Get more = the App Store');
   // round 7 (Miguel, familiarity first): Home is the grid only, no Grid | Orb switch, no orb scene
-  assert.equal(w.q('.ah-sw'), null); assert.equal(w.q('.ah-scene'), null); assert.deepEqual(w.q('.ah').children.map(c => c.className), ['ah-grid']);
+  assert.equal(w.q('.ah-sw'), null); assert.equal(w.q('.ah-scene'), null); assert.deepEqual(w.q('.ah').children.map(c => c.className.split(' ')[0]), ['ah-grid', 'ah-dock'], 'round 19 item 4: the grid, then the dock');
   // footer
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   // round 2: icons only — a big round + (New chat) where ChatGPT's compose button sits, then a cog (Settings); no words,
@@ -646,7 +647,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const w = world();
   w.api.apps.kinds = () => ({ apps: [{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'movies', name: 'Movies' }, { id: 'maps', name: 'Maps', system: true }], wiz: [{ id: 'notes', name: 'Notes' }], agents: [], conns: [], dev: [{ id: 'music', name: 'Music' }] });
   (await layout()).default(w.api);
-  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-cap') ? '|' : b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['music', 'mail', 'money', '|', 'notes', 'maps', '+', 'tidy'], 'round 16 item 7: his pins, then (round 17: no divider) the open apps not pinned (any kind: they are open), then +');
+  assert.deepEqual(w.q('.ah-grid').children.map(b => b.dataset.app || (b.classList.contains('ah-tidy') ? 'tidy' : '+')), ['notes', 'maps', '+', 'tidy'], 'round 19 item 4: the open apps not pinned (any kind: they are open), then +; his pins in the dock');
   const { homeApps } = await import(new URL('web/layouts/ai-apps/home.js', root).href);
   assert.deepEqual(homeApps([{ id: 'mail', name: 'Mail' }, { id: 'money', name: 'Money' }, { id: 'notes', name: 'Notes' }, { id: 'music', name: 'Music' }], [{ desk: 1, id: 'wizard', name: 'Chats' }, { desk: 2, id: 'mail', name: 'Mail' }], w.api.apps.kinds(), () => false).rest.map(a => a.id),
     ['money', 'movies'], 'not open: Notes (agent app), Music (in development) and Maps (system) stay out');
@@ -1093,48 +1094,90 @@ test('round 16 item 7: layer membership (pinned / open / picker disjoint; a pinn
   assert.match(css, /\.vc-tile\.vc-tile-plus \{/);
   assert.match(cj, /if \(open\.length && !pick\) \{/, 'the Orb / Apps sheet keeps its Already open row (opt-in picker only)');
 });
-test('round 16 item 7 phone: Home = Pinned (hold and drag to rearrange), Open (not pinned) in the same flow, +; the picker from +', async () => {
+test('round 16 item 7 + round 19 item 4 phone: Home = the open apps not pinned, +, tidy; the pins in a dock above the composer (8 a page); hold and drag within and between them; the picker from +', async () => {
   const w = world();
   w.api.apps.homeScreen = { can: () => true, offer: () => true };
   (await layout()).default(w.api);
   w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
-  const kids = () => w.q('.ah-grid').children.map(b => b.dataset.app ? (b.dataset.group === 'pin' ? '^' : '') + b.dataset.app + (b.querySelector('.ah-run') ? '•' : '') : b.classList.contains('ah-cap') ? '|' + b.textContent : b.classList.contains('ah-tidy') ? 'tidy' : '+');
-  // round 18 (Miguel: the Mac dock): pins first in his order, then the open apps not pinned on a new row under a tiny
-  // 'Open' caption; every open app wears the running dot (Mail, Money, Music are open desks here), a pin not open none
-  assert.deepEqual(kids(), ['^music•', '^mail•', '^money•', '|Open', 'notes•', 'maps•', '+', 'tidy']);
-  assert.equal(w.q('.ah-div'), null, 'round 17 (Miguel): no divider element, no full-width line');
-  assert.equal(w.qa('.is-open-first').length, 0, 'round 18: no Open chip');
-  assert.equal(w.qa('.ah-pinb, .ah-app .ah-pin').length, 0, 'round 18: no pin badge on pinned icons');
-  assert.ok(w.q('.ah-app[data-app="notes"]').classList.contains('is-opensec'), 'Open: the smaller icons');
-  // drag Money to the front: hold, move over Music, let go
-  const cells = w.qa('.ah-app[data-group="pin"]');
-  cells.forEach((c, i) => { c.getBoundingClientRect = () => ({ left: i * 90, top: 100, width: 80, height: 90, right: i * 90 + 80, bottom: 190 }); });
+  const name = b => b.dataset.app ? (b.dataset.group === 'pin' ? '^' : '') + b.dataset.app + (b.querySelector('.ah-run') ? '•' : '') : b.classList.contains('ah-tidy') ? 'tidy' : '+';
+  const kids = () => w.q('.ah-grid').children.map(name), dockKids = () => w.qa('.ah-dock .ah-app').map(name);
+  // round 19 item 4: the dock = his pins (open ones with the running dot); the grid = the open apps not pinned, +, tidy
+  assert.deepEqual(dockKids(), ['^music•', '^mail•', '^money•']);
+  assert.deepEqual(kids(), ['notes•', 'maps•', '+', 'tidy'], 'no Open caption, no new-row rule');
+  assert.equal(w.q('.ah-cap'), null); assert.equal(w.q('.ah-div'), null); assert.equal(w.qa('.ah-pinb, .ah-app .ah-pin').length, 0, 'no pin badge');
+  assert.equal(w.q('.ah-ddots').hidden, true, 'one page: no dots');
+  const dockEl = w.q('.ah-dock');
+  dockEl.getBoundingClientRect = () => ({ left: 0, top: 500, width: 400, height: 200, right: 400, bottom: 700 });
+  const place = () => {
+    w.qa('.ah-dock .ah-app').forEach((c, i) => { c.getBoundingClientRect = () => ({ left: i * 90, top: 520, width: 80, height: 90, right: i * 90 + 80, bottom: 610 }); });
+    w.qa('.ah-grid .ah-app[data-group="open"]').forEach((c, i) => { c.getBoundingClientRect = () => ({ left: i * 90, top: 100, width: 80, height: 90, right: i * 90 + 80, bottom: 190 }); });
+  };
   const doc = n => (...a) => { for (const f of w.doc.__listeners[n] || []) f(...a); };
-  const money = w.q('.ah-app[data-app="money"]');
-  money.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 9, button: 0, clientX: 220, clientY: 140, pointerType: 'touch' }));
-  w.st.timers.filter(t => t.ms === 450).at(-1).fn();
-  doc('pointermove')(new FakePointerEvent('pointermove', { pointerId: 9, clientX: 40, clientY: 140 }));
-  assert.ok(money.classList.contains('is-lift') && w.q('.ah-app[data-app="music"]').classList.contains('is-drop'), 'it follows the finger; the spot is marked');
-  doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 9 }));
+  const drag = (id, x, y, check) => {
+    place(); const c = w.q(`.ah-app[data-app="${id}"]`), r = c.getBoundingClientRect();
+    c.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 9, button: 0, clientX: r.left + 40, clientY: r.top + 40, pointerType: 'touch' }));
+    w.st.timers.filter(t => t.ms === 450).at(-1).fn();
+    doc('pointermove')(new FakePointerEvent('pointermove', { pointerId: 9, clientX: x, clientY: y }));
+    check?.(c);
+    doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 9 }));
+  };
+  // within the dock: Money to the front
+  drag('money', 20, 560, c => assert.ok(c.classList.contains('is-lift') && w.q('.ah-app[data-app="music"]').classList.contains('is-drop') && dockEl.classList.contains('is-target'), 'it follows the finger; the spot and the dock marked'));
   assert.deepEqual(w.st.store.pins, ['money', 'music', 'mail'], 'his pin order, kept (the same key as the desktop)');
-  assert.deepEqual(kids().slice(0, 3), ['^money•', '^music•', '^mail•']);
+  assert.deepEqual(dockKids(), ['^money•', '^music•', '^mail•']);
+  // grid → dock: Notes dropped before Music = pinned there
+  drag('notes', 100, 560);
+  assert.deepEqual(w.st.store.pins, ['money', 'notes', 'music', 'mail']); assert.deepEqual(kids(), ['maps•', '+', 'tidy']);
+  // dock → grid: Mail dragged out before Maps = unpinned, first in the grid
+  drag('mail', 20, 140);
+  assert.deepEqual(w.st.store.pins, ['money', 'notes', 'music']); assert.deepEqual(kids(), ['mail•', 'maps•', '+', 'tidy']);
+  // within the grid: Maps to the front (his order, kept)
+  drag('maps', 20, 140);
+  assert.deepEqual(kids(), ['maps•', 'mail•', '+', 'tidy']); assert.deepEqual(w.st.store.homeOpen, ['maps', 'mail']);
+  // a hold without moving = the app's menu (no move)
+  place(); const m0 = w.q('.ah-app[data-app="maps"]');
+  m0.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 9, button: 0, clientX: 40, clientY: 140, pointerType: 'touch' })); w.st.timers.filter(t => t.ms === 450).at(-1).fn();
+  doc('pointerup')(new FakePointerEvent('pointerup', { pointerId: 9 }));
+  assert.ok(w.q('.vc-menu, .vc-appmenu, [role="menu"]'), 'the hold menu'); assert.deepEqual(kids(), ['maps•', 'mail•', '+', 'tidy']);
   // + = the picker: installed apps neither pinned nor open (a tap right after a drag is swallowed, so later)
   const realNow = Date.now; Date.now = () => realNow() + 2000;
   try { w.q('.ah-plus').dispatchEvent(new FakePointerEvent('click')); } finally { Date.now = realNow; }
   assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['movies']);
-  // a pin that is not open: no dot (round 18)
+  // a pin that is not open: no dot
   w.st.desks = w.st.desks.filter(d => d.id !== 'music'); w.emit('route', { ...w.st.route }); w.emit('render');
   for (const tm of w.st.timers.splice(0)) if (!tm.dead && tm.ms < 1000) tm.fn();
-  const music = w.q('.ah-app[data-app="music"]');
+  const music = w.q('.ah-dock .ah-app[data-app="music"]');
   assert.ok(music && !music.querySelector('.ah-run') && !music.classList.contains('is-run'), 'a pin not open: no running dot');
+  // nothing else open: the grid is just + (and the tidy line)
+  w.st.desks = w.st.desks.filter(d => !['mail', 'maps'].includes(d.id)); w.emit('render');
+  assert.deepEqual(kids(), ['+', 'tidy']);
   const css = read('web/layouts/ai-apps/layout.css');
-  assert.doesNotMatch(css, /\.ah-div\b/, 'round 17: no divider rule');
-  assert.doesNotMatch(css, /is-open-first/, 'round 18: no Open chip rule');
-  assert.match(css, /\.ah-cap \{ grid-column: 1 \/ -1;[^}]*font: 500 0\.6875rem/, 'round 18: the caption is a full row of its own, 11 px, no line');
-  assert.match(css, /\.ah-run \{ position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aa-ink-2/, 'round 18: the running dot, 4 px, muted, centred under the name');
+  assert.doesNotMatch(css, /\.ah-div\b|is-open-first|\.ah-cap\b|is-opensec/, 'no divider, chip, caption or smaller open icons');
+  assert.match(css, /\.ah-run \{ position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aa-ink-2/, 'the running dot, 4 px, muted, centred under the name');
+  assert.match(css, /\.ah-dock \{[^}]*border-radius: 30px;[^}]*background: color-mix\(in srgb, var\(--wz-panel, var\(--wz-base, var\(--bg\)\)\) 52%, transparent\);[^}]*backdrop-filter: blur/, 'a subtle glass plate from skin tokens');
+  assert.match(css, /\.ah-dpage \{[^}]*scroll-snap-align: start;[^}]*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/, '4 a row, pages snap');
+  assert.match(css, /:has\(\.win\.app-chats \.ch-compose :focus\) \.ah-dock \{ display: none; \}/, 'the dock steps away while typing');
   const dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(dcss, /\.aad-vtab\.is-run::before \{[^}]*width: 4px; height: 4px;[^}]*border-radius: 50%; background: var\(--aad-ink-2\); \}/, 'the desktop column\'s dot: the same 4 px muted dot');
-  assert.doesNotMatch(dcss, /\.aad-vtab\.is-run\.is-on::before/, 'identical in front too');
+});
+
+test('round 19 item 4 phone: more than 8 pins page the dock sideways (dots); parts: orderOpen, homeDrop, dockPages', async () => {
+  const P = await import('../web/layouts/ai-apps/parts.js');
+  assert.equal(P.DOCK_PER, 8);
+  assert.deepEqual(P.dockPages([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).map(p => p.length), [8, 2]); assert.deepEqual(P.dockPages([]), []);
+  const o = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.deepEqual(P.orderOpen(o, ['c', 'a']).map(x => x.id), ['c', 'a', 'b'], 'his order, new ones after'); assert.deepEqual(P.orderOpen(o, null).map(x => x.id), ['a', 'b', 'c']);
+  assert.deepEqual(P.homeDrop(['p', 'q'], ['a', 'b'], { id: 'b', open: true }, { group: 'pin', index: 1 }), { pins: ['p', 'b', 'q'], open: ['a'] }, 'into the dock: pinned there');
+  assert.deepEqual(P.homeDrop(['p', 'q'], ['a'], { id: 'p', open: true }, { group: 'open', index: 0 }), { pins: ['q'], open: ['p', 'a'] }, 'out: unpinned, open in the grid');
+  assert.deepEqual(P.homeDrop(['p', 'q'], ['a'], { id: 'q', open: false }, { group: 'open', index: 1 }), { pins: ['p'], open: ['a'] }, 'a pin not open dragged out: unpinned');
+  const w = world();
+  const many = ['mail', 'music', 'money', 'notes', 'maps', 'movies', 'news', 'files', 'photos2', 'health'].map(id => ({ id, name: id }));
+  w.api.apps.list = () => many.map(a => ({ ...a })); w.st.store.pins = many.map(a => a.id);
+  (await layout()).default(w.api);
+  w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
+  assert.deepEqual(w.qa('.ah-dpage').map(p => p.children.length), [8, 2], '8 a page');
+  assert.equal(w.q('.ah-ddots').hidden, false); assert.equal(w.qa('.ah-ddot').length, 2);
+  assert.ok(w.q('.ah-dock').classList.contains('is-paged'));
 });
 
 test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), auto-tidy on a fake clock, 1:1 with the desks', async () => {

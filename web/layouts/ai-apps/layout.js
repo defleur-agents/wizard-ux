@@ -38,7 +38,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
 import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto,
-  pinsFrom, togglePin, appLayers, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
+  pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
 import desktop from './desktop.js';
@@ -111,7 +111,8 @@ export default function setup(api) {
   layer.append(scrim, drawer);
   api.mount(layer);
 
-  /* ---------- Home: the app grid above the composer (home.js) ----------
+  /* ---------- Home: the app grid above the composer (home.js; round 19 item 4: the pins in a dock above the composer,
+   * the grid = the open apps not pinned, then +) ----------
    * Round 16 item 7 (Miguel, 3 Nov 2026): the desktop's app model. Pinned (his pin order, open or not; hold and drag to
    * rearrange), then 'Open' (the open apps not pinned, auto-tidy), then + (the picker of installed apps neither pinned
    * nor open, + Get more = the App Store). Pins, his open-apps order flag and tidy are kept per device (api.storage),
@@ -121,7 +122,14 @@ export default function setup(api) {
   const pinsNow = () => pinsFrom(Array.isArray(pinsStored) ? pinsStored : null, installedIds());
   const setPins = list => { pinsStored = list; api.storage.set('pins', list); home.paint(true); };
   const mainDesk = () => desks().find(d => d.id === CHATS)?.desk ?? null;
-  const layersNow = () => appLayers(desks(), pinsNow(), { main: mainDesk(), lit: id => lit(id), manual: api.storage.get('vtManual') === true, chats: CHATS });
+  // round 19 item 4: the grid's open apps in his own order once he has dragged them there (kept per device)
+  const layersNow = () => { const L0 = appLayers(desks(), pinsNow(), { main: mainDesk(), lit: id => lit(id), manual: api.storage.get('vtManual') === true, chats: CHATS }); return { ...L0, open: orderOpen(L0.open, api.storage.get('homeOpen')) }; };
+  /** a drop on Home (round 19 item 4): within the dock, within the grid, or across (into the dock pins, out unpins) */
+  function homeMove(item, to) {
+    const pins = pinsNow(), open = layersNow().open.map(d => d.id), r = homeDrop(pins, open, item, to);
+    api.storage.set('homeOpen', r.open);
+    if (r.pins.join() !== pins.join()) setPins(r.pins); else home.paint(true);
+  }
   function appMenuFor(a, at) {
     const pins = pinsNow(), pinned = pins.includes(a.id), running = desks().some(d => d.id === a.id), i = pins.indexOf(a.id);
     const extra = [[pinned ? 'Unpin' : 'Pin', () => setPins(togglePin(pins, a.id))]];
@@ -156,7 +164,7 @@ export default function setup(api) {
   api.listen(tidyFoot, 'click', openTidySheet);
   const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks,
     layers: { model: layersNow, plus: () => chrome.open({ exclude: () => pinsNow(), people: 'For people' }), menu: appMenuFor, foot: tidyFoot,
-      reorderPins: (from, to) => { const l = pinsNow(), [id] = l.splice(from, 1); l.splice(to, 0, id); setPins(l); } } });
+      drop: homeMove } });
   api.mount(home.el);
   /* auto-tidy on the phone too (the desktop's rule and setting): open apps not pinned and unused longer than the Tidy
    * setting close by themselves (the stock close), with a toast; round 18: with Undo, as on the desktop */

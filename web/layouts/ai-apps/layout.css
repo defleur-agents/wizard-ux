@@ -421,7 +421,6 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread 
 /* round 18 (Miguel, 3 Nov 2026: the Mac dock's model): no chip, no line. The open apps not pinned start on a new row
  * after a slightly larger gap holding only a tiny muted 'Open' caption on the left; every open app (pinned or not)
  * wears the dock's running dot under its name; a pin not open has none */
-html[data-shell="phone"][data-layout="ai-apps"] .ah-cap { grid-column: 1 / -1; margin: 2px 0 -10px; padding: 0 12px; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 500 0.6875rem / 1.2 var(--wz-font-ui); letter-spacing: .02em; text-align: left; pointer-events: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-run { position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--aa-ink-2, var(--wz-text-secondary)); pointer-events: none; }
 /* the tidy line at Home's end (under +) and its sheet: the desktop's sentence */
 html[data-shell="phone"][data-layout="ai-apps"] .ah-tidy { grid-column: 1 / -1; justify-self: center; margin: 6px 0 0; padding: 8px 12px; border: 0; background: none; cursor: pointer; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 500 0.75rem / 1.3 var(--wz-font-ui); -webkit-tap-highlight-color: transparent; }
@@ -431,7 +430,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .aa-tidys > b { font-weight: 600
 html[data-shell="phone"][data-layout="ai-apps"] .aa-tidys-sel { height: 34px; margin: 0 2px; padding: 0 8px; border: 0; border-radius: 10px; color: inherit; background: color-mix(in srgb, var(--aa-ink) 8%, transparent); box-shadow: inset 0 0 0 1px var(--aa-line); font: 600 0.9375rem / 1 var(--wz-font-ui); }
 /* the tidy toast (round 18: with Undo, as on the desktop): above the composer */
 /* on the light skins (Landscapes Light too) the caption, the line and the dot get the names' soft white halo */
-html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) :is(.ah-cap, .ah-tidy) { text-shadow: 0 0 2px color-mix(in srgb, white 90%, transparent), 0 0 8px color-mix(in srgb, white 70%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-tidy { text-shadow: 0 0 2px color-mix(in srgb, white 90%, transparent), 0 0 8px color-mix(in srgb, white 70%, transparent); }
 html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-run { box-shadow: 0 0 0 1px color-mix(in srgb, white 70%, transparent); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-toast {
   position: fixed; z-index: 30; left: 50%; bottom: calc(var(--ah-bottom, 96px) + 8px); translate: -50% 0; pointer-events: auto;
@@ -441,10 +440,9 @@ html[data-shell="phone"][data-layout="ai-apps"] .ah-toast {
 html[data-shell="phone"][data-layout="ai-apps"] .ah-toast[hidden] { display: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-toast-u { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; cursor: pointer; color: inherit; background: color-mix(in srgb, var(--aa-surface) 18%, transparent); font: 600 0.8125rem / 1 var(--wz-font-ui); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-toast-u[hidden] { display: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-ic { transform: scale(.82); }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-name { font-size: 0.6875rem; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift { position: relative; z-index: 5; transition: none; }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift .ah-ic { transform: scale(1.12); filter: drop-shadow(0 8px 16px color-mix(in srgb, black 30%, transparent)); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift .ah-ic { opacity: .35; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-ghost { position: fixed; z-index: 40; margin: 0; pointer-events: none; transform: scale(1.12); filter: drop-shadow(0 8px 16px color-mix(in srgb, black 30%, transparent)); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-drop .ah-ic { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 3px; border-radius: 16px; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-grid[data-drag] { touch-action: none; }
 /* the picker's tiles on the light skins: the app's own colour at full strength, a white glyph (round 10's rule) */
@@ -457,3 +455,29 @@ html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sech { display: flex; align-items: center; gap: 4px; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sech > .aa-sec { flex: 1; min-width: 0; }
 html[data-shell="phone"][data-layout="ai-apps"] .aa-sort { flex: none; height: 32px; max-width: 110px; margin: 0 6px 0 0; padding: 0 6px; border: 0; border-radius: 10px; color: var(--aa-ink-2); background: none; font: 500 0.8125rem / 1 var(--wz-font-ui); }
+
+/* ---------- round 19 item 4 (Miguel, 3 Nov 2026: the dock, approved) ----------
+ * The pinned apps in a dock just above the composer: a subtle glass plate (skin tokens, iOS's dock), up to 2 rows × 4
+ * icons at the grid's size with their names and the running dot; more than 8 pins page sideways (snap, dots). The grid
+ * above holds the open apps not pinned, then +, then the tidy line. While the composer is typed in, the dock steps
+ * away (the keyboard is up). A drag over it marks it; an empty dock shows only while an icon is lifted. */
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dock {
+  flex: none; position: relative; width: calc(100% - 16px); max-width: 504px; margin: 6px auto 8px; padding: 10px 0 8px; box-sizing: border-box; border-radius: 30px;
+  background: color-mix(in srgb, var(--wz-panel, var(--wz-base, var(--bg))) 52%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4); backdrop-filter: blur(24px) saturate(1.4);
+}
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-dock { background: color-mix(in srgb, white 50%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, black 7%, transparent), 0 6px 20px color-mix(in srgb, black 8%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dock.is-empty { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah[data-drag] .ah-dock.is-empty { display: block; min-height: 92px; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah[data-drag] .ah-dock.is-empty::before { content: "Drop here to pin"; position: absolute; inset: 0; display: grid; place-items: center; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 500 0.8125rem / 1 var(--wz-font-ui); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dock.is-target { box-shadow: inset 0 0 0 2px var(--wz-accent, var(--ink)); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dview { display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; scrollbar-width: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dview::-webkit-scrollbar { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dpage { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: max-content; align-content: start; gap: 12px 0; padding: 0 4px; box-sizing: border-box; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-ddots { display: flex; justify-content: center; gap: 6px; margin: 8px 0 0; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-ddots[hidden] { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-ddot { width: 6px; height: 6px; border-radius: 50%; background: color-mix(in srgb, var(--wz-text, var(--ink)) 25%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-ddot.is-on { background: var(--wz-text, var(--ink)); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-dock .ah-name { font-size: 0.6875rem; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah[data-drag] { touch-action: none; }
+html[data-shell="phone"][data-layout="ai-apps"]:has(.win.app-chats .ch-compose :focus) .ah-dock { display: none; }
