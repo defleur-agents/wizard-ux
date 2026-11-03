@@ -15,8 +15,8 @@ const ORIGIN = 'http://title-contrast.test';
 const TYPES = { '.css': 'text/css', '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 const SKINS = (process.env.QA_SKINS || 'landscapes-light,nebula,landscapes,grove').split(',');
 const SHELLS = (process.env.QA_SHELLS || 'desktop,phone').split(',');
-const MIN = Number(process.env.QA_MIN_CONTRAST || 3);
-const APPS = { 'synthetic-dark': '#05060f', 'synthetic-light': '#fafafa',
+const MIN = Math.max(4.5, (Number(process.env.QA_MIN_CONTRAST) || 4.5));
+const APPS = { 'synthetic-translucent-dark': 'rgba(0, 0, 0, 0.1)', 'synthetic-translucent-light': 'rgba(255, 255, 255, 0.49)', 'synthetic-midtone': 'rgb(120, 120, 120)', 'synthetic-dark': '#05060f', 'synthetic-light': '#fafafa',
   'synthetic-srgb': 'color(srgb 1 1 1)', 'synthetic-p3': 'color(display-p3 1 1 1)', 'synthetic-oklch': 'oklch(1 0 0)' };
 const APP = bg => `<!doctype html><meta charset=utf-8><title>Synthetic</title><body style="margin:0;background:${bg};color:${bg === '#05060f' ? '#e8e8f0' : '#111'};font:15px sans-serif;height:100vh"><p style="padding:40px">Synthetic app page (${bg})</p>`;
 const lum = ([r, g, b]) => { const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
