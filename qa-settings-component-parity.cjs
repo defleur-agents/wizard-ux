@@ -10,6 +10,10 @@ const BASE = 'https://wizard.test/wizard-os-home/';
 const checks=[],contexts=[], errors=[]; let browser, activePage, activeJournal;
 const flush=()=>fs.writeFileSync(path.join(OUT,'results.json'),JSON.stringify({checks,contexts,errors,passed:checks.filter(x=>x.pass).length,failed:checks.filter(x=>!x.pass).length,forwardedWrites:0,realAgentRuns:0,screenshotsInspected:false},null,2));
 const ok=(condition,name,detail)=>{checks.push({pass:!!condition,name,detail});flush();console.log(condition?'PASS':'FAIL',name);};
+const categoryReady=entry=>{
+ const root=document.querySelector('#settingsBody'), pane=root?.querySelector('.st-page'), heading=pane?.querySelector('h3');
+ return root?.dataset.settingsPage===entry.id&&!pane?.hidden&&heading?.textContent.trim()===entry.label&&root.querySelector('[data-st-page="'+entry.id+'"][aria-current="page"]')!==null;
+};
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
 (async()=>{
  browser=await chromium.launch({headless:true,...(process.env.QA_CHROME?{executablePath:process.env.QA_CHROME}:{})});
@@ -81,7 +85,8 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
     journal.pages[skin]={menu,content:{}};
     for(const entry of menu){
      await tap('[data-st-page="'+entry.id+'"]');
-     ok(await p.locator('.st-page:visible').getAttribute('data-page')===entry.id,kind+' '+skin+': reachable '+entry.id);
+     await p.waitForFunction(categoryReady,entry);
+     ok(await p.evaluate(categoryReady,entry),kind+' '+skin+': reachable '+entry.id);
      journal.pages[skin].content[entry.id]=await p.locator('.st-page:visible').evaluate(el=>({features:[...el.querySelectorAll('[data-settings-feature]')].map(e=>e.dataset.settingsFeature),actions:[...el.querySelectorAll('[data-st],[data-osu]')].map(e=>e.dataset.st||e.dataset.osu)}));
      if(entry.id==='about'){
       if(!process.env.QA_EXPECT_RED)await p.waitForFunction(()=>window.WizWebUpdate?.loadedVersion);
@@ -96,6 +101,7 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
       await tap('[data-osu="ch-latest"]');ok(channel==='latest',kind+' '+skin+': channel action/readback');
       await tap('[data-osu="ch-stable"]');
       await shot(skin+'-about');
+      if(phone){const file=path.join(OUT,kind+'-'+skin+'-native-row.png');await p.locator('[data-settings-version="phone"]').screenshot({path:file});journal.shots.push(file);await shot(skin+'-about-native');}
       await p.evaluate(()=>WosUpdates.load(true)); // drain any prior coalesced read before changing the fixture
       available=false;await p.evaluate(()=>WosUpdates.load(true));
       await p.waitForFunction(()=>document.querySelector('.st-page')?.innerText.includes('could not be verified'));
@@ -115,12 +121,13 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
      await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0,kind+' '+skin+': nearest Back returns to categories');
     }
     await open('about');
+    await p.waitForFunction(categoryReady,menu.find(entry=>entry.id==='about'));
     const opacity=await p.locator(phone?'#settings':'#dsettings').evaluate(el=>({background:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage}));
     // Shared page backing itself is fully opaque; skins may additionally layer solid gradients.
     const panel=await p.locator(phone?'#settings':'#dsettings').evaluate(el=>({color:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage}));
     ok(!/rgba\([^)]*,\s*0(?:\.\d+)?\)/.test(panel.color)&&panel.color!=='transparent',kind+' '+skin+': opaque text-bearing page', {opacity,panel});
     if(!phone){await p.locator('.dsettings-scrim').click({position:{x:2,y:2}});ok(await p.locator('#dsettings').isHidden(),skin+': outside dismiss leaves Home');}
-    else {await p.locator('#scrim').tap({position:{x:2,y:2}});await nap(160);await p.locator('#scrim').tap({position:{x:2,y:2}});await nap(160);ok(await p.evaluate(()=>__wos.sheet===null),skin+': outside unwinds nearest page then dismisses');}
+    else {await p.locator('#scrim').tap({position:{x:2,y:2}});await p.waitForFunction(()=>__wos.sheet===null);ok(await p.locator('#settings').isHidden(),skin+': one outside tap dismisses Settings to Home');}
    }
    ok(journal.writes.every(w=>!w.path.endsWith('/v1/runs')),kind+': zero agent runs');
    await ctx.close();activePage=null;
