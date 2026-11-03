@@ -79,11 +79,14 @@ async function switchSkin(page,shell,skin){
  const root=shell==='phone'?'#settings':'#dsettings';
  const look=page.locator(root+' [data-st-page="look"]');
  if(await look.isVisible())await look.click();
+ await page.evaluate(()=>{window.__qaSkinClick=null;document.addEventListener('click',e=>{const b=e.target.closest('[data-skinpick]');if(b)window.__qaSkinClick={id:b.dataset.skinpick,trusted:e.isTrusted};},{capture:true,once:true});});
  await page.locator(root+' [data-skinpick="'+skin+'"]').click();
  await page.waitForFunction(s=>document.documentElement.dataset.skin===s&&window.WosSkin.current===s,skin);
+ const receipt=await page.evaluate(()=>window.__qaSkinClick);assert.deepEqual(receipt,{id:skin,trusted:true});
  if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('launcher'));
  else{await page.evaluate(()=>window.__wux.closeSettings());await page.keyboard.press('Alt+o');}
  await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
+ return receipt;
 }
 async function shot(page,name,selector){await settle(page,selector);await page.screenshot({path:path.join(OUT,name+'.png')});return name+'.png';}
 async function gallery(page,v,shell,skin){
@@ -97,7 +100,7 @@ async function gallery(page,v,shell,skin){
 }
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin=`http://127.0.0.1:${server.address().port}`;
- const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const report={changed,cases:[],galleries:[],inventory:[],pageErrors:[],failures:[]};
+ const browser=await chromium.launch({headless:true,args:['--no-sandbox']});const report={changed,cases:[],galleries:[],inventory:[],environments:[],skinSwitches:[],pageErrors:[],failures:[]};
  try{
  for(const v of ['candidate','baseline']){version=v;fresh=false;
   for(const shell of ['phone','desktop']){
@@ -109,10 +112,11 @@ async function gallery(page,v,shell,skin){
     await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?shell='+shell,{waitUntil:'domcontentloaded'});
     await page.waitForFunction(shell=>document.documentElement.dataset.shell===shell&&(shell==='phone'?window.__wos?.openSheet:window.__wux?.openPicker)&&window.WizConfig?.live&&window.WizCore?.apps?.(shell==='phone'?'mobile':'desktop').APP?.messenger&&window.WizSigil&&window.WosSkin,shell);
     await page.evaluate(()=>window.WizCore.appsLoaded());
+    report.environments.push({v,shell,...await page.evaluate(()=>({width:innerWidth,height:innerHeight,userAgent:navigator.userAgent,touch:navigator.maxTouchPoints}))});
     report.inventory.push({v,shell,rows:await page.evaluate(({rows,shell})=>rows.map(r=>{const a=window.WizCore.apps(shell==='phone'?'mobile':'desktop').APP[r.id],metadata=window.WizCore.appMetadata(r.id);return {id:r.id,registry:a?{id:a.id,name:a.name}:null,metadata:metadata||null,result:window.WizSigil.of(metadata||{id:r.id}),html:window.WizSigil.html(metadata||{id:r.id})};}),{rows:inventory,shell})});
     if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('launcher'));else{await page.keyboard.press('Alt+o');await page.locator('#palette:not([hidden])').waitFor({state:'visible'});}
     for(const skin of ['obsidian','obsidian-light']){
-     await switchSkin(page,shell,skin);
+     report.skinSwitches.push({v,shell,skin,receipt:await switchSkin(page,shell,skin)});
      report.galleries.push({v,shell,skin,...await gallery(page,v,shell,skin)});
      for(const id of (v==='candidate'?changed:['messenger'])){
       // Move off the tile before every case/skin; hovering an already-hovered tile emits no event.
