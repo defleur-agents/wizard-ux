@@ -7,12 +7,14 @@ import { readFileSync } from 'node:fs';
 const apps = readFileSync(new URL('../web/core/apps.js', import.meta.url), 'utf8');
 const kindsJs = readFileSync(new URL('../web/core/app-kinds.js', import.meta.url), 'utf8');
 
-async function shell(snapshot) {
+async function shell(snapshot, cached = {}) {
   const storage = new Map();
+  if (cached.remote) storage.set('wux.apps.v1', JSON.stringify(cached.remote));
+  if (cached.backend) storage.set('wux.apps.backend.v1', JSON.stringify(cached.backend));
   const window = { WizCore: { norm: s => s.toLowerCase() }, WizConfig: { endpoint: () => '/apps' }, dispatchEvent() {} };
   const ctx = { window, document: { hidden: false, addEventListener() {} }, CustomEvent: class {}, URL, location: new URL('https://wizard.test/'),
     localStorage: { getItem: k => storage.get(k) || null, setItem: (k, v) => storage.set(k, v) },
-    addEventListener() {}, fetch: async () => ({ ok: true, json: async () => snapshot }) };
+    addEventListener() {}, fetch: async () => ({ ok: snapshot !== null, json: async () => snapshot }) };
   vm.runInNewContext(apps, ctx);
   vm.runInNewContext(kindsJs, ctx);
   await window.WizCore.appsLoaded();
@@ -35,6 +37,28 @@ test('a type:external app with a non-"Connect" summary lands in Connectors, page
   assert.ok(!groups.apps.some(a => a.id === 'wizard-brightdata'));
   assert.deepEqual(ids(groups.wiz), ['transcriber']);
   assert.ok(groups.apps.some(a => a.id === 'money'));
+});
+
+test('internal routing services never enter the owner app registry', async () => {
+  const { window, groups, APP } = await shell({ apps: [
+    { id: 'wizard-connection-router', name: 'Connection Router', desc: 'Internal model routing.', url: '/wizard-connection-router/', source: 'apps.json', type: 'service', category: 'system' },
+    { id: 'wizard-agent-service', name: 'Wizard Agent Service', desc: 'Internal agent bridge.', source: 'apps.json', type: 'service', category: 'system' },
+    { id: 'money', name: 'Money', desc: 'Review transactions.', url: '/money/', source: 'apps.json', type: 'view', category: 'app' },
+  ] });
+  assert.equal(APP['wizard-connection-router'], undefined);
+  assert.equal(APP['wizard-agent-service'], undefined);
+  assert.ok(!window.WizCore.backendApps().some(a => ['wizard-connection-router', 'wizard-agent-service'].includes(a.id)));
+  assert.ok(!Object.values(groups).flat().some(a => ['wizard-connection-router', 'wizard-agent-service'].includes(a?.id)));
+  assert.ok(groups.apps.some(a => a.id === 'money'));
+});
+
+test('an offline shell drops stale cached routing-service tiles', async () => {
+  const router = { id: 'wizard-connection-router', name: 'Connection Router', url: '/wizard-connection-router/', source: 'apps.json', type: 'service', category: 'system' };
+  const agentService = { id: 'wizard-agent-service', name: 'Wizard Agent Service', source: 'apps.json', type: 'service', category: 'system' };
+  const { window, APP } = await shell(null, { remote: [router], backend: [agentService] });
+  assert.equal(APP['wizard-connection-router'], undefined);
+  assert.equal(APP['wizard-agent-service'], undefined);
+  assert.equal(window.WizCore.backendApps().length, 0);
 });
 
 test('a declared type wins over the summary wording and the id list; untyped tiles keep the fallback', async () => {
