@@ -484,3 +484,38 @@ html[data-shell="phone"][data-layout="ai-apps"] .ah-ddot.is-on { background: var
 html[data-shell="phone"][data-layout="ai-apps"] .ah-dock .ah-name { font-size: 0.6875rem; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah[data-drag] { touch-action: none; }
 html[data-shell="phone"][data-layout="ai-apps"]:has(.win.app-chats .ch-compose :focus) .ah-dock { display: none; }
+
+/* round 20 item 7 (Miguel, 3 Nov 2026): a notification opened reads as a chat with a clear notification identity: the
+ * source's icon, name and time under the title; the note as the agent's first message with a thin amber edge (no heavy
+ * amber bubble, no second 'Notification' label); a muted 'From X · shows in Chats ▾' line whose menu holds the routing
+ * choices; Resolve (primary), Snooze, Archive as one row of compact buttons (their ⌥ keys as keycaps while ⌥ is held).
+ * core/chats.js draws this when the view asks (--wos-note-quiet). */
+html[data-shell="phone"][data-layout="ai-apps"] { --wos-note-quiet: on; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-head .ti { display: flex; flex-direction: column; justify-content: center; gap: 1px; min-width: 0; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-head .ti b { color: var(--aa-ink) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-hsrc { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--aa-ink-2); font: 400 0.75rem / 1.2 var(--wz-font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-hic { display: inline-grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--amber, var(--wz-warning)); overflow: hidden; border-radius: 4px; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-hic > * { width: 16px !important; height: 16px !important; max-width: 16px; max-height: 16px; font-size: 0.625rem; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-hic svg { fill: none; stroke: currentColor; stroke-width: 1.8; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.a.ch-notif.is-quiet { padding-left: 0 !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.a.ch-notif.is-quiet::before { content: none !important; display: none !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.ch-notif.is-quiet .bub { background: none !important; box-shadow: none !important; border: 0 !important; border-left: 2px solid var(--amber, var(--wz-warning)) !important; border-radius: 0 !important; padding: 2px 0 2px 14px !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-route.is-quiet { display: block; position: relative; margin: 8px 0 0 16px; padding: 0; border: 0; background: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; margin-left: -4px; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--aa-ink-2); font: 400 0.75rem / 1.3 var(--wz-font-ui); }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b b { font-weight: 500; color: var(--aa-ink-2); }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b:hover, html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b[aria-expanded="true"] { background: color-mix(in srgb, var(--aa-ink) 7%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu { position: absolute; z-index: 6; left: 0; top: calc(100% + 4px); min-width: 180px; padding: 4px; box-sizing: border-box; border-radius: 12px; background: var(--wz-base, var(--bg)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--aa-ink) 10%, transparent), 0 12px 32px color-mix(in srgb, black 24%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu[hidden] { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu .wos-route { display: flex !important; flex-direction: column; align-items: stretch; gap: 0; padding: 0 !important; background: none !important; border: 0 !important; box-shadow: none !important; width: auto !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu .wos-route > button { justify-content: flex-start; gap: 8px; min-height: 32px; padding: 0 10px !important; border-radius: 8px !important; background: none !important; color: var(--aa-ink) !important; box-shadow: none !important; font: 400 0.8125rem / 1 var(--wz-font-ui) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu .wos-route > button:hover { background: color-mix(in srgb, var(--aa-ink) 7%, transparent) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu .wos-route > button[aria-checked="true"] { font-weight: 600 !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-menu .wos-route > button[aria-checked="true"]::after { content: "✓"; margin-left: auto; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts { gap: 8px; justify-content: flex-start; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > button { min-height: 32px !important; padding: 0 12px !important; border-radius: 99px !important; font: 500 0.8125rem / 1 var(--wz-font-ui) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="resolve"] { color: var(--wz-base, var(--bg)) !important; background: var(--aa-ink) !important; border-color: var(--aa-ink) !important; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact]:not([data-chact="resolve"]) { color: var(--aa-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aa-ink) 18%, transparent) !important; }
+/* round 20 item 6: a notification row: a small amber bell, its title in normal text, its unread dot amber */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-bell { color: var(--amber, var(--wz-warning)); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-row[data-note] .aa-st.is-new { background: var(--amber, var(--wz-warning)); }
