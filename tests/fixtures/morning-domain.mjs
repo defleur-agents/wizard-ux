@@ -2,7 +2,14 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const src=readFileSync(new URL('../../web/core/chats.js',import.meta.url),'utf8');
-const block=src.slice(src.indexOf('  const MORNING ='),src.indexOf('  function newCompose',src.indexOf('  const MORNING =')));
+const startMarker='  const MORNING =', endMarker='  // The agent\'s status line for a finished thread';
+const start=src.indexOf(startMarker), end=src.indexOf(endMarker,start);
+assert.ok(start>=0 && end>start,'Morning fixture source boundaries missing or out of order');
+assert.equal(src.indexOf(startMarker,start+startMarker.length),-1,'Morning fixture start boundary is ambiguous');
+assert.equal(src.indexOf(endMarker,end+endMarker.length),-1,'Morning fixture end boundary is ambiguous');
+assert.match(src.slice(end),/^  \/\/ The agent's status line[^\n]*\n  const ATT =/,'Morning fixture end must immediately precede ATT');
+const block=src.slice(start,end);
+assert.match(block,/function morningCard\(/,'Morning fixture must include the complete card block');
 const names=['workout','meditate','mindfeed','read'], labels={workout:'Workout',meditate:'Meditate',mindfeed:'MindFeed',read:'Read'};
 export const state=(changes={})=>{
  const d={day:'2030-01-02',hidden:false,total:4,steps:Object.fromEntries(names.map(s=>[s,{done:false}])),...changes};
