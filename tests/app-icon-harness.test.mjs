@@ -32,5 +32,7 @@ test('Food follows actual platform admission instead of fabricating a picker row
   assert.doesNotMatch(source,/force:\s*true|APP\.food\s*=|APPS\.push/);
   assert.match(source,/userAgent:'Mozilla\/5\.0 \(Linux; Android/);
   assert.match(source,/data-skinpick/);
+  assert.match(source,/data-st-page="appearance"/);
+  assert.match(source,/#dsettings/);
   assert.doesNotMatch(source,/WosSkin\.set\(/);
 });
