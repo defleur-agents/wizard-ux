@@ -36,3 +36,31 @@ test('Food follows actual platform admission instead of fabricating a picker row
   assert.match(source,/#dsettings/);
   assert.doesNotMatch(source,/WosSkin\.set\(/);
 });
+
+const desktopCss = readFileSync(new URL('../web/desktop/desktop.css', import.meta.url), 'utf8');
+const systemSkin = 'html:is([data-skin^="obsidian"], [data-skin^="landscapes"])';
+const selectedSystem = `${systemSkin} .pal-app.pal-sys.sel .ic`;
+const sharedShadow = 'box-shadow: 0 0 0 2px rgba(225, 214, 255, .8), 0 10px 24px -10px color-mix(in oklab, var(--c, #8f63ff) 60%, transparent);';
+function assertSystemSelection(css) {
+  const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
+  const shared = rules.find(([, selectors]) => selectors.trim().startsWith('.pal-app.sel .ic,'));
+  assert.ok(shared, 'system selection must extend the shared rule, not copy or weaken it');
+  assert.equal(shared[1].trim(), `.pal-app.sel .ic,\n${selectedSystem}`);
+  assert.equal(shared[2].trim(), sharedShadow, 'selection changes only the existing shadow');
+  // Same skin prefix and extra .sel give (0,5,1), above idle (0,4,1),
+  // independent of source order. Do not remove the approved system idle styling.
+  const idle = rules.find(([, selectors]) => selectors.trim() === `${systemSkin} .pal-app.pal-sys .ic`);
+  assert.ok(idle);
+  assert.equal(idle[2].trim(), 'border: 2.5px solid #8f63ff; background: linear-gradient(160deg, rgba(143, 99, 255, .34), rgba(143, 99, 255, .14)), #0f0c17; box-shadow: 0 4px 14px rgba(143, 99, 255, .28);');
+  assert.doesNotMatch(shared[0] + idle[0], /!important/);
+}
+test('selected system tiles reuse the exact shared ring without losing idle skin identity', () => {
+  assertSystemSelection(desktopCss);
+});
+test('selection regression rejects the old cascade and a weakened outline contract', () => {
+  const old = desktopCss.replace(`.pal-app.sel .ic,\n${selectedSystem}`, '.pal-app.sel .ic');
+  assert.throws(() => assertSystemSelection(old));
+  assert.throws(() => assertSystemSelection(desktopCss.replace('rgba(225, 214, 255, .8)', 'rgba(225, 214, 255, .4)')));
+  assert.ok(source.includes(String.raw`assert.match(hovered.shadow,/^rgba\(225, 214, 255, 0\.8\) 0px 0px 0px 2px,/`));
+});
