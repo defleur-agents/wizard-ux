@@ -210,8 +210,9 @@ async function extra(o){
   await p.waitForFunction(()=>document.querySelector('#err').hidden);
   await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);must(model.steps.workout.done&&requests.length===posts+1,'standalone real Done retry after check persists with one new POST');
   // index.html has exactly two real timers: Workout and Meditate's silent sit. Read uses Wisdom.
-  await p.locator('[data-step="workout"] [data-toggle]').click();
-  await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);
+  const workout=p.locator('[data-step="workout"]');
+  if(!await workout.evaluate(el=>el.classList.contains('is-current')||el.classList.contains('open')))await workout.locator('[data-toggle]').click();
+  await workout.locator('[data-done]').click();await settle(200,f);
   must(!model.steps.workout.done&&requests.at(-1).done===false&&requests.at(-1).how==='tap','registered Undo resets Workout before exercising its real timer');
   for(const [step,how] of [['workout','timer'],['meditate','silent-timer']]){
    const e=p.locator(`[data-step="${step}"]`);if(!await e.evaluate(el=>el.classList.contains('is-current')||el.classList.contains('open')))await e.locator('[data-toggle]').click();
