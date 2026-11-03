@@ -251,6 +251,44 @@ export function readyStep(ids, cur, dir) {
   return { id: ids[j], wrapped: dir > 0 ? j < i : j > i };
 }
 
+/* ---------- round 19 (Miguel, 3 Nov 2026): the order inside each group, and the folded rail used as it is ----------
+ * Grouping by status already IS the priority, so the desktop sidebar offers only the order inside each group: Newest
+ * first / Oldest first (Settings › Chats & app screens). Saved where stock Chats keeps its order (the same key); a
+ * stock Priority or By subject reads as Newest here. */
+export const GROUP_ORDERS = Object.freeze([['newest', 'Newest first'], ['oldest', 'Oldest first']]);
+export const groupOrder = o => o === 'oldest' ? 'oldest' : 'newest';
+/** The chats behind one rail item, in the order the open sidebar draws them: 'snoozed' (as listed), 'ready' (all of
+ * Ready, grouped: what ⌥↓ walks), or one of Ready's statuses (that group only). */
+export function railRows(s, key, order) {
+  if (key === 'snoozed') return (s?.snoozed || []).slice();
+  if (key === 'ready') return readyFlat(s?.ready || [], order);
+  return (readyGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
+}
+/** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
+ * status group holding it, else Ready / Snoozed. { key, i, n } (i zero-based) or null. Pure. */
+export function railActive(s, cur, last, order) {
+  if (!cur) return null;
+  const at = key => { const ids = railRows(s, key, order).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
+  if (last) { const a = at(last); if (a) return a; }
+  const g = stateGroups(s?.ready || []).find(x => x.state !== 'none' && x.rows.some(r => r.id === cur));
+  return (g && at(g.state)) || at('ready') || at('snoozed');
+}
+/** A rail item clicked: its first chat, or (when the chat in front is already in it) the next one, wrapping. */
+export const railNext = (ids, cur) => readyStep(ids, cur, 1);
+/** A short time for the flyout's rows: '5m', '3h', 'Yesterday', 'Mon', '12 Oct' ('' when unknown). Pure (now passed in). */
+export function shortTime(at, now) {
+  const t = Date.parse(at); if (!t) return '';
+  const d = Math.max(0, now - t), m = Math.floor(d / 60e3);
+  if (m < 1) return 'now'; if (m < 60) return m + 'm';
+  const h = Math.floor(m / 60), day = x => { const z = new Date(x); z.setHours(0, 0, 0, 0); return z.getTime(); };
+  const days = Math.round((day(now) - day(t)) / 864e5);
+  if (days === 0) return h + 'h';
+  if (days === 1) return 'Yesterday';
+  const z = new Date(t);
+  if (days < 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][z.getDay()];
+  return z.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][z.getMonth()];
+}
+
 /* ---------- round 16 item 6 (Miguel, 3 Nov 2026): drag to rearrange the right column ---------- */
 const clampI = (i, n) => Math.max(0, Math.min(n, i | 0));
 /** Where a moved row lands. pins = the pin order (app ids); open = the open list below them (desk numbers, as shown);
