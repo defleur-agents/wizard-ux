@@ -104,7 +104,7 @@ async function scenario(browser,base,desktop,skin){
   check(await p.locator('.ch-morning-w').count()>0,`${label} undo immediately restores card`);
   gates.shift().resolve(500);await frame().evaluate(()=>window.__pending);
   check(await p.locator('.ch-morning-w').count()===0,`${label} late failure reconciles after leaving Morning`);
-  check(await frame().locator('#toast').innerText().then(t=>t.includes('Not saved')),`${label} one failure notice`);
+  check(await p.locator('#toast').innerText().then(t=>t.includes('Morning wasn’t saved')),`${label} one visible failure notice after leaving Morning`);
   await p.screenshot({path:path.join(out,label+'-failure.png')});
   check(errors.length===0,`${label} no browser errors`,errors.join('; '));
  }catch(e){check(false,`${label} exception`,e.stack);await p.screenshot({path:path.join(out,label+'-exception.png')}).catch(()=>{});}

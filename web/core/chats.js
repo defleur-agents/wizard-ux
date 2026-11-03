@@ -407,6 +407,7 @@ window.WizCore.chats = function createChats(H) {
     if (MORNING.pending && typeof e.data.pending !== 'boolean') return;
     MORNING.pending = e.data.pending === true; MORNING.epoch++;
     MORNING.at = Date.now(); morningSet(e.data.status);
+    if (e.data.error === 'not-saved') toast('!', 'Morning wasn’t saved · open Morning to retry', 3000);
   });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
   // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
