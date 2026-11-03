@@ -7,6 +7,7 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 const core = read('../web/core/core.js');
 const kit = read('../web/core/chat-kit.js');
 const live = read('../web/live.js');
+const search = read('../web/core/chat-search.js');
 
 function context() {
   const ctx = {
@@ -18,6 +19,8 @@ function context() {
     addEventListener() {},
     setTimeout,
     clearTimeout,
+    AbortController,
+    DOMException,
     console,
     URL,
     Intl,
@@ -87,4 +90,30 @@ test('automatic delivery prompts stay out of chat-list previews but remain avail
   assert.equal(row.preview, '');
   assert.equal(row.previewRole, undefined);
   assert.equal(row.request, raw);
+});
+
+test('message search never exposes an automatic delivery prompt as its result snippet', async () => {
+  const ctx = context();
+  const raw = prompt('AUTO');
+  const rows = [
+    { id: 'prompt-only', title: 'Security', preview: '', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
+    { id: 'visible-match', title: 'Daily Brief', preview: 'Daily Report link', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
+  ];
+  ctx.WizLive = {
+    ok: true,
+    sessions: rows,
+    searchRows: () => rows,
+    cardAt: s => s.updatedAt,
+    rememberSearch() {},
+    async searchSessions(_q, _agent, _signal, onBatch) {
+      onBatch(rows);
+      const out = [...rows]; out.fallbackScopes = []; return out;
+    },
+  };
+  vm.runInContext(search, ctx);
+  const result = ctx.WizCore.chatSearch.query('window', 'daily report', () => {});
+  await new Promise(resolve => setTimeout(resolve, 350));
+  assert.equal(result.hits.has('prompt-only'), false, 'prompt-only server hit is not a visible result');
+  assert.equal(result.hits.has('visible-match'), true, 'a visible title or preview can still match');
+  assert.doesNotMatch(result.hits.get('visible-match').snippet, /\[AUTO\]|Please share the complete/);
 });
