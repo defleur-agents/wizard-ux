@@ -37,7 +37,8 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto } from './parts.js';
+import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto,
+  pinsFrom, togglePin, appLayers, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT } from './parts.js';
 import { homeView } from './home.js';
 import desktop from './desktop.js';
 
@@ -109,9 +110,49 @@ export default function setup(api) {
   layer.append(scrim, drawer);
   api.mount(layer);
 
-  /* ---------- Home: the app grid above the composer (home.js) ---------- */
-  const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks });
+  /* ---------- Home: the app grid above the composer (home.js) ----------
+   * Round 16 item 7 (Miguel, 3 Nov 2026): the desktop's app model. Pinned (his pin order, open or not; hold and drag to
+   * rearrange), then 'Open' (the open apps not pinned, auto-tidy), then + (the picker of installed apps neither pinned
+   * nor open, + Get more = the App Store). Pins, his open-apps order flag and tidy are kept per device (api.storage),
+   * the same keys the desktop uses. */
+  const installedIds = () => api.apps.list().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
+  let pinsStored = api.storage.get('pins');
+  const pinsNow = () => pinsFrom(Array.isArray(pinsStored) ? pinsStored : null, installedIds());
+  const setPins = list => { pinsStored = list; api.storage.set('pins', list); home.paint(true); };
+  const mainDesk = () => desks().find(d => d.id === CHATS)?.desk ?? null;
+  const layersNow = () => appLayers(desks(), pinsNow(), { main: mainDesk(), lit: id => lit(id), manual: api.storage.get('vtManual') === true, chats: CHATS });
+  function appMenuFor(a, at) {
+    const pins = pinsNow(), pinned = pins.includes(a.id), running = desks().some(d => d.id === a.id), i = pins.indexOf(a.id);
+    const extra = [[pinned ? 'Unpin' : 'Pin', () => setPins(togglePin(pins, a.id))]];
+    if (pinned && i > 0) extra.push(['Move up', () => { const l = pins.filter(x => x !== a.id); l.splice(i - 1, 0, a.id); setPins(l); }]);
+    if (pinned && i < pins.length - 1) extra.push(['Move down', () => { const l = pins.filter(x => x !== a.id); l.splice(i + 1, 0, a.id); setPins(l); }]);
+    if (api.apps.homeScreen?.can?.(a.id)) extra.push(['Add to Home Screen', () => api.apps.homeScreen.offer(a.id)]);
+    chrome.appMenu({ id: a.id, name: a.name }, at.x, at.y, { extra, running, onOpen: () => goApp(a.id, a.desk ?? null), onClosed: () => api.after(120, () => home.paint(true)) });
+  }
+  const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit: id => lit(id), badgeText: id => badgeText(id), desks,
+    layers: { model: layersNow, plus: () => chrome.open({ exclude: () => pinsNow(), people: 'For people' }), menu: appMenuFor,
+      reorderPins: (from, to) => { const l = pinsNow(), [id] = l.splice(from, 1); l.splice(to, 0, id); setPins(l); } } });
   api.mount(home.el);
+  /* auto-tidy on the phone too (the desktop's rule and setting): open apps not pinned and unused longer than the Tidy
+   * setting close by themselves (the stock close), with a toast */
+  let used = seedUsed(api.storage.get('used') || {}, desks(), Date.now());
+  api.storage.set('used', used);
+  let usedAt = 0;
+  function markUsed(r) { const d = desks().find(x => x.desk === r?.desk); if (!d || d.id === CHATS || r.home) return; const now = Date.now(); used = { ...used, [d.id]: now }; if (now - usedAt > 60e3) { usedAt = now; api.storage.set('used', used); } }
+  function tidy() {
+    const k = api.storage.get('tidy'), key = Object.prototype.hasOwnProperty.call(TIDY, k) ? k : TIDY_DEFAULT, now = Date.now();
+    used = seedUsed(used, desks(), now); api.storage.set('used', used);
+    const plan = tidyPlan(desks(), { pins: pinsNow(), used, now, limit: TIDY[key], keep: [api.route().desk].filter(x => x != null) });
+    if (!plan.length) return [];
+    const ids = [...new Set(plan.map(d => d.id))];
+    for (const id of ids) api.apps.close?.(id);
+    api.toast?.(tidyWords(ids.length, key));
+    api.after(120, () => home.paint(true));
+    return plan;
+  }
+  let tidyOff = null;
+  const tidyLoop = () => { tidyOff = api.after(3600e3, () => { tidy(); tidyLoop(); }); };
+  api.after(6000, tidy); tidyLoop();
 
   let open = false, offBack = null, q = '';
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
@@ -463,7 +504,7 @@ export default function setup(api) {
     syncOrb();
     paintWs();
   }
-  api.on('route', r => { onRoute(r); api.after(420, syncOrb); });   // again once the chat's desk has slid in
+  api.on('route', r => { markUsed(r); onRoute(r); api.after(420, syncOrb); });   // again once the chat's desk has slid in
   api.on('render', () => { if (open) { readSessions(); paintDrawer(); } paintTop(); });
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
   api.on('voice', () => paintTop());
@@ -472,7 +513,7 @@ export default function setup(api) {
 
   return () => {
     closeMenu(); closeSheet(); closeDrawer();
-    top.remove(); layer.remove(); chrome.dispose();
+    top.remove(); layer.remove(); chrome.dispose(); tidyOff?.();
     for (const k of ['aiApps', 'aiFront', 'aaDrawer', 'aiNew']) delete root.dataset[k];
     home.el.remove(); root.style.removeProperty('--ah-bottom');
   };

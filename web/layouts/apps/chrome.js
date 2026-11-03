@@ -113,7 +113,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   /* ---------- the + sheet: Open · Installed · Get more ---------- */
   let sheet = null, offBack = null, offMount = null, q = '', store = null, storeErr = false, body = null, closing = false;
   const desks = () => (api.desks?.list || api.phone?.desks)?.() || [];
-  function list() { return notOpen(api.apps.list(), openIds()); }
+  // (AI apps round 16, opt-in: the picker of installed apps that are neither open nor pinned; see open(opts))
+  let pick = null;
+  function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), openIds()).filter(a => !ex.has(a.id)); }
   function tile(a, cls = 'vc-tile') {
     const t = el('span', cls, { 'aria-hidden': 'true' }); t.style.setProperty('--c', colourOf(a));
     t.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
@@ -151,7 +153,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   const AGENT_KINDS = new Set(['wiz', 'agents', 'conns']);
   const kindsOf = () => { const k = api.apps.kinds?.(); return k && typeof k === 'object' ? k : null; };
   function installedGroups(K) {
-    const open = new Set([CHATS, ...(openIds() || [])]);
+    const open = new Set([CHATS, ...(openIds() || []), ...(pick?.exclude?.() || [])]);
     const of = k => k === 'apps' ? [...(K.apps || []), ...(K.dev || [])].sort((x, y) => (!!y.system - !!x.system) || String(x.name).localeCompare(String(y.name), undefined, { sensitivity: 'base' })) : K[k] || [];
     return KINDS.map(([k, label]) => [k, label, of(k).filter(a => a && a.id && !open.has(a.id) && matches(a, q))]);
   }
@@ -171,7 +173,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     const out = [];
     if (K) {
       // already open: one quiet folded row first (tap to see them, each with its ✕); while searching, its matches show
-      if (open.length) {
+      if (open.length && !pick) {
         const shown = openFold || !!String(q).trim();
         const h = el('button', 'vc-fold' + (shown ? ' open' : ''), { type: 'button', 'aria-expanded': String(shown) });
         h.append(el('span', '', { text: 'Already open' }), el('small', 'vc-count', { text: String(open.length) }), icon('m6 9 6 6 6-6', 'vc-ico vc-chev'));
@@ -182,7 +184,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
       const groups = installedGroups(K).filter(([, , l]) => l.length), searching = !!String(q).trim();
       const people = groups.filter(([k]) => !AGENT_KINDS.has(k)), agents = groups.filter(([k]) => AGENT_KINDS.has(k));
       const block = ([k, label, l], head) => { const g = el('div', 'vc-list', { role: 'list', 'aria-label': label, 'data-kind': k }); g.append(...l.map(row)); out.push(head(label, l.length), g); };
-      for (const gr of people) block(gr, section);
+      // (the picker: one 'For people' section, open)
+      if (pick && people.length) { const l = people.flatMap(([, , x]) => x); block(['apps', pick.people || 'For people', l], section); }
+      else for (const gr of people) block(gr, section);
       if (agents.length) {
         const shown = agentFold || searching, n = agents.reduce((s, [, , l]) => s + l.length, 0);
         const h = el('button', 'vc-fold vc-fold-agents' + (shown ? ' open' : ''), { type: 'button', 'aria-expanded': String(shown) });
@@ -191,7 +195,7 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
         out.push(h);
         if (shown) for (const gr of agents) block(gr, (label, c) => { const s = section(label, c); s.classList.add('vc-sub-h'); return s; });
       }
-      if (!groups.length) out.push(section('Installed', 0), el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is open.' }));
+      if (!groups.length) out.push(section(pick ? (pick.people || 'For people') : 'Installed', 0), el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : pick ? 'Every installed app is pinned or open.' : 'Every installed app is open.' }));
       // the App Store: no list of everything you don't have (that is the Store's job); a search also looks there, and
       // one row opens the Store itself
       if (searching && store?.length) {
@@ -200,13 +204,17 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
         const hits = store.filter(a => matches(a, q) && !have.has(String(a.name || '').trim().toLowerCase()));
         if (hits.length) { const g = el('div', 'vc-rows', { role: 'list', 'aria-label': 'In the App Store' }); g.append(...hits.map(getRow)); out.push(section('In the App Store', hits.length), g); }
       }
-      const all = el('button', 'vc-store', { type: 'button', text: 'Get more apps in the App Store' });
-      api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); });
-      out.push(all);
+      out.push(pick ? moreTile() : storeBtn('Get more apps in the App Store'));
       body.replaceChildren(...out);
       return;
     } else {
       const inst = list().filter(a => matches(a, q));
+      if (pick) {
+        out.push(section(pick.people || 'For people', inst.length));
+        if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': pick.people || 'For people', 'data-kind': 'apps' }); g.append(...inst.map(row)); out.push(g); }
+        else out.push(el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is pinned or open.' }));
+        out.push(moreTile()); body.replaceChildren(...out); return;
+      }
       if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
       out.push(section('Installed', inst.length));
       if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Installed' }); g.append(...inst.map(row)); out.push(g); }
@@ -225,10 +233,24 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     out.push(all);
     body.replaceChildren(...out);
   }
-  function open() {
+  const storeBtn = text => { const all = el('button', 'vc-store', { type: 'button', text }); api.listen(all, 'click', () => { close(); api.apps.openDesk('app-store'); }); return all; };
+  // the picker's last tile: + Get more = the App Store as it is (its own installed / open states)
+  function moreTile() {
+    const g = el('div', 'vc-list vc-list-more', { role: 'list', 'aria-label': 'Get more' });
+    const b = el('button', 'vc-app vc-more', { type: 'button', role: 'listitem', 'aria-label': 'Get more apps in the App Store' });
+    const t = el('span', 'vc-tile vc-tile-plus', { 'aria-hidden': 'true' }); t.append(icon('M12 5v14M5 12h14', 'vc-ico'));
+    b.append(t, el('span', 'vc-name', { text: 'Get more' }));
+    api.listen(b, 'click', () => { close(); api.apps.openDesk('app-store'); });
+    g.append(b); return g;
+  }
+  /** open(): the + sheet (Already open · Installed by kind · the App Store). open({ exclude, people }) (AI apps round 16):
+   * the picker: only installed apps neither open nor in exclude() (his pins), 'For people' open, 'For agents' folded,
+   * no Already open row, a + Get more tile last; nothing from the App Store listed in it. */
+  function open(opts = null) {
     if (sheet) return;
+    pick = opts && typeof opts === 'object' && !(typeof Event === 'function' && opts instanceof Event) && !opts.type ? opts : null;
     q = ''; store = null; storeErr = false; openFold = false; agentFold = false;
-    sheet = el('div', 'vc-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Apps' });
+    sheet = el('div', 'vc-sheet' + (pick ? ' vc-pick' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-label': pick ? 'Add an app' : 'Apps' });
     const scrim = el('div', 'vc-scrim', { 'aria-hidden': 'true' });
     const card = el('div', 'vc-card');
     const head = el('div', 'vc-head');
@@ -247,13 +269,13 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     root.dataset.vcSheet = 'open';
     paint();
     const mine = sheet;
-    Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
+    if (!pick) Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
     // the desktop types at once; the phone waits for a tap (no keyboard over the lists)
     if (shell === 'desktop') field.focus?.({ preventScroll: true }); else shut.focus?.({ preventScroll: true });
   }
   function close() {
     if (!sheet) return;
-    const s = sheet; sheet = null; body = null;
+    const s = sheet; sheet = null; body = null; pick = null;
     offBack?.(); offBack = null; offMount?.(); offMount = null; s.remove();
     delete root.dataset.vcSheet;
   }
@@ -262,13 +284,14 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
    * on the grid = running, otherwise installed. Chats never closes. */
   let menuEl = null, menuOff = null, menuUnmount = null;
   function menuClose() { if (!menuEl) return; const m = menuEl; menuEl = null; menuOff?.(); menuOff = null; menuUnmount?.(); menuUnmount = null; m.remove(); }
-  function appMenu(a, x, y, { onOpen, onClosed } = {}) {
+  // (extra: [[label, fn]…] first, e.g. Pin / Unpin; running: false = not open, no Close)
+  function appMenu(a, x, y, { onOpen, onClosed, extra = null, running = null } = {}) {
     menuClose(); if (!a || !a.id || a.id === CHATS) return;
     const m = el('div', 'vc-menu', { role: 'menu', 'aria-label': a.name });
     const scrim = el('div', 'vc-menu-scrim', { 'aria-hidden': 'true' });
     const card = el('div', 'vc-menu-card');
     const item = (label, fn, cls = '') => { const b = el('button', 'vc-menu-i' + cls, { type: 'button', role: 'menuitem', text: label }); api.listen(b, 'click', () => { menuClose(); fn(); }); return b; };
-    card.append(el('div', 'vc-menu-h', { text: a.name }), item('Open', () => onOpen?.()), item('Close · stays installed', () => { api.apps.close?.(a.id); onClosed?.(); }, ' is-close'));
+    card.append(el('div', 'vc-menu-h', { text: a.name }), ...(extra || []).map(([label, fn]) => item(label, fn)), item('Open', () => onOpen?.()), ...(running === false ? [] : [item('Close · stays installed', () => { api.apps.close?.(a.id); onClosed?.(); }, ' is-close')]));
     m.append(scrim, card);
     api.listen(scrim, 'pointerdown', e => { e.preventDefault?.(); menuClose(); });
     api.listen(scrim, 'contextmenu', e => { e.preventDefault?.(); menuClose(); });

@@ -351,7 +351,7 @@ test('Apps view grid (both shells): Chats first, badged apps next, the rest in d
 
 test('Apps view icons: right-click (desktop) / long press (phone) = Open · Close · stays installed; Chats never closes', () => {
   const c = read('web/layouts/apps/chrome.js');
-  assert.match(c, /item\('Open', \(\) => onOpen\?\.\(\)\), item\('Close · stays installed', \(\) => \{ api\.apps\.close\?\.\(a\.id\); onClosed\?\.\(\); \}, ' is-close'\)/);
+  assert.match(c, /item\('Open', \(\) => onOpen\?\.\(\)\), \.\.\.\(running === false \? \[\] : \[item\('Close · stays installed', \(\) => \{ api\.apps\.close\?\.\(a\.id\); onClosed\?\.\(\); \}, ' is-close'\)\]\)/, 'Open · Close (AI apps round 16: extra items first, no Close for an app not running; both opt-in)');
   assert.match(c, /if \(!b \|\| !a \|\| a\.id === CHATS\) return;/, 'no menu on Chats');
   assert.match(c, /if \(shell !== 'phone'\) return;/, 'the long press is the phone\'s; the desktop uses right-click');
   assert.match(c, /if \(p\?\.fired\) \{ e\.preventDefault\(\); e\.stopImmediatePropagation\?\.\(\); p = null; \}/, 'the click ending a long press does not also open the app');

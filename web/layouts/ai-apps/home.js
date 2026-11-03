@@ -16,6 +16,10 @@
  *   Files, the App Store, Claude, any system / agent / connector app with a desk), with the stock desk name and the
  *   Apps view's desk icon (Chats = the chats glyph on the accent); a click opens THAT desk. The round-6 "real apps
  *   only" filter now applies to the installed apps not open yet, after them, as before.
+ * Round 16 item 7 (Miguel, 3 Nov 2026: one app model, phone and desktop; the phone's Home here, `layers`): the grid is his
+ *   PINNED apps (his pin order, open or not; press and hold, then drag to rearrange; a hold without moving = the app's
+ *   menu), then under a divider 'Open' the open apps that are not pinned (smaller, same icons; auto-tidy), then a + tile:
+ *   the picker of installed apps neither pinned nor open (chrome.js), its last tile + Get more = the App Store.
  * No timers beyond api.after, no markup strings; everything through the layout API. */
 import { realApps, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
@@ -60,7 +64,7 @@ export function pageFit(w, h, cw, ch, maxCols = 7) {
 }
 export const CELL = { w: 124, h: 128 };
 
-export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = false, menu = null }) {
+export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = false, menu = null, layers = null }) {
   const doc = document;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const box = el('section', 'ah' + (paged ? ' ah-paged' : ''), { 'aria-label': 'Home' }); box.hidden = true;
@@ -81,15 +85,55 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return t;
   }
   function cell(a, cls = 'ah-app') {
-    const b = el('button', cls, { type: 'button', role: 'listitem', 'data-app': a.id, 'data-desk': a.desk == null ? null : String(a.desk), title: a.name });
+    if (a.group) cls += a.group === 'pin' ? ' is-pin' + (a.desk == null ? ' is-closed' : ' is-run') : ' is-opensec';
+    const b = el('button', cls, { type: 'button', role: 'listitem', 'data-app': a.id, 'data-desk': a.desk == null ? null : String(a.desk), 'data-group': a.group || null, title: a.name });
     const ic = el('span', 'ah-ic'), n = el('b', 'ah-badge', { 'aria-hidden': 'true', text: a.dupe ? '' : badgeText(a.id) }); n.hidden = !n.textContent;
     ic.append(tile(a), n);
     b.append(ic, el('span', 'ah-name', { text: a.name }));
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
     api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id, a.desk); });
-    pressable(b, a);
+    if (layers) holdable(b, a); else pressable(b, a);
     return b;
   }
+  /* Round 16 item 7 (layers): a hold (HOLD ms, still) lifts a pinned icon: drag it to its new place among the pins (the
+   * one under the finger is marked); let go without moving = the app's menu (Pin / Unpin, Add to Home Screen, Open,
+   * Close). An open (not pinned) icon's hold = its menu. A right click = the menu. */
+  let lift = null;
+  const pinCells = () => [...grid.querySelectorAll('.ah-app[data-group="pin"]')];
+  function holdable(b, a) {
+    api.listen(b, 'pointerdown', e => {
+      if (e.button > 0) return;
+      const p = { b, a, x: e.clientX, y: e.clientY, pid: e.pointerId, lifted: false, moved: false, to: -1 };
+      p.off = api.after(HOLD, () => {
+        if (press !== p) return;
+        p.lifted = true; swallow = Date.now() + 700;
+        if (a.group !== 'pin') { press = null; layers.menu?.(a, { x: p.x, y: p.y, el: b }); return; }
+        lift = p; p.cells = pinCells(); p.from = p.cells.indexOf(b); p.rects = p.cells.map(c => c.getBoundingClientRect());
+        b.classList.add('is-lift'); grid.dataset.drag = '';
+      });
+      press = p;
+    });
+    api.listen(b, 'contextmenu', e => { e.preventDefault?.(); if (lift) return; swallow = Date.now() + 700; layers.menu?.(a, { x: e.clientX, y: e.clientY, el: b }); });
+  }
+  function liftMove(e) {
+    const p = lift; if (!p) return false;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) > 6) p.moved = true;
+    p.b.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+    let best = -1, bd = Infinity;
+    p.rects.forEach((r, i) => { const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)); if (d < bd) { bd = d; best = i; } });
+    if (best !== p.to) { p.cells[p.to]?.classList.remove('is-drop'); p.to = best; if (best !== p.from) p.cells[best]?.classList.add('is-drop'); }
+    return true;
+  }
+  function liftEnd(commit) {
+    const p = lift; if (!p) return false; lift = null; press = null;
+    p.b.classList.remove('is-lift'); p.b.style.translate = ''; for (const c of p.cells) c.classList.remove('is-drop'); delete grid.dataset.drag;
+    swallow = Date.now() + 500;
+    if (!commit) return true;
+    if (p.moved && p.to >= 0 && p.to !== p.from) layers.reorderPins?.(p.from, p.to);
+    else if (!p.moved) layers.menu?.(p.a, { x: p.x, y: p.y, el: p.b });
+    return true;
+  }
+  if (layers && grid) api.listen(grid, 'touchmove', e => { if (lift) e.preventDefault?.(); }, { passive: false });
   /* Round 7 (Miguel): a hold on an app icon (phone) or a right click (desktop) offers it for the home screen, exactly as
    * the Desks' hold on an app tile does: the stock sheet (core/home-screen-apps.js through api.apps.homeScreen; native
    * pin on the Android app, the two-step Add to Home Screen / Install app guide elsewhere), never a copy. Apps the stock
@@ -113,13 +157,14 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
       if (!canPin(a.id)) return; e.preventDefault?.(); if (Date.now() >= swallow) offer(a.id);
     });
   }
-  function endPress() { if (!press) return; press.off?.(); press = null; }
+  function endPress() { if (lift) { liftEnd(true); return; } if (!press) return; press.off?.(); press = null; }
   api.listen(doc, 'pointermove', e => {
+    if (lift) { liftMove(e); return; }
     if (!press || (e.pointerId != null && press.pid != null && e.pointerId !== press.pid)) return;
     if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8) endPress();   // (a scroll, not a hold)
   });
   api.listen(doc, 'pointerup', endPress);
-  api.listen(doc, 'pointercancel', endPress);
+  api.listen(doc, 'pointercancel', () => { if (lift) liftEnd(false); else endPress(); });
 
   /* ---------- the order and the cells ---------- */
   let order = [], cells = new Map(), more = null, page = 0, fitNow = { cols: 4, rows: 2, per: 8 };
@@ -130,6 +175,13 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     api.listen(b, 'click', () => { if (Date.now() >= swallow) getMore(); });
     return b;
   };
+  const plusTile = () => {
+    const b = el('button', 'ah-app ah-more ah-plus', { type: 'button', role: 'listitem', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more' });
+    const ic = el('span', 'ah-ic'), t = el('span', 'ah-tile is-plain', { 'aria-hidden': 'true' }); t.append(svgIcon(doc, 'plus', 'ah-ico')); ic.append(t);
+    b.append(ic, el('span', 'ah-name', { text: 'Add', 'aria-hidden': 'true' }));
+    api.listen(b, 'click', () => { if (Date.now() >= swallow) layers.plus?.(); });
+    return b;
+  };
   const pages = () => paged ? [...track.children] : [grid];
   function fit() {
     if (!paged) return fitNow;
@@ -137,8 +189,15 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return pageFit(Math.max(0, r.width - 24), Math.max(0, r.height), CELL.w, CELL.h);
   }
   /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
+  let divider = null, plusCell = null, splitAt = -1;
   function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
+    if (layers) {
+      // round 16 item 7: the pins, then (when any) the 'Open' divider and the open apps, then +
+      divider ||= Object.assign(el('div', 'ah-div', { role: 'presentation' }), {}); if (!divider.childElementCount) divider.append(el('span', 'ah-div-w', { text: 'Open' }));
+      const list = order.map(id => cells.get(id)).filter(Boolean);
+      nodes.splice(0, nodes.length, ...list.slice(0, splitAt), ...(splitAt < list.length ? [divider, ...list.slice(splitAt)] : []), plusCell ||= plusTile());
+    }
     const put = (box0, want) => { const now = box0.children; if (now.length !== want.length || want.some((n, k) => now[k] !== n)) box0.replaceChildren(...want); };
     if (!paged) put(grid, nodes);
     else {
@@ -154,10 +213,16 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   let drawn = '';
   function paint(force = false) {
     if (box.hidden) return;
-    const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit);
-    const list = [...open, ...rest];
+    let list;
+    if (layers) {
+      // round 16 item 7: the layers (parts.js appLayers, the desktop's right column too)
+      const L = layers.model(), meta = new Map([...(Array.isArray(api.apps.kinds?.()?.apps) ? api.apps.kinds().apps : []), ...api.apps.list()].filter(a => a && a.id).map(a => [a.id, a]));
+      const pins = L.pinned.map(p => ({ ...(meta.get(p.id) || {}), id: p.id, name: p.name || meta.get(p.id)?.name || p.id, desk: p.desk ?? null, key: 'pin:' + p.id, group: 'pin' }));
+      const open = L.open.map(d => ({ ...(meta.get(d.id) || {}), id: d.id, name: d.name || meta.get(d.id)?.name || d.id, desk: d.desk, key: 'desk:' + d.desk, group: 'open', ...(d.id === CHATS ? { dupe: true } : {}) }));
+      list = [...pins, ...open]; splitAt = pins.length;
+    } else { const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit); list = [...open, ...rest]; }
     fitNow = fit();
-    const cellSig = a => JSON.stringify([a.id, a.name, a.desk, a.dupe ? '' : badgeText(a.id)]);
+    const cellSig = a => JSON.stringify([a.id, a.name, a.desk, a.group || '', a.dupe ? '' : badgeText(a.id)]);
     const sig = JSON.stringify([list.map(a => [a.key, cellSig(a)]), fitNow.per]);
     if (!force && sig === drawn) return;
     drawn = sig;

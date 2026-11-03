@@ -2904,6 +2904,8 @@
     // desk of its own (the Store window opened before goes; the page's Get opens the app right after it installs).
     // The AI apps view's tab strip: a tab's ✕ = the stock close of that desk (round 13)
     closeDesk: i => Number.isInteger(i) && i >= 0 && i < ws.length ? closeDesktop(i) : false,
+    // the stock arrange (a desk dragged along the bar, ⌥⇧[ / ⌥⇧]): the AI apps view's right column reorders the desks
+    moveDesk: (from, to) => Number.isInteger(from) && Number.isInteger(to) ? moveDesk(from, to) : false,
     closeApp: id => { if (globalThis.WosSkinHost?.panelMode) return panelQuit(id); const home = homeOpen; let n = 0; for (let i = ws.length - 1; i >= 0; i--) if (ws[i].wins.some(x => W[x]?.appId === id) && closeDesktop(i)) n++; if (home && !homeOpen) goHome(); return n > 0; },   // closed from Home (the + sheet): stay Home
     openStore: id => { const S = APP['app-store']; if (!S?.url) return false; Object.keys(W).filter(x => W[x]?.appId === 'app-store').forEach(x => closeWin(x));
       const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); const obj = { app: 'frame', appId: 'app-store', url: u.pathname + u.search };

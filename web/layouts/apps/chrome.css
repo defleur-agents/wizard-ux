@@ -202,3 +202,7 @@ html[data-view-chrome] .vc-menu-i {
 }
 html[data-view-chrome="phone"] .vc-menu-i { min-height: 46px; font-size: 1rem; }
 html[data-view-chrome] .vc-menu-i:is(:hover, :focus-visible) { background: color-mix(in srgb, var(--wz-text, var(--ink)) 9%, transparent); outline: none; }
+/* the picker's + Get more tile (AI apps round 16): a plain tile with a +, the App Store as it is */
+html[data-view-chrome] .vc-tile.vc-tile-plus { color: var(--wz-text, var(--ink)); background: color-mix(in srgb, var(--wz-text, var(--ink)) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent); }
+html[data-view-chrome] .vc-tile.vc-tile-plus .vc-ico { width: 26px; height: 26px; }
+html[data-view-chrome] .vc-list.vc-list-more { margin-top: 8px; }
