@@ -56,6 +56,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
+    },
     "core/app-versions.js": {
       "loadedBy": [
         "phone",
@@ -257,7 +264,10 @@
       "note": "Direct entrypoint import"
     },
     "core/context-menu.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
     },
     "core/core.js": {
@@ -341,6 +351,12 @@
       ],
       "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
     },
+    "core/home-screen-capabilities.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Validates app-declared home_screen capabilities (offline, position_keys, route_state); no per-app table"
+    },
     "core/home-screen-policy.js": {
       "loadedBy": [
         "phone",
@@ -400,8 +416,20 @@
       "note": "Direct entrypoint import"
     },
     "core/offline-kit.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); apps load it themselves, the phone shell loads it for pinned-app presentation journals"
+    },
+    "core/offline-session-config.js": {
       "loadedBy": [],
-      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+      "note": "Generated worker config for pinned app sessions (tools/build-offline-session.py); importScripts from web/sw.js, not either shell"
+    },
+    "core/offline-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Publishes the apps that declared home_screen.offline to the pinned-app worker; prepares the offline host"
     },
     "core/offline-sw.js": {
       "loadedBy": [],
@@ -419,6 +447,10 @@
         "desktop"
       ],
       "note": "Direct entrypoint import; Settings \u2192 About: base main commit and how far ahead/behind main"
+    },
+    "core/orb-switcher.js": {
+      "loadedBy": [],
+      "note": "Lazy opt-in pins-only Orb radial via the phone skin-host orb adapter. Neither entrypoint imports it; desktop does not mount it. Open desktops remain on the existing swipe-up path."
     },
     "core/os-updates.js": {
       "loadedBy": [
@@ -538,6 +570,13 @@
         "desktop"
       ],
       "note": "Extracted native/app internal share sheet"
+    },
+    "core/sheetback.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared imported-share chooser/double-Back custody policy."
     },
     "core/shell.js": {
       "loadedBy": [
@@ -669,13 +708,6 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
-    },
-    "core/app-setup.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
@@ -753,6 +785,21 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-capabilities.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
+    },
+    "core/offline-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
+    },
+    "core/offline-kit.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
     },
     "core/single-app-session.js": {
       "shell": "phone",
@@ -862,6 +909,7 @@
     "core/share-sheet.js",
     "core/share-wizard.css",
     "core/share-wizard.js",
+    "core/sheetback.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",

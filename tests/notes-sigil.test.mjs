@@ -43,6 +43,7 @@ test('Notes-only identity repair does not change unrelated shipped logos or glyp
     assert.equal(S.of({ id }).logo, logos[id]);
     assert.match(S.html({ id }), /class="sglogo"/);
   }
+  assert.match(S.html({ id: 'calendar' }), /class="sgi sg-calendar"/);
   assert.match(S.html({ id: 'files' }), /class="sgi sg-files"/);
   assert.match(S.html({ id: 'unknown-app', name: 'Unknown' }), /class="sgi sg-apps"/);
   // a designed house sigil still beats a shipped picture for every other house app

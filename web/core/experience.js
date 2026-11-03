@@ -216,8 +216,9 @@
       return apply();
     },
     refresh: apply,
-    // A color pick never changes tweaks; kept so older callers stay harmless.
-    chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
+    // A color pick never changes tweaks; a failed reconciliation must retry.
+    // Otherwise a stale timeout survives every later pick in this same preset.
+    chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)

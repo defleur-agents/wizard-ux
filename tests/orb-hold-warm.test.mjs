@@ -47,7 +47,7 @@ test('never a permission prompt, never with the native recorder, never during a 
 
 test('wired into the dock orb: warm after a still moment, dropped when the press ends, taken by openRec; tap/hold unchanged', () => {
   assert.match(app, /const MIC_WARM_MS = 90;/);
-  assert.match(app, /if \(V\.state === 'idle'\) G\.warm = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) warmMic\(\); \}, MIC_WARM_MS\);\n    if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(/);
+  assert.match(app, /if \(V\.state === 'idle'\) G\.warm = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) warmMic\(\); \}, MIC_WARM_MS\);\n(?:    \/\/[^\n]*\n)*(?:    if \(window\.WosOrbSwitcher[^\n]*\n    else )?(?:    )?if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(/); // main's default-off Orb radial hold may sit between them
   assert.match(app, /clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\);/);
   // the press really ends: the orb's pressed look and drag classes are code on that line, never swallowed by a comment
   assert.match(app, /\n    clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\); Orb\.press\(false\); orbWrap\.classList\.remove\('dragging'\);/);

@@ -443,7 +443,7 @@
     CHATS.setFocus(w, { kind: 'agent', key: id });
     if (o.thread === '__new__') { CHATS.openNewDraft(w.id, ''); syncChatsPane(w.id); }
     LIVE?.refreshAgents?.().then(() => LIVE.emit());
-    return true;
+    return o.share ? { id: w.id, agentId: id } : true;
   }
   window.WizOpenAgentChats = openAgentChats;
   // Keep deep app links on the same admission path as Home and the launcher.
@@ -645,6 +645,10 @@
   function chatsUpDown(dir) { return stepReady(dir); }
   // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
   // type a new one straight away, or ⌥↓ to the next Ready chat.
+  function keepNewSendList(wid, sid) {
+    if (sid !== '__new__' || !mainChats(W[wid])) return false;
+    try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-new-send-list').trim() === 'on'; } catch (_) { return false; }
+  }
   function toNewChat(wid, why) {
     const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat
     CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
@@ -652,6 +656,7 @@
   stage.addEventListener('submit', e => {
     const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
     const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
+    if (keepNewSendList(wid, w.thread)) return;
     setTimeout(() => {
       if (W[wid] !== w || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
       toNewChat(wid, 'text');
@@ -688,7 +693,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -747,15 +752,18 @@
     ex.hidden = !full;
     const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
     const maxWidth = configuredMax > 0 ? configuredMax : 1200;
-    // Desks out of sight (and the one in front while Home shows) are tiled too, at the size they will show at:
-    // their apps load at a real size, not 0×0. An app that measures its window once at load (File Browser) showed
-    // an empty list when its desk came into view. Measure every desk first, then write, so it costs one reflow.
-    const sizes = ws.map((dk, i) => dk.wins.length ? [wsEl(i).clientWidth, wsEl(i).clientHeight] : null);
-    ws.forEach((dk, i) => { if (sizes[i]) tile(dk, sizes[i][0], sizes[i][1], i === cur && !homeOpen ? full : !!dk.mono, maxWidth, i === cur && !homeOpen); });
+    // Hidden desks retain layout boxes. Size their apps before first load, in the chrome mode
+    // they will have when selected, rather than inheriting the foreground desk's stage height.
+    const barHeight = $('#bar').getBoundingClientRect().height;
+    const sizes = ws.map((dk, i) => {
+      if (!dk.wins.length) return null;
+      const host = wsEl(i), deskFull = !!dk.mono;
+      return [host.clientWidth, host.clientHeight + (deskFull ? barHeight : 0) - (full ? barHeight : 0), deskFull];
+    });
+    ws.forEach((dk, i) => { if (sizes[i]) tile(dk, ...sizes[i], maxWidth); });
   }
-  function tile(d, W_, H_, full, maxWidth, front) {
-    const g = full ? 0 : 8;
-    const n = d.wins.length;
+  function tile(d, W_, H_, full, maxWidth) {
+    const g = full ? 0 : 8, n = d.wins.length;
     const rects = {};
     // Columns on request: a window that sets `share` (Video Editor's video + Feedback pair) lays the desktop out as
     // side-by-side columns in window order; windows without a share split what is left equally.
@@ -785,7 +793,7 @@
     for (const id of d.wins) {
       const el = winEl(id); if (!el) continue; const r = rects[id];
       el.classList.toggle('gone', !r);
-      if (front) el.classList.toggle('full', full && id === d.focus);
+      el.classList.toggle('full', full && id === d.focus);
       if (r) Object.assign(el.style, { left: r[0] + 'px', top: r[1] + 'px', width: r[2] + 'px', height: r[3] + 'px' });
     }
   }
@@ -2007,7 +2015,7 @@
       }
     }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
+    if (rp) { const stayOnList = keepNewSendList(rp.wid, rp.sid); CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); if (stayOnList) syncChatsPane(rp.wid); else setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });

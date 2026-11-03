@@ -5,13 +5,12 @@
  *   WizSigil.html(app)  → '<i class="sgi sg-…">' to drop inside any icon box; the box takes --c
  *   WizSigil.named(glyph, color) → the same for a sigil that isn't an app (search, command rows)
  *
- * An installed app that ships its own logo (Runtipi metadata/logo.jpg, served by the box and listed by core/apps.js)
- * shows that picture as a rounded tile (`<i class="sglogo">`) in every one of these places instead of a sigil.
- * An approved HOUSE_ONLY identity keeps its house mask, even with a cached package logo.
- * Which sigil an app gets otherwise: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
+ * Existing designed identities beat package pictures, including cached logos and refreshed metadata.
+ * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
- * silhouette, then the house glyph that matches what its id and name say (Mail → mail, Home Assistant → home), else
- * the plain app mark, on a colour picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
+ * silhouette, then a safe package logo (only for an app with no designed identity), then the house glyph that
+ * matches what its id and name say (Mail → mail, Home Assistant → home), else the plain app mark, on a colour
+ * picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
  * fallback is never bigger, squarer or more opaque than a designed sigil.
  * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
@@ -23,7 +22,7 @@
   const HOUSE = Object.fromEntries(Object.entries({"calendar":["calendar","FE98AB"],"mizel":["mic","FE9C8C"],"shopping":["bag","FFA15C"],"wisdom":["wisdom","FEC25D"],"cinequeue":["cine","E9CF06"],"trackhunt":["track","ABE355"],"android-apps":["android","50DA79"],"topics":["eye","0ED8BB"],"messenger":["chats","00D6CF"],"wizard-signal":["signal","0AD3E3"],"meditation":["meditate","12CFF6"],"files":["files","56C8FE"],"wizard-search":["search","81B7FF"],"projects":["projects","A0AEFE"],"wizard":["hat","C1AAFF"],"social":["social","EF90FE"],"wizard-music":["music","FF8FD3"],"iching":["iching","E5C9A3"],"console":["console","A9B6C4"],"legacy-wizard":["wizard","BDB5D8"],"v-day":["day","FF9F6D"],"v-week":["week","D6A0FE"],"v-month":["month","99B5E8"],"v-inbox":["inbox","11DBA2"],"usuals":["usuals","FE9E79"],"side-button":["side","C1B1E1"],"maps":["pin","CDDA2D"],"app-store":["apps","ABA9FE"],"system":["gauge","83C9CC"],"notifications":["bell","FEC076"],"morning-report":["coffee","FF9F71"],"news":["news","FE9A9D"],"wizard-calendar":["calendar","FE98AB"],"secret-drop":["secret","05D6CE"],"browser":["globe","11CFF9"],"transcriber":["wave","F98CF1"],"wizard-chatgpt":["spark","06DC92"],"wizard-claude":["burst","FF9C89"],"wizard-agent-service":["hub","88B9EC"],"wizard-tinfoil":["shield","A1C0CF"],"wizard-cloudflare":["cloud","FFA245"],"wizard-shopping":["bag","FFA15C"],"sniper":["scope","FB99B2"],"card-benefits":["card","65D86D"],"money":["dollar","75D291"],"profiles":["profile","C1AAFF"],"defleur-video":["clip","94B1FF"],"wizard-podcasts":["podcast","FBC60E"],"notes":["notes","FF94BD"],"wizard-notes":["notes","FF94BD"],"morning":["coffee","FF9F71"],"wizard-files":["files","56C8FE"],"photos":["image","68BCFF"],"troubleshooter":["wrench","7CCCC2"],"wizard-ux":["wizard","A9AEED"],"agents":["agents","9BB1F5"],"wizard-mail":["mail","09D0F0"],"wizard-microsoft":["mail","7ABEE6"],"wizard-google":["mail","77CEB8"],"smart-home":["home","0FD6CB"],"wizard-health":["heart","FE99A6"],"wizard-apple-health":["heart","FA99B4"],"wizard-whoop":["heart","DFACA8"],"wizard-oura":["heart","B9B4E5"],"wizard-garmin":["heart","81C6E2"],"wizard-polar":["heart","E3A6C2"],"wizard-coros":["heart","E8AA94"],"wizard-fitbit":["heart","85CCB3"],"wizard-withings":["heart","8DC7CA"],"wizard-youtube-music":["music","FB99B2"],"wizard-monarch":["dollar","C7D69B"],"wizard-simplefin":["dollar","92C8B9"],"wizard-brightdata":["globe","83BCE2"],"wizard-twitterapi":["social","84C7D3"],"backup":["cloud","6CC9EA"],"contacts":["social","FF8BE5"],"carlos-crm-demo":["social","C2AFE7"],"maverick-command":["console","EAAB78"],"pr-board":["projects","8DCBA9"],"setup":["wrench","9EB5DB"]}).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries({"movies":"cinequeue","food":"usuals","meditate":"meditation"})) HOUSE[id] = HOUSE[old];
-  const HOUSE_ONLY = new Set(["notes", "wizard-notes"]);
+
   const BRAND = {"wizard-cloudflare":"cloudflare","wizard-claude":"claude","wizard-chatgpt":"chatgpt","wizard-tinfoil":"tinfoil","hermes-agent":"hermes","hermes-frontend-3":"hermes"};
   const FALLBACK = ["#FE9A9A", "#FFA332", "#D2D826", "#1DDC8D", "#07D4D6", "#4CCAFF", "#94B1FF", "#C7A8FE", "#FE8AEA"];
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
@@ -41,11 +40,10 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
-    // A legacy package picture must not replace Notes' approved page/pencil or
-    // bring an opaque image background into the skin's shared hover treatment.
-    if (HOUSE_ONLY.has(a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
-    // A designed sigil (house entry or a named glyph) always wins over a picture, so every surface shows one family.
-    const s = sigilOf(a), logo = s.guessed || s.img ? logoOf(a) : '';
+    // James: restore already-built icons, not one-off exceptions or new artwork.
+    // A package picture is a fallback only; it cannot erase a designed glyph, house/alias,
+    // custom mask or product brand, nor bypass the skin's shared hover treatment. A guessed glyph is not designed.
+    const s = sigilOf(a), logo = (s.glyph && !s.guessed) || s.img || brand(a) ? '' : logoOf(a);
     return logo ? { ...s, logo } : s;
   }
   function sigilOf(a) {
@@ -53,8 +51,8 @@
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
-    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
-    if (!img && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
+    // Package file metadata must not replace the canonical house identity either.
+    if (Object.prototype.hasOwnProperty.call(HOUSE, a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     const letter = String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?';
     if (img) return { glyph: '', color: col || pick(a.id || a.name), letter, img };
     // Never a bare letter: the house glyph that says what the app does, read from its id and name ('wizard-mail',

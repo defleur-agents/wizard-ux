@@ -19,6 +19,13 @@ export function architectureReason(a, architecture) {
 // The shell registry id an App Index listing installs as, when a reviewed host alias renames it (else its own id).
 export const hostAppId = a => HOST_ALIASES[a?.id]?.id || a?.id || '';
 export const isUserApp = a => !['wizard-shell','wizard-ux'].includes(a.id) && a.category !== 'interface' && !(a.provides || []).includes('shell');
+// Store kinds describe the owner's experience, not the runtime packaging tier.
+// Explicit Agents/Connectors keep their roles; only screenless apps are Agent apps.
+export function storeKind(a) {
+  if (a.type === 'agent' || a.category === 'agent') return 'agents';
+  if (a.type === 'external' || a.category === 'connector') return 'connections';
+  return a.type === 'view' || a.has_view === true ? 'apps' : 'agent-apps';
+}
 const alphabetical = (a,b) => String(a || '').localeCompare(String(b || ''),'en');
 export const compareApps = (a,b) => Number(!!b.alpha_badge)-Number(!!a.alpha_badge) || alphabetical(a.name,b.name) || alphabetical(a.id,b.id) || alphabetical(a.repo,b.repo);
 export function resolveInstalled(a, snapshot, runtipi) {

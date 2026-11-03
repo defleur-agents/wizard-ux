@@ -24,13 +24,52 @@
   }
   // Vault is an independent op group. Native uses the one device envelope, never an app-supplied appId.
   for (const op of ['vault.has', 'vault.seal', 'vault.open', 'vault.forget']) OPS.add(op);
-  async function vaultCall(appId, method, extra = {}) {
-    if (!window.wizardDevicePort?.postMessage || !window.WizCore?.bridge?.call) {
-      if (method === 'has') return { available: false, saved: false };
-      throw Object.assign(new Error('unavailable'), { code: 'unavailable' });
-    }
+  let vaultSeq = 0, vaultBound = null; const vaultWaits = new Map();
+  function vaultPort() { const p = window.wizardVaultPort; if (!p?.postMessage) return null; if (vaultBound !== p) { vaultBound = p; p.onmessage = ev => { let m; try { m = JSON.parse(ev.data); } catch (_) { return; } const w = vaultWaits.get(m?.id); if (!w) return; vaultWaits.delete(m.id); clearTimeout(w.timer); m.ok ? w.resolve(m.result || {}) : w.reject(Object.assign(new Error(m.error || 'failed'), { code: m.error || 'failed' })); }; } return p; }
+  // APK 0.10.8 exposes its own wizardVaultPort; 0.10.9+ answers vault.* on the shared device envelope (wizardDevicePort).
+  async function deviceVaultCall(appId, method, extra) {
     try { return await window.WizCore.bridge.call('vault.' + method, { ...extra, appId }); }
-    catch (e) { throw Object.assign(new Error(e.message || 'failed'), { code: e.message === 'unknown method' ? 'unavailable' : e.message || 'failed' }); }
+    catch (e) { const code = e.message === 'unknown method' || e.message === 'unavailable' ? 'unavailable' : e.message || 'failed'; if (method === 'has' && code === 'unavailable') return { available: false, saved: false }; throw Object.assign(new Error(code), { code }); }
+  }
+  function vaultCall(appId, method, extra = {}) {
+    if (!window.wizardVaultPort?.postMessage && window.wizardDevicePort?.postMessage && window.WizCore?.bridge?.call) return deviceVaultCall(appId, method, extra);
+    const p = vaultPort(); if (!p) return Promise.resolve(method === 'has' ? { available: false, saved: false } : Promise.reject(Object.assign(new Error('unavailable'), { code: 'unavailable' })));
+    const id = 'vault-' + (++vaultSeq);
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { vaultWaits.delete(id); reject(Object.assign(new Error('timeout'), { code: 'timeout' })); }, 120000);
+      vaultWaits.set(id, { resolve, reject, timer });
+      try { p.postMessage(JSON.stringify({ ...extra, id, v: 1, appId, method })); } catch (e) { clearTimeout(timer); vaultWaits.delete(id); reject(e); }
+    });
+  }
+  // A fingerprint prompt only for the app you are looking at (James, 27 Oct 2026: after a reload a background
+  // app asked for a fingerprint over a different view). seal/open wait until the app is in front and has stayed there
+  // briefly (a reload passes desks on screen on its way to where you were); after VAULT_WAIT_MS the app gets
+  // code 'not_in_front' and simply asks again when opened.
+  const VAULT_STEADY_MS = 600, VAULT_WAIT_MS = 60000;
+  function inFront(st) {
+    if (document.hidden) return false;
+    try { return (st.isFront || st.isVisible || (() => false))() === true; } catch (_) { return false; }
+  }
+  // Already steadily in front (the usual tap on "Unlock with fingerprint"): no added wait.
+  function steadyFront(st) {
+    const now = Date.now();
+    if (!inFront(st)) { st.frontSince = 0; return false; }
+    st.frontSince ||= now; return now - st.frontSince >= VAULT_STEADY_MS;
+  }
+  setInterval(() => { for (const st of frames.values()) steadyFront(st); }, 250);
+  function whenInFront(st, alive) {
+    if (steadyFront(st)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const t0 = Date.now(); let since = 0;
+      const tick = () => {
+        if (!alive()) return reject(Object.assign(new Error('closed'), { code: 'cancelled' }));
+        const now = Date.now();
+        if (inFront(st)) { since ||= now; if (now - since >= VAULT_STEADY_MS) return resolve(); } else since = 0;
+        if (now - t0 > VAULT_WAIT_MS) return reject(Object.assign(new Error('not_in_front'), { code: 'not_in_front' }));
+        setTimeout(tick, 150);
+      };
+      tick();
+    });
   }
   function apps() { if (!registry) registry = [window.WizCore.apps('mobile'), window.WizCore.apps('desktop')]; return registry.flatMap(r => r.APPS); }
   function registered(st) {
@@ -62,11 +101,11 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, back, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isFront, isVisible, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
-    const st = { frame, appId, url, openThread, openContextDraft, isVisible, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
+    const st = { frame, appId, url, openThread, openContextDraft, isVisible, isFront, back, doc: null, client: null, holds: new Map(), pendingBack: null, lastAlive: Date.now() };
     if (!registered(st)) return () => {};
     const load = () => { if (st.doc && !valid(st, st.doc)) reset(st); try { if (rootArm) frame.contentWindow.document.addEventListener('pointerdown', rootArm, true); } catch (_) {} cleanupLegacy(st).catch(() => {}); restoreReturn(st); };
     st.detach = () => { if (frames.get(frame) !== st) return; frames.delete(frame); frame.removeEventListener('load', load); reset(st); if (st.badged) setBadge(st.appId, 0); };
@@ -253,7 +292,15 @@
       }
     };
     // Recheck the exact requesting document after the biometric prompt as well as before it.
-    const vault = async (method, extra) => { check(); const result = await vaultCall(st.appId, method, extra); check(); return result; };
+    const vault = async (method, extra) => {
+      check();
+      if (method === 'seal' || method === 'open') {
+        await whenInFront(st, () => { try { check(); return true; } catch (_) { return false; } });
+        check();
+        if (!inFront(st)) throw Object.assign(new Error('not_in_front'), { code: 'not_in_front' });
+      }
+      const result = await vaultCall(st.appId, method, extra); check(); return result;
+    };
     source.addEventListener('pagehide', () => { if (st.doc === doc) reset(st); }, { once: true });
     return Object.freeze({ version: VERSION, appId: st.appId,
       ready() { check(); window.WizCompanionPane?.ready(st.frame); return { version: VERSION, hosted: true, appId: st.appId }; },
@@ -437,6 +484,8 @@
   // The shell supplies reviewed exact migration entries; apps cannot ask to unregister workers or delete caches.
   async function cleanupLegacy(st) {
     const policy = window.WizCore.appMigrations?.[st.appId]; if (!policy || !valid(st) || st.url.origin !== ORIGIN) return [];
+    // An app that declares home_screen.offline owns its worker: legacy cleanup would race its clients.claim().
+    if (window.WizCore.appHomeScreen?.(st.appId)?.offline) return [];
     const scope = new URL(policy.scope, ORIGIN), scripts = policy.scripts.map(path => new URL(path, ORIGIN));
     if (!within(scope, st.url) || scripts.some(script => !within(script, st.url)) || scope.pathname === '/') return [];
     const removed = [];

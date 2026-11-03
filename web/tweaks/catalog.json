@@ -21,7 +21,9 @@
     "miguel/ai-apps",
     "miguel/archive-top",
     "miguel/group-by-day",
-    "miguel/reply-summary"
+    "miguel/reply-summary",
+    "wizard/orb-radial",
+    "wizard/new-send-list"
   ],
   "defaults": [
     "wizard/unified-inbox"

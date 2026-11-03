@@ -10,7 +10,7 @@
   win.id = 'singleApp'; win.className = 'win full'; win.dataset.win = key;
   device.appendChild(win);
   let frame = null, app = null, detach = null, mountedURL = '', loaded = false, cut = 0, top = 0;
-  const read = () => { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
+  const read = () => { const durable = policy.presentationRoute?.(); if (durable !== undefined) return durable; try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
   function toast(icon, text) { const el = document.getElementById('toast'); el.textContent = text; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 1400); }
   // Reuse the shared link/media utilities, but never their desk-placement action.
   // Wisdom's selection Search uses window.open; without this guard it is a dead tap in Android.
@@ -27,7 +27,10 @@
       if (!policy.within(href, app.url)) return;
       const state = w.history.state;
       const value = JSON.stringify({ v:1, href, state, at:Date.now(), base:app.url });
-      if (value.length < 65536) localStorage.setItem(key, value);
+      if (value.length < 65536) {
+        policy.savePresentationRoute?.(JSON.parse(value));
+        try { localStorage.setItem(key, value); } catch (_) {}
+      }
       window.WizAppReadingPosition?.flush();
     } catch (_) {}
   }
@@ -81,7 +84,18 @@
   };
   window.WizAppServices?.guardBack(() => { window.__wosNativeBack(); return true; }, toast);
   window.WizCore.bridge?.handle({ back:window.__wosNativeBack });
-  function mount() {
+  let mountGeneration = 0;
+  async function mount() {
+    const generation = ++mountGeneration;
+    const declared = policy.configure?.(registry.APP[id]?.homeScreen);
+    // An app that declared offline: its own reading state is hydrated before any of its scripts can read or write
+    // it, and the small host document is prepared before it can announce Ready offline. Others mount at once.
+    if (declared?.offline) {
+      await policy.preparePresentation();
+      if (generation !== mountGeneration) return;
+      if (window.WizOfflineSession) await window.WizOfflineSession.ready(registry.APPS);
+      if (generation !== mountGeneration) return;
+    }
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
@@ -92,8 +106,8 @@
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, readingStorage:localStorage });
     const mountedFrame = frame;
+    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, isVisible:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible', isFront:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible' && document.hasFocus(), readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
       try {
@@ -108,11 +122,14 @@
           // A recreated frame has no prior app history. Keep the new SDK mark; app Back falls back to parent/root.
           const state = { ...restore.state, domain:false, depth:0, __wizardApp:w.history.state?.__wizardApp };
           w.history.replaceState(state,'',w.location.href);
-          // Only Wisdom reconstructs its own hash at boot. Signal needs popstate even
-          // with a hash, or #sources silently shows the feed after process/frame recreation.
-          if (!(id === 'wisdom' && state.wisdom)) w.dispatchEvent(new w.PopStateEvent('popstate',{state}));
+          // An app that restores its own route at boot declares the state key it reads (home_screen.route_state);
+          // everyone else needs popstate even with a hash, or a filter/route silently resets after frame recreation.
+          const own = policy.capabilities?.routeState;
+          if (!(own && state[own])) w.dispatchEvent(new w.PopStateEvent('popstate',{state}));
         }
-        frame.contentWindow.WizardApp?.ready?.(); safeInsets(); checkpoint();
+        frame.contentWindow.WizardApp?.ready?.();
+        if (policy.presentationFailed) { try { frame.contentWindow.dispatchEvent(new frame.contentWindow.CustomEvent('wizard:presentation-save-failed')); } catch (_) {} }
+        safeInsets(); checkpoint();
         if (links) window.WizLinks.guardFrame(frame.contentWindow,app.url,links);
         const w = frame.contentWindow;
         if (w.__wosSessionHistory !== w.document) {
