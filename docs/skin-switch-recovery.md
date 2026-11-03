@@ -4,7 +4,7 @@ Lane: bounded shared UX repair. REUSE WosSkin, WosMySkin and WosSettings; no sec
 
 ## Exact live source
 
-The repair branch starts at `9e743932bfc0e5799a601d3623103af0e5a57950`, the Service immutable release and the edge-serving checkout at investigation time. Main has since diverged (including independent skin/tweak switches); its companion PR ports only the applicable guards, not this live source wholesale.
+The repair branch starts at `9e743932bfc0e5799a601d3623103af0e5a57950`, the Service immutable release and the edge-serving checkout at investigation time. While the repair was in flight, both advanced to `e76885563098d22593a87dd3b8e3b34f9a76da02` (desktop hotkey repair); that exact source is merged into this candidate, preserving both ancestries. Main has separately diverged (including independent skin/tweak switches); its companion PR ports only the applicable guards, not this live source wholesale.
 
 ## Proven defects
 
