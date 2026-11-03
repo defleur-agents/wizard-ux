@@ -83,6 +83,26 @@ test('orb picker admits arbitrary registry apps without feature-id branches',()=
  assert.equal(predicate({id:'random-app',kind:'native'}),false);
 });
 
+test('stale pins remain removable at capacity without discarding saved choices or blocking a replacement',()=>{
+ const source=read('web/core/orb-switcher.js');
+ const pinRows=source.slice(source.indexOf('  function pinRows('),source.indexOf('  const seg ='));
+ const clicks=source.slice(source.indexOf('  function onSheetClick('),source.indexOf('  function closeSheet('));
+ for(const liveCount of [0,1]){
+  let apps=[{id:'new-app',name:'New app',html:'N'},...(liveCount?[{id:'kept',name:'Kept app',html:'K'}]:[])];
+  const cfg={pins:[...Array.from({length:13-liveCount},(_,i)=>'gone-'+i),...(liveCount?['kept']:[])]};
+  const box={cfg,MAX_PINS:13,H:()=>({apps:()=>apps}),esc:String,UP2:'',sheet:{},closeSheet:()=>assert.fail('a pin click must not close settings'),set:next=>Object.assign(cfg,next)};
+  vm.runInNewContext(pinRows+'\n'+clicks+'\nthis.rows=pinRows;this.click=onSheetClick',box);
+  let html=box.rows();assert.equal((html.match(/aria-checked="true"/g)||[]).length,13);
+  assert.match(html,/data-app="gone-0"[^]*?Unavailable app[^]*?data-pin><i>/,'missing app has an enabled removal switch');
+  assert.match(html,/data-app="new-app"[^]*?data-pin disabled/,'full saved list still enforces capacity');
+  const click=id=>box.click({target:{closest:s=>s==='[data-app]'?{dataset:{app:id}}:s==='[data-pin]'?{disabled:false}:null}});
+  click('gone-0');assert.equal(cfg.pins.length,12);assert.equal(cfg.pins.includes('gone-0'),false);
+  html=box.rows();assert.match(html,/data-app="new-app"[^]*?data-pin><i>/,'one removal frees an available switch');
+  click('new-app');assert.equal(cfg.pins.length,13);assert.equal(cfg.pins.at(-1),'new-app');assert.equal(cfg.pins.includes('gone-1'),true,'unavailable choices are never silently erased');
+  apps.push({id:'gone-1',name:'Restored app',html:'R'});assert.match(box.rows(),/data-app="gone-1"[^]*?Restored app/,'registry recovery resolves a saved pin');
+ }
+});
+
 test('pinned app releases use shared placement, never a cached desk; empty and settings copy stay pins-only',()=>{
  const s=read('web/core/orb-switcher.js'),app=read('web/app.js');
  assert.match(s,/w\?\.kind === 'app'\) out = \{ kind: 'open', id: w\.item\.id \}/);
