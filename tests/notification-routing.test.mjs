@@ -81,9 +81,8 @@ test('Notifications on Badge: nothing in Chats, its count is a badge (and the be
   assert.equal(B.readyCount(), 1, 'and from the Chats count (Messenger\'s item stays)');
   assert.equal(N.counts.notifications, 3, 'its badge comes back');
   assert.match(B.html(), /class="ch-bell"[^>]*aria-label="Notifications, 3 unread"/);
-  const before = fetched(w, '/notifications/api/items');
   await B.refresh(true); await settle();
-  assert.equal(fetched(w, '/notifications/api/items'), before, 'its items are no longer read for Chats');
+  assert.ok(!B.items().some(i => !i.app), 'its list is still read (System rows need it), but nothing of it is listed in Chats');
 });
 
 test('an app on Badge puts nothing in Chats and keeps its badge; set to Chats it swaps', async () => {
@@ -157,13 +156,15 @@ test('Settings has a Notifications page with Badge | Chats per app, and Chats ro
 });
 
 // One simple design everywhere (Miguel, 1 Nov 2026): the picker inside a notification in Chats is THE Settings picker.
-test('one Badge | Chats picker: Settings and every notification in Chats render WosBell.picker', () => {
+test('one picker (Chats · Badge · Morning report · Off): Settings and every notification in Chats render WosBell.picker', () => {
   const w = boot(), B = w.WosBell;
   const html = B.picker('messenger');
   assert.match(html, /role="radiogroup" aria-label="Where Messenger notifications go"/);
   const btns = [...html.matchAll(/<button type="button" role="radio" data-notify-route="messenger" data-notify-to="(badge|chats)" aria-checked="(true|false)">(<svg class="wos-route-ic"[^]*?<\/svg>)<span>(Badge|Chats)<\/span><\/button>/g)];
-  assert.deepEqual(btns.map(m => [m[1], m[2], m[4]]), [['badge', 'false', 'Badge'], ['chats', 'true', 'Chats']], 'two labelled options, Chats picked by default');
-  assert.match(btns[0][3], /<circle /, 'Badge wears a badge dot'); assert.match(btns[1][3], /<path /, 'Chats wears a chat bubble');
+  assert.deepEqual(btns.map(m => [m[1], m[2], m[4]]), [['chats', 'true', 'Chats'], ['badge', 'false', 'Badge']], 'loudest first, Chats picked by default');
+  assert.match(btns[1][3], /<circle /, 'Badge wears a badge dot'); assert.match(btns[0][3], /<path /, 'Chats wears a chat bubble');
+  assert.deepEqual([...html.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats', 'badge', 'daily', 'off']);
+  assert.match(html, /data-notify-to="daily" aria-checked="false" disabled title="Messenger would lose its point waiting for the Morning Report"/, 'an app\'s feed cannot wait a day');
   assert.match(B.picker('messenger', { off: true }), /data-notify-to="chats" aria-checked="false" disabled/, 'without Chats only Badge can be picked');
   const s = read('web/core/settings.js'), c = read('web/core/chats.js');
   assert.match(s, /const routeSeg = \(r, off\) => window\.WosBell\.picker\(r\.id, \{ name: r\.name, off \}\);/, 'Settings renders the shared picker');
