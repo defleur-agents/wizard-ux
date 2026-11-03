@@ -292,6 +292,7 @@
     try {
       let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults()]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
+      if (draft.recoveryTweaks) map = { ...map, ...draft.recoveryTweaks };
       // A replacement group (two Home maps) is one switch: keep only the member that would load, so the draft never
       // shows two and never saves the hidden one as off (any member saved off turns the whole group off).
       for (const g of window.WosExperience.groups?.() || []) {
@@ -307,6 +308,11 @@
   function newSkinHtml(S, draft) {
     const family = S.families.find(f => f.id === S.familyOf(draft.base));
     return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+  }
+  function deviceSkinRecovery() {
+    const previews = window.WosMySkin?.previews || [];
+    if (!previews.length) return '';
+    return `<details class="st-advanced"><summary>Recover device skins</summary><p>These previews are still on this device. Recover opens New skin; nothing is saved until you choose Create.</p>${previews.map(s => `<div><button type="button" data-skin-preview="${esc(s.id)}">Recover ${esc(s.name)}</button><button type="button" data-skin-preview-dismiss="${esc(s.id)}">Dismiss preview</button></div>`).join('')}</details>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
@@ -324,7 +330,7 @@
     const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -355,6 +361,14 @@
     if (ctx.skinRemove) return true;
     if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }
     if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
+    const dismiss = el.closest('[data-skin-preview-dismiss]');
+    if (dismiss) { M.dismissPreview(dismiss.dataset.skinPreviewDismiss); ctx.render(); return true; }
+    const preview = el.closest('[data-skin-preview]');
+    if (preview) {
+      const saved = M.previews.find(s => s.id === preview.dataset.skinPreview); if (!saved) return true;
+      ctx.skinDraft = { name: saved.name, items: [], tweaks: {}, previewId: saved.id, recoveryTweaks: { ...saved.tweaks } };
+      void draftDefaults(ctx, saved.base); return true;
+    }
     if (el.closest('[data-newskin]')) {
       ctx.skinDraft = { name: '', items: [], tweaks: {} };
       void draftDefaults(ctx, S.current);
@@ -369,7 +383,7 @@
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
         if (draft.saving) return true; draft.saving = true; ctx.render();
         const snapshot = { name: draft.name, base: draft.base, tweaks: { ...draft.tweaks } };
-        skinAction(() => M.create(snapshot), () => { draft.saving = false; if (ctx.skinDraft !== draft) return; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; if (ctx.skinDraft === draft) ctx.render(); }); return true;
+        skinAction(() => M.create(snapshot), () => { if (draft.previewId) M.dismissPreview(draft.previewId); draft.saving = false; if (ctx.skinDraft !== draft) return; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; if (ctx.skinDraft === draft) ctx.render(); }); return true;
       }
       return false;
     }

@@ -84,6 +84,20 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: installed own-skin API
   h.view.destroy();
 });
 
+for (const shell of ['phone', 'desktop']) test(`${shell}: device recovery opens the existing draft, cancel keeps preview, Create is explicit`, async () => {
+  const h = look(shell, true), M = h.s.WosMySkin, dismissed = [];
+  const preview = { id: 'device-old', name: 'Old preview', base: 'obsidian-light', tweaks: {sample:false} };
+  M.previews = [preview]; M.dismissPreview = id => { dismissed.push(id); M.previews = []; };
+  h.view.focus('look'); assert.match(h.root.innerHTML, /data-skin-preview="device-old"/);
+  h.act('data-skin-preview', 'device-old'); for (let i=0;i<10;i++) await Promise.resolve();
+  assert.equal(h.S.current, 'nebula'); assert.equal(M.created, undefined); assert.equal(h.view.context.skinDraft.base, 'obsidian-light');
+  assert.equal(h.view.context.skinDraft.tweaks.sample, false); h.view.back(); assert.equal(dismissed.length,0); assert.equal(M.previews.length,1);
+  h.act('data-skin-preview', 'device-old'); for (let i=0;i<10;i++) await Promise.resolve();
+  h.act('data-skin-create', ''); assert.deepEqual(M.created,{name:'Old preview',base:'obsidian-light',tweaks:{sample:false}});
+  assert.deepEqual(dismissed,['device-old']); assert.deepEqual(preview,{id:'device-old',name:'Old preview',base:'obsidian-light',tweaks:{sample:false}});
+  h.view.destroy();
+});
+
 for (const shell of ['phone', 'desktop']) test(`${shell}: New skin keeps Base skin and Colour independent without resetting name or tweaks`, async () => {
   const h = look(shell, true);
   h.S.set('grove');
