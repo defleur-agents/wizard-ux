@@ -64,13 +64,26 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: Look keeps skin and co
 });
 
 for (const shell of ['phone', 'desktop']) test(`${shell}: separate Skin/Color choices never replace the independent tweak mix (#801)`, async () => {
-  const h=look(shell,true), E=h.s.WosExperience, before=JSON.stringify(E.state), calls=[];
-  E.defaults=async()=>{calls.push('defaults');return {sample:false};};
-  E.apply=async()=>{calls.push('apply');};E.toggle=async()=>{calls.push('toggle');};
+  const h=look(shell,true), storage=new Map();let active=[];
+  for(const family of h.S.families) family.tweaks=family.id==='wizard'?'wizard':'miguel';
+  h.s.WosSkinHost={layout:'classic',personalState:{ready:false},get tweakState(){return active;},loadTweaks:async ids=>{active=Array.from(ids);}};
+  h.s.addEventListener=()=>{};h.s.dispatchEvent=()=>{};
+  vm.runInNewContext(fs.readFileSync(new URL('../web/core/experience.js',import.meta.url),'utf8'),{
+    window:h.s,Event,URL,AbortSignal,setTimeout(){},
+    document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}},
+    localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)},
+    fetch:async url=>({ok:true,json:async()=>JSON.parse(fs.readFileSync(new URL('../web/'+url.pathname.split('/wizard-os-home/')[1],import.meta.url),'utf8'))}),
+  });
+  const E=h.s.WosExperience;await E.refresh();await E.toggle('wizard/two-orbs');
+  const before=JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix), beforeActive=JSON.stringify(active);
+  let pending=Promise.resolve(), picks=0;const choose=E.chooseSkin.bind(E);
+  E.chooseSkin=(...args)=>{picks++;return pending=choose(...args);};
   for(const [attr,id] of [['data-skinfamily','mizel'],['data-skinpick','obsidian'],['data-skinfamily','wizard'],['data-skinpick','nebula'],['data-skinfamily','mizel']]) {
-    h.act(attr,id);for(let n=0;n<5;n++)await Promise.resolve();
+    h.act(attr,id);await pending;for(let n=0;n<5;n++)await Promise.resolve();
+    assert.equal(JSON.stringify(JSON.parse(storage.get('wos.skin-tweaks.v1')).mix),before,'real persisted mix survives each pick');
+    assert.equal(JSON.stringify(active),beforeActive,'real active host mix survives each pick');
   }
-  assert.equal(h.S.current,'obsidian');assert.deepEqual(calls,[]);assert.equal(JSON.stringify(E.state),before);
+  assert.equal(h.S.current,'obsidian');assert.equal(picks,5,'dispatch must run the actual chooseSkin reconciler');
   h.view.destroy();
 });
 
