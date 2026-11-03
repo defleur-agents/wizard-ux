@@ -56,6 +56,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-setup.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared connection checklist and required-needs admission"
+    },
     "core/app-versions.js": {
       "loadedBy": [
         "phone",
@@ -257,7 +264,10 @@
       "note": "Direct entrypoint import"
     },
     "core/context-menu.js": {
-      "loadedBy": ["phone", "desktop"],
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
       "note": "Shared pointer/keyboard action menu; desktop tiles supply actions"
     },
     "core/core.js": {
@@ -396,6 +406,12 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/offline-kit.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); apps load it themselves, the phone shell loads it for pinned-app presentation journals"
+    },
     "core/offline-session-config.js": {
       "loadedBy": [],
       "note": "Generated worker config for pinned app sessions (tools/build-offline-session.py); importScripts from web/sw.js, not either shell"
@@ -405,12 +421,6 @@
         "phone"
       ],
       "note": "Publishes the apps that declared home_screen.offline to the pinned-app worker; prepares the offline host"
-    },
-    "core/offline-kit.js": {
-      "loadedBy": [
-        "phone"
-      ],
-      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); apps load it themselves, the phone shell loads it for pinned-app presentation journals"
     },
     "core/offline-sw.js": {
       "loadedBy": [],
@@ -545,6 +555,13 @@
       ],
       "note": "Extracted native/app internal share sheet"
     },
+    "core/sheetback.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Shared imported-share chooser/double-Back custody policy."
+    },
     "core/shell.js": {
       "loadedBy": [
         "phone",
@@ -675,13 +692,6 @@
         "desktop"
       ],
       "note": "Direct entrypoint import"
-    },
-    "core/app-setup.js": {
-      "loadedBy": [
-        "phone",
-        "desktop"
-      ],
-      "note": "Shared connection checklist and required-needs admission"
     }
   },
   "exceptions": {
@@ -893,6 +903,7 @@
     "core/share-sheet.js",
     "core/share-wizard.css",
     "core/share-wizard.js",
+    "core/sheetback.js",
     "core/shell.js",
     "core/sigils.css",
     "core/sigils.js",
