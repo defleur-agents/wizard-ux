@@ -10,6 +10,7 @@
   function normalize(j) {return {cpu:pct(j?.cpuLoad),memory:pct(j?.percentUsedMemory),disk:pct(j?.percentUsed),memoryTotal:number(j?.memoryTotal),diskUsed:number(j?.diskUsed),diskSize:number(j?.diskSize)};}
   const desktopHome = () => !!window.__wux && (window.__wux.homeOpen || !window.__wux.ws[window.__wux.cur]?.wins.length);
   const active = () => !document.hidden && (!!S.panel || desktopHome() || (window.__wos?.idx===0 && !window.__wos?.sheet && !window.__wos?.desks?.[0]?.wins.length));
+  const holdInstallPrompt = on => window.WizardPwaInstall?.hold?.(on, 'resources');
   const staleServer = () => !!S.server && (!!S.serverError || Date.now()-S.serverAt>45000);
   const staleAI = p => !!S.aiError || p?.status==='stale' || !p?.fetchedAt || Date.now()-Date.parse(p.fetchedAt)>300000;
   function freshness(at,error,stale) { if(!at) return error?'Unavailable':'Connecting'; const sec=Math.max(0,Math.floor((Date.now()-at)/1000));const age=sec<60?`${sec}s ago`:`${Math.floor(sec/60)}m ago`;return `${stale?'Last read · ':''}${age}`; }
@@ -114,6 +115,7 @@
   const OURS=new Set(['obsidian','obsidian-light','landscapes','landscapes-light']);
   const ours=()=>typeof document!=='undefined'&&(document.documentElement.dataset.tweaks||'').split(' ').includes('miguel/home-bars');
   const APP_OF={chatgpt:'wizard-chatgpt',claude:'wizard-claude',tinfoil:'wizard-tinfoil'};
+  const RECONNECT_APPS=new Set(['wizard-chatgpt','wizard-claude']);
   /* Speedometer dials (Miguel's skins, 22 Oct): a 240° car gauge per reading. Each dial remembers what it last showed
      (S.shown) and every render starts from there, so Home re-renders never jump; settle() then moves the needle, arc
      and number to the new reading. First reading of a session = needles sweep up from zero, staggered, like a car's
@@ -136,7 +138,7 @@
       const ai=providers.flatMap(p=>{const id=kind(p),n=per[id]>1?(seen[id]=(seen[id]||0)+1):0;
         const full=p.providerName||(p.name&&!p.email?p.name:'')||id.charAt(0).toUpperCase()+id.slice(1),label=(full==='ChatGPT'?'GPT':full)+(n?' '+n:'');
         const q=weekly(p),bad=p.status==='unavailable',v=bad||q?.remainingPercent==null?null:Math.max(0,Math.min(100,Math.round(q.remainingPercent)));
-        const rows=bad||q?[bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Sign in',attrs:`data-res-signin="${esc(APP_OF[id])}"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,fuel:true,attrs:'data-res-open="ai"',title:p.email||label,row:'a'}]:[];
+        const rows=bad||q?[bad&&APP_OF[id]?{k:'ai:'+p.id,label,v:null,signin:true,sub:'Reconnect',attrs:`data-res-signin="${esc(APP_OF[id])}" data-res-reconnect="1"`,title:p.email||label,row:'a'}:{k:'ai:'+p.id,label,v,fuel:true,attrs:'data-res-open="ai"',title:p.email||label,row:'a'}]:[];
         const x=extraFor(p);if(x){const old=x.stale||staleAI(p);rows.push({k:'extra:'+p.id,label:label+' extra',v:x.pct==null?null:100-x.pct,extra:true,note:extraNote(x)+(old?' · Last known reading':''),attrs:'data-res-open="ai"',row:'a'});}return rows;});
       /* Credit accounts (Tinfoil): a fuel gauge, E to F. Full = the last top-up; the readout is dollars left, not a percent. */
       for(const p of providers){const x=p.paid;if(p.status==='unavailable'||!x||x.type!=='credits'||number(x.balanceMinor)==null)continue;
@@ -227,13 +229,13 @@
   }
   function schedule(){clearTimeout(S.timer);S.timer=null;if(viewing())S.timer=setTimeout(()=>{S.timer=null;update();},15000);}
   function sync(){if(!viewing()){clearTimeout(S.timer);S.timer=null;S.controller?.abort();return;}paint();if(!S.busy)update();}
-  function close(){if(!S.panel)return false;S.backdrop?.remove();S.backdrop=null;S.panel.remove();S.panel=null;sync();
+  function close(){if(!S.panel)return false;S.backdrop?.remove();S.backdrop=null;S.panel.remove();S.panel=null;holdInstallPrompt(false);sync();
     /* Back to the exact bar that opened the sheet (a Settings › Resources bar too); else the Home one, as before. */
     const from=S.openerEl;S.openerEl=null;if(from?.isConnected&&from.getClientRects().length){from.focus({preventScroll:true});return true;}
     if(desktopHome()||window.__wos?.idx===0)[...document.querySelectorAll(`[data-res-open="${S.opener}"]`)].find(b=>b.getClientRects().length&&getComputedStyle(b).visibility!=='hidden')?.focus({preventScroll:true});return true;}
-  function open(tab){close();S.tab=tab;S.opener=tab;const d=document.createElement('section');d.className='rs-sheet wz-home-popup';d.setAttribute('role','dialog');d.setAttribute('aria-label','Resources');d.setAttribute('aria-modal','true');d.innerHTML=`<header class="rs-detail-head"><button data-res-close aria-label="Back to Home">‹</button><h2>Resources</h2><button data-res-refresh aria-label="Refresh resource readings">↻</button></header><nav class="rs-tabs"><button data-res-tab="server">Devices</button><button data-res-tab="health">Health</button><button data-res-tab="ai">AI accounts</button></nav><div class="rs-detail-body" data-res-body></div>`;(document.querySelector('.device')||document.body).append(d);S.panel=d;backdropFor(d);select(tab);update();d.querySelector('[data-res-close]').focus({preventScroll:true});}
+  function open(tab){close();S.tab=tab;S.opener=tab;const d=document.createElement('section');d.className='rs-sheet wz-home-popup';d.setAttribute('role','dialog');d.setAttribute('aria-label','Resources');d.setAttribute('aria-modal','true');d.innerHTML=`<header class="rs-detail-head"><button data-res-close aria-label="Back to Home">‹</button><h2>Resources</h2><button data-res-refresh aria-label="Refresh resource readings">↻</button></header><nav class="rs-tabs"><button data-res-tab="server">Devices</button><button data-res-tab="health">Health</button><button data-res-tab="ai">AI accounts</button></nav><div class="rs-detail-body" data-res-body></div>`;(document.querySelector('.device')||document.body).append(d);S.panel=d;holdInstallPrompt(true);backdropFor(d);select(tab);update();d.querySelector('[data-res-close]').focus({preventScroll:true});}
   function select(tab){const was=S.tab;S.tab=tab;S.panel?.querySelectorAll('[data-res-tab]').forEach(b=>{b.classList.toggle('selected',b.dataset.resTab===tab);b.setAttribute('aria-pressed',b.dataset.resTab===tab);});paint();if(tab==='health'&&was!=='health'&&S.panel&&Date.now()-S.healthAt>14000)update();}
-  document.addEventListener('click',e=>{const pk=e.target.closest('[data-dvpick]');if(pk){e.preventDefault();S.pick=S.pick===pk.dataset.dvpick?null:pk.dataset.dvpick;paint();return;}const si=e.target.closest('[data-res-signin]');if(si){e.preventDefault();if(!window.WizOpenApp?.(si.dataset.resSignin))location.assign(`/${si.dataset.resSignin}/`);return;}const b=e.target.closest('[data-res-open],[data-res-close],[data-res-tab],[data-res-refresh],.rs-sheet [data-usage-refresh]');if(!b)return;e.preventDefault();if(b.hasAttribute('data-res-open')){open(b.dataset.resOpen);S.openerEl=b;}else if(b.hasAttribute('data-res-close'))close();else if(b.hasAttribute('data-res-tab'))select(b.dataset.resTab);else update(true);});
+  document.addEventListener('click',e=>{const pk=e.target.closest('[data-dvpick]');if(pk){e.preventDefault();S.pick=S.pick===pk.dataset.dvpick?null:pk.dataset.dvpick;paint();return;}const si=e.target.closest('[data-res-signin]');if(si){e.preventDefault();/* A reading that stopped: open the app straight at that sign-in's Reconnect. */const app=si.dataset.resSignin,path=si.hasAttribute('data-res-reconnect')&&RECONNECT_APPS.has(app)?`/${app}/?reconnect=1`:'';if(!window.WizOpenApp?.(app,path))location.assign(path||`/${app}/`);return;}const b=e.target.closest('[data-res-open],[data-res-close],[data-res-tab],[data-res-refresh],.rs-sheet [data-usage-refresh]');if(!b)return;e.preventDefault();if(b.hasAttribute('data-res-open')){open(b.dataset.resOpen);S.openerEl=b;}else if(b.hasAttribute('data-res-close'))close();else if(b.hasAttribute('data-res-tab'))select(b.dataset.resTab);else update(true);});
   // Cover app frames too: a click inside an iframe never bubbles to this document.
   // The transparent scrim stays immediately below the existing Resources panel.
   const backdropFor = panel => {

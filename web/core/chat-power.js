@@ -257,6 +257,10 @@ window.WosChatPower = function chatPower(A) {
   /* Miguel's skins only (Dark, Light, Landscapes; M.ours()): a four-position slide switch (Opus · Astra · Sol · the
    * private Tinfoil model) above the composer, drag or tap; ⋯ opens every model. James's skins keep the model label. */
   const SW_NAMES = ['Opus', 'Astra', 'Sol', '']; // slot 4: the private model's own name (privateName), in the privacy colour
+  // An empty slot means its account isn't usable right now: tapping it opens that app at the fix (Reconnect / Connect).
+  const SW_FIX = ['/wizard-claude/?reconnect=1', '/wizard-chatgpt/?reconnect=1', '/wizard-chatgpt/?reconnect=1', '/wizard-tinfoil/?connect=1'];
+  const SW_FIX_TITLE = ['Claude needs attention · tap to fix', 'ChatGPT needs attention · tap to fix', 'ChatGPT needs attention · tap to fix', 'Set up Tinfoil · tap to connect'];
+  function openFix(path) { const app = path.split('/')[1]; if (!window.WizOpenApp?.(app, path)) H.openLink?.(path, app); }
   function switchOpts(w, s) {
     const cur = w.thread === '__new__' ? newModel(ch(w.id), w) : s ? threadModel(s) : null;
     const vis = M && M.ready ? M.visible(cur?.model || '', cur?.provider || '') : [];
@@ -284,7 +288,7 @@ window.WosChatPower = function chatPower(A) {
     const pv = M.privateName ? M.privateName(opts[3]?.value) : { name: '', version: '' };
     const nameAt = i => i === 3 ? (opts[3] ? pv.name : 'Private') : SW_NAMES[i];
     const verAt = i => i === 3 ? pv.version : switchVersion(opts[i]?.value);
-    return `<div class="ms${at === 3 ? ' secure-on' : ''}" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === 3 ? ' secure' : ''}${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ' disabled'}${i === 3 ? ` aria-label="${esc([nameAt(3), verAt(3)].filter(Boolean).join(' '))}, private"` : ''}><span class="ms-name">${esc(nameAt(i))}</span> <small class="ms-version">${i === 3 && window.WosAgents?.lock ? window.WosAgents.lock() : ''}${esc(verAt(i))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
+    return `<div class="ms${at === 3 ? ' secure-on' : ''}" data-mswid="${esc(w.id)}" style="--ms-i:${at < 0 ? 1 : at}"><div class="ms-track${at < 0 ? ' off' : ''}" role="radiogroup" aria-label="Model">${SW_NAMES.map((n, i) => `<button type="button" role="radio" class="ms-o${i === 3 ? ' secure' : ''}${i === at ? ' on' : ''}" data-msi="${i}" aria-checked="${i === at}"${opts[i] ? '' : ` aria-disabled="true" data-msfix="${SW_FIX[i]}" title="${esc(SW_FIX_TITLE[i])}"`}${i === 3 ? ` aria-label="${esc([nameAt(3), verAt(3)].filter(Boolean).join(' '))}, private"` : ''}><span class="ms-name">${esc(nameAt(i))}</span> <small class="ms-version">${i === 3 && window.WosAgents?.lock ? window.WosAgents.lock() : ''}${esc(verAt(i))}</small></button>`).join('')}<i class="ms-thumb" aria-hidden="true"></i></div><button type="button" class="ms-more" data-chmodel aria-label="All models${label ? ` · now ${esc(label)}` : ''}">${label ? `<small>${esc(label)}</small>` : ''}⋯</button></div>`;
   }
   async function switchTo(wid, i) {
     const w = H.win(wid); if (!w?.thread) return;
@@ -296,7 +300,7 @@ window.WosChatPower = function chatPower(A) {
     let drag = null;
     document.addEventListener('pointerdown', e => { const tr = e.target.closest?.('.ms-track'); if (!tr) return; const r = tr.getBoundingClientRect(); drag = { tr, r, wid: tr.parentElement.dataset.mswid, moved: false, x0: e.clientX }; tr.setPointerCapture?.(e.pointerId); });
     document.addEventListener('pointermove', e => { if (!drag) return; if (Math.abs(e.clientX - drag.x0) > 6) drag.moved = true; if (!drag.moved) return; const f = Math.max(0, Math.min(1, (e.clientX - drag.r.left) / drag.r.width)); drag.tr.parentElement.style.setProperty('--ms-i', (f * SW_NAMES.length - .5).toFixed(3)); drag.tr.classList.add('dragging'); });
-    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); };
+    const end = e => { if (!drag) return; const d = drag; drag = null; d.tr.classList.remove('dragging'); const f = Math.max(0, Math.min(.999, (e.clientX - d.r.left) / d.r.width)); const i = Math.floor(f * SW_NAMES.length); const w = H.win(d.wid); if (!w?.thread) return; const state = switchOpts(w, LIVE.session(w.thread)); if (state.opts[i]) { d.tr.parentElement.style.setProperty('--ms-i', i); switchTo(d.wid, i); } else { d.tr.parentElement.style.setProperty('--ms-i', state.at < 0 ? 1 : state.at); if (!d.moved) openFix(SW_FIX[i]); } };
     document.addEventListener('pointerup', end); document.addEventListener('pointercancel', () => { if (drag) { drag.tr.classList.remove('dragging'); drag = null; } });
   })();
 
@@ -304,27 +308,22 @@ window.WosChatPower = function chatPower(A) {
   function ensureModels() {
     if (!M || modelsAsked) return;
     modelsAsked = true;
-    M.load().then(() => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } }); // background: waits for a selection
+    const repaint = () => { for (const id of Object.keys(A.CH)) { const w = H.win(id); if (w?.thread) (A.renderThreadLive || A.renderThreadNow)(w); } };
+    M.load().then(repaint); // background: waits for a selection
+    // A later background reload that changed the catalogue (e.g. ChatGPT's real list replacing Hermes' placeholder).
+    window.addEventListener?.('wos:models', repaint);
   }
   async function pickModel(o, direct) {
     const sh = direct || sheet; if (!sh || (!direct && sh.type !== 'model') || (direct?.alive && !direct.alive())) return;
     if (M?.pending?.has(sh.sid) || retrying.has(sh.sid)) return;
     const c = ch(sh.wid), w = H.win(sh.wid); if (!direct) closeSheet();
-    if (sh.mode === 'retry' && sh.retryRunId) {
-      // The picker is a snapshot, not permission to change a request that has
-      // already recovered. Recheck before saving a model; admission checks again.
-      let latest;
-      try { latest = await LIVE.sessionInfo(sh.sid); }
-      catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return; }
-      if (latest?.retryRunId !== sh.retryRunId) {
-        toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return;
-      }
-    }
     if (sh.mode === 'new') { c.newModel = { model: o.value, provider: o.provider, ...(o.agent ? { agent: o.agent } : {}) }; toast('◇', o.private ? `New private chat on ${o.name}` : `New chat on ${o.name}`, 1400); if (w) A.renderThreadNow(w); return; }
     const s = LIVE.session(sh.sid); if (!s) return;
     // A Private model picked in a standard thread: a new private chat continues this conversation (quoted context);
     // this thread is left exactly as it is. Private → standard is never offered (a private thread lists only its own).
     if (o.agent && o.private && !LIVE.agentOf?.(sh.sid)) { if (sh.mode === 'thread' && A.continueInAgent) A.continueInAgent(sh.wid, sh.sid, o); return; }
+    // A model pick on a failed thread means retry, from the panel or composer.
+    if (sh.mode === 'retry' || failedShown(s)) return retryThread(sh.wid, sh.sid, o, sh.retryRunId, direct?.alive);
     const cur = threadModel(s);
     const same = cur.model === o.value && (!o.provider || cur.provider === o.provider);
     if (!same) {
@@ -334,7 +333,6 @@ window.WosChatPower = function chatPower(A) {
       if (direct?.alive && !direct.alive()) return;
       Object.assign(s, route);
     }
-    if (sh.mode === 'retry') return retryThread(sh.wid, sh.sid, o, sh.retryRunId);
     toast('◇', same ? `Already on ${o.name}` : `This thread now uses ${o.name}`, 1600);
     if (w) A.renderThreadNow(w);
   }
@@ -343,9 +341,9 @@ window.WosChatPower = function chatPower(A) {
   const failedShown = s => !!s && (FAILED.has(s.status) || (s.status === 'queued' && s.queueReason === 'provider_access')) && !(E && E.dismissed(s.id));
   function failureHtml(w, s) {
     if (!M || !failedShown(s)) return '';
-    const c = ch(w.id), busy = E?.busy.get(s.id) || (c.retrying === s.id ? 'retry' : '');
+    const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);
-    return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, canRetry: !!req });
+    return M.failureHtml({ s: { ...s, ...threadModel(s) }, busy, retryLabel: retrying.get(s.id), canRetry: !!req });
   }
   // Retry and Choose another model stay live on every failed thread. A failed turn the owner didn't type (a
   // coordinator's follow-through note, a photo-only message, a run a watcher started) is retried with a plain
@@ -370,21 +368,40 @@ window.WosChatPower = function chatPower(A) {
   }
   // Retry = send the thread's last request again, through the durable outbox, on the same thread
   // (and the same model, unless one was just picked). controller.ts retryServerFailedSession.
-  const retrying = new Set();
-  async function retryThread(wid, sid, o, sourceId) {
+  const retrying = new Map();
+  async function retryThread(wid, sid, o, sourceId, alive) {
     let s = LIVE.session(sid); if (!s || !OUTBOX) return false;
     if (retrying.has(sid) || M?.pending?.has(sid) || OUTBOX.unsent?.().some(it => it.sessionId === sid && it.how === 'retry')) return false;
     const savedId = sourceId || s.retryRunId;
     const wasWaiting = s.status === 'queued' && s.queueReason === 'provider_access';
-    retrying.add(sid);
+    retrying.set(sid, o ? `Retrying on ${o.name}…` : 'Retrying…');
     const w = H.win(wid), c = w ? ch(wid) : null; if (c) c.retrying = sid;
+    // Acknowledge on the selection tap, before detail/model-save/disk can wait.
     try {
+      for (const id of Object.keys(A.CH)) { const view = H.win(id); if (view?.thread === sid) A.renderThreadNow(view); }
       // A list/snapshot preview is never retry input, even after an earlier detail read.
       try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
-      // Recovery may already have won while the picker was open. Never turn that
-      // stale card into an ordinary new send of preview text (or a second run).
-      if ((savedId && s?.retryRunId !== savedId) || (wasWaiting && !s?.retryRunId)) {
+      // Recovery may win while the picker or a model PUT is waiting. Never
+      // turn that stale card into a fresh send. The server also fences savedId.
+      const changed = () => !s || (savedId ? s.retryRunId !== savedId : !FAILED.has(s.status)) || (wasWaiting && !s.retryRunId);
+      if (alive && !alive()) return false;
+      if (changed()) {
         toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return false;
+      }
+      if (o) {
+        const cur = threadModel(s);
+        if (cur.model !== o.value || (o.provider && cur.provider !== o.provider)) {
+          let route;
+          try { route = await M.setThreadModel(sid, o); }
+          catch (_) { toast('!', 'Couldn’t change the model · try again', 2600); return false; }
+          if (alive && !alive()) return false;
+          Object.assign(s, route);
+          // Saving can take seconds. Hydrate again ONLY across that await; a
+          // same-model retry reuses the single fresh preflight above.
+          try { s = await LIVE.sessionInfo(sid); } catch (_) { toast('!', 'Couldn’t load the full request · retry when online', 2600); return false; }
+          if (alive && !alive()) return false;
+          if (changed()) { toast('!', 'This saved request has changed · check the latest reply before retrying', 3000); return false; }
+        }
       }
       // Only the freshly hydrated input, never cached turns. A failed note-started turn (the server's request skips
       // follow-through notes, so it is empty or an older request) goes again as a plain "Retry".
@@ -604,10 +621,10 @@ window.WosChatPower = function chatPower(A) {
     // The owner's main Chats also lists the private agents' models (unified Chats); an agent's own Chats does not.
     const priv = !agent && !A.winAgent(w) && mode !== 'retry' && M.privateOptions ? M.privateOptions() : null;
     openSheet({ type: 'model', pane, wid, sid: w.thread, mode, cur, retryRunId: s?.retryRunId || '', all: false, agent, priv, pop: !!pop && mode !== 'retry' });
-    // Revalidate every open; repaint only if the catalogue/default actually changed.
+    // Revalidate every open; repaint only if visible choices or the Claude status note changed.
     // WosModels.options is the catalogue array (never a function): compare the fields the sheet shows.
     const rows = list => (Array.isArray(list) ? list : []).map(o => [o.agent, o.provider, o.value, o.name, o.description, !!o.isGlobalDefault]);
-    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.())]);
+    const key = () => JSON.stringify([rows(M.options), rows(M.privateOptions?.()), M.claudeNote?.()]);
     const opened = sheet, before = key();
     M.load(M.ready).then(() => {
       if (sheet !== opened || sheet?.type !== 'model' || H.win(wid)?.thread !== opened.sid) return;

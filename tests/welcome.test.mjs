@@ -21,16 +21,16 @@ test('Welcome: opens only without a signed-in provider, resumes after sign-in, n
 
 test('Welcome: three steps only, no uppercase eyebrows or em dashes in its copy', () => {
   const js = read('web/core/welcome.js');
-  for (const t of ['Connect your AI', 'Pick a color', 'Say hello']) assert.ok(js.includes(t), t);
+  for (const t of ['Connect your AI', 'Pick a skin', 'Say hello']) assert.ok(js.includes(t), t);
   const copy = js.split('\n').filter(l => !l.trim().startsWith('*') && !l.trim().startsWith('/*') && !l.trim().startsWith('//')).join('\n');
   assert.doesNotMatch(copy, /—/);
   assert.doesNotMatch(copy, /STEP \d/i);
   assert.doesNotMatch(read('web/core/welcome.css'), /text-transform:\s*uppercase/);
 });
 
-test('Welcome: colours are the Wizard skin only, drawn with the Settings preview cards', () => {
+test('Welcome: every skin, drawn with the Settings preview cards (tests/welcome-every-skin.test.mjs)', () => {
   const js = read('web/core/welcome.js');
-  assert.match(js, /const FAMILY = 'wizard'/);
+  assert.doesNotMatch(js, /const FAMILY = /);
   assert.match(js, /class="skp-card"/);
   assert.match(js, /class="st-root wl-skp"/);
   assert.doesNotMatch(js, /data-wl="family"/);

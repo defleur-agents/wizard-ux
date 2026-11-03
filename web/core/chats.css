@@ -331,6 +331,13 @@ a.fchip { color: inherit; text-decoration: none; }
 .mcard .mn { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mcard .mn b { font-size: 13.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mcard .mn small { font-size: 11.5px; color: var(--ink-3); }
+/* File/video card + one-tap Download (chats.js mediaBtn): the ⤓ sits inside the card's right edge. */
+.mfile { position: relative; max-width: 320px; }
+.mfile > .mcard { width: 100%; max-width: none; padding-right: 54px; }
+.mfile > .mdl { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; color: var(--ink); background: var(--line); border: 1px solid var(--line-2); }
+.mfile > .mdl svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.mfile > .mdl:hover, .mfile > .mdl:focus-visible { background: var(--line-2); }
+.mfile > .mdl:active { transform: translateY(-50%) scale(.94); }
 .mcard.aud { max-width: 300px; }
 .mcard audio { width: 220px; height: 34px; margin-top: 2px; }
 /* Thread header actions: one row, icons + short words, no extra height. */
@@ -366,6 +373,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
 .mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
+/* The viewer is always a dark backdrop, so its chrome keeps the default light ink on every skin
+ * (a light skin's black --ink made Close, the title and Download vanish into it). */
+.mviewer { --ink: color-mix(in srgb, white 94%, violet); --ink-2: color-mix(in srgb, var(--ink) 72%, transparent); --ink-3: color-mix(in srgb, var(--ink) 50%, transparent); --line: color-mix(in srgb, var(--ink) 13%, transparent); --line-2: color-mix(in srgb, var(--ink) 24%, transparent); color: var(--ink); color-scheme: dark; }
 .mviewer.open { opacity: 1; }
 .mviewer[hidden] { display: none; }
 .mv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) 10px 6px 6px; }
@@ -385,6 +395,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .mv-file .mv-ic { font-size: 40px; }
 .mv-file b { font-size: 15px; word-break: break-word; } .mv-file small, .mv-file p { font-size: 13px; color: var(--ink-3); margin: 0; }
 .mv-file audio { width: 280px; margin-top: 8px; }
+.mv-file .mv-dl { margin-top: 8px; padding: 11px 20px; border-radius: 99px; font-size: var(--wz-text-md); font-weight: 700; color: var(--ink); background: var(--line); border: 1px solid var(--line-2); }
+/* PDFs render in the browser's own reader (chat-kit.js show): a white page area filling the stage. */
+.mv-stage iframe.mv-pdf { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: white; }
 .mv-tx { max-height: 30vh; overflow: auto; text-align: left; color: var(--ink-2) !important; }
 .mv-doc { position: absolute; inset: 0; overflow: auto; padding: 8px 16px 24px; touch-action: pan-x pan-y; }
 .mv-doc pre { margin: 0; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; color: var(--ink-2); }
@@ -660,12 +673,12 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.compact .ch-row .pv { display: none; }
 /* Archive reads as a different place: a light tinted panel. */
 .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-/* Desktop: Archive on top, then Working, then Ready uninterrupted at the bottom. */
-html[data-shell="desktop"] .ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
-html[data-shell="desktop"] .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
+/* Archive on top, then Working, then Ready uninterrupted at the bottom, on desktop and phone alike (By status layout;
+   James, 31 Oct 2026). Skins that arrange the phone list themselves (obsidian, landscapes) outrank these rules. */
+.ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
+.ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
+.ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
+.ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
 /* Notifications bell beside search (core/notif-bell.js): opens the Notifications app; a dot when something needs you. */
 .ch-bell { position: relative; flex: 0 0 auto; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: rgba(205, 190, 255, .06); border: 1px solid var(--line); }
@@ -799,11 +812,13 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 
 /* Pinned chats (synced per owner; design: Novaire, wizard-ux PR 250) and Boomerang markers. */
 .ch-row-wrap { position: relative; }
-.ch-row-wrap > .ch-row { padding-right: 42px; }
+/* Row pin buttons are off by default (James, 31 Oct 2026): Pin lives in the row's menu (right-click, hold or swipe).
+ * The "Show pin buttons" tweak (web/tweaks/wizard/pin-buttons) brings the button back on every row. */
+.ch-row-wrap > .ch-row { padding-right: 12px; }
 .ch-fail.diagnosed .lb { text-transform: none; letter-spacing: 0; font-size: 17px; }
-.ch-row-wrap.diagnosed .ch-row { padding-right: 122px; }
-.ch-row-signin { position: absolute; z-index: 2; right: 44px; top: 50%; transform: translateY(-50%); padding: 8px 10px; border: 1px solid var(--wz-border, var(--line)); border-radius: 10px; background: var(--wz-surface, var(--surface)); color: var(--wz-text, var(--ink)); font: inherit; font-size: 13px; cursor: pointer; }
-.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: grid; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
+.ch-row-wrap.diagnosed .ch-row { padding-right: 90px; }
+.ch-row-signin { position: absolute; z-index: 2; right: 10px; top: 50%; transform: translateY(-50%); padding: 8px 10px; border: 1px solid var(--wz-border, var(--line)); border-radius: 10px; background: var(--wz-surface, var(--surface)); color: var(--wz-text, var(--ink)); font: inherit; font-size: .8125rem; cursor: pointer; }
+.ch-pin-toggle { position: absolute; z-index: 1; right: 7px; top: 50%; width: 32px; height: 32px; margin-top: -16px; display: none; place-items: center; border-radius: 10px; color: var(--ink-3); opacity: .38; transition: opacity .14s ease, color .14s ease, background .14s ease; }
 .ch-pin-toggle::after { content: ''; position: absolute; inset: -6px; }
 .ch-pin-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 .ch-row-wrap:hover .ch-pin-toggle, .ch-row-wrap:focus-within .ch-pin-toggle, .ch-pin-toggle:focus-visible, .ch-row-wrap.pinned .ch-pin-toggle { opacity: 1; }

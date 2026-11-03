@@ -10,27 +10,30 @@
        Rules: addresses as in android/CONNECT.md (https origin only). A scanned code or a link only fills in the address;
        nothing connects until the owner taps Connect, and nothing is saved until the address opens a Wizard, so a failed
        attempt keeps the current one. -->
+  <link rel="stylesheet" href="wizard-tokens.css">
   <style>
     /* Android's connect screens, drawn in HTML so both apps look the same (Jan, 30 Oct 2026): ConnectActivity (the
        Connect and Change Wizard screens, in WizardLook.nebula's colours), ReachScreen (the can't-reach looks and the
        launch loader, its fixed BG/INK/VIOLET) and TailscaleGuideView (the guide, flat on the base colour). Plus iOS's
        Wizard logo row top-left on every screen but Change Wizard. Keep the values in step with those files. */
+    /* Colours, motion and fonts come from the kit (wizard-tokens.css; no data-skin here, so its :root = Nebula values).
+       Literals only where the kit has no token, as noted. Type in rem (16px = 1rem). */
     :root {
-      --bg: #05030c; --ink: #f3efff; --ink-2: #b9b0d8; --ink-3: #7d74a3;
-      --line: rgba(205, 190, 255, .13); --line-2: rgba(205, 190, 255, .24);
-      --ac: #b99bff; --onac: #05030c;
-      --sf: color-mix(in srgb, #f3efff 6%, transparent); --sf2: color-mix(in srgb, #f3efff 10%, transparent);
-      --acs: color-mix(in srgb, #b99bff 16%, transparent);
-      /* ReachScreen */
-      --r-ink: #e9e4ff; --r-violet: #9b7bff; --r-button: #5b3dd6;
+      --bg: var(--wz-base); --ink: var(--wz-text); --ink-2: var(--wz-text-secondary); --ink-3: var(--wz-text-muted);
+      /* No kit token for the faint divider (--wz-border is the .24 line): ConnectActivity's hairline */
+      --line: rgba(205, 190, 255, .13); --line-2: var(--wz-border);
+      --ac: var(--wz-accent); --onac: var(--wz-on-accent);
+      --sf: var(--wz-surface); --sf2: var(--wz-surface-raised); --acs: var(--wz-accent-soft);
+      /* ReachScreen's fixed INK / VIOLET / button colours (it ignores the skin); no kit tokens for them */
+      --r-ink: #e9e4ff; --r-violet: #9b7bff; --r-button: #5b3dd6; --r-on-button: #fff;
       --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px);
       --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
-      --ease: cubic-bezier(.2, .9, .25, 1);
+      --ease: var(--wz-ease);
       color-scheme: dark;
     }
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     html, body { margin: 0; min-height: 100%; background: var(--bg); }
-    body { font: 15px/1.3 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--ink);
+    body { font: .9375rem/1.3 var(--wz-font-ui); color: var(--ink);
       -webkit-font-smoothing: antialiased; -webkit-text-size-adjust: 100%; overflow-x: hidden; }
     button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
     input { font: inherit; color: inherit; }
@@ -46,7 +49,7 @@
       display: flex; flex-direction: column;
       padding: calc(var(--sat) + 12px) calc(var(--sar) + 20px) calc(var(--sab) + 24px) calc(var(--sal) + 20px); }
     /* The Wizard logo row (iOS's), top-left */
-    .brand { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: 11px; font-weight: 600;
+    .brand { display: flex; align-items: center; gap: 8px; color: var(--ink-3); font-size: .6875rem; font-weight: 600;
       letter-spacing: .22em; text-transform: uppercase; line-height: 18px; padding: 2px 4px 14px; }
     .brand img { height: 18px; width: auto; opacity: .9; }
     body[data-look="change"] main > .brand { display: none; }
@@ -57,42 +60,42 @@
     .eyebrow { margin: 0; }
     #connectCard .eyebrow { display: none; }
     .head { display: flex; align-items: center; gap: 12px; }
-    h1 { margin: 0 0 0 4px; font-size: 22px; font-weight: 500; line-height: 1.25; letter-spacing: 0; }
+    h1 { margin: 0 0 0 4px; font-size: 1.375rem; font-weight: 500; line-height: 1.25; letter-spacing: 0; }
     .round { flex: none; width: 40px; height: 40px; border-radius: 99px; background: var(--sf); border: 1px solid var(--line-2);
-      display: grid; place-items: center; font-size: 26px; line-height: 1; padding-bottom: 4px; color: var(--ink); }
+      display: grid; place-items: center; font-size: 1.625rem; line-height: 1; padding-bottom: 4px; color: var(--ink); }
     .head .round + h1 { margin-left: 0; }
     .orb { display: block; width: 96px; height: 96px; margin: 28px auto 8px; }
-    .lead { margin: 4px 0 28px; text-align: center; color: var(--ink-2); font-size: 15px; }
-    .group { display: block; margin: 0; padding: 0 4px 8px; font-size: 11px; font-weight: 600; letter-spacing: .12em;
+    .lead { margin: 4px 0 28px; text-align: center; color: var(--ink-2); font-size: .9375rem; }
+    .group { display: block; margin: 0; padding: 0 4px 8px; font-size: .6875rem; font-weight: 600; letter-spacing: .12em;
       text-transform: uppercase; color: var(--ink-3); }
     .row { display: flex; align-items: center; gap: 12px; width: 100%; margin-bottom: 16px; padding: 12px; border-radius: 18px;
       background: var(--sf); border: 1px solid var(--line-2); text-align: left; transition: filter 150ms var(--ease); }
     .row:active { filter: brightness(1.25); }
-    .tile { flex: none; width: 34px; height: 34px; border-radius: 12px; background: var(--acs); color: var(--ac);
-      display: grid; place-items: center; font-size: 17px; }
+    .tile { flex: none; width: 34px; height: 34px; border-radius: var(--wz-radius-tile); background: var(--acs); color: var(--ac);
+      display: grid; place-items: center; font-size: 1.0625rem; }
     .row .tx { flex: 1; min-width: 0; margin-right: 8px; }
-    .row b { display: block; font-weight: 500; font-size: 15px; }
-    .row small { display: block; margin-top: 2px; color: var(--ink-3); font-size: 12.5px; line-height: 1.3; }
-    .chev { flex: none; color: var(--ink-3); font-size: 22px; line-height: 1; }
-    input { display: block; width: 100%; height: 52px; padding: 0 14px; border-radius: 14px; background: var(--sf);
-      border: 1px solid var(--line-2); color: var(--ink); font-size: 16px; outline: none; }
+    .row b { display: block; font-weight: 500; font-size: .9375rem; }
+    .row small { display: block; margin-top: 2px; color: var(--ink-3); font-size: .78125rem; line-height: 1.3; }
+    .chev { flex: none; color: var(--ink-3); font-size: 1.375rem; line-height: 1; }
+    input { display: block; width: 100%; height: 52px; padding: 0 14px; border-radius: var(--wz-radius); background: var(--sf);
+      border: 1px solid var(--line-2); color: var(--ink); font-size: 1rem; outline: none; }
     input::placeholder { color: var(--ink-3); }
     input:focus { border-color: color-mix(in srgb, var(--ac) 60%, transparent); }
     /* The status line; a problem gets the 2px accent rule on the left (.sc-error) */
     .status:empty, .err:empty { display: none; }
-    .status, .err { margin-top: 10px; padding: 0 4px; font-size: 13px; line-height: 1.35; color: var(--ink-2); }
+    .status, .err { margin-top: 10px; padding: 0 4px; font-size: .8125rem; line-height: 1.35; color: var(--ink-2); }
     .err { color: var(--ink); border-left: 2px solid var(--ac); padding-left: 10px; }
     .spacer { flex: 1; }
     .btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; margin-top: 24px;
-      padding: 0 16px; border-radius: 16px; font-size: 16px; font-weight: 500; background: var(--ac); color: var(--onac);
+      padding: 0 16px; border-radius: 16px; font-size: 1rem; font-weight: 500; background: var(--ac); color: var(--onac);
       transition: filter 150ms var(--ease); }
     .btn:active { filter: brightness(1.12); }
     .btn:disabled, .row:disabled, .quiet:disabled, .round:disabled { opacity: .5; }
     .quiet { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 4px;
-      color: var(--ink-2); font-size: 15px; font-weight: 500; }
+      color: var(--ink-2); font-size: .9375rem; font-weight: 500; }
     #settings { min-height: 40px; margin-top: 6px; justify-content: flex-start; padding: 0 4px; color: var(--ac); }
-    .note { margin: 8px 0 0; padding: 0 4px; text-align: center; color: var(--ink-3); font-size: 12px; line-height: 1.35; }
-    .meta { margin: 6px 0 0; text-align: center; font-size: 11px; color: var(--ink-3); opacity: .8; }
+    .note { margin: 8px 0 0; padding: 0 4px; text-align: center; color: var(--ink-3); font-size: .75rem; line-height: 1.35; }
+    .meta { margin: 6px 0 0; text-align: center; font-size: .6875rem; color: var(--ink-3); opacity: .8; }
     .meta:empty { display: none; }
     .reach-only { display: none; }
 
@@ -104,66 +107,66 @@
     body[data-look="reach"] .card > .glyph { display: block; order: 0; }
     body[data-look="reach"] .card > .head { display: block; order: 1; margin-top: 12px; }
     body[data-look="reach"] h1 { margin: 0; color: var(--r-ink); }
-    body[data-look="reach"] .card > .lead { display: block; order: 2; margin: 10px 0 0; color: var(--r-ink); opacity: .78; font-size: 16px; line-height: 1.35; }
+    body[data-look="reach"] .card > .lead { display: block; order: 2; margin: 10px 0 0; color: var(--r-ink); opacity: .78; font-size: 1rem; line-height: 1.35; }
     body[data-look="reach"] .card > #retry:not([hidden]) { display: flex; order: 3; }
     body[data-look="reach"] .card > #openTs:not([hidden]) { display: flex; order: 4; }
     body[data-look="reach"] .card > .status:not(:empty) { display: block; order: 5; margin-top: 18px; padding: 0; border: 0;
-      color: var(--r-ink); opacity: .55; font-size: 13px; }
+      color: var(--r-ink); opacity: .55; font-size: .8125rem; }
     body[data-look="reach"] .card > .err:not(:empty) { display: block; order: 6; margin-top: 6px; padding: 0; border: 0;
-      color: var(--r-ink); opacity: .35; font-size: 12px; }
+      color: var(--r-ink); opacity: .35; font-size: .75rem; }
     body[data-look="reach"] .card > #edit { display: block; order: 7; }
-    .glyph { color: var(--r-violet); font-size: 48px; line-height: 1.2; }
+    .glyph { color: var(--r-violet); font-size: 3rem; line-height: 1.2; }
     /* ReachScreen.pill: Try again filled, Open Tailscale outlined */
     body[data-look="reach"] #retry, #openTs { width: auto; min-width: 200px; min-height: 0; margin: 26px auto 0; padding: 13px 24px;
-      border-radius: 999px; background: var(--r-button); color: #fff; font-size: 16px; font-weight: 500; line-height: 1.3; }
-    #openTs { margin-top: 12px; background: transparent; border: 1px solid rgba(155, 123, 255, .43); }
-    .server { margin-top: 28px; padding: 10px 16px; color: var(--r-ink); opacity: .55; font-size: 13px; word-break: break-all; }
+      border-radius: 999px; background: var(--r-button); color: var(--r-on-button); font-size: 1rem; font-weight: 500; line-height: 1.3; }
+    #openTs { margin-top: 12px; background: transparent; border: 1px solid color-mix(in srgb, var(--r-violet) 43%, transparent); }
+    .server { margin-top: 28px; padding: 10px 16px; color: var(--r-ink); opacity: .55; font-size: .8125rem; word-break: break-all; }
 
     /* ---------- Loader (ReachScreen's connecting look): the launch cover and while connecting ---------- */
     .loader { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center;
       padding: var(--sat) 32px var(--sab); background: var(--bg); text-align: center; animation: fade 200ms var(--ease); }
     .loader .brand { position: absolute; top: calc(var(--sat) + 12px); left: calc(var(--sal) + 20px); }
-    .loader p { margin: 18px 0 0; max-width: 300px; color: var(--r-ink); opacity: .55; font-size: 13px; }
-    .loader small { display: block; margin-top: 6px; font-size: 12px; opacity: .65; word-break: break-all; }
+    .loader p { margin: 18px 0 0; max-width: 300px; color: var(--r-ink); opacity: .55; font-size: .8125rem; }
+    .loader small { display: block; margin-top: 6px; font-size: .75rem; opacity: .65; word-break: break-all; }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fade { from { opacity: 0; } }
     @media (prefers-reduced-motion: reduce) { .loader { animation: none; } }
 
     /* ---------- Tailscale guide (tailscale-guide.js; TailscaleGuideView): full screen, flat ---------- */
     #guide { display: flex; flex-direction: column; gap: 14px; padding: 0 2px; }
-    #guide .eyebrow { margin: 8px 0 0; color: var(--ac); font-size: 11px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
-    #guide h1 { margin: -6px 0 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; }
-    #guide .lead { margin: -6px 0 0; text-align: left; color: var(--ink-2); font-size: 15px; }
-    #guide .btn { min-height: 48px; margin-top: 10px; border-radius: 14px; font-size: 15px; font-weight: 600; }
+    #guide .eyebrow { margin: 8px 0 0; color: var(--ac); font-size: .6875rem; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+    #guide h1 { margin: -6px 0 0; font-size: 1.375rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.2; }
+    #guide .lead { margin: -6px 0 0; text-align: left; color: var(--ink-2); font-size: .9375rem; }
+    #guide .btn { min-height: 48px; margin-top: 10px; border-radius: var(--wz-radius); font-size: .9375rem; font-weight: 600; }
     #guide .btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    #guide .link { align-self: flex-start; color: var(--ac); font-size: 15px; padding: 6px 2px; }
-    .pill { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: 14px; color: var(--ink);
-      background: color-mix(in srgb, #f2b56b 14%, transparent); }
-    .pill .dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: #f2b56b; }
+    #guide .link { align-self: flex-start; color: var(--ac); font-size: .9375rem; padding: 6px 2px; }
+    .pill { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 12px; font-size: .875rem; color: var(--ink);
+      background: color-mix(in srgb, var(--wz-warning) 14%, transparent); }
+    .pill .dot { flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--wz-warning); }
     .steps { display: flex; flex-direction: column; }
     .step { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
     .step:first-child { border-top: 0; padding-top: 4px; }
-    .step .gl { width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center; font-size: 14px; font-weight: 700; background: var(--sf2); color: var(--ink-2); }
+    .step .gl { width: 32px; height: 32px; border-radius: 11px; display: grid; place-items: center; font-size: .875rem; font-weight: 700; background: var(--sf2); color: var(--ink-2); }
     .step.now .gl { background: var(--ac); color: var(--onac); }
-    .step.done .gl { background: color-mix(in srgb, #5fd39a 20%, transparent); color: #5fd39a; }
+    .step.done .gl { background: color-mix(in srgb, var(--wz-success) 20%, transparent); color: var(--wz-success); }
     .step.todo { opacity: .62; }
     .step.checking .gl i { width: 16px; height: 16px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--ac) 25%, transparent);
       border-top-color: var(--ac); animation: spin 1s linear infinite; }
-    .step h2 { margin: 5px 0 3px; font-size: 16px; font-weight: 650; line-height: 1.3; }
-    .step p { margin: 0 0 4px; color: var(--ink-2); font-size: 14.5px; line-height: 1.4; }
+    .step h2 { margin: 5px 0 3px; font-size: 1rem; font-weight: 650; line-height: 1.3; }
+    .step p { margin: 0 0 4px; color: var(--ink-2); font-size: .90625rem; line-height: 1.4; }
     .step p b { color: var(--ink); }
-    .step p.warn { color: var(--ink); border-left: 2px solid #f2b56b; padding-left: 9px; margin-top: 6px; }
-    .step p.hint { margin-top: 8px; font-size: 13px; color: var(--ink-3); }
+    .step p.warn { color: var(--ink); border-left: 2px solid var(--wz-warning); padding-left: 9px; margin-top: 6px; }
+    .step p.hint { margin-top: 8px; font-size: .8125rem; color: var(--ink-3); }
     .tsmark { fill: currentColor !important; stroke: none !important; width: 18px !important; height: 18px !important; }
-    .chip { display: inline-flex; margin-top: 8px; padding: 6px 10px; border-radius: 10px; background: var(--sf2); font: 500 13px ui-monospace, "SF Mono", monospace; color: var(--ink); }
+    .chip { display: inline-flex; margin-top: 8px; padding: 6px 10px; border-radius: 10px; background: var(--sf2); font: 500 .8125rem var(--wz-font-mono); color: var(--ink); }
     #guide details { border-top: 1px solid var(--line); padding-top: 12px; }
-    #guide summary { color: var(--ac); font-size: 15px; cursor: pointer; list-style: none; }
+    #guide summary { color: var(--ac); font-size: .9375rem; cursor: pointer; list-style: none; }
     #guide summary::-webkit-details-marker { display: none; }
-    #guide details p { margin: 10px 0 0; color: var(--ink-2); font-size: 14.5px; line-height: 1.4; }
+    #guide details p { margin: 10px 0 0; color: var(--ink-2); font-size: .90625rem; line-height: 1.4; }
     #guide details p b { color: var(--ink); }
     #guide .foot { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
     #guide .foot .link { padding: 4px 2px; }
-    #guide .addr { color: var(--ink-3); font: 12px ui-monospace, monospace; word-break: break-all; }
+    #guide .addr { color: var(--ink-3); font: .75rem var(--wz-font-mono); word-break: break-all; }
     .stage.guiding { justify-content: flex-start; }
   </style>
 </head>
