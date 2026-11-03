@@ -1,0 +1,76 @@
+/* Wizard OS · Settings › About: where this box stands against main (wizard-ux#887 rule 5). One row, plain words:
+ *   Built on main f3cb2e21 · "2 behind main · 120 own changes"
+ * Sources, nothing polled, no token in the browser:
+ *   my-release.json  an owner's own release (written by my-release): the main commit it sits on and his own changes;
+ *                    "behind" is the App Manager's updates status (WosUpdates.state.release.behind), which my-release
+ *                    keeps current, so nothing extra is asked.
+ *   build.json       stamped into every published image (Dockerfile, WIZARD_UX_COMMIT): the commit it was built
+ *                    from. The App Manager compares it with main (store-install/_main-compare, GitHub's public API,
+ *                    cached an hour there); asked when About is drawn, at most once an hour (10 min after a failure).
+ * Neither (a dev checkout, an image from before the stamp): the row says the build carries no stamp. */
+(() => {
+  'use strict';
+  const S = window.WosSettings;
+  if (!S || S.features?.some(f => f.id === 'box-source')) return;
+  const src = document.currentScript?.src || location.href;
+  const at = p => new URL(p, new URL('../', src)).href;
+  const COMPARE = new URL('../store-install/_main-compare', src).href;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const FULL = /^[0-9a-f]{40}$/, SHORT = /^[0-9a-f]{7,40}$/, count = n => Number.isInteger(n) && n >= 0;
+  const HOUR = 3600e3, RETRY = 600e3;
+  let info = null, loading = false, cmp = null, cmpAt = 0, cmpBusy = false;
+
+  const refresh = () => { try { S.refresh(); } catch (_) {} };
+  async function json(u) {
+    try {
+      const r = await fetch(u, { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d && typeof d === 'object' ? d : null;
+    } catch (_) { return null; }
+  }
+  function load() {
+    if (info || loading) return;
+    loading = true;
+    (async () => {
+      const mine = await json(at('my-release.json'));
+      if (mine && SHORT.test(mine.base?.ref || '') && Array.isArray(mine.changes)) info = { kind: 'mine', base: mine.base.ref, own: mine.changes.length };
+      else {
+        const b = await json(at('build.json'));
+        info = FULL.test(b?.commit || '') ? { kind: 'image', commit: b.commit } : { kind: 'none' };
+      }
+      loading = false; refresh();
+    })();
+  }
+  function compare() {
+    if (cmpBusy || (cmpAt && Date.now() - cmpAt < (cmp && !cmp.error ? HOUR : RETRY))) return;
+    cmpBusy = true;
+    json(COMPARE + '?commit=' + info.commit).then(d => {
+      cmp = d && FULL.test(d.base || '') && count(d.behind) && count(d.own) ? d : { error: d?.error || 'unavailable' };
+      cmpAt = Date.now(); cmpBusy = false; refresh();
+    });
+  }
+  // "2 behind main · 120 own changes"; both zero = "Up to date with main".
+  function words(behind, own) {
+    const mineTxt = count(own) && own > 0 ? `${own} own ${own === 1 ? 'change' : 'changes'}` : '';
+    if (!count(behind)) return [mineTxt, 'couldn’t check main'].filter(Boolean).join(' · ');
+    if (!behind && !own) return 'Up to date with main';
+    return [`${behind} behind main`, mineTxt].filter(Boolean).join(' · ');
+  }
+  const row = (title, sub) => `<div class="st-group" data-box-source><div class="st-row static"><span class="st-tx"><b>${esc(title)}</b><small>${esc(sub)}</small></span></div></div>`;
+  function html() {
+    load();
+    if (!info) return '';
+    if (info.kind === 'none') return row('Main commit unknown', 'This build carries no stamp of the main commit it came from');
+    if (info.kind === 'mine') {
+      const st = window.WosUpdates?.state, behind = count(st?.release?.behind) ? st.release.behind : null;
+      const own = info.own ? `${info.own} own ${info.own === 1 ? 'change' : 'changes'} · ` : '';
+      return row(`Built on main ${info.base.slice(0, 8)}`, st ? words(behind, info.own) : `${own}checking main…`);
+    }
+    compare();
+    if (!cmp) return row(`Built from ${info.commit.slice(0, 8)}`, 'Checking main…');
+    if (cmp.error) return row(`Built from ${info.commit.slice(0, 8)}`, cmp.error === 'not on GitHub' ? 'This commit isn’t on GitHub, so it can’t be compared with main' : 'Couldn’t check main just now');
+    return row(`Built on main ${cmp.base.slice(0, 8)}`, words(cmp.behind, cmp.own));
+  }
+  S.register({ id: 'box-source', page: 'about', aliases: ['box-source'], html: () => html() });
+})();
