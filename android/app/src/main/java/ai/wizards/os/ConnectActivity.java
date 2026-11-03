@@ -142,7 +142,7 @@ public final class ConnectActivity extends Activity {
         body.addView(go, sized(ViewGroup.LayoutParams.MATCH_PARENT, dp(52), dp(24), 0));
         if (switching) {
             TextView keep = label("Keep current Wizard", 15, look.text2, true); keep.setGravity(Gravity.CENTER);
-            keep.setOnClickListener(v -> returnToWizard());
+            keep.setOnClickListener(v -> keepCurrent());
             body.addView(keep, sized(ViewGroup.LayoutParams.MATCH_PARENT, dp(48), dp(4), 0));
             address.setText(ServerSettings.origin(this));
         }
@@ -295,10 +295,17 @@ public final class ConnectActivity extends Activity {
         if (install != null) home.setData(android.net.Uri.parse(ServerSettings.origin(this) + install));
         startActivity(home); finish();
     }
+    /** Leave without switching. Opened over the running Wizard (Settings › Change Wizard, Edit address): just close,
+     *  so the owner is back exactly where they were. Otherwise (a link opened it as its own task) restart the Wizard. */
+    private void keepCurrent() {
+        if (checking) { generation++; checking = false; busy(false); }
+        if (installPath(getIntent()) == null && !isTaskRoot()) { finish(); return; }
+        returnToWizard();
+    }
     private void back() {
         if (guideOrigin != null) { hideGuide(); return; }
         if (checking) { generation++; checking = false; busy(false); say("", false); }
-        if (!ServerSettings.origin(this).isEmpty()) returnToWizard();
+        if (!ServerSettings.origin(this).isEmpty()) keepCurrent();
         // Unconfigured root stays open. Camera/keyboard Back are consumed by their own nested surfaces first.
     }
     @Override public void onBackPressed() { back(); }

@@ -267,7 +267,13 @@ final class WizardViewController: CAPBridgeViewController {
     }
 
     static func restart(in window: UIWindow?) {
-        window?.rootViewController = WizardViewController()
+        guard let window else { return }
+        // Change Wizard sits over the Wizard as a presented screen: close it before the Wizard is replaced.
+        if let root = window.rootViewController, root.presentedViewController != nil {
+            root.dismiss(animated: false) { window.rootViewController = WizardViewController() }
+            return
+        }
+        window.rootViewController = WizardViewController()
     }
 }
 
@@ -438,11 +444,16 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Show the connect screen to pick another Wizard. The current one stays saved until a new one passes the check.
+    /// Opened over the running Wizard, which stays as it is underneath: leaving without a switch (Back, Keep current
+    /// Wizard) returns to the exact page the owner came from, e.g. Settings › About & updates.
     @objc func changeWizard(_ call: CAPPluginCall) {
         call.resolve()
         DispatchQueue.main.async { [weak self] in
+            guard let host = self?.bridge?.viewController else { return }
             WizardAddress.showConnect = true
-            WizardViewController.restart(from: self?.bridge?.viewController)
+            let connect = WizardViewController()
+            connect.modalPresentationStyle = .fullScreen
+            host.present(connect, animated: true)
         }
     }
 
@@ -450,7 +461,11 @@ public class WizardShellPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func cancelChange(_ call: CAPPluginCall) {
         WizardAddress.pendingPair = nil
         call.resolve()
-        DispatchQueue.main.async { [weak self] in WizardViewController.restart(from: self?.bridge?.viewController) }
+        DispatchQueue.main.async { [weak self] in
+            guard let screen = self?.bridge?.viewController else { return }
+            if screen.presentingViewController != nil { screen.dismiss(animated: true); return } // back to that page
+            WizardViewController.restart(from: screen)
+        }
     }
 
     /// `{ on }`: whether Tailscale's VPN is running on this iPhone (TailscaleNet). The guide's first line only.
