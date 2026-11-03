@@ -90,6 +90,8 @@ test('automatic delivery prompts stay out of chat-list previews but remain avail
   assert.equal(row.preview, '');
   assert.equal(row.previewRole, undefined);
   assert.equal(row.request, raw);
+  const indexed = normalize({ id: 'wizard_old_daily', listVersion: 1, preview: '[AUTO] Please share the complete Daily Brief report exactly as save…' });
+  assert.equal(indexed.preview, '', 'a stale clipped title-index preview is hidden too');
 });
 
 test('message search never exposes an automatic delivery prompt as its result snippet', async () => {
