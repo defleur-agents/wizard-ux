@@ -76,6 +76,8 @@ async function switchSkin(page,shell,skin){
  const root=shell==='phone'?'#settings':'#dsettings';
  const look=page.locator(root+' [data-st-page="appearance"]');
  if(await look.isVisible())await look.click();
+ const family=await page.evaluate(s=>window.WosSkin.familyOf?.(s),skin);
+ if(family&&await page.locator(root+' [data-skinfamily="'+family+'"]:visible').count())await page.locator(root+' [data-skinfamily="'+family+'"]:visible').click();
  await page.evaluate(()=>{window.__qaSkinClick=null;document.addEventListener('click',e=>{const b=e.target.closest('[data-skinpick]');if(b)window.__qaSkinClick={id:b.dataset.skinpick,trusted:e.isTrusted};},{capture:true,once:true});});
  await page.locator(root+' [data-skinpick="'+skin+'"]').click();
  await page.waitForFunction(s=>document.documentElement.dataset.skin===s&&window.WosSkin.current===s,skin);
