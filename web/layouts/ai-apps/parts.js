@@ -289,6 +289,23 @@ export function shortTime(at, now) {
   return z.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][z.getMonth()];
 }
 
+/* ---------- round 19 item 4 (Miguel, 3 Nov 2026): the phone Home's dock ----------
+ * The pinned apps live in a dock just above the composer (up to 2 rows × 4 = 8 a page; more pins page sideways with
+ * dots); the grid above shows only the open apps not pinned, then +. Hold and drag: within the dock, within the grid
+ * and between them (into the dock pins it there; out of it unpins it), the desktop column's own move (vtMove). */
+export const DOCK_PER = 8;
+/** The open apps (not pinned) in his own order once he has dragged them (ids; new ones after, as they come). Pure. */
+export function orderOpen(open, ids) {
+  if (!Array.isArray(ids) || !ids.length) return (open || []).slice();
+  const at = id => { const i = ids.indexOf(id); return i < 0 ? Infinity : i; };
+  return (open || []).map((d, k) => [d, k]).sort((a, b) => (at(a[0].id) - at(b[0].id)) || (a[1] - b[1])).map(x => x[0]);
+}
+/** A drop on Home: pins (ids), open (the grid's ids), item = { id, open }, to = { group: 'pin' | 'open', index } →
+ * { pins, open } (vtMove keyed by app id: a pin not open dragged out simply unpins). Pure. */
+export const homeDrop = (pins, open, item, to) => vtMove(pins, open, { id: item.id, desk: item.open ? item.id : null }, to);
+/** The dock's pages: the pins in pages of DOCK_PER. */
+export const dockPages = (list, per = DOCK_PER) => { const out = []; for (let i = 0; i < (list || []).length; i += per) out.push(list.slice(i, i + per)); return out; };
+
 /* ---------- round 16 item 6 (Miguel, 3 Nov 2026): drag to rearrange the right column ---------- */
 const clampI = (i, n) => Math.max(0, Math.min(n, i | 0));
 /** Where a moved row lands. pins = the pin order (app ids); open = the open list below them (desk numbers, as shown);

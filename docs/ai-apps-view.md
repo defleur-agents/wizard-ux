@@ -19,13 +19,16 @@ Phone (`web/layouts/ai-apps/layout.js`, `layout.css`, `home.js`):
   press gives Pin, Rename, Mark unread, Snooze, Archive / Restore through Chats' own actions), New chat at the bottom.
 - Main screen: the chat, edge to edge, with the stock composer as a pill (+ · field · model chip · the orb as the mic ·
   Send). Home = a New chat with no greeting.
-- Home grid (the Mac dock's model): Pinned apps in his order (hold and drag to rearrange; the hold menu has Pin / Unpin,
-  no pin badge), then the open apps that are not pinned on a new row under a tiny muted "Open" caption, then + = a
-  picker of installed apps neither pinned nor open (For people / For agents; Get more opens the App Store). Every open
-  app (pinned or not) wears a 4 px running dot under its name; a pin that is not open has none.
+- Home: the pinned apps live in a dock just above the composer (a subtle glass plate from skin tokens, up to 2 rows ×
+  4 icons at the grid's size, names under; more than 8 pins page sideways with dots; it steps away while the composer
+  is typed in). The grid above shows only the open apps that are not pinned, then + = a picker of installed apps
+  neither pinned nor open (For people / For agents; Get more opens the App Store); nothing else open = just +. Hold and
+  drag within the dock, within the grid, or between them (into the dock pins it at that spot, out of it unpins); a hold
+  without moving = the app's menu (Pin / Unpin, …). Every open app wears a 4 px running dot; a pin not open has none.
 - Under +: "Unused apps close after 24h · Change" opens a sheet with the tidy sentence (below). A tidy shows a toast
   "Closed 3 apps you hadn't used in 24 hours · Undo".
-- Drawer Ready: in the stock Chats Filter order (Priority / Newest / Oldest, the control on Ready's header).
+- Drawer Ready: in the stock Chats Filter order (Priority / Newest / Oldest, the control on Ready's header; the desktop
+  offers only Newest / Oldest inside each status group, below).
 - An app fills the screen under the same top bar; the orb sits in the app's own bottom row (Orb bar standard).
 - A take (tap the orb) uses the stock voice controls, painted with the skin's tokens.
 
@@ -34,11 +37,17 @@ Desktop (`desktop.js`, `desktop.css`):
   statuses). The open sidebar is built on the rail: Ready's count sits on its header (the rail's amber disc, none on
   ◫), Ready is grouped by the rail's statuses (sub-headers with counts, its chats under each in the chosen order),
   Snoozed shows only when it holds chats, and the headers sit at the rail items' heights, so folding only widens or
-  narrows. A status on the rail opens the sidebar scrolled to that group, briefly highlighted (no filter).
-- Ready's order: the stock Chats Filter choice (Priority / Newest / Oldest) on Ready's header, the same saved choice as
-  Chats (`api.sessions.order / setOrder` → `wos.chats.readyOrder.v1`, shared through the box preferences). Priority =
-  needs approval, Needs you, Your call, FYI, Done, then the rest, newest first inside; notifications rank by their own
-  priority (4–5 with Needs you, 3 with Your call, else FYI) in the same list.
+  narrows. Headers and status sub-headers are small and muted (12 / 11 px, normal weight; Archive the quietest); only
+  Ready's amber count stands out, so the chat titles lead.
+- The folded rail works on its own (nothing expands but ◫): a click on Snoozed, Ready or a status opens that group's
+  first chat in the docked chat column; the same item again opens the next one (wrapping). The current group is marked
+  and shows its place ("2/3"). Hovering an item for 300 ms shows a flyout of its chats (title, time); a click opens one;
+  Esc closes it. Nothing advances on send (stock has no such setting).
+- Order inside each status group (the grouping already is the priority): Newest first / Oldest first in Settings ›
+  Chats & app screens › AI apps view, saved where stock Chats keeps its order (`api.sessions.order / setOrder` →
+  `wos.chats.readyOrder.v1`; a stock Priority or By subject reads as Newest here). "Show sort control in sidebar"
+  (off at first) adds a small Newest / Oldest menu on Ready's header. The group is mounted through the layout API's
+  `desk.setting(id, node)` (core/skin-host.js).
 - Middle: the chat in a centred column with the composer.
 - Right: one apps column = Pinned · Open · + (drag to rearrange; ⌥ letters through the shell's own key guide). An app
   opens as a panel beside the chat; panels resize by grips. An open pin wears the same 4 px running dot as the phone.
