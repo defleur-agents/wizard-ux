@@ -11,7 +11,7 @@ const {chromium} = require('playwright');
 const root = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, '..'));
 const read = f => fs.readFileSync(path.join(root, 'web', f), 'utf8');
 const skins = ['nebula', 'grove', 'tide', 'ember', 'signal'];
-const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
+const phoneCSS = ['core/base.css', 'styles.css', 'core/chats.css', 'core/chat-power.css', 'core/desks.css', 'core/tour.css', 'core/polish.css', 'core/update-banner.css', 'core/home-surfaces.css', 'core/home-screen-apps.css', 'core/scheduled-reminders.css', 'core/app-route.css', 'core/attach-chip.css', 'core/share-wizard.css', 'core/sel-menu.css', 'core/skins.css'];
 const groups = {
  phone: phoneCSS,
  desktop: ['core/base.css', 'core/chats.css', 'desktop/desktop.css', 'core/update-banner.css', 'core/skins.css'],
@@ -31,6 +31,8 @@ const cases = [
  {group:'phone',name:'dock',cls:'dock',wrap:'device'},
  {group:'phone',name:'scrub-label',cls:'sc-label',wrap:'scrub'},
  {group:'phone',name:'share-wizard',cls:'dv-sheet',wrap:'wz-share'},
+ ...[['share-compose','dv-compose'],['share-destination','dv-dest'],['share-agent-row','dv-row dv-agent'],['share-chat-row','dv-row dv-chat'],['share-message','dv-quote'],['share-attachment','ch-att'],['share-picker','dv-picker'],['share-backhint','dv-backhint']].map(([name,cls])=>({group:'phone',name,cls,wrap:'wz-share'})),
+ {group:'phone',name:'share-option',tag:'button',wrap:'wz-share',middle:'dv-picker'},
  {group:'phone',name:'message-popover',cls:'ch-sheet-b',wrap:'ch-mpop'},
  {group:'phone',name:'reminder-footer',cls:'',tag:'footer',wrap:'boom-card'},
  {group:'phone',name:'tour-step-three',cls:'tr-copy',wrap:'tour',attrs:'data-step="3"'},
@@ -50,7 +52,7 @@ function html(test, skin, hosted) {
  const css = [...new Set(['kit/wizard-tokens.css',...groups[test.group]])].map(read).join('\n');
  const tag=test.tag||'section';
  const panel=`<${tag} id="${test.id||'qa-panel'}" class="${test.cls||''}" data-qa-panel><strong>Readable ${test.name}</strong><p>Nothing behind this panel should show through.</p></${tag}>`;
- const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${panel}</div>`;
+ const wrap=`<div ${test.wrapId?`id="${test.wrapId}"`:''} class="${test.wrap||''}" ${test.attrs||''}>${test.middle?`<div class="${test.middle}">${panel}</div>`:panel}</div>`;
  return `<!doctype html><html data-skin="${skin}" data-shell="${test.group==='desktop'?'desktop':'phone'}" class="${hosted?'wz-hosted':''}"><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>${css}</style><style>
  * {animation:none!important;transition:none!important;caret-color:transparent!important}
  html,body {margin:0;width:390px;height:844px;overflow:hidden}

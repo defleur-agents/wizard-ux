@@ -65,7 +65,7 @@ Reuse:
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) | — |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) | own queue |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) | — |
-| Share to Wizard | `WizShareWizard` (`share-wizard.js`) | one sheet; `share.wizard`; native `durable` |
+| Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) | shared/native import; separate comment, agent + chat; durable |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings in both shells | `WosSettings.register` (`settings.js`; separate Skin/Color; package System: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
