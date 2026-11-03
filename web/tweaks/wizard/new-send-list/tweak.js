@@ -1,1 +1,1 @@
-export default function setup() { return () => {}; }
+export default function setup(api) { return () => {}; }
