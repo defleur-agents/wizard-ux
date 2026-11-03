@@ -2297,7 +2297,16 @@
       box.innerHTML = `<p class="kh-keys-h">Hold ${esc(ALT)} and press</p>` + groups.map(g => `<section><h4>${esc(g.name)}</h4>${g.keys.map(([k, w]) => `<span>${k.split(' ').map(x => `<kbd>${esc(x)}</kbd>`).join('')}<em>${esc(w)}</em></span>`).join('')}</section>`).join('');
       // (span: the free middle [left, right] the card centres in and fits; else the near thing's centre)
       if (span) box.style.maxWidth = Math.max(320, Math.round(span[1] - span[0] - 24)) + 'px';
+      box.style.left = '0px'; box.style.top = '0px';   // measured at the viewport's edge: its full width available
       el.appendChild(box);
+      // the last group runs as one row under the others (CSS): shrink the card to the columns above it, not the full span
+      const secs = [...box.querySelectorAll('section')];
+      if (!line && secs.length > 1) {
+        const last = secs[secs.length - 1], cap = parseFloat(box.style.maxWidth) || innerWidth - 32;
+        box.style.width = 'max-content'; last.style.display = 'none'; const cols = box.offsetWidth; last.style.display = '';
+        const row = [...last.children].reduce((t, x) => t + x.getBoundingClientRect().width, 0) + 14 * (last.children.length - 1) + 36;
+        box.style.width = Math.ceil(Math.min(cap, Math.max(cols, row))) + 'px';
+      }
       const w = box.offsetWidth, h = box.offsetHeight, nr = near && vis(near) ? near.getBoundingClientRect() : null;
       const cx = span ? (span[0] + span[1]) / 2 : nr ? nr.left + nr.width / 2 : innerWidth / 2;
       const x = Math.round(Math.max(8, Math.min(innerWidth - w - 8, cx - w / 2)));
