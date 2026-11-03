@@ -24,6 +24,9 @@ export const ICON = {
   restore: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
   check: ['m5 12.5 4.5 4.5L19 7.5'],
   x: ['M6 6l12 12', 'M18 6 6 18'],
+  // Move up / Move down (round 16: the right column's menu)
+  up: ['M12 19V5', 'm6 11 6-6 6 6'],
+  dn: ['M12 5v14', 'm6 13 6 6 6-6'],
   unpin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7', 'M4 4l16 16'],
   hide: ['M6 12h12'],
   // the app panel wider / back to a third (round 7, the Orb desktop's panel)
@@ -65,6 +68,9 @@ export function sectionsOpen(stored) {
  * notification row is FYI unless it is urgent. */
 export const STATES = [['needs', 'Needs you'], ['approval', 'Needs approval'], ['failed', 'Error'], ['check', 'Your call'], ['fyi', 'FYI'], ['done', 'Done'], ['deferred', 'Snoozed'], ['none', 'Ready']];
 const KNOWN = new Set(STATES.map(s => s[0]));
+/** Round 16 (Miguel, 3 Nov 2026): the folded 52 px rail's short words, one under each count (the full STATES words in
+ * its tip): Snoozed, Ready, then Ready's statuses. */
+export const RAIL_WORDS = Object.freeze({ snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs', approval: 'Approve', failed: 'Error', check: 'Call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed' });
 /** One row's status: the shell's own (row.state), else what the row says (needs / a note). */
 export function stateOf(r) {
   const s = r && typeof r.state === 'string' ? r.state : '';
@@ -182,3 +188,41 @@ export function tidyWords(n, key) {
   return `Closed ${n} app${n === 1 ? '' : 's'} you hadn't used ${when}`;
 }
 
+/* ---------- round 16 item 6 (Miguel, 3 Nov 2026): drag to rearrange the right column ---------- */
+const clampI = (i, n) => Math.max(0, Math.min(n, i | 0));
+/** Where a moved row lands. pins = the pin order (app ids); open = the open list below them (desk numbers, as shown);
+ * item = { id, desk } (desk null for a pin not open); to = { group: 'pin' | 'open', index }. Into Pinned pins it there
+ * (out of the open list); out of Pinned unpins it (an open one joins the open list there). Pure. */
+export function vtMove(pins, open, item, to) {
+  const P = (pins || []).filter(id => id !== item.id), O = (open || []).filter(d => d !== item.desk);
+  if (to.group === 'pin') P.splice(clampI(to.index, P.length), 0, item.id);
+  else if (item.desk != null) O.splice(clampI(to.index, O.length), 0, item.desk);
+  return { pins: P, open: O };
+}
+/** The fewest desk moves (the stock moveDesk(from, to): take out, put in) that put `want` (desk numbers) in that order
+ * among the desks, leaving the others where they are as far as it can: each one that sits before the previous wanted
+ * desk moves to just after it (only ever later, so a desk never jumps ahead of Home's Chats desk). order = every desk
+ * number in desk order. Returns { moves: [[from, to]…], order } (order = the old numbers in their new places). Pure. */
+export function relMoves(order, want) {
+  const a = [...order], moves = []; let prev = -1;
+  for (const k of want || []) {
+    let p = a.indexOf(k); if (p < 0) continue;
+    if (p < prev) { a.splice(prev, 0, a.splice(p, 1)[0]); moves.push([p, prev]); p = prev; }
+    prev = p;
+  }
+  return { moves, order: a };
+}
+
+/* ---------- round 16 item 7 (Miguel, 3 Nov 2026): one app model on the phone and the desktop ---------- */
+/** The three layers. Pinned: every pin once, in his pin order, open or not ({ id, desk, name }; desk null = not open;
+ * its first desk when open). Open: the other desks (never Home's own Chats desk, never a pinned app), badged first
+ * until he has ordered them by hand (manual: the desks' order). The picker (layer 3) lists what is in neither. Pure. */
+export function appLayers(desks, pins, { main = null, lit = () => false, manual = false, names = {}, chats = 'wizard' } = {}) {
+  const rest = (desks || []).filter(d => d && d.id && d.desk !== main);
+  const pinned = (pins || []).map(id => rest.find(d => d.id === id) || { desk: null, id, name: names[id] || '' });
+  const pinIds = new Set(pins || []), others = rest.filter(d => !pinIds.has(d.id));
+  const on = d => d.id !== chats && lit(d.id);
+  return { pinned, open: manual ? others : [...others.filter(on), ...others.filter(d => !on(d))] };
+}
+/** Layer 3's exclusions: what the picker never repeats (pinned or open). */
+export const shownIds = (layers, chats = 'wizard') => new Set([chats, ...layers.pinned.map(p => p.id), ...layers.open.map(d => d.id)]);

@@ -113,7 +113,9 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
   /* ---------- the + sheet: Open · Installed · Get more ---------- */
   let sheet = null, offBack = null, offMount = null, q = '', store = null, storeErr = false, body = null, closing = false;
   const desks = () => (api.desks?.list || api.phone?.desks)?.() || [];
-  function list() { return notOpen(api.apps.list(), openIds()); }
+  // (AI apps round 16, opt-in: the picker of installed apps that are neither open nor pinned; see open(opts))
+  let pick = null;
+  function list() { const ex = new Set(pick?.exclude?.() || []); return notOpen(api.apps.list(), openIds()).filter(a => !ex.has(a.id)); }
   function tile(a, cls = 'vc-tile') {
     const t = el('span', cls, { 'aria-hidden': 'true' }); t.style.setProperty('--c', colourOf(a));
     t.append(el('i', `sgi sg-${glyphOf(a)}`, { 'aria-hidden': 'true' }));
@@ -155,6 +157,13 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     if (!sheet || !body) return;
     const apps = api.apps.list(), open = openApps(apps, desks()).filter(a => matches(a, q)), inst = list().filter(a => matches(a, q));
     const out = [];
+    if (pick) {
+      // the picker: one For people list (installed, neither open nor pinned), then + Get more (the App Store as it is)
+      out.push(section(pick.people || 'For people', inst.length));
+      if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': pick.people || 'For people', 'data-kind': 'apps' }); g.append(...inst.map(row)); out.push(g); }
+      else out.push(el('p', 'vc-empty', { text: q ? 'No installed app by that name.' : 'Every installed app is pinned or open.' }));
+      out.push(moreTile()); body.replaceChildren(...out); return;
+    }
     if (open.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Open' }); g.append(...open.map(openTile)); out.push(section('Open', open.length), g); }
     out.push(section('Installed', inst.length));
     if (inst.length) { const g = el('div', 'vc-list', { role: 'list', 'aria-label': 'Installed' }); g.append(...inst.map(row)); out.push(g); }
@@ -172,10 +181,22 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     out.push(all);
     body.replaceChildren(...out);
   }
-  function open() {
+  // the picker's last tile: + Get more = the App Store as it is (its own installed / open states)
+  function moreTile() {
+    const g = el('div', 'vc-list vc-list-more', { role: 'list', 'aria-label': 'Get more' });
+    const b = el('button', 'vc-app vc-more', { type: 'button', role: 'listitem', 'aria-label': 'Get more apps in the App Store' });
+    const t = el('span', 'vc-tile vc-tile-plus', { 'aria-hidden': 'true' }); t.append(icon('M12 5v14M5 12h14', 'vc-ico'));
+    b.append(t, el('span', 'vc-name', { text: 'Get more' }));
+    api.listen(b, 'click', () => { close(); api.apps.openDesk('app-store'); });
+    g.append(b); return g;
+  }
+  /** open(): the + sheet (Open · Installed · Get more). open({ exclude, people }) (AI apps round 16): the picker: only
+   * installed apps neither open nor in exclude() (his pins), + Get more last; nothing from the App Store listed in it. */
+  function open(opts = null) {
     if (sheet) return;
+    pick = opts && typeof opts === 'object' && !opts.type ? opts : null;
     q = ''; store = null; storeErr = false;
-    sheet = el('div', 'vc-sheet', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Apps' });
+    sheet = el('div', 'vc-sheet' + (pick ? ' vc-pick' : ''), { role: 'dialog', 'aria-modal': 'true', 'aria-label': pick ? 'Add an app' : 'Apps' });
     const scrim = el('div', 'vc-scrim', { 'aria-hidden': 'true' });
     const card = el('div', 'vc-card');
     const head = el('div', 'vc-head');
@@ -194,13 +215,13 @@ export function viewChrome(api, { openIds, goOpen = null, inset = null, orb = nu
     root.dataset.vcSheet = 'open';
     paint();
     const mine = sheet;
-    Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
+    if (!pick) Promise.resolve(api.apps.store ? api.apps.store() : []).then(l => { if (sheet === mine) { store = l || []; paint(); } }, () => { if (sheet === mine) { storeErr = true; paint(); } });
     // the desktop types at once; the phone waits for a tap (no keyboard over the lists)
     if (shell === 'desktop') field.focus?.({ preventScroll: true }); else shut.focus?.({ preventScroll: true });
   }
   function close() {
     if (!sheet) return;
-    const s = sheet; sheet = null; body = null;
+    const s = sheet; sheet = null; body = null; pick = null;
     offBack?.(); offBack = null; offMount?.(); offMount = null; s.remove();
     delete root.dataset.vcSheet;
   }

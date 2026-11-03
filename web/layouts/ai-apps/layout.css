@@ -414,3 +414,19 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread 
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread .ch-tacts > .ch-notif-route { flex: 1 0 100%; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 4px 10px; margin: 0; padding: 0; border: 0; background: none; color: var(--aa-ink-2); font: 500 0.75rem / 1.3 var(--wz-font-ui); }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread .ch-tacts > .ch-notif-route > span { flex: 1 1 auto; min-width: 0; text-align: right; }
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread .ch-tacts > .ch-notif-route .wos-route { flex: none; }
+
+/* ---------- round 16 item 7 (Miguel, 3 Nov 2026): Home = his pinned apps, then 'Open', then + ---------- */
+html[data-shell="phone"][data-layout="ai-apps"] .ah-div { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 4px 12px -4px; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 600 0.75rem / 1.3 var(--wz-font-ui); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-div::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-ic { transform: scale(.82); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-name { font-size: 0.6875rem; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-pin.is-run .ah-name::before { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 4px 2px 0; border-radius: 50%; background: currentColor; opacity: .7; vertical-align: middle; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift { position: relative; z-index: 5; transition: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift .ah-ic { transform: scale(1.12); filter: drop-shadow(0 8px 16px color-mix(in srgb, black 30%, transparent)); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-drop .ah-ic { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 3px; border-radius: 16px; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-grid[data-drag] { touch-action: none; }
+/* the picker's tiles on the light skins: the app's own colour at full strength, a white glyph (round 10's rule) */
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .vc-tile:not(.is-logo):not(.vc-tile-plus) {
+  background: linear-gradient(165deg, color-mix(in oklab, var(--c) 82%, white), var(--c) 55%, color-mix(in oklab, var(--c) 82%, black));
+}
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .vc-tile:not(.is-logo):not(.vc-tile-plus) .sgi:not(.sgb) { background: white !important; filter: drop-shadow(0 1px 1px color-mix(in srgb, black 28%, transparent)) !important; }

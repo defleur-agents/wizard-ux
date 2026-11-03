@@ -930,6 +930,8 @@
         list: () => { const l = live() ? (shell.deskApps || shell.phoneDesks)?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
         // close one desk as the stock ✕ does (the AI apps view's tab ✕; desktop only)
         close: desk => live() && Number.isInteger(desk) && desk >= 0 ? !!shell.closeDesk?.(desk) : false,
+        // move one desk as the stock arrange does (take out at from, put in at to; the AI apps view's drag; desktop only)
+        move: (from, to) => live() && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 ? !!shell.moveDesk?.(from, to) : false,
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
       back: Object.freeze({ push(close) {
