@@ -41,9 +41,9 @@
   let DEV = (() => { try { return new Set(JSON.parse(localStorage.getItem(DEV_KEY) || '[]')); } catch (_) { return new Set(); } })();
   // Reviewed legacy migrations, not supplied by apps or guessed from cache prefixes.
   // Never migrate /sw.js at scope / (Social's historical root worker is not app-owned).
+  // An app that declares home_screen.offline owns its worker (app-services.js skips these ids).
   window.WizCore.appMigrations = Object.freeze({
     'wizard-signal': { scope: '/wizard-signal/', scripts: ['/wizard-signal/sw.js'], caches: [] },
-    wisdom: { scope: '/wisdom/', scripts: ['/wisdom/sw.js'], caches: [] },
     'wisdom-next': { scope: '/wisdom-next/', scripts: ['/wisdom-next/sw.js'], caches: [] },
     social: { scope: '/wizard-social/', scripts: ['/wizard-social/sw.js'], caches: [] },
     trackhunt: { scope: '/trackhunt/', scripts: ['/trackhunt/sw.js', '/trackhunt/__pwa/service-worker.js'], caches: ['trackhunt-v1-20260711d'] },
@@ -65,6 +65,8 @@
     ...(a.desktop_only ? { desktopOnly: true } : {}),
     phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
     status: a.status,
+    // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
+    homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
@@ -78,6 +80,8 @@
   // never turn a stale or mistaken page declaration into a launcher tile, search result or deep-link target.
   const SHELL_HIDDEN = new Set(['wizard-agent-service', 'wizard-connection-router']);
   let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
+  // The installed app's own home-screen declaration (or null), for shell code that has no registry handle.
+  window.WizCore.appHomeScreen = id => REMOTE.find(a => a.id === id)?.homeScreen || null;
   const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
   let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
@@ -144,6 +148,8 @@
       const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
+      // The pinned-app worker learns which installed apps declared an offline pin (no per-app list in the shell).
+      window.WizOfflineSession?.publish(REMOTE).catch(() => {});
       BACK = back.map(a => toTile(a));
       listeners.forEach(fn => fn());
     } catch (e) {}

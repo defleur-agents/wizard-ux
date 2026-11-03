@@ -340,6 +340,12 @@
       ],
       "note": "Long-press Add to home screen sheet; Android ShortcutManager bridge"
     },
+    "core/home-screen-capabilities.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Validates app-declared home_screen capabilities (offline, position_keys, route_state); no per-app table"
+    },
     "core/home-screen-policy.js": {
       "loadedBy": [
         "phone"
@@ -390,9 +396,21 @@
       ],
       "note": "Direct entrypoint import"
     },
-    "core/offline-kit.js": {
+    "core/offline-session-config.js": {
       "loadedBy": [],
-      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); loaded by an app, not either shell"
+      "note": "Generated worker config for pinned app sessions (tools/build-offline-session.py); importScripts from web/sw.js, not either shell"
+    },
+    "core/offline-session.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Publishes the apps that declared home_screen.offline to the pinned-app worker; prepares the offline host"
+    },
+    "core/offline-kit.js": {
+      "loadedBy": [
+        "phone"
+      ],
+      "note": "Opt-in app offline replica and durable outbox (WizOffline.create); apps load it themselves, the phone shell loads it for pinned-app presentation journals"
     },
     "core/offline-sw.js": {
       "loadedBy": [],
@@ -737,6 +755,21 @@
       "shell": "phone",
       "classification": "preview",
       "reason": "Opt-in Live Mode motion styles."
+    },
+    "core/home-screen-capabilities.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
+    },
+    "core/offline-session.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
+    },
+    "core/offline-kit.js": {
+      "shell": "phone",
+      "classification": "native",
+      "reason": "Android home-screen pin sessions; desktop has no home-screen pinning."
     },
     "core/home-screen-policy.js": {
       "shell": "phone",

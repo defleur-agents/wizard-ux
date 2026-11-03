@@ -86,7 +86,7 @@ Reuse:
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native phone mic recording (voice notes, orb takes, dictation) | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
 | Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
-| Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; `single-app-session.js`, `home-screen-apps.css`: host owns status/cutout, child inset 0; docs/pwa-app-install.md | app CSS inset ownership |
+| Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; `single-app-session.js`: host owns status/cutout, child inset 0; docs/pwa-app-install.md; pins: `WizHomeScreenCapabilities` | app CSS inset ownership |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
@@ -94,7 +94,7 @@ Reuse:
 | Need | Use | Never hand-roll |
 |---|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` | PNG + CSS spin, Lottie, SVG |
-| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients, canvases or colour constants |
+| Skins, backgrounds, scenery, skin switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) | own gradients/canvases/colours |
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help ("Step N of 3": Talk, Reply in Chats, Done), responsive Done, skip/exit; desktop guide `WosTour.desk` ("Step N of 2") | `WosTour` (`web/core/tour.js`) | — |
 | Install prompt (banner; `hold(on, owner?)` while a tour or overlay owns the top controls) | `WizardPwaInstall` (`web/pwa-install.js`) | a second `beforeinstallprompt` listener |
