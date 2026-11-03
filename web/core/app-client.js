@@ -41,12 +41,12 @@
   const detached = () => !service;
   const localHolds = new Map();
   const notify = (set, value) => { for (const fn of set) try { fn(value); } catch (e) { console.warn('WizardApp subscriber', e); } };
-  function request(op, args, timeout = 15000) {
+  function request(op, args, timeout = 15000, onAdmitted) {
     if (!framed || requests.size >= 32) return Promise.reject(new Error('Shared app transport unavailable'));
     const id = 'wa-' + (++requestId) + '-' + Math.random().toString(36).slice(2);
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { requests.delete(id); reject(new Error('Shared app transport timed out')); }, timeout);
-      requests.set(id, { resolve, reject, timer });
+      const timer = setTimeout(() => { requests.delete(id); reject(Object.assign(new Error('Shared app transport timed out'), op === 'ready.write' ? {uncertain:true} : {})); }, timeout);
+      requests.set(id, { resolve, reject, timer, onAdmitted, op });
       try { parent.postMessage({ type: 'wizard:app:request', version: VERSION, id, op, args }, ORIGIN); }
       catch (e) { clearTimeout(timer); requests.delete(id); reject(e); }
     });
@@ -292,9 +292,18 @@
     if (!framed || e.source !== parent || e.origin !== ORIGIN || !e.data) return;
     const d = e.data;
     if (d.type === 'wizard:app:companion' && d.version === VERSION) notify(companionMessages, { from: d.from, data: d.data });
+    if (d.type === 'wizard:app:admitted' && d.version === VERSION && requests.has(d.id) && e instanceof MessageEvent && e.isTrusted) {
+      const pending = requests.get(d.id), fn = pending.onAdmitted; pending.onAdmitted = null;
+      try { fn?.(); } catch (_) {}
+    }
     if (d.type === 'wizard:app:reply' && d.version === VERSION && requests.has(d.id)) {
+      if (requests.get(d.id).op === 'ready.write' && (!(e instanceof MessageEvent) || !e.isTrusted)) return;
       const pending = requests.get(d.id); clearTimeout(pending.timer); requests.delete(d.id);
-      if (d.error) pending.reject(new Error(String(d.error))); else pending.resolve(d.value);
+      if (d.error) {
+        const error = new Error(String(d.error));
+        if (pending.op === 'ready.write' && d.details && typeof d.details === 'object') for (const [key,value] of Object.entries(d.details)) if (!['__proto__','prototype','constructor'].includes(key)) error[key] = value;
+        pending.reject(error);
+      } else pending.resolve(d.value);
     }
     if (d.type === 'wizard:appearance' && applyTheme(d.appearance)) parent.postMessage({ type: 'wizard:appearance:ack', version: VERSION, revision: currentTheme.revision }, ORIGIN);
     if (d.type === 'wizard:app:orb' && d.version === VERSION && orbHandler) { try { orbHandler(); } catch (err) { console.warn('WizardApp orb', err); } }
@@ -406,6 +415,7 @@
   }
   const sharedResult = promise => promise.then(value => ['shared', 'copied', 'cancelled', 'unsupported'].includes(value) ? value : 'unsupported', () => 'unsupported');
   window.WizardApp = Object.freeze({ version: VERSION, get hosted() { return !!service || transportReady; }, ready,
+    readyExtension: Object.freeze({write: (kind,input,before,options={}) => request('ready.write',{kind,input,before},120000,options.onAdmitted)}),
     identity: Object.freeze({
       info: () => framed ? request('identity.info') : Promise.resolve({ unavailable: true }),
       sign: event => framed ? request('identity.sign', { event }, 190000) : Promise.resolve({ unavailable: true }),

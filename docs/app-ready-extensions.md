@@ -19,8 +19,8 @@ The module exports the same `contract` and a default factory. Its instance owns
 while app-owned writes settle. It receives `installed`, `authorize`, `changed`,
 `open`, and `toast`. `authorize` requires the exact connected shell-owned frame,
 its current document and same-origin app path. Callers use generic
-`WizAppExtensions.call(source, kind, input, before)`; domain kinds/bodies stay
-opaque to the host. Removed grants revoke admission immediately. Superseded
+`WizardApp.readyExtension.write(kind, input, before, {onAdmitted})`; domain kinds/bodies stay
+opaque to the host. Browser-supplied trusted message origin/source admits the exact frame, not a caller-provided WindowProxy. Admission acknowledgement permits Back without waiting for the backend. Removed grants revoke admission immediately. Superseded
 metadata/imports cannot resurrect them. Updates use a new content-addressed
 module and dispose its old listeners/styles after pending custody settles.
 

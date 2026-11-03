@@ -232,14 +232,33 @@
       } catch (_) { /* Keep an admitted running extension on transient metadata failure, not a new grant. */ }
     }));
   }
+  // Only browser-supplied message provenance admits a write; callers cannot pass
+  // another app's WindowProxy to a public synchronous dispatch function.
+  window.addEventListener?.('message', async e => {
+    const d = e.data;
+    if (!(e instanceof MessageEvent) || !e.isTrusted || e.origin !== location.origin || d?.type !== 'wizard:app:request' || d.version !== 1 || d.op !== 'ready.write' || typeof d.id !== 'string' || d.id.length > 96) return;
+    const entry = [...entries.values()].find(x => x.instance && frameFor(e.source,x));
+    if (!entry) return;
+    entry.requests ||= new Set();
+    if (entry.requests.size >= 32 || entry.requests.has(d.id)) return;
+    entry.requests.add(d.id);
+    const doc = e.source.document;
+    const reply = payload => { if (installed(entry) && frameFor(e.source,entry) && e.source.document === doc) e.source.postMessage({version:1,id:d.id,...payload},location.origin); };
+    try {
+      const task = entry.instance.write(e.source,d.args?.kind,d.args?.input,d.args?.before);
+      reply({type:'wizard:app:admitted'}); // custody exists before the caller may Back; never await the backend
+      const value = await task;
+      reply({type:'wizard:app:reply',value});
+    } catch (error) {
+      const details = {};
+      for (const [key,value] of Object.entries(error || {})) if (!['__proto__','prototype','constructor'].includes(key)) details[key] = value;
+      reply({type:'wizard:app:reply',error:String(error?.message || error).slice(0,200),details});
+    } finally { entry.requests.delete(d.id); }
+  });
   window.WizAppExtensions = Object.freeze({contract:CONTRACT,moduleURL,configure,html,
     attach(H) { host = H; for (const e of entries.values()) start(e); },
     poll() { for (const e of entries.values()) { try { Promise.resolve(e.instance?.poll()).catch(() => {}); } catch (_) {} } },
     handle(event) { try { return entries.get(event.target.closest('[data-app-ready]')?.dataset.appReady)?.instance?.handle(event) || false; } catch (_) { return false; } },
-    call(source,kind,input,before) {
-      const entry = [...entries.values()].find(e => e.instance && frameFor(source,e));
-      if (!entry) throw Error('Current shell-owned app frame required');
-      return entry.instance.write(source,kind,input,before);
-    },
+
   });
 })();
