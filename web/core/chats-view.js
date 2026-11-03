@@ -29,6 +29,7 @@
   }
   // Only a fresh Agent Service registry response admits code. Launcher links and cache never do.
   function configure(snapshot) {
+    window.WizAppExtensions?.configure(snapshot);
     const keep = new Set([DEFAULT, ...(fixture ? ['chats-fixture', 'chats-throws'] : [])]);
     for (const a of snapshot.apps || []) {
       const module = moduleURL(a);
@@ -68,6 +69,7 @@
     if (/\bimport\s*(?:[({*'\"]|[a-zA-Z_$])/.test(source)) throw Error('Chats views cannot import other modules');
   }
   function create(H) {
+    window.WizAppExtensions?.attach(H);
     const regions = new Map(), bypass = new Set(), failed = new Set();
     let core;
     const owner = id => H.owner ? H.owner(id) : id;
@@ -142,5 +144,88 @@
   window.WizChatsHost = Object.freeze({ contract: VERSION, register, configure, create, moduleURL, lint,
     defaultId: () => selected, installed: () => [...installed.values()].map(a => ({ ...a })),
     tiles: () => [...installed.values()].filter(a => a.id !== DEFAULT || installed.size > 1).map(a => ({ id: a.id, name: a.id === DEFAULT ? 'Chats (standard)' : a.name, kind: 'chats', chatsProvider: a.id, icon: '✦', g: ['var(--violet-2)', 'var(--violet-2)'], desc: 'Chats view · same conversations' })),
+  });
+})();
+
+/* Owner-installed Ready extensions. Like Chats views, these are trusted same-origin
+ * app code, NOT a sandbox. Only a fresh installed registry declaration admits code. */
+(() => {
+  'use strict';
+  const entries = new Map(); let host = null, generation = 0;
+  const CONTRACT = 'wizard.ready-extension/1';
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function moduleURL(a) {
+    if (a.source !== 'apps.json' || !a.provides?.includes('ready-extension')) return null;
+    try {
+      const base = new URL(a.url, location.origin);
+      if (base.origin !== location.origin || base.username || base.password || base.search || base.hash || /%(?:2f|5c|2e|25)/i.test(base.pathname)) return null;
+      const prefix = base.pathname.endsWith('/') ? base.pathname : base.pathname.slice(0, base.pathname.lastIndexOf('/') + 1);
+      return prefix !== '/' ? new URL(prefix + 'shell.js', location.origin) : null;
+    } catch (_) { return null; }
+  }
+  function frameFor(source, entry) {
+    try {
+      const f = [...host.root().querySelectorAll('iframe')].find(f => f.contentWindow === source);
+      const w = f?.closest('[data-win]'), win = w && host.win(w.dataset.win);
+      const current = new URL(source.location.href), launch = new URL(f.src, location.href);
+      return !!f?.isConnected && !f.hasAttribute?.('srcdoc') && win?.app === 'frame' && win.appId === entry.id && source.document === f.contentDocument
+        && [current,launch].every(u => u.origin === location.origin && !/%(?:2f|5c|2e|25)/i.test(u.pathname) && u.pathname.startsWith(entry.prefix));
+    } catch (_) { return false; }
+  }
+  function html() { return [...entries.values()].filter(e => e.instance).map(e => `<div data-app-ready="${esc(e.id)}">${e.instance.html()}</div>`).join(''); }
+  function repaint() {
+    if (!host) return;
+    for (const slot of host.root().querySelectorAll('[data-slot="ready-top"]')) {
+      const parent = slot.parentNode;
+      for (const old of parent.querySelectorAll(':scope > [data-app-ready]')) old.remove();
+      slot.insertAdjacentHTML('afterend', html());
+    }
+  }
+  function start(entry) {
+    if (!host || entry.loading) return;
+    entry.loading = true;
+    import(entry.module.href).then(m => {
+      if (entries.get(entry.id) !== entry || m.contract !== CONTRACT || typeof m.default !== 'function') return;
+      const api = Object.freeze({
+        installed: () => entries.get(entry.id) === entry,
+        authorize: source => entries.get(entry.id) === entry && frameFor(source, entry),
+        changed: repaint,
+        open: target => host.openApp?.(entry.id, target) || window.WizOpenApp?.(entry.id),
+        toast: (...args) => host.toast(...args),
+      });
+      entry.instance = m.default(api);
+      if (!entry.instance || !['html','write','poll','handle','dispose'].every(k => typeof entry.instance[k] === 'function')) throw Error('Invalid Ready extension');
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = new URL('shell.css', entry.module).href;
+      document.head.appendChild(link); entry.style = link;
+      entry.instance.poll(); repaint();
+    }).catch(() => { entry.instance = null; repaint(); });
+  }
+  function configure(snapshot) {
+    generation++;
+    const keep = new Set();
+    for (const a of snapshot.apps || []) {
+      const module = moduleURL(a);
+      if (!module || !/^[a-z0-9][a-z0-9-]{0,63}$/.test(a.id) || keep.has(a.id)) continue;
+      keep.add(a.id);
+      let entry = entries.get(a.id);
+      if (entry && entry.module.href !== module.href) { entry.instance?.dispose(); entry.style?.remove(); entries.delete(a.id); entry = null; }
+      if (!entry) { entry = {id:a.id,module,prefix:module.pathname.slice(0,module.pathname.lastIndexOf('/')+1),generation}; entries.set(a.id,entry); }
+      start(entry);
+    }
+    for (const [id,e] of entries) if (!keep.has(id)) { entries.delete(id); e.instance?.dispose(); e.style?.remove(); }
+    repaint();
+  }
+  window.WizAppExtensions = Object.freeze({contract:CONTRACT,moduleURL,configure,html,
+    attach(H) { host = H; for (const e of entries.values()) start(e); },
+    poll() { for (const e of entries.values()) e.instance?.poll(); },
+    handle(event) {
+      const id = event.target.closest('[data-app-ready]')?.dataset.appReady;
+      return entries.get(id)?.instance?.handle(event) || false;
+    },
+    call(source,kind,input,before) {
+      const entry = [...entries.values()].find(e => e.instance && frameFor(source,e));
+      if (!entry) throw Error('Current shell-owned app frame required');
+      return entry.instance.write(source,kind,input,before);
+    },
   });
 })();
