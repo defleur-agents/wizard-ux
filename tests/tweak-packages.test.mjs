@@ -56,7 +56,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
-  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/orb-radial', 'wizard/pin-buttons', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
+  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), cat.tweaks.filter(id => id.startsWith('wizard/') && !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)).sort(), 'tapped again: his are off, James\'s stay');
   const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
   assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
   assert.equal(E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').builtin, true);
