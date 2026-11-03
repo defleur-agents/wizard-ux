@@ -646,6 +646,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
   assert.match(host, /open: id => \{ if \(!live\(\) \|\| typeof id !== 'string' \|\| !id\) return; if \(id\.startsWith\(NOTE_ID\)\) inboxAct\(NOTE_ID_OPEN, id\.slice\(NOTE_ID\.length\)\); else shell\.openThread\(id\); \},/);
   assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && noteAct\(id, action\)/);
+  assert.match(read('web/layouts/ai-apps/layout.css'), /\.ch-notif-route \.wos-route button\[aria-checked="true"\] \{ background: var\(--wz-accent\) !important; color: var\(--wz-base\) !important; \}/, 'the picked place stays readable in the phone action row');
   ctx.inboxThreads.get('wizard/unified-inbox').list = false;
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.withNoteRows([]))), [], 'none while no package lists the inbox in Chats');
 });
