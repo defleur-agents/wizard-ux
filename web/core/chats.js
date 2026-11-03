@@ -726,11 +726,11 @@ window.WizCore.chats = function createChats(H) {
     try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); return true; } catch (e) { return false; }
   }
   // Remove legacy saved slots created just by opening a notification; preserve the live composer.
-  (function dropOpenedNotifications() {
+  function dropOpenedNotifications() {
     const all = KIT.drafts.all(); let n = 0;
     for (const k of Object.keys(all)) if (k !== 'new' && SAVED_NEW.test(k) && untouchedNotif(KIT.drafts.get(k))) { delete all[k]; n++; }
     if (n) try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); } catch (e) {}
-  })();
+  }
   function openNewDraft(wid, resume) {
     const w = W[wid]; if (!w) return;
     if (w.thread) saveDraft(wid);
@@ -782,6 +782,7 @@ window.WizCore.chats = function createChats(H) {
     return n;
   }
   migrateOldReplies();
+  dropOpenedNotifications();
   // The reply bubble above the composer: who it answers, one or two lines of it, and × to drop it.
   /* Notifications as threads (a live package holds WosSkinHost.inboxThreads): a New chat whose draft carries a
    * Notifications item is shown as that notification's one-message thread. Its title, one yellow message, Done /
