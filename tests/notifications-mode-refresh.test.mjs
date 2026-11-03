@@ -29,7 +29,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
     return nodes.get(key);
   };
   const groups = () => ({ ready: [{ id: 'chat-a' }, { id: 'chat-b' }], needs: [], working: [] });
-  const window = { addEventListener, dispatchEvent, WosSkinHost: { inboxList: mode },
+  const window = { addEventListener, dispatchEvent, WosSkinHost: { inboxList: mode, changed() {} },
     WizCore: { backendApps: () => [{ id: 'notifications' }] } };
   const context = vm.createContext({ window, addEventListener, dispatchEvent,
     document: { querySelectorAll: () => [], addEventListener() {} },
