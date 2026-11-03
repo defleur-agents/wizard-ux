@@ -74,11 +74,13 @@
     ...(APP_CATEGORIES.has(a.category) ? { category: a.category } : {}),
     sigil: { id: String(a.id), name: String(a.name || a.id), icon: a.icon || '', colors: Array.isArray(a.colors) ? a.colors : [] },
   });
-  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).map(toTile); } catch (e) { return []; } })();
-  // The Agent Service is Wizard itself, not an app the owner manages.
-  const BACK_KEY = 'wux.apps.backend.v1', BACK_HIDDEN = new Set(['wizard-agent-service']);
+  // Core plumbing has no owner-facing action. Keep it in the installed-app snapshot for the Store and agents, but
+  // never turn a stale or mistaken page declaration into a launcher tile, search result or deep-link target.
+  const SHELL_HIDDEN = new Set(['wizard-agent-service', 'wizard-connection-router']);
+  let REMOTE = (() => { try { return (JSON.parse(localStorage.getItem(REMOTE_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(toTile); } catch (e) { return []; } })();
+  const BACK_KEY = 'wux.apps.backend.v1';
   window.WizCore.appMetadata = id => [...REMOTE, ...BACK].find(a => a.id === id)?.sigil;
-  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).map(a => toTile(a)); } catch (e) { return []; } })();
+  let BACK = (() => { try { return (JSON.parse(localStorage.getItem(BACK_KEY) || '[]') || []).filter(a => !SHELL_HIDDEN.has(a?.id)).map(a => toTile(a)); } catch (e) { return []; } })();
   window.WizCore.backendApps = () => BACK.map(a => {
     if (!a.sgh && window.WizSigil) { const g = window.WizSigil.of(a.sigil || a); a.sgc = g.color; a.sgh = window.WizSigil.html(a.sigil || a); }
     return a;
@@ -136,10 +138,10 @@
       // Owner's In development list (launcher.json in_development, James 23 Oct 2026): any app id, built-ins included.
       DEV = new Set(Array.isArray(snapshot.in_development) ? snapshot.in_development.map(String) : []);
       try { localStorage.setItem(DEV_KEY, JSON.stringify([...DEV])); } catch (_) {}
-      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard');
+      const all = (snapshot.apps || []).filter(a => a && a.id && a.id !== 'wizard' && !SHELL_HIDDEN.has(a.id));
       const list = all.filter(a => a.url);
       // Backend-only apps (no page of their own): listed only by skins that show them (Miguel's skins, app.js).
-      const back = all.filter(a => !a.url && !BACK_HIDDEN.has(a.id) && !window.WizCore.isMaintenanceApp?.(a));
+      const back = all.filter(a => !a.url && !window.WizCore.isMaintenanceApp?.(a));
       try { localStorage.setItem(REMOTE_KEY, JSON.stringify(list)); localStorage.setItem(BACK_KEY, JSON.stringify(back)); } catch (e) {}
       REMOTE = list.map(a => toTile(a, true));
       BACK = back.map(a => toTile(a));
