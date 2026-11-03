@@ -25,10 +25,17 @@
  *   a small running dot under its name, like the dock's; a pin not open has none (no pin badge either: the hold menu
  *   says Pin / Unpin). The open apps not pinned start on a new row after a slightly larger gap that holds only a tiny
  *   muted 'Open' caption on the left (.ah-cap); then +; then the caller's foot (the phone's tidy line).
+ * Round 19 item 4 (Miguel, 3 Nov 2026: the dock, approved): the pinned apps live in a DOCK just above the composer, a
+ *   subtle glass plate (skin tokens, iOS's dock), up to 2 rows × 4 icons (8; more pins page sideways by page with dots),
+ *   the grid's icon size, names under, the running dot under the open ones. The grid above shows only the open apps not
+ *   pinned, then +, then the caller's foot (the tidy line); no 'Open' caption, no new-row rule; nothing else open = just
+ *   +. Hold and drag: within the dock, within the grid and between them (into the dock = pinned there; out = unpinned),
+ *   the desktop column's move (parts.js homeDrop); a hold without moving = the app's menu. The dock hides while the
+ *   composer is typed in (the keyboard up).
  * No timers beyond api.after, no markup strings; everything through the layout API. */
 import { realApps, CHATS } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
-import { svgIcon } from './parts.js';
+import { svgIcon, dockPages, DOCK_PER } from './parts.js';
 
 /* App letters (Miguel, 2 Nov 2026: "keep ALL existing Option-key hotkeys"): ⌥ + a letter opens a Home app, but only
  * letters the desktop's own ⌥ keys leave free (⌥C D F G I L N O P R S T V W X Z keep their meaning; H flips the Home
@@ -77,6 +84,20 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   const grid = paged ? null : el('div', 'ah-grid', { role: 'list', 'aria-label': 'Apps' });
   const view = paged ? el('div', 'ah-view') : null, track = paged ? el('div', 'ah-track') : null, dots = paged ? el('div', 'ah-dots', { role: 'tablist', 'aria-label': 'Pages' }) : null;
   if (paged) { view.append(track); box.append(view, dots); } else box.append(grid);
+  // round 19 item 4: the dock (layers, the phone): pages of 8 pins in a sideways snap scroller, dots when 2+ pages
+  const dock = layers ? el('div', 'ah-dock is-empty', { role: 'group', 'aria-label': 'Dock: your pinned apps' }) : null;
+  const dview = layers ? el('div', 'ah-dview') : null, ddots = layers ? el('div', 'ah-ddots', { 'aria-hidden': 'true' }) : null;
+  if (dock) { dock.append(dview, ddots); box.append(dock); }
+  let dpage = 0;
+  const dockPageNow = () => { const w = dview.clientWidth || 0; return w ? Math.round((dview.scrollLeft || 0) / w) : dpage; };
+  function paintDDots() {
+    const n = dview.children.length; ddots.hidden = n < 2;
+    while (ddots.children.length < n) ddots.append(el('i', 'ah-ddot'));
+    while (ddots.children.length > n) ddots.lastElementChild.remove();
+    dpage = Math.min(dockPageNow(), Math.max(0, n - 1));
+    [...ddots.children].forEach((d, k) => d.classList.toggle('is-on', k === dpage));
+  }
+  if (dock) api.listen(dview, 'scroll', () => { if (dockPageNow() !== dpage) paintDDots(); });
 
   function tile(a) {
     const t = el('span', 'ah-tile', { 'aria-hidden': 'true' }), chats = a.id === CHATS;
@@ -103,45 +124,61 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     if (layers) holdable(b, a); else pressable(b, a);
     return b;
   }
-  /* Round 16 item 7 (layers): a hold (HOLD ms, still) lifts a pinned icon: drag it to its new place among the pins (the
-   * one under the finger is marked); let go without moving = the app's menu (Pin / Unpin, Add to Home Screen, Open,
-   * Close). An open (not pinned) icon's hold = its menu. A right click = the menu. */
+  /* Round 16 item 7 (layers): a hold (HOLD ms, still) lifts an icon; round 19 item 4: any icon, in the dock or the grid:
+   * drag it within its row of apps or across (the dock pins, the grid unpins; the spot under the finger is marked); let
+   * go without moving = the app's menu (Pin / Unpin, Add to Home Screen, Open, Close). A right click = the menu. */
   let lift = null;
-  const pinCells = () => [...grid.querySelectorAll('.ah-app[data-group="pin"]')];
+  const liftCells = () => [...dock.querySelectorAll('.ah-app[data-group="pin"]'), ...grid.querySelectorAll('.ah-app[data-group="open"]')];
   function holdable(b, a) {
     api.listen(b, 'pointerdown', e => {
       if (e.button > 0) return;
-      const p = { b, a, x: e.clientX, y: e.clientY, pid: e.pointerId, lifted: false, moved: false, to: -1 };
+      const p = { b, a, x: e.clientX, y: e.clientY, pid: e.pointerId, lifted: false, moved: false, to: null, mark: null };
       p.off = api.after(HOLD, () => {
         if (press !== p) return;
         p.lifted = true; swallow = Date.now() + 700;
-        if (a.group !== 'pin') { press = null; layers.menu?.(a, { x: p.x, y: p.y, el: b }); return; }
-        lift = p; p.cells = pinCells(); p.from = p.cells.indexOf(b); p.rects = p.cells.map(c => c.getBoundingClientRect());
-        b.classList.add('is-lift'); grid.dataset.drag = '';
+        lift = p; p.cells = liftCells().filter(c => c !== b); p.rects = p.cells.map(c => c.getBoundingClientRect());
+        b.classList.add('is-lift'); box.dataset.drag = ''; grid.dataset.drag = '';
+        // the icon follows the finger as a floating copy over everything (the grid and the dock both clip their own)
+        const ic = b.querySelector('.ah-ic'), g = ic?.cloneNode?.(true);
+        if (g) { const r = ic.getBoundingClientRect(); g.classList.add('ah-ghost'); g.style.left = Math.round(r.left) + 'px'; g.style.top = Math.round(r.top) + 'px'; box.append(g); p.ghost = g; }
       });
       press = p;
     });
     api.listen(b, 'contextmenu', e => { e.preventDefault?.(); if (lift) return; swallow = Date.now() + 700; layers.menu?.(a, { x: e.clientX, y: e.clientY, el: b }); });
   }
+  /** where a lifted icon would land for a finger at (x, y): the dock (pin) when over it, else the grid (open); before
+   * the nearest icon of that group, or after it when the finger is past its middle on its row. Pure on the rects. */
+  function liftTarget(p, x, y) {
+    const dr = dock.getBoundingClientRect(), inDock = y >= dr.top - 12 && dr.height > 0;
+    const group = inDock ? 'pin' : 'open';
+    const all = [...(group === 'pin' ? dock.querySelectorAll('.ah-app[data-group="pin"]') : grid.querySelectorAll('.ah-app[data-group="open"]'))];
+    const rest = all.filter(c => c !== p.b);
+    let best = -1, bd = Infinity;
+    rest.forEach((c, i) => { const r = p.rects[p.cells.indexOf(c)] || c.getBoundingClientRect(); if (inDock && (r.right < dr.left || r.left > dr.right)) return; const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2)); if (d < bd) { bd = d; best = i; } });
+    if (best < 0) return { to: { group, index: 0 }, mark: null };
+    const r = p.rects[p.cells.indexOf(rest[best])] || rest[best].getBoundingClientRect(), after = x > r.left + r.width / 2 && Math.abs(y - (r.top + r.height / 2)) < r.height / 2;
+    return { to: { group, index: best + (after ? 1 : 0) }, mark: rest[best] };
+  }
   function liftMove(e) {
     const p = lift; if (!p) return false;
     const dx = e.clientX - p.x, dy = e.clientY - p.y; if (Math.hypot(dx, dy) > 6) p.moved = true;
-    p.b.style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
-    let best = -1, bd = Infinity;
-    p.rects.forEach((r, i) => { const d = Math.hypot(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2)); if (d < bd) { bd = d; best = i; } });
-    if (best !== p.to) { p.cells[p.to]?.classList.remove('is-drop'); p.to = best; if (best !== p.from) p.cells[best]?.classList.add('is-drop'); }
+    (p.ghost || p.b).style.translate = `${Math.round(dx)}px ${Math.round(dy)}px`;
+    const t = liftTarget(p, e.clientX, e.clientY); p.to = t.to;
+    if (t.mark !== p.mark) { p.mark?.classList.remove('is-drop'); p.mark = t.mark; p.mark?.classList.add('is-drop'); }
+    dock.classList.toggle('is-target', t.to.group === 'pin');
     return true;
   }
   function liftEnd(commit) {
     const p = lift; if (!p) return false; lift = null; press = null;
-    p.b.classList.remove('is-lift'); p.b.style.translate = ''; for (const c of p.cells) c.classList.remove('is-drop'); delete grid.dataset.drag;
+    p.b.classList.remove('is-lift'); p.b.style.translate = ''; p.ghost?.remove(); p.mark?.classList.remove('is-drop'); dock.classList.remove('is-target');
+    delete grid.dataset.drag; delete box.dataset.drag;
     swallow = Date.now() + 500;
     if (!commit) return true;
-    if (p.moved && p.to >= 0 && p.to !== p.from) layers.reorderPins?.(p.from, p.to);
+    if (p.moved && p.to) layers.drop?.({ id: p.a.id, open: p.a.desk != null, group: p.a.group }, p.to);
     else if (!p.moved) layers.menu?.(p.a, { x: p.x, y: p.y, el: p.b });
     return true;
   }
-  if (layers && grid) api.listen(grid, 'touchmove', e => { if (lift) e.preventDefault?.(); }, { passive: false });
+  if (layers && grid) for (const n of [grid, dock]) api.listen(n, 'touchmove', e => { if (lift) e.preventDefault?.(); }, { passive: false });
   /* Round 7 (Miguel): a hold on an app icon (phone) or a right click (desktop) offers it for the home screen, exactly as
    * the Desks' hold on an app tile does: the stock sheet (core/home-screen-apps.js through api.apps.homeScreen; native
    * pin on the Android app, the two-step Add to Home Screen / Install app guide elsewhere), never a copy. Apps the stock
@@ -197,19 +234,23 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return pageFit(Math.max(0, r.width - 24), Math.max(0, r.height), CELL.w, CELL.h);
   }
   /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
-  let plusCell = null, cap = null, splitAt = -1;
+  let plusCell = null, dockKeys = [];
   function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
-    if (layers) {
-      // round 16 item 7: the pins, then the open apps, then +. Round 18 (Miguel, 3 Nov 2026: the Mac dock): no chip, no
-      // line; the open apps not pinned start on a new row under a tiny muted 'Open' caption (a full-row grid item), then
-      // + and the caller's foot (the phone's tidy line)
-      const list = order.map(id => cells.get(id)).filter(Boolean);
-      cap ||= el('div', 'ah-cap', { 'aria-hidden': 'true', text: 'Open' });
-      if (splitAt > 0 && splitAt < list.length) list.splice(splitAt, 0, cap);
-      nodes.splice(0, nodes.length, ...list, plusCell ||= plusTile(), ...(layers.foot ? [layers.foot] : []));
-    }
     const put = (box0, want) => { const now = box0.children; if (now.length !== want.length || want.some((n, k) => now[k] !== n)) box0.replaceChildren(...want); };
+    if (layers) {
+      // round 19 item 4: the grid = the open apps not pinned, then +, then the caller's foot (the tidy line); the pins
+      // in the dock, pages of 8 (round 18's 'Open' caption and new-row rule are gone)
+      const list = order.filter(k => !dockKeys.includes(k)).map(k => cells.get(k)).filter(Boolean);
+      nodes.splice(0, nodes.length, ...list, plusCell ||= plusTile(), ...(layers.foot ? [layers.foot] : []));
+      const pg = dockPages(dockKeys.map(k => cells.get(k)).filter(Boolean));
+      while (dview.children.length < pg.length) dview.append(el('div', 'ah-dpage', { role: 'list' }));
+      while (dview.children.length > pg.length) dview.lastElementChild.remove();
+      [...dview.children].forEach((p, i) => { p.setAttribute('aria-label', pg.length > 1 ? `Dock, page ${i + 1} of ${pg.length}` : 'Dock'); put(p, pg[i]); });
+      dock.classList.toggle('is-empty', !pg.length); dock.classList.toggle('is-paged', pg.length > 1);
+      dock.style.setProperty('--ah-dock-rows', String(Math.min(2, Math.max(1, Math.ceil(Math.min(dockKeys.length, DOCK_PER) / 4)))));
+      paintDDots();
+    }
     if (!paged) put(grid, nodes);
     else {
       const n = Math.max(1, Math.ceil(nodes.length / fitNow.per));
@@ -230,7 +271,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
       const L = layers.model(), meta = new Map([...(Array.isArray(api.apps.kinds?.()?.apps) ? api.apps.kinds().apps : []), ...api.apps.list()].filter(a => a && a.id).map(a => [a.id, a]));
       const pins = L.pinned.map(p => ({ ...(meta.get(p.id) || {}), id: p.id, name: p.name || meta.get(p.id)?.name || p.id, desk: p.desk ?? null, key: 'pin:' + p.id, group: 'pin' }));
       const open = L.open.map(d => ({ ...(meta.get(d.id) || {}), id: d.id, name: d.name || meta.get(d.id)?.name || d.id, desk: d.desk, key: 'desk:' + d.desk, group: 'open', ...(d.id === CHATS ? { dupe: true } : {}) }));
-      list = [...pins, ...open]; splitAt = pins.length;
+      list = [...pins, ...open]; dockKeys = pins.map(a => a.key);
     } else { const { open, rest } = homeApps(api.apps.list(), desks(), api.apps.kinds?.(), lit); list = [...open, ...rest]; }
     fitNow = fit();
     const cellSig = a => JSON.stringify([a.id, a.name, a.desk, a.group || '', a.dupe ? '' : badgeText(a.id)]);
