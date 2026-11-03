@@ -76,7 +76,7 @@ function levels(api, now = () => Date.now()) {
   return {
     attach(h) { host = h; void sync(true); },
     route: (id, stored) => {
-      const r = stored !== undefined ? stored : sysOf(id) ? 'daily' : id === 'notifications' ? 'chats' : undefined;
+      const r = stored !== undefined ? stored : sysOf(id) ? 'daily' : 'chats';  // apps start in Chats, like stock
       return TO.includes(r) && (r !== 'daily' || dailyOk(id)) ? r : 'badge';
     },
     accepts: (id, to) => validId(id) && TO.includes(to) && (to !== 'daily' || dailyOk(id)),

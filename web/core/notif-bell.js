@@ -6,10 +6,11 @@
  *
  * Where each app's notifications go (Settings › Notifications; Miguel, 1 Nov 2026: "badges or my unified inbox, but
  * not both"): one choice per app, Badge or Chats. Badge = the count on the app's own icon, nothing in Chats. Chats =
- * its items wait in Chats (yellow threads with Archive / Snooze, counted in Chats' Ready badge) and its own icon
- * shows no count. Default: Notifications (agent alerts) → Chats, every other app → Badge. Chats needs a package that
- * lists inbox threads (wizard/unified-inbox, on by default); without one everything is a badge. Saved per device
- * (`wos.notify.route.v1`); the same choice on every device would need a ui-preferences field in the Agent Service.
+ * its items wait in Chats (yellow threads with Open / Done / Snooze, counted in Chats' Ready badge) and its own icon
+ * shows no count. Default (Miguel, 3 Nov 2026: "notifications should come in the same place chat threads come in"):
+ * Chats, for Notifications' own alerts and for every app that publishes an inbox feed; an app without a feed can
+ * only show a badge. Chats needs a package that lists inbox threads (wizard/unified-inbox, on by default); without
+ * one everything is a badge. Saved per device (`wos.notify.route.v1`); a part may keep it on the box instead.
  *
  * Where things go is one replaceable part, `notify-routing` (version 1): the stock part below is the
  * Badge | Chats choice. A trusted tweak (skin-host `notify` capability) may replace it whole, e.g. to add more
@@ -25,12 +26,14 @@
   const writeJson = (k, v) => { try { store?.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
   /* ---- Routing: Badge or Chats, per app ---- */
-  const ROUTE_KEY = 'wos.notify.route.v1', ROUTE_DEFAULT = Object.freeze({ notifications: 'chats' });
+  const ROUTE_KEY = 'wos.notify.route.v1';
   const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/;
   let ROUTES = readJson(ROUTE_KEY, {});
   /* The stock `notify-routing` part: Badge | Chats. Every method is pure data; core escapes and renders it. */
   const STOCK = Object.freeze({
-    route: (id, stored) => { const r = stored !== undefined ? stored : ROUTE_DEFAULT[id]; return r === 'chats' ? 'chats' : 'badge'; },
+    // Chats unless the owner turned it down: what an app wants him to see lands where his chats are. A quieter
+    // choice saved by another part (Morning report, Off) reads as Badge here, the quietest stock place.
+    route: (id, stored) => stored === undefined || stored === 'chats' ? 'chats' : 'badge',
     accepts: (id, to) => APPID.test(id) && ['badge', 'chats'].includes(to),
     choices: () => [{ to: 'badge', label: 'Badge' }, { to: 'chats', label: 'Chats' }],
     quiet: () => false,          // true = no badge and nothing in Chats (kept in Notifications' own history)
@@ -40,7 +43,7 @@
     describe: (r, off) => r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats',
     ask: (id, name) => `${name} notifications go to`,
     moved: (id, now, from, name) => { const back = now === 'badge' ? 'chats' : 'badge'; return { back, text: `${name} moved to ${back === 'chats' ? 'badges' : 'Chats'} · ` }; },
-    intro: () => ({ lead: [['Each app tells you in one place: a '], ['Badge', true], [' on its icon, or a thread in '], ['Chats', true], [' that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.']], foot: 'Apps not listed here only show badges. Saved on this device.' }),
+    intro: () => ({ lead: [['Each app tells you in one place: a '], ['Badge', true], [' on its icon, or a thread in '], ['Chats', true], [' that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.']], foot: 'Every app listed starts in Chats. Apps not listed here only show badges. Saved on this device.' }),
     groups: () => [],            // more Settings groups: [{ key, title, hint, rows: [source ids], list?: { title, items } }]
     attention: () => null,       // { n, label, short }: a count on the Settings cog and a row in Settings
     readsAll: () => false,       // read Notifications' whole list even while it is not routed to Chats
@@ -76,9 +79,10 @@
     return true;
   }
   // Something changed what goes where: drop items that no longer belong in Chats at once, recount every badge.
+  // Items stay loaded (IN.all) so turning Chats back on shows them at once, with no read and no flicker.
   function rerouted() {
-    const keep = IN.items.filter(i => inChats(routeIdOf(i)));
-    if (keep.length !== IN.items.length) { IN.items = Object.freeze(keep); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } }
+    const keep = Object.freeze(IN.all.filter(i => inChats(routeIdOf(i))));
+    if (JSON.stringify(keep) !== JSON.stringify(IN.items)) { IN.items = keep; for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } }
     window.WizCore?.workspaceNav?.rerouted?.();
     paint();
     window.dispatchEvent(new CustomEvent('wizard:notify-route'));
@@ -140,7 +144,7 @@
   /* Inbox items for a trusted tweak (skin-host `inbox` capability): newest first, each with read / archived. Fetched only
    * while something watches, on the bell's own cadence. Text stays data; the tweak renders it with textContent.
    * Only what is routed to Chats is listed: Notifications' items, and the items of apps set to Chats. */
-  const IN = { items: [], subs: new Set(), seq: 0 };
+  const IN = { items: [], all: [], subs: new Set(), seq: 0 };
   // Notifications' own list as last read (every item, not only what Chats lists), for the part's other sources.
   const NOTES = { all: [] };
   const away = () => NOTES.all.reduce((n, i) => n + (!i.read && !i.archived && routeIdOf(i) !== 'notifications' ? 1 : 0), 0);
@@ -257,7 +261,8 @@
       const got = notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app);
       const base = !wantNotes ? [] : !all ? got : got.filter(i => i && (routeIdOf(i) === 'notifications' ? route('notifications') === 'chats' : inChats(routeIdOf(i))));
       const before = JSON.stringify(IN.items);
-      IN.items = Object.freeze([...base, ...apps].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
+      IN.all = Object.freeze([...base, ...apps].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
+      IN.items = Object.freeze(IN.all.filter(i => inChats(routeIdOf(i))));
       for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
       if (before !== JSON.stringify(IN.items)) inboxChanged();
     } catch (e) {}
@@ -281,7 +286,8 @@
     const next = { ...marks, ...(marks.archived ? { read: true } : {}) };
     // An app item's mark covers its activity as of now: newer activity in the app brings it back.
     const at = {}; for (const id of appIds) { const it = IN.items.find(i => i.id === id); at[id] = it ? it.time : Date.now() / 1000; }
-    IN.items = Object.freeze(IN.items.map(i => ids.includes(i.id) ? Object.freeze({ ...i, ...next }) : i)); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+    const upd = l => Object.freeze(l.map(i => ids.includes(i.id) ? Object.freeze({ ...i, ...next }) : i));
+    IN.all = upd(IN.all); IN.items = upd(IN.items); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
     inboxChanged();
     if (appIds.length) { FD.marks = { ...(FD.marks || {}) }; for (const id of appIds) FD.marks[id] = { ...(FD.marks[id] || {}), ...next, at: at[id] }; writeJson(MARK_KEY, FD.marks); }
     let ok = !installed();
@@ -324,7 +330,8 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   addEventListener('wizard:apps', () => { refresh(); paint(); });
   // The inbox package came or went (skin-host fires wos:prefs): what Chats can hold changed, so recount.
-  addEventListener('wos:prefs', () => { const on = chatsReady(); if (on !== FD.ready) { FD.ready = on; rerouted(); loadItems(); } });
+  // Everything already read moves at once (no request); apps' feeds are read only when Chats can now list them.
+  addEventListener('wos:prefs', () => { const on = chatsReady(); if (on !== FD.ready) { FD.ready = on; rerouted(); if (on && feedList().some(id => route(id) === 'chats')) loadItems(); } });
   // Another tab on this device changed a choice.
   addEventListener('storage', e => { if (e && e.key === ROUTE_KEY) { ROUTES = readJson(ROUTE_KEY, {}); rerouted(); loadItems(); } });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);

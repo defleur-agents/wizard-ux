@@ -49,18 +49,26 @@ function boot({ storage = new Map(), inboxList = true, notifications = true } = 
 const settle = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 const fetched = (w, url) => w.calls.filter(([m, u]) => m === 'GET' && u.startsWith(url)).length;
 
-test('defaults: Notifications goes to Chats (today\'s yellow threads), every other app to Badge', () => {
+// Miguel, 3 Nov 2026: "notifications should come in the same place chat threads come in" — Chats is the default for
+// Notifications' alerts AND every app with a feed; Badge is the step down he picks per app.
+test('defaults: Notifications and every app with a feed go to Chats; Badge only when picked', async () => {
   const w = boot(), B = w.WosBell;
   assert.equal(B.route('notifications'), 'chats');
-  assert.equal(B.route('messenger'), 'badge');
-  assert.equal(B.route('anything-new'), 'badge');
+  assert.equal(B.route('messenger'), 'chats');
+  assert.equal(B.route('anything-new'), 'chats');
+  // An app without a feed has nothing Chats could list: it stays a badge whatever the route says.
+  await B.discover(); await settle();
+  assert.equal(B.inChats('messenger'), true);
+  assert.equal(B.inChats('files'), false, 'HTML 200 is not a feed');
+  assert.equal(B.inChats('money'), false, '404 is not a feed');
+  assert.equal(B.setRoute('messenger', 'badge'), true); assert.equal(B.route('messenger'), 'badge');
 });
 
 test('Notifications on Chats: its items are in Chats and counted there, its own badge and the bell are gone', async () => {
   const w = boot(), B = w.WosBell, N = w.WizCore.workspaceNav;
   B.watch(() => {}); await B.refresh(true); await settle();
-  assert.deepEqual([...B.items()].map(i => i.id), ['n1']);
-  assert.equal(B.readyCount(), 1, 'Chats Ready counts it');
+  assert.deepEqual([...B.items()].map(i => i.id).sort(), ['a-messenger-6e3ac07612d9ea80', 'n1'], 'its alert and Messenger\'s item (default Chats)');
+  assert.equal(B.readyCount(), 2, 'Chats Ready counts both');
   assert.equal(N.counts.notifications || 0, 0, 'no badge on the Notifications icon');
   assert.match(B.html(), /data-chbell hidden/, 'no bell beside Chats search either');
 });
@@ -69,8 +77,8 @@ test('Notifications on Badge: nothing in Chats, its count is a badge (and the be
   const w = boot(), B = w.WosBell, N = w.WizCore.workspaceNav;
   B.watch(() => {}); await B.refresh(true); await settle();
   assert.equal(B.setRoute('notifications', 'badge'), true); await settle();
-  assert.equal(B.items().length, 0, 'gone from Chats at once');
-  assert.equal(B.readyCount(), 0, 'and from the Chats count');
+  assert.ok(!B.items().some(i => !i.app), 'gone from Chats at once');
+  assert.equal(B.readyCount(), 1, 'and from the Chats count (Messenger\'s item stays)');
   assert.equal(N.counts.notifications, 3, 'its badge comes back');
   assert.match(B.html(), /class="ch-bell"[^>]*aria-label="Notifications, 3 unread"/);
   const before = fetched(w, '/notifications/api/items');
@@ -78,8 +86,8 @@ test('Notifications on Badge: nothing in Chats, its count is a badge (and the be
   assert.equal(fetched(w, '/notifications/api/items'), before, 'its items are no longer read for Chats');
 });
 
-test('an app on Badge (the default) puts nothing in Chats and keeps its badge; set to Chats it swaps', async () => {
-  const w = boot(), B = w.WosBell, N = w.WizCore.workspaceNav;
+test('an app on Badge puts nothing in Chats and keeps its badge; set to Chats it swaps', async () => {
+  const w = boot({ storage: new Map([['wos.notify.route.v1', JSON.stringify({ messenger: 'badge' })]]) }), B = w.WosBell, N = w.WizCore.workspaceNav;
   B.watch(() => {}); await B.refresh(true); await settle();
   assert.equal(fetched(w, '/messenger/api/inbox'), 0, 'an app on Badge is never asked for its items');
   await B.discover(); await settle();
@@ -141,7 +149,7 @@ test('Settings has a Notifications page with Badge | Chats per app, and Chats ro
   assert.match(read('web/core/notif-bell.js'), /data-notify-route="\$\{escH\(id\)\}" data-notify-to="\$\{to\}"/);
   assert.match(s, /window\.WosBell\?\.setRoute\?\.\(b\.dataset\.notifyRoute, b\.dataset\.notifyTo\)/);
   const c = read('web/core/chats.js');
-  assert.match(c, /it\.app \? \(it\.appName \|\| it\.app\) \+ ' · '/, 'an app item names its app in the row');
+  assert.match(c, /<span class="ch-notif-from">\$\{esc\(clip\(from, 40\)\)\}<\/span>/, 'an app item names its app in the row');
   assert.match(c, /it\?\.app && !it\.archived && window\.WizCanOpen\?\.\(it\.app\) \? \['app'\]/, 'Open is offered for an app item');
   assert.match(read('web/core/skin-host.js'), /open\(id\) \{\n        if \(a\.dead\) return false;/);
   assert.match(read('web/tweaks/wizard/unified-inbox/tweak.js'), /action === 'app'/);
@@ -154,7 +162,7 @@ test('one Badge | Chats picker: Settings and every notification in Chats render 
   const html = B.picker('messenger');
   assert.match(html, /role="radiogroup" aria-label="Where Messenger notifications go"/);
   const btns = [...html.matchAll(/<button type="button" role="radio" data-notify-route="messenger" data-notify-to="(badge|chats)" aria-checked="(true|false)">(<svg class="wos-route-ic"[^]*?<\/svg>)<span>(Badge|Chats)<\/span><\/button>/g)];
-  assert.deepEqual(btns.map(m => [m[1], m[2], m[4]]), [['badge', 'true', 'Badge'], ['chats', 'false', 'Chats']], 'two labelled options, Badge picked by default');
+  assert.deepEqual(btns.map(m => [m[1], m[2], m[4]]), [['badge', 'false', 'Badge'], ['chats', 'true', 'Chats']], 'two labelled options, Chats picked by default');
   assert.match(btns[0][3], /<circle /, 'Badge wears a badge dot'); assert.match(btns[1][3], /<path /, 'Chats wears a chat bubble');
   assert.match(B.picker('messenger', { off: true }), /data-notify-to="chats" aria-checked="false" disabled/, 'without Chats only Badge can be picked');
   const s = read('web/core/settings.js'), c = read('web/core/chats.js');

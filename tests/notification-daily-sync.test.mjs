@@ -54,10 +54,10 @@ test('Morning report is greyed out for an app like Mail and refused if asked; No
 test('a choice is saved on the box, so another device gets it', async () => {
   const server = { routes: {}, saved: true };
   const a = boot({ server }); await settle();
-  a.WosBell.setRoute('mail', 'chats'); await settle();
-  assert.deepEqual(server.routes, { mail: 'chats' });
+  a.WosBell.setRoute('mail', 'badge'); await settle();
+  assert.deepEqual(server.routes, { mail: 'badge' });
   const b = boot({ server }); await settle();
-  assert.equal(b.WosBell.route('mail'), 'chats', 'a second device shows the same choice');
+  assert.equal(b.WosBell.route('mail'), 'badge', 'a second device shows the same choice');
 });
 
 test('a box with nothing saved takes this device\'s choices once; then the box wins', async () => {
@@ -93,11 +93,11 @@ test('the coffee cup is the Morning Report sigil from sigils.css', () => {
 });
 
 test('tweak off: no box routes are read or written, choices stay on this device', async () => {
-  const server = { routes: { mail: 'chats' }, saved: true };
+  const server = { routes: { mail: 'badge' }, saved: true };
   const w = boot({ server, tweak: false }); await settle();
   await w.WosBell.refresh(true); await settle();
-  assert.equal(w.WosBell.route('mail'), 'badge', 'the box copy is not read');
-  w.WosBell.setRoute('mail', 'chats'); await settle();
+  assert.equal(w.WosBell.route('mail'), 'chats', 'the box copy is not read (stock default: Chats)');
+  w.WosBell.setRoute('mail', 'badge'); await settle();
   assert.ok(!w.calls.some(([, u]) => u === '/notifications/api/routes'));
 });
 
