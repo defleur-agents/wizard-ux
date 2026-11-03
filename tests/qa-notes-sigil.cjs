@@ -54,7 +54,7 @@ async function settle(page,selector) {
  await page.evaluate(async sel => {
   const el=document.querySelector(sel); if (!el) throw Error('missing '+sel);
   document.body.getBoundingClientRect(); await document.fonts.ready;
-  const end=performance.now()+4500; let last='',stable=0;
+  const end=performance.now()+4500; let last='',stable=0,reason='surface did not settle';
   while(performance.now()<end){
    await new Promise(requestAnimationFrame);
    const r=el.getBoundingClientRect();
@@ -62,9 +62,9 @@ async function settle(page,selector) {
    for(let a=el;a;a=a.parentElement){ const c=getComputedStyle(a); hidden ||= +c.opacity<.99 || c.visibility==='hidden' || c.filter.includes('blur('); running ||= a.getAnimations().some(v=>v.playState==='running'&&v.effect.getTiming().iterations!==Infinity); }
    const mark=JSON.stringify([r.x,r.y,r.width,r.height,s.transform]);
    stable=mark===last&&!running&&!hidden?stable+1:0;last=mark;
-   if(stable>=5){ const x=r.x+r.width/2,y=r.y+r.height/2; if(r.width<8||r.height<8||x<0||y<0||x>innerWidth||y>innerHeight)throw Error('clipped target'); const hit=document.elementFromPoint(x,y);if(!el.contains(hit))throw Error('covered target '+hit?.outerHTML.slice(0,150));return; }
+   if(stable>=5){ const x=r.x+r.width/2,y=r.y+r.height/2; if(r.width<8||r.height<8||x<0||y<0||x>innerWidth||y>innerHeight){reason='clipped target';continue;} const hit=document.elementFromPoint(x,y);if(!el.contains(hit)){reason='covered target '+hit?.outerHTML.slice(0,150);continue;}return; }
   }
-  throw Error('surface did not settle');
+  throw Error(reason);
  },selector);
 }
 async function shot(page,name,sel) { await settle(page,sel); await page.screenshot({path:path.join(OUT,name+'.png')}); }
@@ -72,12 +72,13 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const origin=`http://127.0.0.1:${server.address().port}`;
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
- const report={apps, cases:[], pageErrors:[],writes:[]};
+ const report={apps, cases:[], pageErrors:[],writes:[],failures:[]};
  try {
- for(const v of (BASELINE?['baseline','candidate']:['candidate'])) {
+ for(const v of (BASELINE?['candidate','baseline']:['candidate'])) {
   version=v;
   for(const shell of ['phone','desktop']) {
    const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},hasTouch:shell==='phone',isMobile:shell==='phone',deviceScaleFactor:1,serviceWorkers:'block'});
+   try {
    // Allow ONLY this synthetic local origin: no leaked provider/private-agent traffic.
    await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
    await context.addInitScript(({shell})=>{
@@ -94,21 +95,25 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
     window.WizConfig?.live && window.WizCore?.apps?.(shell==='phone'?'mobile':'desktop').APP?.notes &&
     window.WizSigil && window.WosSkin,shell);
    assert.equal(await page.evaluate(()=>document.documentElement.dataset.shell),shell);
-   let row,ic;
+   let row,ic,calendar;
    if(shell==='phone') {
-    await page.evaluate(()=>window.__wos.openSheet('launcher')); row='#launcher.open [data-app="notes"]';ic=row+' .ic';
+    await page.evaluate(()=>window.__wos.openSheet('launcher')); row='#launcher.open [data-app="notes"]';ic=row+' .ic';calendar='#launcher.open [data-app="calendar"]';
    } else {
-    await page.keyboard.press('Control+o');
+    await page.keyboard.press('Alt+o');
+    await page.locator('#palette:not([hidden])').waitFor({state:'visible'});
     // Read the actual production id: settle() also uses native querySelector.
-    const target=page.locator('#palette:not([hidden]) .pal-app').filter({hasText:/^Notes$/});
+    const target=page.locator('#palette:not([hidden]) .pal-app').filter({has:page.locator('.nm',{hasText:/^Notes$/})});
     await target.waitFor({state:'visible'});
-    row='#palette:not([hidden]) #'+await target.getAttribute('id');ic=row+' .ic';
+    const id=await target.getAttribute('id');assert.match(id,/^pal-o\d+$/,'native picker id');
+    row='#palette:not([hidden]) #'+id;ic=row+' .ic';
+    calendar=page.locator('#palette:not([hidden]) .pal-app').filter({has:page.locator('.nm',{hasText:/^Calendar$/})});
    }
    for(const skin of ['obsidian','obsidian-light']) {
     await page.evaluate(s=>window.WosSkin.set(s),skin);
     await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
     await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
-    await settle(page,ic); const before=await page.locator(ic).evaluate(style);
+    await settle(page,ic);await (typeof calendar==='string'?page.locator(calendar):calendar).hover();await settle(page,ic);
+    const before=await page.locator(ic).evaluate(style);
     await page.locator(row).hover();await settle(page,ic);const hovered=await page.locator(ic).evaluate(style);
     const name=[v,shell,skin,'hover'].join('-');await shot(page,name,ic);
     const isMask=/\bsg-notes\b/.test(hovered.child||'') && !/sglogo/.test(hovered.child||'');
@@ -118,7 +123,7 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
      assert.equal(isMask,true,'Notes uses shared approved mask');assert.ok(hovered.mask&&hovered.mask!=='none');assert.equal(hovered.logo,'');
      if(shell==='desktop') {
       assert.equal(await page.locator(row).evaluate(e=>e.classList.contains('sel')),true,'real hover selects the standard app tile');
-      assert.match(hovered.shadow,/2px/,'shared white selection outline stays outside the mask, not a black picture');
+      assert.match(hovered.shadow,/^rgba\(225, 214, 255, 0\.8\) 0px 0px 0px 2px,/,'shared white selection outline stays outside the mask, not a black picture');
      }
     }
    }
@@ -141,7 +146,13 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
    }
    assert.deepEqual(appearances.map(a=>a.scheme),['dark','light']);
    report.cases.push({v,shell,surface:'notes-view',iframe:frame.url(),appearances,screenshots:['obsidian','obsidian-light'].map(s=>[v,shell,'notes-view',s].join('-')+'.png')});
-   await context.close();
+   }catch(e){
+    report.failures.push({v,shell,message:e.message,stack:e.stack});
+    for(const p of context.pages())await p.screenshot({path:path.join(OUT,`REJECTED-${v}-${shell}.png`)}).catch(()=>{});
+   }finally{
+    fs.writeFileSync(path.join(OUT,'progress.json'),JSON.stringify(report,null,2));
+    await context.close();
+   }
   }
  }
  // Standalone dark fallback is the actual Notes document with an empty synthetic vault.
@@ -152,6 +163,10 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
  report.standalone=await standalone.evaluate(()=>({scheme:document.documentElement.dataset.colorScheme,base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base'),body:getComputedStyle(document.body).backgroundColor}));
  report.writes=requests.filter(r=>r.method!=='GET');
  fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(report,null,2));
+ assert.equal(report.failures.length,0,JSON.stringify(report.failures));
+ assert.equal(report.cases.length,BASELINE?12:6,'complete picker + Notes view matrix');
+ assert.equal(report.standalone.scheme,'dark','standalone Notes stays dark');
+ assert.equal(report.writes.length,0,'synthetic vault remains read-only');
  console.log('Notes identity canary PASS',JSON.stringify({cases:report.cases.length,out:OUT,pageErrors:report.pageErrors}));
  }catch(e){fs.writeFileSync(path.join(OUT,'failure.json'),JSON.stringify({message:e.message,stack:e.stack,report,requests},null,2));for(const p of browser.contexts().flatMap(c=>c.pages()))await p.screenshot({path:path.join(OUT,'REJECTED-'+Date.now()+'.png')}).catch(()=>{});throw e;}
  finally{await browser.close();await new Promise(r=>server.close(r));}
