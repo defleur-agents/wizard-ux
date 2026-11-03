@@ -4,15 +4,16 @@
 (() => {
   'use strict';
   const C = window.WizCore = window.WizCore || {};
-  /* Per-app counts (Chats = visible unread threads, later any app). Desk marks may show their app counts;
+  /* Per-app counts (Chats = visible unread messages outside Working, later any app). Desk marks may show their app counts;
    * the orb's top-left badge always reads the global Chats count. */
   const counts = {};
   const countOf = id => Math.max(0, counts[id] | 0);
   function chatUnreadCount(live) {
-    if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function') return 0;
+    if (!live?.ok || typeof live.unified !== 'function' || typeof live.visibleUnread !== 'function' || typeof live.workGroups !== 'function') return 0;
     try {
-      const unread = live.visibleUnread(live.unified());
-      return Math.max(0, Array.isArray(unread) ? unread.length : 0);
+      const rows = live.unified(), unread = live.visibleUnread(rows);
+      const working = new Set(live.workGroups(rows).working || []);
+      return Math.max(0, Array.isArray(unread) ? unread.filter(s => !working.has(s)).length : 0);
     } catch (_) { return 0; }
   }
   function setCount(id, n) {
