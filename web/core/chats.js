@@ -402,7 +402,7 @@ window.WizCore.chats = function createChats(H) {
   let morningCanonical = null, morningWrites = Promise.resolve(), morningRead = 0;
   function morningDTO(d) {
     const next = morningSteps.find(s => !d?.steps?.[s]?.done) || null;
-    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.day) || d.total !== 4 || typeof d.hidden !== 'boolean'
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.day) || !Number.isFinite(Date.parse(d.day + 'T00:00:00Z')) || new Date(d.day + 'T00:00:00Z').toISOString().slice(0, 10) !== d.day || d.total !== 4 || typeof d.hidden !== 'boolean'
       || !morningSteps.every(s => typeof d.steps?.[s]?.done === 'boolean')
       || d.done !== morningSteps.filter(s => d.steps[s].done).length || d.next !== next
       || d.next_label !== (morningLabels[next] || null)) throw new Error('Invalid Morning status');
