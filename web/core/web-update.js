@@ -213,8 +213,8 @@
     get armed() { return !!armed; },
     get pending() { return pending; },
     get version() { return printNow; },
-    // About names the code this document loaded, not a newer build awaiting Reload.
-    get loadedVersion() { return print0.startsWith('v:') ? print0.slice(2) : ''; },
+    // First successful version-file observation; not a stamp of the document's loaded code.
+    get firstObservedVersion() { return print0.startsWith('v:') ? print0.slice(2) : ''; },
     _state: () => ({ pending, print0: !!print0, changes, listOpen }),
   });
   // Older name used by hosted-app QA and the app services layer.

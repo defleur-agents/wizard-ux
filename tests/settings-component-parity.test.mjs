@@ -11,7 +11,7 @@ const status = { mode: 'auto', chosen: true, installed: '0.3.15', latest: '0.3.1
 async function harness(reply = () => [200, status]) {
   const calls = [], s = { console, URL, Map, Set, Date, String, CSS: { escape: String }, navigator: { userAgent: 'Android fixture' }, location: { host: 'fixture.invalid' }, setTimeout, document: { activeElement: null, currentScript: { src: 'https://fixture.invalid/wizard-os-home/core/os-updates.js' } }, addEventListener() {} };
   s.window = s; s.WizCore = {}; s.WizBrand = { html: 'W' }; s.WizConfig = { agent: () => 'Fixture assistant' };
-  s.WizWebUpdate = { loadedVersion: 'a'.repeat(40), version: 'v:' + 'b'.repeat(40) };
+  s.WizWebUpdate = { firstObservedVersion: 'a'.repeat(40), version: 'v:' + 'b'.repeat(40) };
   s.fetch = async (url, options = {}) => { calls.push({ url, ...options }); const [code, body] = await reply(options.method || 'GET'); return { ok: code >= 200 && code < 300, status: code, json: async () => body }; };
   vm.runInNewContext(read('web/core/settings.js'), s);
   vm.runInNewContext(read('web/core/os-updates.js'), s);
@@ -32,13 +32,16 @@ test('every reachable category has identical registered page content with the sa
     for (const {view} of mounts) { assert.equal(view.back(), true); assert.equal(view.page, ''); }
   }
 });
-test('desktop and phone show loaded interface and installed server versions even when an update is ready', async () => {
+test('desktop and phone show first-observed interface revision and installed server versions even when an update is ready', async () => {
   const { mounts } = await harness();
   for (const {root,view} of mounts) {
     view.focus('updates');
-    assert.match(root.innerHTML, /Interface build<\/b><small>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
+    assert.match(root.innerHTML, /<details data-settings-technical><summary>Technical details<\/summary>/);
+    assert.match(root.innerHTML, /Interface revision at first check<\/b><small title="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">aaaaaaaa<\/small>/);
+    assert.match(root.innerHTML, /data-settings-observed-full[^>]*>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/);
+    assert.doesNotMatch(root.innerHTML, /<details data-settings-technical open|code this document loaded|the Android app update separately/);
     assert.match(root.innerHTML, /Wizard OS \(server\) 0\.3\.15/);
-    assert.doesNotMatch(root.innerHTML, /Interface build<\/b><small>v:bbbb/);
+    assert.doesNotMatch(root.innerHTML, /data-settings-observed-full[^>]*>bbbb/);
     assert.match(root.innerHTML, /data-osu="auto"/); assert.match(root.innerHTML, /data-osu="ask"/);
   }
 });
@@ -54,6 +57,7 @@ test('native data is rendered by the same registered About owner, never a shell-
     assert.doesNotMatch(root.innerHTML, /Wizard OS 0\.10\.23/);
     assert.match(root.innerHTML, /data-dvupd/); // existing guarded native update action preserved
     assert.match(root.innerHTML, /Reply notifications/);
+    assert.match(root.innerHTML, /The Android phone app updates separately too/);
   }
 });
 test('missing, unauthorized, malformed and offline connectors stay visible and cannot change preferences or install', async () => {
@@ -63,6 +67,8 @@ test('missing, unauthorized, malformed and offline connectors stay visible and c
     s.WosUpdates.act({closest: () => ({ dataset: { osu: 'ask' } })}, {});
     assert.equal(calls.filter(c => c.method === 'POST').length, 0);
     assert.equal(s.WosUpdates.card(), null);
+    assert.match(s.WosUpdates.html(), /No update preference was changed by this check/);
+    assert.doesNotMatch(s.WosUpdates.html(), /Nothing has been changed/);
   }
 });
 test('retry reads the original connector and only a verified response restores canonical controls', async () => {
@@ -86,15 +92,44 @@ test('a later connector failure withdraws install/policy controls instead of kee
   s.WosUpdates.act({closest: () => ({ dataset: { osu: 'apply' } })}, {});
   assert.equal(calls.filter(c => c.method === 'POST').length, 0);
 });
-test('shared updater exposes the loaded interface build, not the newer pending revision', async () => {
+test('shared updater exposes the first observed revision, not an actual loaded-code stamp or newer pending revision', async () => {
   let marker = 'a'.repeat(40), refreshes = 0;
   const s = { console, URL, navigator: { onLine: true }, location: { href: 'https://fixture.invalid/wizard-os-home/' }, document: { currentScript: { src: 'https://fixture.invalid/wizard-os-home/core/web-update.js' } }, fetch: async url => ({ ok: true, text: async () => marker, json: async () => [] }) };
   s.window = s; s.WosSettings = { refresh: () => refreshes++ };
   vm.runInNewContext(read('web/core/web-update.js'), s);
+  s.navigator.onLine=false;await s.WizWebUpdate.check(true);
+  assert.equal(s.WizWebUpdate.firstObservedVersion,'');
+  s.navigator.onLine=true;
   await s.WizWebUpdate.check(true);
-  assert.equal(s.WizWebUpdate.loadedVersion, marker); assert.equal(refreshes,1);
+  assert.equal(s.WizWebUpdate.loadedVersion,undefined);
+  assert.equal(s.WizWebUpdate.firstObservedVersion, marker); assert.equal(refreshes,1);
   marker = 'b'.repeat(40); await s.WizWebUpdate.check(true);
-  assert.equal(s.WizWebUpdate.loadedVersion, 'a'.repeat(40));
+  assert.equal(s.WizWebUpdate.firstObservedVersion, 'a'.repeat(40));
   assert.equal(s.WizWebUpdate.version, 'v:' + marker);
   assert.equal(s.WizWebUpdate.pending,true);
+});
+
+test('lost connection during an install retains explicitly last-checked identity and progress but no actionable stale controls', async () => {
+  for (const failure of [() => { throw Error('offline'); }, () => [503,{}], () => [401,{}]]) {
+    let fail=false;
+    const installing={...status,installing:true};
+    const {s,calls,mounts}=await harness(()=>fail?failure():[200,installing]);
+    fail=true;await s.WosUpdates.load(true);
+    assert.equal(s.WosUpdates.state.installing,true,'known state is retained, not discarded');
+    for(const {root,view} of mounts){
+      view.focus('about');
+      assert.match(root.innerHTML,/Wizard OS \(server\) 0\.3\.15/);
+      assert.match(root.innerHTML,/Last checked · previously verified/);
+      assert.match(root.innerHTML,/Last checked: Updating Wizard OS… Connection lost; latest progress unverified/);
+      assert.doesNotMatch(root.innerHTML,/Nothing has been changed|Up to date|data-osu="(?:auto|ask|apply|ch-stable|ch-latest)"/);
+      assert.match(root.innerHTML,/<button type="button"[^>]*data-osu="retry"/);
+    }
+    for(const osu of ['auto','ask','apply','ch-stable','ch-latest'])s.WosUpdates.act({closest:()=>({dataset:{osu}})},{});
+    const before=calls.length;
+    s.WosUpdates.act({closest:()=>({dataset:{osu:'retry'}})},{});
+    await tick();await tick();
+    assert.equal(calls.length,before+1);assert.equal(calls.at(-1).method,undefined);
+    assert.equal(calls.filter(c=>c.method==='POST').length,0);
+    assert.doesNotMatch(s.WosUpdates.html(),/data-osu="(?:auto|ask|apply|ch-stable|ch-latest)"/);
+  }
 });

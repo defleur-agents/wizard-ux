@@ -89,12 +89,16 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
      ok(await p.evaluate(categoryReady,entry),kind+' '+skin+': reachable '+entry.id);
      journal.pages[skin].content[entry.id]=await p.locator('.st-page:visible').evaluate(el=>({features:[...el.querySelectorAll('[data-settings-feature]')].map(e=>e.dataset.settingsFeature),actions:[...el.querySelectorAll('[data-st],[data-osu]')].map(e=>e.dataset.st||e.dataset.osu)}));
      if(entry.id==='about'){
-      if(!process.env.QA_EXPECT_RED)await p.waitForFunction(()=>window.WizWebUpdate?.loadedVersion);
+      if(!process.env.QA_EXPECT_RED)await p.waitForFunction(()=>window.WizWebUpdate?.firstObservedVersion);
       const text=await p.locator('.st-page:visible').innerText();
-      const hasInterface=await p.locator('[data-settings-version="interface"]:visible').count()===1;
+      const hasInterface=await p.locator('[data-settings-version="interface"]').count()===1;
       if(process.env.QA_EXPECT_RED){ok(!hasInterface,'RED_EXPECTED desktop interface version absent');await shot('baseline-about');throw Object.assign(Error('RED_EXPECTED desktop interface version absent'),{expectedRed:!hasInterface});}
-      ok(hasInterface&&text.includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': server version and interface build visible');
-      ok((await p.locator('[data-settings-version="interface"]:visible').innerText()).includes(process.env.QA_INTERFACE_BUILD),kind+' '+skin+': exact loaded interface fingerprint');
+      ok(hasInterface&&text.includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': server version visible and interface revision in Technical details');
+      await tap('[data-settings-technical] summary');
+      await p.waitForFunction(()=>document.querySelector('[data-settings-technical]')?.open);
+      ok((await p.locator('[data-settings-observed-full]:visible').innerText())===process.env.QA_INTERFACE_BUILD,kind+' '+skin+': exact first-observed interface fingerprint in Technical details');
+      await shot(skin+'-technical');
+      await tap('[data-settings-technical] summary');
       if(phone){ok(text.includes('Phone app (Android) 0.10.23')&&!text.includes('Wizard OS 0.10.23'),skin+': native app identity distinct from server');await tap('[data-dvupd]');ok(await p.evaluate(()=>__qaNativeChecks)>0,skin+': existing native check action preserved');}
       await tap('[data-osu="ask"]');ok(policy==='ask'&&await p.locator('[data-osu="ask"]').getAttribute('aria-checked')==='true',kind+' '+skin+': Ask me action/readback');
       await tap('[data-osu="auto"]');ok(policy==='auto',kind+' '+skin+': Automatic action/readback');
