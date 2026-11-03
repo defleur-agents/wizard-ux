@@ -850,8 +850,8 @@ window.WizCore.chats = function createChats(H) {
   // "More from Money · 47": each a one-line button that opens it here; Done all clears this one and every one listed.
   function noteMoreHtml(NV) {
     const sib = noteSiblings(NV.item); if (!sib.length) return '';
-    const from = noteSrcName(NV.item), shown = sib.slice(0, 12);
-    return `<section class="ch-notif-more" aria-label="More from ${esc(from)}"><div class="ch-notif-more-h"><span>More from ${esc(from)} · ${sib.length}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${sib.length + 1}</span></button></div>${shown.map(i => `<button type="button" class="ch-notif-more-i${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${esc(ago(new Date(noteAt(i)).toISOString()))}</time></button>`).join('')}${sib.length > shown.length ? `<p class="ch-notif-more-x">and ${sib.length - shown.length} more · they move up as you finish these</p>` : ''}</section>`;
+    const from = noteSrcName(NV.item), shown = sib.slice(0, 5);   // short: the thread's actions stay clear of it
+    return `<section class="ch-notif-more" aria-label="More from ${esc(from)}"><div class="ch-notif-more-h"><span>More from ${esc(from)} · ${sib.length}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${sib.length + 1}</span></button></div>${shown.map(i => `<button type="button" class="ch-notif-more-i${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${esc(ago(new Date(noteAt(i)).toISOString()))}</time></button>`).join('')}${sib.length > shown.length ? `<p class="ch-notif-more-x">and ${sib.length - shown.length} more · the next ones move up as you finish these</p>` : ''}</section>`;
   }
   // Done all: the open item and the rest from its app leave Chats together; one undo-free archive, like Done.
   async function notifDoneAll(wid, nid) {
