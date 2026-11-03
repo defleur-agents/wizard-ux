@@ -793,7 +793,7 @@
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
         act: (id, action) => !live() || typeof id !== 'string' || !id ? false
-          : id.startsWith(NOTE_ID) ? NOTE_ACTS.includes(action) && inboxAct(action, id.slice(NOTE_ID.length))
+          : id.startsWith(NOTE_ID) ? NOTE_ACTS.includes(action) && noteAct(id, action)
           : SESSION_ACTS.includes(action) ? !!shell.sessionAct?.(id, action) : false,
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
         // Ready's order (the AI apps view, round 18): the stock Chats Filter's own saved choice (wos.chats.readyOrder.v1,
@@ -991,12 +991,34 @@
    * inbox's handler takes; open = the notification as a chat (its Badge | Chats picker above it). */
   const NOTE_ID = 'notif:', NOTE_ID_OPEN = 'open', NOTE_ACTS = Object.freeze(['snooze', 'restore', 'done']);
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
+  /* One row per app (Miguel, 3 Nov 2026: a noisy app is one row, not 50; the same rule as Chats' own list): two or more
+   * waiting items from one app (or Wizard's own alerts) fold into one row named for the app with its count, opening the
+   * newest (Chats lists the rest under it). Priority 4+ never folds. A fold's Snooze / Archive / Restore cover it all. */
+  const NOTE_FOLD = new Map();   // row id → every item id it stands for
+  const noteTitle = it => (notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification');
   function noteRows() {
+    NOTE_FOLD.clear();
     if (!isDoc || !inboxList()) return [];
-    return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived).map(it => ({
-      id: NOTE_ID + it.id, title: (notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification').slice(0, 120),
-      kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
-      unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] }));
+    const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived), by = new Map(), sets = [];
+    for (const it of all) {
+      if (Number(it.priority) >= 4) { sets.push([it]); continue; }
+      const k = (it.app || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
+    }
+    for (const l of by.values()) if (l.length < 2) sets.push(l); else sets.push(l.slice().sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0)));
+    return sets.map(l => {
+      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : (window.WizConfig?.agent?.() || 'Wizard');
+      if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
+      return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
+        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+        unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
+    });
+  }
+  // A folded row's action covers every item in it (the inbox marks them together); a single row goes through the inbox.
+  function noteAct(id, action) {
+    const ids = NOTE_FOLD.get(id);
+    if (!ids || !window.WosBell?.mark) return inboxAct(action, id.slice(NOTE_ID.length));
+    void window.WosBell.mark(ids, action === 'restore' ? { archived: false, read: false } : action === 'snooze' ? { read: true } : { read: true, archived: true });
+    return true;
   }
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function withNoteRows(ready) {

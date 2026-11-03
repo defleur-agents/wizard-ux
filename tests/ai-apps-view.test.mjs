@@ -632,10 +632,20 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   vm.runInNewContext(src + ';globalThis.withNoteRows = withNoteRows; globalThis.inboxAct = inboxAct;', ctx);
   const rows = JSON.parse(JSON.stringify(ctx.withNoteRows([{ id: 'r9', at: new Date(200000).toISOString() }])));
   assert.deepEqual(rows.map(r => r.id), ['notif:a', 'r9', 'notif:b'], 'new ones among the chats by time, snoozed last, archived left out');
-  assert.deepEqual([rows[0].title, rows[0].note, rows[0].unread, rows[0].actions, rows[2].title, rows[2].actions], ['Pay card', true, true, ['snooze', 'done'], 'Backup done', ['restore', 'done']]);
+  assert.deepEqual([rows[0].title, rows[0].note, rows[0].unread, rows[0].actions, rows[2].title, rows[2].actions], ['money · Pay card', true, true, ['snooze', 'done'], 'Wizard · Backup done', ['restore', 'done']], 'each row names where it came from');
   ctx.inboxAct('open', 'a'); assert.deepEqual(calls, [['open', 'a']]);
+  // One row per app (Miguel, 3 Nov 2026): 2+ waiting from one app fold, newest first; needs-you (4+) never folds;
+  // the fold's Archive covers every item in it.
+  const marks = []; items.push({ id: 'm1', title: 'Grab', time: 400, app: 'money', appName: 'Money', priority: 3 }, { id: 'm2', title: 'Villa', time: 500, app: 'money', appName: 'Money', priority: 3 }, { id: 'm3', title: 'Apple', time: 450, app: 'money', appName: 'Money', priority: 3 });
+  ctx.window.WosBell.mark = (ids, m) => { marks.push([[...ids], { ...m }]); return Promise.resolve(true); };
+  const folded = JSON.parse(JSON.stringify(ctx.withNoteRows([])));
+  const f = folded.find(r => r.count === 3);
+  assert.ok(f && f.id === 'notif:m2' && f.title === 'Money (3) · Villa · Apple · Grab', 'Money is one row: name, count, newest titles');
+  assert.ok(folded.some(r => r.id === 'notif:a' && r.count === 1), 'priority 4 keeps its own row');
+  vm.runInNewContext('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
+  assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
   assert.match(host, /open: id => \{ if \(!live\(\) \|\| typeof id !== 'string' \|\| !id\) return; if \(id\.startsWith\(NOTE_ID\)\) inboxAct\(NOTE_ID_OPEN, id\.slice\(NOTE_ID\.length\)\); else shell\.openThread\(id\); \},/);
-  assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && inboxAct\(action, id\.slice\(NOTE_ID\.length\)\)/);
+  assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && noteAct\(id, action\)/);
   ctx.inboxThreads.get('wizard/unified-inbox').list = false;
   assert.deepEqual(JSON.parse(JSON.stringify(ctx.withNoteRows([]))), [], 'none while no package lists the inbox in Chats');
 });
