@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Isolated real-shell acceptance for Skin families and their Colours, phone + desktop.
+// Isolated real-shell acceptance for Skin families and their Colors, phone + desktop.
 // Static assets are this checkout; APIs are empty fixtures. No live box/network/writes.
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
@@ -18,9 +18,9 @@ async function colours(page) {
 async function check(page, skin) {
   await page.waitForFunction(id => window.WosSkin?.current === id, skin);
   const expected = await page.evaluate(() => WosSkin.families.find(f => f.id === WosSkin.familyOf(WosSkin.current)).palettes);
-  assert.deepEqual(await colours(page), expected, 'Colours shows only the chosen skin family');
+  assert.deepEqual(await colours(page), expected, 'Colors shows only the chosen skin family');
   assert.equal(await page.locator('[data-stgroup="look"] > h4:visible').textContent(), 'Skin');
-  assert.equal(await page.locator('.skp-colours > h4:visible').textContent(), 'Colours');
+  assert.equal(await page.locator('.skp-colours > h4:visible').textContent(), 'Colors');
   assert.equal(await page.locator('[data-skinpick][aria-pressed="true"]:visible').getAttribute('data-skinpick'), skin);
   assert.deepEqual(await families(page), await page.evaluate(() => WosSkin.families.map(f => f.id)));
 }
@@ -61,6 +61,7 @@ async function capture(page, shell, skin) {
         if (req.method() === 'GET' && f.startsWith(web + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile())
           return route.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
         if (req.method() !== 'GET') { writes.push({ method: req.method(), path: u.pathname }); return route.fulfill({ status: 403, contentType: 'application/json', body: '{}' }); }
+        if (u.pathname === '/wizard/v1/skins') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({skins:[],active:null})});
         if (/\/skins(?:\/|$)|\/bootstrap$|\/_connections\//.test(u.pathname)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(/\/sessions$/.test(u.pathname) ? { data: [], has_more: false } : {}) });
       });
@@ -90,8 +91,23 @@ async function capture(page, shell, skin) {
       assert.equal(await page.evaluate(() => WosSkin.current), 'obsidian-light', 'draft family choice does not change worn colour');
       await page.locator('[data-skinpick="ember"]:visible').click();
       await page.screenshot({ path: path.join(out, `${shell}-new-skin.png`) });
+      rows.push({shell,view:'new-skin',file:`${shell}-new-skin.png`});
       await page.locator('[data-st-back]:visible').click();
       await check(page, 'obsidian-light');
+      const previewBytes = JSON.stringify({version:1,active:null,skins:[{id:'device-fixture',name:'Synthetic device preview',base:'grove',tweaks:{'wizard/two-orbs':false}}]});
+      await page.evaluate(async bytes => {localStorage.setItem('wos.own-skins.v1',bytes); await WosMySkin.refresh();},previewBytes);
+      await page.getByText('Recover device skins',{exact:true}).click();
+      await page.locator('[data-skin-preview="device-fixture"]').click();
+      await page.locator('[data-skin-name]:visible').waitFor();
+      assert.equal(await page.locator('[data-skin-name]').inputValue(),'Synthetic device preview');
+      assert.equal(await page.evaluate(()=>WosSkin.current),'obsidian-light','recovering a draft never changes the worn skin');
+      await page.screenshot({path:path.join(out,`${shell}-device-recovery.png`)});
+      rows.push({shell,view:'device-recovery',file:`${shell}-device-recovery.png`});
+      await page.locator('[data-st-back]:visible').click();
+      await page.getByText('Recover device skins',{exact:true}).click();
+      await page.locator('[data-skin-preview-dismiss="device-fixture"]').click();
+      assert.equal(await page.evaluate(()=>WosMySkin.previews.length),0);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('wos.own-skins.v1')),previewBytes,'explicit dismissal retains preview bytes');
       const url = page.url();
       await page.goBack(); // exercise shell's native-history guard, never navigate out of Wizard
       await page.waitForFunction(() => document.querySelector('[data-settings-root]'));
