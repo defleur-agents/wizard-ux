@@ -78,7 +78,8 @@ test('pinned native Back uses the real shared hosted teardown without an Incogni
   let overlay = true, recording = false;
   const hosted = new Map([[w.id, {w,frame,container,oldPosition:'',previous:{value:null,writable:true,configurable:true,enumerable:true},layer:{remove:()=>effects.push('remove')}}]]);
   const sandbox = {window:{}, wid:w.id, threadWindow:w, W:{[w.id]:w}, ch:()=>state, hosted, frame:null, loaded:false,
-    replyVoice:{back:()=>recording}, links:null, LIVE:{session:()=>null},
+    // #630 declares a nullable closure slot; no Incognito API is installed or consulted.
+    INC:null, replyVoice:{back:()=>recording}, links:null, LIVE:{session:()=>null},
     KIT:{drafts:{set:(...args)=>effects.push(args)}},draftKey:()=> 'direct:synthetic-thread',
     save:()=>assert.fail('hosted Back must not persist a workspace'),renderChats:()=>assert.fail('must restore original iframe'),
     chats:{isHosted:()=>hosted.has(w.id),closeOverlay:()=>{const was=overlay;overlay=false;return was;}}};
