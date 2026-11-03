@@ -2682,6 +2682,8 @@
   try { navigator.permissions?.query?.({ name: 'microphone' })?.then(p => { micGranted = micGranted || p.state === 'granted'; p.onchange = () => { micGranted = p.state === 'granted'; }; }, () => {}); } catch (_) {}
   function warmMic() {
     if (MW || V.state !== 'idle' || !micGranted || DEV() || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    // an app or meeting holding the mic is handed over by startVoice (WosOrbHandoff) first: never open a second stream
+    const shared = window.WizAppCapture?.getState?.(); if (V.admitting || shared?.active || shared?.recording || shared?.hold) return;
     const w = MW = { p: openMic() };
     w.p.catch(() => { if (MW === w) MW = null; });
   }
