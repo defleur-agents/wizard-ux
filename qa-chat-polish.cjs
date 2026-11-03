@@ -204,7 +204,7 @@ async function archiveRouteChecks(b, desktop) {
         await p.fill(search, 'archive parity');
         await p.waitForSelector(`${root} [data-chbs="done"]`);
         const snapshot = () => p.evaluate(root => {
-          const r = document.querySelector(root), secs = [...r.querySelectorAll('.ch-sec[data-sec]')];
+          const r = document.querySelector(root), secs = [...r.querySelectorAll('.ch-search-results .ch-row')];
           const footer = r.querySelector('[data-chbs="done"]');
           return { rows: [...r.querySelectorAll('[data-chopen]')].map(e => e.dataset.chopen),
             order: secs.map(e => ({ key: e.dataset.sec, top: e.getBoundingClientRect().top, bottom: e.getBoundingClientRect().bottom, open: e.classList.contains('open') })).sort((a,b) => a.top - b.top),
@@ -212,19 +212,16 @@ async function archiveRouteChecks(b, desktop) {
         }, root);
         const live = `qa_archive_${agent.id}_live`, old = `qa_archive_${agent.id}_old`, s = await snapshot();
         ok(s.rows.length === 2 && s.rows.includes(live) && s.rows.includes(old), `${label}: main/routed results contain only this agent, not another route`, s);
-        ok(s.order.length >= 2 && s.order.at(-1).key === 'archive' && s.order.at(-1).open, `${label}: Archive is last and opens during search`, s);
+        ok(await p.locator(`${root} .ch-sec-h`).count() === 0, `${label}: search is flat with no section headers`, s);
+        ok(await p.locator(`${root} .ch-search-status`).count() === s.rows.length, `${label}: every result carries a status chip`, s);
         ok(s.order.every(e => s.footer >= e.bottom - 1), `${label}: completed body-search footer is below every result`, s);
-        await p.locator(`${root} [data-sectoggle="archive"]`).click();
-        const collapsed = await snapshot();
-        ok(!collapsed.order.find(e => e.key === 'archive')?.open && !collapsed.rows.includes(old) && collapsed.rows.includes(live), `${label}: Archive alone collapses`, collapsed);
-        ok(await p.evaluate(() => localStorage.getItem('wos.chats.sections.v1')) === before, `${label}: temporary collapse never writes saved list state`);
-        await p.locator(`${root} [data-sectoggle="archive"]`).click();
-        ok((await snapshot()).rows.includes(old), `${label}: Archive expands again`);
+        ok(s.rows[0] === live && s.rows[1] === old, `${label}: equal-relevance results use gentle recency across live and archived`, s.rows);
+        ok(await p.evaluate(() => localStorage.getItem('wos.chats.sections.v1')) === before, `${label}: flat search never writes saved section state`);
         await p.fill(search, '');
         ok(await p.locator(`${root} .ch-sec-last`).count() === 0, `${label}: non-search layout has no search-order override`);
         await p.fill(search, 'archive parity');
         await p.waitForSelector(`${root} [data-chbs="done"]`);
-        ok((await snapshot()).order.at(-1)?.open, `${label}: fresh search resets temporary collapse`);
+        ok((await snapshot()).rows.includes(old) && await p.locator(`${root} .ch-sec-h`).count() === 0, `${label}: fresh search remains flat including archived hits`);
         await shot(p, `archive-${shell}-${skin}-${layout}-${agent.kind}`);
         await p.fill(search, ''); // reset temporary state before the shared window switches agent Focus
         if (!scopedEvidence.has(agent.id)) {
@@ -340,7 +337,7 @@ async function archiveRouteChecks(b, desktop) {
     ok(instant.length === 1 && instant[0] === 'qa_t05' && W.msgFetch.filter(f => f.order === 'latest').length === 0, '#26 titles match instantly, before any message is read', instant);
     // Progress shows above the results, not under a long Archive.
     await sleep(320);
-    ok(await p.evaluate(id => { const sc = document.querySelector(`.win[data-win="${id}"] .ch-scroll`), b = sc?.querySelector('[data-chbs="busy"]'), s = sc?.querySelector('.ch-sec'); return !!b && !!s && !!(b.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }, wid), 'Searching progress sits above the result sections');
+    ok(await p.evaluate(id => { const sc = document.querySelector(`.win[data-win="${id}"] .ch-scroll`), b = sc?.querySelector('[data-chbs="busy"]'), s = sc?.querySelector('[data-search-results], .ch-sec'); return !!b && !!s && !!(b.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING); }, wid), 'Searching progress sits above the results');
     W.msgFetch.length = 0;
     // cancel: start a body search, change the query mid-flight
     await p.fill(sel, 'zebrac'); await sleep(450);
@@ -392,18 +389,15 @@ async function archiveRouteChecks(b, desktop) {
     await p.fill(sel,'Zirconium'); await sleep(60);
     ok(await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_archived"]`).count()===1 && W.searchFetch.length===0,'Fast search: an archive title outside the list payload matches synchronously, without a server query');
     ok(await p.evaluate(()=>!WizLive.searchRows?.().some(s=>s.id==='qa_private')),'Fast search: a different agent never enters the main title index');
-    // Archive sorts last while searching and stays collapsible (James, 31 Oct 2026).
-    await p.fill(sel,'archive'); await sleep(200);
-    const secOrder=()=>p.evaluate(id=>{const r=document.querySelector(`.win[data-win="${id}"]`);return [...r.querySelectorAll('.ch-sec[data-sec]')].map(e=>[e.dataset.sec,Math.round(e.getBoundingClientRect().top),e.classList.contains('open')]).sort((a,b)=>a[1]-b[1]);},wid);
-    const so=await secOrder();
-    ok(so.length>=2&&so[so.length-1][0]==='archive'&&so[so.length-1][2],'Search: Archive is the last section, open by default',so);
+    // Search alone is flat. Archive, pin and active state never create separate search sections.
     const savedBefore=await p.evaluate(()=>localStorage.getItem('wos.chats.sections.v1'));
-    await p.click(`.win[data-win="${wid}"] [data-sectoggle="archive"]`); await sleep(200);
-    const so2=await secOrder();
-    ok(so2[so2.length-1][0]==='archive'&&!so2[so2.length-1][2]&&await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_archived"]`).count()===0,'Search: tapping Archive collapses it',so2);
-    ok(await p.evaluate(()=>localStorage.getItem('wos.chats.sections.v1'))===savedBefore,'Search: collapsing Archive does not change the saved section state');
-    await p.click(`.win[data-win="${wid}"] [data-sectoggle="archive"]`); await sleep(200);
-    ok(await p.locator(`.win[data-win="${wid}"] [data-chopen="qa_archived"]`).count()===1,'Search: tapping Archive again expands it');
+    await p.fill(sel,'archive'); await sleep(200);
+    const rootSearch = `.win[data-win="${wid}"]`;
+    ok(await p.locator(`${rootSearch} .ch-sec-h`).count()===0,'Search: no section headers');
+    ok(await p.locator(`${rootSearch} [data-chopen="qa_archived"]`).count()===1,'Search: archived hits join the flat list');
+    const countRows=await p.locator(`${rootSearch} .ch-row`).count();
+    ok(countRows>0 && await p.locator(`${rootSearch} .ch-search-status`).count()===countRows,'Search: every result has a status tag');
+    ok(await p.evaluate(()=>localStorage.getItem('wos.chats.sections.v1'))===savedBefore,'Search: flat results leave saved section state alone');
     await p.fill(sel,'Zirconium'); await sleep(60);
     await p.fill(sel,'zi'); W.searchFetch.length=0; await sleep(700);
     ok(W.searchFetch.length===0,'Fast search: two letters make no server body request',W.searchFetch);

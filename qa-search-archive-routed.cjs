@@ -1,100 +1,104 @@
-// Search keeps Archive last and collapsible on the main agent and a routed host-profile agent, phone and desktop (James, 31 Oct 2026).
-// Synthetic data, writes intercepted.
-const fs = require('fs'), path = require('path');
+// Flat relevance-aware search on both shells, main + routed host-profile agent. Synthetic only; all writes blocked.
+const fs = require('fs'), path = require('path'), os = require('os');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = process.env.QA_TREE || __dirname;
-const OUT = process.env.QA_OUT || path.join(require('os').tmpdir(), 'wizard-search-archive-last');
+const OUT = process.env.QA_OUT || path.join(os.homedir(), '.hermes/cache/screenshots');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let pass = 0, fail = 0;
-const ok = (c, n, d = '') => { c ? pass++ : fail++; console.log(`${c ? 'PASS' : 'FAIL'} ${n}${d === '' ? '' : ' ' + JSON.stringify(d)}`); };
-const now = Date.now() / 1000;
-const mk = (id, title, ago) => ({ id, title, source: 'wizard-mobile', status: 'completed', archived: false, hidden: false, message_count: 2, started_at: now - 900, last_active: now - ago, wizard_last_user_at: now - ago - 60, wizard_last_assistant_at: now - ago, latest_message: { role: 'assistant', content: 'Fixture reply for ' + title, timestamp: now - ago }, last_user_message: { role: 'user', content: 'Fixture question', timestamp: now - ago - 60 } });
-const arch = (s) => ({ ...s, archived: true });
-const sessions = [mk('qa_s_live', 'QA · Zephyr live thread', 20), arch(mk('qa_s_old', 'QA · Zephyr archived thread', 90000))];
-// A routed host-profile agent's own synthetic threads (listed only with ?agent=qa-host): same shared row menu.
-const ROUTED = 'qa-host', ag = { id: ROUTED, label: 'Synthetic routed', privacy: 'standard' }, routed = [{ ...mk('qa_r_live', 'QA · Zephyr routed live', 40), agent: ag }, { ...arch(mk('qa_r_old', 'QA · Zephyr routed archived', 90000)), agent: ag }];
-
+let pass = 0, fail = 0; const cases = [];
+const ok = (value, name, detail = '') => { const success = !!value; success ? pass++ : fail++; cases.push({ name, pass: success, detail }); console.log(`${success ? 'PASS' : 'FAIL'} ${name} ${JSON.stringify(detail)}`); };
+const NOW = Date.now(), HOUR = 3600000, ROUTED = 'qa-host';
+const agents = [{ id: 'hermes', is_default: true, label: 'Hermes' }, { id: ROUTED, label: 'Synthetic routed', runtime: { kind: 'host-profile', profile: ROUTED } }].map(a => ({ harness: 'hermes', privacy: 'standard', status: 'running', ...a }));
+const rowsFor = agent => [
+  ['body', 'Follow-up plan', 1, { archived: true, preview: 'A recent answer', searchSnippet: 'The messenger work is ready' }],
+  ['preview', 'Delivery notes', 2, { preview: 'Update for messenger' }],
+  ['working', 'Messenger delivery', 12, { status: 'running' }],
+  ['snoozed', 'Messenger later', 48, { deferred: true, deferredAt: new Date(NOW).toISOString() }],
+  ['error', 'Messenger retry', 72, { status: 'failed' }],
+  ['old', 'Messenger project', 168, {}],
+].map(([suffix, title, hours, extra]) => { const at = new Date(NOW - hours * HOUR).toISOString(); return { id: `qa_${agent}_${suffix}`, agent, title, preview: 'Synthetic answer', status: 'completed', archived: false, hidden: false, messageCount: 2, listVersion: 1, cardTime: at, updatedAt: at, activityAt: at, previewAt: at, lastUserAt: at, assignedAt: at, requestAt: at, ...extra }; });
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
-  const browser = await chromium.launch({ ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}), args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
-  const writes = [], errors = []; let prefs = { pinnedChats: [], chatLayout: 'status' };
-  const routeRequest = async route => {
-    const req = route.request(), u = new URL(req.url()), method = req.method();
-    if (u.hostname !== 'wizard.test') return route.abort();
-    if (u.pathname === '/wizard/v1/ui-preferences') {
-      if (method === 'PUT') { writes.push({ method, path: u.pathname }); prefs = { ...prefs, ...req.postDataJSON() }; }
-      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(prefs) });
+  const errors = [], writes = [], bodyRequests = [];
+  const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  try {
+    for (const shell of ['phone', 'desktop']) {
+      const ctx = await browser.newContext({ viewport: shell === 'phone' ? { width: 412, height: 892 } : { width: 1280, height: 860 }, ...(shell === 'phone' ? { isMobile: true, hasTouch: true } : {}), serviceWorkers: 'block' });
+      try {
+        await ctx.addInitScript(shell => {
+          for (const [k,v] of Object.entries({
+            'wos.chats.pinned.v2': JSON.stringify(['qa_hermes_old', 'qa_qa-host_old']), 'wos.chats.pinned.migrated.v1': '1',
+            'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': shell, 'wos.chats.layout.v1': 'status', 'wos.chats.archiveAfter.v1': '0' })) localStorage.setItem(k,v);
+        }, shell);
+        await ctx.route('**/*', async route => {
+          const req = route.request(), u = new URL(req.url());
+          const json = (body, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
+          if (u.hostname !== 'wizard.test') return route.abort();
+          if (!['GET', 'HEAD'].includes(req.method())) { writes.push([req.method(), u.pathname]); return json({ error: 'synthetic QA: write refused' }, 403); }
+          if (u.pathname === '/wizard/v1/ui-preferences') return json({ pinnedChats: ['qa_hermes_old', `qa_${ROUTED}_old`], chatLayout: 'status', archiveAfterDays: 0 });
+          if (u.pathname === '/wizard/v1/agents') return json({ agents });
+          if (u.pathname === '/wizard/v1/setup/status') return json({ first_run: false, complete: true });
+          if (u.pathname === '/wizard/hermes/model/options') return json({ options: [{ provider: 'synthetic', model: 'qa', authenticated: true }], current: { provider: 'synthetic', model: 'qa' } });
+          if (u.pathname === '/wizard/hermes/api/sessions') {
+            const agent = u.searchParams.get('agent') || 'hermes', rows = rowsFor(agent);
+            if (u.searchParams.get('mode') === 'body') { bodyRequests.push(agent); return json({ mode: 'body', list_version: 1, snapshot: 'qa-body-' + agent, data: rows.map(r => ({ id: r.id, agent, snippet: r.searchSnippet || 'messenger synthetic match' })), search_total: rows.length, has_more: false, partial: false }); }
+            return json({ data: rows, view: 'list', list_version: 1, window: 'archive-50', archive_total: 1, archive_returned: 1, has_more: false, archive_cursor: null, snapshot: 'qa-flat-' + agent, fields: u.searchParams.get('fields') || undefined });
+          }
+          if (u.pathname === '/wizard/thread-dispositions') return json({ state: { 'direct:qa_hermes_snoozed': { deferred: true, updatedAt: new Date(NOW).toISOString() }, [`agent/${ROUTED}/direct:qa_${ROUTED}_snoozed`]: { deferred: true, updatedAt: new Date(NOW).toISOString() } } });
+          if (u.pathname === '/wizard/thread-seen') return json({ state: { initializedAt: 1, threads: {} } });
+          if (u.pathname === '/wizard/v1/boomerangs') return json({ reminders: [] });
+          if (u.pathname.startsWith('/wizard/')) return json({});
+          if (u.pathname.startsWith('/wizard-os-home/')) {
+            const rel = u.pathname.slice('/wizard-os-home/'.length) || 'index.html', file = path.join(TREE, 'web', rel);
+            if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
+            const ct = { '.css': 'text/css', '.html': 'text/html', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2' }[path.extname(file)] || 'application/javascript';
+            return route.fulfill({ contentType: ct, body: fs.readFileSync(file) });
+          }
+          return route.fulfill({ status: 404, body: '' });
+        });
+        const page = await ctx.newPage(); page.on('pageerror', e => errors.push(String(e)));
+        await page.goto(`https://wizard.test/wizard-os-home/${shell === 'desktop' ? 'desktop.html' : ''}`, { waitUntil: 'load' });
+        await page.waitForFunction(() => (window.__wos || window.__wux) && window.WizCore?.apps);
+        ok(await page.evaluate(shell => shell === 'desktop' ? window.__wux?.shell === 'desktop' && document.documentElement.dataset.shell === 'desktop' : !!window.__wos && !window.__wux, shell), `${shell}: correct shell runtime, not a redirected phone mock`);
+        for (const agent of ['hermes', ROUTED]) {
+          ok(await page.evaluate(a => WizOpenAgentChats(a), agent), `${shell}/${agent}: shell opens agent Chats`);
+          const wid = await page.waitForFunction(a => Object.values((window.__wux || window.__wos).wins).find(w => w.app === 'chats' && w.focus?.kind === 'agent' && w.focus.key === a)?.id, agent).then(h => h.jsonValue());
+          const root = shell === 'desktop' ? `.win[data-win="${wid}"]` : `[data-chats="${wid}"]`;
+          await page.waitForSelector(`${root} [data-chsearch]`);
+          await page.waitForFunction(() => window.WosExperience && !WosExperience.state.busy);
+          await sleep(700); await page.evaluate(() => document.getElementById('wosWelcome')?.remove());
+          await page.fill(`${root} [data-chsearch]`, 'messenger');
+          await page.waitForSelector(`${root} [data-chbs="done"]`); await sleep(400);
+          // Desktop keeps an inert, hidden list in the split-view main pane; assert only rendered geometry.
+          const get = () => page.evaluate(root => { const r = document.querySelector(root), visible = e => !!(e.getBoundingClientRect().width && e.getBoundingClientRect().height), rows = [...r.querySelectorAll('.ch-row')].filter(visible), footer = [...r.querySelectorAll('[data-chbs="done"]')].find(visible); return { headers: [...r.querySelectorAll('.ch-sec-h')].filter(visible).length, ids: rows.map(e => e.dataset.chopen), tags: rows.map(e => e.querySelector('.ch-search-status')?.textContent), bounds: rows.map(e => { const b=e.getBoundingClientRect(); return { top:b.top,bottom:b.bottom,width:b.width }; }), footer: footer?.getBoundingClientRect().top }; }, root);
+          let s = await get();
+          ok(bodyRequests.includes(agent), `${shell}/${agent}: body search uses the requested agent route`, bodyRequests);
+          ok(await page.locator(`${root} .ch-row-wrap.pinned [data-chopen="qa_${agent}_old"]:visible`).count() === 1, `${shell}/${agent}: the oldest fixture really is pinned`);
+          ok(s.headers === 0, `${shell}/${agent}: no search section headers`, s.headers);
+          const expected = ['working', 'snoozed', 'error', 'old', 'preview', 'body'].map(k => `qa_${agent}_${k}`);
+          ok(JSON.stringify(s.ids) === JSON.stringify(expected), `${shell}/${agent}: exact relevance rank, incidental body mention last; pins receive no boost`, s.ids);
+          ok(s.tags.length === 6 && s.tags.every(t => ['Working','Ready','Archive','Error','Snoozed'].includes(t)) && s.tags.includes('Archive') && s.tags.includes('Snoozed') && s.tags.includes('Error'), `${shell}/${agent}: every row has its status chip`, s.tags);
+          ok(s.ids.includes(`qa_${agent}_body`) && s.ids.indexOf(`qa_${agent}_body`) > s.ids.indexOf(`qa_${agent}_old`), `${shell}/${agent}: week-old title beats recent incidental archived body hit`, s.ids);
+          ok(s.bounds.length > 0 && s.bounds.every((b,i) => b.width > 0 && (!i || b.top >= s.bounds[i-1].bottom - 1)) && s.footer >= Math.max(...s.bounds.map(b => b.bottom)) - 1, `${shell}/${agent}: no overlap, completed footer below rows`, s);
+          if (agent === 'hermes') {
+            for (const skin of shell === 'phone' ? ['nebula','grove','obsidian','landscapes'] : ['nebula','grove']) {
+              await page.evaluate(id => WosSkin.set(id), skin);
+              await page.waitForFunction(id => document.documentElement.dataset.skin === id && !WosExperience.state.busy, skin);
+              if (await page.$('.nv-boot')) await page.locator('.nv-boot').click({ position: { x: 10, y: 10 } }).catch(() => {});
+              await sleep(900);
+              s = await get();
+              ok(s.headers === 0 && s.ids.length === 6 && s.footer >= Math.max(...s.bounds.map(b => b.bottom)) - 1, `${shell}/${skin}: flat flow and footer after live skin switch`, s);
+              await page.screenshot({ path: path.join(OUT, `search-rank2-${shell}-${skin}.png`) });
+            }
+          }
+          await page.fill(`${root} [data-chsearch]`, ''); await sleep(400);
+          const sections = await page.evaluate(root => [...document.querySelectorAll(`${root} .ch-sec[data-sec]`)].filter(e => e.getBoundingClientRect().width && e.getBoundingClientRect().height).map(e => [e.dataset.sec,e.getBoundingClientRect().top]).sort((a,b)=>a[1]-b[1]), root);
+          ok(sections.length >= 2 && sections[0][0] === 'archive', `${shell}/${agent}: clearing search restores By-status sections with Archive on top`, sections);
+        }
+      } catch(e) { ok(false, `${shell}: complete search scenario`, String(e.stack)); }
+      finally { await ctx.close(); }
     }
-    if (!['GET', 'HEAD'].includes(method)) { writes.push({ method, path: u.pathname }); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, record: {} }) }); }
-    if (u.pathname === '/wizard/v1/agents') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ agents: [{ id: 'hermes', is_default: true, label: 'Hermes', harness: 'hermes', privacy: 'standard', status: 'running' }, { id: ROUTED, label: 'Synthetic routed', harness: 'hermes', privacy: 'standard', status: 'running' }] }) });
-    if (u.pathname === '/wizard/hermes/api/sessions') { const ag = u.searchParams.get('agent') || '', first = (u.searchParams.get('offset') || '0') === '0'; const data = !first ? [] : ag === ROUTED ? routed : ag ? [] : sessions; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data, has_more: false, limit: 100, offset: 0, snapshot: 'qa' }) }); }
-    if (u.pathname === '/wizard/thread-seen') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: { initializedAt: 1, threads: {} } }) });
-    if (u.pathname === '/wizard/v1/boomerangs') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"reminders":[]}' });
-    if (u.pathname.startsWith('/wizard/')) return route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
-    const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
-    if (m) {
-      const rel = (m[1] || 'index.html').split('?')[0], file = path.join(TREE, 'web', rel);
-      if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
-      const ct = rel.endsWith('.css') ? 'text/css' : rel.endsWith('.html') ? 'text/html' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.png') ? 'image/png' : rel.endsWith('.svg') ? 'image/svg+xml' : 'application/javascript';
-      return route.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(file) });
-    }
-    return route.fulfill({ status: 404, body: '' });
-  };
-  const settle = page => page.waitForFunction(() => window.WosExperience && !WosExperience.state.busy, null, { timeout: 15000 }).then(() => sleep(250)).then(() => page.evaluate(() => document.getElementById('wosWelcome')?.remove()));
-  const setSkin = async (page, id) => {
-    await page.evaluate(id => WosSkin.set(id), id); await sleep(150);
-    if (await page.$('.nv-boot')) { await page.locator('.nv-boot').click({ position: { x: 10, y: 10 } }).catch(() => {}); await page.waitForSelector('.nv-boot', { state: 'detached', timeout: 3000 }).catch(() => {}); }
-    await settle(page);
-  };
-  const pinShown = (page, root) => page.evaluate(root => [...document.querySelectorAll(`${root} .ch-pin-toggle`)].filter(b => getComputedStyle(b).display !== 'none' && b.getBoundingClientRect().width > 0).length, root);
-  const rowCount = (page, root) => page.evaluate(root => document.querySelectorAll(`${root} .ch-row[data-chopen]`).length, root);
-  const menu = (page, root, sid) => page.evaluate(({ root, sid }) => {
-    const row = document.querySelector(`${root} .ch-row[data-chopen="${sid}"]`), b = row.getBoundingClientRect();
-    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: b.x + 40, clientY: b.y + 10, button: 2 }));
-    const sheet = document.querySelector('.ch-sheet'); if (!sheet) return null;
-    const labels = [...sheet.querySelectorAll('button')].filter(x => getComputedStyle(x).display !== 'none').map(x => x.innerText.trim());
-    return { labels, pinVisible: !!sheet.querySelector('[data-rspin]') && getComputedStyle(sheet.querySelector('[data-rspin]')).display !== 'none' };
-  }, { root, sid });
-  const closeMenu = page => page.evaluate(() => { document.querySelector('.ch-sheet')?.dispatchEvent(new MouseEvent('click', { bubbles: true })); }).then(() => sleep(250));
-
-  const ctxs = [['phone', { viewport: { width: 412, height: 892 }, isMobile: true, hasTouch: true }], ['desktop', { viewport: { width: 1280, height: 860 } }]];
-  for (const [shell, opts] of ctxs) {
-    const ctx = await browser.newContext({ ...opts, serviceWorkers: 'block' });
-    await ctx.route('**/*', routeRequest);
-    await ctx.addInitScript(() => { try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wos.skin', 'nebula'); localStorage.setItem('wos.chats.layout.v1', 'status'); } catch (_) {} });
-    const page = await ctx.newPage(); page.on('pageerror', e => errors.push(String(e)));
-    await page.goto('https://wizard.test/wizard-os-home/' + (shell === 'desktop' ? 'desktop.html' : ''), { waitUntil: 'load' });
-    await page.waitForFunction(() => (window.__wos || window.__wux) && window.WizCore?.apps, null, { timeout: 20000 });
-    if (shell === 'phone') await page.evaluate(() => __wos.openApp(WizCore.apps('mobile').APPS.find(a => a.id === 'wizard')));
-    const wid = await page.waitForFunction(() => Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && !w.agent)?.id || '', null, { timeout: 15000 }).then(h => h.jsonValue());
-    const rootOf = id => shell === 'desktop' ? `.win[data-win="${id}"]` : `[data-chats="${id}"]`;
-    let root = rootOf(wid);
-    await page.waitForSelector(`${root} .ch-row[data-chopen="qa_s_live"], ${root} [data-sec="archive"]`, { timeout: 20000 }); await settle(page);
-    const order = () => page.evaluate(root => [...document.querySelectorAll(`${root} .ch-sec[data-sec]`)].filter(e => e.getBoundingClientRect().width > 0).map(e => [e.dataset.sec, Math.round(e.getBoundingClientRect().top), e.classList.contains('open')]).sort((a, b) => a[1] - b[1]), root);
-    const foot = () => page.evaluate(root => { const f = document.querySelector(`${root} .ch-bodysearch`); const secs = [...document.querySelectorAll(`${root} .ch-sec`)]; return f && secs.length ? Math.round(f.getBoundingClientRect().top) - Math.max(...secs.map(e => Math.round(e.getBoundingClientRect().top))) : null; }, root);
-    const run = async (label, prefix, liveId, oldId) => {
-      await page.fill(`${root} [data-chsearch]:visible`, 'zephyr'); await sleep(1500);
-      let o = await order();
-      ok(o.length >= 2 && o[o.length - 1][0] === 'archive' && o[o.length - 1][2] && o[0][0] !== 'archive', `${shell} ${label}: search lists live matches first and Archive last, open`, o);
-      const fo = await foot(); ok(fo === null || fo > 0, `${shell} ${label}: search footer stays below Archive`, fo);
-      await page.click(`${root} [data-sectoggle="archive"]:visible`); await sleep(250);
-      o = await order();
-      ok(o[o.length - 1][0] === 'archive' && !o[o.length - 1][2] && await page.locator(`${root} .ch-row[data-chopen="${oldId}"]:visible`).count() === 0 && await page.locator(`${root} .ch-row[data-chopen="${liveId}"]:visible`).count() === 1, `${shell} ${label}: tapping Archive collapses only it`, o);
-      await page.click(`${root} [data-sectoggle="archive"]:visible`); await sleep(250);
-      ok(await page.locator(`${root} .ch-row[data-chopen="${oldId}"]:visible`).count() === 1, `${shell} ${label}: tapping Archive again expands it`);
-      await page.locator(`${root} [data-chsearch]:visible`).click(); await page.keyboard.press('Control+a'); await page.keyboard.press('Backspace'); await sleep(1500);
-      o = await order(); ok(o[0][0] === 'archive', `${shell} ${label}: clearing the search puts Archive back on top`, [o, await page.evaluate(root => { const l = document.querySelector(`${root} .ch-list`); return [l?.className, [...l.querySelectorAll('.ch-sec')].map(e => e.className + '|' + getComputedStyle(e).order), [...document.querySelectorAll(`${root} [data-chsearch]`)].map(e => e.value), window.WizLive?.chatLayout]; }, root)]);
-    };
-    await run('main agent', '', 'qa_s_live', 'qa_s_old');
-    ok(await page.evaluate(ag => window.WizOpenAgentChats(ag), ROUTED), `${shell} routed agent: its chats open`);
-    { const rw = await page.waitForFunction(ag => Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && w.agent === ag)?.id || Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && !w.agent && document.querySelector(`[data-chats="${w.id}"] .ch-row[data-chopen="qa_r_live"]`))?.id || '', ROUTED, { timeout: 15000 }).then(h => h.jsonValue()); root = rootOf(rw); }
-    await page.waitForSelector(`${root} .ch-row[data-chopen="qa_r_live"], ${root} [data-sec="archive"]`, { timeout: 15000 }); await sleep(500);
-    await run('routed agent', '', 'qa_r_live', 'qa_r_old');
-    await page.screenshot({ path: path.join(OUT, `${shell}-routed.png`) });
-    await ctx.close();
-  }
-  ok(errors.length === 0, 'no page errors', errors.slice(0, 2));
-  await browser.close();
-  console.log(`${pass} pass, ${fail} fail`);
-  process.exit(fail ? 1 : 0);
-})();
+    ok(errors.length === 0, 'no page errors', errors);
+  } finally { await browser.close(); }
+  fs.writeFileSync(path.join(OUT, 'search-flat-results.json'), JSON.stringify({ pass, fail, cases, writes, bodyRequests, tree: TREE }, null, 2));
+  console.log(`${pass} pass, ${fail} fail`); process.exitCode = fail ? 1 : 0;
+})().catch(e => { console.error(e); process.exitCode = 1; });
