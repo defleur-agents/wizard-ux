@@ -71,6 +71,7 @@ test('retry reads the original connector and only a verified response restores c
   online = true;
   s.WosUpdates.act({closest: () => ({ dataset: { osu: 'retry' } })}, {});
   assert.doesNotMatch(s.WosUpdates.html(), /data-osu="ask"/, 'stale controls cannot flash during retry');
+  assert.match(s.WosUpdates.html(), /disabled aria-busy="true"[^>]*>Checking…/, 'retry acknowledges the tap before the read resolves');
   await tick(); await tick();
   assert.match(s.WosUpdates.html(), /data-osu="ask"/);
   const updates = calls.filter(c => c.url.endsWith('/store-install/_updates'));
