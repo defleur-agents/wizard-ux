@@ -11,7 +11,7 @@ const source = fs.readFileSync(path.join(root, 'web/desktop/desktop.js'), 'utf8'
 function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', narrow = false } = {}) {
   const timers = [], w = { id: 'qa', app: 'chats', thread: sid }, desk = { wins: count === 2 ? ['qa', 'other'] : ['qa'], mono };
   const width = narrow ? 580 : count === 2 && !mono ? Math.min(1200, (viewport - 24) / 2) : Math.min(1200, viewport - 16);
-  let submit;
+  let submit, attr = sid;
   const el = { dataset: { win: 'qa' }, contains: () => true, querySelector: () => ({ getBoundingClientRect: () => ({ width }) }) };
   const ta = { value: 'Synthetic retained words' }, form = { querySelector: () => ta, closest: () => el };
   const context = vm.createContext({
@@ -20,14 +20,14 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
     mainChats: x => x?.app === 'chats', focused: () => w, hud: null, homeOpen: false,
     document: { activeElement: null }, setTimeout: (fn, ms) => timers.push({ fn, ms }),
     CHATS: { openNewDraft: () => { w.thread = '__new__'; }, sendVoiceTo: () => { w.thread = null; } },
-    syncChatsPane() {}, focusInside() {}, log() {}, toast() {},
+    syncChatsPane() { attr = w.thread || ''; }, focusInside() {}, log() {}, toast() {},
     rp: { wid: 'qa', sid }, r: { blob: {} }, extraFiles: [], sealed: false,
     modelRoute: {}, stagedId: null, transcript: '',
   });
   const start = source.indexOf('  function keepNewSendList(') >= 0 ? source.indexOf('  function keepNewSendList(') : source.indexOf('  function toNewChat(');
   vm.runInContext(source.slice(start, source.indexOf('  function stepThread(', start)), context);
-  return { w, desk, width,
-    text() { submit({ target: { closest: () => form } }); w.thread = null; },
+  return { w, desk, width, get attr() { return attr; },
+    text() { submit({ target: { closest: () => form } }); w.thread = null; attr = ''; },
     voice() {
       const line = source.split('\n').find(x => x.includes('if (rp) { CHATS.sendVoiceTo(') || x.includes('if (rp) { const stayOnList'));
       assert.ok(line, 'actual composer-mic handoff branch found');
@@ -40,6 +40,7 @@ for (const viewport of [1280, 1920, 2560]) for (const mode of ['text', 'voice'])
   test(`half-width desktop ${viewport}: new ${mode} keeps list past the shell timer`, () => {
     const f = fixture({ viewport }); f[mode](); f.drain();
     assert.equal(f.w.thread, null, `half-width ${f.width}px is layout ownership, not a 620px breakpoint`);
+    assert.equal(f.attr, '', 'desktop pane projection also leaves New chat');
   });
 }
 test('new text leaves a later visit and failed-save recovery untouched', () => {
