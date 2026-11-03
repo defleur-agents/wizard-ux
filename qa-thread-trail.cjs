@@ -90,19 +90,41 @@ async function sendReturnChecks(b) {
     const journal={mobile,skin,half,desktopWidth,writes:intercepted,errors,receipts,requests,models:[],requestFailures:[],externalRequests:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
     await c.exposeBinding('__qaReceipt',(_source,value)=>{receipts.push(value);flush();});
     await c.exposeBinding('__qaModelState',(_source,value)=>{journal.models.push(value);flush();});
+    journal.lifecycle=[]; journal.phases=[];
+    await c.exposeBinding('__qaLifecycle',(_source,value)=>{journal.lifecycle.push(value);flush();});
+    await c.addInitScript(()=>{
+      const log=(event,detail={})=>{void window.__qaLifecycle({at:performance.now(),event,...detail});};
+      window.__qaRecorders=[];
+      // Observe the native fake-device recorder; never replace bytes or its timing.
+      const start=MediaRecorder.prototype.start;
+      MediaRecorder.prototype.start=function(...args){
+        const rec=this, row={started:performance.now(),bytes:0,chunks:0,stopped:false};
+        window.__qaRecorders.push(row);
+        for(const type of ['start','dataavailable','stop','error'])rec.addEventListener(type,e=>{
+          if(type==='dataavailable'){row.bytes+=e.data.size;row.chunks++;}
+          if(type==='stop')row.stopped=true;
+          log('recorder:'+type,{bytes:row.bytes,chunks:row.chunks,state:rec.state,mime:rec.mimeType,error:e.error?.message});
+        });
+        return start.apply(this,args);
+      };
+      addEventListener('wizard-voice-state',e=>log('voice-state',e.detail));
+      addEventListener('unhandledrejection',e=>log('unhandled-rejection',{error:String(e.reason?.stack||e.reason)}));
+      document.addEventListener('click',e=>{const b=e.target.closest('[data-chmic],#micBtn');if(b)log('mic-click',{target:b.id||'composer',pressed:b.getAttribute('aria-pressed')});},true);
+    });
     await c.route('**/*', async r => {
       const q = r.request(), u = new URL(q.url()); requests.push({method:q.method(),path:u.pathname}); flush();
       const json = (status, body) => r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
       if (u.origin !== origin) { journal.externalRequests.push(q.url()); flush(); return r.abort(); }
       if (!['GET','HEAD'].includes(q.method())) {
-        const write={method:q.method(),path:u.pathname,body:q.postData() || '',key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
+        const bytes=q.postDataBuffer(), media=/\/(?:transcribe|files\/upload)$/.test(u.pathname);
+        const write={method:q.method(),path:u.pathname,body:media?'[synthetic audio bytes]':q.postData() || '',bytes:bytes?.length||0,key:q.headers()['idempotency-key'] || ''}; intercepted.push(write); flush();
         if (u.pathname.endsWith('/v1/runs')) {
           if (holdAck) await new Promise(resolve => heldRuns.push(resolve));
           write.ack={run_id:'qa_return_'+write.key,session_id:JSON.parse(write.body).session_id,status:'queued'}; flush(); return json(202,write.ack);
         }
         if (u.pathname === '/wizard/thread-seen') return json(200,{state:JSON.parse(q.postData() || '{}').state || {initializedAt:1,threads:{}}});
         if (u.pathname.endsWith('/transcribe')) return json(200,{text:'QA tiled voice'});
-        if (u.pathname.endsWith('/files/upload')) return json(200,{file:{id:'qa_tiled_voice',filename:'voice.webm',mime:'audio/webm',bytes:4096}});
+        if (u.pathname.endsWith('/files/upload')) { write.response={file:{id:'qa_tiled_voice',filename:'voice.webm',mime:'audio/webm',bytes:write.bytes}};flush();return json(200,write.response); }
         return json(200,{ok:true});
       }
       // chat-models.normalize/resolveRoute require a confirmed default. An empty
@@ -143,6 +165,19 @@ async function sendReturnChecks(b) {
       if(!M.ready||M.error||M.loading||d?.value!=='qa-model'||d?.provider!=='qa-provider'||!M.options.some(o=>o.value===d.value&&o.provider===d.provider&&o.isGlobalDefault))
         throw new Error('Fixture model catalogue invalid: '+JSON.stringify(snapshot('invalid')));
     });
+    await p.evaluate(()=>{
+      const ob=WosOutbox;
+      const snapshot=x=>x&&({id:x.id,captureId:x.captureId,custodyId:x.custodyId,kind:x.kind,sessionId:x.sessionId,state:x.state,audioBytes:x.audio?.size,text:x.text,model:x.model,provider:x.provider,durable:x.durable,storageError:x.storageError});
+      for(const name of ['capture','stage','handOff','enqueue']){
+        const original=ob[name];
+        ob[name]=function(...args){
+          const spec=name==='capture'?{id:args[1],audioBytes:args[0]?.size}:name==='handOff'?{id:args[0]}:snapshot(args[0]);
+          void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':enter',spec});
+          const result=original.apply(this,args);
+          return Promise.resolve(result).then(value=>{void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':return',item:typeof value==='object'?snapshot(value):value});return value;},e=>{void __qaLifecycle({at:performance.now(),event:'outbox:'+name+':error',error:String(e.stack||e)});throw e;});
+        };
+      }
+    });
     await p.evaluate(mobile => {
       if (mobile) __wos.goDesk(1); else __wux.openChatsList();
       // done() persists sent before the hook; landed() may later compact text and
@@ -170,7 +205,8 @@ async function sendReturnChecks(b) {
       if (enter) await p.locator(root+' .ch-compose textarea').press('Enter'); else await p.locator(root+' .ch-send').click();
       journal.submission=await p.evaluate(()=>__qaSubmit);flush();return journal.submission;
     };
-    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;ob.enqueue=async x=>{await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
+    const phase = async name => {journal.phases.push({name,state:await state(),capture:await p.evaluate(()=>({voice:window.__wux?.voiceState,recorders:window.__qaRecorders,held:window.__qaHeld,items:[...WosOutbox._items.values()].map(x=>({id:x.id,kind:x.kind,state:x.state,audioBytes:x.audio?.size,durable:x.durable,storageError:x.storageError,sessionId:x.sessionId,text:x.text,error:x.error}))}))});flush();};
+    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;window.__qaHeld=null;ob.enqueue=async x=>{window.__qaHeld={captureId:x.captureId,custodyId:x.custodyId,kind:x.kind,sessionId:x.sessionId,audioBytes:x.audio?.size,model:x.model,provider:x.provider};await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
     const release = async reject => { await p.evaluate(reject=>{const r=__qaResume;__qaUnhold();reject ? r.reject(new Error('QA disk full')) : r.resolve();},reject); };
     const openOther = () => p.locator(list+' [data-chopen="qa_tt_b"]').first().click();
     const ack = () => {holdAck=false;heldRuns.splice(0).forEach(r=>r());};
@@ -185,14 +221,27 @@ async function sendReturnChecks(b) {
       check(!!item&&item.text===text&&body.input===text&&body.session_id===item.sessionId&&body.model===item.model&&body.provider===item.provider&&body.require_model_lock===true&&write.body===item.body,'held run bound to exact item, destination, text and model', {write,item});
       return async()=>{ack();await p.waitForFunction(key=>__qaReceipts.some(x=>x.id===key),write.key);const receipt=await p.evaluate(key=>__qaReceipts.find(x=>x.id===key),write.key);check(receipt.state==='sent'&&receipt.text===text&&receipt.sessionId===body.session_id&&receipt.runId===write.ack.run_id&&receipt.body===write.body,'persisted receipt bound to exact intercepted ACK',{receipt,write});};
     };
-    return {c,p,id,root,list,state,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors,journal};
+    return {c,p,id,root,list,state,phase,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors,journal};
   }
   // James's desktop half-width means TWO REAL TILES, including at >620px.
   // These cases deliberately use shell newWin/layout, never forced CSS widths.
   if (process.env.QA_SEND_TILING === '1') {
+    const verifyVoice = async t => {
+      await t.phase('native-ack-persisted');
+      const held=t.journal.phases.find(x=>x.name==='delivery-enqueue-held').capture.held;
+      const id=held.captureId||held.custodyId;
+      const stt=t.intercepted.filter(x=>x.path.endsWith('/transcribe'));
+      const uploads=t.intercepted.filter(x=>x.path.endsWith('/files/upload'));
+      const runs=t.intercepted.filter(x=>x.path.endsWith('/v1/runs'));
+      const receipt=t.journal.receipts.find(x=>x.id===id);
+      const file=uploads[0]?.response?.file, body=runs[0]&&JSON.parse(runs[0].body);
+      check(stt.length===1&&uploads.length===1&&runs.length===1&&uploads[0].bytes===held.audioBytes&&receipt?.id===id&&body?.wizard_file_ids?.includes(file?.id),
+        `${t.journal.case.mode}: one STT/upload/run/ACK retains capture and audio receipt`,{id,held,stt,uploads,body,receipt});
+    };
     const red = process.env.QA_EXPECT_TILING_RED === '1';
     const modes = ['click','enter','composer-mic','composer-right-command','right-command','bar-mic'];
     for (const skin of ['nebula','grove']) for (const width of [1280,1920,2560]) for (const mode of modes) {
+      if (process.env.QA_NATIVE_MIC_CANARY === '1' && (skin !== 'nebula' || width !== 1920 || mode !== 'composer-mic')) continue;
       if (red && (skin !== 'nebula' || width !== 1920 || !['click','composer-mic'].includes(mode))) continue;
       let t;
       try {
@@ -215,22 +264,41 @@ async function sendReturnChecks(b) {
             else await p.locator('#micBtn').click();
           };
           await start(); await p.waitForFunction(()=>__wux.voiceState==='listen');
-          await p.waitForTimeout(600); // real fake-device MediaRecorder chunks, no mocked product recorder
+          await p.waitForTimeout(600);
+          await t.phase('legacy-600ms');
+          // voice.start publishes listen BEFORE opening the stream. finish rejects
+          // <450ms OR <1200 bytes. A wall delay from listen isn't a valid take.
+          // Await the real recorder and its journal, never fabricate capture flags.
+          await p.waitForFunction(()=>{
+            const r=window.__qaRecorders.at(-1);
+            return r&&!r.stopped&&performance.now()-r.started>=450&&r.bytes>=1200&&
+              [...WosOutbox._items.values()].some(x=>x.kind==='capture'&&x.audio?.size>=1200);
+          });
+          await t.phase('native-take-ready');
           if (mode==='composer-right-command'||mode==='right-command') await p.keyboard.press('MetaRight');
           else if(mode==='composer-mic') await p.locator(t.root+' [data-chmic]').click();
           else await p.locator('#micBtn').click();
+          await t.phase('stop-control-returned');
           await p.waitForFunction(()=>window.__qaResume);
-          check((await t.state()).thread===null,`${skin}/${width}/${mode}: voice handoff leaves before durable save`);
+          await t.phase('delivery-enqueue-held');
+          check((await t.state()).thread===null,`${skin}/${width}/${mode}: voice handoff leaves before delivery enqueue resumes`);
+          const pinned=await p.evaluate(()=>{
+            const h=__qaHeld, id=h.captureId||h.custodyId, x=WosOutbox._items.get(id), r=__qaRecorders.at(-1);
+            return {held:h,id,item:x&&{id:x.id,state:x.state,bytes:x.audio?.size,durable:x.durable},recorder:r};
+          });
+          check(pinned.recorder.stopped&&pinned.held.audioBytes>=1200&&pinned.item?.bytes>=1200&&pinned.id?.startsWith('capture-'),`${skin}/${width}/${mode}: native final audio retains original capture identity`,pinned);
         }
         await p.waitForTimeout(450); const st=await t.state(); t.journal.held=st; flush();
         if (red) {
           check(st.thread==='__new__',`${skin}/${width}/${mode}: RED old shell timer reopens New chat`,st);
           t.journal.reproduced=st.thread==='__new__'; flush();
           await p.screenshot({path:path.join(OUT,`red-${mode}.png`)});
+          if(process.env.QA_NATIVE_MIC_CANARY==='1'){await t.release(false);await (await t.sent(text))();await verifyVoice(t);}
           continue;
         }
         check(st.thread===null&&st.attr===''&&st.list,`${skin}/${width}/${mode}: list survives delayed shortcut with save held`,st);
         await t.release(false); await (await t.sent(text))(); await p.waitForTimeout(450);
+        if(mode!=='click'&&mode!=='enter')await verifyVoice(t);
         const after=await t.state();
         check(after.thread===null&&after.attr===''&&after.list,`${skin}/${width}/${mode}: exact run ACK retains list`,after);
         if(width===1920&&mode==='click') {
@@ -245,7 +313,7 @@ async function sendReturnChecks(b) {
           check((await t.state()).thread==='qa_tt_b',`${skin}: realistic tile never steals a newer visit`);
         }
         check(t.errors.length===0&&t.journal.externalRequests.length===0,`${skin}/${width}/${mode}: no page errors or external traffic`,t.errors);
-      } catch(e) { check(false,`${skin}/${width}/${mode}: exception`,String(e.stack||e)); }
+      } catch(e) { if(t){await t.phase('exception').catch(()=>{});await t.p.screenshot({path:path.join(OUT,`failure-${skin}-${width}-${mode}.png`)}).catch(()=>{});} check(false,`${skin}/${width}/${mode}: exception`,String(e.stack||e));return; }
       finally { if(t) await close(t.c); else await closeAll(); }
     }
     return;
