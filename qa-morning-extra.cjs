@@ -4,7 +4,7 @@ const q=require('./qa-morning-instant-done.cjs');
 const mode=process.env.QA_CASE;
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
 async function extra(o){
- const {p,ctx,frame,gates,requests,model,desktop,skin,label,out,base,statusReads}=o;
+ const {p,ctx,frame,gates,requests,model,ctl,desktop,skin,label,out,base,statusReads}=o;
  const must=(c,n,d)=>{q.check(c,`${label}/${mode}: ${n}`,d);assert.ok(c,n);};
  const waitGate=async()=>{const end=Date.now()+5000;while(!gates.length&&Date.now()<end)await nap(20);assert.equal(gates.length,1,'one real synthetic transport gate');};
  const settle=async(code,f=frame())=>{await waitGate();gates.shift().resolve(code);if(f&&!f.isDetached())await f.waitForFunction(()=>![...document.querySelectorAll('[data-done],#hideBtn')].some(b=>b.disabled));else await nap(100);};
@@ -20,29 +20,60 @@ async function extra(o){
  const open=async()=>{await p.evaluate(()=>WizOpenApp('morning'));await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.__morning?.state()));return frame();};
  const chats=async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});};
  const done=async(step='workout')=>frame().evaluate(s=>{const e=document.querySelector(`[data-step="${s}"]`);if(!e.classList.contains('is-current')&&!e.classList.contains('is-open'))e.querySelector('[data-toggle]').click();e.querySelector('[data-done]').click();},step);
- const shellNotices=async()=>p.locator('#toast').evaluate(e=>({text:e.innerText,visible:e.getClientRects().length>0&&getComputedStyle(e).opacity!=='0',count:window.__morningNoticeCount||0}));
- // Count actual shell failure paints, not console calls or hidden app toasts.
- await p.evaluate(()=>{window.__morningNoticeCount=0;let last='';const e=document.querySelector('#toast');new MutationObserver(()=>{const t=e.textContent;if(t!==last&&t.includes('Morning wasn’t saved'))window.__morningNoticeCount++;last=t;}).observe(e,{subtree:true,childList:true,characterData:true});});
- if(mode.startsWith('destroy-')){
+ const notices=()=>p.evaluate(()=>window.__morningNotices.slice()); // one entry per actual shell failure toast paint (installed by the scenario)
+ const shellNotices=async()=>({...(await p.locator('#toast').evaluate(e=>({text:e.innerText,visible:e.getClientRects().length>0&&getComputedStyle(e).opacity!=='0'}))),count:(await notices()).length});
+ const cardTexts=()=>p.evaluate(()=>[...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent));
+ const cardText=async()=>(await cardTexts()).join('|');
+ const refreshed=()=>p.waitForFunction(()=>/Status refreshed/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
+ const toastGone=()=>p.waitForFunction(()=>{const t=document.querySelector('#toast');return !t.classList.contains('show')&&!t.classList.contains('on');});
+ const controls=async()=>p.evaluate(()=>[...document.querySelectorAll('.ch-morning-w')].every(c=>c.querySelector('[data-chmorningrecover]')&&c.querySelector('[data-chmorning]')));
+ // Authoritative check through the actual card control; waits on the shell's own text transition.
+ const clickRecover=async()=>{await p.waitForFunction(()=>{const b=document.querySelector('.ch-morning-w [data-chmorningrecover]');return !!b&&!b.disabled;});await p.evaluate(()=>document.querySelector('.ch-morning-w [data-chmorningrecover]').click());};
+ const checkStatus=async()=>{const r=statusReads();await clickRecover();await refreshed();must(statusReads()>r,'actual Check status control reads canonical status');};
+ // A refusal inside the app reloads its own state first (a real second tap is then needed); never a blind POST.
+ const retryTap=async fire=>{await fire();for(let i=0;i<2&&!gates.length;i++){const end=Date.now()+1200;while(!gates.length&&Date.now()<end)await nap(20);if(!gates.length)await fire();}};
+ // With canonical reads unavailable a retry has no way to reconcile: the app/shell must refuse locally.
+ const attemptWhileUnreadable=async(fire,what)=>{const posts=requests.length;ctl.statusFail=true;try{await fire();await nap(300);must(requests.length===posts&&gates.length===0,what+' is refused without a blind POST');must(!/Status refreshed/.test(await cardText()),what+' leaves the uncertainty visible while status is unreadable');}finally{ctl.statusFail=false;}};
+  if(mode.startsWith('destroy-')){
   const code=mode==='destroy-success'?200:500;
   const result=await p.evaluate(()=>{const a=window.__wos||window.__wux,f=[...document.querySelectorAll('iframe')].find(f=>f.contentWindow?.__morning),w=Object.values(a.wins).find(w=>w.appId==='morning'||w.url?.startsWith('/morning/'));if(!w)throw Error('Morning host window missing');const b=f.contentDocument.querySelector('[data-step="workout"] [data-done]');b.click();const own=f.contentWindow.__morning.state().steps.workout.done;if(!w)throw Error('Morning host window missing');a.closeWin(w.id);return {own,removed:!f.isConnected};});
   must(result.own&&result.removed,'actual Done then actual host close destroys frame in same task',result);
   await chats();await waitGate();await nap(5100);
-  must(await p.locator('.ch-morning-w').innerText().then(t=>t.includes('1 of 4')),'projection survives destroyed frame and 5s backend hold');
+  must(await cardText().then(t=>t.includes('1 of 4')),'projection survives destroyed frame and 5s backend hold');
   await p.evaluate(m=>postMessage({type:'wizard:morning',status:m,pending:false},location.origin),q.initial());
-  must(await p.locator('.ch-morning-w').innerText().then(t=>t.includes('1 of 4')),'stale settled app message cannot steal transport custody');
+  must(await cardText().then(t=>t.includes('1 of 4')),'stale settled app message cannot steal transport custody');
   await settle(code,null);
-  await p.waitForFunction(want=>document.querySelector('.ch-morning-w')?.innerText.includes(want),code===200?'1 of 4':'Workout · Meditate · Read');
-  must(model.steps.workout.done===(code===200),'late terminal result reconciles actual fixture state');
-  const n=await shellNotices();must(code===200?n.count===0:n.count===1&&n.visible&&n.text.includes('Morning wasn’t saved'),'one visible shell failure notice, none for success',n);await shot('terminal');
+  if(code===200){
+   await p.waitForFunction(()=>document.querySelector('.ch-morning-w')?.innerText.includes('1 of 4'));
+   must(model.steps.workout.done,'late terminal result reconciles actual fixture state');
+   const n=await shellNotices();must(n.count===0&&!(await cardText()).includes('outcome unknown'),'no failure notice or card for a committed late success',n);
+  }else{
+   await p.waitForFunction(()=>/Save outcome unknown/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
+   must(!model.steps.workout.done,'late failed terminal result is not a commit in the synthetic server');
+   const n=await shellNotices(),text=await cardText();
+   must(n.count===1&&n.visible&&n.text.includes('Save outcome unknown')&&!n.text.includes('Morning wasn’t saved'),'destroyed frame: one visible shell notice, honest uncertainty (not definitely unsaved)',n);
+   must(/Workout/.test(text)&&await controls(),'destroyed frame: persistent card names the step and keeps Check status/Open Morning',text);
+   await shot('terminal');await toastGone();
+   must(/Save outcome unknown/.test(await cardText())&&requests.length===1&&gates.length===0,'destroyed frame: card persists after the toast and no automatic POST retry');
+  }
+  if(code===200)await shot('terminal');
   const reads=statusReads();await p.evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));const until=Date.now()+5000;while(statusReads()===reads&&Date.now()<until)await nap(20);
   must(statusReads()>reads,'status polling resumes after destroyed-frame terminal settlement');
+  if(code===500){await refreshed();must(/Workout/.test(await cardText())&&await controls(),'resumed poll is a status check: card turns to Status refreshed and stays actionable');}
   const f=await open();must(await f.evaluate(want=>__morning.state().steps.workout.done===want,code===200),'new app frame reads canonical terminal state');
-  if(code===500){await done();await settle(200);must(model.steps.workout.done,'real Done retry after destroyed-frame failure persists');}
+  if(code===500){await done();await settle(200);must(model.steps.workout.done&&requests.length===2,'real Done retry after checked destroyed-frame failure persists with one new POST');must(!(await cardText()).includes('outcome unknown')&&!(await cardText()).includes('Status refreshed'),'successful retry clears the persistent failure');}
  }else if(mode==='retry'){
   await done();must(await frame().evaluate(()=>__morning.state().steps.workout.done),'Done immediately acknowledges while failure unresolved');await waitGate();await chats();await settle(500);
-  const n=await shellNotices();must(n.count===1&&n.visible,'exactly one visible offscreen failure notice',n);must(await frame().evaluate(()=>!__morning.state().steps.workout.done),'failed Done rolls back, not mistaken for Undo');await shot('failed-Done');await opacityProof();
-  await open();await done();await settle(200);must(model.steps.workout.done&&requests.length===2,'real Done retry produces one new successful write');
+  const n=await shellNotices();must(n.count===1&&n.visible&&n.text.includes('Save outcome unknown')&&!n.text.includes('Morning wasn’t saved'),'exactly one visible offscreen failure notice, outcome unknown',n);must(await frame().evaluate(()=>!__morning.state().steps.workout.done),'failed Done rolls back, not mistaken for Undo');
+  const text=await cardText();must(/Workout/.test(text)&&/Save outcome unknown/.test(text)&&await controls(),'persistent actionable uncertainty card names the failed step',text);
+  must(await frame().evaluate(()=>!document.querySelector('#err').hidden&&/Save outcome unknown/.test(document.querySelector('#err').textContent)),'local Morning error is also honest uncertainty');
+  await shot('failed-Done');await opacityProof();await toastGone();
+  must(/Save outcome unknown/.test(await cardText())&&await controls()&&requests.length===1&&gates.length===0,'card persists after the toast and nothing retried automatically');
+  await open();
+  await attemptWhileUnreadable(done,'real Done retry before a status check');
+  await checkStatus();must(/Workout/.test(await cardText()),'checked status keeps the unresolved failure visible');
+  await retryTap(done);await settle(200);must(model.steps.workout.done&&requests.length===2,'real Done retry after check produces one new successful write');
+  must((await cardTexts()).every(c=>!/outcome unknown|Status refreshed/.test(c))&&(await notices()).length===1,'success clears persistent failure and emits no further failure notice');
   // Exercise both adjacent sheet actions, not only setDone with a how string.
   for(const [step,selector] of [['meditate','#meds [data-open]'],['read','#picks [data-open]']]){
    await frame().evaluate(({step,selector})=>{const el=document.querySelector(`[data-step="${step}"]`);if(!el.classList.contains('is-current'))el.querySelector('[data-toggle]').click();document.querySelector(selector).click();document.querySelector('#sheetDone').click();},{step,selector});
@@ -52,11 +83,65 @@ async function extra(o){
   const r=await frame().evaluate(()=>{document.querySelector('#hideBtn').click();return {hidden:__morning.state().hidden,label:document.querySelector('#hideBtn').textContent,disabled:document.querySelector('#hideBtn').disabled};});
   must(r.hidden&&r.disabled&&r.label.includes('show it again'),'Skip today paints Show again and pending before backend',r);
   await waitGate();await chats();must(await p.locator('.ch-morning-w').count()===0,'Skip removes pinned card immediately');await settle(500);
-  must(!model.hidden&&await p.locator('.ch-morning-w').count()>0,'failed Skip restores card and does not tick any step');must((await shellNotices()).count===1,'failed offscreen Skip has one shell notice');await shot('failed-skip');
-  await open();await frame().evaluate(()=>document.querySelector('#hideBtn').click());await settle(200);must(model.hidden&&model.done===0,'Skip retry persists hide without Done');
-  await open();await frame().evaluate(()=>document.querySelector('#hideBtn').click());
+  let text=await cardText();
+  must(!model.hidden&&model.done===0&&/Show \/ hide/.test(text)&&/Save outcome unknown/.test(text)&&await controls(),'failed Skip leaves a persistent Show/hide uncertainty card and ticks no step',text);must((await shellNotices()).count===1,'failed offscreen Skip has one shell notice');await shot('failed-skip');
+  const hide=async()=>frame().evaluate(()=>document.querySelector('#hideBtn').click());
+  await open();await attemptWhileUnreadable(hide,'Skip retry before a status check');await checkStatus();
+  await retryTap(hide);await settle(200);must(model.hidden&&model.done===0,'Skip retry after check persists hide without Done');
+  await chats();must(await p.locator('.ch-morning-w').count()===0,'successful Skip clears the failure and hides the card');
+  await open();await hide();
   must(await frame().evaluate(()=>!__morning.state().hidden&&document.querySelector('#hideBtn').textContent.startsWith('Skip today')),'Show again paints immediately');await settle(500);
-  must(await frame().evaluate(()=>__morning.state().hidden),'Show again failure restores hidden status');await frame().evaluate(()=>document.querySelector('#hideBtn').click());await settle(200);must(!model.hidden&&model.done===0,'Show again retry persists without changing steps');
+  must(await frame().evaluate(()=>__morning.state().hidden),'Show again failure restores hidden status');
+  text=await cardText();must(model.hidden&&/Show \/ hide/.test(text)&&/Save outcome unknown/.test(text)&&await controls()&&(await shellNotices()).count===2,'failed Show again keeps a persistent card even though canonical is hidden, with its own single notice',text);
+  await attemptWhileUnreadable(hide,'Show again retry before a status check');await checkStatus();
+  await retryTap(hide);await settle(200);must(!model.hidden&&model.done===0,'Show again retry after check persists without changing steps');
+  await chats();must(await p.locator('.ch-morning-w').count()>0&&(await cardTexts()).every(c=>!/outcome unknown|Status refreshed/.test(c)),'successful Show again returns the normal card');
+ }else if(mode==='refusal'){
+  // A definitive 4xx refusal is a different state from an ambiguous response: nothing was saved, the
+  // wording says so, and an explicit retry needs no status check.
+  await done();must(await frame().evaluate(()=>__morning.state().steps.workout.done),'Done acknowledges before a definitive refusal');await waitGate();await chats();await settle(400);
+  const n=await shellNotices(),text=await cardText();
+  must(n.count===1&&n.visible&&n.text.includes('Morning wasn’t saved')&&!n.text.includes('outcome unknown'),'definitive refusal: one visible shell notice says not saved',n);
+  must(/Workout/.test(text)&&/Morning wasn’t saved/.test(text)&&!/outcome unknown/.test(text)&&await controls(),'definitive refusal: persistent actionable card, not an uncertainty',text);
+  must(await frame().evaluate(()=>!__morning.state().steps.workout.done&&!document.querySelector('#err').hidden&&/Not saved/.test(document.querySelector('#err').textContent)),'definitive refusal rolls back with local Not saved error');
+  must(!model.steps.workout.done&&requests.length===1&&gates.length===0,'refused write is not committed and is not retried automatically');
+  await shot('refused');await opacityProof();await toastGone();must(/Morning wasn’t saved/.test(await cardText()),'definitive refusal card persists after the toast');
+  await open();await done();await settle(200);
+  must(model.steps.workout.done&&requests.length===2,'explicit retry after definitive refusal needs no status check and persists with one new POST');
+  must((await cardTexts()).every(c=>!/wasn’t saved|outcome unknown/.test(c))&&(await notices()).length===1,'successful retry clears the refusal card without another notice');
+ }else if(mode==='lost-commit'){
+  // Response lost AFTER the server committed. The bounded status read proves the effect, so the shell must
+  // reconcile to success: no failure card or notice, and never a second POST.
+  for(const [step,how,code] of [['workout','tap','commit-500'],['meditate','tap','commit-abort']]){
+   const posts=requests.length;await done(step);must(await frame().evaluate(s=>__morning.state().steps[s].done,step),`${step}: Done acknowledges before the lost response`);
+   await waitGate();await chats();await settle(code);
+   await p.waitForFunction(m=>document.querySelector('.ch-morning-w')?.innerText.includes(m),step==='workout'?'1 of 4':'2 of 4');
+   must(model.steps[step].done&&requests.length===posts+1&&gates.length===0,`${step}: committed-but-lost response is reconciled with exactly one POST`);
+   must((await cardTexts()).every(c=>!/outcome unknown|wasn’t saved|Status refreshed/.test(c))&&(await notices()).length===0,`${step}: confirmed commit shows no failure card or notice`);
+   must(await open().then(f=>f.evaluate(s=>__morning.state().steps[s].done,step)),`${step}: reopened app agrees with committed state`);
+  }
+  await shot('reconciled');
+ }else if(mode==='uncertain'){
+  // Server outcome cannot be established because the canonical read is also unavailable. The UI must say
+  // so honestly, show the OLD canonical state, never retry blindly, and let a later read decide.
+  ctl.statusFail=true;await done('workout');await waitGate();await chats();await settle('commit-abort');
+  await p.waitForFunction(()=>/Save outcome unknown/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
+  must(model.steps.workout.done&&requests.length===1,'fixture: server did commit but the client has no evidence');
+  let n=await shellNotices(),text=await cardText();
+  must(n.count===1&&n.text.includes('Save outcome unknown')&&!n.text.includes('Morning wasn’t saved')&&/Workout/.test(text)&&await controls(),'committed-but-unreadable: honest uncertainty, not definitely unsaved',text);
+  await shot('unknown-committed');await toastGone();
+  const reads=statusReads();await clickRecover();const end=Date.now()+5000;while(statusReads()===reads&&Date.now()<end)await nap(20);
+  must(statusReads()>reads&&/Save outcome unknown/.test(await cardText())&&requests.length===1,'failed status check does not invent a result and does not POST');
+  await nap(100);ctl.statusFail=false;await clickRecover();
+  await p.waitForFunction(()=>document.querySelector('.ch-morning-w')?.innerText.includes('1 of 4'));
+  must(requests.length===1&&(await cardTexts()).every(c=>!/outcome unknown|Status refreshed/.test(c)),'later canonical read proves the commit; failure clears without any retry');
+  // Second step: genuinely not committed + unreadable, then recovered and retried explicitly.
+  ctl.statusFail=true;await open();await done('meditate');await waitGate();await chats();await settle(500);
+  await p.waitForFunction(()=>/Meditate/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join(''))&&/Save outcome unknown/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
+  must(!model.steps.meditate.done&&requests.length===2&&(await notices()).length===2,'uncommitted-and-unreadable failure has its own single notice');
+  await open();await attemptWhileUnreadable(()=>done('meditate'),'retry while status is unreadable');
+  await checkStatus();await retryTap(()=>done('meditate'));await settle(200);
+  must(model.steps.meditate.done&&requests.length===3&&(await cardTexts()).every(c=>!/outcome unknown|Status refreshed/.test(c)),'explicit retry after a successful check persists with exactly one new POST');
  }else if(mode==='skins'){
   await frame().evaluate(()=>{window.__documentBeforeSkin=document;});await done();await waitGate();
   const original=await p.evaluate(()=>({skin:WosSkin.current,saved:localStorage.getItem('wos.skin')}));
@@ -78,8 +163,12 @@ async function extra(o){
   await p.clock.install();await p.goto(new URL('/morning/',base).href);await p.waitForFunction(()=>window.__morning?.state());
   const f=p.mainFrame();must(await p.evaluate(()=>parent===window&&!window.WizardApp),'actual unhosted entry has no shell bridge');
   const bg=await p.evaluate(()=>({bg:getComputedStyle(document.body).backgroundColor,ink:getComputedStyle(document.body).color}));must(bg.bg!==bg.ink&&bg.bg!=='rgb(255, 255, 255)','standalone dark fallback has distinct canvas and ink',bg);await shot('standalone-loaded');
-  await p.locator('[data-step="workout"] [data-done]').click();must(await p.evaluate(()=>__morning.state().steps.workout.done),'standalone actual Done paints before request');await settle(500,f);must(await p.evaluate(()=>!__morning.state().steps.workout.done&&document.querySelector('#toast').textContent.includes('Not saved')),'standalone failed Done rolls back with local error');
-  await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);must(model.steps.workout.done,'standalone real Done retry persists');
+  await p.locator('[data-step="workout"] [data-done]').click();must(await p.evaluate(()=>__morning.state().steps.workout.done),'standalone actual Done paints before request');await settle(500,f);
+  must(await p.evaluate(()=>!__morning.state().steps.workout.done&&!document.querySelector('#err').hidden&&/Save outcome unknown/.test(document.querySelector('#err').textContent)&&/Save outcome unknown/.test(document.querySelector('#toast').textContent)),'standalone failed Done rolls back with local honest-uncertainty error');
+  const posts=requests.length;await p.locator('[data-step="workout"] [data-done]').click();await nap(300);
+  must(requests.length===posts&&gates.length===0,'standalone retry before the status check is refused without a blind POST');
+  await p.waitForFunction(()=>document.querySelector('#err').hidden);
+  await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);must(model.steps.workout.done&&requests.length===posts+1,'standalone real Done retry after check persists with one new POST');
   for(const step of ['meditate','read']){
    const e=p.locator(`[data-step="${step}"]`);if(!await e.evaluate(el=>el.classList.contains('is-current')))await e.locator('[data-toggle]').click();
    const total=await e.locator('[data-timer]').getAttribute('data-timer');await e.locator('[data-start]').click();must(await e.locator('[data-start]').innerText()==='Pause',`${step} actual timer Start handler running`);

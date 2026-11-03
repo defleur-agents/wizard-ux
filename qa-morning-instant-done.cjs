@@ -26,15 +26,21 @@ async function scenario(browser,base,desktop,skin,extra){
  const label=`${desktop?'desktop':'phone'}-${skin}`,ctx=await browser.newContext({viewport:desktop?{width:1600,height:1000}:{width:412,height:892},isMobile:!desktop,hasTouch:!desktop,serviceWorkers:'block'});
  const sessions=readySessionFixture(); // one stable raw page per context, including refreshes
  let model=initial(),requests=[],gates=[],statusReads=0,sessionReads=0;
+ const ctl={statusFail:false}; // synthetic, test-owned: makes the canonical status read unavailable
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url()),json=(d,status=200)=>r.fulfill({status,json:d}).catch(()=>{});
   if(u.origin!==new URL(base).origin)return r.abort('blockedbyclient');
   if(u.pathname==='/morning/api/step'||u.pathname==='/morning/api/hide'){
    const body=q.postDataJSON();requests.push({...body,kind:u.pathname.endsWith('/hide')?'hide':'step'});let release;const code=await new Promise(resolve=>{release=resolve;gates.push({resolve,body});});
-   if(code===200){if(u.pathname.endsWith('/hide'))model.hidden=body.hidden;else model.steps[body.step]={done:body.done,source:'you',at:'2030-01-02T10:00:00Z'};recount(model);}
-   return json(code===200?copy(model):{error:'fixture failure'},code);
+   // Numeric codes: 200 commits; every other number is an uncommitted refusal/failure.
+   // 'commit-500' / 'commit-abort' commit on the synthetic server, then lose the response.
+   const commits=code===200||code==='commit-500'||code==='commit-abort';
+   if(commits){if(u.pathname.endsWith('/hide'))model.hidden=body.hidden;else model.steps[body.step]={done:body.done,source:'you',at:'2030-01-02T10:00:00Z'};recount(model);}
+   if(code==='commit-abort')return r.abort('connectionreset').catch(()=>{});
+   const status=code==='commit-500'?500:code;
+   return json(status===200?copy(model):{error:'fixture failure'},status);
   }
-  if(u.pathname==='/morning/api/status'){statusReads++;return json(copy(model));}
+  if(u.pathname==='/morning/api/status'){statusReads++;return ctl.statusFail?json({error:'status unavailable'},503):json(copy(model));}
   if(u.pathname==='/morning/api/today')return json(copy(model));
   if(u.pathname.startsWith('/morning/api/'))return json({},503);
   if(['/mindfeed/','/wisdom/','/meditation/'].includes(u.pathname))return r.fulfill({contentType:'text/html',body:'<!doctype html><p>Synthetic app fixture</p>'});
@@ -77,12 +83,15 @@ async function scenario(browser,base,desktop,skin,extra){
   check(await p.evaluate(d=>document.documentElement.dataset.shell===(d?'desktop':'phone'),desktop),`${label} actual shell kind`);
   await p.screenshot({path:path.join(out,label+'-mount-canary.png')});
   if(process.env.QA_CANARY==='1')return;
+  // Count each ACTUAL shell failure toast paint (one innerHTML write per toast call), not
+  // distinct strings: a duplicated identical notice must count twice.
+  await p.evaluate(()=>{window.__morningNotices=[];const e=document.querySelector('#toast');new MutationObserver(recs=>{if(!recs.some(r=>r.addedNodes.length))return;const t=e.textContent;if(/wasn’t saved|outcome unknown|new morning started/.test(t))window.__morningNotices.push(t.trim());}).observe(e,{subtree:true,childList:true,characterData:true});});
   await p.evaluate(()=>WizOpenApp('morning'));
   await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.__morning?.state()));
   const frame=()=>p.frames().find(f=>/\/morning\//.test(f.url()));
   check(!!frame(),`${label} actual installed Morning iframe`);
   await p.screenshot({path:path.join(out,label+'-app-before.png')});
-  if(extra){profile.phase='extra';await extra({p,ctx,frame,requests,gates,model,desktop,skin,label,check,out,base,statusReads:()=>statusReads});check(errors.length===0,`${label} no browser errors`,errors.join('; '));return;}
+  if(extra){profile.phase='extra';await extra({p,ctx,frame,requests,gates,model,ctl,desktop,skin,label,check,out,base,statusReads:()=>statusReads});check(errors.length===0,`${label} no browser errors`,errors.join('; '));return;}
   profile.phase='progress';
   for(const [index,step] of steps.entries()){
    const before=requests.length;
@@ -121,13 +130,53 @@ async function scenario(browser,base,desktop,skin,extra){
    gates.shift().resolve(200);await frame().waitForFunction(step=>!document.querySelector(`[data-step="${step}"] [data-done]`)?.disabled,step);
    const canonical=await frame().evaluate(()=>fetch('api/today').then(r=>r.json()));check(canonical.steps[step].done,`${label}/${step} canonical GET confirms success`);
   }
-  // Undo/read failure after navigating to Chats: rollback must restore the all-done disappearance.
+  // Undo/read failure after navigating to Chats. Repaired contract: the pending Undo paints at once;
+  // an ambiguous 500 with a canonical read that does not show the Undo is explicit UNCERTAINTY
+  // (never "definitely not saved"); the shell owns ONE terminal notice and a persistent actionable
+  // card that survives an all-done canonical state, with no automatic POST retry.
+  const notices=()=>p.evaluate(()=>window.__morningNotices.slice());
+  const cardTexts=()=>p.evaluate(()=>[...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent));
+  const cardText=()=>p.evaluate(()=>[...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('|'));
+  const failBefore={posts:requests.length,reads:statusReads,notices:(await notices()).length};
   await frame().evaluate(()=>{window.__pending=__morning.setDone('read',false);});await p.waitForTimeout(50);
   check(await p.locator('.ch-morning-w').count()>0,`${label} undo immediately restores card`);
-  gates.shift().resolve(500);await frame().evaluate(()=>window.__pending);
-  check(await p.locator('.ch-morning-w').count()===0,`${label} late failure reconciles after leaving Morning`);
-  check(await p.locator('#toast').innerText().then(t=>t.includes('Morning wasn’t saved')),`${label} one visible failure notice after leaving Morning`);
+  gates.shift().resolve(500);const undoResult=await frame().evaluate(()=>window.__pending);
+  check(undoResult===false,`${label} failed Undo resolves false to the actual handler`);
+  const cards=await p.locator('.ch-morning-w').count(),ctext=await cardText(),each=await cardTexts();
+  check(cards>=1&&each.every(t=>/Read/.test(t)&&/Save outcome unknown/.test(t)&&!/Done for today/.test(t)&&!/wasn’t saved/.test(t)),`${label} persistent uncertainty card survives all-done canonical`,ctext);
+  check(await p.locator('.ch-morning-w [data-chmorningrecover]').count()===cards&&await p.locator('.ch-morning-w [data-chmorning]').count()===cards,`${label} every failure card keeps Check status and Open Morning controls`);
+  const noticed=(await notices()).slice(failBefore.notices);
+  check(noticed.length===1&&/Save outcome unknown/.test(noticed[0]),`${label} exactly one shell terminal notice, uncertain wording`,JSON.stringify(noticed));
+  check(await p.locator('#toast').innerText().then(t=>t.includes('Save outcome unknown'))&&!(await p.locator('#toast').innerText()).includes('Morning wasn’t saved'),`${label} visible notice says outcome unknown, not definitely unsaved`);
+  check(statusReads>failBefore.reads,`${label} failed write is followed by a canonical status read`);
+  check(await frame().evaluate(()=>!document.querySelector('#err').hidden&&/Save outcome unknown/.test(document.querySelector('#err').textContent)),`${label} local frame error is also honest uncertainty`);
   await p.screenshot({path:path.join(out,label+'-failure.png')});
+  // Barrier on the transient toast leaving, not a fixed sleep: the card is the persistent surface.
+  await p.waitForFunction(()=>{const t=document.querySelector('#toast');return !t.classList.contains('show')&&!t.classList.contains('on');});
+  check(await p.locator('.ch-morning-w [data-chmorningrecover]').count()>=1&&/Save outcome unknown/.test(await cardText()),`${label} error card persists after the toast is gone`);
+  check(requests.length===failBefore.posts+1&&gates.length===0,`${label} no automatic POST retry`);
+  await p.screenshot({path:path.join(out,label+'-failure-persistent.png')});
+  // Explicit retry before an authoritative check: with the canonical read unavailable (503) the real app
+  // and shell must refuse locally, with no blind POST and the failure card unchanged.
+  ctl.statusFail=true;
+  const readsBeforeRetry=statusReads;
+  const refused=await frame().evaluate(()=>__morning.setDone('read',false));
+  const unreadable=await new Promise(r=>setTimeout(r,300)).then(()=>statusReads>readsBeforeRetry);
+  check(refused===false&&requests.length===failBefore.posts+1&&gates.length===0,`${label} retry before an authoritative status check is refused without POST`);
+  check(/Save outcome unknown/.test(await cardText())&&!/Status refreshed/.test(await cardText()),`${label} unreadable status keeps honest uncertainty`,JSON.stringify({unreadable}));
+  ctl.statusFail=false;
+  const manualReads=statusReads;
+  await p.waitForFunction(()=>{const b=document.querySelector('.ch-morning-w [data-chmorningrecover]');return !!b&&!b.disabled;});
+  await p.evaluate(()=>document.querySelector('.ch-morning-w [data-chmorningrecover]').click());
+  await p.waitForFunction(()=>/Status refreshed/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
+  check(statusReads>manualReads,`${label} actual Check status control reads canonical`);
+  check(/Read/.test(await cardText())&&await p.locator('.ch-morning-w [data-chmorningrecover]').count()>=1,`${label} checked status still shows the unresolved failure`);
+  const retry=frame().evaluate(()=>__morning.setDone('read',false));
+  for(const end=Date.now()+5000;!gates.length&&Date.now()<end;)await new Promise(r=>setTimeout(r,20));
+  check(gates.length===1&&requests.length===failBefore.posts+2&&requests.at(-1).done===false,`${label} explicit retry after check sends exactly one new POST`);
+  gates.shift().resolve(200);check(await retry===true,`${label} explicit retry succeeds`);
+  const after=await cardText();
+  check((await cardTexts()).every(t=>/3 of 4/.test(t)&&!/outcome unknown|Status refreshed|wasn’t saved/.test(t))&&await p.locator('.ch-morning-w').count()>=1&&(await notices()).length===failBefore.notices+1,`${label} success clears the failure without another notice`,after);
   check(errors.length===0,`${label} no browser errors`,errors.join('; '));
  }catch(e){profile.error=String(e);profile.diagnostic=await p.evaluate(()=>{const a=window.__wos||window.__wux;return {welcome:window.__welcomeLog,shell:document.documentElement.dataset.shell,canMorning:window.WizCanOpen?.('morning'),wins:Object.values(a?.wins||{}).map(w=>({id:w.id,app:w.app,thread:w.thread,focus:w.focus,query:a.chats.ch(w.id).q,filter:a.chats.ch(w.id).filter})),sessions:a?.live?.sessions?.map(s=>({id:s.id,status:s.status,agent:s.agent})),ready:a?.live?.workGroups().ready.map(s=>s.id),cards:document.querySelectorAll('.ch-morning-w').length,body:document.body.innerText.slice(0,1800)};}).catch(()=>({}));profile.diagnostic.statusReads=statusReads;profile.diagnostic.sessionReads=sessionReads;profile.diagnostic.errors=errors;check(false,`${label} exception`,e.stack);await p.screenshot({path:path.join(out,label+'-exception.png')}).catch(()=>{});}
  finally{for(const g of gates)g.resolve(500);await ctx.close();}
