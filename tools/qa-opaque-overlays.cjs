@@ -59,7 +59,7 @@ function html(test, skin, hosted) {
  body {background:var(--wz-base,#05030c)}
  #behind {position:fixed;inset:0;z-index:0;font:900 26px/30px sans-serif}
  #fixture {position:fixed;inset:0;z-index:1;isolation:isolate;background:none}
- #fixture > div {position:absolute;inset:0;background:none;opacity:1;transform:none;pointer-events:auto}
+ #fixture > div {position:absolute;inset:0;margin:0;background:none;opacity:1;transform:none;pointer-events:auto}
  /* Normalize only nested fixture placement; preserve production material/cascade. */
  [data-qa-middle] {position:absolute!important;inset:0!important;max-height:none!important;margin:0!important;padding:0!important}
  /* A retained raster layer prevents gradient dithering from changing on an unrelated repaint.
