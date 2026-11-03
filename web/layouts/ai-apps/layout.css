@@ -418,8 +418,12 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread 
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread .ch-tacts > .ch-notif-route .wos-route { flex: none; }
 
 /* ---------- round 16 item 7 (Miguel, 3 Nov 2026): Home = his pinned apps, then 'Open', then + ---------- */
-html[data-shell="phone"][data-layout="ai-apps"] .ah-div { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; margin: 4px 12px -4px; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 600 0.75rem / 1.3 var(--wz-font-ui); }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-div::after { content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent); }
+/* round 17 (Miguel: no full-width divider): the open apps continue in the same flow; the first one wears a tiny 'Open'
+ * caption chip on its icon's top-left corner (the count badge sits top-right), the only mark between the two groups */
+html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-open-first::before {
+  content: "Open"; position: absolute; z-index: 2; left: 4px; top: -4px; padding: 2px 6px; border-radius: 7px; pointer-events: none;
+  color: var(--aa-ink-2, var(--wz-text-secondary)); background: var(--aa-surface); box-shadow: 0 0 0 1px var(--aa-line); font: 600 0.5625rem / 1.2 var(--wz-font-ui); letter-spacing: .02em;
+}
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-ic { transform: scale(.82); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-name { font-size: 0.6875rem; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-pin.is-run .ah-name::before { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 4px 2px 0; border-radius: 50%; background: currentColor; opacity: .7; vertical-align: middle; }

@@ -18,7 +18,8 @@
  *   only" filter now applies to the installed apps not open yet, after them, as before.
  * Round 16 item 7 (Miguel, 3 Nov 2026: one app model, phone and desktop; the phone's Home here, `layers`): the grid is his
  *   PINNED apps (his pin order, open or not; press and hold, then drag to rearrange; a hold without moving = the app's
- *   menu), then under a divider 'Open' the open apps that are not pinned (smaller, same icons; auto-tidy), then a + tile:
+ *   menu), then the open apps that are not pinned (smaller, same icons; auto-tidy) in the same grid flow, the first one
+ *   marked by a tiny 'Open' caption chip (round 17: no divider line), then a + tile:
  *   the picker of installed apps neither pinned nor open (chrome.js), its last tile + Get more = the App Store.
  * No timers beyond api.after, no markup strings; everything through the layout API. */
 import { realApps, CHATS } from '../apps/chrome.js';
@@ -189,14 +190,16 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     return pageFit(Math.max(0, r.width - 24), Math.max(0, r.height), CELL.w, CELL.h);
   }
   /** Lay the cells out in `order` (pages of fitNow.per on the desktop). */
-  let divider = null, plusCell = null, splitAt = -1;
+  let plusCell = null, splitAt = -1;
   function place() {
     const nodes = [...order.map(id => cells.get(id)).filter(Boolean), more];
     if (layers) {
-      // round 16 item 7: the pins, then (when any) the 'Open' divider and the open apps, then +
-      divider ||= Object.assign(el('div', 'ah-div', { role: 'presentation' }), {}); if (!divider.childElementCount) divider.append(el('span', 'ah-div-w', { text: 'Open' }));
+      // round 16 item 7: the pins, then the open apps, then +. Round 17 (Miguel, 3 Nov 2026: no full-width line, no new
+      // block): the open apps carry on in the same grid flow right after the pins; only the first of them wears a tiny
+      // 'Open' caption chip in the row gap above it (CSS, .is-open-first).
       const list = order.map(id => cells.get(id)).filter(Boolean);
-      nodes.splice(0, nodes.length, ...list.slice(0, splitAt), ...(splitAt < list.length ? [divider, ...list.slice(splitAt)] : []), plusCell ||= plusTile());
+      list.forEach((c, i) => c.classList.toggle('is-open-first', i === splitAt));
+      nodes.splice(0, nodes.length, ...list, plusCell ||= plusTile());
     }
     const put = (box0, want) => { const now = box0.children; if (now.length !== want.length || want.some((n, k) => now[k] !== n)) box0.replaceChildren(...want); };
     if (!paged) put(grid, nodes);
