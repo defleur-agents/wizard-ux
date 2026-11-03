@@ -16,6 +16,15 @@ html[data-skin-frame="borderless"] .win {
  * rest of the window keeps the skin material. */
 html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #0f1014)); }
 html[data-shell="desktop"][data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed) { background: var(--frame-top, var(--frame-bg, #05030c)); }
+/* That heading is the app's colour, not the skin's, so its title and buttons take an ink that reads on it: light on
+ * the dark default (a light skin's dark ink vanished there, e.g. Landscapes Light), dark on a heading the shell
+ * measured as light (.edge-light). Settings keeps the skin material and ink. */
+html[data-skin-frame="borderless"] .win:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar {
+  --ink: white; --ink-2: color-mix(in srgb, white 78%, transparent); --ink-3: color-mix(in srgb, white 58%, transparent);
+}
+html[data-skin-frame="borderless"] .win.edge-light:has(> .wbody iframe):not(.wz-themed):not(:has(> .wbody .st-embed iframe)) > .wbar {
+  --ink: black; --ink-2: color-mix(in srgb, black 76%, transparent); --ink-3: color-mix(in srgb, black 56%, transparent);
+}
 /* Settings is not an app window: a page it embeds (.st-embed, Settings › Connections) leaves it the skin material. */
 html[data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed),
 html[data-shell="desktop"][data-skin-frame="borderless"] .win:has(> .wbody .st-embed iframe):not(.wz-themed) { background: var(--sk-win); }
