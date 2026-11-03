@@ -86,9 +86,20 @@ test('nonsquare PNG and WebP masks contain-fit, centre, and retain the existing 
     assert.deepEqual(f.requests, [a.icon]); assert.deepEqual(f.canvases[1].ctx.draws[0].slice(1), geometry); assertTint(f, a);
   }
 });
-test('existing data-SVG masks retain exact draw geometry', async () => {
-  const a = { id: 'messenger', name: 'Messenger' }, f = fixture(a); await f.run();
-  assert.deepEqual(f.canvases[1].ctx.draws[0].slice(1), [32, 32, 128, 128]); assertTint(f, a);
+test('existing data-SVG masks retain exact draw geometry, even with a raster-like suffix', async () => {
+  const a = { id: 'messenger', name: 'Messenger' };
+  for (const mask of [svg, "url('data:image/svg+xml,%3Csvg%3E%3C/svg%3E%23.png')"]) {
+    const f = fixture(a, { mask, width: 400, height: 200 }); await f.run();
+    assert.deepEqual(f.canvases[1].ctx.draws[0].slice(1), [32, 32, 128, 128]); assertTint(f, a);
+  }
+});
+test('unbranded cached package logo keeps the unchanged cover path and PNG output', async () => {
+  const a = { id: 'unknown-app', name: 'Unknown' }, f = fixture(a, { width: 400, height: 200 });
+  assert.match(await f.run(), /^data:image\/png/);
+  assert.deepEqual(f.requests, ['/wizard-os-home/store-data/app-logo/unknown-app?v=0123456789abcdef']);
+  assert.deepEqual(f.properties, []); assert.equal(f.canvases.length, 1);
+  assert.deepEqual(f.canvases[0].ctx.draws[0].slice(1), [-96, 0, 384, 192]);
+  assert.deepEqual(f.canvases[0].ctx.letters, []);
 });
 test('missing glyph, empty mask, failed file and failed brand decode fall back without throwing', async () => {
   for (const options of [{ missing: true }, { mask: '' }, { mask: "url('/fixture/missing.svg')", fail: true }]) {

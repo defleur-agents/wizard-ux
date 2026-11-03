@@ -5,6 +5,7 @@ const ROOT = path.resolve(__dirname, '..'), OUT = process.env.QA_OUT;
 assert.ok(OUT, 'QA_OUT required'); fs.mkdirSync(OUT, { recursive: true });
 const hash = b => crypto.createHash('sha256').update(b).digest('hex');
 const pin = fs.readFileSync(path.join(ROOT, 'web/core/home-screen-apps.js'), 'utf8');
+assert.ok(process.env.PIN_BASE_SOURCE, 'PIN_BASE_SOURCE required');
 const baseline = fs.readFileSync(process.env.PIN_BASE_SOURCE, 'utf8');
 const extract = s => s.slice(s.indexOf('  async function iconPNG('), s.indexOf('  async function show('));
 const assets = ['core/sigils.js', 'core/sigils.css', 'brand/apps/hermes.svg', 'skins/obsidian/skin.css'];
