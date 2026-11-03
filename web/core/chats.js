@@ -592,10 +592,15 @@ window.WizCore.chats = function createChats(H) {
     return noteRank(it) < r || (noteRank(it) === r && noteAt(it) >= sesAt(s));
   }
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
+  // An app's item (Settings › Notifications set to Chats) wears that app's own mark in the yellow tile; Notifications keeps the bell.
+  function noteIcon(it) {
+    if (!it.app || !window.WizSigil) return window.WosBell?.icon || '';
+    try { const meta = window.WizCore?.appMetadata?.(it.app) || { id: it.app, name: it.appName || it.app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
+  }
   function noteRow(it) {
     const later = !!it.read, title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
-    const pv = (it.source === 'cron' ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open alert · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${window.WosBell?.icon || ''}</span>
+    const pv = (it.source === 'cron' ? 'Scheduled job · ' : it.app ? (it.appName || it.app) + ' · ' : '') + clip(notePlain(it.message), 160);
+    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open alert · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
       <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
@@ -784,18 +789,52 @@ window.WizCore.chats = function createChats(H) {
     if (!w || w.thread !== '__new__' || winAgent(w) || !window.WosSkinHost?.inboxThreads) return null;
     const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
     const it = window.WosBell?.item?.(m[1]) || null;
-    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'] };
+    // An app's item also opens that app (Open), where it can be handled for real.
+    const open = it?.app && !it.archived && window.WizCanOpen?.(it.app) ? ['app'] : [];
+    return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : [...open, ...(it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'])] };
   }
+  const NOTE_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
+  const noteActBtn = (NV, a) => a === 'app' ? { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${NV.item?.appName || 'the app'}` } : NACT[a] || ACT[a];
   function notifAct(wid, a) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
     vib(8);
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
+    if (a === 'app') return true; // the app opens on top; the item stays until the app (or Archive) clears it
     // The notification leaves the chat window; an untouched draft goes with it (typed words stay as a draft).
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
     ch(w.id).draft = ''; chatsBack(w);
     toast({ done: '✓', snooze: '◷', restore: '↺' }[a], { done: 'Archived', snooze: 'Snoozed', restore: 'Back in your inbox' }[a], 1600);
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+    return true;
+  }
+  /* Where this notification's app sends its notifications: the same Badge | Chats picker as Settings › Notifications
+   * (WosBell.picker, one saved setting). Notifications' own alerts route as 'notifications'. */
+  const APP_NOTE = /^a-([a-z0-9][a-z0-9-]{0,63})-[0-9a-f]{16}$/;
+  // A Notifications item routes as the source the routing part says (stock: Notifications).
+  const noteRoute = NV => NV.item?.app || (!NV.item && APP_NOTE.exec(NV.id)?.[1]) || (NV.item && window.WosBell?.routeIdOf?.(NV.item)) || 'notifications';
+  function noteRouteHtml(NV) {
+    const B = window.WosBell; if (!B?.picker || !B.chatsAvailable) return '';
+    const id = noteRoute(NV), name = B.nameOf?.(id) || id, ask = B.ask?.(id, name) || `${name} notifications go to`;
+    return `<div class="ch-notif-route" data-part="notify-route"><span>${esc(ask)}</span>${B.picker(id, { name })}</div>`;
+  }
+  // Picked in the notification: Badge takes this app's items out of Chats at once (this one too) with Undo.
+  function notifRoute(wid, app, to) {
+    const B = window.WosBell, w = W[owner(wid)]; if (!B?.setRoute || !w) return false;
+    const from = B.route(app); if (from === to) return true;
+    vib(8);
+    if (!B.setRoute(app, to)) return false;
+    // Anywhere but Chats (stock: Badge) takes it out of Chats at once.
+    if (to !== 'chats') {
+      const n = notifOf(w);
+      if (n && noteRoute(n) === app) {
+        const d = KIT.drafts.get('new');
+        if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+        ch(w.id).draft = ''; chatsBack(w);
+      }
+      B.movedToast?.(app, toast, 5000, from);
+    }
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }
@@ -811,6 +850,8 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-rq" role="note" aria-label="Reply to a quoted item"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
+  // Changed elsewhere (Settings, another tab): an open notification's picker shows the new choice.
+  window.addEventListener('wizard:notify-route', () => { for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === '__new__' && notifOf(x)) renderThreadNow(x); } });
 
   // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
@@ -1922,7 +1963,9 @@ window.WizCore.chats = function createChats(H) {
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
     const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
-    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : 'Notification'}</span></div></div>`;
+    if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.app ? esc(NV.item.appName || NV.item.app) : 'Notification'}</span></div></div>`;
+    // The same Badge | Chats picker as Settings › Notifications, above the notification.
+    if (NV) msgs = noteRouteHtml(NV) + msgs;
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
     else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
@@ -1984,7 +2027,7 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = NACT[a] || ACT[a]; return `<button type="button" data-chact="${a}" aria-label="${A.hint}" title="${A.hint}">${A.icon}<span>${A.label}</span></button>`; }).join('')}</div>`
+    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = noteActBtn(NV, a); return `<button type="button" data-chact="${a}" aria-label="${esc(A.hint)}" title="${esc(A.hint)}">${A.icon}<span>${esc(A.label)}</span></button>`; }).join('')}</div>`
       : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).
@@ -2866,6 +2909,7 @@ window.WizCore.chats = function createChats(H) {
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (e.detail === 0 || rowSheet.outsidePress) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
+    const nrt = e.target.closest('.ch-notif-route [data-notify-route]'); if (nrt && w.thread) { if (!nrt.disabled) notifRoute(id, nrt.dataset.notifyRoute, nrt.dataset.notifyTo); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
