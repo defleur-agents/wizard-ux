@@ -70,7 +70,7 @@ Reuse:
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
 | Settings (shared pages/versions), instant Appearance receipt | `WosSettings.register/focus`, `lookAction` (rounded art + inline busy), `hasSystem`, `WosFeatures` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
-| Store source/removal | `sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | own badges |
+| Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
 | App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
 | Desktop frame shortcuts | `watchFrame → onKey` (`desktop/desktop.js`); same-origin window capture + keyup/blur cleanup; no nested/opaque-frame relay | second dispatcher or postMessage key forwarding |
