@@ -50,7 +50,7 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
    await ctx.addInitScript(seedOwner);
    const p=await ctx.newPage();p.setDefaultTimeout(8000);p.on('pageerror',e=>{errors.push({kind,error:String(e)});flush();});
    activePage=p;activeJournal=journal;
-   const tap=async sel=>{const el=p.locator(sel+':visible').first();phone?await el.tap():await el.click();await nap(140);};
+   const tap=async sel=>{await p.locator('.mz-intro').waitFor({state:'detached'});const el=p.locator(sel+':visible').first();phone?await el.tap():await el.click();await nap(140);};
    const open=async view=>{await p.evaluate(v=>WizCore.deeplink.route('/wizard-os-home/?view='+v),view);await p.locator('#settingsBody').waitFor({state:'visible'});await nap(180);};
    const back=async()=>{phone?await p.evaluate(()=>window.__wos.onBack()):await p.keyboard.press('Escape');await nap(180);};
    const shot=async name=>{await p.locator('.mz-intro').waitFor({state:'detached'});const file=path.join(OUT,kind+'-'+name+'.png');await p.screenshot({path:file});journal.shots.push(file);flush();};
@@ -72,7 +72,7 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
      if(family&&await p.locator('[data-skinfamily="'+family+'"]:visible').count())await tap('[data-skinfamily="'+family+'"]');
      await tap('[data-skinpick="'+skin+'"]');
     }
-    await p.waitForFunction(s=>WosSkin.current===s&&!WosExperience?.state?.busy,skin);
+    await p.waitForFunction(s=>WosSkin.current===s&&!window.WosExperience?.state?.busy,skin);
     ok(await p.evaluate(s=>WosSkin.current===s,skin),kind+' '+skin+': live skin change');
     await shot(skin+'-appearance');
     if(!phone){const geom=await p.locator('#dsettings').evaluate(el=>{const r=el.getBoundingClientRect();return{modal:el.classList.contains('is-modal'),inBody:el.parentNode===document.body,center:Math.abs(r.left+r.width/2-innerWidth/2)<4,windows:document.querySelectorAll('.win .settings-host').length};});ok(geom.modal&&geom.inBody&&geom.center&&geom.windows===0,skin+': #1552 Settings centred over Home, no desk window',geom);}
@@ -96,16 +96,20 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
       await tap('[data-osu="ch-latest"]');ok(channel==='latest',kind+' '+skin+': channel action/readback');
       await tap('[data-osu="ch-stable"]');
       await shot(skin+'-about');
+      await p.evaluate(()=>WosUpdates.load(true)); // drain any prior coalesced read before changing the fixture
       available=false;await p.evaluate(()=>WosUpdates.load(true));
+      await p.waitForFunction(()=>document.querySelector('.st-page')?.innerText.includes('could not be verified'));
       ok((await p.locator('.st-page:visible').innerText()).includes('could not be verified')&&await p.locator('[data-osu="ask"]').count()===0,kind+' '+skin+': missing route visible and fail-closed');
       await shot(skin+'-unavailable');
       const writesBeforeRetry=journal.writes.length;
       available=true;await tap('[data-osu="retry"]');await p.locator('[data-osu="ask"]').waitFor();
       ok(journal.writes.length===writesBeforeRetry,kind+' '+skin+': retry is read-only');
       ok(await p.locator('[data-osu="auto"]').getAttribute('aria-checked')==='true',kind+' '+skin+': read-only retry recovers verified mode');
+      await p.evaluate(()=>WosUpdates.load(true));
       pending=true;await p.evaluate(()=>WosUpdates.load(true));
       ok((await p.locator('.st-page:visible').innerText()).includes('Wizard OS (server) 0.3.101'),kind+' '+skin+': installed version retained beside pending update');
       await tap('#settingsBody [data-osu="apply"]');ok(journal.writes.some(w=>w.path.endsWith('/store-install/_updates')&&w.body==='{"action":"apply"}'),kind+' '+skin+': original Install action intercepted');
+      await p.evaluate(()=>WosUpdates.load(true));
       pending=false;await p.evaluate(()=>WosUpdates.load(true));
      }
      await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0,kind+' '+skin+': nearest Back returns to categories');
