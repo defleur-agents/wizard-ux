@@ -25,9 +25,11 @@ test('synthetic empty native capability restores actual phone Food, never a desk
  assert.equal(desktop.APP.food,undefined);assert.equal(desktop.APPS.some(a=>a.id==='food'),false);
  const declaration=w.WizDeviceLegacy.find(d=>d.appId==='food');assert.equal(declaration.phoneOnly,true);assert.equal(declaration.probe,'usuals');
 });
-test('retired usuals identity resolves through the production alias if this source owns it',async()=>{
+test('native compatibility records keep their real IDs even when lookup aliases exist',async()=>{
  const w=await registry({native:true,id:'usuals'}),mobile=w.WizCore.apps('mobile');
  assert.equal(mobile.APP.usuals.id,'usuals');
- if(w.WizCore.appIdAliases){assert.equal(w.WizCore.appIdAliases.usuals,'food');assert.equal(mobile.APP.food,mobile.APP.usuals);}
+ assert.equal(mobile.APP.food.id,'food');
+ // Aliases fill missing lookups; they do not overwrite two present native records.
+ if(w.WizCore.appIdAliases)assert.equal(w.WizCore.appIdAliases.usuals,'food');
  assert.equal(w.WizCore.apps('desktop').APP.usuals,undefined);
 });
