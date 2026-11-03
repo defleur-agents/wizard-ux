@@ -36,3 +36,10 @@ test('has does not wait for focus; late secret still cannot cross a document rep
  const f=fixture({front:true});const has=f.service.vault.has();assert.equal(f.sent.length,1);f.reply();await has;
  const opened=f.service.vault.open('Sample');await f.advance(1000);assert.equal(f.sent.length,2);f.child.document={};f.reply({secret:'synthetic'});await assert.rejects(opened,/no longer authorized/);
 });
+test('pinned app attachment admits only its current connected focused document',()=>{
+ const source=read('web/core/single-app-session.js');const a=source.indexOf('    // Attach before frontend scripts run'),b=source.indexOf('    frame.addEventListener',a);assert.ok(a>=0 && b>a);
+ let options,focused=true;const original={isConnected:true},ctx={win:{appendChild(){}},frame:original,id:'sample',next:{url:'/sample/'},localStorage:{},document:{visibilityState:'visible',hasFocus:()=>focused},window:{WizAppServices:{attach:(_,o)=>{options=o;}}}};
+ vm.createContext(ctx);vm.runInContext('let detach;'+source.slice(a,b),ctx);assert.equal(typeof options.isFront,'function');assert.equal(options.isVisible(),true);assert.equal(options.isFront(),true);
+ focused=false;assert.equal(options.isFront(),false);focused=true;ctx.document.visibilityState='hidden';assert.equal(options.isFront(),false);assert.equal(options.isVisible(),false);
+ ctx.document.visibilityState='visible';original.isConnected=false;assert.equal(options.isFront(),false);original.isConnected=true;ctx.frame={isConnected:true};assert.equal(options.isFront(),false,'replacement app cannot inherit admission');
+});

@@ -106,8 +106,8 @@
     frame.src = saved?.v === 1 && saved.base === next.url && policy.within(saved.href, next.url) ? saved.href : next.url;
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, readingStorage:localStorage });
     const mountedFrame = frame;
+    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, isVisible:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible', isFront:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible' && document.hasFocus(), readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
       try {
