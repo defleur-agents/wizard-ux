@@ -77,7 +77,7 @@ async function switchSkin(page,shell,skin){
  if(shell==='phone')await page.evaluate(()=>window.__wos.openSheet('settings'));
  else await page.evaluate(()=>window.__wux.openSettings('look'));
  const root=shell==='phone'?'#settings':'#dsettings';
- const look=page.locator(root+' [data-st-page="look"]');
+ const look=page.locator(root+' [data-st-page="appearance"]');
  if(await look.isVisible())await look.click();
  await page.evaluate(()=>{window.__qaSkinClick=null;document.addEventListener('click',e=>{const b=e.target.closest('[data-skinpick]');if(b)window.__qaSkinClick={id:b.dataset.skinpick,trusted:e.isTrusted};},{capture:true,once:true});});
  await page.locator(root+' [data-skinpick="'+skin+'"]').click();
