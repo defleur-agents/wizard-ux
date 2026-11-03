@@ -25,23 +25,28 @@ async function scenario(browser,base,desktop,skin,extra){
  const profile={desktop,skin,setupPassed:false,regressionReproduced:false,phase:'setup'};profiles.push(profile);
  const label=`${desktop?'desktop':'phone'}-${skin}`,ctx=await browser.newContext({viewport:desktop?{width:1600,height:1000}:{width:412,height:892},isMobile:!desktop,hasTouch:!desktop,serviceWorkers:'block'});
  const sessions=readySessionFixture(); // one stable raw page per context, including refreshes
- let model=initial(),requests=[],gates=[],statusReads=0,sessionReads=0;
+ let model=initial(),requests=[],gates=[],statusReads=0,todayReads=0,sessionReads=0;
  const ctl={statusFail:false}; // synthetic, test-owned: makes the canonical status read unavailable
  await ctx.route('**/*',async r=>{
   const q=r.request(),u=new URL(q.url()),json=(d,status=200)=>r.fulfill({status,json:d}).catch(()=>{});
   if(u.origin!==new URL(base).origin)return r.abort('blockedbyclient');
   if(u.pathname==='/morning/api/step'||u.pathname==='/morning/api/hide'){
-   const body=q.postDataJSON();requests.push({...body,kind:u.pathname.endsWith('/hide')?'hide':'step'});let release;const code=await new Promise(resolve=>{release=resolve;gates.push({resolve,body});});
+   const body=q.postDataJSON(),kind=u.pathname.endsWith('/hide')?'hide':'step';requests.push({...body,kind});
+   // Fixture-owned completion is independent of the iframe's RAF/paint lifecycle after Back.
+   let complete;const completed=new Promise(resolve=>{complete=resolve;});
+   const code=await new Promise(resolve=>gates.push({resolve,body,kind,completed}));
    // Numeric codes: 200 commits; every other number is an uncommitted refusal/failure.
    // 'commit-500' / 'commit-abort' commit on the synthetic server, then lose the response.
    const commits=code===200||code==='commit-500'||code==='commit-abort';
-   if(commits){if(u.pathname.endsWith('/hide'))model.hidden=body.hidden;else model.steps[body.step]={done:body.done,source:'you',at:'2030-01-02T10:00:00Z'};recount(model);}
-   if(code==='commit-abort')return r.abort('connectionreset').catch(()=>{});
-   const status=code==='commit-500'?500:code;
-   return json(status===200?copy(model):{error:'fixture failure'},status);
+   if(commits){if(kind==='hide')model.hidden=body.hidden;else model.steps[body.step]={done:body.done,source:'you',at:'2030-01-02T10:00:00Z'};recount(model);}
+   try{
+    if(code==='commit-abort')await r.abort('connectionreset').catch(()=>{});
+    else{const status=code==='commit-500'?500:code;await json(status===200?copy(model):{error:'fixture failure'},status);}
+   }finally{complete({code,commits,kind,body:copy(body),canonical:copy(model)});}
+   return;
   }
   if(u.pathname==='/morning/api/status'){statusReads++;return ctl.statusFail?json({error:'status unavailable'},503):json(copy(model));}
-  if(u.pathname==='/morning/api/today')return json(copy(model));
+  if(u.pathname==='/morning/api/today'){todayReads++;return json(copy(model));}
   if(u.pathname.startsWith('/morning/api/'))return json({},503);
   if(['/mindfeed/','/wisdom/','/meditation/'].includes(u.pathname))return r.fulfill({contentType:'text/html',body:'<!doctype html><p>Synthetic app fixture</p>'});
   if(u.pathname==='/wizard/v1/bootstrap')return json({bootstrap:1,settings:{agent:{name:'Fixture Agent'},clock:{timezone:'UTC'}},capabilities:{},endpoints:{apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions'}});
@@ -91,7 +96,7 @@ async function scenario(browser,base,desktop,skin,extra){
   const frame=()=>p.frames().find(f=>/\/morning\//.test(f.url()));
   check(!!frame(),`${label} actual installed Morning iframe`);
   await p.screenshot({path:path.join(out,label+'-app-before.png')});
-  if(extra){profile.phase='extra';await extra({p,ctx,frame,requests,gates,model,ctl,desktop,skin,label,check,out,base,statusReads:()=>statusReads});check(errors.length===0,`${label} no browser errors`,errors.join('; '));return;}
+  if(extra){profile.phase='extra';await extra({p,ctx,frame,requests,gates,model,ctl,desktop,skin,label,check,out,base,statusReads:()=>statusReads,todayReads:()=>todayReads});check(errors.length===0,`${label} no browser errors`,errors.join('; '));return;}
   profile.phase='progress';
   for(const [index,step] of steps.entries()){
    const before=requests.length;

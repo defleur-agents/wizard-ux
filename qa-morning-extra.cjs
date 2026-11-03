@@ -4,13 +4,37 @@ const q=require('./qa-morning-instant-done.cjs');
 const mode=process.env.QA_CASE;
 const nap=ms=>new Promise(r=>setTimeout(r,ms));
 async function extra(o){
- const {p,ctx,frame,gates,requests,model,ctl,desktop,skin,label,out,base,statusReads}=o;
+ const {p,ctx,frame,gates,requests,model,ctl,desktop,skin,label,out,base,statusReads,todayReads}=o;
  const must=(c,n,d)=>{q.check(c,`${label}/${mode}: ${n}`,d);assert.ok(c,n);};
  const waitGate=async()=>{const end=Date.now()+5000;while(!gates.length&&Date.now()<end)await nap(20);assert.equal(gates.length,1,'one real synthetic transport gate');};
- const settle=async(code,f=frame())=>{await waitGate();gates.shift().resolve(code);if(f&&!f.isDetached())await f.waitForFunction(()=>![...document.querySelectorAll('[data-done],#hideBtn')].some(b=>b.disabled));else await nap(100);};
+ const settle=async(code,f=frame())=>{
+  await waitGate();const gate=gates.shift();gate.resolve(code);
+  let timer,terminal;try{terminal=await Promise.race([gate.completed,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('fixture transport did not complete')),5000);})]);}finally{clearTimeout(timer);}
+  if(gate.kind==='hide'){
+   // Skip invokes Back synchronously. Poll the VISIBLE shell, not the parked iframe's RAF.
+   // Its retained model/pending flags are settlement evidence, not a claim of offscreen paint.
+   const evidence=await p.waitForFunction(({canonical,code})=>{
+    const visible=e=>{if(!e)return false;const r=e.getBoundingClientRect(),s=getComputedStyle(e);return r.width>0&&r.height>0&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight&&s.display!=='none'&&s.visibility!=='hidden'&&Number(s.opacity)>0;};
+    const f=[...document.querySelectorAll('iframe')].find(f=>f.contentWindow?.__morning),d=f?.contentDocument,st=f?.contentWindow?.__morning.state(),hb=d?.querySelector('#hideBtn');
+    if(!st||!hb||hb.disabled||st.hidden!==canonical.hidden||st.done!==canonical.done)return false;
+    const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats'),root=w&&document.querySelector(`[data-win="${w.id}"]`),list=root?.querySelector('.ch-list');
+    const cards=[...(root?.querySelectorAll('.ch-morning-w')||[])],text=cards.map(c=>c.textContent).join('|');
+    const chats=visible(list),app=visible(f)&&!d.hidden;
+    const surface=chats&&(code===200?(canonical.hidden?cards.length===0:cards.some(visible)&&!/outcome unknown|wasn’t saved|Status refreshed/.test(text)):cards.some(visible)&&/Save outcome unknown|Morning wasn’t saved/.test(text));
+    if(!surface&&!app)return false;
+    return {frameConnected:f.isConnected,frameHidden:d.hidden,appHidden:st.hidden,canonicalHidden:canonical.hidden,done:st.done,pending:hb.disabled,visibleShell:surface?'chats':'morning',cardText:text};
+   },{canonical:terminal.canonical,code},{timeout:5000});
+   must(terminal.code===code&&terminal.canonical.hidden===model.hidden,'hide fixture completed, retained model/pending settled, and relevant shell is visible',await evidence.jsonValue());
+  }else if(f&&!f.isDetached())await f.waitForFunction(()=>![...document.querySelectorAll('[data-done],#hideBtn')].some(b=>b.disabled));else await nap(100);
+ };
  const shot=async n=>{await p.locator('.mz-intro').waitFor({state:'detached'});await p.screenshot({path:path.join(out,`${label}-${mode}-${n}.png`)});};
+ const toastPaint=()=>p.waitForFunction(()=>{
+  const e=document.querySelector('#toast');if(!e||!(e.classList.contains('show')||e.classList.contains('on')))return false;
+  const r=e.getBoundingClientRect(),s=getComputedStyle(e);
+  return r.width>0&&r.height>0&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight&&s.visibility!=='hidden'&&s.display!=='none'&&Number(s.opacity)===1&&e.getAnimations().every(a=>a.playState!=='running');
+ },null,{timeout:1000}); // source CSS: phone 260/360ms, desktop 160ms; terminal toast stays 3000ms
  const opacityProof=async()=>{
-  await nap(400);const b=await p.locator('#toast').boundingBox();assert.ok(b&&b.width>48&&b.height>20);
+  await toastPaint();const b=await p.locator('#toast').boundingBox();assert.ok(b&&b.width>48&&b.height>20);
   const clip={x:Math.ceil(b.x+20),y:Math.ceil(b.y+8),width:Math.floor(b.width-40),height:Math.floor(b.height-16)};
   const samples=[];
   try{for(const loud of [false,true]){await p.evaluate(({b,loud})=>{let e=document.querySelector('#qa-under-toast');if(!e){e=document.createElement('div');e.id='qa-under-toast';document.body.append(e);}e.style.cssText=`position:fixed;pointer-events:none;left:${b.x}px;top:${b.y}px;width:${b.width}px;height:${b.height}px;z-index:2147483645;background:${loud?'#ff00ff':'#00ff00'};font:24px monospace;color:#fff`;e.textContent=loud?'LOUD TEXT LOUD TEXT LOUD TEXT':'';const t=document.querySelector('#toast');if(!('qaOldZ' in t.dataset))t.dataset.qaOldZ=t.style.zIndex;t.style.zIndex='2147483646';},{b,loud});const png=await p.screenshot({clip});fs.writeFileSync(path.join(out,`${label}-${mode}-opaque-${loud?'text':'blank'}.png`),png);samples.push(png);}
@@ -21,7 +45,10 @@ async function extra(o){
  const chats=async()=>{await p.evaluate(()=>{const a=window.__wos||window.__wux,w=Object.values(a.wins).find(w=>w.app==='chats');if(window.__wos)a.goDesk(a.desks.findIndex(d=>d.wins.includes(w.id)));a.focusWin(w.id);});};
  const done=async(step='workout')=>frame().evaluate(s=>{const e=document.querySelector(`[data-step="${s}"]`);if(!e.classList.contains('is-current')&&!e.classList.contains('is-open'))e.querySelector('[data-toggle]').click();e.querySelector('[data-done]').click();},step);
  const notices=()=>p.evaluate(()=>window.__morningNotices.slice()); // one entry per actual shell failure toast paint (installed by the scenario)
- const shellNotices=async()=>({...(await p.locator('#toast').evaluate(e=>({text:e.innerText,visible:e.getClientRects().length>0&&getComputedStyle(e).opacity!=='0'}))),count:(await notices()).length});
+ const shellNotices=async()=>{
+  if((await notices()).length)await toastPaint();
+  return {...(await p.locator('#toast').evaluate(e=>{const r=e.getBoundingClientRect(),s=getComputedStyle(e);return {text:e.innerText,visible:e.getClientRects().length>0&&r.width>0&&r.height>0&&r.right>0&&r.left<innerWidth&&r.bottom>0&&r.top<innerHeight&&s.visibility!=='hidden'&&s.display!=='none'&&Number(s.opacity)===1};})),count:(await notices()).length};
+ };
  const cardTexts=()=>p.evaluate(()=>[...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent));
  const cardText=async()=>(await cardTexts()).join('|');
  const refreshed=()=>p.waitForFunction(()=>/Status refreshed/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
@@ -135,8 +162,16 @@ async function extra(o){
   await nap(100);ctl.statusFail=false;await clickRecover();
   await p.waitForFunction(()=>document.querySelector('.ch-morning-w')?.innerText.includes('1 of 4'));
   must(requests.length===1&&(await cardTexts()).every(c=>!/outcome unknown|Status refreshed/.test(c)),'later canonical read proves the commit; failure clears without any retry');
-  // Second step: genuinely not committed + unreadable, then recovered and retried explicitly.
-  ctl.statusFail=true;await open();await done('meditate');await waitGate();await chats();await settle(500);
+  // Second step starts only after the retained app has read successfully. A successful shell
+  // Check status does not clear the app's private uncertain flag (mutate() first calls load()).
+  await open();await frame().waitForFunction(()=>!document.hidden,null,{polling:20,timeout:5000});
+  const resumedReads=todayReads(),resumedPosts=requests.length;
+  await frame().evaluate(()=>document.dispatchEvent(new Event('visibilitychange')));
+  const resumeEnd=Date.now()+5000;while(todayReads()===resumedReads&&Date.now()<resumeEnd)await nap(20);
+  await frame().waitForFunction(()=>document.querySelector('#err').hidden&&__morning.state().steps.workout.done&&!__morning.state().steps.meditate.done&&!document.querySelector('[data-step="meditate"] [data-done]').disabled,null,{timeout:5000});
+  must(todayReads()>resumedReads&&requests.length===resumedPosts&&gates.length===0,'retained app resumes through a successful canonical read, without a POST');
+  // Genuinely not committed + unreadable, then recovered and retried explicitly.
+  ctl.statusFail=true;await done('meditate');await waitGate();await chats();await settle(500);
   await p.waitForFunction(()=>/Meditate/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join(''))&&/Save outcome unknown/.test([...document.querySelectorAll('.ch-morning-w')].map(n=>n.textContent).join('')));
   must(!model.steps.meditate.done&&requests.length===2&&(await notices()).length===2,'uncommitted-and-unreadable failure has its own single notice');
   await open();await attemptWhileUnreadable(()=>done('meditate'),'retry while status is unreadable');
@@ -152,7 +187,12 @@ async function extra(o){
     await p.locator(`[data-skinpick="${worn}"]:visible`).first().click();await p.locator('.mz-intro').waitFor({state:'detached'});
     await p.waitForFunction(s=>WosSkin.current===s&&document.querySelector(`[data-skinpick="${s}"]`)?.getAttribute('aria-pressed')==='true',worn);
     await shot(worn+'-picker');
-    await p.locator(desktop?'#dsettings [data-close]:visible':'#settings [data-stclose]:visible').first().click();
+    if(desktop){
+     const settingsId=await p.evaluate(()=>Object.values(__wux.wins).find(w=>w.app==='settings')?.id);
+     assert.ok(settingsId,'actual Settings window exists');
+     await p.locator(`[data-win="${settingsId}"] > .wbar [data-wact="close"]:visible`).click();
+     await p.waitForFunction(id=>!__wux.wins[id]&&document.querySelector('#dsettings').hidden,settingsId);
+    }else await p.locator('#settings [data-stclose]:visible').first().click();
     await open();await frame().waitForFunction(s=>document.documentElement.dataset.skin===s,worn);
     const state=await frame().evaluate(()=>({same:document===window.__documentBeforeSkin,done:__morning.state().steps.workout.done,busy:document.querySelector('[data-step="workout"] [data-done]').disabled,skin:document.documentElement.dataset.skin,base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base'),panel:getComputedStyle(document.querySelector('#toast')).backgroundColor}));
     must(state.same&&state.done&&state.busy&&state.skin===worn,'live skin change retains actual document and pending edit',state);await shot(worn+'-pending-app');
@@ -169,11 +209,19 @@ async function extra(o){
   must(requests.length===posts&&gates.length===0,'standalone retry before the status check is refused without a blind POST');
   await p.waitForFunction(()=>document.querySelector('#err').hidden);
   await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);must(model.steps.workout.done&&requests.length===posts+1,'standalone real Done retry after check persists with one new POST');
-  for(const step of ['meditate','read']){
-   const e=p.locator(`[data-step="${step}"]`);if(!await e.evaluate(el=>el.classList.contains('is-current')))await e.locator('[data-toggle]').click();
-   const total=await e.locator('[data-timer]').getAttribute('data-timer');await e.locator('[data-start]').click();must(await e.locator('[data-start]').innerText()==='Pause',`${step} actual timer Start handler running`);
-   await p.clock.fastForward(Number(total)*1000+1000);await waitGate();must(await p.evaluate(s=>__morning.state().steps[s].done,step),`${step} actual wall-clock completion paints while write unresolved`);
-   must(requests.at(-1).how===(step==='meditate'?'silent-timer':'timer'),`${step} actual timer transport source`);await settle(200,f);
+  // index.html has exactly two real timers: Workout and Meditate's silent sit. Read uses Wisdom.
+  await p.locator('[data-step="workout"] [data-toggle]').click();
+  await p.locator('[data-step="workout"] [data-done]').click();await settle(200,f);
+  must(!model.steps.workout.done&&requests.at(-1).done===false&&requests.at(-1).how==='tap','registered Undo resets Workout before exercising its real timer');
+  for(const [step,how] of [['workout','timer'],['meditate','silent-timer']]){
+   const e=p.locator(`[data-step="${step}"]`);if(!await e.evaluate(el=>el.classList.contains('is-current')||el.classList.contains('open')))await e.locator('[data-toggle]').click();
+   const total=await e.locator('[data-timer]').getAttribute('data-timer'),posts=requests.length,start=await p.evaluate(()=>Date.now());
+   must(total==='600',`${step} actual source timer is ten minutes`);
+   await e.locator('[data-start]').click();must(await e.locator('[data-start]').innerText()==='Pause',`${step} actual timer Start handler running`);
+   await p.clock.fastForward(Number(total)*1000+1000);await waitGate();
+   const elapsed=await p.evaluate(()=>Date.now());
+   must(elapsed-start>=Number(total)*1000&&await p.evaluate(s=>__morning.state().steps[s].done,step),`${step} actual wall-clock completion paints while write unresolved`,{start,end:elapsed,seconds:total});
+   must(requests.length===posts+1&&requests.at(-1).step===step&&requests.at(-1).done===true&&requests.at(-1).how===how,`${step} actual timer transport source, exactly one POST`);await settle(200,f);
   }
   await shot('standalone-timers-done');
  }else throw Error('Unknown acceptance mode '+mode);
