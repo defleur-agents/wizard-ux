@@ -899,6 +899,17 @@
         classic: () => { if (live() && layoutHolder && layoutRec === a) return Promise.resolve(window.WosExperience?.toggle?.(layoutHolder)).then(() => true, () => false); return Promise.resolve(false); },
         // Closing the last window of a desk goes Home instead of to another desk (desks are out of sight). Released on teardown.
         emptyHome() { if (!live()) return () => {}; emptyHomes.add(a); const off = () => { emptyHomes.delete(a); a.offs.delete(off); }; a.offs.add(off); return off; },
+        /* The layout's own group in Settings › Chats & app screens (the AI apps view's order inside each group, round
+         * 19): a live node of its own, put back after every Settings render, released on teardown. */
+        setting(id, node) {
+          if (!live() || !isDoc || typeof id !== 'string' || !/^[a-z0-9-]{1,32}$/.test(id) || !node || typeof node.append !== 'function') return () => {};
+          const W = window.WosSettings; if (!W?.register) return () => {};
+          let off0 = () => {};
+          try { off0 = W.register({ id: 'layout-' + id, page: 'chats', html: () => '<div class="st-tweak" data-st-tweak></div>',
+            painted: (ctx, box) => { const slot = box?.firstElementChild; if (slot && node.parentNode !== slot) slot.append(node); },
+            deferRefresh: () => !!node.contains?.(document.activeElement) }); } catch (_) { return () => {}; }
+          let done = false; const off = () => { if (done) return; done = true; off0(); node.remove?.(); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
       }),
       /* No desks: while a layout holds the panel, whatever opens shows in a panel over Home instead of on a desk
        * (desktop.js, outside the desks: never tiled, never synced): a Chats window in the chat panel, anything else in

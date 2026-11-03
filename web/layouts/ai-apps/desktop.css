@@ -683,3 +683,48 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp-n { font-variant-nume
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp.is-flash { color: var(--aad-ink); background: color-mix(in srgb, var(--wz-accent, var(--amber, var(--aad-ink))) 22%, transparent); transition: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist { padding-top: 22px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="snoozed"] { margin-bottom: 0; }
+
+/* ---------- round 19 (Miguel, 3 Nov 2026) ----------
+ * Item 3: a quieter expanded sidebar, ChatGPT's: section headers (Archive, Working, Snoozed, Ready) and Ready's status
+ * sub-headers small (12 / 11 px), the muted ink, normal weight, a hairline chevron only on hover or while folded;
+ * counts muted (Ready's amber count kept, smaller); Archive the quietest. Rows unchanged: the titles are the thing. */
+html[data-shell="desktop"][data-layout="ai-apps"] { --aad-ink-3: var(--wz-text-muted, var(--ink-3, var(--aad-ink-2))); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec { height: 26px; margin: 14px 0 0; padding: 0 10px; gap: 6px; color: var(--aad-ink-3); font: 400 0.75rem / 1 var(--wz-font-ui); letter-spacing: .01em; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec:hover { color: var(--aad-ink-2); background: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll > .aad-sec:first-child, html[data-shell="desktop"][data-layout="ai-apps"] .aad-scroll > .aad-sech:first-child { margin-top: 4px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-c { width: 12px; height: 12px; stroke-width: 1.6; opacity: 0; transition: transform 160ms ease, opacity 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-sec:hover, .aad-sec:focus-visible, .aad-sec[aria-expanded="false"]) .aad-sec-c { opacity: .7; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec[data-sec="archive"] { font-size: 0.6875rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tally { color: var(--aad-ink-3); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-tally::after { font-weight: 400; font-size: 0.6875rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-n { min-width: 18px; height: 16px; margin-left: 2px; padding: 0 5px; border-radius: 8px; font: 700 0.6875rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sech { margin: 14px 0 0; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp { height: 22px; margin: 6px 0 0; padding: 0 10px; gap: 5px; color: var(--aad-ink-3); font: 400 0.6875rem / 1 var(--wz-font-ui); letter-spacing: .01em; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-b > .aad-grp:first-child { margin-top: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-grp-n { font-weight: 400; opacity: .8; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-lab:not(.aad-sec) { color: var(--aad-ink-3); font: 400 0.75rem / 1.4 var(--wz-font-ui); }
+/* item 2: the sort control on Ready's header (only when Settings shows it): a quiet word and chevron, a menu in the
+ * shell's own type (it was a native select whose list drew in the system font) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortb { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 22px; margin: 0 4px 0 0; padding: 0 6px; border: 0; border-radius: 7px; cursor: pointer; color: var(--aad-ink-3); background: none; font: 400 0.6875rem / 1 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortb:hover, html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortb.is-held { color: var(--aad-ink); background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortb:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: -2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortb-c { width: 11px; height: 11px; stroke-width: 1.8; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortmenu { min-width: 200px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortmenu .aad-pop-i { height: 36px; gap: 10px; }
+/* item 1: the folded rail in use: the current group marked (a soft plate and the full ink), where the chat in front
+ * sits in it under its word ('2/3'); the hover flyout beside the rail */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-on { background: var(--aad-held); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-on .aad-rk-w { color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-p { color: var(--aad-ink-2); font: 400 0.5625rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly { z-index: 7; width: 280px; min-width: 0; max-height: min(420px, calc(100vh - 16px)); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; animation: aad-fly 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly .aad-pop-i { height: 34px; gap: 10px; font-weight: 400; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-at { flex: none; color: var(--aad-ink-2); font: 400 0.75rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i.is-cur { background: var(--aad-hover); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i.is-cur .aad-fly-t { font-weight: 600; }
+@keyframes aad-fly { from { opacity: 0; translate: -4px 0; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly { animation: none; } }
+/* item 2: this view's group in Settings › Chats & app screens */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-stg .aad-stg-l { margin: 4px 0 6px; font-weight: 600; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-stg .aad-stg-n { margin: 6px 0 10px; opacity: .75; font-size: 0.8125rem; }
