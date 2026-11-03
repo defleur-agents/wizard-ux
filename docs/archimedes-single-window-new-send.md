@@ -1,34 +1,35 @@
-# Single narrow OS-window New chat: screenshot contract
+# Single OS-window New chat: remaining reset repair
 
-## Source custody
+## Diagnosis and scope
 
-Inspected live `current` release and serving repository on 3 Nov 2026: both source revision `37ed1d2bcb021e6b6ad890c4c4eb99833319fbf8`, web tree `f91151379baf06a37976363814e69d7ae0fb969f`.
-This branch extends the existing harness only. No production change is justified yet; no source-red or candidate-green result has been executed. Do not deploy this branch as a claimed repair.
+The supplied 1190×1890 image does not establish CSS viewport or device-pixel ratio. Test both provisional interpretations: CSS 1190/DPR1 and CSS 595/DPR2, each with one app filling one OS/browser window. Heights are synthetic (1890/945); browser chrome prevents claiming exact web content height. The title `Archimedes Main Agent` does not establish a separate agent window or saved Focus. Actual registry launcher and supported saved main-agent Focus are separate fixture entries.
 
-## Screenshot → source
+Unmodified source `37ed1d2bcb021e6b6ad890c4c4eb99833319fbf8` guards new sends only when the workspace has multiple tiles or `.dchats` width is ≤620px. At a single-window 1190px layout, its real submit capture schedules `toNewChat` after 180ms, undoing shared Chats' list return. Composer-mic handoff uses the same restrictive helper. The source-bound Node regression reproduces `__new__` after draining those actual branches at 1190px; 595px already passes. This is branch evidence, not executed browser evidence.
 
-- One app fills one narrow browser/OS window. There is no evidence of a second tiled app. Use forced desktop shell at CSS 595×945 / DPR2 as the initial, explicitly provisional size interpretation. The screenshot includes browser chrome, so its full 1190×1890 pixel dimensions are not proof of exact web viewport height.
-- `web/core/agents.js:161-171` renders `Archimedes Main Agent` for the default registry entry. `web/desktop/desktop.js:490` calls `WosAgents.titlebar(w.agent || '')` for **every** Chats window. This title does **not** prove `w.agent === 'hermes'`, agent Focus, a separate agent window, or a different app.
-- `web/core/apps.js:172-176` builds the actual default-agent launcher tile with `id: 'wizard'`, `kind: 'chats'`, and **no `agent` property**. `desktop.js:418-423` reuses/opens normal Chats. The harness clicks this visible, registry-derived `Archimedes Main Agent` tile instead of calling a guessed agent route.
-- Supported saved Focus is `w.focus = {kind:'agent',key:'hermes'}`. `chats.js:32-38` migrates a sole legacy `w.agent` window into this shape; `winAgent` at line 1633 normalizes the default agent to the empty main-agent route. The test also seeds that supported saved shape without any owner data.
-- The Back arrow and absent list correspond to `.dchats[data-thread="__new__"]` inside the 620px container rule (`desktop.css:129-134`), not to shell tile count. The empty center card uses `chats.js:2111`; its desktop hint comes from `desktop.js:102`. `Message Archimedes` is the default-agent composer placeholder.
+## Repair
 
-## Existing owning behavior (important contradiction)
+Reuse:
+- navigation: REUSE shared Chats `leaveAfterSend`, draft recovery and pane sync.
+- desktop adapter: EXTEND `keepNewSendList` to follow the pinned `sid === '__new__'`, independent of guessed OS tiling/viewport.
+- send custody: REUSE existing model/provider sealing and native recorder/outbox.
+- tests: EXTEND `qa-thread-trail.cjs` and `tests/desktop-tiled-new-send.test.mjs`.
+- NEW: none.
 
-REUSE shared Chats `leaveAfterSend`, `modelRoute`, draft storage, durable outbox; EXTEND existing `qa-thread-trail.cjs` and `desktop-tiled-new-send.test.mjs`; NEW no production capability.
+Only production change: simplify the existing new-send helper. Both typed and mic callers already use it. Existing-thread desktop fresh-draft shortcuts remain; phone shared leave/Back remains. Preserving a wide desktop *new*-send reset was an earlier agent-invented constraint, not an owner requirement. No OS split-screen heuristic or extra geometry query is added.
 
-At the exact current live source, `keepNewSendList(wid, '__new__')` already accepts **either** a tiled workspace **or** a `.dchats` measured width ≤620px (`desktop.js:591-596`). This is used by both typed capture and native composer-mic handoff. `mainChats` excludes legacy `w.agent` but not `w.focus`; boot migration removes the sole legacy property before the guard. Therefore the claim “focused Archimedes bypasses this guard” is not supported by the actual source. Narrow single-window new sends are predicted to remain on the shared list already. This is a prediction, not a browser PASS.
+## Harness correction and parent packet
 
-A source-red must be established on this exact asset before selecting another production fix. If the staged probe passes, report NOT_REPRODUCED; inspect the affected client's loaded revision and real measured layout before changing policy. Do not turn a harness exception or mismatch into a RED. Do not import the earlier tiled red/green evidence for this surface.
+Launcher selection reads `WizCore.apps('desktop').APP.wizard.name`, then matches its exact `.nm` inside the real palette button and performs an ordinary click. Do not assume titlebar text or concatenate label/subtitle. Persist registry name, count, every palette tile and a failure screenshot if unique binding fails. Saved Focus uses the source-supported stored shape, then the same visible launcher route.
 
-## Parent-admitted canary
+`QA_SEND_RETURN=1 QA_SCREENSHOT_NEW=1` runs 14 bounded cases: eight width × skin × typed/native-mic launcher new sends; two saved-Focus new sends; two existing-thread desktop typed/native-mic replies; phone new and existing typed sends. Native audio is actual Chromium fake-device MediaRecorder output (not substituted bytes), requires ≥1200 bytes, and retains original capture identity through exactly one STT/upload/run/ACK. All content/routes/models are synthetic; no owner history, private agents, real model runs or real transcription. Confirm real Nebula/Grove skin state and inspect in-shell screenshots; no styles change.
 
-`QA_SCREENSHOT_NEW=1` selects eight isolated synthetic cases in the existing harness: Nebula/Grove × real default-agent launcher/saved main-agent Focus × native Enter/native MediaRecorder composer mic. No second app, CSS width override, owner history, private agents, real model run or real transcription. Every request is fulfilled locally or aborted; journal unexpected writes as failures.
+`QA_SCREENSHOT_RED=1` selects only the first real-launcher 1190px typed case for the unmodified-source browser canary. Baseline must fail only the held/post-ACK navigation checks with exact single-window/source/run preconditions, never a boot/selector/model/custody exception. Preserve its failed journal. Only after valid SOURCE_RED may the runner admit the candidate matrix. A baseline exception is FIXTURE_OR_OTHER_FAILURE, not evidence of the bug.
 
-For each case capture pre-send state and screenshot: shell, single window, viewport, DPR, titlebar, saved Focus, normalized route, visible Back, hidden list, empty-card hint and composer placeholder. Hold the real delivery enqueue before durable storage, require list after 450ms and after synthetic run ACK, compare session-create/run agent query+body, provider/model locks, and retain capture-journal/native recording readiness of ≥1200 bytes. Existing broad tiled/phone/reply tests remain unchanged and are not run by this canary.
+The parent stages one complete tracked candidate archive plus the exact baseline desktop asset; all other web assets must hash identically to the pinned baseline. The runner constructs an isolated baseline copy, verifies its complete web closure, runs red then green sequentially, retains screenshots/assertion journals, and terminates the owned process group on timeout. No HTTP server is required; static and synthetic API requests are intercepted under wizard.test. No browser run, heavy submission, merge or deployment is authorized to this child.
 
-The model fixture intentionally uses `qa-model` / `qa-provider`; this proves preservation of the selected route, not availability of the owner's GPT 6.1 Sol subscription. CSS 595×945 / DPR2 and the chosen skins are synthetic interpretation variants, not evidence read from the affected browser. Screenshots still require parent visual review.
+## Executed checks
 
-## Admission boundary
-
-The stage contains only a source diagnosis spec. Source-red cannot honestly be predeclared. Candidate-green admission must follow a valid source reproduction and a minimal owning production change; no candidate or repair receipt is fabricated. No tests, browser, deployment, main merge or heavy job were run/submitted by this worker.
+- Candidate Node branch tests: 27 pass / 0 fail.
+- Same tests against hash-verified unmodified desktop source: 18 pass / 9 fail. Failures are the newly corrected 1190/1920/fullscreen new-send policy, including 1190 typed/native handoff with main/saved Focus; all existing-thread cases and 595px cases pass.
+- `node --check qa-thread-trail.cjs` passes.
+- Browser red/green and visual review remain parent-owned and unexecuted by this worker. Do not claim this packet is browser-green or deploy it before admission.

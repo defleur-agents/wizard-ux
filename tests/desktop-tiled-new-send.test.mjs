@@ -48,21 +48,21 @@ test('new text leaves a later visit and failed-save recovery untouched', () => {
     const f = fixture(); f.text(); f.w.thread = destination; f.drain(); assert.equal(f.w.thread, destination);
   }
 });
-for (const mode of ['text', 'voice']) test(`single full-width desktop ${mode} shortcut is unchanged`, () => {
-  const f = fixture({ count: 1 }); f[mode](); f.drain(); assert.equal(f.w.thread, '__new__');
+for (const viewport of [595,1190,1920]) for (const mode of ['text', 'voice']) test(`single OS window ${viewport}px new ${mode} returns to list`, () => {
+  const f = fixture({ count: 1, viewport }); f[mode](); f.drain(); assert.equal(f.w.thread, null); assert.equal(f.attr, '');
 });
-test('fullscreen of a two-window desk retains wide behavior', () => {
-  const f = fixture({ mono: true }); f.text(); f.drain(); assert.equal(f.w.thread, '__new__');
+test('fullscreen new send also keeps shared list return', () => {
+  const f = fixture({ mono: true }); f.text(); f.drain(); assert.equal(f.w.thread, null);
 });
-test('existing tiled reply keeps the established shell shortcut', () => {
-  const f = fixture({ sid: 'qa_existing' }); f.text(); f.drain(); assert.equal(f.w.thread, '__new__');
+for (const mode of ['text','voice']) for(const count of [1,2]) test(`existing ${mode} reply (${count} windows) keeps established shell shortcut`, () => {
+  const f = fixture({ sid: 'qa_existing', count }); f[mode](); f.drain(); assert.equal(f.w.thread, '__new__');
 });
 test('pre-existing narrow new-text guard is retained', () => {
   const f = fixture({ narrow: true }); f.text(); f.drain(); assert.equal(f.w.thread, null);
 });
-for (const mode of ['text', 'voice']) for (const focus of [null, { kind: 'agent', key: 'hermes' }]) {
-  test(`single narrow OS window ${mode}, ${focus ? 'saved main-agent Focus' : 'main launcher'}: does not reopen New chat`, () => {
-    const f = fixture({ count: 1, viewport: 595, narrow: true, focus });
+for (const viewport of [595,1190]) for (const mode of ['text', 'voice']) for (const focus of [null, { kind: 'agent', key: 'hermes' }]) {
+  test(`single OS window ${viewport}px ${mode}, ${focus ? 'saved main-agent Focus' : 'main launcher'}: does not reopen New chat`, () => {
+    const f = fixture({ count: 1, viewport, focus });
     f[mode](); f.drain();
     assert.equal(f.w.thread, null);
     assert.equal(f.attr, '');

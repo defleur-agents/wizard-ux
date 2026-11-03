@@ -586,14 +586,10 @@
   }
   // ⌥↓ / ⌥↑ always walk Ready, wherever you are (Miguel, 27 Oct 2026: one key, no list/composer sides).
   function chatsUpDown(dir) { return stepReady(dir); }
-  // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
-  // type a new one straight away, or ⌥↓ to the next Ready chat.
+  // Existing-thread replies retain the desktop fresh-draft shortcut. A new-chat
+  // send already returns to the list in shared Chats; never undo that navigation.
   function keepNewSendList(wid, sid) {
-    if (sid !== '__new__') return false;
-    const d = ws[wsOf(wid)];
-    // Desktop half-width is a tiled workspace, not the Chats container's
-    // single-pane breakpoint. Keep the existing narrow-window behavior too.
-    return (!!d && !d.mono && d.wins.length > 1) || winEl(wid)?.querySelector('.dchats')?.getBoundingClientRect().width <= 620;
+    return sid === '__new__';
   }
   function toNewChat(wid, why) {
     const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat

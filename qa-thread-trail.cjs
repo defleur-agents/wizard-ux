@@ -84,7 +84,7 @@ async function sendReturnChecks(b) {
   const closeAll = async () => { for (const c of [...contexts.keys()]) await close(c).catch(()=>{}); };
   try {
   async function boot(mobile, skin, half = false, desktopWidth = 1200, screenshotCase = '') {
-    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:desktopWidth,height:screenshotCase?945:900},deviceScaleFactor:screenshotCase?2:1,userAgent:screenshotCase?'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36':undefined,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block',permissions:mobile?[]:['microphone']});
+    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:desktopWidth,height:screenshotCase?(desktopWidth===595?945:1890):900},deviceScaleFactor:screenshotCase&&desktopWidth===595?2:1,userAgent:screenshotCase?'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36':undefined,isMobile:mobile,hasTouch:mobile,serviceWorkers:'block',permissions:mobile?[]:['microphone']});
     contexts.set(c,setTimeout(()=>{void c.close().catch(()=>{});},60000)); // hard per-context case cap
     const intercepted = [], errors = [], heldRuns = [], receipts = [], requests = []; let holdAck = true;
     const journal={mobile,skin,half,desktopWidth,writes:intercepted,errors,receipts,requests,models:[],requestFailures:[],externalRequests:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
@@ -200,8 +200,14 @@ async function sendReturnChecks(b) {
       await p.evaluate(async()=>{await WosAgents.load();await WizConfig.ready;});
       // Both the actual main-agent launcher tile and saved Focus are supported.
       // The screenshot title alone cannot tell them apart.
+      const name=await p.evaluate(()=>WizCore.apps('desktop').APP.wizard.name);
       await p.keyboard.press('Alt+o');
-      await p.locator('#palette .pal-app').filter({has:p.getByText('Archimedes Main Agent',{exact:true})}).click();
+      await p.locator('#palette .pal-app .nm').first().waitFor({state:'visible'});
+      const exact=new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$');
+      const tile=p.locator('#palette .pal-app').filter({has:p.locator('.nm').filter({hasText:exact})});
+      journal.launcher={registryName:name,count:await tile.count(),tiles:await p.locator('#palette .pal-app').evaluateAll(xs=>xs.map(x=>({text:x.querySelector('.nm')?.textContent,title:x.title,index:x.dataset.i})))};flush();
+      if(journal.launcher.count!==1){await p.screenshot({path:path.join(OUT,'launcher-preflight-failed.png')});throw new Error('Registry-derived launcher tile missing or ambiguous: '+JSON.stringify(journal.launcher));}
+      await tile.click();
     }
     if (half) await p.evaluate(()=>__wux.newWin({app:'settings'}));
     const id = await p.evaluate(mobile=>Object.values((mobile ? __wos : __wux).wins).find(w=>w.app==='chats'&&!w.agent).id,mobile);
@@ -241,20 +247,32 @@ async function sendReturnChecks(b) {
     };
     return {c,p,id,root,list,state,phase,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors,journal};
   }
-  // The supplied screenshot is a SINGLE narrow OS/browser window. Retain the
-  // earlier two-tile regression below, but never substitute it for this surface.
+  // Pixel dimensions do not establish CSS width or DPR. Cover both plausible
+  // single-OS-window interpretations, without claiming either is the real client.
   if(process.env.QA_SCREENSHOT_NEW==='1') {
-    for(const skin of ['nebula','grove']) for(const entry of ['launcher','saved-focus']) for(const mode of ['enter','composer-mic']) {
+    const cases=[];
+    for(const width of [1190,595]) for(const skin of ['nebula','grove']) for(const mode of ['enter','composer-mic']) cases.push({width,skin,mode,entry:'launcher',sid:'__new__'});
+    for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'saved-focus',sid:'__new__'});
+    for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'launcher',sid:'qa_tt_a'});
+    for(const sid of ['__new__','qa_tt_a']) cases.push({width:412,skin:'nebula',mode:'enter',entry:'',sid,mobile:true});
+    const red=process.env.QA_SCREENSHOT_RED==='1';
+    for(const spec of red?cases.slice(0,1):cases) {
+      const {width,skin,mode,entry,sid,mobile=false}=spec;
+      const label=`${width}-${skin}-${entry||'phone'}-${mode}-${sid}`;
       let t;
       try {
-        t=await boot(false,skin,false,595,entry);const {p}=t;
-        t.journal.case={skin,width:595,height:945,dpr:2,entry,mode};flush();
-        await t.newChat();const before=await t.state();t.journal.before=before;flush();
-        check(before.shell==='desktop'&&before.desktop.wins.length===1&&!before.desktop.mono&&before.viewport===595&&before.height===945&&before.dpr===2,`${entry}/${mode}: one narrow Mac desktop window`,before);
-        check(before.thread==='__new__'&&!before.list&&before.back&&before.title==='Archimedes Main Agent'&&before.hint.includes('Type below and press Enter')&&before.placeholder==='Message Archimedes',`${entry}/${mode}: screenshot-matched visible New chat`,before);
-        check(before.legacyAgent===''&&before.sendAgent===''&&(entry!=='saved-focus'||before.focus?.key==='hermes'),`${entry}/${mode}: actual main-agent Focus normalizes transport route`,before);
-        await p.screenshot({path:path.join(OUT,`before-${skin}-${entry}-${mode}.png`)});
-        await t.holdSave();let text='QA screenshot '+entry;
+        t=await boot(mobile,skin,false,width,entry);const {p}=t;
+        t.journal.case=spec;flush();
+        if(sid==='__new__') await t.newChat(); else await p.locator(t.list+' [data-chopen="'+sid+'"]').first().click();
+        const before=await t.state();t.journal.before=before;flush();
+        check(before.thread===sid&&before.shell===(mobile?'phone':'desktop')&&before.viewport===width&&(mobile||(before.desktop.wins.length===1&&!before.desktop.mono&&before.dpr===(width===595?2:1))),`${label}: exact single-window preconditions`,before);
+        if(!mobile){
+          check(before.title==='Archimedes Main Agent'&&before.legacyAgent===''&&before.sendAgent===''&&(entry!=='saved-focus'||before.focus?.key==='hermes'),`${label}: actual main-agent Focus normalizes transport route`,before);
+          if(sid==='__new__')check(before.hint?.includes('Type below and press Enter')&&before.placeholder==='Message Archimedes'&&(width!==595||(!before.list&&before.back)),`${label}: real New chat surface (responsive Back only at narrow width)`,before);
+          check(await p.evaluate(skin=>WosSkin.current===skin&&document.documentElement.dataset.skin===skin,skin),`${label}: requested real shell skin`);
+        }
+        await p.screenshot({path:path.join(OUT,`before-${label}.png`)});
+        await t.holdSave();let text='QA screenshot '+label;
         if(mode==='enter') await t.send(text,true);
         else {
           text='QA tiled voice';await p.locator(t.root+' [data-chmic]').click();
@@ -264,14 +282,23 @@ async function sendReturnChecks(b) {
         }
         await p.waitForFunction(()=>window.__qaResume);await t.phase('delivery-enqueue-held');await p.waitForTimeout(450);
         const held=await t.state();t.journal.held=held;t.journal.reproduced=held.thread==='__new__';flush();
-        check(held.thread===null&&held.attr===''&&held.list,`${entry}/${mode}: list remains visible with save held`,held);
-        await p.screenshot({path:path.join(OUT,`held-${skin}-${entry}-${mode}.png`)});
+        const expected=mobile||sid==='__new__'?null:'__new__';
+        const matches=s=>s.thread===expected&&(expected!==null||((mobile||s.attr==='')&&s.list));
+        check(matches(held),`${label}: navigation remains correct with save held`,held);
+        await p.screenshot({path:path.join(OUT,`held-${label}.png`)});
         await t.release(false);await(await t.sent(text))();await p.waitForTimeout(450);
-        const after=await t.state();check(after.thread===null&&after.attr===''&&after.list,`${entry}/${mode}: exact persisted run ACK retains list`,after);
+        const after=await t.state();t.journal.after=after;flush();
+        check(matches(after),`${label}: exact persisted run ACK retains navigation`,after);
         const create=t.intercepted.filter(x=>x.path==='/wizard/hermes/api/sessions'),runs=t.intercepted.filter(x=>x.path.endsWith('/v1/runs'));
-        check(create.length===1&&runs.length===1&&[...create,...runs].every(x=>!new URLSearchParams(x.query).get('agent')&&!JSON.parse(x.body).agent&&JSON.parse(x.body).model==='qa-model'&&JSON.parse(x.body).provider==='qa-provider'),`${entry}/${mode}: create and run retain normalized main agent and locked model`,{create,runs});
-        check(!t.errors.length&&!t.journal.externalRequests.length&&!t.journal.unlistedWrites?.length,`${entry}/${mode}: no errors, escaped traffic or unknown writes`,t.journal.unlistedWrites||t.errors);
-      }catch(e){if(t)await t.phase('exception').catch(()=>{});check(false,`${skin}/${entry}/${mode}: exception`,String(e.stack||e));return;}
+        check(create.length===(sid==='__new__'?1:0)&&runs.length===1&&[...create,...runs].every(x=>!new URLSearchParams(x.query).get('agent')&&!JSON.parse(x.body).agent&&JSON.parse(x.body).model==='qa-model'&&JSON.parse(x.body).provider==='qa-provider')&&(sid==='__new__'||JSON.parse(runs[0].body).session_id===sid),`${label}: exact create/reply destination and model route`,{create,runs});
+        if(mode==='composer-mic'){
+          const h=t.journal.phases.find(x=>x.name==='delivery-enqueue-held').capture.held,id=h.captureId||h.custodyId;
+          const stt=t.intercepted.filter(x=>x.path.endsWith('/transcribe')),uploads=t.intercepted.filter(x=>x.path.endsWith('/files/upload'));
+          const receipt=t.journal.receipts.find(x=>x.id===id),body=runs[0]&&JSON.parse(runs[0].body);
+          check(h.audioBytes>=1200&&stt.length===1&&uploads.length===1&&uploads[0].bytes===h.audioBytes&&receipt?.id===id&&body?.wizard_file_ids?.includes(uploads[0].response?.file?.id),`${label}: original native audio custody, one STT/upload/run/ACK`,{h,id,stt,uploads,receipt});
+        }
+        check(!t.errors.length&&!t.journal.externalRequests.length&&!t.journal.unlistedWrites?.length,`${label}: no errors, escaped traffic or unknown writes`,t.journal.unlistedWrites||t.errors);
+      }catch(e){if(t)await t.phase('exception').catch(()=>{});check(false,`${label}: exception`,String(e.stack||e));return;}
       finally{if(t)await close(t.c);else await closeAll();}
     }
     return;
@@ -444,7 +471,7 @@ async function sendReturnChecks(b) {
   await wide.p.evaluate(id=>__wux.chats.sendChat(id,'QA wide keep thread'),wide.id); await wide.p.waitForTimeout(250);
   check((await wide.state()).thread==='qa_tt_a','wide desktop shared reply keeps thread');
   await wide.p.locator(wide.list+' [data-chnew]').first().click(); await wide.send('QA wide real form'); await wide.p.waitForTimeout(450);
-  check((await wide.state()).thread==='__new__','wide desktop real-form fresh-draft shortcut unchanged'); wide.ack();
+  check((await wide.state()).thread===null,'wide desktop new real-form send keeps shared list return'); wide.ack();
   check(wide.errors.length===0,'wide desktop no page errors',wide.errors); await close(wide.c);
   } catch(e) { check(false,'wide case exception',String(e.stack||e)); await closeAll(); }
   try { const phone=await boot(true,'nebula');
