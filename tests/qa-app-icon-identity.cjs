@@ -56,20 +56,17 @@ async function rowFor(page,shell,id){
  const target=page.locator('#palette:not([hidden]) .pal-app').filter({has:page.locator('.nm',{hasText:new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$')})});
  await target.waitFor({state:'visible'});return '#palette:not([hidden]) #'+await target.getAttribute('id');
 }
-// Food is source-declared native/phone-only, never a desktop picker row.
-// Keep its desktop artwork + exact shared outline coverage as an explicitly
-// synthetic renderer control, not an injected production picker result.
-async function foodDesktopControl(page){
+// The live donor keeps native usuals separate from the installed web Food app.
+// Prove the actual fixture/registry contract; never fabricate a desktop entry.
+async function foodDesktopAdmission(page){
+ const fixture=apps.find(a=>a.id==='food');
+ assert.equal(fixture.url,'/fixture-app/food/');assert.notEqual(fixture.phone_only,true);
  return page.evaluate(()=>{
-  const C=window.WizCore,desktop=C.apps('desktop');
-  if(desktop.APP.food||desktop.APPS.some(a=>a.id==='food'||a.id==='usuals'))throw Error('Food unexpectedly desktop-launchable');
-  const metadata=C.appMetadata('food');if(!metadata)throw Error('missing actual Food metadata');
-  const rule=window.WizDeviceLegacy.find(d=>d.appId==='food');
-  if(rule?.phoneOnly!==true||rule.probe!=='usuals')throw Error('Food platform contract changed');
-  const panel=document.createElement('section');panel.id='qa-food-desktop';
-  panel.style.cssText='position:fixed;right:16px;top:16px;z-index:2147483647;padding:16px;background:var(--wz-base);color:var(--wz-text);';
-  panel.innerHTML='<div class="pal-app sel">'+window.WizSigil.box('span','ic',metadata)+'<span class="nm">Food — shared renderer control (phone-only app)</span></div>';
-  document.body.append(panel);return {metadata,rule,desktopPickerAbsent:true,surface:'shared-renderer-control-not-launcher'};
+  const C=window.WizCore,desktop=C.apps('desktop'),food=desktop.APP.food;
+  if(!food||food.id!=='food'||food.phoneOnly!==false||food.url!=='/fixture-app/food/')throw Error('live Food web admission changed');
+  const rule=window.WizDeviceLegacy.find(d=>d.probe==='usuals');
+  if(rule?.appId!=='usuals'||rule.phoneOnly!==true||desktop.APP.usuals)throw Error('live native usuals platform contract changed');
+  return {id:food.id,url:food.url,phoneOnly:food.phoneOnly,nativeRule:rule,desktopPickerPresent:true,surface:'picker'};
  });
 }
 async function switchSkin(page,shell,skin){
@@ -122,13 +119,12 @@ async function gallery(page,v,shell,skin){
      for(const id of (v==='candidate'?changed:['messenger'])){
       // Move off the tile before every case/skin; hovering an already-hovered tile emits no event.
       const calendar=await rowFor(page,shell,'wizard-calendar');await page.locator(calendar).scrollIntoViewIfNeeded();await page.locator(calendar).hover();
-      const foodControl=shell==='desktop'&&id==='food'?await foodDesktopControl(page):null;
-      const row=foodControl?'#qa-food-desktop .pal-app':await rowFor(page,shell,id),ic=row+' .ic';await page.locator(row).scrollIntoViewIfNeeded();await settle(page,ic);const before=await page.locator(ic).evaluate(style);
+      const foodAdmission=shell==='desktop'&&id==='food'?await foodDesktopAdmission(page):null;
+      const row=await rowFor(page,shell,id),ic=row+' .ic';await page.locator(row).scrollIntoViewIfNeeded();await settle(page,ic);const before=await page.locator(ic).evaluate(style);
       await page.locator(row).hover();await settle(page,ic);const hovered=await page.locator(ic).evaluate(style),screenshot=await shot(page,[v,shell,skin,id].join('-'),ic);
-      const isMask=/\bsgi\b/.test(hovered.child||'')&&!/\bsglogo\b/.test(hovered.child||'');report.cases.push({v,shell,skin,id,surface:foodControl?'shared-renderer-control-not-launcher':'picker',foodControl,before,hovered,isMask,screenshot});
+      const isMask=/\bsgi\b/.test(hovered.child||'')&&!/\bsglogo\b/.test(hovered.child||'');report.cases.push({v,shell,skin,id,surface:'picker',foodAdmission,before,hovered,isMask,screenshot});
       if(v==='baseline'){assert.equal(isMask,false,'baseline Messenger must reproduce package-logo override');assert.match(hovered.logo,/messenger\?v=/);}
       else{assert.equal(isMask,true,id+' uses existing shared mask');assert.ok(hovered.mask&&hovered.mask!=='none');assert.equal(hovered.logo,'');if(shell==='desktop'){assert.equal(await page.locator(row).evaluate(e=>e.classList.contains('sel')),true);assert.match(hovered.shadow,/^rgba\(225, 214, 255, 0\.8\) 0px 0px 0px 2px,/,'shared white hover outline');}}
-      if(foodControl)await page.locator('#qa-food-desktop').evaluate(e=>e.remove());
      }
     }
     if(v==='candidate'){
