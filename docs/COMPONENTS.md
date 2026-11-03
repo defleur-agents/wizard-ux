@@ -2,18 +2,7 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One implementation per capability. NEW: `web/core/` + row.
-
-CI: [reuse gate](app-reuse-gate.md).
-
-```
-Reuse:
-- chat: REUSE WizardApp.nav.openThread
-- orb: EXTEND Orb.create
-- streak: NEW web/core/streaks.js + row
-```
-
-`Reuse: n/a (reason)` requires no `web/` or `android/` changes.
+One implementation per capability. See [reuse gate](app-reuse-gate.md): name a REUSE/EXTEND owner below; NEW adds a shared owner and row. `Reuse: n/a` requires no UI changes.
 
 ## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
@@ -53,7 +42,7 @@ Reuse:
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages` preload; early answers; notification drafts; `WizLive.readyRank`; `setFocus`/`migrateChatsFocus`; seq resume; provider-access Errors; send/cache; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`) | domain code in core |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder` custody; non-clobbering drafts | domain code in core |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
