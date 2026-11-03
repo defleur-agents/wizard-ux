@@ -21,22 +21,38 @@ async function registry({native=false,ids=['food']}={}) {
  vm.runInContext(read('web/core/apps.js'),window);
  await window.WizCore.appsLoaded();return window;
 }
-test('old fixture has no Food on either shell without the real legacy capability',async()=>{
- const w=await registry();
- for(const shell of ['mobile','desktop'])assert.equal(w.WizCore.apps(shell).APP.food,undefined);
+// This live donor declares usuals as the native device tool, not the web Food app.
+// Preserve capability gating on its genuine ID and independently prove Food admission.
+test('live web Food is available on both shells; native usuals requires its capability',async()=>{
+ const w=await registry({ids:['food','usuals']});
+ const declaration=w.WizDeviceLegacy.find(d=>d.probe==='usuals');
+ assert.equal(declaration.appId,'usuals');assert.equal(declaration.phoneOnly,true);
+ for(const shell of ['mobile','desktop']){
+  const apps=w.WizCore.apps(shell);
+  assert.equal(apps.APP.food.id,'food');assert.equal(apps.APP.food.phoneOnly,false);
+  assert.equal(apps.APP.food.url,'/fixture-app/food/');
+  assert.equal(apps.APP[declaration.appId],undefined);
+ }
  assert.equal(w.WizCore.appMetadata('food').id,'food');
 });
-test('synthetic empty native capability restores actual phone Food, never a desktop row',async()=>{
- const w=await registry({native:true}),events=[];
+test('empty native capability admits actual phone usuals, never desktop; web Food stays on both',async()=>{
+ const w=await registry({native:true,ids:['food','usuals']}),events=[];
  const record=e=>events.push(e.detail);
  w.addEventListener('wizard:apps',record);
  const mobile=w.WizCore.apps('mobile'),desktop=w.WizCore.apps('desktop');
  w.removeEventListener('wizard:apps',record);
  assert.deepEqual(events.map(e=>e.shell),['mobile','desktop']);
  assert.equal(events[0].count,mobile.APPS.length);assert.equal(events[1].count,desktop.APPS.length);
- assert.equal(mobile.APP.food.id,'food');assert.equal(mobile.APP.food.name,'Food');
- assert.equal(desktop.APP.food,undefined);assert.equal(desktop.APPS.some(a=>a.id==='food'),false);
- const declaration=w.WizDeviceLegacy.find(d=>d.appId==='food');assert.equal(declaration.phoneOnly,true);assert.equal(declaration.probe,'usuals');
+ for(const apps of [mobile,desktop]){
+  assert.equal(apps.APP.food.id,'food');assert.equal(apps.APP.food.name,'Food');
+  assert.equal(apps.APP.food.phoneOnly,false);assert.equal(apps.APP.food.url,'/fixture-app/food/');
+ }
+ const declaration=w.WizDeviceLegacy.find(d=>d.probe==='usuals');
+ assert.equal(declaration.appId,'usuals');assert.equal(declaration.phoneOnly,true);
+ assert.equal(mobile.APP[declaration.appId].id,declaration.appId);
+ assert.equal(mobile.APP[declaration.appId].phoneOnly,true);
+ assert.equal(desktop.APP[declaration.appId],undefined);
+ assert.equal(desktop.APPS.some(a=>a.id===declaration.appId),false);
 });
 test('native compatibility records keep their real IDs even when lookup aliases exist',async()=>{
  const w=await registry({native:true,ids:['food','usuals']}),mobile=w.WizCore.apps('mobile');
