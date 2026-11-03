@@ -716,7 +716,8 @@ export default function desktop(api) {
    * (300 ms) shows a small flyout listing its chats (title, time); a click opens one; Esc closes it. ⌥↓ / ⌥↑ still walk
    * the whole Ready. Nothing advances on send (stock has no such setting). */
   let railLast = '';
-  const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || null; };
+  // (an app in front with a chat docked beside it: that chat is the current one, so ⌥↓ / ⌥↑ step from it)
+  const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || (h.app && chatThread ? (chatThread === NOTE ? stepAt : chatThread) : null) || null; };
   const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder());
   function railGo(key) {
     closeFly();
@@ -1328,7 +1329,8 @@ export default function desktop(api) {
     readSessions();
     const ids = readyIds();
     if (!ids.length) { showToast('Nothing ready right now'); return; }
-    const r = api.route(), h = here(r), cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && (h.note || r.thread === '__new__') ? stepAt : null;
+    const r = api.route(), h = here(r), cc = h.app ? curChat() : null;
+    const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && (h.note || r.thread === '__new__') ? stepAt : cc && ids.includes(cc) ? cc : null;
     const nx = readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
     stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id);

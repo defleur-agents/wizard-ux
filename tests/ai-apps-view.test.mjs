@@ -1816,6 +1816,9 @@ test('round 20 item 1: ⌥. Focus folds both sides, closes the chat and the pane
   // chat lands (live: ⌥` and ⌥. left the app open)
   assert.match(js, /if \(!goBack\) dropped = \{ id: was\.id, desk: Number\(was\.desk\) \};/);
   assert.match(js, /if \(h\.app && !dropped && \(want === h\.app/);
+  // an app in front with a chat docked: ⌥↓ / ⌥↑ step from that chat, not from the top (live matrix, round 20)
+  assert.match(js, /\(h\.app && chatThread \? \(chatThread === NOTE \? stepAt : chatThread\) : null\)/);
+  assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
 test('round 20 item 9: Ready is one flat list in priority order by default (tags on Needs you / Your call); Group Ready by status brings the sub-headers back', async () => {
