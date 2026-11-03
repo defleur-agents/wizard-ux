@@ -418,15 +418,31 @@ html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread 
 html[data-shell="phone"][data-layout="ai-apps"] .win.app-chats .ch-notif-thread .ch-tacts > .ch-notif-route .wos-route { flex: none; }
 
 /* ---------- round 16 item 7 (Miguel, 3 Nov 2026): Home = his pinned apps, then 'Open', then + ---------- */
-/* round 17 (Miguel: no full-width divider): the open apps continue in the same flow; the first one wears a tiny 'Open'
- * caption chip on its icon's top-left corner (the count badge sits top-right), the only mark between the two groups */
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-open-first::before {
-  content: "Open"; position: absolute; z-index: 2; left: 4px; top: -4px; padding: 2px 6px; border-radius: 7px; pointer-events: none;
-  color: var(--aa-ink-2, var(--wz-text-secondary)); background: var(--aa-surface); box-shadow: 0 0 0 1px var(--aa-line); font: 600 0.5625rem / 1.2 var(--wz-font-ui); letter-spacing: .02em;
+/* round 18 (Miguel, 3 Nov 2026: the Mac dock's model): no chip, no line. The open apps not pinned start on a new row
+ * after a slightly larger gap holding only a tiny muted 'Open' caption on the left; every open app (pinned or not)
+ * wears the dock's running dot under its name; a pin not open has none */
+html[data-shell="phone"][data-layout="ai-apps"] .ah-cap { grid-column: 1 / -1; margin: 2px 0 -10px; padding: 0 12px; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 500 0.6875rem / 1.2 var(--wz-font-ui); letter-spacing: .02em; text-align: left; pointer-events: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-run { position: absolute; left: 50%; bottom: -6px; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--aa-ink-2, var(--wz-text-secondary)); pointer-events: none; }
+/* the tidy line at Home's end (under +) and its sheet: the desktop's sentence */
+html[data-shell="phone"][data-layout="ai-apps"] .ah-tidy { grid-column: 1 / -1; justify-self: center; margin: 6px 0 0; padding: 8px 12px; border: 0; background: none; cursor: pointer; color: var(--aa-ink-2, var(--wz-text-secondary)); font: 500 0.75rem / 1.3 var(--wz-font-ui); -webkit-tap-highlight-color: transparent; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-tidy-c { color: var(--aa-ink, var(--wz-text)); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-tidys { margin: 4px 4px 12px; color: var(--aa-ink); font: 400 0.9375rem / 1.6 var(--wz-font-ui); }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-tidys > b { font-weight: 600; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-tidys-sel { height: 34px; margin: 0 2px; padding: 0 8px; border: 0; border-radius: 10px; color: inherit; background: color-mix(in srgb, var(--aa-ink) 8%, transparent); box-shadow: inset 0 0 0 1px var(--aa-line); font: 600 0.9375rem / 1 var(--wz-font-ui); }
+/* the tidy toast (round 18: with Undo, as on the desktop): above the composer */
+/* on the light skins (Landscapes Light too) the caption, the line and the dot get the names' soft white halo */
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) :is(.ah-cap, .ah-tidy) { text-shadow: 0 0 2px color-mix(in srgb, white 90%, transparent), 0 0 8px color-mix(in srgb, white 70%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .ah-run { box-shadow: 0 0 0 1px color-mix(in srgb, white 70%, transparent); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-toast {
+  position: fixed; z-index: 30; left: 50%; bottom: calc(var(--ah-bottom, 96px) + 8px); translate: -50% 0; pointer-events: auto;
+  display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100vw - 24px); padding: 8px 8px 8px 16px; box-sizing: border-box; border-radius: 14px;
+  color: var(--aa-surface); background: var(--aa-ink); box-shadow: 0 6px 20px color-mix(in srgb, black 25%, transparent); font: 500 0.8125rem / 1.3 var(--wz-font-ui); animation: aa-up 180ms ease;
 }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-toast[hidden] { display: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-toast-u { flex: none; height: 32px; padding: 0 12px; border: 0; border-radius: 9px; cursor: pointer; color: inherit; background: color-mix(in srgb, var(--aa-surface) 18%, transparent); font: 600 0.8125rem / 1 var(--wz-font-ui); }
+html[data-shell="phone"][data-layout="ai-apps"] .ah-toast-u[hidden] { display: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-ic { transform: scale(.82); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-opensec .ah-name { font-size: 0.6875rem; }
-html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-pin.is-run .ah-name::before { content: ""; display: inline-block; width: 4px; height: 4px; margin: 0 4px 2px 0; border-radius: 50%; background: currentColor; opacity: .7; vertical-align: middle; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift { position: relative; z-index: 5; transition: none; }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-lift .ah-ic { transform: scale(1.12); filter: drop-shadow(0 8px 16px color-mix(in srgb, black 30%, transparent)); }
 html[data-shell="phone"][data-layout="ai-apps"] .ah-app.is-drop .ah-ic { outline: 2px solid var(--wz-accent, var(--ink)); outline-offset: 3px; border-radius: 16px; }
@@ -436,3 +452,8 @@ html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-
   background: linear-gradient(165deg, color-mix(in oklab, var(--c) 82%, white), var(--c) 55%, color-mix(in oklab, var(--c) 82%, black));
 }
 html[data-shell="phone"][data-layout="ai-apps"]:is([data-skin$="-light"], [data-skin="sepia"]) .vc-tile:not(.is-logo):not(.vc-tile-plus) .sgi:not(.sgb) { background: white !important; filter: drop-shadow(0 1px 1px color-mix(in srgb, black 28%, transparent)) !important; }
+
+/* round 18 item 3 (Miguel, 3 Nov 2026): Ready's order (the stock Chats Filter choice) on Ready's header in the drawer */
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sech { display: flex; align-items: center; gap: 4px; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sech > .aa-sec { flex: 1; min-width: 0; }
+html[data-shell="phone"][data-layout="ai-apps"] .aa-sort { flex: none; height: 32px; max-width: 110px; margin: 0 6px 0 0; padding: 0 6px; border: 0; border-radius: 10px; color: var(--aa-ink-2); background: none; font: 500 0.8125rem / 1 var(--wz-font-ui); }

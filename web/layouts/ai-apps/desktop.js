@@ -71,7 +71,8 @@ import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chr
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
-  pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords } from './parts.js';
+  pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
+  TIDY_SHORT, tidySentence, READY_SORTS, sortOf, PRIORITY_TIP, readyGroups, readyFlat, readyStep } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -146,8 +147,7 @@ export default function desktop(api) {
   wsBtn.append(wsName, icon('down', 'aad-ico aad-wsc'));
   const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
-  // the Ready count (round 5): on the sidebar's ◫ and on the rail's, like the phone's ☰
-  const togCount = el('b', 'aad-count', { 'aria-hidden': 'true' }); togCount.hidden = true; togBtn.append(togCount);
+  // (round 18 item 4a, Miguel: the Ready count sits on Ready's own header, as on the rail; none on ◫ any more)
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
   const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
@@ -210,7 +210,7 @@ export default function desktop(api) {
   const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥T)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
   vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
-  const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false' });
+  const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
   const tidyW = el('span', 'aad-tidy-w');
   tidyBtn.append(icon('snooze', 'aad-ico aad-tidy-i'), tidyW);
   vtFoot.append(vtAll, tidyBtn);
@@ -251,7 +251,6 @@ export default function desktop(api) {
     // the sidebar opens with a short reveal (clip, no width animation); folding snaps to the rail
     if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
-    if (!open) only = '';   // round 12: a status shown alone is dropped when the sidebar folds
     togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
     rTog.title = 'Open sidebar (Ctrl+Shift+S)';
@@ -269,8 +268,10 @@ export default function desktop(api) {
   let offPeek = null;
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
   const secOpen = sectionsOpen(api.storage.get('sections'));
-  const STATE_WORD = Object.fromEntries(STATES);
-  let only = '';   // round 12: the Ready status the sidebar shows alone (a click on it in the rail), '' = all
+  /* round 18 item 3 (Miguel, 3 Nov 2026): Ready's order = the stock Chats Filter's (Priority / Newest / Oldest, its own
+   * saved choice, api.sessions.order); item 4: the open Ready is grouped by status like the rail, the order inside */
+  const readyOrder = () => sortOf(api.sessions.order?.() || 'priority');
+  api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
@@ -573,7 +574,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, only, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, (r.actions || []).join()]))]);
+      secOpen, readyOrder(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -587,25 +588,44 @@ export default function desktop(api) {
       // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
-        const all = s[k] || [], on = !!secOpen[k], rows = k === 'ready' && only ? all.filter(r => stateOf(r) === only) : all;
+        const rows = s[k] || [], on = !!secOpen[k];
+        // round 18 item 4 (Miguel: the open sidebar built on the folded rail): Snoozed only when it holds chats, as on the rail
+        if (k === 'snoozed' && !rows.length) continue;
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
-        hd.append(el('span', '', { text: word0 }), icon('down', 'aad-ico aad-sec-c'));
+        hd.append(el('span', 'aad-sec-w', { text: word0 }));
+        // round 18 item 4a: Ready's count on its own header (the rail's amber disc, the Chats badge)
+        if (k === 'ready' && rows.length) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        hd.append(icon('down', 'aad-ico aad-sec-c'));
         // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
-        if (!on && k !== 'archive' && rows.length) { hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' })); hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`); }
-        api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; if (k === 'ready') only = ''; api.storage.set('sections', { ...secOpen }); paintList(true); });
+        if (!on && k !== 'archive' && k !== 'ready' && rows.length) hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' }));
+        if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
+        api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
-        if (on && k === 'ready' && only) {
-          // round 12: Ready showing one status (a click on it in the rail): its name and how to see all again
-          const chip = el('button', 'aad-only', { type: 'button', 'aria-label': `Showing only ${STATE_WORD[only] || only}. Show all of Ready`, title: 'Show all of Ready' });
-          chip.append(el('span', 'aad-only-w', { text: `${STATE_WORD[only] || only} · ${rows.length} of ${all.length}` }), el('span', 'aad-only-x', { text: 'Show all' }));
-          api.listen(chip, 'click', () => { only = ''; paintList(true); });
-          body.append(chip);
-        }
-        if (on) {
+        if (on && k === 'ready' && rows.length) {
+          // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
+          // the chosen order (item 3: group first, then the order inside each)
+          const groups = readyGroups(rows, readyOrder());
+          for (const g of groups) {
+            // (only plain chats: no sub-header, as the rail shows Ready alone)
+            if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
+            const gh = el('div', 'aad-grp', { 'data-state': g.state, role: 'heading', 'aria-level': '4' });
+            gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
+            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread)));
+          }
+        } else if (on) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
           else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : EMPTY[k] }));
         }
-        out.push(hd, body);
+        if (k === 'ready') {
+          // round 18 item 3a: the stock Chats sort choice on Ready's header (Priority / Newest / Oldest)
+          const row = el('div', 'aad-sech');
+          const sort = el('select', 'aad-sort', { 'aria-label': 'Order Ready', title: `${PRIORITY_TIP}\nReady is grouped by status first; the order applies inside each group. The same choice as Chats' own Filter.` });
+          for (const [v, w0] of READY_SORTS) { const o = el('option', '', { value: v, text: w0 }); if (v === readyOrder()) o.setAttribute('selected', ''); sort.append(o); }
+          sort.value = readyOrder();
+          api.listen(sort, 'change', () => { api.sessions.setOrder?.(sort.value); paintList(true); });
+          row.append(hd, sort);
+          out.push(row, body);
+        } else out.push(hd, body);
       }
     }
     closeMenu();
@@ -623,20 +643,22 @@ export default function desktop(api) {
   /* The rail (round 12, Miguel: the icon tiles were unreadable: words, no status icons; round 16: 52 px). Snoozed, then
    * Ready and under it each stock Chats status with chats in it (STATES: core/chats.js stiKind's order; plain Ready
    * chats count in Ready only), each a count with a short word under it (RAIL_WORDS; the full words in its tip).
-   * Archive and Working stay in the open sidebar. One click opens the sidebar on that section, scrolled to it; a status
-   * opens Ready showing only that status, with a chip above the rows that shows all again (dropped when it folds). */
+   * Archive and Working stay in the open sidebar. One click opens the sidebar on that section, scrolled to it; round 18
+   * item 4c: a status opens it scrolled to that status's group in Ready, briefly highlighted (no filter, no chip). */
   function openSection(k, state = '') {
     secOpen[k] = true; api.storage.set('sections', { ...secOpen });
-    only = k === 'ready' ? state : '';
     if (q) setSearch(false);
     if (narrow()) { if (!peek) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } }
     else { folded = false; api.storage.set('folded', false); }
     paintSide(); paintList(true);
-    const hd = scroll.querySelector?.(`.aad-sec[data-sec="${k}"]`), top = hd?.getBoundingClientRect?.().top, box = scroll.getBoundingClientRect?.().top;
-    if (typeof top === 'number' && typeof box === 'number') scroll.scrollTop = Math.max(0, (scroll.scrollTop || 0) + top - box - 4);
+    // round 18 item 4c (Miguel): a status expands the sidebar and scrolls to its group with a brief highlight (no filter)
+    const hd = (state && scroll.querySelector?.(`.aad-grp[data-state="${state}"]`)) || scroll.querySelector?.(`.aad-sec[data-sec="${k}"]`);
+    const top = hd?.getBoundingClientRect?.().top, box = scroll.getBoundingClientRect?.().top;
+    if (state && typeof top === 'number' && typeof box === 'number') scroll.scrollTop = Math.max(0, (scroll.scrollTop || 0) + top - box - 4);
+    if (hd && state) { hd.classList.add('is-flash'); api.after(1200, () => hd.classList.remove('is-flash')); }
   }
   function railRow(k, n, word0, state = '') {
-    const sub = !!state, tip = sub ? `${n} ${word0}: show them in Ready` : `${word0}, ${n}: open the sidebar there`;
+    const sub = !!state, tip = sub ? `${n} ${word0}: open the sidebar there` : `${word0}, ${n}: open the sidebar there`;
     const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero'), { type: 'button', role: 'listitem', 'data-k': sub ? state : k, title: tip, 'aria-label': tip });
     b.append(el('span', 'aad-rk-n', { text: n > 99 ? '99+' : String(n) }), el('span', 'aad-rk-w', { text: RAIL_WORDS[sub ? state : k] || word0 }));
     api.listen(b, 'click', () => openSection(k, state));
@@ -660,9 +682,7 @@ export default function desktop(api) {
     paintVt();
     if (root.dataset.aadSide === 'rail') paintRail(); else paintList();
     for (const n of scroll.querySelectorAll('[data-badge]')) { n.textContent = badgeText(n.dataset.badge); n.hidden = !n.textContent; }
-    const rt = badgeText(CHATS);
-    togCount.textContent = rt; togCount.hidden = !rt;
-    togBtn.setAttribute('aria-label', rt ? `Close sidebar, ${rt} ready` : 'Close sidebar');
+    togBtn.setAttribute('aria-label', 'Close sidebar');
   }
 
   /* ---------- workspaces (top right): this Wizard, then the ones he manages ---------- */
@@ -823,6 +843,8 @@ export default function desktop(api) {
     });
     api.listen(b, 'contextmenu', e => { e.preventDefault?.(); openAppMenu({ id: d.id, name, ...(open ? { desk: d.desk } : {}), system: !!metaOf(d.id).system, col: colPlace(d, pinned) }, { x: e.clientX, y: e.clientY, el: b }); });
     b.dataset.group = pinned ? 'pin' : 'open';
+    // (round 18 item 3c: ⌥1–9, ⌥[ ] and ⌥⇧[ ] reach the rows through these)
+    b.__pick = pick; b.__move = dir => { const c = colPlace(d, pinned), i = c.index + dir; if (c.index >= 0 && i >= 0 && i < c.n) dropTo({ id: d.id, desk: open ? d.desk : null }, { group: c.group, index: i }); };
     return b;
   }
   /** a row's place in the column: its group, index and the group's size (the menu's Move up / Move down) */
@@ -1110,22 +1132,18 @@ export default function desktop(api) {
   let tidyOff = null;
   const tidyLoop = () => { tidyOff = api.after(TIDY_EVERY, () => { tidy(); tidyLoop(); }); };
   api.after(6000, tidy); tidyLoop();
-  // the setting: the column's foot (Off · 12 hours · 24 hours · 1 week)
+  // the setting: the column's foot. Round 18 (Miguel, 3 Nov 2026: the setting reads as a sentence): a small 'Tidy: 24h'
+  // line that expands in place into 'Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps always stay
+  // open.' (parts.js tidySentence, the phone's sheet too); folded to the rail it opens beside the column
   let tidyPop = null, offTidyBack = null;
-  function paintTidy() { const k = tidyKey(); tidyW.textContent = `Tidy: ${k === 'off' ? 'Off' : TIDY_WORDS[k]}`; tidyBtn.setAttribute('aria-label', `Close apps not used for a while: ${TIDY_WORDS[k]}`); tidyBtn.title = `Auto-tidy: close open apps you haven't used for ${k === 'off' ? '… (off)' : TIDY_WORDS[k]} (pinned apps stay)`; }
+  function paintTidy() { const k = tidyKey(); tidyW.textContent = `Tidy: ${TIDY_SHORT[k]}`; tidyBtn.setAttribute('aria-label', `Tidy up: ${k === 'off' ? 'off' : `close apps you haven't used in ${TIDY_WORDS[k]}`}. Change`); tidyBtn.title = 'Tidy up: close apps you haven\'t used for a while (pinned apps always stay open)'; }
   function closeTidy() { if (!tidyPop) return; tidyPop.remove(); tidyPop = null; offTidyBack?.(); offTidyBack = null; tidyBtn.setAttribute('aria-expanded', 'false'); }
   function openTidy() {
     if (tidyPop) { closeTidy(); return; } closeMenu();
-    tidyPop = el('div', 'aad-pop aad-tidypop', { role: 'menu', 'aria-label': 'Tidy' });
-    tidyPop.append(el('h3', 'aad-pop-h', { text: 'Close apps not used for' }));
-    for (const k of Object.keys(TIDY)) {
-      const it = el('button', 'aad-pop-i', { type: 'button', role: 'menuitemradio', 'aria-checked': String(k === tidyKey()), 'data-tidy': k });
-      it.append(el('span', '', { text: TIDY_WORDS[k] })); if (k === tidyKey()) it.append(icon('check', 'aad-ico aad-wcheck'));
-      api.listen(it, 'click', () => { api.storage.set('tidy', k); closeTidy(); paintTidy(); });
-      tidyPop.append(it);
-    }
-    scene.append(tidyPop); offTidyBack = api.back.push(closeTidy); tidyBtn.setAttribute('aria-expanded', 'true');
-    api.after(0, () => tidyPop?.querySelector('[aria-checked="true"]')?.focus?.({ preventScroll: true }));
+    tidyPop = el('div', 'aad-tidyx', { role: 'group', 'aria-label': 'Tidy up' });
+    tidyPop.append(tidySentence(doc, tidyKey(), k => { api.storage.set('tidy', k); paintTidy(); }, 'aad-tidys'));
+    vtFoot.replaceChildren(vtAll, tidyPop, tidyBtn); offTidyBack = api.back.push(closeTidy); tidyBtn.setAttribute('aria-expanded', 'true');
+    api.after(0, () => tidyPop?.querySelector('select')?.focus?.({ preventScroll: true }));
   }
   api.listen(tidyBtn, 'click', openTidy);
   api.listen(doc, 'pointerdown', e => { if (tidyPop && !tidyPop.contains(e.target) && !tidyBtn.contains(e.target)) closeTidy(); }, true);
@@ -1144,10 +1162,43 @@ export default function desktop(api) {
     if (docked && !typing()) { closeChat(); return true; }
     return false;
   } });
+  /* round 18 item 3b (Miguel): ⌥↓ / ⌥↑ walk EXACTLY Ready as this sidebar draws it (grouped by status, the chosen order
+   * inside; notifications in it), top to bottom, opening each one; from elsewhere the top; past the end back to the top
+   * (stock stepReady's wrap and toast). Folded or not, it is the same list. */
+  let stepAt = null;
+  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder()).map(r => r.id);
+  function stepReady(dir) {
+    readSessions();
+    const ids = readyIds();
+    if (!ids.length) { showToast('Nothing ready right now'); return; }
+    const r = api.route(), h = here(r), cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && (h.note || r.thread === '__new__') ? stepAt : null;
+    const nx = readyStep(ids, cur, dir); if (!nx) return;
+    if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
+    stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id);
+  }
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
+    if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && !e.shiftKey) { if (!e.repeat || here().thread) stepReady(e.code === 'ArrowDown' ? 1 : -1); return true; }
     if (e.code === 'Backslash' && !e.shiftKey) { if (!e.repeat) toggleSide(); return true; }
     if (e.code === 'KeyT' && !e.shiftKey) { if (!e.repeat) (allOpenNow() ? closeAll : openAll)(); return true; }
+    /* round 18 item 3c (Miguel: audit every ⌥ key; stock meanings kept where they still mean something here):
+     * ⌥O (stock: the apps palette) = the view's one app picker, as ⌥T; ⌥I (stock: the chat list, again its search) =
+     * the sidebar's search; ⌥1–9 = the right column's rows top to bottom (stock: desk N, invisible here); ⌥[ / ⌥] =
+     * the previous / next row (stock: windows, then desks); ⌥⇧[ / ⌥⇧] = move the row in front up / down (stock: move the
+     * desk); ⌥− / ⌥= = the app panel narrower / wider (stock: the focused window); ⌥⇧1–9 (move a window to desk N) and
+     * ⌥W on Home (it closed the Chats window behind Home) do nothing here. */
+    if (e.code === 'KeyO' && !e.shiftKey) { if (!e.repeat) (allOpenNow() ? closeAll : openAll)(); return true; }
+    if (e.code === 'KeyI' && !e.shiftKey) { if (!e.repeat) setSearch(true); return true; }
+    const dg = /^Digit([1-9])$/.exec(e.code || '');
+    if (dg) { if (!e.repeat && !e.shiftKey) vtRows()[+dg[1] - 1]?.__pick?.(); return true; }
+    if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
+      const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), dir = e.code === 'BracketRight' ? 1 : -1;
+      if (e.shiftKey) { if (!e.repeat && i >= 0) rows[i].__move?.(dir); return true; }
+      if (rows.length) rows[i < 0 ? (dir > 0 ? 0 : rows.length - 1) : (i + dir + rows.length) % rows.length].__pick?.();
+      return true;
+    }
+    if ((e.code === 'Minus' || e.code === 'Equal') && !e.shiftKey) { if (pane) setSize('app', sizes().app[0] + (e.code === 'Equal' ? 64 : -64), true); return true; }
+    if (e.code === 'KeyW' && !e.shiftKey && !pane && !docked) return true;
     if (e.code === 'KeyW' && !e.shiftKey && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (e.code === 'KeyW' && !e.shiftKey && docked) { if (!e.repeat) closeChat(); return true; }
     if (e.code === 'KeyF' && !e.shiftKey && pane) { if (!e.repeat) setWide(!wide); return true; }
@@ -1156,6 +1207,7 @@ export default function desktop(api) {
     if (id) { if (!e.repeat) goApp(id); return true; }
     return false;
   } });
+  const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
   const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
   api.keys.guide(() => {
     const open = root.dataset.aadSide === 'open', out = [];
@@ -1163,11 +1215,12 @@ export default function desktop(api) {
     put(open ? togBtn : rTog, '\\', open ? 'Close sidebar' : 'Sidebar', 'below');
     put(open ? newBtn : rNew, 'N', 'New chat', open ? 'above' : 'below');
     put(open ? setBtn : rSet, ',', 'Settings', 'above');
-    put(open ? findBtn : rFind, '␣', 'Search', 'below');
+    put(open ? findBtn : rFind, 'I', 'Search', 'below');   // (round 18: ⌥I is this search; ⌥Space stays the shell's palette)
     if (open) {
+      // (round 18: the hints follow the same walk as ⌥↓ / ⌥↑: the drawn Ready, in its order)
       const rows = [...side.querySelectorAll('.aad-rw[data-kind="ready"] .aad-row')].filter(shown), i = rows.findIndex(r => r.closest('.aad-rw.is-cur'));
       const next = rows.length && (i < 0 ? rows[0] : rows[(i + 1) % rows.length]); if (next && next !== rows[i]) put(next, '↓', '', 'inside');
-      if (i > 0 && rows.length > 2) put(rows[i - 1], '↑', '', 'inside');
+      if (i >= 0 && rows.length > 2) put(rows[(i - 1 + rows.length) % rows.length], '↑', '', 'inside');
     }
     put(vtAll, 'T', 'Add an app', 'above');
     // the apps' letters: on the right column's rows (pinned or open; one letter per app)

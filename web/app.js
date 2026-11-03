@@ -4110,7 +4110,7 @@
       const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
-        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
           needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
           actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
       // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom

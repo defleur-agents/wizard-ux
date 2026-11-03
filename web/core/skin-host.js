@@ -796,6 +796,15 @@
           : id.startsWith(NOTE_ID) ? NOTE_ACTS.includes(action) && inboxAct(action, id.slice(NOTE_ID.length))
           : SESSION_ACTS.includes(action) ? !!shell.sessionAct?.(id, action) : false,
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
+        // Ready's order (the AI apps view, round 18): the stock Chats Filter's own saved choice (wos.chats.readyOrder.v1,
+        // shared across devices through the box preferences, like Chats' own buttons), so both views always agree.
+        order: () => { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } },
+        setOrder: o => {
+          if (!live() || !['newest', 'oldest', 'priority'].includes(o)) return false;
+          try { localStorage.setItem(READY_ORDER_KEY, o); } catch (_) {}
+          try { window.WizLive?.putPrefs?.({ readyOrder: o }); } catch (_) {}
+          window.dispatchEvent?.(new Event('wos:prefs')); return true;
+        },
         // The Chats window as it is (its thread kept), and a New chat in it: the AI apps view's main screen.
         chats: () => live() ? !!shell.showChats?.() : false,
         newChat: () => live() ? !!shell.newChat?.() : false,
@@ -975,9 +984,10 @@
     if (!isDoc || !inboxList()) return [];
     return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived).map(it => ({
       id: NOTE_ID + it.id, title: (notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification').slice(0, 120),
-      kind: 'ready', note: true, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+      kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
       unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] }));
   }
+  const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function withNoteRows(ready) {
     const notes = noteRows(); if (!notes.length) return ready;
     const t = r => Date.parse(r.at) || 0, awake = notes.filter(n => n.unread).sort((a, b) => t(b) - t(a)), later = notes.filter(n => !n.unread).sort((a, b) => t(b) - t(a));
