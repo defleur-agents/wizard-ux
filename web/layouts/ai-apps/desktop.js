@@ -1108,7 +1108,9 @@ export default function desktop(api) {
     return plan;
   }
   let tidyOff = null;
-  const tidyLoop = () => { tidyOff = api.after(TIDY_EVERY, () => { tidy(); tidyLoop(); }); };
+  // api.after caps a timer at 10 s: wake on that beat and tidy only once the hour is up
+  let tidyAt = Date.now() + TIDY_EVERY;
+  const tidyLoop = () => { tidyOff = api.after(10e3, () => { if (Date.now() >= tidyAt) { tidyAt = Date.now() + TIDY_EVERY; tidy(); } tidyLoop(); }); };
   api.after(6000, tidy); tidyLoop();
   // the setting: the column's foot (Off · 12 hours · 24 hours · 1 week)
   let tidyPop = null, offTidyBack = null;

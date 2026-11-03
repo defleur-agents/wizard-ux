@@ -508,3 +508,16 @@ test('Orbs desktop: the docked list drags down to a thin column of status icons 
 test('Orbs desktop: → on the thin list grip steps straight out to a readable list', () => {
   assert.match(read('web/layouts/orb/layout.js'), /if \(id === 'list' && dir > 0 && cur <= THIN \+ 8\) \{ set\(id, 260, true\); return; \}/);
 });
+
+// Codex review (PR #888): in the Orb view a chat lives in the panel (no desk, Home stays open), so the bound-view
+// manager must count the panel's chat as in view, or a page linked from its latest reply never opens beside it.
+test('bound views: the Orb panel\'s chat counts as visible (a linked page opens beside it)', () => {
+  const js = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
+  const shown = js.slice(js.indexOf('  function threadShown(wid,el) {'), js.indexOf('boundManager.shown(wid,el);'));
+  assert.match(shown, /visible:id=>\(globalThis\.WosSkinHost\?\.panelMode&&panelHas\(id\)\)\|\|\(!homeOpen&&wsOf\(id\)===cur\)/);
+  const visible = new Function('globalThis', 'panelHas', 'homeOpen', 'wsOf', 'cur', 'return ' + shown.match(/visible:(id=>.*?), close:/)[1]);
+  const v = (panelMode, inPanel, home) => visible({ WosSkinHost: { panelMode } }, () => inPanel, home, () => 9, 0)('w');
+  assert.equal(v(true, true, true), true, 'Orb: the panel chat over Home is in view');
+  assert.equal(v(false, true, true), false, 'Desks: Home in front, nothing in view (unchanged)');
+  assert.equal(v(true, false, true), false, 'Orb: a chat not in the panel is not in view');
+});

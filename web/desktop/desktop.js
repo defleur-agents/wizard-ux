@@ -184,7 +184,7 @@
   function threadShown(wid,el) {
     if (wid.endsWith('::list')) return;
     boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,appAt,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
-      visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id,true),
+      visible:id=>(globalThis.WosSkinHost?.panelMode&&panelHas(id))||(!homeOpen&&wsOf(id)===cur), close:id=>closeWin(id,true),   // the Orb's chat panel is in view too
       open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
       reload:id=>{save();const f=winEl(id)?.querySelector('iframe');if(f)f.src=f.src;}
     }); boundManager.shown(wid,el);
