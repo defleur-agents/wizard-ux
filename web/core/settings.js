@@ -422,7 +422,7 @@
         restored = true;
       }
       if (S.current !== previous.palette) {
-        if (M?.active) await M.update({ base: previous.palette }); else S.set(previous.palette);
+        if (M?.active && !M.overlay) await M.update({ base: previous.palette }); else S.set(previous.palette);
         restored = true;
       }
       if (restored) { await window.WosExperience?.refresh?.(); await skinSettled(); }

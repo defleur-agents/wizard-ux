@@ -201,25 +201,11 @@
         let list = await request('');
         if (!Array.isArray(list.skins)) throw new Error('Invalid skins response');
         serverMode = true;
-        // Checkpoint each preview recipe only after the box confirms it. Failed uploads retry next refresh.
-        let legacy;
-        try { legacy = JSON.parse(localStorage.getItem(RECIPES)); } catch (_) {}
-        if (legacy?.version === 1 && Array.isArray(legacy.skins)) {
-          const active = legacy.active;
-          for (const s of [...legacy.skins]) {
-            if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
-            let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
-            if (!found) { const made = await request('', 'POST', { name: s.name, base: s.base, tweaks: s.tweaks, migration_key: s.id, activate: s.id === active }); found = { id: made.id }; }
-            // Cached CSS can recreate the legacy local entry before box discovery.
-            // Reading an already-worn match is not an activation; keep real migrations
-            // to a different selection authoritative, including explicit remote wear().
-            else if (s.id === active && list.active !== found.id) list = await request('/active', 'PUT', { id: found.id });
-            legacy.skins = legacy.skins.filter(k => k.id !== s.id);
-            localStorage.setItem(RECIPES, JSON.stringify(legacy));
-          }
-          localStorage.removeItem(RECIPES);
-          list = await request('');
-        }
+        // Opening Settings or picking a palette is not consent to create a named skin.
+        // Older Services ignore migration_key and create suffixed, empty folders; an
+        // interrupted background import can therefore multiply "My skin" tiles.
+        // Keep preview recipes in device storage for recovery. Box discovery must
+        // neither POST named skins nor overwrite the owner's active selection.
         receive(list);
       } catch (e) {
         if (e.older) { serverMode = false; migrate(state.css); }

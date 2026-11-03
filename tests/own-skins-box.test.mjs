@@ -62,14 +62,14 @@ test('box owns recipe CRUD, active selection, reload, remove and Undo; empty def
   await second.M.wear(made.id); assert.equal(server.data.active, made.id);
   assert.equal(second.M.active.name, 'Morning');
 });
-test('preview recipes upload once, keep the worn choice and clear legacy storage', async () => {
+test('preview recipes stay on the device until an explicit creation request', async () => {
   const server = box(), store = new Map([['wos.own-skins.v1', JSON.stringify({ version: 1, active: 'skin-two', migrated: true, skins: [
     { id: 'skin-one', name: 'First', base: 'nebula', tweaks: {} }, { id: 'skin-two', name: 'Second', base: 'obsidian-light', tweaks: { 'wizard/app-borders': false } },
   ] })]]);
   const b = await boot(server, store);
-  assert.equal(b.M.active.id, 'Second'); assert.equal(store.has('wos.own-skins.v1'), false);
-  assert.equal(server.calls.filter(c => c.method === 'POST').length, 2);
-  await boot(server, store); assert.equal(server.calls.filter(c => c.method === 'POST').length, 2);
+  assert.equal(b.M.active, null); assert.equal(store.has('wos.own-skins.v1'), true);
+  assert.equal(server.calls.filter(c => c.method !== 'GET').length, 0);
+  await boot(server, store); assert.equal(server.calls.filter(c => c.method !== 'GET').length, 0);
 });
 test('two clients patch only changed tweak keys, preserving independent edits', async () => {
   const server = box(), a = await boot(server);
@@ -79,12 +79,12 @@ test('two clients patch only changed tweak keys, preserving independent edits', 
   assert.deepEqual(server.data.skins.find(s => s.id === 'Shared').tweaks, { 'wizard/a': true, 'wizard/b': false, 'wizard/c': true });
   assert.ok(server.calls.filter(c => c.method === 'PATCH').every(c => Object.keys(c.input.tweaks).length === 1));
 });
-test('two preview tabs use the same migration key and make only one box folder', async () => {
+test('two preview tabs never create box folders in the background', async () => {
   const server = box(), saved = JSON.stringify({ version: 1, active: 'skin-stable', migrated: true, skins: [{ id: 'skin-stable', name: 'Imported', base: 'nebula', tweaks: {} }] });
   const tabs = await Promise.all([boot(server, new Map([['wos.own-skins.v1', saved]])), boot(server, new Map([['wos.own-skins.v1', saved]]))]);
-  assert.equal(server.data.skins.filter(s => s.name === 'Imported').length, 1);
-  assert.ok(server.calls.filter(c => c.method === 'POST').every(c => c.input.migration_key === 'skin-stable'));
-  assert.ok(tabs.every(t => t.M.active.id === 'Imported' && !t.store.has('wos.own-skins.v1')));
+  assert.equal(server.data.skins.filter(s => s.name === 'Imported').length, 0);
+  assert.equal(server.calls.filter(c => c.method !== 'GET').length, 0);
+  assert.ok(tabs.every(t => t.M.active === null && t.store.get('wos.own-skins.v1') === saved));
 });
 test('only empty uncustomized My skin is hidden; explicit names and existing CSS/script remain', async () => {
   for (const values of [{ has_recipe: true }, { empty: false }, { has_script: true }]) {
@@ -140,7 +140,7 @@ test('cached CSS with cleared recipe caches migrates without reactivating the al
   const b = await boot(server, store, 'grove');
   assert.ok(journal.some(c => c.legacy?.skins[0]?.legacy), 'first-paint cached CSS really traversed migrate -> persist');
   assert.equal(b.M.active.id, 'My skin'); assert.equal(b.M.overlay, true);
-  assert.equal(store.has('wos.own-skins.v1'), false, 'migration checkpoint still completes');
+  assert.equal(store.has('wos.own-skins.v1'), true, 'local recovery data is retained, not silently uploaded or erased');
   console.log('CACHED_CSS_REQUESTS', JSON.stringify(journal));
   assert.deepEqual(server.calls.filter(c => c.method !== 'GET').map(c => ({ method: c.method, input: c.input })), [], 'reload is not an explicit activation');
   for (let i = 0; i < 2; i++) {
@@ -154,14 +154,14 @@ test('cached CSS with cleared recipe caches migrates without reactivating the al
   await off.M.wear('My skin'); assert.equal(server.data.active, 'My skin', 'a different explicit activation still writes');
   assert.deepEqual(server.calls.filter(c => c.method === 'PUT').map(c => c.input), [{ id: null }, { id: 'My skin' }]);
 });
-test('migration still activates a different matched preview recipe', async () => {
+test('discovery never activates a matched device preview over the box selection', async () => {
   const server = box(); server.data.active = 'My skin';
   server.data.skins.push({ id: 'Imported', name: 'Imported', base: 'grove', tweaks: {}, has_recipe: true });
   const store = new Map([['wos.own-skins.v1', JSON.stringify({ version: 1, active: 'local-import', skins: [{ id: 'local-import', name: 'Imported', base: 'grove', tweaks: {} }] })]]);
   const b = await boot(server, store, 'grove');
-  assert.equal(b.M.active.id, 'Imported');
-  assert.deepEqual(server.calls.filter(c => c.method === 'PUT').map(c => c.input), [{ id: 'Imported' }]);
-  assert.equal(store.has('wos.own-skins.v1'), false);
+  assert.equal(b.M.active, null, 'empty default stays hidden, not replaced by the device preview');
+  assert.deepEqual(server.calls.filter(c => c.method !== 'GET'), []);
+  assert.equal(store.has('wos.own-skins.v1'), true);
 });
 
 test('old boxes resolve legacy recipe presence through Files, never infer it from a name or missing field', async () => {

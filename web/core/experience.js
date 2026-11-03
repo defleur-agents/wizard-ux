@@ -202,7 +202,9 @@
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // Settings calls this after a skin pick; other skin changes arrive as `wos:skin`.
-    chooseSkin() { if (busy && targetOwner === wornOwner()) return inFlight; if (wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
+    // owner is assigned before manifests finish: a failed reconcile is not a settled family.
+    // Retry on the next pick instead of letting its stale timeout roll every colour back.
+    chooseSkin() { if (busy && targetOwner === wornOwner()) return inFlight; if (error || wornOwner() !== owner || (!set && owner)) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.

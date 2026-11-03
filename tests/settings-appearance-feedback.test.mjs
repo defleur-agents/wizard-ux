@@ -98,6 +98,22 @@ test('competing Appearance choices dim without layout changes; switch progress s
   assert.match(css, /\.st-pending \.sw::after \{ width: 18px; height: 18px/);
   assert.doesNotMatch(css, /\.st-pending \.sw::before|\.st-pending[^}]*outline: 2px/);
 });
+test('legacy owner overlay rollback restores only the palette, never PATCHes personal skin metadata', async () => {
+  const f = fixture('data-skinpick', 'obsidian');
+  f.s.WosMySkin.active = { id: 'My skin', name: 'My skin', base: 'nebula', tweaks: {} };
+  f.s.WosMySkin.overlay = true;
+  let writes = 0, picks = 0;
+  f.s.WosMySkin.update = async () => { writes++; throw Error('palette rollback must not edit owner metadata'); };
+  f.s.WosExperience.chooseSkin = () => ++picks === 1 ? new Promise((_, no) => { f.failPick = no; }) : Promise.resolve();
+  f.s.WosExperience.refresh = async () => {};
+  f.click(); assert.equal(f.node().attrs['aria-busy'], 'true'); f.frame(); f.frame(); await tick();
+  assert.equal(f.s.WosSkin.current, 'obsidian');
+  f.failPick(new DOMException('signal timed out', 'TimeoutError')); await tick(); await tick();
+  assert.equal(f.s.WosSkin.current, 'nebula'); assert.equal(f.s.WosMySkin.active.id, 'My skin');
+  assert.equal(writes, 0); assert.equal(f.view.context.lookPending, null);
+  assert.equal(f.view.context.lookError, 'signal timed out');
+});
+
 test('reduced motion removes both the pulse and spin, leaving static partial rings', () => {
   const css = read('web/core/settings.css');
   assert.match(css, /prefers-reduced-motion: reduce\) \{\s*\.st-root \.st-pending \.skp-mini, \.st-root \.st-pending \.skp-mini::after, \.st-root \.st-pending \.sw::after \{ animation: none; \}/);
