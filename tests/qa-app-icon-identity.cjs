@@ -104,6 +104,7 @@ async function gallery(page,v,shell,skin){
  try{
  for(const v of ['candidate','baseline']){version=v;fresh=false;
   for(const shell of ['phone','desktop']){
+   fresh=false;
    const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},hasTouch:shell==='phone',isMobile:shell==='phone',deviceScaleFactor:1,serviceWorkers:'block',...(shell==='phone'?{userAgent:'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'}:{})});
    try{
     await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
