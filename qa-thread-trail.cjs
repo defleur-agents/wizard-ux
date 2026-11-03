@@ -234,6 +234,9 @@ async function sendReturnChecks(b) {
     // saved words through the real list row, not a product/debug state setter.
     await p.locator(t.root+' [data-chback]').click();
     const saved=await p.evaluate(text=>Object.entries(JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}')).filter(([key,d])=>/^new:[a-z0-9]{4,40}$/.test(key)&&d.text===text).map(([key])=>key),failedText);
+    // The cached desktop pane refreshes through the owner's real window control.
+    await p.locator(t.root+' [data-wact="reload"]').click();
+    await p.locator(t.list+' [data-chdraft="'+saved[0]+'"]').waitFor({state:'visible'});
     const draftRow=p.locator(t.list+' [data-chdraft]').filter({has:p.getByText(failedText,{exact:true})});
     const rowCount=await draftRow.count();
     const rowKey=rowCount===1 ? await draftRow.getAttribute('data-chdraft') : null;
