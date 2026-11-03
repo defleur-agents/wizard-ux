@@ -73,7 +73,7 @@ Reuse:
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`) | PNG/emoji icons |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); registry glyphs/aliases, masks and brands beat package pictures; Store reuses the same identity; unknown logos preserved | PNG/emoji icons |
 | Desktop frame shortcuts | `watchFrame → onKey` (`desktop/desktop.js`); same-origin window capture + keyup/blur cleanup; no nested/opaque-frame relay | second dispatcher or postMessage key forwarding |
 | Launcher policy | `WizLauncher`, `WizLauncherDefaults` (`core/launcher*.js`); synced prefs+defaults, 1s boot cap | lists |
 | App groups | `WosAppKinds` (`app-kinds.js`) | forks |
