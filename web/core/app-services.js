@@ -101,7 +101,7 @@
       if (st.doc && !valid(st, st.doc)) reset(st);
     }
   }
-  function attach(frame, { appId, path, openThread, openContextDraft, isVisible, isFront, back, readingStorage } = {}) {
+  function attach(frame, { appId, path, openThread, openContextDraft, isFront, isVisible, back, readingStorage } = {}) {
     frames.get(frame)?.detach();
     if (!frame || frame.tagName !== 'IFRAME' || !appId || !path) return () => {};
     let url; try { url = new URL(path, ORIGIN); } catch (_) { return () => {}; }
