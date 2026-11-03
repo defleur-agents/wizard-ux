@@ -1111,9 +1111,11 @@ export default function desktop(api) {
   const NOTE = '__note__';
   const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
   const noteTitle = () => noteThread(doc, '.win .dchats .pane-main')?.querySelector('.ch-head .ti b')?.textContent || 'Notification';
+  let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
   function paintSplit(chatOn) {
     const h = here();
-    if (h.app && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
+    if (dropped && (want === h.app || h.app !== dropped.id || Number(h.r.desk) !== dropped.desk)) dropped = null;
+    if (h.app && !dropped && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
       const el0 = wsps().find(w => !w.hidden && !w.querySelector('.dchats'));
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
@@ -1155,6 +1157,8 @@ export default function desktop(api) {
     const finish = () => {
       closing = null; if (pane !== was) return;
       pane = null; setWide(false); doneLoading(); anim('close');
+      // (Home / Focus: the route still names the app until the new chat lands; don't take it back as the panel meanwhile)
+      if (!goBack) dropped = { id: was.id, desk: Number(was.desk) };
       const m = mainChats();
       if (goBack && here().app === was.id) { if (m) api.nav.goDesk(m.desk); else api.sessions.newChat(); }
       paintSplit(!!chatThread); paintTop();
