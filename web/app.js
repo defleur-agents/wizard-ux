@@ -900,7 +900,7 @@
         // the phone frame's existing dark fallback, then paint exactly what we measured.
         const alpha = rgb[3] / 255;
         rgb = [15, 16, 20].map((base, i) => Math.round(rgb[i] * alpha + base * (1 - alpha)));
-        const opaque = `rgb(${rgb.join(', ')})`;
+        const opaque = '#' + rgb.map(c => c.toString(16).padStart(2, '0')).join('');
         if (top) top = opaque; else bg = opaque;
       }
       const lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
