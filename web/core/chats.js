@@ -575,7 +575,30 @@ window.WizCore.chats = function createChats(H) {
     else if (!on && notesOff) { notesOff(); notesOff = null; }
     if (!on) return null;
     const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived);
-    return { awake: all.filter(i => !i.read), later: all.filter(i => i.read) };
+    return { awake: fold(all.filter(i => !i.read)), later: fold(all.filter(i => i.read)) };
+  }
+  /* One row per app (Miguel, 3 Nov 2026: a noisy app is one row in Chats, not 50). Two or more waiting items from the
+   * same place (an app, or Wizard's own alerts) fold into one row: its mark, its name, how many, the newest first.
+   * Opening it opens the newest, with the rest listed under it and Done all. Anything that needs you (priority 4+)
+   * keeps its own row, so it is never buried in a fold. The Chats badge still counts every item (badge == items). */
+  const noteSrc = it => it.app || 'notifications';
+  const noteSrcName = it => it.app ? (it.appName || it.app) : (window.WizConfig?.agent?.() || 'Wizard');
+  const noteFolds = it => !it.group && (Number(it.priority) || 3) < 4;
+  function fold(list) {
+    const by = new Map(), out = [];
+    for (const it of list) { if (!noteFolds(it)) { out.push(it); continue; } const k = noteSrc(it); if (!by.has(k)) by.set(k, []); by.get(k).push(it); }
+    for (const [k, l] of by) {
+      if (l.length < 2) { out.push(l[0]); continue; }
+      const items = l.slice().sort((a, b) => noteAt(b) - noteAt(a)), top = items[0];
+      out.push(Object.freeze({ ...top, group: k, items, time: top.time, priority: Math.max(...items.map(i => Number(i.priority) || 3)), read: items.every(i => i.read) }));
+    }
+    return out;
+  }
+  // The open item's place: everything else waiting from the same app (what Done all clears with it).
+  function noteSiblings(it) {
+    if (!it || !noteFolds(it)) return [];
+    const k = noteSrc(it);
+    return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived && i.id !== it.id && noteFolds(i) && noteSrc(i) === k).sort((a, b) => noteAt(b) - noteAt(a));
   }
   const noteAt = it => (Number(it.time) || 0) * 1000, sesAt = s => Date.parse(LIVE.cardAt(s)) || 0;
   const noteRank = it => it.priority >= 4 ? 1 : it.priority === 3 ? 2 : 3;
@@ -605,11 +628,16 @@ window.WizCore.chats = function createChats(H) {
     if (!it.app || !window.WizSigil) return window.WosBell?.icon || '';
     try { const meta = window.WizCore?.appMetadata?.(it.app) || { id: it.app, name: it.appName || it.app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
   }
+  const noteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
+  /* A notification row reads unlike a chat at a glance: the app's mark on a yellow tile, the app's name as a small
+   * yellow label, then one line of what happened (and a count when several from that app wait together). */
   function noteRow(it) {
-    const later = !!it.read, title = notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
-    const pv = (it.source === 'cron' ? 'Scheduled job · ' : it.app ? (it.appName || it.app) + ' · ' : '') + clip(notePlain(it.message), 160);
-    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}" data-morph-key="notif:${esc(it.id)}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''} aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open alert · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
-      <span class="bd"><span class="tp"><b>${esc(clip(title, 120))}</b><time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
+    const later = !!it.read, from = noteSrcName(it), n = it.group ? it.items.length : 0;
+    const title = n ? it.items.slice(0, 4).map(noteTitle).join(' · ') : noteTitle(it);
+    const pv = (it.source === 'cron' && !n ? 'Scheduled job · ' : '') + clip(notePlain(it.message), 160);
+    const lbl = n ? `${from}: ${n} waiting · newest ${noteTitle(it)}` : `${from}: ${noteTitle(it)}`;
+    return `<div class="ch-row-wrap ch-notif-wrap${later ? ' later' : ''}${it.app ? ' ch-notif-app' : ''}${n ? ' ch-notif-group' : ''}" data-morph-key="${n ? `notifg:${esc(it.group)}:${later ? 'l' : 'a'}` : `notif:${esc(it.id)}`}"><button type="button" class="ch-row ch-notif-row${later ? ' deferred' : ' unread'}" data-chnotif="${esc(it.id)}"${it.app ? ` data-chnotif-app="${esc(it.app)}"` : ''}${n ? ` data-chnotif-group="${esc(it.group)}"` : ''} aria-label="${esc(clip(lbl, 200))}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="${n ? 'Open the newest · the rest are listed under it' : 'Open'} · hold or open the context menu for actions"><span class="emo ch-notif-ic" aria-hidden="true">${noteIcon(it)}</span>
+      <span class="bd"><span class="tp"><span class="ch-notif-from">${esc(clip(from, 40))}</span><b>${esc(clip(title, 160))}</b>${n ? `<span class="ch-notif-n">${n > 99 ? '99+' : n}</span>` : ''}<time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
   const noteTimeOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : noteAt(b) - noteAt(a);
@@ -826,6 +854,25 @@ window.WizCore.chats = function createChats(H) {
     const B = window.WosBell; if (!B?.picker || !B.chatsAvailable) return '';
     const id = noteRoute(NV), name = B.nameOf?.(id) || id, ask = B.ask?.(id, name) || `${name} notifications go to`;
     return `<div class="ch-notif-route" data-part="notify-route"><span>${esc(ask)}</span>${B.picker(id, { name })}</div>`;
+  }
+  // "More from Money · 47": each a one-line button that opens it here; Done all clears this one and every one listed.
+  function noteMoreHtml(NV) {
+    const sib = noteSiblings(NV.item); if (!sib.length) return '';
+    const from = noteSrcName(NV.item), shown = sib.slice(0, 12);
+    return `<section class="ch-notif-more" aria-label="More from ${esc(from)}"><div class="ch-notif-more-h"><span>More from ${esc(from)} · ${sib.length}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${sib.length + 1}</span></button></div>${shown.map(i => `<button type="button" class="ch-notif-more-i${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${esc(ago(new Date(noteAt(i)).toISOString()))}</time></button>`).join('')}${sib.length > shown.length ? `<p class="ch-notif-more-x">and ${sib.length - shown.length} more · they move up as you finish these</p>` : ''}</section>`;
+  }
+  // Done all: the open item and the rest from its app leave Chats together; one undo-free archive, like Done.
+  async function notifDoneAll(wid, nid) {
+    const w = W[owner(wid)], n = notifOf(w); if (!n || n.id !== nid || !n.item) return false;
+    const ids = [n.id, ...noteSiblings(n.item).map(i => i.id)];
+    vib(8);
+    const d = KIT.drafts.get('new');
+    if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+    ch(w.id).draft = ''; chatsBack(w);
+    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+    const ok = await window.WosBell?.mark?.(ids, { read: true, archived: true });
+    toast(ok ? '✓' : '!', ok ? `${ids.length} done` : 'Couldn’t save · restored', ok ? 1600 : 3200);
+    return true;
   }
   // Picked in the notification: Badge takes this app's items out of Chats at once (this one too) with Undo.
   function notifRoute(wid, app, to) {
@@ -1556,15 +1603,18 @@ window.WizCore.chats = function createChats(H) {
   }
   /* Threads and alerts share one actions sheet, dismissal and gesture ownership. */
   const ROW_MENU = '.ch-list [data-chopen], .ch-list .ch-notif-row[data-chnotif]';
-  const NOTE_ACT = { done: ACT.done, unread: ACT.unread };
-  async function noteRowAct(nid, a) {
+  const NOTE_ACT = { done: ACT.done, snooze: { ...ACT.snooze, label: 'Snooze' }, unread: ACT.unread };
+  // On a folded row (several from one app) every action covers the whole fold.
+  async function noteRowAct(nid, a, ids) {
     const it = window.WosBell?.item?.(nid);
     if (!it || it.archived || !NOTE_ACT[a]) return;
     vib(8);
+    ids = ids && ids.length ? ids : [nid];
     // The Notifications app has read / archived, not a separate done or flag state.
-    // Archive marks the alert read and takes it out of Ready.
-    const ok = await window.WosBell.mark([nid], a === 'unread' ? { read: false } : { read: true, archived: true });
-    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? 'Marked unread' : 'Archived') : 'Couldn’t save · alert restored', ok ? 1600 : 3200);
+    // Archive marks the alert read and takes it out of Ready; Snooze marks it read and keeps it (the snoozed tail).
+    const ok = await window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
+    const many = ids.length > 1 ? `${ids.length} ` : '';
+    toast(ok ? '✓' : '!', ok ? (a === 'unread' ? `${many}Marked unread` : a === 'snooze' ? `${many}Snoozed` : many ? `${ids.length} done` : 'Done') : 'Couldn’t save · restored', ok ? 1600 : 3200);
   }
   let rowSheet = null; // { wid, sid?, nid?, trigger }
   function rowActions(s) {
@@ -1575,17 +1625,18 @@ window.WizCore.chats = function createChats(H) {
     const s = nid ? window.WosBell?.item?.(nid) : rowOf(wid, sid), el = track.querySelector(`[data-chats="${wid}"]`); if (!s || !el || (nid && s.archived)) return;
     closeRowSheet();
     const trigger = Array.from(el.querySelectorAll(nid ? '[data-chnotif]' : '[data-chopen]')).find(row => (nid ? row.dataset.chnotif : row.dataset.chopen) === (nid || sid)) || null;
-    const acts = nid ? ['done', ...(s.read ? ['unread'] : [])] : rowActions(s);
-    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? notePlain(s.title) || 'Alert' : s.title)}</div>
+    const grp = nid && trigger?.dataset.chnotifGroup ? [s, ...noteSiblings(s)].filter(i => !!i.read === !!s.read).map(i => i.id) : null;
+    const acts = nid ? ['done', ...(s.read ? ['unread'] : ['snooze'])] : rowActions(s);
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? grp && grp.length > 1 ? `${noteSrcName(s)} · ${grp.length}` : notePlain(s.title) || 'Alert' : s.title)}</div>
       ${nid ? '<button type="button" data-rsopen><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Open</button>' : ''}
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
       ${PIN.on?.() !== false ? `<button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>` : ''}
       <button type="button" data-rsspacepicker>${PIN_SVG}${spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}`}
-      ${acts.map(a => `<button type="button" data-rsact="${a}">${(nid ? NOTE_ACT : ACT)[a].icon}${nid ? NOTE_ACT[a].label : actionLabel(s, a)}</button>`).join('')}
+      ${acts.map(a => `<button type="button" data-rsact="${a}">${(nid ? NOTE_ACT : ACT)[a].icon}${nid ? NOTE_ACT[a].label + (grp && grp.length > 1 ? ` all ${grp.length}` : '') : actionLabel(s, a)}</button>`).join('')}
       ${acts.length ? '' : `<p class="ch-sheet-n">${isWorking(s) || ['waiting_for_approval', 'unknown'].includes(s.status) ? `${window.WizConfig.agent()} is still on this one.` : 'Nothing to file yet.'}</p>`}</div></div>`);
-    rowSheet = { wid, sid, nid, trigger };
+    rowSheet = { wid, sid, nid, trigger, grp };
     el.querySelector('.ch-sheet button')?.focus({ preventScroll: true });
     vib(10);
   }
@@ -1976,6 +2027,8 @@ window.WizCore.chats = function createChats(H) {
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
     const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
     if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.app ? esc(NV.item.appName || NV.item.app) : 'Notification'}</span></div></div>`;
+    // The rest waiting from the same app, under it (its row in the list was one fold), with Done all.
+    if (NV) msgs += noteMoreHtml(NV);
     // The same Badge | Chats picker as Settings › Notifications, above the notification.
     if (NV) msgs = noteRouteHtml(NV) + msgs;
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
@@ -2908,7 +2961,7 @@ window.WizCore.chats = function createChats(H) {
     const more = e.target.closest('[data-secmore]'); if (more) { const c = ch(id); c.more = { ...(c.more || {}), [more.dataset.secmore]: true }; renderChatList(w, elOf(id)); return true; }
     if (e.target.closest('[data-chattach]')) { pickFor = id; picker.accept = ''; picker.click(); return true; }
     const rm = e.target.closest('[data-attrm]'); if (rm) { const c = ch(id); UPLOAD_ABORT.get(rm.dataset.attrm)?.abort(); c.files = (c.files || []).filter(f => f.key !== rm.dataset.attrm); refreshCompose(id); saveDraft(id); return true; }
-    const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid, nid } = rowSheet; closeRowSheet(); if (nid) void noteRowAct(nid, rsa.dataset.rsact); else threadAct(rw, sid, rsa.dataset.rsact); return true; }
+    const rsa = e.target.closest('[data-rsact]'); if (rsa && rowSheet) { const { wid: rw, sid, nid, grp } = rowSheet; closeRowSheet(); if (nid) void noteRowAct(nid, rsa.dataset.rsact, grp); else threadAct(rw, sid, rsa.dataset.rsact); return true; }
     if (e.target.closest('[data-chemoclear]') && rowSheet?.emoji) { const sheet = e.target.closest('.ch-emoji-sheet'), input = sheet?.querySelector('[data-chemosearch]'); if (input) { input.value = ''; renderEmojiSearch(sheet, ''); input.focus(); } return true; }
     const emoji = e.target.closest('[data-chtopicemoji]'); if (emoji && rowSheet?.emoji) { const { key } = rowSheet; if (TOPIC.set(key, emoji.dataset.chtopicemoji)) { closeRowSheet(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww && !ww.thread) renderChats(ww); } toast(emoji.dataset.chtopicemoji, 'Topic emoji saved', 1400); } return true; }
     if (e.target.closest('[data-rsemo]') && rowSheet?.sid) { const { wid: rw, sid } = rowSheet, s = LIVE.session(sid); openEmojiSheet(rw, `thread:${sid}`, s?.title || 'Choose emoji'); return true; }
@@ -2926,6 +2979,8 @@ window.WizCore.chats = function createChats(H) {
     // The lift that ends a long-press can land on the sheet's backdrop (the row sat under it): keep the sheet open.
     if (rowSheet && e.target.closest('.ch-sheet') && !e.target.closest('.ch-sheet-b')) { if (e.detail === 0 || rowSheet.outsidePress) closeRowSheet(); return true; }
     if (e.target.closest('[data-boom-id]') && w.thread) { const el = elOf(id); void BOOM()?.handle(e.target, r => { if (!showBoomMessage(el, r.anchor_at)) toast('!', 'That message is no longer in this thread', 2200); }); return true; }
+    const ngo = e.target.closest('.ch-notif-more [data-chnotif-go]'); if (ngo && w.thread) { window.WosSkinHost?.inboxAct?.('open', ngo.dataset.chnotifGo); return true; }
+    const nda = e.target.closest('.ch-notif-more [data-chnotif-doneall]'); if (nda && w.thread) { void notifDoneAll(id, nda.dataset.chnotifDoneall); return true; }
     const nrt = e.target.closest('.ch-notif-route [data-notify-route]'); if (nrt && w.thread) { if (!nrt.disabled) notifRoute(id, nrt.dataset.notifyRoute, nrt.dataset.notifyTo); return true; }
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
