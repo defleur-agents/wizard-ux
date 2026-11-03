@@ -12,6 +12,7 @@ const kitCtx = { window: null, URL, Intl, Date, navigator: {}, location: { origi
 kitCtx.window = kitCtx; vm.createContext(kitCtx); vm.runInContext(read('web/core/chat-kit.js'), kitCtx);
 const KIT = kitCtx.WosChat;
 const chats = read('web/core/chats.js');
+const line = start => { const a = chats.indexOf(start); assert.ok(a >= 0, start); return chats.slice(a, chats.indexOf('\n', a) + 1); };
 const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexOf(end, a); assert.ok(a >= 0 && b > a, `${start} .. ${end}`); return chats.slice(a, b); };
 
 function render(rows, { on }) {
@@ -19,7 +20,7 @@ function render(rows, { on }) {
     document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
     replyCard: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
   vm.createContext(ctx);
-  vm.runInContext(`${slice('  const regenOn = ', '  const ourSkin = ')}${slice('  const timeTag = ', '  // A note another agent')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
+  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
   return KIT.parseRows(rows).map((tn, i, all) => ctx.turnHtml({ texts: [] }, tn, i === all.length - 1, false, null, null)).join('');
 }
 const long = Array.from({ length: 160 }, (_, i) => `word${i}`).join(' ');
