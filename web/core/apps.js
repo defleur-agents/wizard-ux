@@ -17,13 +17,24 @@
     { id: 'wizard', kind: 'chats', name: 'Chats', icon: '✦', g: ['#6b46ff', '#c04dff'], desc: 'Your threads with your Wizard' },
     { id: 'side-button', kind: 'native', name: 'Side button', icon: '◉', g: ['#8f63ff', '#ff5ccf'], desc: 'Hold the side button to talk to Wizard' },
   ];
+  // Native compatibility grants describe one legacy surface, not every web app sharing its id.
+  function deviceSurface(a) {
+    return window.WizDeviceLegacy?.find(d => {
+      if (d.appId !== a.id) return false;
+      if (!d.path) return true; // old declarations without a path retain their capability gate
+      try {
+        const url = new URL(a.originalUrl || a.url, location.href);
+        return url.origin === location.origin && (url.pathname === d.path || url.pathname.startsWith(d.path.endsWith('/') ? d.path : d.path + '/'));
+      } catch (_) { return false; }
+    });
+  }
   // Platform: 'mobile' gets everything except desktop-only entries; 'desktop' drops Android intents.
   function appsFor(shell, list = ALL) {
     const nativeSide = !!(window.WizardOSNative && typeof window.WizardOSNative.sideButton === 'function');
     return list.filter(a => {
       if (a.id === 'pages' && !window.WosPages?.available) return false;
       if (a.id === 'side-button' && !nativeSide) return false;
-      const device = window.WizDeviceLegacy?.find(d => d.appId === a.id);
+      const device = deviceSurface(a);
       if (device && typeof window.WizardOSNative?.[device.probe] !== 'function') return false;
       if (shell === 'desktop') return a.kind !== 'native' && !a.phoneOnly;
       return !a.desktopOnly;
@@ -65,7 +76,7 @@
       (a.view.mode !== 'own' || a.view.url === `/wizard/views/${a.id}/`) ? a.view : { mode: 'original', url: a.url || '' },
     url: a.source === 'apps.json' && a.view?.mode === 'own' && a.view.url === `/wizard/views/${a.id}/` ? a.view.url : a.url || '', desc: a.desc || '',
     ...(a.desktop_only ? { desktopOnly: true } : {}),
-    phoneOnly: a.phone_only === true || window.WizDeviceLegacy?.some(d => d.appId === a.id && d.phoneOnly === true), source: a.source || '', system: a.system === true,
+    phoneOnly: a.phone_only === true || deviceSurface(a)?.phoneOnly === true, source: a.source || '', system: a.system === true,
     status: a.status,
     // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
     homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
