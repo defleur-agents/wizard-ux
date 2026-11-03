@@ -210,3 +210,27 @@ test('Badge from inside a notification: out of Chats at once, toast "<App> moved
   const c = read('web/core/chats.js');
   assert.match(c, /if \(to !== 'chats'\) \{[^]*chatsBack\(w\);[^]*B\.movedToast\?\.\(app, toast, 5000, from\);/, 'picking Badge in Chats closes the notification and shows the toast');
 });
+
+// With Chats the default, an app's badge is hidden while its feed lists it in Chats. A feed that goes away (404) or
+// stays offline must give the badge back, or the app's count shows nowhere (Codex on #895).
+test('a feed that goes away or stays offline gets its own badge back; answering again moves it back to Chats', async () => {
+  let mode = 'ok';
+  const w = boot({ storage: new Map([['wos.inbox.feeds.v2', JSON.stringify({ messenger: { s: 'yes', at: Date.now() } })]]) });
+  const real = w.fetch;
+  w.fetch = async (url, o) => url === '/messenger/api/inbox' && mode !== 'ok' ? (mode === 'gone' ? { ok: false, status: 404, headers: { get: () => 'application/json' }, json: async () => ({}) } : Promise.reject(new Error('offline'))) : real(url, o);
+  const B = w.WosBell, N = w.WizCore.workspaceNav;
+  B.watch(() => {}); await B.refresh(true); await settle();
+  N.setCount('messenger', 4);
+  assert.equal(N.counts.messenger || 0, 0, 'in Chats: no badge of its own');
+  // Offline past the grace period (no recent items kept): the badge comes back.
+  // The shell's clock (its own realm) moves 6 minutes on.
+  mode = 'down'; vm.runInContext('globalThis.__now = Date.now; Date.now = () => __now() + 6 * 60e3;', w);
+  try { await B.refresh(true); await settle(); } finally { vm.runInContext('Date.now = __now;', w); }
+  assert.equal(B.inChats('messenger'), false);
+  assert.equal(N.counts.messenger, 4, 'offline: its badge is back');
+  mode = 'ok'; await B.refresh(true); await settle();
+  assert.equal(B.inChats('messenger'), true); assert.equal(N.counts.messenger || 0, 0, 'answering again: back in Chats');
+  mode = 'gone'; await B.refresh(true); await settle();
+  assert.equal(B.inChats('messenger'), false);
+  assert.equal(N.counts.messenger, 4, 'feed removed: badge at once');
+});
