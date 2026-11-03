@@ -255,7 +255,7 @@ async function sendReturnChecks(b) {
     for(const width of [1190,595]) for(const skin of ['nebula','grove']) for(const mode of ['enter','composer-mic']) cases.push({width,skin,mode,entry:'launcher',sid:'__new__'});
     for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'saved-focus',sid:'__new__'});
     for(const mode of ['enter','composer-mic']) cases.push({width:1190,skin:'nebula',mode,entry:'launcher',sid:'qa_tt_a'});
-    for(const sid of ['__new__','qa_tt_a']) cases.push({width:412,skin:'nebula',mode:'enter',entry:'',sid,mobile:true});
+    for(const sid of ['__new__','qa_tt_a']) cases.push({width:412,skin:'nebula',mode:'click',entry:'',sid,mobile:true});
     const red=process.env.QA_SCREENSHOT_RED==='1';
     for(const spec of red?cases.slice(0,1):cases) {
       const {width,skin,mode,entry,sid,mobile=false}=spec;
@@ -274,7 +274,7 @@ async function sendReturnChecks(b) {
         }
         await p.screenshot({path:path.join(OUT,`before-${label}.png`)});
         await t.holdSave();let text='QA screenshot '+label;
-        if(mode==='enter') await t.send(text,true);
+        if(mode==='enter'||mode==='click') await t.send(text,mode==='enter');
         else {
           text='QA tiled voice';await p.locator(t.root+' [data-chmic]').click();
           await p.waitForFunction(()=>__wux.voiceState==='listen');
