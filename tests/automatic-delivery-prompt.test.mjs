@@ -77,7 +77,7 @@ function normalizer() {
 
 test('automatic delivery prompts stay out of chat-list previews but remain available for retry', () => {
   const normalize = normalizer();
-  const raw = prompt('Nebula');
+  const raw = prompt('Nebula:');
   const row = normalize({
     id: 'wizard_daily',
     status: 'running',
@@ -93,13 +93,17 @@ test('automatic delivery prompts stay out of chat-list previews but remain avail
   assert.equal(row.request, raw);
   const indexed = normalize({ id: 'wizard_old_daily', listVersion: 1, preview: '[AUTO] Please share the complete Daily Brief report exactly as save…' });
   assert.equal(indexed.preview, '', 'a stale clipped title-index preview is hidden too');
+  const colonless = normalize({ id: 'wizard_compat_daily', listVersion: 1, preview: '[Nebula] Please share the complete Daily Brief report exactly as save…' });
+  assert.equal(colonless.preview, '', 'the short-lived colonless compatibility form is hidden too');
 });
 
 test('message search never exposes an automatic delivery prompt as its result snippet', async () => {
   const ctx = context();
   const raw = '[AUTO] Please share the complete Daily security considerations · Tue, Nov 3 report exactly as save…';
+  const colonless = '[Nebula] Please share the complete Daily security considerations · Tue, Nov 3 report exactly as save…';
   const rows = [
     { id: 'prompt-only', title: 'Security', preview: raw, searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
+    { id: 'prompt-only-colonless', title: 'Security', preview: colonless, searchSnippet: colonless, updatedAt: '2026-11-03T15:00:00Z' },
     { id: 'visible-match', title: 'Daily Brief', preview: 'Daily Report link', searchSnippet: raw, updatedAt: '2026-11-03T15:00:00Z' },
   ];
   ctx.WizLive = {
@@ -117,6 +121,7 @@ test('message search never exposes an automatic delivery prompt as its result sn
   const result = ctx.WizCore.chatSearch.query('window', 'daily report', () => {});
   await new Promise(resolve => setTimeout(resolve, 350));
   assert.equal(result.hits.has('prompt-only'), false, 'prompt-only server hit is not a visible result');
+  assert.equal(result.hits.has('prompt-only-colonless'), false, 'the compatibility prompt-only hit is not visible either');
   assert.equal(result.hits.has('visible-match'), true, 'a visible title or preview can still match');
-  assert.doesNotMatch(result.hits.get('visible-match').snippet, /\[AUTO\]|Please share the complete/);
+  assert.doesNotMatch(result.hits.get('visible-match').snippet, /\[(?:AUTO|Nebula:?)\]|Please share the complete/);
 });
