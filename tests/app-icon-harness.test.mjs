@@ -44,9 +44,9 @@ const sharedShadow = 'box-shadow: 0 0 0 2px rgba(225, 214, 255, .8), 0 10px 24px
 function assertSystemSelection(css) {
   const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const rules = [...clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)];
-  const shared = rules.find(([, selectors]) => selectors.trim().startsWith('.pal-app.sel .ic,'));
+  const shared = rules.find(([, selectors]) => selectors.trim().startsWith(`${selectedSystem},`));
   assert.ok(shared, 'system selection must extend the shared rule, not copy or weaken it');
-  assert.equal(shared[1].trim(), `.pal-app.sel .ic,\n${selectedSystem}`);
+  assert.equal(shared[1].trim(), `${selectedSystem},\n.pal-app.sel .ic`);
   assert.equal(shared[2].trim(), sharedShadow, 'selection changes only the existing shadow');
   // Same skin prefix and extra .sel give (0,5,1), above idle (0,4,1),
   // independent of source order. Do not remove the approved system idle styling.
@@ -59,7 +59,7 @@ test('selected system tiles reuse the exact shared ring without losing idle skin
   assertSystemSelection(desktopCss);
 });
 test('selection regression rejects the old cascade and a weakened outline contract', () => {
-  const old = desktopCss.replace(`.pal-app.sel .ic,\n${selectedSystem}`, '.pal-app.sel .ic');
+  const old = desktopCss.replace(`${selectedSystem},\n.pal-app.sel .ic`, '.pal-app.sel .ic');
   assert.throws(() => assertSystemSelection(old));
   assert.throws(() => assertSystemSelection(desktopCss.replace('rgba(225, 214, 255, .8)', 'rgba(225, 214, 255, .4)')));
   assert.ok(source.includes(String.raw`assert.match(hovered.shadow,/^rgba\(225, 214, 255, 0\.8\) 0px 0px 0px 2px,/`));
