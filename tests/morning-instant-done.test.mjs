@@ -45,9 +45,9 @@ for(const defect of ['foreign-app','detached','navigated','cross-origin','nested
 test('valid legacy pending is only invalidation, never an unbounded pending latch',async()=>{
  const f=fixture();f.message({status:state(),pending:true});await flush();assert.equal(f.c.current().pending,false);assert.equal(f.reads.length,1);assert.equal(f.c.current().data.done,0);
 });
-for(const malformed of ['json','total','hidden','day','effect'])test(`malformed/contradictory 200 ${malformed} reconciles synthetic committed state, no POST retry`,async()=>{
+for(const malformed of ['json','total','hidden','day','impossible-day','effect'])test(`malformed/contradictory 200 ${malformed} reconciles synthetic committed state, no POST retry`,async()=>{
  const f=fixture();const a=f.write();await flush();const good=effect(state(),{step:'workout',done:true});f.setBackend(good);
- const bad=structuredClone(good);if(malformed==='total')delete bad.total;if(malformed==='hidden')bad.hidden='yes';if(malformed==='day')bad.day='yesterday';if(malformed==='effect')bad.steps.workout.done=false;
+ const bad=structuredClone(good);if(malformed==='total')delete bad.total;if(malformed==='hidden')bad.hidden='yes';if(malformed==='day')bad.day='yesterday';if(malformed==='impossible-day')bad.day='2030-02-30';if(malformed==='effect')Object.assign(bad,state());
  f.requests[0].gate.resolve({ok:true,json:async()=>{if(malformed==='json')throw Error('broken JSON');return bad;}});
  await a;assert.equal(f.c.current().data.done,1);assert.equal(f.requests.length,1);assert.equal(f.reads.length,1);assert.equal(f.notices.length,0);
 });
