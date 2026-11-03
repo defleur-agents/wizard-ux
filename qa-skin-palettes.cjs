@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Isolated real-shell acceptance for Skin families and their Colours, phone + desktop.
+// Isolated real-shell acceptance for shared-main's single skin list, phone + desktop.
 // Static assets are this checkout; APIs are empty fixtures. No live box/network/writes.
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
@@ -9,20 +9,18 @@ const ORIGIN = 'http://look-separation.test';
 const TYPES = { '.css': 'text/css', '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 fs.mkdirSync(out, { recursive: true });
 const rows = [];
-async function families(page) {
-  return page.locator('[data-skinfamily]:visible').evaluateAll(es => es.map(e => e.dataset.skinfamily));
-}
+
 async function colours(page) {
   return page.locator('[data-skinpick]:visible').evaluateAll(es => es.map(e => e.dataset.skinpick));
 }
 async function check(page, skin) {
   await page.waitForFunction(id => window.WosSkin?.current === id, skin);
-  const expected = await page.evaluate(() => WosSkin.families.find(f => f.id === WosSkin.familyOf(WosSkin.current)).palettes);
-  assert.deepEqual(await colours(page), expected, 'Colours shows only the chosen skin family');
+  const expected = await page.evaluate(() => WosSkin.list.map(s => s.id));
+  assert.deepEqual(await colours(page), expected, 'one list shows every skin, independent of tweaks');
   assert.equal(await page.locator('[data-stgroup="look"] > h4:visible').textContent(), 'Skin');
-  assert.equal(await page.locator('.skp-colours > h4:visible').textContent(), 'Colours');
+
   assert.equal(await page.locator('[data-skinpick][aria-pressed="true"]:visible').getAttribute('data-skinpick'), skin);
-  assert.deepEqual(await families(page), await page.evaluate(() => WosSkin.families.map(f => f.id)));
+  assert.equal(await page.locator('[data-skinfamily]').count(), 0, 'no second family-control layer');
 }
 async function capture(page, shell, skin) {
   // Restore the pane's top after clicks; both control groups must be visible in the shot.
@@ -71,23 +69,22 @@ async function capture(page, shell, skin) {
       const page = await ctx.newPage(); page.on('pageerror', e => errors.push(e.message));
       const entry = shell === 'phone' ? '?shell=phone&view=skin' : 'desktop.html?view=skin';
       await page.goto(`${ORIGIN}/wizard-os-home/${entry}`, { waitUntil: 'load' });
-      await page.locator('[data-skinfamily="wizard"]:visible').waitFor({ timeout: 30000 });
+      await page.locator('[data-skinpick="nebula"]:visible').waitFor({ timeout: 30000 });
       await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}' });
       await check(page, 'nebula');
       await page.waitForFunction(() => !document.querySelector('.skp-wait'));
       await capture(page, shell, 'nebula');
       await page.locator('[data-skinpick="grove"]:visible').click(); await check(page, 'grove');
-      await page.locator('[data-skinfamily="mizel"]:visible').click(); await check(page, 'obsidian');
+      await page.locator('[data-skinpick="obsidian"]:visible').click(); await check(page, 'obsidian');
       await page.locator('[data-skinpick="obsidian-light"]:visible').click(); await check(page, 'obsidian-light');
       await capture(page, shell, 'obsidian-light');
-      await page.locator('[data-skinfamily="wizard"]:visible').click(); await check(page, 'grove');
-      await page.locator('[data-skinfamily="mizel"]:visible').click(); await check(page, 'obsidian-light');
+      await page.locator('[data-skinpick="grove"]:visible').click(); await check(page, 'grove');
+      await page.locator('[data-skinpick="obsidian-light"]:visible').click(); await check(page, 'obsidian-light');
       await page.locator('[data-newskin]:visible').click();
       await page.locator('[data-skin-name]:visible').fill('Quiet morning');
-      await page.locator('[data-skin-base]:visible').selectOption('wizard');
-      assert.deepEqual(await colours(page), await page.evaluate(() => WosSkin.families.find(f => f.id === 'wizard').palettes));
+      assert.deepEqual(await colours(page), await page.evaluate(() => WosSkin.list.map(s => s.id)));
       assert.equal(await page.locator('[data-skin-name]').inputValue(), 'Quiet morning');
-      assert.equal(await page.evaluate(() => WosSkin.current), 'obsidian-light', 'draft family choice does not change worn colour');
+      assert.equal(await page.evaluate(() => WosSkin.current), 'obsidian-light', 'draft choice does not change the worn skin');
       await page.locator('[data-skinpick="ember"]:visible').click();
       await page.screenshot({ path: path.join(out, `${shell}-new-skin.png`) });
       await page.locator('[data-st-back]:visible').click();
@@ -110,7 +107,7 @@ async function capture(page, shell, skin) {
         await page.locator('.dsettings-scrim').click({ position: { x: 5, y: 5 } });
         await page.waitForFunction(() => document.querySelector('#dsettings').hidden);
       }
-      assert.equal(writes.filter(w => /\/skins(?:\/|$)/.test(w.path)).length, 0, 'plain family/colour choices never write own-skin API');
+      assert.equal(writes.filter(w => /\/skins(?:\/|$)/.test(w.path)).length, 0, 'plain choices never write own-skin API');
       assert.deepEqual(errors, [], 'no uncaught browser errors');
       rows.push({ shell, behaviour: 'PASS', backStayed: true, outsideCloses: true, originalUrl: url, writes });
       await ctx.close();

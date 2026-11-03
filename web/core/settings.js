@@ -229,7 +229,7 @@
       if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
     }
   }
-  // Settings › Look: choose a skin family, then one of its colours. Tweaks stay independent.
+  // Settings › Look: every color in one grid (any author), then tweaks as their own choice. My skin stays an overlay.
   const lookName = (S, id) => S.list.find(k => k.id === id)?.name || '';
   // Skin picker: a grid of small preview cards, one per look, in the skins' own order. Each card is a miniature of
   // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
@@ -310,27 +310,19 @@
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
   }
   function newSkinHtml(S, draft) {
-    const family = S.families.find(f => f.id === S.familyOf(draft.base));
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Colour</h4><div class="skp" role="group" aria-label="New skin colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><h4>Base skin</h4><div class="skp" role="group" aria-label="Base skins">${S.list.map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
-    const fams = S.families || [{ id: cur, name: base, palettes: S.list.map(k => k.id) }];
-    const worn = S.familyOf?.(cur) || fams[0]?.id;
-    const family = fams.find(f => f.id === worn) || fams[0];
-    const tiles = fams.map(f => {
-      const k = S.list.find(k => k.id === (S.lastIn?.(f.id) || f.palettes[0]));
-      return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
-    }).join('');
-    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = `<div class="skp-colours"><h4>Colours</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colours">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
-
+    // Shared main's single list: no author/family filter. Pending removals remain hidden until custody settles.
+    const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} skins">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
+    const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S, ctx.skinRemoving)}${newTile()}</div></div>` : '';
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -344,12 +336,7 @@
   }, input(ctx, el) {
     if (!ctx.skinDraft || ctx.skinDraft.saving) return;
     if (el.matches('[data-skin-name]')) ctx.skinDraft.name = el.value;
-    if (el.matches('[data-skin-base]')) {
-      const S = window.WosSkin, family = S.families.find(f => f.id === el.value);
-      if (family && S.familyOf(ctx.skinDraft.base) !== family.id) {
-        ctx.skinDraft.base = S.lastIn(family.id); ctx.render();
-      }
-    }
+
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
@@ -390,8 +377,7 @@
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const quick = el.closest('[data-tweakauthor]');
     if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
-    const family = el.closest('[data-skinfamily]');
-    if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
+
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();
