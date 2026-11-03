@@ -28,7 +28,7 @@ test('James: Agent row is unconditional; one Chat picker starts with New chat, n
   assert.match(shared,/g.status !== 'running'/); assert.doesNotMatch(shared,/filter\([^\n]*privacy/);
 });
 test('James: changing agent resets Chat before a scoped fetch and guards stale responses', () => {
-  assert.match(shared,/target = '__new__'; threads = \[\]; loading = true/);
+  assert.match(shared,/target = initial \? dest : '__new__'; threads = \[\]; loading = true/);
   assert.match(shared,/&agent=\$\{encodeURIComponent\(agentId\)\}/);
   assert.match(shared,/seq !== loadSeq/); assert.match(shared,/chosenAgent = g; status.textContent = ''; loadThreads\(\)/);
 });
@@ -92,6 +92,31 @@ test('a permission revoked while another delivery holds the lane never sends', a
   const two=sandbox.deliver(w,chats,{id:2,files:[],authorize:()=>authorized});
   for(let n=0;n<10;n++)await Promise.resolve();authorized=false;release();
   assert.equal(await one,'sent');assert.equal(await two,'unsupported');assert.deepEqual(sent,[1]);
+});
+test('real share discovery rejects ambiguous IDs and never substitutes a missing explicit agent',()=>{
+  const start=shared.indexOf('  function shareAgents('),end=shared.indexOf('  // Android',start),window={};
+  vm.runInNewContext(shared.slice(start,end)+';Object.assign(window,{shareAgents,initialAgent});',{window});
+  const main={id:'main',is_default:true,status:'running'},other={id:'private',status:'running'};
+  for(const rows of [[main,{id:'',status:'running'}],[main,{id:' private',status:'running'}],[main,other,{...other}],[main,{id:'another',is_default:true}],[{...main,is_default:'false'}],[],{}])assert.throws(()=>window.shareAgents(rows));
+  const agents=window.shareAgents([main,other]);assert.equal(window.initialAgent(agents,{}).id,'main');assert.equal(window.initialAgent(agents,{agent:'private'}).id,'private');
+  assert.throws(()=>window.initialAgent([main],{agent:'private'}));assert.throws(()=>window.initialAgent([other],{agent:''}));
+});
+test('resumable import with all files removed still waits for the ordinary web receipt',async()=>{
+  const source=read('web/device.js'),start=source.indexOf('  async function onShare('),end=source.indexOf('  /* ================= #21',start);
+  let resolve,opened=false;const calls=[],meta={items:[{n:0,name:'x.pdf',bytes:4,mime:'application/pdf',sha256:'a'.repeat(64)}]};
+  const port={capability:async()=>({v:1}),async call(method){calls.push(method);return {queued:true};}};
+  const window={WosDevicePort:port,WizConfig:{has:()=>true},WizShareWizard:{open(options){assert.equal(options.durable,true);assert.equal(typeof options.nativeQueue,'function');opened=true;return new Promise(r=>resolve=r);}}};
+  const sandbox={window,DEV:()=>({shareMeta:()=>JSON.stringify(meta)}),J:JSON.parse,closeSheet(){},log(){},toast(){}};
+  vm.runInNewContext(source.slice(start,end)+';this.onShare=onShare;',sandbox);const pending=sandbox.onShare('synthetic');
+  for(let n=0;n<10;n++)await Promise.resolve();assert.equal(opened,true);assert.deepEqual(calls,[]);resolve('sent');await pending;assert.deepEqual(calls,['device.shares.finish']);
+});
+test('legacy async native file reads are awaited after close, never uploaded as [object Promise]',async()=>{
+  const start=shared.indexOf('  async function deliver('),end=shared.indexOf('  async function carry(',start);let reads=0;const uploads=[];
+  const sandbox={jobs:0,File,blob:x=>x instanceof Blob,inLane:fn=>fn(),carry:async()=> 'sent'};
+  vm.runInNewContext(shared.slice(start,end)+';this.deliver=deliver;',sandbox);
+  const job={authorize:()=>true,files:[{name:'x.pdf',type:'application/pdf',async read(){reads++;return new Blob(['exact native bytes']);}}]};
+  const result=await sandbox.deliver({}, {async uploadFile(file){uploads.push(file);assert.equal(await file.text(),'exact native bytes');return {id:'uploaded'};}},job);
+  assert.equal(result,'sent');assert.equal(reads,1);assert.equal(uploads.length,1);assert.equal(uploads[0].name,'x.pdf');
 });
 // APK source is outside this web-only port: the shipped APK is retained, not rebuilt.
 // Its newer native-only adapter assertions remain in the archived live source and future APK acceptance.

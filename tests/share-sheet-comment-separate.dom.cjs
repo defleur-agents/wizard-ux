@@ -6,12 +6,12 @@ const root=process.env.SHARE_TEST_TREE || path.resolve(__dirname,'..');
 const source=fs.readFileSync(path.join(root,'web/core/share-wizard.js'),'utf8');
 const tick=()=>new Promise(r=>setImmediate(r));
 async function until(check){for(let n=0;n<30;n++){if(check())return;await tick();}throw Error('DOM state did not settle');}
-function fixture({solo=false,delayedMain=false}={}){
+function fixture({solo=false,delayedMain=false,agentsInput}={}){
  const errors=[],sends=[],uploads=[],requests=[];
  const console=new VirtualConsole();console.on('jsdomError',e=>errors.push(String(e)));
  const dom=new JSDOM('<!doctype html><html><body><button id="previous">Previous focus</button></body></html>',{runScripts:'outside-only',url:'https://synthetic.invalid/wizard-os-home/',virtualConsole:console});
  const w=dom.window, d=w.document;let mainResolve;
- const agents=[{id:'main',label:'Archimedes',is_default:true,status:'running'},...solo?[]:[{id:'synthetic-private',label:'Synthetic Private',privacy:'private',status:'running'},{id:'stopped',label:'Stopped',status:'stopped'}]];
+ const agents=agentsInput || [{id:'main',label:'Archimedes',is_default:true,status:'running'},...solo?[]:[{id:'synthetic-private',label:'Synthetic Private',privacy:'private',status:'running'},{id:'stopped',label:'Stopped',status:'stopped'}]];
  w.WizConfig={agent:()=> 'Archimedes'};
  w.fetch=async url=>{
    requests.push(url);
@@ -84,6 +84,24 @@ function fixture({solo=false,delayedMain=false}={}){
   const r2=f.w.WizShareWizard.open({items:[item(0)]});await f.ready();f.click('[data-attrm="0"]');f.q('.dv-text').value='my words';
   f.w.WizShareWizard.back();assert.ok(f.q('.wz-share'),'a typed comment is worth a warning');assert.ok(f.q('.dv-backhint').textContent);f.click('.dv-cancel');assert.equal(await r2,'cancelled');
   f.dom.window.close();mark('nothing to lose cancels on the first Back; a comment alone still warns');
+ }
+ {
+  const f=fixture({solo:true});const result=f.w.WizShareWizard.open({text:'Private quoted material',comment:'Keep private',agent:'synthetic-private'});
+  await until(()=>f.q('.dv-status')?.textContent.includes('load agents'));assert.equal(f.q('[data-sharesend]').disabled,true);assert.equal(f.q('.dv-text').value,'Keep private');assert.equal(f.q('.dv-agent strong').textContent,'Unavailable');
+  f.click('.dv-scrim');await result;assert.equal(f.sends.length,0);f.dom.window.close();mark('missing explicit private agent fails closed instead of substituting the default');
+ }
+ {
+  const main={id:'main',label:'Main',is_default:true,status:'running'};
+  for(const agentsInput of [[main,{id:'',label:'Not default',status:'running'}],[main,{id:'other',label:'A',status:'running'},{id:'other',label:'B',status:'running'}],[{...main,is_default:'false'}]]){
+   const f=fixture({agentsInput}),result=f.w.WizShareWizard.open({text:'quote'});await until(()=>f.q('.dv-status')?.textContent.includes('load agents'));assert.equal(f.q('[data-sharesend]').disabled,true);f.click('.dv-scrim');await result;assert.equal(f.sends.length,0);f.dom.window.close();
+  }mark('malformed/default-typed/duplicate agent identities cannot become selectable routes');
+ }
+ {
+  const f=fixture(),result=f.w.WizShareWizard.open({text:'quote',agent:'synthetic-private',dest:'off-page-original',destLabel:'Original chosen chat'});await f.ready();assert.equal(f.q('.dv-chat strong').textContent,'Original chosen chat');f.click('[data-sharesend]');await result;await until(()=>!f.w.WizShareWizard.busy);assert.equal(f.sends[0].opts.sid,'off-page-original');assert.equal(f.sends[0].opts.agent,'synthetic-private');f.dom.window.close();mark('off-page retry keeps its exact original chat and label, never New chat');
+ }
+ {
+  const f=fixture();let receipt,settled=false;f.w.__wos.chats.sendChat=async(wid,text,how,audio,opts)=>{f.sends.push({text,opts});return new Promise(r=>receipt=r);};
+  const result=f.w.WizShareWizard.open({durable:true,android:true,items:[{n:0,name:'x.pdf',mime:'application/pdf',bytes:4,read(){throw Error('native file must not be read');}}],nativeQueue(){throw Error('all files were removed');}}).then(r=>{settled=true;return r;});await f.ready();f.click('[data-attrm="0"]');f.q('.dv-text').value='Only my comment';f.click('[data-sharesend]');await until(()=>receipt);assert.equal(f.q('.wz-share'),null);assert.equal(settled,false);assert.equal(f.uploads.length,0);receipt({durable:true});assert.equal(await result,'sent');assert.equal(f.sends[0].text,'Only my comment');assert.equal(f.sends[0].opts.files.length,0);f.dom.window.close();mark('comment-only native fallback closes immediately but keeps completion custody until receipt');
  }
  console.log(JSON.stringify({passed:pass,failed:0,checks,scope:'jsdom integration only; no rendered-browser/Android proof'}));
 })().catch(e=>{console.error(e);process.exitCode=1;});

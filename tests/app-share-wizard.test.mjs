@@ -58,7 +58,7 @@ test('real shared Chats send enqueues all 10 attachments once without consuming 
 });
 test('share destination wording keeps one Chat picker, a valid default and a decorative chevron',()=>{
  assert.match(shared,/class="dv-row dv-chat"[^>]*><span>Chat<\/span><strong>New chat<\/strong><span aria-hidden="true">⌄<\/span>/);
- assert.match(shared,/target = '__new__'/);
+ assert.match(shared,/dest = '__new__'/, 'fresh imports default to New chat; explicit retries retain dest');
  assert.match(shared,/\[\{id:'__new__', title:'\+ New chat', on:target === '__new__'\}, \.\.\.threads\.map/);
  assert.match(shared,/else \{ target = opt\.dataset\.dvpick; a\.closePicker\(\); paint\(\); \}/);
  assert.doesNotMatch(shared,/role="radiogroup"|value="pick"/);

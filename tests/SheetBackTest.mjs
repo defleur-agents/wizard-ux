@@ -1,6 +1,6 @@
 // Back on the share sheet never discards with a single press (James's standing rule). Ported from the live Android
 // SheetBackTest.java (same three cases), plus the web-only "nothing to lose" and wiring checks.
-// Named SheetBackTest.mjs on purpose: app-parity-gate inventories the live module `sheetbacktest`; `npm test` runs it explicitly.
+// Retain the live module name; sheet-back-policy.test.mjs imports these cases for default npm test discovery.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';

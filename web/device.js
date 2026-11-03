@@ -238,9 +238,9 @@
       else d.shareDone(id);
     };
     const resumable = cap && window.WizConfig?.has('resumable_uploads') && m.items?.length && m.items.every(f => /^[a-f0-9]{64}$/.test(f.sha256 || ''));
-    // durable (live 7bff0adf): on the web-upload path 'sent' waits for the message receipt, so the staged copy
-    // survives a mid-upload kill; the native queue path already holds its own custody.
-    const result = await window.WizShareWizard.open({durable:!resumable,
+    // Wait for either the web receipt or native queue acknowledgement before releasing custody.
+    // This also covers a resumable import whose owner removes every file and sends only a comment.
+    const result = await window.WizShareWizard.open({durable:true,
       android:true, text:m.text || '', subject:m.subject || '', from:m.from || '', skipped:m.skipped || 0,
       onPresented:cap ? () => port.call('device.shares.present', {shareId:id}).catch(() => {}) : null,
       onCancelled:cap ? () => finishNative().catch(() => {}) : null,

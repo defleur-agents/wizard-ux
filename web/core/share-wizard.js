@@ -18,6 +18,24 @@
     if (!files.length && !data?.text?.trim()) throw new Error('Nothing to share');
     return {files, text: data?.text || '', title: data?.title || ''};
   }
+  // Match WosAgents' routing-ID contract. Never repair malformed/ambiguous identities.
+  function shareAgents(rows) {
+    if (!Array.isArray(rows)) throw new Error('Agents unavailable');
+    const seen = new Set(), agents = rows.filter(Boolean);
+    for (const a of agents) {
+      if (typeof a.id !== 'string' || !/^[a-z0-9][a-z0-9-]{0,40}$/.test(a.id) || seen.has(a.id) || (a.is_default !== undefined && typeof a.is_default !== 'boolean')) throw new Error('Agents unavailable');
+      seen.add(a.id);
+    }
+    if (!agents.length || agents.filter(a => a.is_default === true).length > 1) throw new Error('Agents unavailable');
+    return agents;
+  }
+  function initialAgent(agents, options) {
+    const explicit = Object.hasOwn(options, 'agent');
+    if (explicit && typeof options.agent !== 'string') throw new Error('Selected agent is unavailable');
+    const selected = explicit ? agents.find(a => options.agent === '' ? a.is_default === true : a.id === options.agent) : agents.find(a => a.is_default === true) || agents[0];
+    if (!selected) throw new Error('Selected agent is unavailable');
+    return selected;
+  }
   // Android's filename-only subject / "Emailing file.pdf" is metadata, never the owner's comment.
   // Match the WHOLE value, not a substring: a real note mentioning a filename must survive.
   function sharedText({text = '', subject = '', items = []} = {}) {
@@ -75,8 +93,8 @@
     return new Promise(resolve => {
       const a = active = {el, mount, resolve, urls, focus: document.activeElement, abort: new AbortController(), picker: '', onCancelled, sb: window.WizSheetBack?.create(), hintTimer: 0};
       const $ = q => el.querySelector(q), status = $('.dv-status');
-      let agents = [], chosenAgent = null, target = '__new__', threads = [], loadSeq = 0, loading = true;
-      const route = () => chosenAgent && !chosenAgent.is_default ? chosenAgent.id : '';
+      let agents = [], chosenAgent = null, target = dest, threads = [], loadSeq = 0, loading = true;
+      const route = () => chosenAgent?.is_default === true ? '' : chosenAgent?.id || '';
       const label = () => chosenAgent?.label || window.WizConfig?.agent?.() || 'Wizard';
       a.hasContent = () => !!$('.dv-text').value.trim() || !!text.trim() || kept.some(Boolean); // anything the owner could lose
       a.clearHint = () => { clearTimeout(a.hintTimer); const h = $('.dv-backhint'); if (h) h.textContent = ''; };
@@ -85,7 +103,7 @@
       const paint = () => {
         $('.dv-title').textContent = `Send to ${label()}`; $('[role=dialog]').setAttribute('aria-label', `Send to ${label()}`);
         $('.dv-agent strong').textContent = chosenAgent ? label() : 'Unavailable';
-        $('.dv-chat strong').textContent = target === '__new__' ? 'New chat' : threads.find(s => s.id === target)?.title || 'Untitled chat';
+        $('.dv-chat strong').textContent = target === '__new__' ? 'New chat' : threads.find(s => s.id === target)?.title || options.destLabel || 'Selected chat';
         $('[data-sharesend]').disabled = !chosenAgent || chosenAgent.status !== 'running' || loading;
       };
       const showPicker = which => {
@@ -98,14 +116,14 @@
         wrap.querySelector('[aria-selected=true]:not(:disabled)')?.focus({preventScroll:true});
       };
       const loadThreads = async (initial = false) => {
-        const seq = ++loadSeq, agentId = route(); target = '__new__'; threads = []; loading = true; a.closePicker(); paint();
+        const seq = ++loadSeq, agentId = route(); target = initial ? dest : '__new__'; threads = []; loading = true; a.closePicker(); paint();
         try {
           const r = await fetch(`/wizard/hermes/api/sessions?limit=40&offset=0&include_children=false${agentId ? `&agent=${encodeURIComponent(agentId)}` : ''}`, {credentials:'same-origin', cache:'no-store', signal:a.abort.signal});
           if (!r.ok) throw new Error('Chats unavailable');
           const j = await r.json(); if (active !== a || seq !== loadSeq) return;
           threads = (Array.isArray(j.data) ? j.data : Array.isArray(j.sessions) ? j.sessions : Array.isArray(j.items) ? j.items : [])
             .map(s => ({...s,id:s.id || s.session_id})).filter(s => s.id && !s.archived && !s.hidden).slice(0,40);
-          if (initial && dest !== '__new__' && threads.some(s => s.id === dest)) target = dest;
+          // Keep an explicit retry destination even when it is outside this first page.
         } catch (e) {
           if (active !== a || seq !== loadSeq) return;
           if (e.name !== 'AbortError') status.textContent = 'Recent chats unavailable · you can still start a new chat';
@@ -120,11 +138,11 @@
           else {
             const r = await fetch('/wizard/v1/agents', {credentials:'same-origin', signal:a.abort.signal});
             if (r.status !== 404 && !r.ok) throw new Error('Agents unavailable');
-            agents = r.status === 404 ? [{id:'', label:window.WizConfig?.agent?.() || 'Wizard', is_default:true, status:'running'}] : (await r.json()).agents || [];
+            agents = r.status === 404 ? [{id:'hermes', label:window.WizConfig?.agent?.() || 'Wizard', is_default:true, status:'running'}] : (await r.json()).agents || [];
           }
           if (active !== a) return;
-          if (!agents.length) throw new Error('Agents unavailable');
-          chosenAgent = agents.find(g => (g.id === agent || (!agent && g.is_default))) || agents.find(g => g.is_default) || agents[0];
+          agents = shareAgents(agents);
+          chosenAgent = initialAgent(agents, options);
           await loadThreads(true);
         } catch (e) { if (active === a && e.name !== 'AbortError') { loading = false; status.textContent = 'Couldn’t load agents · close and try again'; paint(); } }
       })();
@@ -148,9 +166,9 @@
         const note = [$('.dv-text').value.trim(), text.trim()].filter(Boolean).join('\n\n'), chosen = items.filter((_, n) => kept[n]);
         if (!note && !chosen.length) { status.textContent = 'Add a comment first'; return; }
         let files = [];
-        try { if (!nativeQueue || !chosen.length) files = chosen.map(f => new File([f.blob || f.read()], f.name, {type:f.mime})); }
+        try { if (!nativeQueue || !chosen.length) files = chosen.map(f => f.blob ? new File([f.blob], f.name, {type:f.mime}) : {name:f.name,type:f.mime,read:f.read}); }
         catch (_) { status.textContent = 'Couldn’t read a shared item · remove it and try again'; return; }
-        const job = {files, note, target, agent:route(), agentLabel:label(), stay, title, text, from, comment:$('.dv-text').value, authorize, durable,
+        const job = {files, note, target, targetLabel:$('.dv-chat strong').textContent, agent:route(), agentLabel:label(), stay, title, text, from, comment:$('.dv-text').value, authorize, durable,
           nativeQueue: chosen.length ? nativeQueue : null, keptItemIndexes:items.flatMap((f,n) => kept[n] ? [f.n ?? n] : []), items:chosen, onPresented, onCancelled};
         const done = a.resolve;
         finish('sent', durable);
@@ -165,13 +183,18 @@
       if (!job.authorize()) return 'unsupported';
       if (job.nativeQueue) { await job.nativeQueue(job); return 'sent'; }
       const uploaded = [];
-      for (const f of job.files) uploaded.push(await chats.uploadFile(f));
+      for (let n = 0; n < job.files.length; n++) {
+        let f = job.files[n];
+        if (!blob(f)) { const data = await f.read(); if (!blob(data)) throw new Error('Shared file is unavailable'); f = job.files[n] = new File([data], f.name, {type:f.type}); }
+        if (!job.authorize()) return 'unsupported'; // permission may change while reading native bytes
+        uploaded.push(await chats.uploadFile(f));
+      }
       if (!job.authorize()) return 'unsupported'; // the app lost its share permission while uploading
       return await inLane(() => job.authorize() ? carry(w, chats, job, uploaded) : 'unsupported');
     } catch (_) {
       w.toast?.('!', 'Couldn’t send · try again', 3200);
-      const args = [{items:job.nativeQueue ? job.items : job.files.map(f => ({name:f.name,mime:f.type,bytes:f.size,blob:f})), text:job.text, title:job.title, from:job.from,
-        nativeQueue:job.nativeQueue, onPresented:job.onPresented, onCancelled:job.onCancelled, agent:job.agent, stay:job.stay, durable:job.durable, comment:job.comment, dest:job.target, error:'Couldn’t send · check the connection and try again'}, job.authorize];
+      const args = [{items:job.items, text:job.text, title:job.title, from:job.from,
+        nativeQueue:job.nativeQueue, onPresented:job.onPresented, onCancelled:job.onCancelled, agent:job.agent, stay:job.stay, durable:job.durable, comment:job.comment, dest:job.target, destLabel:job.targetLabel, error:'Couldn’t send · check the connection and try again'}, job.authorize];
       return new Promise(resolve => { if (active) retries.push({args, resolve}); else open(...args).then(resolve); });
     } finally { jobs--; }
   }
