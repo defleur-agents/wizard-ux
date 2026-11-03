@@ -23,6 +23,7 @@ const server = http.createServer((req,res) => {
  requests.push({ method:req.method, path:p });
  function send(data, type='application/json', status=200) { res.writeHead(status, {'content-type':type, 'cache-control':'no-store'}); res.end(type === 'application/json' ? JSON.stringify(data) : data); }
  if (req.method !== 'GET') return send({ error:'fixture refuses writes' }, 'application/json', 405);
+ if (p === '/wizard/v1/bootstrap') return send({bootstrap:1,settings:{agent:{name:'Wizard QA'}},capabilities:{},endpoints:{apps:'/wizard/v1/apps'}});
  if (p === '/wizard/v1/apps') return send({ apps });
  if (p.endsWith('/wizard/v1/app-logos')) return send({logos:{notes:'0123456789abcdef'}});
  if (p.includes('/store-data/app-logo/notes')) return send(fs.readFileSync(path.join(FIXTURE,'notes-live-logo.jpg')), 'image/jpeg');
@@ -76,7 +77,7 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
  for(const v of (BASELINE?['baseline','candidate']:['candidate'])) {
   version=v;
   for(const shell of ['phone','desktop']) {
-   const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},deviceScaleFactor:1,serviceWorkers:'block'});
+   const context=await browser.newContext({viewport:shell==='phone'?{width:390,height:844}:{width:1440,height:1000},hasTouch:shell==='phone',isMobile:shell==='phone',deviceScaleFactor:1,serviceWorkers:'block'});
    // Allow ONLY this synthetic local origin: no leaked provider/private-agent traffic.
    await context.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
    await context.addInitScript(({shell})=>{
@@ -85,26 +86,28 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
     localStorage.setItem('wux.applogos.v1',JSON.stringify({notes:'/wizard-os-home/store-data/app-logo/notes?v=0123456789abcdef'}));
    },{shell});
    const page=await context.newPage();page.setDefaultTimeout(12000);page.on('pageerror',e=>report.pageErrors.push({v,shell,message:e.message}));
-   await page.goto(origin+'/wizard-os-home/?shell='+shell,{waitUntil:'networkidle'});
-   await page.waitForFunction(()=>window.WizCore?.apps?.().APP?.notes && window.WizSigil && window.WosSkin);
+   // The real shell polls independently of readiness. Network-idle is not a boot contract.
+   // Navigate straight to the requested entrypoint; shell.js otherwise stops and redirects.
+   await page.goto(origin+'/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?shell='+shell,{waitUntil:'domcontentloaded'});
+   await page.waitForFunction(shell=>document.documentElement.dataset.shell===shell &&
+    (shell==='phone'?window.__wos?.openSheet:window.__wux?.openPicker) &&
+    window.WizConfig?.live && window.WizCore?.apps?.(shell==='phone'?'mobile':'desktop').APP?.notes &&
+    window.WizSigil && window.WosSkin,shell);
    assert.equal(await page.evaluate(()=>document.documentElement.dataset.shell),shell);
    let row,ic;
    if(shell==='phone') {
-    await page.evaluate(()=>window.__wux.launcher()); row='.launcher.open [data-app="notes"]';ic=row+' .ic';
+    await page.evaluate(()=>window.__wos.openSheet('launcher')); row='#launcher.open [data-app="notes"]';ic=row+' .ic';
    } else {
-    await page.keyboard.press('Control+o');row='#palette:not([hidden]) [data-app="notes"]';
-    // Current desktop picker may identify entries by palette index rather than app id.
-    if(!await page.locator(row).count()) {
-     await page.waitForSelector('#palette:not([hidden]) .pal-app,#palette:not([hidden]) .lapp');
-     const nodes=page.locator('#palette .pal-app,#palette .lapp');
-     const n=await nodes.evaluateAll(els=>els.findIndex(e=>e.textContent.trim()==='Notes'));
-     assert.ok(n>=0,'Notes in actual desktop picker'); await nodes.nth(n).evaluate(e=>e.dataset.qaNotes='true');row='[data-qa-notes="true"]';
-    }
-    ic=row+' .ic';
+    await page.keyboard.press('Control+o');
+    // Read the actual production id: settle() also uses native querySelector.
+    const target=page.locator('#palette:not([hidden]) .pal-app').filter({hasText:/^Notes$/});
+    await target.waitFor({state:'visible'});
+    row='#palette:not([hidden]) #'+await target.getAttribute('id');ic=row+' .ic';
    }
    for(const skin of ['obsidian','obsidian-light']) {
     await page.evaluate(s=>window.WosSkin.set(s),skin);
     await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
+    await page.waitForFunction(()=>!document.querySelector('.mz-intro'));
     await settle(page,ic); const before=await page.locator(ic).evaluate(style);
     await page.locator(row).hover();await settle(page,ic);const hovered=await page.locator(ic).evaluate(style);
     const name=[v,shell,skin,'hover'].join('-');await shot(page,name,ic);
@@ -122,6 +125,7 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
    // Open the real Notes app with an empty synthetic vault; never inspect owner notes.
    await page.locator(row).click();
    await page.waitForSelector('iframe.appframe');
+   await page.waitForFunction(()=>[...document.querySelectorAll('iframe.appframe')].some(f=>f.contentDocument?.querySelector('#tree')));
    const frames=page.frames().filter(f=>f.url().startsWith(origin+'/notes/'));assert.ok(frames.length,'real Notes view loaded');
    await frames.at(-1).waitForSelector('#tree');
    await shot(page,[v,shell,'notes-view'].join('-'),'iframe.appframe');
@@ -131,7 +135,8 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
  }
  // Standalone dark fallback is the actual Notes document with an empty synthetic vault.
  version='candidate';const standalone=await browser.newPage({viewport:{width:390,height:844}});
- await standalone.goto(origin+'/notes/',{waitUntil:'networkidle'});await standalone.waitForSelector('#tree');
+ await standalone.route('**/*',r=>new URL(r.request().url()).origin===origin?r.continue():r.abort());
+ await standalone.goto(origin+'/notes/',{waitUntil:'domcontentloaded'});await standalone.waitForSelector('#tree');
  await standalone.screenshot({path:path.join(OUT,'standalone-dark.png')});
  report.standalone=await standalone.evaluate(()=>({scheme:document.documentElement.dataset.colorScheme,base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base'),body:getComputedStyle(document.body).backgroundColor}));
  report.writes=requests.filter(r=>r.method!=='GET');
