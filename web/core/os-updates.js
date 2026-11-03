@@ -104,7 +104,7 @@
   function html() {
     if (!st || issue) {
       if (!off && !inflight) load();
-      return `<div class="st-group" data-osu-group><h4>Wizard OS (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? '<p class="st-hint">The server version and update preference could not be verified. Nothing has been changed.</p><button class="st-wide wz-button secondary" data-osu="retry">Try again</button>' : ''}</div>`;
+      return `<div class="st-group" data-osu-group><h4>Wizard OS (server)</h4><p class="st-note" role="status">${esc(issue || 'Checking server updates…')}</p>${issue ? `<p class="st-hint">The server version and update preference could not be verified. Nothing has been changed.</p><button class="st-wide wz-button secondary" data-osu="retry" ${inflight ? 'disabled aria-busy="true"' : ''}>${inflight ? 'Checking…' : 'Try again'}</button>` : ''}</div>`;
     }
     if (Date.now() - at > FRESH) load();
     const auto = st.mode === 'auto';
