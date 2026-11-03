@@ -171,6 +171,12 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .steps summary { list-style: none; cursor: pointer; padding: 4px 2px; display: flex; gap: 6px; align-items: center; }
 .steps summary::-webkit-details-marker { display: none; }
 .steps.live summary { color: var(--cyan); }
+/* Reply summary (--wos-reply-summary: on): the reply's plain-words ask first, the full reply folded under Details. */
+.msg.a .rsum { margin: 0 0 6px; font-weight: 600; }
+.msg.a .rdet > summary { list-style: none; cursor: pointer; padding: 4px 0; color: var(--ink-3); font-size: var(--wz-text-sm); }
+.msg.a .rdet > summary::-webkit-details-marker { display: none; }
+.msg.a .rdet > summary::before { content: '▸ '; }
+.msg.a .rdet[open] > summary::before { content: '▾ '; }
 .note-line { margin: 4px 0 4px 16px; padding-left: 10px; border-left: 1px solid var(--line-2); font-size: 13px; color: var(--ink-3); }
 .note-line p { margin: 0; }
 .dots { display: inline-flex; gap: 3px; } .dots b { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite; }

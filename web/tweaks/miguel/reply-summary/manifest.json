@@ -1,0 +1,11 @@
+{
+  "id": "miguel/reply-summary",
+  "name": "Short answer first",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "A long agent reply opens with its one-line plain answer; the full reply sits under Details"
+}

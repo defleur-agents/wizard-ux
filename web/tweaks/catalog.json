@@ -19,7 +19,8 @@
     "miguel/arrange-download",
     "wizard/app-borders",
     "miguel/refresh-button",
-    "wizard/unified-inbox"
+    "wizard/unified-inbox",
+    "miguel/reply-summary"
   ],
   "defaults": [
     "wizard/unified-inbox"
