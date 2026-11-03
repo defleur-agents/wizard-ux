@@ -63,3 +63,29 @@ test('Ready extensions remain root-only for default, host, container and restric
  const poll=src.match(/if \(!AGID\) window\.WizAppExtensions\?\.poll\(\);/);assert.ok(poll);
  for(const agent of ['', 'host-agent','container-agent','restricted-agent']){let calls=0;new Function('AGID','window',poll[0])(agent,{WizAppExtensions:{poll:()=>calls++}});assert.equal(calls,agent?0:1);}
 });
+
+test('throwing app disposal cannot retain later revoked grants or styles', async () => {
+  const f = fixture();
+  await f.api.configure({ apps: [declared(), declared({ id: 'other', url: '/other/' })] });
+  let disposed = false;
+  f.instances[0].dispose = () => { throw Error('broken disposal'); };
+  f.instances[1].dispose = () => { disposed = true; };
+  await f.api.configure({ apps: [] });
+  assert.equal(disposed, true);
+  assert.equal(f.api.html(), '');
+  assert.equal(f.links.filter(x => !x.removed).length, 0);
+  assert.equal(await f.api.handle('sample:done'), false);
+  assert.equal(await f.api.handle('other:done'), false);
+});
+test('sync and rejected async polling failures do not block other apps or Chats rendering', async () => {
+  const f = fixture();
+  await f.api.configure({ apps: [declared(), declared({ id: 'other', url: '/other/' }), declared({ id: 'third', url: '/third/' })] });
+  let polled = 0;
+  f.instances[0].poll = () => { throw Error('broken poll'); };
+  f.instances[1].poll = () => Promise.reject(Error('unavailable'));
+  f.instances[2].poll = () => { polled++; };
+  assert.doesNotThrow(() => f.api.poll());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(polled, 1);
+  assert.match(f.api.html(), /Task/);
+});
