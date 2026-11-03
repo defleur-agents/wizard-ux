@@ -1812,6 +1812,10 @@ test('round 20 item 1: ⌥. Focus folds both sides, closes the chat and the pane
   assert.match(js, /focusStash = \{ folded, vtFolded, thread: [^;]+, app: pane \? \{ id: pane\.id, desk: Number\(pane\.desk\) \} : null, wide, widths: \{ \.\.\.sized \} \};/, 'the stash: both sides, the chat, the app, wide, the widths');
   assert.match(js, /if \(st\.thread\) \{[^}]*api\.sessions\.open\(st\.thread\); \}/); assert.match(js, /goApp\(st\.app\.id, d \? d\.desk : null\);/); assert.match(js, /if \(st\.wide\) api\.after\(500, \(\) => setWide\(true\)\);/);
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\[data-aad-focus\] \{ --aad-side: 0px; --aad-rs: 0px; \}/);
+  // Home / Focus hide the panel without leaving its desk first: it must not be taken back as the panel before the new
+  // chat lands (live: ⌥` and ⌥. left the app open)
+  assert.match(js, /if \(!goBack\) dropped = \{ id: was\.id, desk: Number\(was\.desk\) \};/);
+  assert.match(js, /if \(h\.app && !dropped && \(want === h\.app/);
 });
 
 test('round 20 item 9: Ready is one flat list in priority order by default (tags on Needs you / Your call); Group Ready by status brings the sub-headers back', async () => {
