@@ -122,12 +122,12 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.equal(h.posts.length, 0);
 });
 // #803 supersedes #755's flat all-colours grid; colour and family remain independent.
-test('Look: separate family tiles and scoped Colours, with Layout gone', () => {
+test('Look: separate family tiles and scoped Colors, with Layout gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;
   assert.match(html, /data-skinfamily="wizard" aria-pressed="false"/);
   assert.match(html, /data-skinfamily="mizel" aria-pressed="true"/);
-  assert.match(html, /<h4>Colours<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
+  assert.match(html, /<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"/);
   assert.doesNotMatch(html, /data-skinpick="nebula"/, 'only the selected family supplies colours');
   assert.doesNotMatch(html, /data-layout-row|data-layoutpick|<b>Layout<\/b>/);
   h.s.WosSkin.current = 'nebula'; h.view.render();
@@ -179,7 +179,7 @@ test('New skin is last; nested Back returns to Look on both shells, never leaves
     h.s.WosMySkin = { recipes: [], state: { empty: true, script: {} } };
     h.s.WosExperience = { installed: async()=>[], defaults: async()=>({}), state: {tweaks:[]} };
     h.view.focus('look');
-    // #803: New skin is last in the family row, before the scoped Colours grid.
+    // #803: New skin is last in the family row, before the scoped Colors grid.
     assert.match(h.root.innerHTML, /aria-label="Skins"[^]*data-skinfamily="mizel"[^]*data-newskin[^]*\+ New skin<\/span><\/button><\/div><div class="skp-colours">/);
     h.act('data-newskin'); await tick();
     assert.match(h.root.innerHTML, /data-newskin-sheet/);
@@ -210,7 +210,7 @@ test('own tiles use base preview; own panel shows colours, edit hint and a neste
   h.s.WosMySkin = { recipes:[own],active:own,state:{script:{}} };
   h.view.focus('look');
   assert.match(h.root.innerHTML,/data-ownskin="mine" aria-pressed="true"/);
-  assert.match(h.root.innerHTML,/aria-label="Quiet colours"/); // #803 separates Skin from Colours.
+  assert.match(h.root.innerHTML,/aria-label="Quiet colors"/); // #803 separates Skin from Colors.
   assert.match(h.root.innerHTML,/change my Quiet skin so…/);
   h.act('data-ownskin-remove','mine'); assert.match(h.root.innerHTML,/role="alertdialog"/);
   assert.equal(h.view.back(),true); assert.equal(h.view.page,'appearance');

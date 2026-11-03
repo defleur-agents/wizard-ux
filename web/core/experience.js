@@ -195,7 +195,7 @@
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
-    // A colour pick does not change tweaks, but must retry a failed reconciliation.
+    // A color pick never changes tweaks; a failed reconciliation must retry.
     // Otherwise a stale timeout survives every later pick in this same preset.
     chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     // Quick button: turn on every tweak by this author; if all are on already, turn them off.
