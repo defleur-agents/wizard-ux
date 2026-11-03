@@ -55,7 +55,7 @@ Reuse:
 | Saved Wizards | `WizWorkspaces` (`web/core/workspaces.js`); [v1](workspaces.md) | See notes |
 | App setup | `WosAppSetup` (`app-setup.js`) | See notes |
 | Workspace sync and shared desk order | `WosWorkspaceSync` (`workspace-sync.js`), phone `insertPos`/`bringBeside` | See notes |
-| Chats: Focus/Filter/search, composer/files/read,… | `WizCore`; `chats.js`; `.css`; `WizLive.readyRank`; `setFocus`; `migrateChatsFocus`; `WizLive`; `CHATS.clearFilter(id::list)` | See notes | `WizLive.cardAt` `c.sOpen` `chatSearch.rank` `streamShown`
+| Chats: Focus/Filter/search, composer/files/read,… | `WizCore`; `chats.js`; `.css`; `WizLive.readyRank`; `setFocus`; `migrateChatsFocus`; `WizLive`; `CHATS.clearFilter(id::list)` | See notes | `WizLive.cardAt` `c.sOpen` `chatSearch.rank` `streamShown` `WizLive.groupSwitch`
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | See notes |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | See notes |
 | Repaint a live view without flicker (only changed… | `WosMorph.morph` (`dom-morph.js`) | `innerHTML` |

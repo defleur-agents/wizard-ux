@@ -8,15 +8,22 @@ const OURS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
 const JAMES = ['nebula', 'grove', 'tide', 'ember', 'signal'];
 
 // Evaluate live.js's chatLayout() in isolation with a given skin and stored choice.
-function layoutFor(skin, stored) {
+function layoutFor(skin, stored, groupSwitch = false) {
   const src = read('../web/live.js');
   const start = src.indexOf("  const LAYOUT_KEY = 'wos.chats.layout.v1';");
   const end = src.indexOf('  const archiveAfterDays');
   assert.ok(start > 0 && end > start, 'chatLayout block found');
-  const ctx = { document: { documentElement: { dataset: { skin } } }, localStorage: { getItem: () => stored } };
+  const ctx = { document: { documentElement: { dataset: { skin } } }, localStorage: { getItem: () => stored }, ...(groupSwitch ? { getComputedStyle: () => ({ getPropertyValue: k => k === '--wos-chats-group-switch' ? ' on' : '' }) } : {}) };
   vm.createContext(ctx);
   return vm.runInContext(src.slice(start, end) + '; chatLayout()', ctx);
 }
+
+test('all colors preserve the same saved grouping with the optional control on or off', () => {
+  for (const s of [...OURS, ...JAMES]) for (const on of [true, false]) {
+    assert.equal(layoutFor(s, null, on), 'day', `${s}/${on}: unchanged default`);
+    assert.equal(layoutFor(s, 'day', on), 'day'); assert.equal(layoutFor(s, 'status', on), 'status');
+  }
+});
 
 test("James's skins keep the stored layout and the By day default", () => {
   for (const s of JAMES) {
