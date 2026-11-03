@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const http = require('node:http');
 const assert = require('node:assert/strict');
+const { assertReadOnlyFixture } = require('./notes-fixture-write-policy.cjs');
 const ROOT = path.resolve(__dirname, '..');
 const OUT = process.env.QA_OUT || path.join(ROOT, 'qa', 'notes-sigil');
 const FIXTURE = process.env.QA_FIXTURE || path.join(ROOT, '..', 'fixture');
@@ -20,9 +21,13 @@ let version = 'candidate';
 const requests = [];
 const server = http.createServer((req,res) => {
  const p = new URL(req.url, 'http://localhost').pathname;
- requests.push({ method:req.method, path:p });
+ const request = { method:req.method, path:p };
+ requests.push(request);
  function send(data, type='application/json', status=200) { res.writeHead(status, {'content-type':type, 'cache-control':'no-store'}); res.end(type === 'application/json' ? JSON.stringify(data) : data); }
- if (req.method !== 'GET') return send({ error:'fixture refuses writes' }, 'application/json', 405);
+ if (req.method !== 'GET') {
+  request.status = 405; request.refusedBeforeHandlers = true;
+  return send({ error:'fixture refuses writes' }, 'application/json', 405);
+ }
  if (p === '/wizard/v1/bootstrap') return send({bootstrap:1,settings:{agent:{name:'Wizard QA'}},capabilities:{},endpoints:{apps:'/wizard/v1/apps'}});
  if (p === '/wizard/v1/apps') return send({ apps });
  if (p.endsWith('/wizard/v1/app-logos')) return send({logos:{notes:'0123456789abcdef'}});
@@ -166,11 +171,12 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
  await standalone.screenshot({path:path.join(OUT,'standalone-dark.png')});
  report.standalone=await standalone.evaluate(()=>({scheme:document.documentElement.dataset.colorScheme,base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base'),body:getComputedStyle(document.body).backgroundColor}));
  report.writes=requests.filter(r=>r.method!=='GET');
+ report.writePolicy=assertReadOnlyFixture(requests);
  fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(report,null,2));
  assert.equal(report.failures.length,0,JSON.stringify(report.failures));
  assert.equal(report.cases.length,BASELINE?12:6,'complete picker + Notes view matrix');
  assert.equal(report.standalone.scheme,'dark','standalone Notes stays dark');
- assert.equal(report.writes.length,0,'synthetic vault remains read-only');
+ assert.equal(report.pageErrors.length,0,'no browser page errors');
  console.log('Notes identity canary PASS',JSON.stringify({cases:report.cases.length,out:OUT,pageErrors:report.pageErrors}));
  }catch(e){fs.writeFileSync(path.join(OUT,'failure.json'),JSON.stringify({message:e.message,stack:e.stack,report,requests},null,2));for(const p of browser.contexts().flatMap(c=>c.pages()))await p.screenshot({path:path.join(OUT,'REJECTED-'+Date.now()+'.png')}).catch(()=>{});throw e;}
  finally{await browser.close();await new Promise(r=>server.close(r));}
