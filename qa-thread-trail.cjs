@@ -225,8 +225,21 @@ async function sendReturnChecks(b) {
     await p.locator(t.root+' [data-chback]').click();
     await t.newChat(); await t.holdSave(); await t.send('QA navigate failure '+skin); await t.openOther(); await t.release(true); await p.waitForTimeout(450);
     st=await t.state(); check(st.thread==='qa_tt_b',skin+': delayed failure cannot take over newer thread',st);
+    const failedText='QA navigate failure '+skin;
+    const persisted=await p.evaluate(()=>JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}'));
+    check(persisted.new?.text===failedText,skin+': late failed draft persists exact text before fresh New chat',persisted);
     await p.locator(t.root+' [data-chback]').click(); await t.newChat();
-    st=await t.state(); check(st.draft==='QA navigate failure '+skin,skin+': late failed draft remains recoverable',st);
+    st=await t.state(); check(st.thread==='__new__'&&st.draft==='',skin+': fresh New chat stays empty after late failure',st);
+    // Fresh New chat intentionally rotates the recovered live slot. Resume the
+    // saved words through the real list row, not a product/debug state setter.
+    await p.locator(t.root+' [data-chback]').click();
+    const saved=await p.evaluate(text=>Object.entries(JSON.parse(localStorage.getItem('wos.chat.drafts.v1')||'{}')).filter(([key,d])=>/^new:[a-z0-9]{4,40}$/.test(key)&&d.text===text).map(([key])=>key),failedText);
+    const draftRow=p.locator(t.list+' [data-chdraft]').filter({has:p.getByText(failedText,{exact:true})});
+    const rowCount=await draftRow.count();
+    const rowKey=rowCount===1 ? await draftRow.getAttribute('data-chdraft') : null;
+    check(saved.length===1&&rowCount===1&&rowKey===saved[0],skin+': unique real saved-draft row matches exact persisted failed text',{saved,rowCount,rowKey});
+    await draftRow.click();
+    st=await t.state(); check(st.thread==='__new__'&&st.draft===failedText,skin+': late failed draft remains recoverable',st);
     await p.evaluate(()=>WosSkin.set('obsidian')); await p.waitForTimeout(200);
     check(await p.evaluate(()=>WosSkin.current==='obsidian'&&document.documentElement.dataset.skin==='obsidian'&&!!getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim()),skin+': live skin change retains Appearance tokens');
     check(t.errors.length===0,skin+': no page errors',t.errors); await close(t.c);
