@@ -24,9 +24,9 @@ Reuse:
 | Home-screen identity + app root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK | per-app manifest injectors | manifest wins; frames untouched |
 | Own chat-box input: paste, drop, Enter | `WizardApp.composer.bind` (Chats' `web/core/composer-input.js`) | own paste/drop/Enter | `qa-composer-input.cjs` |
 | File chip before send | `WizardApp.attachChip.node` (Chats' tray, `core/attach-chip.js`) | own chip | `qa-attach-chip.cjs` |
-| Full-screen photo/video | `WizardApp.media.view(items, i)` = Chats' `WosChat.viewer` | own lightbox | Messenger `photo_viewer_browser.cjs` |
+| Media | `WizardApp.media.view(items, i)` = `WosChat.viewer` | own lightbox | `photo_viewer_browser.cjs` |
 | Same-app companion | `WizardApp.shell.openCompanion` → `WizCompanionPane` (`web/core/companion-pane.js`); [API](shared-app-services-host.md) | own desks/relays | `qa-companion-pane.cjs` |
-| Back/dismiss/outside tap | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates URL/origin | guards, 2nd tap | nested Back stays; repair returns |
+| Back/dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates URL/origin | guards, 2nd tap | nested Back; repair returns |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + live change keep state |
 | Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles/Nebula | literal colours |
 | Offline/connect | `ReachScreen` / `ReachPolicy`, `TailscaleGuide`, `ConnectActivity` / `ServerSettings`; web `WizReach` | duplicate UI |
@@ -52,7 +52,7 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; source-bound send/cache; Esc `CHATS.clearFilter(id::list)`; search: Archive last, collapse via `c.sOpen` only | duplicate Chats/Focus |
+| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; source-bound send/cache; desktop.js new-send defers to shared leave at ≤620px; Esc `CHATS.clearFilter(id::list)`; search: Archive last, `c.sOpen` only | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
