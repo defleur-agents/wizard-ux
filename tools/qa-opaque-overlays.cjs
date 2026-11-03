@@ -59,12 +59,12 @@ function html(test, skin, hosted) {
  body {background:var(--wz-base,#05030c)}
  #behind {position:fixed;inset:0;z-index:0;font:900 26px/30px sans-serif}
  #fixture {position:fixed;inset:0;z-index:1;isolation:isolate;background:none}
- #fixture > div {position:absolute;inset:0;background:none;opacity:1;transform:none;pointer-events:auto}
+ #fixture > div {position:absolute;inset:0;margin:0;background:none;opacity:1;transform:none;pointer-events:auto}
  /* Normalize only nested fixture placement; preserve production material/cascade. */
  [data-qa-middle] {position:absolute!important;inset:0!important;max-height:none!important;margin:0!important;padding:0!important}
  /* A retained raster layer prevents gradient dithering from changing on an unrelated repaint.
   * This does not supply an opaque backing: the old translucent materials still fail. */
- [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
+ [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;translate:none!important;rotate:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
  </style></head><body><div id="behind">${loud}</div><main id="fixture">${wrap}</main></body></html>`;
 }
 async function realShell(browser, results) {

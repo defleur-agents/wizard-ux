@@ -9,6 +9,7 @@ test('nested opacity fixture keeps production ancestry but normalizes only geome
   assert.ok(rule);assert.match(rule,/inset:0!important/);
   assert.doesNotMatch(rule,/background|opacity|filter|color|border/);
   assert.match(source,/test:test.name,box:b,clip/);
+  assert.match(source,/translate:none!important;rotate:none!important;scale:1!important/);
 });
 test('opacity browser closes even if a screenshot or assertion fails',()=>{
   assert.match(source,/finally\s*\{\s*await browser.close\(\)/);
