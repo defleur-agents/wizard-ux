@@ -25,3 +25,7 @@ description = "Public localStorage app-logo cache key, not a credential (existin
 condition = "AND"
 paths = ['''^web/core/apps\.js$''']
 regexes = ['''^wux\.applogos\.v1$''']
+description = "Verified notification route localStorage key at e4d8da50 line 24; not a credential"
+condition = "AND"
+paths = ['''^web/core/notif-bell\.js$''']
+regexes = ['''^wos\.notify\.route\.v1$''']
