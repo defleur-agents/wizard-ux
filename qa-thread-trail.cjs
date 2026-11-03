@@ -80,17 +80,18 @@ async function sendReturnChecks(b) {
   const evidence = [], contexts = new Map(), checks = [];
   const flush = () => fs.writeFileSync(path.join(OUT,'send-return-evidence.json'),JSON.stringify({pass,fail,checks,evidence,realRuns:0},null,2));
   const check = (condition,name,extra='') => { ok(condition,name,extra); checks.push({name,pass:!!condition,extra}); flush(); };
-  const close = async c => { const journal=evidence.find(x=>x.context===contexts.get(c)); if(journal) { journal.final=await Promise.race([c.pages()[0]?.evaluate(()=>({receipts:window.__qaReceipts,items:[...(window.WosOutbox?._items?.values()||[])].map(x=>({id:x.id,sessionId:x.sessionId,state:x.state,text:x.text,error:x.error,runId:x.runId}))})).catch(()=>null),sleep(1500).then(()=>({diagnosticTimeout:true}))]); } clearTimeout(contexts.get(c)); contexts.delete(c); await c.close(); flush(); };
+  const close = async c => { const journal=evidence.find(x=>x.context===contexts.get(c)); if(journal) { journal.final=await Promise.race([c.pages()[0]?.evaluate(()=>({receipts:window.__qaReceipts,models:window.WosModels&&{ready:WosModels.ready,options:WosModels.options,error:WosModels.error,loading:!!WosModels.loading,defaultOption:WosModels.defaultOption()},items:[...(window.WosOutbox?._items?.values()||[])].map(x=>({id:x.id,sessionId:x.sessionId,state:x.state,text:x.text,error:x.error,runId:x.runId}))})).catch(()=>null),sleep(1500).then(()=>({diagnosticTimeout:true}))]); } clearTimeout(contexts.get(c)); contexts.delete(c); await c.close(); flush(); };
   const closeAll = async () => { for (const c of [...contexts.keys()]) await close(c).catch(()=>{}); };
   try {
   async function boot(mobile, skin, half = false) {
     const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:1200,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
     contexts.set(c,setTimeout(()=>{void c.close().catch(()=>{});},60000)); // hard per-context case cap
     const intercepted = [], errors = [], heldRuns = [], receipts = [], requests = []; let holdAck = true;
-    const journal={mobile,skin,half,writes:intercepted,errors,receipts,requests}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
+    const journal={mobile,skin,half,writes:intercepted,errors,receipts,requests,models:[]}; Object.defineProperty(journal,'context',{value:contexts.get(c)}); evidence.push(journal); flush();
     await c.exposeBinding('__qaReceipt',(_source,value)=>{receipts.push(value);flush();});
+    await c.exposeBinding('__qaModelState',(_source,value)=>{journal.models.push(value);flush();});
     await c.route('**/*', async r => {
-      const q = r.request(), u = new URL(q.url()); requests.push({method:q.method(),path:u.pathname});
+      const q = r.request(), u = new URL(q.url()); requests.push({method:q.method(),path:u.pathname}); flush();
       const json = (status, body) => r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
       if (u.origin !== origin) return r.abort();
       if (!['GET','HEAD'].includes(q.method())) {
@@ -122,7 +123,22 @@ async function sendReturnChecks(b) {
     const p = await c.newPage(); p.setDefaultTimeout(8000); p.setDefaultNavigationTimeout(12000); p.on('pageerror',e=>{errors.push(String(e));flush();});
     await p.goto(URL_+(URL_.includes('?')?'&':'?')+'shell='+(mobile?'phone':'desktop'),{waitUntil:'load'});
     await p.waitForFunction(mobile => mobile ? !!window.__wos?.live?.session('qa_tt_a') : !!window.__wux?.live?.session('qa_tt_a'),mobile);
-    await p.waitForFunction(()=>window.WosModels?.defaultOption()?.value==='qa-model');
+    // The catalogue is lazy. Welcome's independent model/options fetch does not
+    // populate WosModels; await the real module, never synthesize its state.
+    await p.evaluate(async()=>{
+      const M=window.WosModels;
+      if(typeof M?.load!=='function')throw new Error('Fixture contract: WosModels.load missing');
+      const snapshot=phase=>({phase,ready:M.ready,options:M.options,error:M.error,loading:!!M.loading,defaultOption:M.defaultOption()});
+      await window.__qaModelState(snapshot('before-load'));
+      const pending=M.load();
+      await window.__qaModelState(snapshot('load-started'));
+      let cap;
+      try { await Promise.race([pending,new Promise((_,reject)=>{cap=setTimeout(()=>reject(new Error('Fixture model load exceeded 6s')),6000);})]); }
+      finally { clearTimeout(cap); await window.__qaModelState(snapshot('after-load')); }
+      const d=M.defaultOption();
+      if(!M.ready||M.error||M.loading||d?.value!=='qa-model'||d?.provider!=='qa-provider'||!M.options.some(o=>o.value===d.value&&o.provider===d.provider&&o.isGlobalDefault))
+        throw new Error('Fixture model catalogue invalid: '+JSON.stringify(snapshot('invalid')));
+    });
     await p.evaluate(mobile => {
       document.getElementById('wosWelcome')?.remove(); if (mobile) __wos.goDesk(1); else __wux.openChatsList();
       // done() persists sent before the hook; landed() may later compact text and
@@ -165,6 +181,17 @@ async function sendReturnChecks(b) {
       return async()=>{ack();await p.waitForFunction(key=>__qaReceipts.some(x=>x.id===key),write.key);const receipt=await p.evaluate(key=>__qaReceipts.find(x=>x.id===key),write.key);check(receipt.state==='sent'&&receipt.text===text&&receipt.sessionId===body.session_id&&receipt.runId===write.ack.run_id&&receipt.body===write.body,'persisted receipt bound to exact intercepted ACK',{receipt,write});};
     };
     return {c,p,id,root,list,state,newChat,send,holdSave,release,openOther,ack,sent,intercepted,errors};
+  }
+  // Parent runner admits the full matrix only after the exact real form can
+  // reach a held run and persist its matching ACK on every sealed source.
+  if(process.env.QA_SEND_RETURN_SMOKE==='1') {
+    try { const t=await boot(false,'nebula',true);
+      await t.newChat(); await t.holdSave(); await t.send('QA model route smoke'); await t.release(false);
+      await (await t.sent('QA model route smoke'))();
+      check(t.errors.length===0,'model route smoke has no page errors',t.errors);
+      console.log('MODEL_ROUTE_SMOKE_OK'); await close(t.c);
+    } catch(e) { check(false,'model route smoke exception',String(e.stack||e)); }
+    return;
   }
   for (const skin of ['nebula','grove']) { try {
     const t=await boot(false,skin,true), {p}=t;
