@@ -72,8 +72,131 @@ function routeFor() {
   };
 }
 
+// Focused offline admission for the desktop new-send adapter. This stays in the
+// thread-navigation suite; all content is synthetic and every request is local.
+// QA_SEND_RETURN=1 QA_WEB_DIR=<repo> QA_OUT=<dir> node qa-thread-trail.cjs https://wizard.test/wizard-os-home/
+async function sendReturnChecks(b) {
+  const evidence = [];
+  async function boot(mobile, skin, half = false) {
+    const c = await b.newContext({viewport:mobile ? {width:412,height:892} : {width:1200,height:900},isMobile:mobile,hasTouch:mobile,serviceWorkers:'block'});
+    const intercepted = [], errors = [], heldRuns = []; let holdAck = true;
+    await c.route('**/*', async r => {
+      const q = r.request(), u = new URL(q.url());
+      const json = (status, body) => r.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+      if (u.origin !== origin) return r.abort();
+      if (!['GET','HEAD'].includes(q.method())) {
+        intercepted.push({method:q.method(),path:u.pathname,body:q.postData() || ''});
+        if (u.pathname.endsWith('/v1/runs')) {
+          if (holdAck) await new Promise(resolve => heldRuns.push(resolve));
+          return json(202,{run_id:'qa_return_run',status:'queued'});
+        }
+        if (u.pathname === '/wizard/thread-seen') return json(200,{state:JSON.parse(q.postData() || '{}').state || {initializedAt:1,threads:{}}});
+        return json(200,{ok:true});
+      }
+      if (u.pathname === '/wizard/hermes/api/sessions') return json(200,{object:'list',data:Object.keys(FIX).map(fixSession),has_more:false,limit:100,offset:0,snapshot:'synthetic-return'});
+      const m = u.pathname.match(/^\/wizard\/hermes\/api\/sessions\/([^/]+)(\/messages)?$/);
+      if (m && FIX[m[1]]) return json(200,m[2] ? {object:'list',data:FIX[m[1]].rows().map(x=>({...x,session_id:m[1]})),pagination:{limit:500,offset:0}} : {session:fixSession(m[1])});
+      if (u.pathname === '/wizard/thread-seen') return json(200,{state:{initializedAt:1,threads:{}}});
+      if (u.pathname === '/wizard/v1/boomerangs') return json(200,{reminders:[]});
+      if (u.pathname.startsWith('/wizard/')) return json(200,{});
+      const rel = u.pathname.replace(/^\/wizard-os-home\//,'') || 'index.html';
+      const file = path.resolve(WEB,'web',rel), root = path.resolve(WEB,'web') + path.sep;
+      if (!file.startsWith(root) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return r.fulfill({status:404,body:''});
+      const mime = rel.endsWith('.html') ? 'text/html' : rel.endsWith('.css') ? 'text/css' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.svg') ? 'image/svg+xml' : rel.endsWith('.png') ? 'image/png' : 'application/javascript';
+      return r.fulfill({status:200,contentType:mime,body:fs.readFileSync(file)});
+    });
+    await c.addInitScript(skin => { localStorage.setItem('wos.coached','true'); localStorage.setItem('wos.tour.done','1'); localStorage.setItem('wos.skin',skin); },skin);
+    const p = await c.newPage(); p.on('pageerror',e=>errors.push(String(e)));
+    await p.goto(URL_,{waitUntil:'load'});
+    await p.waitForFunction(mobile => mobile ? !!window.__wos?.live?.session('qa_tt_a') : !!window.__wux?.live?.session('qa_tt_a'),mobile);
+    await p.evaluate(mobile => { document.getElementById('wosWelcome')?.remove(); if (mobile) __wos.goDesk(1); else __wux.openChatsList(); },mobile);
+    if (half) await p.evaluate(()=>__wux.newWin({app:'settings'}));
+    const id = await p.evaluate(mobile=>Object.values((mobile ? __wos : __wux).wins).find(w=>w.app==='chats'&&!w.agent).id,mobile);
+    if (!mobile) await p.evaluate(id=>__wux.focusWin(id),id);
+    await p.waitForTimeout(300);
+    const root = `.win[data-win="${id}"]`, list = mobile ? root : root + ' .pane-list';
+    const state = () => p.evaluate(({id,mobile})=>{
+      const w=(mobile ? __wos : __wux).wins[id], el=document.querySelector(`.win[data-win="${id}"]`);
+      const box=el.querySelector('.dchats'), list=el.querySelector(mobile ? '.ch-list' : '.pane-list');
+      return {thread:w.thread ?? null,attr:box?.dataset.thread,width:box?.getBoundingClientRect().width,list:!!list&&list.getBoundingClientRect().width>0&&getComputedStyle(list).display!=='none',draft:el.querySelector('.ch-compose textarea')?.value || ''};
+    },{id,mobile});
+    const newChat = async () => { await p.locator(list+' [data-chnew]').first().click(); await p.waitForSelector(root+' .ch-compose textarea',{state:'visible'}); };
+    const send = async text => {
+      await p.locator(root+' .ch-compose textarea').fill(text);
+      // Bubble listener runs after the real form's handler, in the SAME task.
+      await p.evaluate(({id,mobile})=>{document.addEventListener('submit',()=>{const w=(mobile ? __wos : __wux).wins[id],box=document.querySelector(`.win[data-win="${id}"] .dchats`); window.__qaSubmit={thread:w.thread??null,attr:box?.dataset.thread};},{once:true});},{id,mobile});
+      await p.locator(root+' .ch-send').click();
+      return p.evaluate(()=>__qaSubmit);
+    };
+    const holdSave = () => p.evaluate(()=>{const ob=WosOutbox,enqueue=ob.enqueue;window.__qaResume=null;ob.enqueue=async x=>{await new Promise((resolve,reject)=>{window.__qaResume={resolve,reject};});return enqueue.call(ob,x);};window.__qaUnhold=()=>{ob.enqueue=enqueue;};});
+    const release = async reject => { await p.evaluate(reject=>{const r=__qaResume;__qaUnhold();reject ? r.reject(new Error('QA disk full')) : r.resolve();},reject); };
+    const openOther = () => p.locator(list+' [data-chopen="qa_tt_b"]').first().click();
+    const ack = () => {holdAck=false;heldRuns.splice(0).forEach(r=>r());};
+    return {c,p,id,root,list,state,newChat,send,holdSave,release,openOther,ack,intercepted,errors};
+  }
+  for (const skin of ['nebula','grove']) {
+    const t=await boot(false,skin,true), {p}=t;
+    ok((await t.state()).width<=620,skin+': real tiled half-width Chats');
+    await t.newChat(); await t.holdSave();
+    const sync=await t.send('QA half new '+skin);
+    ok(sync.thread===null&&sync.attr==='',skin+': real New chat click/send returns list in same task',sync);
+    await p.waitForTimeout(450); let st=await t.state();
+    ok(st.thread===null&&st.attr===''&&st.list,skin+': list remains past legacy timer with save held',st);
+    if (process.env.QA_EXPECT_RED === '1') {
+      await p.screenshot({path:path.join(OUT,'baseline-half-new-send.png')});
+      fs.writeFileSync(path.join(OUT,'send-return-evidence.json'),JSON.stringify({pass,fail,state:st,sync,realRuns:0},null,2));
+      console.log(st.thread==='__new__'&&!st.list ? 'RED_EXPECTED half-width timer reopened __new__' : 'RED_NOT_REPRODUCED');
+      await t.c.close(); return;
+    }
+    await t.release(false);
+    await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.text.startsWith('QA half new')&&x.durable));
+    await p.waitForTimeout(350); st=await t.state();
+    ok(st.thread===null&&st.list,skin+': pending run ACK leaves list visible',st);
+    t.ack(); await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.text.startsWith('QA half new')&&x.state==='sent'));
+    st=await t.state(); ok(st.thread===null&&st.list,skin+': outbox ACK does not reopen New chat',st);
+    await p.screenshot({path:path.join(OUT,`half-new-send-${skin}.png`)});
+    await t.newChat(); await t.holdSave(); await t.send('QA recover '+skin); await t.release(true); await p.waitForTimeout(450);
+    st=await t.state(); ok(st.thread==='__new__'&&st.draft==='QA recover '+skin,skin+': failed save restores original composer without timer clearing words',st);
+    await p.locator(t.root+' [data-chback]').click();
+    await t.newChat(); await t.holdSave(); await t.send('QA navigate success '+skin); await t.openOther(); await p.waitForTimeout(450);
+    ok((await t.state()).thread==='qa_tt_b',skin+': opening another thread during save survives old timer');
+    await t.release(false); await p.waitForTimeout(450);
+    ok((await t.state()).thread==='qa_tt_b',skin+': newer thread survives save and ACK');
+    await p.locator(t.root+' [data-chback]').click();
+    await t.newChat(); await t.holdSave(); await t.send('QA navigate failure '+skin); await t.openOther(); await t.release(true); await p.waitForTimeout(450);
+    st=await t.state(); ok(st.thread==='qa_tt_b',skin+': delayed failure cannot take over newer thread',st);
+    await p.locator(t.root+' [data-chback]').click(); await t.newChat();
+    st=await t.state(); ok(st.draft==='QA navigate failure '+skin,skin+': late failed draft remains recoverable',st);
+    await p.evaluate(()=>WosSkin.set('obsidian')); await p.waitForTimeout(200);
+    ok(await p.evaluate(()=>!!getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim()),skin+': live skin change retains Appearance tokens');
+    ok(t.errors.length===0,skin+': no page errors',t.errors); evidence.push({skin,writes:t.intercepted,errors:t.errors}); await t.c.close();
+  }
+  // Neighbours: shared core API wide replies stay open; the wide shell's existing
+  // real-form shortcut still opens a fresh draft. Phone retains send-and-back.
+  const wide=await boot(false,'nebula');
+  ok((await wide.state()).width>620,'wide desktop uses two-pane layout');
+  await wide.p.locator(wide.list+' [data-chopen="qa_tt_a"]').first().click();
+  await wide.p.evaluate(id=>__wux.chats.sendChat(id,'QA wide keep thread'),wide.id); await wide.p.waitForTimeout(250);
+  ok((await wide.state()).thread==='qa_tt_a','wide desktop shared reply keeps thread');
+  await wide.p.locator(wide.list+' [data-chnew]').first().click(); await wide.send('QA wide real form'); await wide.p.waitForTimeout(450);
+  ok((await wide.state()).thread==='__new__','wide desktop real-form fresh-draft shortcut unchanged'); wide.ack();
+  ok(wide.errors.length===0,'wide desktop no page errors',wide.errors); evidence.push({skin:'wide',writes:wide.intercepted,errors:wide.errors}); await wide.c.close();
+  const phone=await boot(true,'nebula');
+  await phone.newChat(); await phone.holdSave(); const sync=await phone.send('QA phone new');
+  ok(sync.thread===null,'phone new send immediately returns list',sync); await phone.release(false); phone.ack(); await phone.p.waitForTimeout(450);
+  ok((await phone.state()).thread===null,'phone new ACK retains list');
+  await phone.p.locator(phone.list+' [data-chopen="qa_tt_a"]').first().click(); await phone.send('QA phone reply'); await phone.p.waitForTimeout(450);
+  ok((await phone.state()).thread===null,'phone reply still returns list');
+  await phone.p.locator(phone.list+' [data-chopen="qa_tt_b"]').first().click(); await phone.p.keyboard.press('Escape');
+  ok((await phone.state()).thread===null,'phone Back returns list'); await phone.p.keyboard.press('Escape');
+  ok(await phone.p.evaluate(()=>!!window.__wos&&document.visibilityState==='visible'),'phone root Back never exits');
+  ok(phone.errors.length===0,'phone no page errors',phone.errors); evidence.push({skin:'phone',writes:phone.intercepted,errors:phone.errors}); await phone.c.close();
+  fs.writeFileSync(path.join(OUT,'send-return-evidence.json'),JSON.stringify({pass,fail,evidence,realRuns:0},null,2));
+}
+
 (async () => {
-  const b = await chromium.launch({ executablePath: fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+  const b = await chromium.launch({ executablePath: EXEC && fs.existsSync(EXEC) ? EXEC : undefined, args: ['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream'] });
+  if (process.env.QA_SEND_RETURN === '1') { await sendReturnChecks(b); await b.close(); console.log(`${pass} passed, ${fail} failed`); process.exit(fail ? 1 : 0); }
   const ctx = await b.newContext({ viewport: { width: 412, height: 892 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, ignoreHTTPSErrors: true, serviceWorkers:'block' });
   await ctx.route('**/*', routeFor());
   const p = await ctx.newPage(); p.setDefaultTimeout(8000);
