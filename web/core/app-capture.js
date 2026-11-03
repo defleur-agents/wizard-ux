@@ -376,6 +376,7 @@
     if (!navigator.mediaDevices?.getUserMedia) throw fail('unsupported', 'Microphone capture is unavailable.');
     s.stage = 'microphone permission';
     s.stream = await navigator.mediaDevices.getUserMedia({ audio: s.opts.audio ?? { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    if (s.timedOut) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('start_abandoned', 'Capture start was abandoned.'); }
     s.stage = 'audio engine';
     // On the Android app the browser recorder skips the native phone-mic guard; ask Android where it really listens.
     if (await externalMic()) { s.stream.getTracks().forEach(t => t.stop()); s.stream = null; throw fail('external_mic', EXTERNAL_MIC); }
