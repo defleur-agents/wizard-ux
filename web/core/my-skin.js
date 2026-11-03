@@ -81,11 +81,25 @@
       else await startScript();
     } catch (_) { if (seq === refreshSeq) { verified = null; turnOff(); } }
   }
-  // The box owns recipes; this device caches first paint and migrates preview-only recipes once.
+  // The box owns recipes. Device previews stay recoverable without background box writes.
   const RECIPES = 'wos.own-skins.v1', BOX_CACHE = 'wos.own-skins.cache.v1', URL_SKINS = '/wizard/v1/skins';
   let serverMode = null, loadingRecipes = null, writing = Promise.resolve(), selecting = false;
   const clone = value => JSON.parse(JSON.stringify(value));
   let recipes = { version: 1, skins: [], active: null, migrated: false };
+  const DISMISSED = 'wos.own-skins.dismissed.v1';
+  function devicePreviews() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RECIPES)), dismissed = JSON.parse(localStorage.getItem(DISMISSED) || '[]');
+      if (saved?.version !== 1 || !Array.isArray(saved.skins)) return [];
+      return clone(saved.skins.filter(s => s && typeof s.id === 'string' && s.id.length <= 64 && typeof s.name === 'string' && s.name.trim() && s.name.length <= 60 && typeof s.base === 'string' && s.tweaks && typeof s.tweaks === 'object' && !Array.isArray(s.tweaks) && !recipes.skins.some(r => r.id === s.id) && !(Array.isArray(dismissed) && dismissed.includes(s.id))));
+    } catch (_) { return []; }
+  }
+  function dismissPreview(id) {
+    if (!devicePreviews().some(s => s.id === id)) return;
+    // Original bytes remain for rollback; only explicit recovery/discard hides this entry.
+    try { const saved = JSON.parse(localStorage.getItem(DISMISSED) || '[]'); localStorage.setItem(DISMISSED, JSON.stringify([...new Set([...(Array.isArray(saved) ? saved : []), id])])); } catch (_) {}
+    emit();
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(BOX_CACHE) || localStorage.getItem(RECIPES));
     if (saved?.version === 1 && Array.isArray(saved.skins)) {
@@ -293,6 +307,8 @@
   const api = {
     get FILE() { return own() ? 'Skins/' + own().id + '/skin.css' : FILE; },
     get recipes() { return clone(recipes.skins); },
+    get previews() { return devicePreviews(); },
+    dismissPreview,
     get active() { return own() ? clone(own()) : null; },
     create: boxAction(create, createOnBox), wear: boxAction(wear, wearOnBox), leave: boxAction(leave, leaveOnBox), update: boxAction(update, updateOnBox), remove: boxAction(remove, removeOnBox), restore: boxAction(restore, restoreOnBox),
     get storage() { return serverMode === true ? 'box' : serverMode === false ? 'local' : 'offline'; },

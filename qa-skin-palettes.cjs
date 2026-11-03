@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Isolated real-shell acceptance for shared-main's single skin list, phone + desktop.
+// Isolated real-shell acceptance for Skin families and their Colors, phone + desktop.
 // Static assets are this checkout; APIs are empty fixtures. No live box/network/writes.
 const fs = require('fs'), path = require('path'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
@@ -9,18 +9,20 @@ const ORIGIN = 'http://look-separation.test';
 const TYPES = { '.css': 'text/css', '.html': 'text/html', '.js': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.woff2': 'font/woff2' };
 fs.mkdirSync(out, { recursive: true });
 const rows = [];
-
+async function families(page) {
+  return page.locator('[data-skinfamily]:visible').evaluateAll(es => es.map(e => e.dataset.skinfamily));
+}
 async function colours(page) {
   return page.locator('[data-skinpick]:visible').evaluateAll(es => es.map(e => e.dataset.skinpick));
 }
 async function check(page, skin) {
   await page.waitForFunction(id => window.WosSkin?.current === id, skin);
-  const expected = await page.evaluate(() => WosSkin.list.map(s => s.id));
-  assert.deepEqual(await colours(page), expected, 'one list shows every skin, independent of tweaks');
+  const expected = await page.evaluate(() => WosSkin.families.find(f => f.id === WosSkin.familyOf(WosSkin.current)).palettes);
+  assert.deepEqual(await colours(page), expected, 'Colors shows only the chosen skin family');
   assert.equal(await page.locator('[data-stgroup="look"] > h4:visible').textContent(), 'Skin');
-
+  assert.equal(await page.locator('.skp-colours > h4:visible').textContent(), 'Colors');
   assert.equal(await page.locator('[data-skinpick][aria-pressed="true"]:visible').getAttribute('data-skinpick'), skin);
-  assert.equal(await page.locator('[data-skinfamily]').count(), 0, 'no second family-control layer');
+  assert.deepEqual(await families(page), await page.evaluate(() => WosSkin.families.map(f => f.id)));
 }
 async function capture(page, shell, skin) {
   // Restore the pane's top after clicks; both control groups must be visible in the shot.
@@ -59,6 +61,7 @@ async function capture(page, shell, skin) {
         if (req.method() === 'GET' && f.startsWith(web + path.sep) && fs.existsSync(f) && fs.statSync(f).isFile())
           return route.fulfill({ status: 200, contentType: TYPES[path.extname(f)] || 'application/octet-stream', body: fs.readFileSync(f) });
         if (req.method() !== 'GET') { writes.push({ method: req.method(), path: u.pathname }); return route.fulfill({ status: 403, contentType: 'application/json', body: '{}' }); }
+        if (u.pathname === '/wizard/v1/skins') return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({skins:[],active:null})});
         if (/\/skins(?:\/|$)|\/bootstrap$|\/_connections\//.test(u.pathname)) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
         return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(/\/sessions$/.test(u.pathname) ? { data: [], has_more: false } : {}) });
       });
@@ -69,26 +72,42 @@ async function capture(page, shell, skin) {
       const page = await ctx.newPage(); page.on('pageerror', e => errors.push(e.message));
       const entry = shell === 'phone' ? '?shell=phone&view=skin' : 'desktop.html?view=skin';
       await page.goto(`${ORIGIN}/wizard-os-home/${entry}`, { waitUntil: 'load' });
-      await page.locator('[data-skinpick="nebula"]:visible').waitFor({ timeout: 30000 });
+      await page.locator('[data-skinfamily="wizard"]:visible').waitFor({ timeout: 30000 });
       await page.addStyleTag({ content: '*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}' });
       await check(page, 'nebula');
       await page.waitForFunction(() => !document.querySelector('.skp-wait'));
       await capture(page, shell, 'nebula');
       await page.locator('[data-skinpick="grove"]:visible').click(); await check(page, 'grove');
-      await page.locator('[data-skinpick="obsidian"]:visible').click(); await check(page, 'obsidian');
+      await page.locator('[data-skinfamily="mizel"]:visible').click(); await check(page, 'obsidian');
       await page.locator('[data-skinpick="obsidian-light"]:visible').click(); await check(page, 'obsidian-light');
       await capture(page, shell, 'obsidian-light');
-      await page.locator('[data-skinpick="grove"]:visible').click(); await check(page, 'grove');
-      await page.locator('[data-skinpick="obsidian-light"]:visible').click(); await check(page, 'obsidian-light');
+      await page.locator('[data-skinfamily="wizard"]:visible').click(); await check(page, 'grove');
+      await page.locator('[data-skinfamily="mizel"]:visible').click(); await check(page, 'obsidian-light');
       await page.locator('[data-newskin]:visible').click();
       await page.locator('[data-skin-name]:visible').fill('Quiet morning');
-      assert.deepEqual(await colours(page), await page.evaluate(() => WosSkin.list.map(s => s.id)));
+      await page.locator('[data-skin-base]:visible').selectOption('wizard');
+      assert.deepEqual(await colours(page), await page.evaluate(() => WosSkin.families.find(f => f.id === 'wizard').palettes));
       assert.equal(await page.locator('[data-skin-name]').inputValue(), 'Quiet morning');
-      assert.equal(await page.evaluate(() => WosSkin.current), 'obsidian-light', 'draft choice does not change the worn skin');
+      assert.equal(await page.evaluate(() => WosSkin.current), 'obsidian-light', 'draft family choice does not change worn colour');
       await page.locator('[data-skinpick="ember"]:visible').click();
       await page.screenshot({ path: path.join(out, `${shell}-new-skin.png`) });
+      rows.push({shell,view:'new-skin',file:`${shell}-new-skin.png`});
       await page.locator('[data-st-back]:visible').click();
       await check(page, 'obsidian-light');
+      const previewBytes = JSON.stringify({version:1,active:null,skins:[{id:'device-fixture',name:'Synthetic device preview',base:'grove',tweaks:{'wizard/two-orbs':false}}]});
+      await page.evaluate(async bytes => {localStorage.setItem('wos.own-skins.v1',bytes); await WosMySkin.refresh();},previewBytes);
+      await page.getByText('Recover device skins',{exact:true}).click();
+      await page.locator('[data-skin-preview="device-fixture"]').click();
+      await page.locator('[data-skin-name]:visible').waitFor();
+      assert.equal(await page.locator('[data-skin-name]').inputValue(),'Synthetic device preview');
+      assert.equal(await page.evaluate(()=>WosSkin.current),'obsidian-light','recovering a draft never changes the worn skin');
+      await page.screenshot({path:path.join(out,`${shell}-device-recovery.png`)});
+      rows.push({shell,view:'device-recovery',file:`${shell}-device-recovery.png`});
+      await page.locator('[data-st-back]:visible').click();
+      await page.getByText('Recover device skins',{exact:true}).click();
+      await page.locator('[data-skin-preview-dismiss="device-fixture"]').click();
+      assert.equal(await page.evaluate(()=>WosMySkin.previews.length),0);
+      assert.equal(await page.evaluate(()=>localStorage.getItem('wos.own-skins.v1')),previewBytes,'explicit dismissal retains preview bytes');
       const url = page.url();
       await page.goBack(); // exercise shell's native-history guard, never navigate out of Wizard
       await page.waitForFunction(() => document.querySelector('[data-settings-root]'));
@@ -107,7 +126,7 @@ async function capture(page, shell, skin) {
         await page.locator('.dsettings-scrim').click({ position: { x: 5, y: 5 } });
         await page.waitForFunction(() => document.querySelector('#dsettings').hidden);
       }
-      assert.equal(writes.filter(w => /\/skins(?:\/|$)/.test(w.path)).length, 0, 'plain choices never write own-skin API');
+      assert.equal(writes.filter(w => /\/skins(?:\/|$)/.test(w.path)).length, 0, 'plain family/colour choices never write own-skin API');
       assert.deepEqual(errors, [], 'no uncaught browser errors');
       rows.push({ shell, behaviour: 'PASS', backStayed: true, outsideCloses: true, originalUrl: url, writes });
       await ctx.close();

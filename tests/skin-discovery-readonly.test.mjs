@@ -39,6 +39,10 @@ test('old Service plus two cached previews cannot create My skin 2 / My skin 3 o
     await M.refresh();
     assert.equal(store.get('wos.own-skins.v1'), preview, 'retain the local preview byte-for-byte');
     assert.equal(M.active.id, 'My skin');
+    assert.equal(M.previews[0].id, 'device-copy', 'legacy preview stays explicitly recoverable even with a box cache');
+    const reloaded = await boot(server, store); assert.equal(reloaded.previews[0].id, 'device-copy');
+    M.dismissPreview('device-copy'); assert.equal(M.previews.length, 0); assert.equal(store.get('wos.own-skins.v1'), preview);
+    assert.equal((await boot(server, store)).previews.length, 0, 'only the explicit dismissal persists');
   }
   console.log('DISCOVERY_METADATA', JSON.stringify(server.data));
   assert.deepEqual(server.writes, [], 'read-only discovery never submits background migration POSTs or activations');

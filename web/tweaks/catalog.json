@@ -20,10 +20,10 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
-    "miguel/archive-top",
     "wizard/orb-radial",
-    "miguel/group-by-day",
-    "wizard/new-send-list"
+    "wizard/new-send-list",
+    "miguel/archive-top",
+    "miguel/group-by-day"
   ],
   "defaults": [
     "wizard/unified-inbox"

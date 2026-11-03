@@ -113,8 +113,8 @@
   function agentsFor(kind, from) {
     const AG = window.WosAgents; if (!AG || !window.WizOpenAgentChats) return [];
     if (from.incognito) return [];
-    let list = AG.visible?.() || [];
-    if (!list.length) list = [{ id: AG.defaultId?.() || 'hermes', label: String(window.WizConfig?.agent?.() || '').trim() || 'Wizard', is_default: true, status: 'running', appearance: {}, permissions: {} }];
+    // Only the registry may declare a recipient. An empty/unavailable registry is not an agent.
+    let list = (AG.visible?.() || []).filter(a => a.status !== 'stopped');
     if (from.private) list = list.filter(a => a.id === from.agent);
     if (kind === 'image' || kind === 'file') list = list.filter(a => a.permissions?.files !== 'none');
     const order = new Map(list.map((a, i) => [a.id, i]));
