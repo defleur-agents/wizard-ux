@@ -118,7 +118,11 @@ async function shot(page,name,sel) { await settle(page,sel); await page.screensh
     const name=[v,shell,skin,'hover'].join('-');await shot(page,name,ic);
     const isMask=/\bsg-notes\b/.test(hovered.child||'') && !/sglogo/.test(hovered.child||'');
     report.cases.push({v,shell,skin,surface:'picker',before,hovered,isMask,screenshot:name+'.png'});
-    if(v==='baseline') assert.equal(isMask,false,'baseline must reach the known opaque-logo regression');
+    if(v==='baseline') {
+     assert.equal(isMask,false,'baseline must reach the known opaque-logo regression');
+     assert.match(hovered.child||'',/\bsglogo\b/,'baseline is the actual legacy logo, not a missing glyph');
+     assert.match(hovered.logo||'',/notes\?v=0123456789abcdef/,'baseline uses the pinned opaque Notes JPEG fixture');
+    }
     else {
      assert.equal(isMask,true,'Notes uses shared approved mask');assert.ok(hovered.mask&&hovered.mask!=='none');assert.equal(hovered.logo,'');
      if(shell==='desktop') {
