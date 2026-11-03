@@ -375,7 +375,7 @@ window.WizCore.chats = function createChats(H) {
    * all steps done = no card until Morning's day rolls over.
    * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
    * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
-  const MORNING = { data: null, at: 0, busy: false };
+  const MORNING = { data: null, at: 0, busy: false, pending: false, epoch: 0 };
   const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
   function morningSet(d) {
     // A stale poll or app message cannot undo the owner's pending dismiss.
@@ -384,16 +384,30 @@ window.WizCore.chats = function createChats(H) {
     const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || ''), hidden: !!d.hidden } : null;
     if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
     MORNING.data = next;
-    // Desktop's ::list proxy has no app field; the owning window is Chats.
-    for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && H.win(owner(id))?.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
+    // Explicit domain edits repaint just their card even while the background list is held,
+    // including desktop's ::list beside an open thread. Never rebuild the reader/composer.
+    for (const id of Object.keys(CH)) {
+      const w = H.win(id), el = elOf(id);
+      if (!w || H.win(owner(id))?.app !== 'chats' || !el?.querySelector('.ch-list')) continue;
+      const card = el.querySelector('.ch-morning-w'), html = morningCard();
+      if (card) { if (html) card.outerHTML = html; else card.remove(); }
+      else if (html) el.querySelector('[data-slot="ready-top"]')?.insertAdjacentHTML('afterend', html);
+      if (!w.thread && !holdList(id)) renderChatList(w, el);
+    }
   }
   function morningPoll() {
-    if (MORNING.busy || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
-    MORNING.busy = true; MORNING.at = Date.now();
+    if (MORNING.busy || MORNING.pending || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
+    MORNING.busy = true; MORNING.at = Date.now(); const epoch = MORNING.epoch;
     fetch('/morning/api/status', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
-      .then(morningSet, () => {}).finally(() => { MORNING.busy = false; });
+      .then(d => { if (!MORNING.pending && epoch === MORNING.epoch) morningSet(d); }, () => {}).finally(() => { MORNING.busy = false; });
   }
-  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
+  addEventListener('message', e => {
+    if (e.origin !== location.origin || e.data?.type !== 'wizard:morning') return;
+    // Legacy/background messages cannot erase an acknowledged local pending projection.
+    if (MORNING.pending && typeof e.data.pending !== 'boolean') return;
+    MORNING.pending = e.data.pending === true; MORNING.epoch++;
+    MORNING.at = Date.now(); morningSet(e.data.status);
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
   // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
   // routine, it's evening, stop showing it). Morning owns the flag so every device agrees; undo lives in Morning.

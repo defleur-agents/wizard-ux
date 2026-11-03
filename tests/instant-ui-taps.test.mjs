@@ -14,7 +14,7 @@ for (const held of [false, true]) test(`Morning removes every pane before fetch 
     nodes.push({ parentNode:parent,nextSibling:null,connected:true,remove(){this.connected=false;events.push('remove');} });
   }
   const w = { id:'desk',app:'chats',thread:'__new__' }, pane = { id:'desk::list',thread:null };
-  const c = { MORNING:{data:state},H:{root:()=>({querySelectorAll:()=>nodes.filter(n=>n.connected)}),win:id=>id==='desk'?w:pane},CH:{'desk::list':{}},owner:id=>id.replace(/::list$/,''),elOf:()=>({querySelector:()=>true}),holdList:()=>held,renderChatList:()=>events.push('render'),toast:(...a)=>events.push(a),fetch:()=>{assert.ok(nodes.every(n=>!n.connected));assert.equal(c.MORNING.data.hidden,true);events.push('fetch');return gate.promise;} };
+  const c = { MORNING:{data:state},H:{root:()=>({querySelectorAll:()=>nodes.filter(n=>n.connected)}),win:id=>id==='desk'?w:pane},CH:{'desk::list':{}},owner:id=>id.replace(/::list$/,''),elOf:()=>({querySelector:s=>s==='.ch-list'?true:null}),morningCard:()=>'',holdList:()=>held,renderChatList:()=>events.push('render'),toast:(...a)=>events.push(a),fetch:()=>{assert.ok(nodes.every(n=>!n.connected));assert.equal(c.MORNING.data.hidden,true);events.push('fetch');return gate.promise;} };
   vm.createContext(c);vm.runInContext(fn('morningSet')+'\n'+fn('morningHide'),c);
   c.morningHide(); c.morningHide();
   assert.deepEqual(events,['remove','remove','fetch'],'no duplicate write or background rerender');
