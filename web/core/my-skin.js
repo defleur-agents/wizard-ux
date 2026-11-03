@@ -181,22 +181,9 @@
         let list = await request('');
         if (!Array.isArray(list.skins)) throw new Error('Invalid skins response');
         serverMode = true;
-        // Checkpoint each preview recipe only after the box confirms it. Failed uploads retry next refresh.
-        let legacy;
-        try { legacy = JSON.parse(localStorage.getItem(RECIPES)); } catch (_) {}
-        if (legacy?.version === 1 && Array.isArray(legacy.skins)) {
-          const active = legacy.active;
-          for (const s of [...legacy.skins]) {
-            if (!s || typeof s.name !== 'string' || !s.base || !s.tweaks) continue;
-            let found = list.skins.find(k => k.name === s.name && (s.legacy || (k.base === s.base && JSON.stringify(k.tweaks || {}) === JSON.stringify(s.tweaks))));
-            if (!found) { const made = await request('', 'POST', { name: s.name, base: s.base, tweaks: s.tweaks, migration_key: s.id, activate: s.id === active }); found = { id: made.id }; }
-            else if (s.id === active) await request('/active', 'PUT', { id: found.id });
-            legacy.skins = legacy.skins.filter(k => k.id !== s.id);
-            localStorage.setItem(RECIPES, JSON.stringify(legacy));
-          }
-          localStorage.removeItem(RECIPES);
-          list = await request('');
-        }
+        // Discovery is read-only: an old Service ignores migration_key and creates
+        // suffixed empty folders. Keep device previews for recovery; never POST a
+        // named skin or change the box selection without an explicit owner action.
         receive(list);
       } catch (e) {
         if (e.older) { serverMode = false; migrate(state.css); }
