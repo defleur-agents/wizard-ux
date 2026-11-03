@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, READY_SORTS, sortOf, PRIORITY_TIP, readyGroups, readyFlat, readyStep } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -251,6 +251,7 @@ export default function desktop(api) {
     // the sidebar opens with a short reveal (clip, no width animation); folding snaps to the rail
     if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
+    if (open) closeFly();
     togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
     rTog.title = 'Open sidebar (Ctrl+Shift+S)';
@@ -268,10 +269,14 @@ export default function desktop(api) {
   let offPeek = null;
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
   const secOpen = sectionsOpen(api.storage.get('sections'));
-  /* round 18 item 3 (Miguel, 3 Nov 2026): Ready's order = the stock Chats Filter's (Priority / Newest / Oldest, its own
-   * saved choice, api.sessions.order); item 4: the open Ready is grouped by status like the rail, the order inside */
-  const readyOrder = () => sortOf(api.sessions.order?.() || 'priority');
-  api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); });
+  /* round 18 item 4: the open Ready is grouped by status like the rail. Round 19 item 2 (Miguel, 3 Nov 2026: the
+   * grouping IS the priority): only the order inside each group, Newest first / Oldest first, chosen in Settings ›
+   * Chats & app screens and kept where stock Chats keeps its order (api.sessions.order; its Priority or By subject
+   * reads as Newest here). The sidebar's own sort control shows only when 'Show sort control in sidebar' is on. */
+  const readyOrder = () => groupOrder(api.sessions.order?.());
+  const sortShown = () => api.storage.get('sortShown') === true;
+  const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
+  api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
@@ -564,6 +569,51 @@ export default function desktop(api) {
     if (!menu) return;
     menu.card.remove(); menu.wrap.classList.remove('is-held'); menu = null; offMenuBack?.(); offMenuBack = null;
   }
+  /** round 19 item 2: the sidebar's sort menu (when shown): Newest first / Oldest first, the current one checked */
+  function openSortMenu(btn) {
+    if (menu?.wrap === btn) { closeMenu(); return; }
+    closeMenu();
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': 'Order inside each group' });
+    card.append(el('h3', 'aad-pop-h', { text: 'Order inside each group' }));
+    for (const [v, w0] of GROUP_ORDERS) {
+      const on = v === readyOrder(), it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), 'data-order': v });
+      it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
+      api.listen(it, 'click', () => { closeMenu(); setOrder(v); });
+      card.append(it);
+    }
+    scene.append(card);
+    const r = btn.getBoundingClientRect();
+    card.style.left = Math.round(Math.max(8, Math.min(r.right - 200, (globalThis.innerWidth || 1440) - 216))) + 'px';
+    card.style.top = Math.round(r.bottom + 4) + 'px';
+    menu = { card, wrap: btn }; btn.classList.add('is-held'); btn.setAttribute('aria-expanded', 'true');
+    offMenuBack = api.back.push(closeMenu);
+    api.after(0, () => card.querySelector('.is-on')?.focus?.({ preventScroll: true }));
+  }
+
+  /* ---------- round 19 item 2: the order in Settings › Chats & app screens (this view's own group there) ---------- */
+  const setNode = el('div', 'st-group aad-stg', { 'data-aad-setting': '' });
+  function paintSetting() {
+    const o = readyOrder(), shownNow = sortShown();
+    const radios = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Order chats within each group' });
+    for (const [v, w0] of GROUP_ORDERS) {
+      const b = el('button', 'st-row wz-row', { type: 'button', role: 'radio', 'aria-checked': String(v === o), 'data-aad-order': v });
+      const tx = el('span', 'st-tx'); tx.append(el('b', '', { text: w0 }));
+      b.append(el('span', '', { 'aria-hidden': 'true', text: v === o ? '◉' : '○' }), tx);
+      api.listen(b, 'click', () => setOrder(v));
+      radios.append(b);
+    }
+    const sw = el('button', 'st-row wz-row', { type: 'button', role: 'switch', 'aria-checked': String(shownNow), 'data-aad-sortshown': '' });
+    const swTx = el('span', 'st-tx'); swTx.append(el('b', '', { text: 'Show sort control in sidebar' }), el('small', '', { text: 'A small Newest / Oldest menu on Ready\'s header.' }));
+    const knob = el('span', 'sw' + (shownNow ? ' on' : ''), { 'aria-hidden': 'true' }); knob.append(el('i'));
+    sw.append(swTx, knob);
+    api.listen(sw, 'click', () => { api.storage.set('sortShown', !sortShown()); paintSetting(); paintList(true); });
+    setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }),
+      el('p', 'aad-stg-l', { text: 'Order chats within each group' }), radios,
+      el('p', 'aad-stg-n', { text: 'Chats are grouped by status first (Needs you, Your call, FYI, …). The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }),
+      sw);
+  }
+  paintSetting();
+  api.desk.setting?.('ai-apps-order', setNode);
 
   /* ---------- paint the sidebar (only when what it lists changed: renders come often while a chat works) ---------- */
   const label = text => el('h3', 'aad-lab', { text });
@@ -574,7 +624,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), sortShown(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -616,13 +666,14 @@ export default function desktop(api) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
           else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : EMPTY[k] }));
         }
-        if (k === 'ready') {
-          // round 18 item 3a: the stock Chats sort choice on Ready's header (Priority / Newest / Oldest)
+        if (k === 'ready' && sortShown()) {
+          // round 19 item 2: the order inside each group on Ready's header only when Settings shows it (off at first);
+          // a small menu in the shell's own type (never a native select: its list drew in the system font)
           const row = el('div', 'aad-sech');
-          const sort = el('select', 'aad-sort', { 'aria-label': 'Order Ready', title: `${PRIORITY_TIP}\nReady is grouped by status first; the order applies inside each group. The same choice as Chats' own Filter.` });
-          for (const [v, w0] of READY_SORTS) { const o = el('option', '', { value: v, text: w0 }); if (v === readyOrder()) o.setAttribute('selected', ''); sort.append(o); }
-          sort.value = readyOrder();
-          api.listen(sort, 'change', () => { api.sessions.setOrder?.(sort.value); paintList(true); });
+          const word0 = (GROUP_ORDERS.find(([v]) => v === readyOrder()) || GROUP_ORDERS[0])[1];
+          const sort = el('button', 'aad-sortb', { type: 'button', 'aria-haspopup': 'menu', 'aria-label': `Order inside each group: ${word0}. Change`, title: 'Order inside each status group' });
+          sort.append(el('span', 'aad-sortb-w', { text: word0.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
+          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort); });
           row.append(hd, sort);
           out.push(row, body);
         } else out.push(hd, body);
@@ -642,39 +693,87 @@ export default function desktop(api) {
   }
   /* The rail (round 12, Miguel: the icon tiles were unreadable: words, no status icons; round 16: 52 px). Snoozed, then
    * Ready and under it each stock Chats status with chats in it (STATES: core/chats.js stiKind's order; plain Ready
-   * chats count in Ready only), each a count with a short word under it (RAIL_WORDS; the full words in its tip).
-   * Archive and Working stay in the open sidebar. One click opens the sidebar on that section, scrolled to it; round 18
-   * item 4c: a status opens it scrolled to that status's group in Ready, briefly highlighted (no filter, no chip). */
-  function openSection(k, state = '') {
-    secOpen[k] = true; api.storage.set('sections', { ...secOpen });
-    if (q) setSearch(false);
-    if (narrow()) { if (!peek) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } }
-    else { folded = false; api.storage.set('folded', false); }
-    paintSide(); paintList(true);
-    // round 18 item 4c (Miguel): a status expands the sidebar and scrolls to its group with a brief highlight (no filter)
-    const hd = (state && scroll.querySelector?.(`.aad-grp[data-state="${state}"]`)) || scroll.querySelector?.(`.aad-sec[data-sec="${k}"]`);
-    const top = hd?.getBoundingClientRect?.().top, box = scroll.getBoundingClientRect?.().top;
-    if (state && typeof top === 'number' && typeof box === 'number') scroll.scrollTop = Math.max(0, (scroll.scrollTop || 0) + top - box - 4);
-    if (hd && state) { hd.classList.add('is-flash'); api.after(1200, () => hd.classList.remove('is-flash')); }
+   * chats count in Ready only), each a count with a short word under it (RAIL_WORDS; the full words in its label).
+   * Archive and Working stay in the open sidebar.
+   * Round 19 item 1 (Miguel, 3 Nov 2026: fully usable while folded, nothing expands but ◫): a click opens that group's
+   * FIRST chat in the docked chat column, the rail staying folded; the same item again opens the next one (wrapping).
+   * The current group is marked and shows where the chat in front sits in it ('1/3' under its word). Hovering an item
+   * (300 ms) shows a small flyout listing its chats (title, time); a click opens one; Esc closes it. ⌥↓ / ⌥↑ still walk
+   * the whole Ready. Nothing advances on send (stock has no such setting). */
+  let railLast = '';
+  const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || null; };
+  const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder());
+  function railGo(key) {
+    closeFly();
+    const s = readSessions(), ids = railRows(s, key, readyOrder()).map(r => r.id); if (!ids.length) return;
+    const a = railNow(), nx = railNext(ids, a && a.key === key ? curChat() : null); if (!nx) return;
+    openChat(nx.id, key);
   }
-  function railRow(k, n, word0, state = '') {
-    const sub = !!state, tip = sub ? `${n} ${word0}: open the sidebar there` : `${word0}, ${n}: open the sidebar there`;
-    const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero'), { type: 'button', role: 'listitem', 'data-k': sub ? state : k, title: tip, 'aria-label': tip });
-    b.append(el('span', 'aad-rk-n', { text: n > 99 ? '99+' : String(n) }), el('span', 'aad-rk-w', { text: RAIL_WORDS[sub ? state : k] || word0 }));
-    api.listen(b, 'click', () => openSection(k, state));
+  function openChat(id, key) {
+    if (q) setSearch(false);
+    railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
+    paintRail(true);
+  }
+  function railRow(k, n, word0, state = '', act = null) {
+    const key = state || k, sub = !!state, on = !!act && act.key === key;
+    const label = `${word0}, ${n}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
+    const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero') + (on ? ' is-on' : ''), { type: 'button', role: 'listitem', 'data-k': key, 'aria-label': label, ...(on ? { 'aria-current': 'true' } : {}) });
+    b.append(el('span', 'aad-rk-n', { text: n > 99 ? '99+' : String(n) }), el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
+    if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
+    api.listen(b, 'click', () => railGo(key));
+    api.listen(b, 'pointerenter', () => flyWant(b, key, word0));
+    api.listen(b, 'pointerleave', flyLeave);
+    api.listen(b, 'focus', () => { if (fly) flyWant(b, key, word0); });
     return b;
   }
   function paintRail(force = false) {
     if (root.dataset.aadSide !== 'rail') return;
-    const s = sessions || readSessions(), ready = s.ready || [], groups = stateGroups(ready).filter(g => g.state !== 'none');
-    const sig = JSON.stringify([(s.snoozed || []).length, ready.length, groups.map(g => g.state + g.rows.length)]);
+    const s = sessions || readSessions(), ready = s.ready || [], groups = stateGroups(ready).filter(g => g.state !== 'none'), act = railNow();
+    const sig = JSON.stringify([(s.snoozed || []).length, ready.length, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (always, its count may be 0), then Ready's statuses
-    const out = (s.snoozed || []).length ? [railRow('snoozed', s.snoozed.length, 'Snoozed')] : [];
-    out.push(railRow('ready', ready.length, 'Ready'), ...groups.map(g => railRow('ready', g.rows.length, g.word, g.state)));
+    const out = (s.snoozed || []).length ? [railRow('snoozed', s.snoozed.length, 'Snoozed', '', act)] : [];
+    out.push(railRow('ready', ready.length, 'Ready', '', act), ...groups.map(g => railRow('ready', g.rows.length, g.word, g.state, act)));
     rList.replaceChildren(...out);
+    if (fly) paintFly();
   }
+  /* the hover flyout (round 19 item 1c): a small card beside the rail listing one item's chats */
+  const FLY_MS = 300, FLY_OUT_MS = 220;
+  let fly = null, flyOn = null, flyOff = null;
+  function flyWant(b, key, word0) {
+    flyOff?.(); flyOff = null;
+    if (fly) { if (fly.key !== key) showFly(b, key, word0); return; }
+    flyOn?.(); flyOn = api.after(FLY_MS, () => { flyOn = null; if (root.dataset.aadSide === 'rail' && b.isConnected) showFly(b, key, word0); });
+  }
+  function flyLeave() { flyOn?.(); flyOn = null; if (!fly) return; flyOff?.(); flyOff = api.after(FLY_OUT_MS, () => { flyOff = null; closeFly(); }); }
+  function showFly(b, key, word0) {
+    const card = fly?.card || el('div', 'aad-pop aad-fly', { role: 'menu' });
+    if (!fly) {
+      api.listen(card, 'pointerenter', () => { flyOff?.(); flyOff = null; });
+      api.listen(card, 'pointerleave', flyLeave);
+      scene.append(card);
+    }
+    fly = { card, key, word: word0, at: b };
+    paintFly();
+  }
+  function paintFly() {
+    if (!fly) return;
+    const { card, key, word } = fly, rows = railRows(sessions || readSessions(), key, readyOrder()), cur = curChat(), now = Date.now();
+    card.setAttribute('aria-label', `${word}: ${rows.length}`);
+    const items = rows.map(r => {
+      const it = el('button', 'aad-pop-i aad-fly-i' + (r.id === cur ? ' is-cur' : ''), { type: 'button', role: 'menuitem', 'data-sid': r.id, ...(r.id === cur ? { 'aria-current': 'true' } : {}) });
+      it.append(el('span', 'aad-fly-t', { text: r.title || 'Untitled' }), el('span', 'aad-fly-at', { text: shortTime(r.at, now) }));
+      api.listen(it, 'click', () => { const k = fly?.key || key; closeFly(); openChat(r.id, k); });
+      return it;
+    });
+    card.replaceChildren(el('h3', 'aad-pop-h', { text: `${word} · ${rows.length}` }), ...(items.length ? items : [el('p', 'aad-empty', { text: 'Nothing here now.' })]));
+    const r = fly.at.getBoundingClientRect?.(), H = globalThis.innerHeight || 900, h = Math.min(420, rows.length * 34 + 44);
+    const x = (rail.getBoundingClientRect?.().right || RAIL) + 6;
+    card.style.left = Math.round(x) + 'px';
+    card.style.top = Math.round(Math.max(8, Math.min((r?.top ?? 60) - 4, H - h - 8))) + 'px';
+  }
+  function closeFly() { flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
   let fuelSig = '';
   const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { unpeek(); api.desk.settings('ai'); }); };
   function paintBadges() {
@@ -719,8 +818,9 @@ export default function desktop(api) {
   // a click anywhere else closes the menus (their own popovers, like ChatGPT's)
   api.listen(doc, 'pointerdown', e => {
     const t = e.target;
-    if (menu && !menu.card.contains(t) && !t?.closest?.('.aad-more')) closeMenu();
+    if (menu && !menu.card.contains(t) && !t?.closest?.('.aad-more, .aad-sortb')) closeMenu();
     if (wsPop && !wsPop.contains(t) && !wsBtn.contains(t)) closeWs();
+    if (fly && !fly.card.contains(t) && !rail.contains(t)) closeFly();
   }, true);
 
   /* ---------- voice: the orb (click talks, hold commands, drag up = Home) ---------- */
@@ -1158,6 +1258,7 @@ export default function desktop(api) {
   const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
   api.keys.on({ down: e => {
     if (e.key === 'Escape' && drag?.on) { dragEnd(false); return true; }   // (round 16: Esc cancels a drag)
+    if (e.key === 'Escape' && fly) { closeFly(); return true; }   // (round 19: Esc closes the rail's flyout)
     if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || menu || wsPop || q || tidyPop) return false;
     if (allOpenNow()) { closeAll(); return true; }
     if (pane) { if (wide) setWide(false); else hidePanel(); return true; }
@@ -1285,7 +1386,7 @@ export default function desktop(api) {
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
-    closeMenu(); closeWs(); closeTidy(); closeAll(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
+    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
     toolsMo?.disconnect();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading']) delete root.dataset[k];
