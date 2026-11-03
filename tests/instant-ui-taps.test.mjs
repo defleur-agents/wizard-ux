@@ -7,21 +7,17 @@ const deferred = () => { let resolve; const promise = new Promise(r => { resolve
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
 const chats = read('web/core/chats.js');
 const fn = name => { const start = chats.indexOf(`  function ${name}(`); assert.ok(start > 0); return chats.slice(start, chats.indexOf('\n  }', start) + 4); };
-for (const held of [false, true]) test(`Morning removes every pane before fetch and rolls back with list held=${held}`, async () => {
-  const gate = deferred(), events = [], state = { day:'day',done:0,total:3,hidden:false }, nodes = [];
-  for (let i = 0; i < 2; i++) {
-    const parent = { isConnected:true,querySelector:()=>nodes.find(n=>n.parentNode===parent&&n.connected),insertBefore(node){node.connected=true;node.parentNode=this;} };
-    nodes.push({ parentNode:parent,nextSibling:null,connected:true,remove(){this.connected=false;events.push('remove');} });
-  }
-  const w = { id:'desk',app:'chats',thread:'__new__' }, pane = { id:'desk::list',thread:null };
-  const c = { MORNING:{data:state},H:{root:()=>({querySelectorAll:()=>nodes.filter(n=>n.connected)}),win:id=>id==='desk'?w:pane},CH:{'desk::list':{}},owner:id=>id.replace(/::list$/,''),elOf:()=>({querySelector:()=>true}),holdList:()=>held,renderChatList:()=>events.push('render'),toast:(...a)=>events.push(a),fetch:()=>{assert.ok(nodes.every(n=>!n.connected));assert.equal(c.MORNING.data.hidden,true);events.push('fetch');return gate.promise;} };
-  vm.createContext(c);vm.runInContext(fn('morningSet')+'\n'+fn('morningHide'),c);
-  c.morningHide(); c.morningHide();
-  assert.deepEqual(events,['remove','remove','fetch'],'no duplicate write or background rerender');
-  c.morningSet(state); assert.equal(c.MORNING.data.hidden,true,'stale read cannot resurrect pending hide');
-  gate.resolve({ok:false,status:500});await flush();
-  assert.ok(nodes.every(n=>n.connected));assert.equal(c.MORNING.data.hidden,false);assert.ok(events.some(e=>Array.isArray(e)&&e[0]==='!'));
-  assert.equal(events.includes('render'),!held,'desktop proxy uses owner app while preserving background hold');
+import { fixture as morningFixture, flush as morningFlush } from './fixtures/morning-domain.mjs';
+for (const held of [false, true]) test(`Morning sole writer removes every pane before fetch and restores actionable failure with list held=${held}`, async () => {
+  const f=morningFixture({held,panes:2});await f.c.poll();
+  f.c.hide();f.c.hide();
+  assert.equal(f.html(),'');assert.equal(f.html('desk2::list'),'');assert.equal(f.c.current().data.hidden,true);
+  assert.equal(f.requests.length,0,'same-task paint before the writer microtask');
+  await morningFlush();assert.equal(f.requests.length,1,'duplicate X never sends twice');
+  f.reply(0,400);await morningFlush();
+  assert.equal(f.c.current().pending,false);assert.equal(f.c.current().data.hidden,false);
+  for(const id of ['desk::list','desk2::list'])assert.match(f.html(id),/data-chmorningrecover/,'held pane recovers without rebuilding list');
+  assert.equal(f.notices.length,1);assert.equal(f.renders()>0,!held,'preserve background list hold');
 });
 for (const ok of [true,false]) test(`attention and failure dismiss are optimistic, backend ok=${ok}`, async () => {
   const gates = [], notices = [];

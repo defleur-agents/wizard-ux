@@ -375,7 +375,7 @@ window.WizCore.chats = function createChats(H) {
    * all steps done = no card until Morning's day rolls over.
    * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
    * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
-  const MORNING = { data: null, at: 0, busy: false };
+  const MORNING = { data: null, at: 0, busy: false, pending: false, epoch: 0, failure: null, uncertain: false };
   const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
   function morningSet(d) {
     // A stale poll or app message cannot undo the owner's pending dismiss.
@@ -384,40 +384,167 @@ window.WizCore.chats = function createChats(H) {
     const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || ''), hidden: !!d.hidden } : null;
     if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
     MORNING.data = next;
-    // Desktop's ::list proxy has no app field; the owning window is Chats.
-    for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && H.win(owner(id))?.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
+    // Explicit domain edits repaint just their card even while the background list is held,
+    // including desktop's ::list beside an open thread. Never rebuild the reader/composer.
+    for (const id of Object.keys(CH)) {
+      const w = H.win(id), el = elOf(id);
+      if (!w || H.win(owner(id))?.app !== 'chats' || !el?.querySelector('.ch-list')) continue;
+      const card = el.querySelector('.ch-morning-w'), html = morningCard();
+      if (card) { if (html) card.outerHTML = html; else card.remove(); }
+      else if (html) el.querySelector('[data-slot="ready-top"]')?.insertAdjacentHTML('afterend', html);
+      if (!w.thread && !holdList(id)) renderChatList(w, el);
+    }
   }
-  function morningPoll() {
-    if (MORNING.busy || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
-    MORNING.busy = true; MORNING.at = Date.now();
-    fetch('/morning/api/status', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
-      .then(morningSet, () => {}).finally(() => { MORNING.busy = false; });
+  // Morning-only custody, not a general transaction bus or same-origin sandbox.
+  // Shell lifetime (not shell crash/reload) owns admission, queue and recovery.
+  const morningOps = new Map(), morningFailures = new Map(), morningSteps = ['workout', 'meditate', 'mindfeed', 'read'];
+  const morningLabels = { workout: 'Workout', meditate: 'Meditate', mindfeed: 'MindFeed', read: 'Read' };
+  let morningCanonical = null, morningWrites = Promise.resolve(), morningRead = 0;
+  function morningDTO(d) {
+    const next = morningSteps.find(s => !d?.steps?.[s]?.done) || null;
+    if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d.day) || !Number.isFinite(Date.parse(d.day + 'T00:00:00Z')) || new Date(d.day + 'T00:00:00Z').toISOString().slice(0, 10) !== d.day || d.total !== 4 || typeof d.hidden !== 'boolean'
+      || !morningSteps.every(s => typeof d.steps?.[s]?.done === 'boolean')
+      || d.done !== morningSteps.filter(s => d.steps[s].done).length || d.next !== next
+      || d.next_label !== (morningLabels[next] || null)) throw new Error('Invalid Morning status');
+    return JSON.parse(JSON.stringify(d));
   }
-  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
+  function morningFrame(source) {
+    try {
+      const frame = [...H.root().querySelectorAll('iframe')].find(f => f.contentWindow === source);
+      const host = frame?.closest('[data-win]'), w = host && H.win(host.dataset.win);
+      // Check the CURRENT document as well as the launch URL and owning app.
+      const url = new URL(source.location.href), launch = new URL(frame.src, location.href);
+      if (!frame.isConnected || w?.app !== 'frame' || w.appId !== 'morning' || source.document !== frame.contentDocument
+        || url.origin !== location.origin || launch.origin !== location.origin
+        || !url.pathname.startsWith('/morning/') || !launch.pathname.startsWith('/morning/')) return null;
+      return frame;
+    } catch (e) { return null; }
+  }
+  // Bound the whole response, including JSON body consumption. Abort is not proof
+  // the server did not commit; a timed-out POST must never be automatically retried.
+  async function morningRequest(path, opt = {}) {
+    const controller = new AbortController(); let timer;
+    try {
+      return await Promise.race([
+        (async () => {
+          const r = await fetch('/morning/api/' + path, { cache: 'no-store', credentials: 'same-origin', ...opt, signal: controller.signal });
+          if (!r.ok) throw Object.assign(new Error('Morning request failed'), { definitive: r.status >= 400 && r.status < 500 && r.status !== 408, rollover: r.status === 409 });
+          return morningDTO(await r.json());
+        })(),
+        new Promise((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error('Morning response uncertain')); }, 12000); })
+      ]);
+    } finally { clearTimeout(timer); }
+  }
+  function morningSnapshot() {
+    const d = JSON.parse(JSON.stringify(morningCanonical));
+    for (const op of morningOps.values()) if (op.day === d.day) {
+      if (op.kind === 'hide') d.hidden = op.body.hidden;
+      else d.steps[op.body.step] = { done: op.body.done, source: 'you' };
+    }
+    d.done = morningSteps.filter(s => d.steps[s].done).length;
+    d.next = morningSteps.find(s => !d.steps[s].done) || null;
+    d.next_label = morningLabels[d.next] || null;
+    return d;
+  }
+  function morningProject() {
+    if (!morningCanonical) return;
+    const d = morningSnapshot();
+    MORNING.pending = morningOps.size > 0; MORNING.failure = morningFailures.values().next().value || null; MORNING.epoch++; MORNING.at = Date.now();
+    // Failure text changes must repaint even when the counters are unchanged.
+    MORNING.data = null; morningSet(d);
+  }
+  const morningEffect = (st, op) => st.day === op.day && (op.kind === 'hide' ? st.hidden === op.body.hidden : st.steps[op.body.step].done === op.body.done);
+  function morningAdmit(kind, input, before) {
+    if (MORNING.uncertain) throw Object.assign(new Error('Check Morning status before retrying'), { morningStatus: morningSnapshot(), uncertain: true });
+    const body = kind === 'step' ? { step: input.step, done: input.done, how: input.how } : { hidden: input.hidden };
+    if (!(kind === 'step' && morningSteps.includes(body.step) && typeof body.done === 'boolean' && ['tap', 'sheet', 'timer', 'silent-timer'].includes(body.how)) && !(kind === 'hide' && typeof body.hidden === 'boolean')) throw new Error('Invalid Morning write');
+    const snapshot = morningDTO(before), key = kind === 'hide' ? 'hide' : body.step;
+    if (!morningCanonical) morningCanonical = snapshot; // bootstrap only; never reseed established truth
+    if (snapshot.day !== morningCanonical.day) throw Object.assign(new Error('Morning day changed · reopen Morning'), { morningStatus: morningSnapshot(), rollover: true });
+    body.expected_day = snapshot.day;
+    const prior = morningOps.get(key);
+    if (prior) {
+      if (JSON.stringify(prior.body) === JSON.stringify(body)) return prior.promise;
+      throw Object.assign(new Error('Morning is saving that item · try again afterwards'), { morningStatus: morningSnapshot() });
+    }
+    const op = { kind, body, day: snapshot.day };
+    morningOps.set(key, op); MORNING.epoch++; morningRead++; morningProject();
+    const result = morningWrites.then(async () => {
+      let st, failure;
+      try {
+        if (MORNING.uncertain) throw Object.assign(new Error('Check Morning status first'), { blocked: true });
+        if (morningCanonical.day !== op.day) throw Object.assign(new Error('Morning day changed'), { definitive: true, rollover: true });
+        st = await morningRequest(kind, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!morningEffect(st, op)) throw new Error('Unexpected Morning result');
+      } catch (e) {
+        failure = e;
+        if (!e.blocked) {
+          try {
+            // Owned queue is suspended: this read cannot race another owned POST.
+            st = await morningRequest('status');
+            morningCanonical = st;
+            if (!e.definitive && morningEffect(st, op)) failure = null;
+            else if (!e.definitive) MORNING.uncertain = true;
+          } catch (ignored) { MORNING.uncertain = !e.definitive; }
+        }
+      }
+      if (st) morningCanonical = st;
+      morningOps.delete(key); MORNING.epoch++; morningRead++;
+      if (failure) {
+        const note = { op, uncertain: MORNING.uncertain, text: failure.rollover || (st && st.day !== op.day) ? 'A new morning started · open Morning' : MORNING.uncertain ? 'Save outcome unknown · check status before retrying' : 'Morning wasn’t saved · open Morning to retry' };
+        morningFailures.set(key, note); // bounded by the four steps plus hide
+        // Shell always owns this one notice. The persistent card is the recovery
+        // surface even when the frame is covered, offscreen, destroyed or hidden.
+        toast('!', note.text, 3000); morningProject();
+        throw Object.assign(failure, { morningStatus: morningCanonical, shellNotified: true, uncertain: MORNING.uncertain });
+      }
+      morningFailures.delete(key);
+      morningProject(); return morningCanonical;
+    });
+    op.promise = result; morningWrites = result.catch(() => {}); return result;
+  }
+  window.WizMorningWrite = (source, kind, input, before) => {
+    if (!morningFrame(source)) throw new Error('Current shell-owned Morning frame required');
+    return morningAdmit(kind, input, before);
+  };
+  async function morningPoll(force = false) {
+    if (MORNING.busy || MORNING.pending || (!force && Date.now() - MORNING.at < 60000) || !morningInstalled()) return;
+    MORNING.busy = true; MORNING.at = Date.now(); const epoch = MORNING.epoch, read = ++morningRead;
+    try {
+      const d = await morningRequest('status');
+      if (!MORNING.pending && epoch === MORNING.epoch && read === morningRead) {
+        morningCanonical = d;
+        MORNING.uncertain = false;
+        for (const [key, note] of morningFailures) {
+          if (morningEffect(d, note.op)) morningFailures.delete(key);
+          else if (note.uncertain) { note.uncertain = false; note.text = 'Status refreshed · open Morning to review or retry'; }
+        }
+        morningProject();
+      }
+    } catch (e) { /* keep recoverable failure, never claim an unread state */ }
+    finally { MORNING.busy = false; }
+  }
+  addEventListener('message', e => {
+    if (e.origin !== location.origin || e.data?.type !== 'wizard:morning' || !morningFrame(e.source)) return;
+    // Unversioned legacy/frame-local reads are invalidations, not settlement or
+    // a pending transport lease. A stale sender can never overwrite canonical.
+    MORNING.epoch++; morningRead++; MORNING.at = 0;
+    if (!morningOps.size) morningPoll(true);
+  });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
   // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
   // routine, it's evening, stop showing it). Morning owns the flag so every device agrees; undo lives in Morning.
   function morningHide() {
-    if (!MORNING.data || MORNING.hiding) return;
-    const prev = MORNING.data;
-    // Explicit taps bypass background-paint guards (selection, press, sheet and split panes).
-    // Retain the exact nodes so a failed write also rolls back a held list.
-    const removed = [...H.root().querySelectorAll('.ch-morning-w')].map(node => ({ node, parent: node.parentNode, next: node.nextSibling }));
-    for (const { node } of removed) node.remove();
-    MORNING.data = { ...prev, hidden: true }; MORNING.hiding = true;
-    fetch('/morning/api/hide', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"hidden":true}' })
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(st => { MORNING.hiding = false; MORNING.at = Date.now(); morningSet(st); },
-        () => {
-          MORNING.hiding = false;
-          for (const { node, parent, next } of removed) if (parent.isConnected && !parent.querySelector('.ch-morning-w')) parent.insertBefore(node, next?.parentNode === parent ? next : null);
-          morningSet(prev); toast('!', 'Couldn’t hide Morning · try again', 2400);
-        });
+    if (!morningCanonical || morningOps.has('hide')) return;
+    try { morningAdmit('hide', { hidden: true }, morningCanonical).catch(() => {}); }
+    catch (e) { toast('!', e.message, 3000); }
   }
   function morningCard() {
     // Done for today = gone until the next morning (the day rolls at the owner's day start, on Morning's side).
     // Hidden for today (the owner tapped × or Morning's "Skip today") = gone too, steps untouched; back at rollover.
-    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total || d.hidden) return '';
+    const d = MORNING.data; if (!d || !morningInstalled()) return '';
+    if (MORNING.failure) return `<div class="ch-morning-w"><button type="button" class="ch-morning" data-chmorning><span class="tx"><span class="hd"><b>Morning</b></span><small>${esc(MORNING.failure.op.kind === 'hide' ? 'Show / hide' : morningLabels[MORNING.failure.op.body.step])}: ${esc(MORNING.failure.text)}${morningFailures.size > 1 ? ` · ${morningFailures.size} saves need review` : ''}</small></span></button><button type="button" class="ch-morning-x" data-chmorningrecover aria-label="Check Morning status" title="Check status">↻</button></div>`;
+    if (d.done >= d.total || d.hidden) return '';
     const all = false;
     const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
     const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
@@ -2883,6 +3010,7 @@ window.WizCore.chats = function createChats(H) {
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
+    if (e.target.closest('[data-chmorningrecover]')) { const b = e.target.closest('button'); b.disabled = true; b.setAttribute('aria-busy', 'true'); morningPoll(true).finally(() => { b.disabled = false; b.setAttribute('aria-busy', 'false'); }); return true; }
     if (e.target.closest('[data-chmorninghide]')) { morningHide(); return true; }
     if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(H.openApp?.('morning', e.target) || window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
