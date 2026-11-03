@@ -43,6 +43,8 @@ test('phone and desktop nav badges use unread chats, never Ready or notification
     assert.doesNotMatch(src, /workspaceNav\.setCount\([^\n]*WosBell\?\.readyCount/);
     assert.match(src, /addEventListener\('wizard:notifications',/, 'notification changes still repaint Home');
   }
+  assert.doesNotMatch(phone, /Ready chats, unread notifications/,
+    'source comments must not restore the old Ready-based Chats contract');
   assert.match(phone, /const N = window\.WizCore\.workspaceNav, n = N\.countOf\(CHATS_APP\.id\);/,
     'the orb keeps the global Chats unread count instead of adopting the focused app count');
 });

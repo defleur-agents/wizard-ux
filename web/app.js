@@ -526,7 +526,7 @@
     }).join('');
     const cap = wins.length === 1 && winTitle(wins[0]) !== winApp(wins[0]).name ? winTitle(wins[0]) : '';
     const accessible = wins.length > 1 ? `${wins.length} windows: ${wins.map(w => winTitle(w)).join(', ')}` : name;
-    // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
+    // Miguel's skins: desk cards mirror dock marks. Chats uses visible unread; other apps keep their own counts.
     const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
       <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `${ovDl(d)}<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
