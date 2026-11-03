@@ -2,7 +2,7 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-**One implementation per capability.** NEW: `web/core/` + row, never an app.
+One implementation per capability. NEW: `web/core/` + row.
 
 CI: [reuse gate](app-reuse-gate.md).
 
