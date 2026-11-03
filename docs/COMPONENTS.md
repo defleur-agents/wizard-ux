@@ -49,6 +49,7 @@ Reuse:
 
 | Need | Use | Never hand-roll |
 |---|---|---|
+| Desktop tiling | `layout` / `tile` in `web/desktop/desktop.js`: all desks, own fullscreen | app-local geometry |
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
