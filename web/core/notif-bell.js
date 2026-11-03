@@ -64,7 +64,8 @@
   function inChats(id) {
     id = String(id || '');
     if (!id || id === 'wizard' || route(id) !== 'chats' || !chatsReady()) return false;
-    return id === 'notifications' || P.carried(id) ? installed() : known()[id]?.s === 'yes';
+    // An app's feed must be answering: one that went away or stays offline gets its own badge back (never nowhere).
+    return id === 'notifications' || P.carried(id) ? installed() : known()[id]?.s === 'yes' && !FD.down[id];
   }
   // Quiet (a part's Off, say): no badge anywhere and nothing in Chats. Never true for the stock part.
   const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && P.quiet(id, route(id)) === true; };
@@ -167,7 +168,7 @@
    * not a feed) counts as "no feed", asked again after 30 min; an app that was restarting is asked again in 2 min. */
   const FEED_KEY = 'wos.inbox.feeds.v2', MARK_KEY = 'wos.inbox.appmarks.v1', NO_AGAIN = 30 * 60e3, RETRY = 2 * 60e3;
   const FEED_SKIP = new Set(['notifications', 'wizard', 'wizard-agent-service', 'wizard-connection-router', 'wizard-ux', 'setup', 'side-button', 'pages', 'app-store', 'agents', 'troubleshooter']);
-  const FD = { known: null, last: {}, marks: null, retry: {}, probing: null, ready: null, more: {} };
+  const FD = { known: null, last: {}, marks: null, retry: {}, probing: null, ready: null, more: {}, down: {} };
   const known = () => FD.known || (FD.known = readJson(FEED_KEY, {}));
   const saveKnown = () => writeJson(FEED_KEY, known());
   const hash = t => { let a = 0x811c9dc5, b = 0x01000193; for (const c of String(t)) { const k = c.codePointAt(0); a = Math.imul(a ^ k, 16777619) >>> 0; b = Math.imul(b ^ k, 2246822519) >>> 0; } return a.toString(16).padStart(8, '0') + b.toString(16).padStart(8, '0'); };
@@ -203,14 +204,18 @@
     try {
       const items = await getFeed(id);
       delete FD.retry[id];
-      if (!items) { known()[id] = { s: 'no', at: now }; saveKnown(); delete FD.last[id]; return null; }
+      if (!items) { const was = k && k.s === 'yes'; known()[id] = { s: 'no', at: now }; saveKnown(); delete FD.last[id]; delete FD.down[id]; if (was) rerouted(); return null; }
       if (!k || k.s !== 'yes') { known()[id] = { s: 'yes', at: now }; saveKnown(); }
+      if (FD.down[id]) { delete FD.down[id]; rerouted(); }
       const list = items.slice(0, 50).map(it => fromFeed(id, it)).filter(Boolean);
       FD.last[id] = { at: now, items: list }; return list;
     } catch (e) {
       if (!(k && k.s === 'yes')) FD.retry[id] = now + RETRY;
-      // A feed that stops answering keeps its last items a few minutes (no flicker), then they go.
-      return FD.last[id] && now - FD.last[id].at < 5 * 60e3 ? FD.last[id].items : null;
+      // A feed that stops answering keeps its last items a few minutes (no flicker), then they go and its badge
+      // comes back until it answers again.
+      if (FD.last[id] && now - FD.last[id].at < 5 * 60e3) return FD.last[id].items;
+      if (k && k.s === 'yes' && !FD.down[id]) { FD.down[id] = true; rerouted(); }
+      return null;
     }
   }
   const feedList = () => feedApps().filter(id => known()[id]?.s === 'yes');
