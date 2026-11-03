@@ -52,10 +52,10 @@ Reuse:
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) | app powers |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
-| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); `WizMorningWrite` owns Morning writes/held-list paint, fences stale polls; paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; source-bound send/cache; desktop.js new-send shared leave ≤620px; Esc `CHATS.clearFilter(id::list)`; search: Archive last, `c.sOpen` only | duplicate Chats/Focus |
+| Chats: Focus/search, composer/files/read, Copy/Share, Recall/Archive | `WizCore` (`chats.js`, `.css`); `WizMorningWrite` Morning writes/held-list paint, stale-poll fence; paint first; alert hold; `WizLive.readyRank`/seq resume; `setFocus`/`migrateChatsFocus`; provider Errors; source-bound send/cache; desktop new-send shared leave ≤620px; Esc `CHATS.clearFilter(id::list)`; search: Archive last, `c.sOpen` only | duplicate Chats/Focus |
 | Chats list variant | `WizChatsHost` view slot (`chats-view.js`) | a forked Chats |
 | Bound-view handle; first three appearances glow | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
-| Repaint a live view without flicker (only changed nodes move) | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
+| Repaint without flicker | `WosMorph.morph` (`dom-morph.js`); changed nodes only | whole-view `innerHTML` on live ticks |
 | Models/retry, composer mic, receipts, reading place; label clear of draft text | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) | forks; model controls over editable text |
 | Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` | own parser/viewer |
 | Spaces / Focus | `WizCore` (`chats.js`), `WizLive.prefOps` (`spaces`; add=move); shared form; `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restore awaits census; explicit hidden-agent routes; `WosAgents.colour`/`distinctHues`, `--ch-agent-hue` | tabs, second store, per-shell Focus |
