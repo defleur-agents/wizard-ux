@@ -38,8 +38,9 @@ test('has does not wait for focus; late secret still cannot cross a document rep
 });
 test('pinned app attachment admits only its current connected focused document',()=>{
  const source=read('web/core/single-app-session.js');const a=source.indexOf('    // Attach before frontend scripts run'),b=source.indexOf('    frame.addEventListener',a);assert.ok(a>=0 && b>a);
- let options,focused=true;const original={isConnected:true},ctx={win:{appendChild(){}},frame:original,id:'sample',next:{url:'/sample/'},localStorage:{},document:{visibilityState:'visible',hasFocus:()=>focused},window:{WizAppServices:{attach:(_,o)=>{options=o;}}}};
+ let options,focused=true,hosted=false;const original={isConnected:true},ctx={win:{appendChild(){}},frame:original,id:'sample',wid:'single-app',chats:{isHosted:()=>hosted},next:{url:'/sample/'},localStorage:{},document:{visibilityState:'visible',hasFocus:()=>focused},window:{WizAppServices:{attach:(_,o)=>{options=o;}}}};
  vm.createContext(ctx);vm.runInContext('let detach;'+source.slice(a,b),ctx);assert.equal(typeof options.isFront,'function');assert.equal(options.isVisible(),true);assert.equal(options.isFront(),true);
+ hosted=true;assert.equal(options.isFront(),false,'a hosted Chats view conceals the app');assert.equal(options.isVisible(),false);hosted=false;
  focused=false;assert.equal(options.isFront(),false);focused=true;ctx.document.visibilityState='hidden';assert.equal(options.isFront(),false);assert.equal(options.isVisible(),false);
  ctx.document.visibilityState='visible';original.isConnected=false;assert.equal(options.isFront(),false);original.isConnected=true;ctx.frame={isConnected:true};assert.equal(options.isFront(),false,'replacement app cannot inherit admission');
 });
