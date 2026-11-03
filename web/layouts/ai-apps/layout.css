@@ -500,7 +500,7 @@ html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-hic svg { fill: none; 
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.a.ch-notif.is-quiet { padding-left: 0 !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.a.ch-notif.is-quiet::before { content: none !important; display: none !important; }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-thread .msg.ch-notif.is-quiet .bub { background: none !important; box-shadow: none !important; border: 0 !important; border-left: 2px solid var(--amber, var(--wz-warning)) !important; border-radius: 0 !important; padding: 2px 0 2px 14px !important; }
-html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-route.is-quiet { display: block; position: relative; margin: 8px 0 0 16px; padding: 0; border: 0; background: none; }
+html[data-shell="phone"][data-layout="ai-apps"] .ch-notif-route.is-quiet { display: block; position: relative; margin: 8px 0 0 16px; padding: 0; border: 0; background: none; container-type: normal; }   /* (core makes .ch-notif-route a size container for its picker: the one muted line must size to its words) */
 html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px; margin-left: -4px; border: 0; border-radius: 6px; background: none; cursor: pointer; color: var(--aa-ink-2); font: 400 0.75rem / 1.3 var(--wz-font-ui); }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b b { font-weight: 500; color: var(--aa-ink-2); }
 html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b:hover, html[data-shell="phone"][data-layout="ai-apps"] .ch-nr-b[aria-expanded="true"] { background: color-mix(in srgb, var(--aa-ink) 7%, transparent); }

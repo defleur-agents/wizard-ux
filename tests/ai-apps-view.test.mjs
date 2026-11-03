@@ -1849,6 +1849,7 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
     const css = read('web/layouts/ai-apps/' + f);
     assert.match(css, /\] \{ --wos-note-quiet: on; \}/, f + ': the view asks for the quiet thread');
     assert.match(css, /\.msg\.ch-notif\.is-quiet \.bub \{ background: none !important;[^}]*border-left: 2px solid var\(--amber/, f + ': a thin amber edge, no amber bubble');
+    assert.match(css, /\.ch-notif-route\.is-quiet \{[^}]*container-type: normal; \}/, f + ': the quiet line sizes to its words (core makes .ch-notif-route a size container, which squeezed it to one word a line)');
   }
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(e\.code === 'KeyB' && !e\.shiftKey\) \{ if \(!e\.repeat && docked && frontNote\(\)\) doc\.querySelector\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
