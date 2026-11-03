@@ -437,6 +437,8 @@
   // The shell supplies reviewed exact migration entries; apps cannot ask to unregister workers or delete caches.
   async function cleanupLegacy(st) {
     const policy = window.WizCore.appMigrations?.[st.appId]; if (!policy || !valid(st) || st.url.origin !== ORIGIN) return [];
+    // An app that declares home_screen.offline owns its worker: legacy cleanup would race its clients.claim().
+    if (window.WizCore.appHomeScreen?.(st.appId)?.offline) return [];
     const scope = new URL(policy.scope, ORIGIN), scripts = policy.scripts.map(path => new URL(path, ORIGIN));
     if (!within(scope, st.url) || scripts.some(script => !within(script, st.url)) || scope.pathname === '/') return [];
     const removed = [];
