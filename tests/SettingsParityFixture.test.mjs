@@ -40,11 +40,21 @@ test('category oracle awaits canonical state, selected navigation and matching h
   assert(harness.includes('await p.waitForFunction(categoryReady,entry)'));assert(!harness.includes("getAttribute('data-page')"));
 });
 test('phone outside dismissal sends one trusted tap and awaits closed sheet; nearest Back and native evidence remain',async()=>{
-  const body=harness.match(/else \{(await p\.locator\('#scrim'\)[^\n]+)\}/)[1];
-  let taps=0,waits=0,checks=0;const state={sheet:'settings'};
-  const p={locator:s=>({tap:async()=>{assert.equal(s,'#scrim');assert.equal(++taps,1);state.sheet=null;},isHidden:async()=>{assert.equal(s,'#settings');return state.sheet===null;}}),waitForFunction:async predicate=>{++waits;assert.equal(predicate(),true);}};
-  await vm.runInNewContext(`(async()=>{${body}})()`,{p,__wos:state,skin:'fixture',ok:c=>{++checks;assert(c);}});
-  assert.equal(taps,1);assert.equal(waits,1);assert.equal(checks,1);
+  // #880 supersedes the single-line model-only oracle with visual/interaction closure.
+  const body=harness.match(/else \{\s*(await p\.locator\('#scrim'\)[\s\S]*?)\n    \}/)[1];
+  const oracle=harness.match(/const phoneDismissed=\(\)=>\{([\s\S]*?)\n\};/)[1];
+  let taps=0,waits=0,checks=0;const state={sheet:'settings'},visual={open:false,device:false,opacity:'0',pointerEvents:'none',top:900};
+  const settings={classList:{contains:()=>visual.open},getBoundingClientRect:()=>({top:visual.top,bottom:visual.top+400,left:0,right:412,width:412,height:400})};
+  const device={classList:{contains:()=>visual.device}},backdrop={};
+  const context={__wos:state,innerWidth:412,innerHeight:892,document:{querySelector:s=>({'#settings':settings,'#device':device,'#scrim':backdrop})[s]},getComputedStyle:el=>el===settings?{opacity:visual.opacity}:{pointerEvents:visual.pointerEvents}};
+  const phoneDismissed=vm.runInNewContext(`()=>{${oracle}}`,context);
+  const p={locator:s=>({tap:async()=>{assert.equal(s,'#scrim');assert.equal(++taps,1);state.sheet=null;}}),waitForFunction:async predicate=>{++waits;const value=predicate();assert(value);return{jsonValue:async()=>value};}};
+  await vm.runInNewContext(`(async()=>{${body}})()`,{p,__wos:state,phoneDismissed,skin:'fixture',ok:c=>{++checks;assert(c);}});
+  assert.equal(taps,1);assert.equal(waits,2);assert.equal(checks,1);
+  for(const [key,value] of [['open',true],['device',true],['opacity','1'],['pointerEvents','auto'],['top',100]]){
+    const before=visual[key];visual[key]=value;assert.equal(phoneDismissed(),false,key+' must be fully dismissed');visual[key]=before;
+  }
+  state.sheet='settings';assert.equal(phoneDismissed(),false,'model must be closed too');
   assert(harness.includes("await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0"));
   assert(harness.includes("await shot(skin+'-about')"));assert(harness.includes('[data-settings-version="phone"]'));assert(harness.includes("await shot(skin+'-about-native')"));
 });
