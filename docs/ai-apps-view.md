@@ -56,27 +56,44 @@ Desktop (`desktop.js`, `desktop.css`):
 
 ## Keys (desktop)
 
-One base key, ⌥ (Option / Alt). Hold left ⌥ for the shell's hints on their targets.
+One base key, ⌥ (Option / Alt). Hold left ⌥ (round 20): a small keycap sits on the top-left corner of every target you
+can see that has a key (the right column's rows wear 1–9 by place, app count badges step back), and one compact card
+above the composer lists, in plain words, only the keys that do something in the current state (no Ready chats: no
+↑ ↓; nothing open: no W, F, − =; a notification in front: X ← → B). ⌥/ keeps it open. With the app picker or Settings in
+front, the view takes only that modal's own key (⌥T / ⌥,), voice and ⌥/: a one-line legend sits above the modal and its
+✕ wears the key.
 
 | Key | In the AI apps view |
 | --- | --- |
-| ⌥↓ / ⌥↑ | Next / previous Ready row exactly as the sidebar draws it (grouped, chosen order, notifications included); wraps |
-| ⌥N, ⌥Enter | New chat (Home) |
-| ⌥\\, Ctrl/⌘⇧S | Fold / unfold the sidebar |
-| ⌥I | Search chats and apps (the sidebar's search) |
-| ⌥T, ⌥O | The app picker (+) |
-| ⌥1–9 | The right column's rows, top to bottom |
-| ⌥[ / ⌥] | Previous / next row of the right column (wraps) |
-| ⌥⇧[ / ⌥⇧] | Move the row in front up / down |
-| ⌥ + A B E J K M Q U Y | Open the app wearing that letter (shown while ⌥ is held) |
-| ⌥W | Close the app in front (a pinned one hides) or the docked chat; nothing on Home |
-| ⌥F | App panel wider / back |
-| ⌥− / ⌥= | App panel narrower / wider |
+| ⌥[ / ⌥] | Previous / next app in the right column (wraps); ⌥⇧[ / ⌥⇧] move the app in front up / down |
+| ⌥1–9 | The app at that place in the right column |
+| ⌥↓ / ⌥↑ | Next / previous Ready item exactly as the sidebar draws it (notifications included); wraps |
 | ⌥` | Home |
-| ⌥← / ⌥→ / ⌥X | Snooze / Done / Resolve the chat in front (stock) |
-| ⌥S ⌥C ⌥D ⌥V | Talk, command, dictate, talk into a new chat (stock) |
-| ⌥Space, ⌥, ⌥/ ⌥G ⌥P ⌥Z ⌥⇧W ⌥L ⌥R | Palette, Settings, key guide, pick, float chat, jump back, reopen, light/dark, reload (stock) |
+| ⌥. | Focus: both sides away, chat and app closed, only Home and the composer; again = back exactly as it was (in memory only) |
+| ⌥\\, Ctrl/⌘⇧S | Fold / unfold the left sidebar |
+| ⌥⇧\\ | Fold / unfold the apps column |
+| ⌥F | App panel wide / back to the side |
+| ⌥− / ⌥= | App panel narrower / wider |
+| ⌥W | Close the app in front (a pinned one hides) or the docked chat / notification; nothing on Home |
+| ⌥← | Snooze the item in front |
+| ⌥→ | Archive the item in front, then the next Ready item opens |
+| ⌥X | Resolve the notification in front, then the next Ready item opens |
+| ⌥B | Where this app's notifications go (the menu under the notification; same picker as Settings › Notifications) |
+| ⌥N, ⌥Enter | New chat |
+| ⌥T, ⌥O | Add an app (the picker); again closes it |
+| ⌥I | Search chats and apps (the sidebar's search) |
+| ⌥, | Settings (again closes it) |
+| ⌥G | Letters on everything (stock pick) |
+| ⌥/ | Keep the key guide open |
+| ⌥S ⌥V ⌥C ⌥D | Talk, new voice chat, command, dictate (stock) |
+| ⌥ + A E J K M Q U Y | Open the app wearing that letter (right column rows past 9, Home icons) |
 | ⌥⇧1–9 | Nothing (no desks to move windows to) |
+
+Ready is one flat list in priority order by default (a tiny muted tag on Needs you / Your call rows); Settings › Chats
+& app screens › AI apps view › "Group Ready by status" brings the per-status sub-headers back. Notification rows wear a
+small amber bell and amber unread dot (folded per app, e.g. "Money (48) · …"); an opened notification reads as a quiet
+thread (`--wos-note-quiet`): its source line, a thin amber edge, and one muted "From X · shows in Chats ▾" line whose
+menu is the shared `WosBell.picker`.
 
 ## How it is built
 

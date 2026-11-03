@@ -84,7 +84,7 @@ test('the layout gets the shell\'s own threads, actions, apps and Home; nothing 
   assert.deepEqual(Object.keys(api.desk).sort(), ['attention', 'classic', 'emptyHome', 'home', 'look', 'setting', 'settings']);
   assert.deepEqual(Object.keys(api.voice).sort(), ['ask', 'cancel', 'command', 'dictate', 'onCommand', 'state', 'talk', 'tap']);
   assert.deepEqual(Object.keys(api.panel).sort(), ['back', 'claim', 'close', 'dock', 'park', 'quit', 'running', 'state']); assert.ok(Object.isFrozen(api.panel));
-  assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'on']); assert.ok(Object.isFrozen(api.keys));
+  assert.deepEqual(Object.keys(api.keys).sort(), ['guide', 'legend', 'on']); assert.ok(Object.isFrozen(api.keys));
   assert.equal(D.host.panelMode, false);
   assert.equal(api.panel.dock(true), false, 'docking needs the panel first');
   api.panel.claim(); assert.equal(D.host.panelMode, true, 'no desks while the layout holds the panel');

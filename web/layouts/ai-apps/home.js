@@ -41,7 +41,7 @@ import { svgIcon, dockPages, DOCK_PER } from './parts.js';
  * letters the desktop's own ⌥ keys leave free (⌥C D F G I L N O P R S T V W X Z keep their meaning; H flips the Home
  * style), so nothing changes meaning while ⌥ is held. The Orbs view's rule otherwise (layouts/orb/keys.js): one plain
  * letter per app, the first free letter of its name, else any free one; stable per device; the rest get none. */
-export const APP_LETTERS = [...'ABEJKMQUY'];
+export const APP_LETTERS = [...'AEJKMQUY'];   // (round 20: B = where this notification's source goes)
 export function appKeys(apps, saved = {}) {
   const free = new Set(APP_LETTERS), out = {};
   for (const a of apps) { const k = saved?.[a.id]; if (typeof k === 'string' && free.has(k)) { out[a.id] = k; free.delete(k); } }

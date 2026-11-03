@@ -2325,6 +2325,7 @@
       if (at === 'inside-2') { x = r.right - w - 8 - 76; y = r.top + r.height / 2 - h / 2; }
       if (at === 'above') y = r.top - h - 3 < 4 ? r.bottom + 3 : r.top - h - 3;
       if (at === 'corner') { x = r.left - 4; y = r.top - 4; }
+      if (at === 'tl') { x = r.left - Math.round(w * .45); y = r.top - Math.round(h * .45); } // a keycap on the target's top-left corner (a layout's legend names it)
       if (at === 'bottom-in') { x = r.left + r.width / 2 - w / 2; y = r.bottom - h - 6; }
       if (at && typeof at === 'object') { x = at.x - w; y = at.y; at.x = x - 6; } // Speak words: one row, right to left, ending under the last speak button
       x = Math.round(Math.max(4, Math.min(innerWidth - w - 4, x))); y = Math.round(Math.max(4, y));
@@ -2332,11 +2333,30 @@
       const taken = [...el.querySelectorAll('.kh-chip')].filter(o => o !== c).map(o => o.getBoundingClientRect());
       for (let k = 0; k < 8 && taken.some(o => x < o.right + 2 && x + w > o.left - 2 && y < o.bottom + 2 && y + h > o.top - 2); k++) y += h + 3;
       c.style.left = x + 'px'; c.style.top = y + 'px';
+      marked.push(r);
       return c;
+    }
+    let marked = [];
+    function keysCard({ near, span, line, groups }) {
+      const box = document.createElement('div'); box.className = 'kh-keys' + (pinned ? ' pinned' : '') + (line ? ' is-line' : '');   // line: one short row (a modal's few keys)
+      box.setAttribute('aria-label', 'Keys you can press now');
+      box.innerHTML = `<p class="kh-keys-h">Hold ${esc(ALT)} and press</p>` + groups.map(g => `<section><h4>${esc(g.name)}</h4>${g.keys.map(([k, w]) => `<span>${k.split(' ').map(x => `<kbd>${esc(x)}</kbd>`).join('')}<em>${esc(w)}</em></span>`).join('')}</section>`).join('');
+      // (span: the free middle [left, right] the card centres in and fits; else the near thing's centre)
+      if (span) box.style.maxWidth = Math.max(320, Math.round(span[1] - span[0] - 24)) + 'px';
+      el.appendChild(box);
+      const w = box.offsetWidth, h = box.offsetHeight, nr = near && vis(near) ? near.getBoundingClientRect() : null;
+      const cx = span ? (span[0] + span[1]) / 2 : nr ? nr.left + nr.width / 2 : innerWidth / 2;
+      const x = Math.round(Math.max(8, Math.min(innerWidth - w - 8, cx - w / 2)));
+      let y = Math.round((nr ? nr.top : innerHeight - 16) - 14 - h);
+      // never over a chip or the thing a chip marks: up past each one in the way, else (no room above) under the top
+      const hits = [...el.querySelectorAll('.kh-chip')].map(c => c.getBoundingClientRect()).concat(marked);
+      for (let k = 0; k < 24; k++) { const o = hits.find(o => x < o.right + 6 && x + w > o.left - 6 && y < o.bottom + 6 && y + h > o.top - 6); if (!o) break; y = Math.round(o.top - 8 - h); }
+      box.style.left = x + 'px'; box.style.top = Math.max(8, y) + 'px';
     }
     function show(pin = pinned) {
       pinned = !!pin;
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
+      marked = [];
       // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
       // [ ] sit on where they go: the next window or Chats side on this desk (left to right), else the desk one
       // step left / right (Home left of desktop 1; nothing past either end).
@@ -2433,6 +2453,10 @@
         if (bar && end - lw >= min) { leg.style.left = Math.round(end - lw) + 'px'; leg.style.top = Math.round(bar.top + (bar.height - lh) / 2) + 'px'; leg.classList.add('in-bar'); }
         else { const last = speak[speak.length - 1][0].getBoundingClientRect(); leg.style.left = Math.round(Math.max(4, last.right - lw)) + 'px'; leg.style.top = Math.round(last.bottom + 24) + 'px'; }
       }
+      // A layout's legend (the AI apps view): one compact card of the keys valid right now with no single target, in
+      // plain words, centred above its `near` (the composer), moved up past every chip and the thing it marks.
+      const lg = window.WosSkinHost?.keyLegend?.({ pinned });
+      if (lg) { keysCard(lg); document.documentElement.classList.add('key-hints-on'); return; }
       // One quiet line for the keys that have no single place: pick anything, keep this open.
       if (!pinned && el.querySelector('.kh-legend.in-bar')) { document.documentElement.classList.add('key-hints-on'); return; } // the bar line already says G
       const foot = document.createElement('div'); foot.className = 'kh-foot' + (pinned ? ' pinned' : '');
