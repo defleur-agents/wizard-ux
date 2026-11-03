@@ -1,0 +1,12 @@
+{
+  "id": "miguel/ai-apps",
+  "name": "Different shell view - AI apps",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout"
+  ],
+  "description": "Phone: like the ChatGPT, Claude and Perplexity apps. A top bar (menu, your Wizard's name, workspaces), a left drawer (menu or swipe from the left edge) with your open apps, All apps and your chats, and the chat with its composer as the main screen; an app you open fills the screen under the same top bar. Desktop: the same as their desktop apps: a sidebar on the left (your open apps, All apps, your chats, New chat, Settings) that folds to an icon rail (Ctrl+Shift+S), the chat in a centred column with the composer, an app filling the page beside it, the workspace switcher top right and the orb at the bottom over an app. One shell view at a time: on turns Orb and Apps off; all off = Desks",
+  "view": "AI apps"
+}
