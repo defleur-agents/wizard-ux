@@ -93,6 +93,12 @@ async function gallery(page,v,shell,skin){
     if(v==='candidate'){
      fresh=true;await page.evaluate(()=>window.WizCore.refreshApps());await page.waitForFunction(()=>window.WizCore.appLogo('messenger').endsWith('fedcba9876543210'));
      const refreshed=await page.evaluate(ids=>ids.map(id=>({id,html:window.WizSigil.html({id})})),changed);assert.ok(refreshed.every(x=>!x.html.includes('sglogo')));report.cases.push({v,shell,surface:'metadata-refresh',rows:refreshed});
+     const messenger=await rowFor(page,shell,'messenger');await page.locator(messenger).scrollIntoViewIfNeeded();await page.locator(messenger).click();
+     const frame='iframe[title="Messenger"]';await page.locator(frame).waitFor({state:'visible'});
+     await page.waitForFunction(()=>[...document.querySelectorAll('iframe[title="Messenger"]')].some(f=>f.contentDocument?.title==='Synthetic empty app'));
+     const windowIdentity=await page.locator(frame).evaluate(f=>{const w=f.closest('.win,.dwin');return {header:w?.querySelector('.wbar')?.innerHTML,marks:[...document.querySelectorAll('.dsg .sgi')].map(g=>g.className)};});
+     assert.match(windowIdentity.header||'',/sg-chats/,'real Messenger window header shares restored mask');assert.doesNotMatch(windowIdentity.header||'',/sglogo/);
+     const screenshot=await shot(page,[v,shell,'messenger-window'].join('-'),frame);report.cases.push({v,shell,surface:'messenger-window',windowIdentity,screenshot});
     }
    }catch(e){report.failures.push({v,shell,message:e.message,stack:e.stack});for(const p of context.pages())await p.screenshot({path:path.join(OUT,'REJECTED-'+v+'-'+shell+'.png')}).catch(()=>{});}
    finally{fs.writeFileSync(path.join(OUT,'progress.json'),JSON.stringify(report,null,2));await context.close();}
@@ -110,7 +116,7 @@ async function gallery(page,v,shell,skin){
  report.standaloneStore.unknownLogoPreserved=true;await standalone.screenshot({path:path.join(OUT,'store-standalone-dark-unknown.png')});await standalone.close();
  report.writes=requests.filter(r=>r.method!=='GET');report.writePolicy=assertReadOnlyFixture(requests);report.requests=requests;
  fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(report,null,2));
- assert.equal(report.failures.length,0,JSON.stringify(report.failures));assert.equal(report.pageErrors.length,0);assert.equal(report.cases.length,changed.length*4+4+2);assert.equal(report.galleries.length,8);
+ assert.equal(report.failures.length,0,JSON.stringify(report.failures));assert.equal(report.pageErrors.length,0);assert.equal(report.cases.length,changed.length*4+4+2+2);assert.equal(report.galleries.length,8);
  console.log('PASS',JSON.stringify({cases:report.cases.length,galleries:report.galleries.length,changed:changed.length,inventory:inventory.length,acceptedMutations:report.writePolicy.acceptedMutations.length,refusedBootWrites:report.writePolicy.refusedShellBootstrap.length}));
  }catch(e){fs.writeFileSync(path.join(OUT,'failure.json'),JSON.stringify({message:e.message,stack:e.stack,report,requests},null,2));throw e;}
  finally{await browser.close();await new Promise(r=>server.close(r));}
