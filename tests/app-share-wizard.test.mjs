@@ -48,13 +48,38 @@ test('real shared Chats send enqueues all 10 attachments once without consuming 
  const src=read('web/core/chats.js'),start=src.indexOf('  async function sendChat('),end=src.indexOf('  const picker =',start);
  const files=Array.from({length:10},(_,n)=>({id:'f'+n,name:'voice-'+n+'.ogg',mime:'audio/ogg',bytes:10}));
  const draft={draft:'Keep my words',files:[{id:'existing',name:'mine'}]},enqueued=[];
- const sandbox={window:{},MAX_FILES:Number(src.match(/const MAX_FILES = (\d+)/)[1]),W:{w1:{id:'w1',app:'chats',thread:'__new__'}},ch:()=>draft,
+ const sandbox={window:{},INC:null,MAX_FILES:Number(src.match(/const MAX_FILES = (\d+)/)[1]),W:{w1:{id:'w1',app:'chats',thread:'__new__'}},ch:()=>draft,
   joinWords:(a,b)=>[a,b].filter(Boolean).join('\n\n'),focusOf:()=>null,PW:null,winAgent:()=>'',AGS:()=>null,
   KIT:{drafts:{get:()=>({}),clear(){throw Error('Do not consume my draft');}}},LIVE:{},OUTBOX:{async enqueue(it){enqueued.push(it);return {durable:true,id:'receipt'};}},
   viewContext:()=>'',isWorking:()=>false,pendRef:f=>f,renderChats(){},applyLayout(){},deskOf:()=>0};
  vm.runInNewContext(src.slice(start,end)+';this.sendChat=sendChat;',sandbox);
  const receipt=await sandbox.sendChat('w1','Forwarded words','shared to Wizard',null,{sid:'__new__',files,seal:false,away:true});
  assert.equal(receipt.durable,true);assert.equal(enqueued.length,1);assert.equal(enqueued[0].files.length,10);assert.equal(enqueued[0].text,'Forwarded words');assert.equal(draft.draft,'Keep my words');assert.equal(draft.files[0].id,'existing');
+});
+test('share destination wording keeps one Chat picker, a valid default and a decorative chevron',()=>{
+ assert.match(shared,/class="dv-row dv-chat"[^>]*><span>Chat<\/span><strong>New chat<\/strong><span aria-hidden="true">⌄<\/span>/);
+ assert.match(shared,/target = '__new__'/);
+ assert.match(shared,/\[\{id:'__new__', title:'\+ New chat', on:target === '__new__'\}, \.\.\.threads\.map/);
+ assert.match(shared,/else \{ target = opt\.dataset\.dvpick; a\.closePicker\(\); paint\(\); \}/);
+ assert.doesNotMatch(shared,/role="radiogroup"|value="pick"/);
+});
+test('share title names the chosen agent and text remains a separate read-only quote',()=>{
+ assert.ok(shared.includes('textContent = `Send to ${label()}`'));
+ assert.ok(shared.includes("setAttribute('aria-label', `Send to ${label()}`)"));
+ assert.match(shared,/blockquote class="dv-quote" aria-label="Shared content \(not editable\)" tabindex="0">\$\{esc\(text\)\}/);
+ assert.match(shared,/placeholder="Add a comment \(optional\)"/);
+ assert.match(shared,/if \(!note && !chosen\.length\) \{ status\.textContent = 'Add a comment first'; return; \}/);
+});
+test('share receipt toast names the actual destination agent, only after durable send',async()=>{
+ const start=shared.indexOf('  async function carry('),end=shared.indexOf('  function wizard(',start),toasts=[];
+ const w={wins:{c:{app:'chats'}},toast:(...args)=>toasts.push(args)};
+ let release; const chats={sendChat:()=>new Promise(r=>{release=r;})};
+ const sandbox={};vm.runInNewContext(shared.slice(start,end)+';this.carry=carry;',sandbox);
+ const pending=sandbox.carry(w,chats,{note:'Synthetic share',target:'__new__',agent:'synthetic-agent',agentLabel:'Synthetic Agent',stay:false},[]);
+ assert.equal(toasts.length,0);release({durable:true});assert.equal(await pending,'sent');
+ assert.deepEqual(toasts,[['✦','Sent to Synthetic Agent',1800]]);
+ await sandbox.carry(w,{sendChat:async()=>({durable:true})},{target:'__new__',agentLabel:'Synthetic Agent',stay:true},[]);
+ assert.equal(toasts.length,1);
 });
 test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',()=>{
  for(const p of ['index.html','desktop.html']){const s=read('web/'+p);assert.match(s,/core\/share-wizard.js/);assert.match(s,/core\/share-wizard.css/);}
