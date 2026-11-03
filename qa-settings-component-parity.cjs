@@ -124,7 +124,7 @@ const nap=ms=>new Promise(r=>setTimeout(r,ms));
      }
      await back();ok(await p.locator('#settingsBody [data-st-page]:visible').count()>0,kind+' '+skin+': nearest Back returns to categories');
     }
-    await open('about');
+    await tap('#settingsBody [data-st-page="about"]:visible');
     await p.waitForFunction(categoryReady,menu.find(entry=>entry.id==='about'));
     const opacity=await p.locator(phone?'#settings':'#dsettings').evaluate(el=>({background:getComputedStyle(el).backgroundColor,image:getComputedStyle(el).backgroundImage}));
     // Shared page backing itself is fully opaque; skins may additionally layer solid gradients.
