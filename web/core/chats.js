@@ -395,6 +395,54 @@ window.WizCore.chats = function createChats(H) {
       if (!w.thread && !holdList(id)) renderChatList(w, el);
     }
   }
+  // Morning-only transport custody. The shell, not a removable app iframe,
+  // owns its serialized writes, optimistic card and terminal error notice.
+  const morningOps = new Map(), morningSteps = ['workout', 'meditate', 'mindfeed', 'read'];
+  let morningCanonical = null, morningWrites = Promise.resolve();
+  function morningProject() {
+    const d = JSON.parse(JSON.stringify(morningCanonical));
+    for (const op of morningOps.values()) if (op.day === d.day) {
+      if (op.kind === 'hide') d.hidden = op.body.hidden;
+      else d.steps[op.body.step] = { done: op.body.done, source: 'you' };
+    }
+    d.done = morningSteps.filter(s => d.steps[s]?.done).length;
+    d.next = morningSteps.find(s => !d.steps[s]?.done) || null;
+    d.next_label = { workout: 'Workout', meditate: 'Meditate', mindfeed: 'MindFeed', read: 'Read' }[d.next] || null;
+    MORNING.pending = morningOps.size > 0; MORNING.epoch++; MORNING.at = Date.now(); morningSet(d);
+  }
+  window.WizMorningWrite = (source, kind, input, before) => {
+    const frame = [...document.querySelectorAll('iframe')].find(f => f.contentWindow === source);
+    const url = frame && new URL(frame.src, location.href);
+    if (!frame || url.origin !== location.origin || !url.pathname.startsWith('/morning/')) throw new Error('Morning frame required');
+    const body = kind === 'step' ? { step: input.step, done: input.done, how: input.how } : { hidden: input.hidden };
+    if (!(kind === 'step' && morningSteps.includes(body.step) && typeof body.done === 'boolean' && ['tap', 'sheet', 'timer', 'silent-timer'].includes(body.how)) && !(kind === 'hide' && typeof body.hidden === 'boolean')) throw new Error('Invalid Morning write');
+    const key = kind === 'hide' ? 'hide' : body.step;
+    if (morningOps.has(key)) return morningOps.get(key).promise;
+    if (!morningOps.size) {
+      if (typeof before?.day !== 'string' || !morningSteps.every(s => typeof before.steps?.[s]?.done === 'boolean')) throw new Error('Morning state required');
+      morningCanonical = JSON.parse(JSON.stringify(before));
+    }
+    const op = { kind, body, day: morningCanonical.day }, sourceDocument = source.document; morningOps.set(key, op); morningProject();
+    const result = morningWrites.then(async () => {
+      let st;
+      try {
+        const r = await fetch('/morning/api/' + kind, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!r.ok) throw new Error(r.status);
+        st = await r.json();
+        if (typeof st?.day !== 'string' || !morningSteps.every(s => typeof st.steps?.[s]?.done === 'boolean')) throw new Error('Invalid Morning response');
+      } catch (e) {
+        morningOps.delete(key); morningProject();
+        // A retained but covered frame is not visible; a removed frame no longer
+        // has a consumer at all. In either case deliver exactly one shell notice.
+        let visible = false;
+        try { visible = frame.isConnected && frame.getClientRects().length > 0 && source.document === sourceDocument && !sourceDocument.hidden; } catch (ignored) {}
+        if (!visible) toast('!', 'Morning wasn’t saved · open Morning to retry', 3000);
+        throw e;
+      }
+      morningCanonical = st; morningOps.delete(key); morningProject(); return st;
+    });
+    op.promise = result; morningWrites = result.catch(() => {}); return result;
+  };
   function morningPoll() {
     if (MORNING.busy || MORNING.pending || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
     MORNING.busy = true; MORNING.at = Date.now(); const epoch = MORNING.epoch;
@@ -403,6 +451,7 @@ window.WizCore.chats = function createChats(H) {
   }
   addEventListener('message', e => {
     if (e.origin !== location.origin || e.data?.type !== 'wizard:morning') return;
+    if (morningOps.size) return; // only the shell-owned transport can settle its projection
     // Legacy/background messages cannot erase an acknowledged local pending projection.
     if (MORNING.pending && typeof e.data.pending !== 'boolean') return;
     MORNING.pending = e.data.pending === true; MORNING.epoch++;
