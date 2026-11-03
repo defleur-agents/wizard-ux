@@ -5,7 +5,6 @@ useDefault = true
 [[allowlists]]
 description = "Known non-secrets: RFC 6455 sample WebSocket nonce, localStorage key names, Android test certificate digests"
 regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^(wos|wux)\.[a-z0-9-]+\.v[0-9]+$''']
-regexes = ['''^dGhlIHNhbXBsZSBub25jZQ==$''', '''^wos\.[a-z0-9-]+\.v[0-9]+$''', '''^wux\.[a-z0-9-]+\.v[0-9]+$''']
 paths = ['''^android/app/src/test/''']
 
 [[allowlists]]
@@ -19,13 +18,3 @@ description = "Verified SHA-256 of shared style tokens.css, not a credential"
 condition = "AND"
 paths = ['''^docs/provenance/appearance-review\.json$''']
 regexes = ['''^fdb2b9a39a2b2b4893a5f3f3d13db4e685097dcdd55037ebb9d102ffccdedca1$''']
-
-[[allowlists]]
-description = "Public localStorage app-logo cache key, not a credential (existing main history)"
-condition = "AND"
-paths = ['''^web/core/apps\.js$''']
-regexes = ['''^wux\.applogos\.v1$''']
-description = "Verified notification route localStorage key at e4d8da50 line 24; not a credential"
-condition = "AND"
-paths = ['''^web/core/notif-bell\.js$''']
-regexes = ['''^wos\.notify\.route\.v1$''']
