@@ -64,7 +64,7 @@ function html(test, skin, hosted) {
  [data-qa-middle] {position:absolute!important;inset:0!important;max-height:none!important;margin:0!important;padding:0!important}
  /* A retained raster layer prevents gradient dithering from changing on an unrelated repaint.
   * This does not supply an opaque backing: the old translucent materials still fail. */
- [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
+ [data-qa-panel] {will-change:transform;position:absolute!important;display:block!important;inset:220px auto auto 16px!important;width:358px!important;height:240px!important;min-width:0!important;max-width:none!important;max-height:none!important;margin:0!important;padding:24px!important;box-sizing:border-box!important;transform:none!important;translate:none!important;rotate:none!important;scale:1!important;visibility:visible!important;overflow:hidden!important}
  </style></head><body><div id="behind">${loud}</div><main id="fixture">${wrap}</main></body></html>`;
 }
 async function realShell(browser, results) {
