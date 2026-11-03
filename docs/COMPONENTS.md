@@ -105,6 +105,7 @@ Reuse:
 | Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
 | Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; `single-app-session.js`, `home-screen-apps.css`: host status/cutout, child inset 0; `WizChatsHost.openHosted / replyRecorder` → shared `WizAppCapture`, `sendVoiceTo`/outbox; Back saves take, returns to mounted app; docs/pwa-app-install.md; pins: `WizHomeScreenCapabilities` | app insets, nested shell/chat/recorder |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) | second capture path | long Chats capture |
+| Incognito chat | `WizCore.incognitoChats` (RAM-only, `WizLive.openRunStream`) | outbox, history |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 

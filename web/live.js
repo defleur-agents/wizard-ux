@@ -1265,27 +1265,36 @@
   /* Open-thread delta subscriptions. Read-only: a failed stream never replays a send.
    * Hermes uses unnamed SSE data frames with data.event; other runtimes name events. */
   const RUN_STREAMS = new Map();
-  L.openRunStream = function (sid, agent, runId, paint) {
+  L.openRunStream = function (sid, agent, runId, paint, target = null) {
+    // Explicit ephemeral target: reuse SSE/progress/Stop, never ordinary catalogs/outbox.
+    const base = target?.base;
+    if (target && !/^\/wizard\/v1\/agents\/[a-z0-9][a-z0-9-]{0,40}\/incognito\/incog_[a-f0-9]{32}$/.test(base || '')) return null;
+    const read = target?.read || req;
     const registry = window.WosAgents;
     const rec = registry?.get(agent || registry.defaultId());
-    if ((agent && !rec) || rec?.privacy === 'private' || !window.EventSource || !runId) return null;
-    const key = JSON.stringify([agent, sid, runId]);
+    if ((!target && ((agent && !rec) || rec?.privacy === 'private')) || !window.EventSource || !runId) return null;
+    const key = JSON.stringify([agent, sid, runId, base]);
     let r = RUN_STREAMS.get(key);
     if (!r) {
       r = { text: '', steps: [], live: false, terminal: false, listeners: new Set(), frame: null, stopped: false };
       RUN_STREAMS.set(key, r);
-      const url = `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
+      const url = base ? `${base}/v1/runs/${encodeURIComponent(runId)}` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}${agent ? '?agent=' + encodeURIComponent(agent) : ''}`;
       const notify = () => {
         if (r.frame != null || r.stopped) return;
         r.frame = requestAnimationFrame(() => { r.frame = null; for (const fn of r.listeners) fn(r); });
       };
       const close = () => { r.source?.close(); r.source = null; };
-      const terminal = () => { if (!r.terminal) { r.terminal = true; close(); notify(); } };
+      const terminal = async status => { if (r.terminal) return; r.terminal = true; r.status = status; close();
+        // Only the temporary target needs a final read to release its busy latch.
+        if (target) { try { r.result = await (await read(url)).json(); r.status = r.result.status || status; } catch (_) { r.status = 'failed'; } }
+        notify();
+      };
       // Resume across drops (spotty wifi, a phone waking up): Hermes and the Agent Service number every frame (SSE id
       // and data.seq) and replay the run on each new read, so a reconnect skips every frame this stream already showed.
       // Unnumbered streams keep the old rule: reconnect only before any answer bytes, never duplicate text.
       let retries = 0, lastSeq = -1, numbered = false;
       const BACKOFF = [500, 1000, 2000, 4000, 8000, 15000, 30000], MAX_RETRIES = 20, STALL_MS = 90000;
+
       const event = e => {
         if (r.stopped || r.terminal) return;
         let d; try { d = JSON.parse(e.data); } catch (_) { return; }
@@ -1309,7 +1318,7 @@
           if (i >= 0) { r.steps = r.steps.map((s, n) => n === i ? { ...s, done: true, error: !!d.error } : s); notify(); }
         }
         // reasoning.available is deliberately not answer text.
-        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) terminal();
+        if (['run.completed', 'run.failed', 'run.cancelled', 'run.interrupted'].includes(type)) void terminal(type.slice(4));
       };
       const canResume = () => !r.stopped && !r.terminal && (numbered || !r.text);
       const connect = () => {
@@ -1318,7 +1327,7 @@
         if (!numbered) r.steps = []; // an unnumbered reconnect replays the run from its first event
         try {
           r.seenAt = Date.now(); // a new read gets the full stall window to open, however slow the link
-          r.source = new window.EventSource(`/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
+          r.source = new window.EventSource(base ? `${url}/events` : `/wizard/hermes/v1/runs/${encodeURIComponent(runId)}/events${agent ? '?agent=' + encodeURIComponent(agent) : ''}`);
           r.source.onmessage = event;
           for (const name of ['message.delta', 'tool.started', 'tool.completed', 'run.completed', 'run.failed', 'run.cancelled', 'run.interrupted', 'replay.truncated']) r.source.addEventListener(name, event);
           r.source.onopen = () => { r.live = true; r.seenAt = Date.now(); };
@@ -1343,13 +1352,14 @@
       const poll = async () => {
         if (r.stopped || r.terminal) return;
         try {
-          const d = await (await req(url)).json();
+          const d = await (await read(url)).json();
           if (r.stopped) return;
-          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) terminal();
+          if ((d.run_id || d.id) === runId && d.session_id === sid && ['completed', 'failed', 'cancelled', 'interrupted'].includes(d.status)) void terminal(d.status);
           // Wizard answers but the stream has been silent past several keepalives: a half-open connection (plane wifi).
           else if (r.source && r.live && numbered && Date.now() - (r.seenAt || 0) > STALL_MS) { r.live = false; close(); connect(); }
           // Some systems never fire 'online': a status read that worked is proof enough.
           else if (!r.source && r.waitingOnline) resumeNow();
+
         } catch (_) { /* connectivity recovery is the ordinary read poll, never another send */ }
         // The status read is only the safety net while the live stream is open.
         if (!r.stopped && !r.terminal) r.timer = setTimeout(poll, r.live ? 10000 : 1500);
