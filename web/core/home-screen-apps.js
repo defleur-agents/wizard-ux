@@ -44,7 +44,7 @@
     if (image) {
       const tmp = document.createElement('canvas'); tmp.width = tmp.height = 192;
       // Raster files retain their aspect; existing SVG drawing remains unchanged.
-      const raster = /\.(?:png|webp)$/.test(match[1]), k = raster ? Math.min(128 / image.naturalWidth, 128 / image.naturalHeight) : 0;
+      const raster = match[1].startsWith('/') && /\.(?:png|webp)$/.test(match[1]), k = raster ? Math.min(128 / image.naturalWidth, 128 / image.naturalHeight) : 0;
       const w = raster ? image.naturalWidth * k : 128, h = raster ? image.naturalHeight * k : 128;
       const t = tmp.getContext('2d'); t.drawImage(image,(192-w)/2,(192-h)/2,w,h); t.globalCompositeOperation = 'source-in'; t.fillStyle = sigil.color; t.fillRect(0,0,192,192); ctx.drawImage(tmp,0,0);
     } else { ctx.fillStyle = sigil.color; ctx.font = 'bold 100px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(sigil.letter || a.name[0],96,100); }
