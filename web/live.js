@@ -13,7 +13,7 @@
   const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
   const ALIASES = { started: 'running', accepted: 'queued', pending: 'queued', waiting: 'waiting_for_approval' };
   const isAutomaticPrompt = s => globalThis.WizCore?.isAutomaticPrompt?.(s) === true;
-  const isAutomaticPreview = s => isAutomaticPrompt(s) || /^(?:\[AUTO\]|\[Nebula:?\])[ \t]+Please share the complete [^\r\n]{1,240} report exactly as save…$/.test(String(s || ''));
+  const isAutomaticPreview = s => isAutomaticPrompt(s) || /^(?:\[AUTO\]|\[Nebula:?\])[ \t]+Please share the complete [^\r\n]{1,240}(?:report exactly as save…|\.{3})$/.test(String(s || ''));
   const WEEK = 7 * 864e5;
 
   const iso = v => {

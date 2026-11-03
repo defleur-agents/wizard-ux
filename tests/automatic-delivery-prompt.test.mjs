@@ -95,6 +95,16 @@ test('automatic delivery prompts stay out of chat-list previews but remain avail
   assert.equal(indexed.preview, '', 'a stale clipped title-index preview is hidden too');
   const colonless = normalize({ id: 'wizard_compat_daily', listVersion: 1, preview: '[Nebula] Please share the complete Daily Brief report exactly as save…' });
   assert.equal(colonless.preview, '', 'the short-lived colonless compatibility form is hidden too');
+  const active = normalize({
+    id: 'wizard_active_delivery',
+    listVersion: 1,
+    status: 'running',
+    helperStatus: { phase: 'integrating', returned: 1 },
+    preview: '[Nebula:] Please share the complete AXM · Ready for Samples ...',
+  });
+  assert.equal(active.preview, '', 'an earlier server clip cannot leak through a working/helper status preview');
+  const manual = normalize({ id: 'wizard_manual', listVersion: 1, preview: '[Nebula:] Please share the complete migration plan tomorrow.' });
+  assert.equal(manual.preview, '[Nebula:] Please share the complete migration plan tomorrow.', 'ordinary prefixed owner text stays visible');
 });
 
 test('message search never exposes an automatic delivery prompt as its result snippet', async () => {
