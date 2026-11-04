@@ -1877,8 +1877,12 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   assert.match(c, /if \(a === 'app'\) return \{ label: `Open \$\{app\}`/, 'Open names the app');
   assert.match(c, /const tacts = NV \? \(NQ \? '' : noteTactsHtml\(NV, false\)\)/, 'quiet: the buttons sit inside the open card, not under the list');
   assert.doesNotMatch(c.split('\n').find(l => l.trim().startsWith('if (NQ) msgs =')), /ch-notif-src|mmeta/, 'no second Notification label');
-  assert.match(b, /ask: \(id, name\) => id === 'notifications'[^?]*\? `\$\{name\} go to` : `\$\{name\} notifications go to`/, 'the doubled word fixed');
   assert.match(b, /function routeLabel\(id\)/);
+  // Shared main's unified inbox owns the notification thread; the layout must reuse its picker.
+  assert.match(c, /function noteRouteHtml\(NV\)/);
+  assert.match(c, /class="ch-notif-route" data-part="notify-route"/);
+  assert.ok(c.includes('B.picker(id, { name })'), 'one shared notification routing picker');
+  assert.match(b, /ask: \(id, name\) =>/, 'routing wording comes from the shared core');
   for (const f of ['desktop.css', 'layout.css']) {
     const css = read('web/layouts/ai-apps/' + f);
     assert.match(css, /\] \{ --wos-note-quiet: on; \}/, f + ': the view asks for the quiet thread');

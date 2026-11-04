@@ -51,6 +51,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
+| Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
