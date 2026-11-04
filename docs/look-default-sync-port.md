@@ -36,7 +36,9 @@ not included. #956 remains separate and must reconcile this appearance subset.
 
 Before source changes, the first four new cases fail on the base (0/4); after,
 `nice -n 19 node --test tests/look-default-sync.test.mjs tests/look-sync.test.mjs`
-passes. Full npm, real temporary-directory audit and browser screenshots are
+passes 40/40 (29 existing look-sync cases and 11 default-sync cases).
+The components inventory guard also passes 3/3. Full npm, real temporary-directory
+audit and browser screenshots are
 separately staged for parent-owned forum admission; local source tests are not
 browser or physical-phone acceptance. No live deployment/restart is part of this
 port.
