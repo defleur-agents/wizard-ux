@@ -727,9 +727,9 @@
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
     let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
-    const meeting = meetingBridge();
+    const meeting = meetingBridge(); let meetingStatus = null;
     if (meeting?.status) {
-      const st = await meeting.status(); check();
+      const st = await meeting.status(); check(); meetingStatus = st;
       if (typeof st?.recording !== 'boolean') throw fail('native_owner_uncertain', 'Native recorder status is unknown.');
       // A live status without an ID still owns the mic; never invent an ID to recover it.
       const unknown = !!(st?.recording && !st.meetingId);
@@ -743,7 +743,7 @@
     // Positive proof that no native recorder runs: the device reports no take and the meeting bridge (if any) is not recording.
     let nativeQuiet = false;
     try { nativeQuiet = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null') === null && !unknownMeetingActive &&
-      !(meeting?.status && (await meeting.status())?.recording); } catch (_) { nativeQuiet = false; }
+      (!meeting?.status || meetingStatus?.recording === false); } catch (_) { nativeQuiet = false; }
     check();
     for (const row of all) {
       check();
@@ -1050,6 +1050,7 @@
   function reloadCheck() {
     const no = reason => ({ safe: false, reason, keeps: null, recheck: !active && preparations.size === 0 });
     if (preparations.size) return no('capture_starting');
+    if (!ownershipLoaded || recoveryError) return no('capture_custody_uncertain');
     if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
@@ -1058,6 +1059,7 @@
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
+    if ([...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) return no('capture_custody_uncertain');
     if (active) {
       const s = active;
       const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&

@@ -6,7 +6,9 @@ const fixture=require('./tools/qa-closed-shell.cjs');
 const OUT=process.env.QA_OUT;assert(OUT);fs.mkdirSync(OUT,{recursive:true});
 const ORIGIN='http://wizard-qa.invalid',results={source:process.env.QA_SOURCE_SHA,synthetic:true,cases:[],screenshots:[]};
 let browser,page,stage='boot';const pass=name=>{results.cases.push(name);console.log('PASS',name)};
-const app='<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/wizard-os-home/kit/wizard-ui.css"><script src="/wizard-os-home/core/app-client.js"></script><p>Synthetic Recorder: microphone startup failed. No private data.</p><script>window.fixtureHold=WizardApp.update.hold("Mizel recording");window.fixtureReady=true;</script>';
+const recorderSource=process.env.QA_RECORDER_SOURCE;assert(recorderSource,'QA_RECORDER_SOURCE must pin the actual Recorder app source');
+const recorderBytes=fs.readFileSync(recorderSource);results.recorder={sha:process.env.QA_RECORDER_SHA,appSha256:require('node:crypto').createHash('sha256').update(recorderBytes).digest('hex')};
+const app=require('./tools/qa-recorder-controller.cjs').fixture(recorderBytes.toString());
 async function load(phone){
  let version='a'.repeat(40);
  const {c}=await fixture.boot(phone,async c=>{
@@ -19,7 +21,8 @@ async function load(phone){
  await page.waitForFunction(()=>window.WizAppCapture&&window.WizWebUpdate&&window.WizAppServices);
  await page.evaluate(()=>WizOpenApp('mizel'));
  await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.fixtureReady));
- await page.waitForFunction(()=>WizAppServices.inspect().some(f=>f.appId==='mizel'&&f.holds.includes('Mizel recording')));
+ assert.equal(await page.evaluate(()=>[...document.querySelectorAll('iframe')].find(f=>f.contentWindow?.fixtureReady)?.contentWindow.fixtureError||null),null,'production controller fixture must execute, not fail setup');
+ await page.waitForFunction(()=>WizAppServices.inspect().some(f=>f.appId==='mizel'));
  await page.evaluate(()=>WizCore.deeplink.route(location.origin+'/wizard-os-home/?view=chats'));
  await fixture.settle(page);
  const frame=()=>page.frames().find(f=>f.url().includes('/fixture-recorder/'));

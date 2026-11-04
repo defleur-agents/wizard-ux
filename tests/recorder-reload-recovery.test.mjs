@@ -23,18 +23,16 @@ function service(cap,appId='mizel') {
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
   return {host,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
-test('failed Start hold and retained stopped task-save recover, without ack/delete or work-hold override',()=>{
+test('shared durable custody never overrides app-owned capture or dirty-work holds',()=>{
   const cap=capture().reloadCheck(); assert.equal(cap.durable,true);
-  for(const reason of ['Mizel recording','Mizel capture or durable task save']) {
-    const f=service(cap);f.facade.update.hold(reason);assert.equal(f.plan().ok,true,reason);
-    const notes=f.facade.update.hold('Mizel unsaved notes');assert.equal(f.plan().ok,false);notes.release();assert.equal(f.plan().ok,true);
+  for(const appId of ['mizel','other']) for(const reason of ['Mizel recording','Mizel capture or durable task save','Mizel unsaved notes','Recording','Some capture work','Mizel recording notes']) {
+    const f=service(cap,appId),hold=f.facade.update.hold(reason);assert.equal(f.plan().ok,false,appId+': '+reason);
+    hold.release();assert.equal(f.plan().ok,true);
   }
-  for(const reason of ['Recording','Some capture work','Mizel recording notes']){const f=service(cap);f.facade.update.hold(reason);assert.equal(f.plan().ok,false,reason);}
-  const other=service(cap,'other');other.facade.update.hold('Mizel recording');assert.equal(other.plan().ok,false);
 });
 test('durability is positive proof, never inferred from an error, unloaded registry, unresolved row or active memory',()=>{
   for(const overrides of [{ownershipLoaded:false},{recoveryError:{code:'storage_failed'}},{ownedRows:new Map([['x',{status:'recoverable'}]])}]){
-    const cap=capture(overrides).reloadCheck(),f=service(cap);f.facade.update.hold('Mizel recording');assert.equal(cap.durable,false);assert.equal(f.plan().ok,false);
+    const cap=capture(overrides).reloadCheck(),f=service(cap);assert.notEqual(cap.durable,true);assert.equal(cap.safe,false);assert.equal(f.plan().ok,false);
   }
   const retained={id:'stopped',appId:'mizel',kind:'meeting',status:'pending',bytes:32000};
   const ctx=capture({ownedRows:new Map([['stopped',retained]])});assert.equal(ctx.reloadCheck().durable,true);assert.equal(ctx.ownedRows.get('stopped'),retained);
@@ -48,6 +46,15 @@ test('real browser recording, stopping, unsaved memory, preparations and microph
   const ctx=capture({W:{wizardMizelPort:{}},active:{row:{id:'live',appId:'mizel',native:'wizard-meetings',nativeId:'qa-meeting',kind:'meeting',meta:{}},phase:'recording',engine:{}}});
   const cap=ctx.reloadCheck();assert.equal(cap.safe,true);assert.equal(cap.keeps.appId,'mizel');
   ctx.active.borrow={};assert.equal(ctx.reloadCheck().reason,'microphone_loan');
+});
+test('native survival is specific: steady Android meeting keeps recording, private mic loans and unfinished saves block',()=>{
+  const row={id:'native-capture',appId:'recorder-fixture',kind:'meeting',native:'wizard-meetings',nativeId:'meeting'};
+  const active={row,phase:'recording',engine:{}};
+  assert.equal(capture({active,W:{wizardMizelPort:{}}}).reloadCheck().safe,true);
+  for(const patch of [{borrow:{private:true}},{borrowWork:Promise.resolve()},{finishPromise:Promise.resolve()},{phase:'stopping'},{engineDetached:true}]) {
+    const check=capture({active:{...active,...patch},W:{wizardMizelPort:{}}}).reloadCheck();
+    assert.equal(check.safe,false);if(patch.borrow||patch.borrowWork)assert.equal(check.reason,'microphone_loan');
+  }
 });
 test('unknown/malformed native owners fail closed',()=>{
   for(const overrides of [{unknownMeetingActive:true},{W:{WizardOSDevice:{recActive:()=>'{broken'}}},{W:{WizardOSDevice:{recActive:()=>'{"id":"native-live"}'}}},{ownedRows:new Map([['x',{native:'wizard-meetings',status:'recoverable'}]])}])assert.equal(capture(overrides).reloadCheck().safe,false);

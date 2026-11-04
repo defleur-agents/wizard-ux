@@ -672,11 +672,9 @@
     if (!cap.safe) blocking.push({ appId: null, kind: 'capture', reason: cap.reason || 'capture' });
     for (const st of frames.values()) for (const reason of st.holds.values()) {
       const capture = CAPTURE_HOLD.test(reason);
-      // The serving Recorder starts this hold even after a failed Start clears its engine. A stopped
-      // task save can also retain it. Only its exact audio holds may follow proven durable custody;
-      // notes/other work and unknown owners remain protected. This never acknowledges/deletes audio.
-      const recorder = st.appId === 'mizel' && /^Mizel (recording|capture or durable task save)$/i.test(reason);
-      if (capture && cap.safe && ((keeps && st.appId === keeps.appId) || (recorder && cap.durable === true))) continue;
+      // App-owned holds are released only by their owner. Durable shared storage cannot prove an
+      // app has no private in-memory work. Only the existing native-survival contract passes here.
+      if (capture && keeps && st.appId === keeps.appId) continue;
       blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
     }
     return { ok: !blocking.length, keeps, capture: cap, blocking, recording: blocking.some(b => b.kind === 'capture') };
