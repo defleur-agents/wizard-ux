@@ -18,7 +18,7 @@ test('desktop Settings opens as a window and every way of closing the window hid
   // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
   assert.match(open, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
-  assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
+  assert.match(desk, /if \(settingsModal && !settingsOver\(\)\) closeSettings\(\);\n    homeOpen = false;/, 'only an everywhere-modal view keeps Settings while preparing its page');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);

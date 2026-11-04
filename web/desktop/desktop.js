@@ -1378,7 +1378,9 @@
   function leaveHome() {
     window.WosResources?.back();
     if (!homeOpen || globalThis.WosSkinHost?.panelMode) return;
-    if (settingsModal) closeSettings();
+    // A view with Settings over every page may prepare Chats behind the picker when it mounts.
+    // Keep that modal (and its Look page) open; ordinary Home navigation still closes it.
+    if (settingsModal && !settingsOver()) closeSettings();
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
