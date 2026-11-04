@@ -47,6 +47,22 @@ test("an owner's own release: base from my-release.json, behind from the App Man
   assert.match(text(b.feature.html()), /0 behind main · 120 own changes/);
 });
 
+test("an owner's own release whose updates status never loads settles on 'couldn't check main', not 'checking main…' forever", async () => {
+  const mine = { '/wizard-os-home/my-release.json': { base: { ref: 'f3cb2e21' }, changes: [{ sha: '1' }, { sha: '2' }] } };
+  let loads = 0;
+  // updates request failed / older App Manager: os-updates.js marks itself off and load() resolves with no state
+  let b = await boot({ files: mine, updates: { state: null, load: async () => { loads++; return null; } } });
+  assert.match(text(await b.render()), /Built on main f3cb2e21 2 own changes · couldn’t check main$/);
+  assert.equal(loads, 1, 'asked once, not on every draw');
+  // no WosUpdates at all
+  b = await boot({ files: mine, updates: null });
+  assert.match(text(await b.render()), /Built on main f3cb2e21 2 own changes · couldn’t check main$/);
+  // a load that succeeds shows the real count
+  const u = { state: null, load: async () => { u.state = { release: { behind: 4 } }; return u.state; } };
+  b = await boot({ files: mine, updates: u });
+  assert.match(text(await b.render()), /4 behind main · 2 own changes$/);
+});
+
 test('a published image: build.json commit, compared with main by the App Manager once an hour', async () => {
   let t0 = 1e12, asks = 0;
   const b = await boot({ now: () => t0, files: {

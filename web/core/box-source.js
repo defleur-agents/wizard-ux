@@ -18,7 +18,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const FULL = /^[0-9a-f]{40}$/, SHORT = /^[0-9a-f]{7,40}$/, count = n => Number.isInteger(n) && n >= 0;
   const HOUR = 3600e3, RETRY = 600e3;
-  let info = null, loading = false, cmp = null, cmpAt = 0, cmpBusy = false;
+  let info = null, loading = false, cmp = null, cmpAt = 0, cmpBusy = false, updAt = 0, updBusy = false, updFailed = false;
 
   const refresh = () => { try { S.refresh(); } catch (_) {} };
   async function json(u) {
@@ -50,6 +50,21 @@
       cmpAt = Date.now(); cmpBusy = false; refresh();
     });
   }
+  // The App Manager's updates status (my-release keeps .release.behind current). If it never loads (request failed,
+  // older App Manager, no WosUpdates) os-updates.js stops asking, so settle on "couldn't check main" instead of
+  // "checking main…" forever; ask again at most every 10 minutes while About is drawn.
+  function updates() {
+    const U = window.WosUpdates;
+    if (U?.state) { updFailed = false; return U.state; }
+    if (typeof U?.load !== 'function') { updFailed = true; return null; }
+    if (!updBusy && (!updAt || Date.now() - updAt >= RETRY)) {
+      updBusy = true;
+      Promise.resolve().then(() => U.load()).catch(() => null).then(st => {
+        updBusy = false; updAt = Date.now(); updFailed = !(st || U.state); refresh();
+      });
+    }
+    return null;
+  }
   // "2 behind main · 120 own changes"; both zero = "Up to date with main".
   function words(behind, own) {
     const mineTxt = count(own) && own > 0 ? `${own} own ${own === 1 ? 'change' : 'changes'}` : '';
@@ -63,9 +78,9 @@
     if (!info) return '';
     if (info.kind === 'none') return row('Main commit unknown', 'This build carries no stamp of the main commit it came from');
     if (info.kind === 'mine') {
-      const st = window.WosUpdates?.state, behind = count(st?.release?.behind) ? st.release.behind : null;
+      const st = updates(), behind = count(st?.release?.behind) ? st.release.behind : null;
       const own = info.own ? `${info.own} own ${info.own === 1 ? 'change' : 'changes'} · ` : '';
-      return row(`Built on main ${info.base.slice(0, 8)}`, st ? words(behind, info.own) : `${own}checking main…`);
+      return row(`Built on main ${info.base.slice(0, 8)}`, st || updFailed ? words(behind, info.own) : `${own}checking main…`);
     }
     compare();
     if (!cmp) return row(`Built from ${info.commit.slice(0, 8)}`, 'Checking main…');
