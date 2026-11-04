@@ -333,7 +333,7 @@ test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by au
   const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
   assert.doesNotMatch(rows, /tw-author|data-tweakauthor|All of/, 'no author sections or quick buttons');
   assert.match(rows, /\.sort\(\(a, b\) => String\(a\.name \|\| a\.id\)\.localeCompare/, 'A to Z by name');
-  assert.match(rows, /tweakSwitches\(list, 'data-tweak-toggle', s\.busy, name\)/, 'one switch per tweak, with its author');
+  assert.match(rows, /tweakSwitches\(\[t\], 'data-tweak-toggle', s\.busy, name\)/, 'one switch per tweak, with its author');
   assert.doesNotMatch(read('web/core/experience.js'), /chooseAuthor/, 'the author mix is gone');
   assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
   assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');

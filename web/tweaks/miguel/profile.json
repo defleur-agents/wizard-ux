@@ -9,7 +9,8 @@
     "miguel/machines-home",
     "miguel/no-desk-close",
     "miguel/archive-top",
-    "miguel/group-by-day"
+    "miguel/group-by-day",
+    "miguel/reply-summary"
   ],
   "flags": {},
   "off": [

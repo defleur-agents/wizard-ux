@@ -19,7 +19,8 @@
     "wizard/new-send-list",
     "miguel/no-desk-close",
     "miguel/archive-top",
-    "miguel/group-by-day"
+    "miguel/group-by-day",
+    "miguel/reply-summary"
   ],
   "defaults": [
     "wizard/unified-inbox"

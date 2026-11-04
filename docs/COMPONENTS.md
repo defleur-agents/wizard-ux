@@ -15,7 +15,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 ## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
 | Need | Use |
-|---|---|---|---|
+|---|---|
 | Owner signatures | `WizardApp.identity.*` → `wizardDevicePort` |
 | Agent chat | `WizardApp.nav.openThread(sessionId, {reply})`, `nav.openContextDraft` |
 | App identity/root | `WizardAppIdentity` (`web/core/app-identity.js`), loaded by SDK |
@@ -45,7 +45,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 ## Shell (`web/core/`): both shells/all agents.
 
 | Need | Use |
-|---|---|---|
+|---|---|
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
@@ -93,9 +93,9 @@ One owner per capability: [gate](app-reuse-gate.md).
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
 | Need | Use |
-|---|---|---|
+|---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
-| Skin, scenery and tweak switches | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
+| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
 | Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
