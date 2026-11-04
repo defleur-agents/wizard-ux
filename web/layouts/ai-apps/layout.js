@@ -215,6 +215,7 @@ export default function setup(api) {
     readSessions(); paintDrawer(true);
     layer.hidden = false; layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity');
     api.frame(() => layer.classList.add('is-open'));
+    api.aiUsage?.live?.(foot);  // the fuel gauge's feed: watched only once the foot is on screen
     root.dataset.aaDrawer = 'open'; menuBtn.setAttribute('aria-expanded', 'true');
     offBack = api.back.push(closeDrawer);
   }
