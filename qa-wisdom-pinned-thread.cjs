@@ -17,6 +17,7 @@ const mime=f=>({'.js':'application/javascript','.json':'application/json','.css'
 fs.mkdirSync(OUT,{recursive:true});
 const result={status:'running',scope:LIVE?'INSTALLED live unmodified shell/app assets; synthetic private APIs; no provider calls':'CANDIDATE exact shell source + pinned Wisdom bytes; synthetic registry; synthetic private APIs; no provider calls',revision:manifest.revision,shellRevision:manifest.shell_revision,cases:[]};
 function save(){fs.writeFileSync(path.join(OUT,'hosted-route.json'),JSON.stringify(result,null,2)+'\n')}
+function reportFailure(c,e){console.error('FAIL wisdom-pinned-thread', JSON.stringify({width:c?.width,skin:c?.skin,action:c?.action,message:String(e.message),stack:String(e.stack)}));}
 function sourceError(e){return {name:e.name,sourceStack:[...String(e.stack||'').matchAll(/https?:\/\/[^\s)]+:\d+:\d+/g)].map(x=>x[0].replace(BASE.origin,''))};}
 (async()=>{const browser=await chromium.launch({headless:true,args:['--use-fake-ui-for-media-stream','--use-fake-device-for-media-stream']});try{
 for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const skin of (process.env.QA_BASELINE==='1'?['nebula']:['nebula','signal']))for(const action of ['selection-ask-ai','selection-open-discussion']){
@@ -230,7 +231,7 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
   c.admissions={discussionIds:thread?[thread.id]:[],sessionIds:[SID],providerRuns:0};
   assert(!c.requests.some(r=>r.path.includes('/runs')||r.path.endsWith('/ask')),'No send or provider request');
   assert.equal(c.failures.length,0,'No source pageerrors');c.status='pass';
- }catch(e){c.status='fail';const failedFrame=ctx.pages()[0]?.frames().find(f=>new URL(f.url(),BASE).pathname.startsWith('/wisdom/'));c.errorText=await failedFrame?.locator('.wd-notice').textContent().catch(()=>'');await ctx.pages()[0]?.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-failure.png`)}).catch(()=>{});c.failures.push({kind:'assertion',message:String(e.message).slice(0,600),...sourceError(e)})}finally{await ctx.close();save()}
+ }catch(e){reportFailure(c,e);c.status='fail';const failedFrame=ctx.pages()[0]?.frames().find(f=>new URL(f.url(),BASE).pathname.startsWith('/wisdom/'));c.errorText=await failedFrame?.locator('.wd-notice').textContent().catch(()=>'');await ctx.pages()[0]?.screenshot({path:path.join(OUT,`${width}-${skin}-${action}-failure.png`)}).catch(()=>{});c.failures.push({kind:'assertion',message:String(e.message).slice(0,600),...sourceError(e)})}finally{await ctx.close();save()}
 }
-result.status=result.cases.length===(process.env.QA_BASELINE==='1'?2:8)&&result.cases.every(c=>c.status==='pass')?'pass':'fail';save();if(result.status!=='pass')process.exitCode=1;
-}finally{await browser.close()}})().catch(e=>{result.status='blocked';result.error={message:String(e.message).slice(0,600),...sourceError(e)};save();process.exitCode=1});
+result.status=result.cases.length===(process.env.QA_BASELINE==='1'?2:8)&&result.cases.every(c=>c.status==='pass')?'pass':'fail';save();console.log('wisdom-pinned-thread',result.status,JSON.stringify(result.cases.map(({width,skin,action,status,failures})=>({width,skin,action,status,failures}))));if(result.status!=='pass')process.exitCode=1;
+}finally{await browser.close()}})().catch(e=>{reportFailure(null,e);result.status='blocked';result.error={message:String(e.message).slice(0,600),...sourceError(e)};save();process.exitCode=1});

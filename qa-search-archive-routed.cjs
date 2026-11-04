@@ -72,7 +72,8 @@ const ROUTED = 'qa-host', ag = { id: ROUTED, label: 'Synthetic routed', privacy:
     await page.waitForFunction(() => (window.__wos || window.__wux) && window.WizCore?.apps, null, { timeout: 20000 });
     if (shell === 'phone') await page.evaluate(() => __wos.openApp(WizCore.apps('mobile').APPS.find(a => a.id === 'wizard')));
     const wid = await page.waitForFunction(() => Object.values((window.__wos || window.__wux).wins).find(w => w.app === 'chats' && !w.agent)?.id || '', null, { timeout: 15000 }).then(h => h.jsonValue());
-    const rootOf = id => shell === 'desktop' ? `.win[data-win="${id}"]` : `[data-chats="${id}"]`;
+    // Desktop mounts both a detail root and a separate list root; hidden stale detail markup is not a search result.
+    const rootOf = id => `[data-chats="${id}${shell === 'desktop' ? '::list' : ''}"]`;
     let root = rootOf(wid);
     await page.waitForSelector(`${root} .ch-row[data-chopen="qa_s_live"], ${root} [data-sec="archive"]`, { timeout: 20000 }); await settle(page);
     const order = () => page.evaluate(root => [...document.querySelectorAll(`${root} .ch-sec[data-sec]`)].filter(e => e.getBoundingClientRect().width > 0).map(e => [e.dataset.sec, Math.round(e.getBoundingClientRect().top), e.classList.contains('open')]).sort((a, b) => a[1] - b[1]), root);
