@@ -138,8 +138,10 @@
     return `<section class="wz-recovery" data-recovery><details open><summary>Connection help</summary><div class="wz-recovery-help"><h2>Can’t reach your Wizard?</h2><p data-recovery-message>Check this device’s internet connection. On a Tailscale address, open the Tailscale app and check it’s connected. Your saved chats stay on this device.</p><ul class="wz-list" data-recovery-rows><li class="wz-row">Internet · Not checked</li><li class="wz-row">Your Wizard’s connection · Not checked</li><li class="wz-row">Wizard · Not checked</li></ul><button type="button" class="wz-button" data-recovery-check>Check again</button><p data-recovery-remote>Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.</p></div></details><iframe class="appframe" data-own-app="troubleshooter" title="Troubleshooter" hidden allow="clipboard-read; clipboard-write" referrerpolicy="same-origin"></iframe></section>`;
   }
   const recoveries = new Set();
-  function mountRecovery(root) {
+  function mountRecovery(root, url) {
     if (!root || root._recovery) return;
+    // Provider reconnect links carry their sign-in workflow in this query. Keep it through local-first checks.
+    const target = typeof url === 'string' && /^\/troubleshoot\/(?:[?#]|$)/.test(url) ? url : '/troubleshoot/';
     root._recovery = true;
     const frame = root.querySelector('iframe'), details = root.querySelector('details'), button = root.querySelector('[data-recovery-check]');
     let serial = 0, timer, remoteReady = false, remoteLoading = false, last;
@@ -168,10 +170,10 @@
       if (c.hostReachable && !remoteReady && !remoteLoading) {
         remoteLoading = true;
         // A host HTTP error is not proof the repair page loaded. Keep help visible until its actual document loads.
-        request('/troubleshoot/', { method: 'HEAD' }).then(r => {
+        request(target, { method: 'HEAD' }).then(r => {
           if (!connected() || id !== serial) { remoteLoading = false; return; }
           if (!r.ok) throw Error('Repair page unavailable');
-          frame.src = '/troubleshoot/';
+          frame.src = target;
         }).catch(() => { remoteLoading = false; remoteMessage('The repair page isn’t available yet. Local connection help is still available.'); });
       }
       if (!c.hostReachable) { frame.hidden = true; remoteReady = false; remoteLoading = false; root.classList.remove('repair-ready'); details.open = true; remoteMessage('Repair buttons and repair chat need a connection to your Wizard. Local connection help is available here.'); }
