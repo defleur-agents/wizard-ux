@@ -743,7 +743,7 @@ export default function desktop(api) {
   let railLast = '';
   // (an app in front with a chat docked beside it: that chat is the current one, so ⌥↓ / ⌥↑ step from it)
   const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || (h.app && chatThread ? (chatThread === NOTE ? stepAt : chatThread) : null) || null; };
-  const railMode = () => groupReady() ? 'groups' : 'list';   // (round 24: By subject folds to Ready alone, like One list)
+  const railMode = () => ({ status: 'groups', subject: 'subjects' })[groupBy()] || 'list';   // (round 24b: By subject folds to its subjects)
   const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder(), railMode());
   function railGo(key) {
     closeFly();
@@ -794,9 +794,9 @@ export default function desktop(api) {
     if (root.dataset.aadSide !== 'rail') return;
     // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
     // status alone (plain chats as 'Other'), no Ready total over them
-    const s = sessions || readSessions(), ready = s.ready || [], grouped = groupReady(), groups = grouped ? stateGroups(ready) : [], act = railNow();
+    const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'subject' ? subjectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
-    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, grouped, groups.map(g => g.state + g.rows.length), act]);
+    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (always, its count may be 0), then Ready's statuses
@@ -804,7 +804,7 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each subject)
     else out.push(railRow('ready', ready.length, 'Ready', '', act));
     rList.replaceChildren(...out);
     if (fly) paintFly();
@@ -1528,7 +1528,7 @@ export default function desktop(api) {
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)
-      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder(), railMode()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
+      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder(), railMode()); return a && [...rList.querySelectorAll('.aad-rk')].find(n => n.dataset.k === a.key); };   // (a subject key may hold any character)
       const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
       // (beside the rail word, never over its count; both on one word: ↑ over ↓)
       if (n1) put(n1, '↓', p1 === n1 ? 'right-dn' : 'right'); if (p1) put(p1, '↑', p1 === n1 ? 'right-up' : 'right');

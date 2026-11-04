@@ -280,14 +280,18 @@ export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
   if (key === 'ready') return readyFlat(s?.ready || [], order, mode);
+  // (round 24b: a subject on the folded rail, 'subj:<name>')
+  if (String(key).startsWith('subj:')) return (subjectGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
   return (readyGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
 }
 /** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
  * status group holding it, else Ready / Snoozed. { key, i, n } (i zero-based) or null. Pure. */
 export function railActive(s, cur, last, order, mode) {
   if (!cur) return null;
-  const at = key => { const ids = railRows(s, key, order).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
+  const at = key => { const ids = railRows(s, key, order, mode === 'subjects' ? 'subject' : undefined).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
   if (last) { const a = at(last); if (a) return a; }
+  // round 24b (Miguel, 4 Nov 2026: By subject on the folded rail too): each subject alone, as 'groups' does statuses
+  if (mode === 'subjects') { const sg = subjectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
   // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
   const g = mode === 'list' ? null : stateGroups(s?.ready || []).find(x => (mode === 'groups' || x.state !== 'none') && x.rows.some(r => r.id === cur));
   return (g && at(g.state)) || (mode === 'groups' ? null : at('ready')) || at('snoozed') || at('working');
