@@ -435,7 +435,7 @@
   register({ id: 'wallpaper', aliases: ['background', 'wallpaper'], available: () => typeof window.WosSkin?.setWallpaper === 'function', html() {
     const S = window.WosSkin; if (!S.wallpaperable) return '';
     const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
-    return `<div class="st-group wp-section"><h4>Background</h4><div class="st-seg" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}">${w.name}</button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
+    return `<div class="st-group wp-section"><h4>Background</h4><div class="wp-grid" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" class="wp-tile" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}"><i style="background-image:url('${S.wallpaperThumb(w.id)}')" aria-hidden="true"></i><span>${w.name}</span></button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
   }, act(ctx, el) {
     const b = el.closest('[data-wallpaper]'); if (!b) return false;
     window.WosSkin.setWallpaper(b.dataset.wallpaper); ctx.render(); ctx.root.querySelector(`[data-wallpaper="${b.dataset.wallpaper}"]`)?.focus({ preventScroll: true }); ctx.haptic?.(8); return true;
