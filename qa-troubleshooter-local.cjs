@@ -10,6 +10,16 @@ assert.ok(tsRoot && fs.existsSync(path.join(tsRoot, 'index.html')), 'stage real 
 const policy = fs.readFileSync(path.join(__dirname, 'packaging/static.conf'), 'utf8').match(/Content-Security-Policy "([^"]+)"/)[1];
 const publicUrl = 'https://derp1.tailscale.com/generate_204';
 const results = [], receipts = [];
+// Unchanged 03fa4ee shell startup attempts these writes (launcher.js:32, live.js:539).
+// They remain ABORTED, never fulfilled/forwarded; no repair/diagnostic write is allowed.
+const shellStartupWrites = { '/wizard/v1/ui-preferences/seed': 'POST', '/wizard/thread-seen': 'PUT' };
+function assertWriteFence(writes, host) {
+  assert.deepEqual(writes.filter(w => /\/(?:troubleshoot|repairs?|diagnostics?)(?:\/|$)/i.test(w.path)), [], 'zero repair/diagnostic write attempts');
+  assert.deepEqual(writes.filter(w => {
+    const u = new URL(w.url);
+    return u.origin !== host || u.search || shellStartupWrites[w.path] !== w.method || w.aborted !== true;
+  }), [], 'only exact pre-existing shell startup paths/methods may be attempted, and every attempt is aborted');
+}
 fs.mkdirSync(out, { recursive: true });
 const ok = (name, detail = {}) => { results.push({ name, pass: true, ...detail }); console.log('PASS', name); };
 const json = (res, value) => { res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
@@ -46,11 +56,21 @@ const server = http.createServer((req, res) => {
       const label = desktop ? 'desktop' : 'phone';
       const ctx = await browser.newContext({ viewport: desktop ? { width: 1440, height: 1000 } : { width: 412, height: 892 }, isMobile: !desktop, hasTouch: !desktop, serviceWorkers: 'block' });
       let mode = 'down', privateDown = false, probeRequests = 0, diagnosticRequests = 0, escaped = [], writes = [], errors = [];
-      await ctx.route('**/*', async route => {
+      receipts.push({ label, blockedWriteAttempts: writes, allowedShellStartupWrites: shellStartupWrites });
+      const fence = route => {
         const q = route.request(), u = new URL(q.url());
+        // Abort ALL mutating traffic first, including public/escaped destinations.
+        if (!['GET', 'HEAD'].includes(q.method())) {
+          writes.push({ url: q.url(), path: u.pathname, method: q.method(), aborted: true });
+          return route.abort();
+        }
         if (q.url() === publicUrl) { probeRequests++; return route.fulfill({ status: 204, body: '' }); }
-        if (u.hostname !== 'wizard.fixture.ts.net') { escaped.push(q.url()); return route.abort(); }
-        if (!['GET', 'HEAD'].includes(q.method())) { writes.push(q.url()); return route.abort(); }
+        if (u.origin !== host) { escaped.push(q.url()); return route.abort(); }
+        return null;
+      };
+      await ctx.route('**/*', async route => {
+        const fenced = fence(route); if (fenced) return fenced;
+        const q = route.request(), u = new URL(q.url());
         if (u.pathname.startsWith('/troubleshoot/api/')) {
           diagnosticRequests++;
           if (mode === 'down') return route.abort('connectionrefused');
@@ -112,15 +132,18 @@ const server = http.createServer((req, res) => {
       // Delivered policy deliberately excludes the probe; real browser CSP must prevent a network request.
       await ctx.close();
       const blocked = await browser.newContext(); let hit = 0;
-      await blocked.route(publicUrl, r => { hit++; return r.fulfill({ status: 204 }); });
-      await blocked.route('**/troubleshoot/api/ping', r => r.abort());
+      await blocked.route('**/*', route => {
+        if (route.request().url() === publicUrl && ['GET', 'HEAD'].includes(route.request().method())) { hit++; return route.fulfill({ status: 204 }); }
+        return fence(route) || route.continue();
+      });
+      await blocked.route('**/troubleshoot/api/ping', r => fence(r) || r.abort());
       const bp = await blocked.newPage(); await bp.goto(`${host}/wizard-os-home/index.html?blockedProbe=1`);
       await bp.waitForFunction(() => !!window.WizReach);
       const c = await bp.evaluate(() => WizReach.checks()); assert.equal(c.internet.state, 'skip'); assert.equal(hit, 0); assert.match(c.help, /Tailscale/);
       ok(`${label}: delivered restrictive CSP blocks public probe and produces unknown, never offline`);
       await blocked.close();
-      assert.deepEqual(escaped, []); assert.deepEqual(writes, []); assert.deepEqual(errors, []);
-      ok(`${label}: zero escaped traffic, owner writes or browser errors`, { diagnosticRequests, probeRequests });
+      assert.deepEqual(escaped, []); assertWriteFence(writes, host); assert.deepEqual(errors, []);
+      ok(`${label}: zero escaped traffic, forwarded writes, repair/diagnostic write attempts or browser errors`, { diagnosticRequests, probeRequests, blockedShellStartupWrites: writes });
     }
     // No skin/kit host: the shell-local recovery content has a readable dark fallback.
     const p = await browser.newPage({ viewport: { width: 412, height: 892 } });
