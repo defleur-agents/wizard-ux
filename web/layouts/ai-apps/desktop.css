@@ -825,14 +825,12 @@ html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [
 
 /* round 23 (Miguel, 4 Nov 2026): the rail is a tally of marks, no numbers: a spinner per working chat (the expanded
  * list's tiny spinner), a solid dot per ready chat (amber in Ready, the ink in a status), a ring per snoozed one; rows of 4 */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; width: 2.75rem; min-width: 0; height: auto; padding: 0.125rem 0; border-radius: 0; color: var(--aad-ink); background: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d { width: 0.5rem; height: 0.5rem; box-sizing: border-box; border-radius: 50%; font-style: normal; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-dot { background: var(--aad-ink); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="ready"] .aad-d.is-dot { background: var(--amber, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-ring { border: 0.09375rem solid var(--aad-ink-2); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-none { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 22%, transparent); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-more { display: grid; place-items: center; color: var(--aad-ink-2); font: 600 0.625rem / 1 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="working"] { margin-bottom: 0.25rem; }
 @media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { animation-duration: 3s; } }
 /* round 22: the Sort / Group menu's second heading sits a step below the first group */
@@ -844,6 +842,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-
 /* round 22: By status on the rail has no Ready row over the statuses: the first one still opens the soft plate */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub:first-child { border-top-left-radius: 0.625rem; border-top-right-radius: 0.625rem; }
 /* round 23b: Working = one spinner + its number; the rail's words are whole ("Needs you", "Your call"), two lines at most */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-rk-wk { display: inline-flex; align-items: center; gap: 0.3125rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-rk-wk { display: inline-flex; align-items: center; gap: 0.3125rem; min-width: 0; height: auto; padding: 0; border-radius: 0; color: var(--aad-ink); background: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wn { font: 650 0.875rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-space: normal; text-align: center; overflow-wrap: normal; line-height: 1.15; }

@@ -206,8 +206,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
   assert.deepEqual(w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className), ['aad-d is-spin'], 'round 23b: Working = one spinner');
   assert.equal(w.q('.aad-rk[data-k="working"] .aad-rk-wn').textContent, '1', 'round 23b: and its number');
-  assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot', 'aad-d is-dot'], 'round 23: one solid dot per ready chat');
-  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-n').textContent, '', 'no digits on the rail');
+  assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot'], 'round 23c: Ready = ONE amber dot, not a dot per chat');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-wn').textContent, '2', 'round 23c: and its number');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.js'), /DOTS_MAX|aad-dots/, 'round 23c: no tally of dots past four (looked weird)');
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
