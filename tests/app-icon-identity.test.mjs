@@ -52,8 +52,8 @@ test('unknown package logos, safe URL checks and unregistered fallback remain in
   assert.equal(S.of({ id: 'unknown-app' }).logo, logo('unknown-app'));
   assert.match(S.html({ id: 'unknown-app' }), /class="sglogo"/);
   logos.set('unknown-app', 'https://untrusted.invalid/logo.png');
-  assert.match(S.html({ id: 'unknown-app' }), /class="sgi sgl"/);
-  assert.match(S.html({ id: 'other-app', icon: '//untrusted.invalid/icon.svg' }), /class="sgi sgl"/);
+  assert.match(S.html({ id: 'unknown-app' }), /class="sgi sg-apps"/);
+  assert.match(S.html({ id: 'other-app', icon: '//untrusted.invalid/icon.svg' }), /class="sgi sg-apps"/);
 });
 test('all existing product brands keep their canonical masked artwork', () => {
   const { S, logos } = load();

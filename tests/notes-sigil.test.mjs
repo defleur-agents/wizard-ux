@@ -36,13 +36,14 @@ test('Notes compatibility alias and cached metadata cannot restore a legacy icon
 });
 
 test('unknown shipped logos stay intact while every designed identity wins', () => {
-  const logos = { 'maverick-command': legacyLogo('maverick-command') };
+  const logos = { 'unregistered-fixture': legacyLogo('unregistered-fixture') };
   const S = sigils({ logos });
   for (const id of Object.keys(logos)) {
     assert.equal(S.of({ id }).logo, logos[id]);
     assert.match(S.html({ id }), /class="sglogo"/);
   }
+  assert.match(S.html({ id: 'maverick-command' }), /class="sgi sg-console"/);
   assert.match(S.html({ id: 'calendar' }), /class="sgi sg-calendar"/);
   assert.match(S.html({ id: 'files' }), /class="sgi sg-files"/);
-  assert.match(S.html({ id: 'unknown-app', name: 'Unknown' }), /class="sgi sgl"/);
+  assert.match(S.html({ id: 'unknown-app', name: 'Unknown' }), /class="sgi sg-apps"/);
 });
