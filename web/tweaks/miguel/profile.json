@@ -10,10 +10,12 @@
     "miguel/no-desk-close",
     "miguel/archive-top",
     "miguel/group-by-day",
-    "miguel/reply-summary"
+    "miguel/reply-summary",
+    "miguel/now-playing"
   ],
   "flags": {},
   "off": [
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/now-playing"
   ]
 }

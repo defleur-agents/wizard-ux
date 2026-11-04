@@ -80,6 +80,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) | — |
 | Update banners/card/pop-up | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`: `card`/`popup`) | own reload timers, a second card |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
+| Now playing | `WosMediaWatch` (`web/core/media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic recording | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) | `new MediaRecorder`, `AudioRecord` or `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
 | Android shell capabilities | `WosDevicePort` (`device-port.js`), `WosDeviceRecording` (`device-recording.js`), `WosDeviceOrb` (`device-orb.js`); `wizardDevicePort` v1 (`device/DeviceMessageProtocol.java`) | another envelope, recorder/store or feature `@JavascriptInterface`; ack before durable custody |
 | Home-screen apps / safe top | `WizHomeScreenApps.attach / offer / canOffer`; host owns cutout, child inset 0 | app CSS insets |

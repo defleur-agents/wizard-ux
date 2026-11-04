@@ -7,7 +7,7 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, id === 'miguel/send-and-go' ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing'].includes(id) ? 'desktop' : 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];

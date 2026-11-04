@@ -20,7 +20,8 @@
     "miguel/no-desk-close",
     "miguel/archive-top",
     "miguel/group-by-day",
-    "miguel/reply-summary"
+    "miguel/reply-summary",
+    "miguel/now-playing"
   ],
   "defaults": [
     "wizard/unified-inbox"
