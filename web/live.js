@@ -325,7 +325,8 @@
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
-  // Optional control shape only; all skins retain the same saved choice and By day default.
+  // A tweak can ask for one Group by day switch instead of the Layout picker: `html { --wos-chats-group-switch: on; }`.
+  // It then works identically on every skin and keeps the stored By day/By status choice.
   const groupSwitch = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-chats-group-switch').trim() === 'on'; } catch (e) { return false; } };
   const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
@@ -341,6 +342,8 @@
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
+    // Short answer first (skin-host replySummary): on, how long replies start, and the short answer's length.
+    replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = (patch, { requireShared = false } = {}) => {

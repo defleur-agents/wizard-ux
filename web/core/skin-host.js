@@ -192,12 +192,41 @@
         },
         onLevel(fn) { const g = guard(a, 'orb.onLevel', fn); a.levels.add(g); levels.add(g); return () => { a.levels.delete(g); levels.delete(g); }; },
       }),
+      /* Now playing (core/media-watch.js): what the installed apps play, newest first ([{ key, appId, app, kind, playing,
+       * title, artist }]), and pausing it. watch(fn) arms the watcher (nothing is watched while nobody holds it) and is
+       * released on teardown; { passive: true } only listens while someone else holds it. icon(appId) = the shell's own
+       * app mark (a fresh node), open(appId) = bring that app to the front. */
+      media: Object.freeze({
+        list: () => mediaList(a),
+        watch(fn, { passive = false } = {}) {
+          const M = isDoc && window.WosMedia; if (a.dead || !M || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'media.watch', () => fn(mediaList(a)));
+          const off0 = M.watch(g, { passive: passive === true });
+          const off = () => { off0(); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        pause: key => !a.dead && !!(isDoc && window.WosMedia?.pause(String(key))),
+        play: key => !a.dead && !!(isDoc && window.WosMedia?.play(String(key))),
+        pauseAll: () => !a.dead && !!(isDoc && window.WosMedia?.pauseAll()),
+        toggle: () => !a.dead && !!(isDoc && window.WosMedia?.toggle()),
+        icon(id) {
+          const h = !a.dead && typeof id === 'string' ? shell?.mediaApp?.(id)?.icon : '';
+          if (!h || !isDoc) return null;
+          const t = document.createElement('template'); t.innerHTML = String(h); return t.content.firstElementChild || null;
+        },
+        open: id => !a.dead && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) && !!shell?.mediaOpen?.(id),
+      }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
         set(key, value) { try { localStorage.setItem(`wos.skin.${a.id}.${key}`, JSON.stringify(value)); } catch (_) {} },
       }),
     };
     return Object.freeze(api);
+  }
+
+  // The Now playing list with each app's own name (the shell's catalog), for api.media.
+  function mediaList(a) {
+    const M = isDoc && window.WosMedia; if (!M || a.dead) return [];
+    return M.list().map(x => Object.freeze({ ...x, app: String(shell?.mediaApp?.(x.appId)?.name || x.appId) }));
   }
 
   /* ---------- script lifecycle ---------- */
@@ -355,7 +384,40 @@
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
   const homeHtml = new WeakMap();   // Home element -> the markup paintHome last wrote
-  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
+  // Short answer first, box-wide: { on, start: collapsed|expanded, length: line|sentences|paragraph } in ui-preferences
+  // (cached by live.js as wos.chats.replySummary.v1). chats.js and packages (api.replies) read and write it here.
+  const REPLY_LENGTHS = Object.freeze([
+    Object.freeze({ id: 'line', name: 'One short line', hint: 'About 80 characters' }),
+    Object.freeze({ id: 'sentences', name: 'Two sentences', hint: 'About 140 characters' }),
+    Object.freeze({ id: 'paragraph', name: 'Short paragraph', hint: 'About 300 characters' })]);
+  const RSUM_KEY = 'wos.chats.replySummary.v1';
+  const replySummary = {
+    get() {
+      let v = null; try { v = JSON.parse(localStorage.getItem(RSUM_KEY) || 'null'); } catch (_) {}
+      v = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+      return Object.freeze({ on: v.on === true, start: v.start === 'expanded' ? 'expanded' : 'collapsed', length: REPLY_LENGTHS.some(l => l.id === v.length) ? v.length : 'sentences', saved: typeof v.on === 'boolean' });
+    },
+    set(patch, force = false) {
+      const cur = replySummary.get();
+      const next = { on: typeof patch.on === 'boolean' ? patch.on : cur.on, start: ['collapsed', 'expanded'].includes(patch.start) ? patch.start : cur.start, length: REPLY_LENGTHS.some(l => l.id === patch.length) ? patch.length : cur.length };
+      if (!force && cur.saved && next.on === cur.on && next.start === cur.start && next.length === cur.length) return;
+      try { localStorage.setItem(RSUM_KEY, JSON.stringify(next)); } catch (_) {}
+      window.WizLive?.putPrefs?.({ replySummary: next });
+      window.dispatchEvent?.(new Event('wos:prefs'));
+    },
+    // Turning the view on reads the box's saved choice first, so a fresh device never overwrites it with defaults, and
+    // tells the box only when the box doesn't already have it on (e.g. the box's service learnt the key after this device).
+    async on(flag) {
+      let box = null;
+      if (flag) {
+        try { const r = await fetch(new URL('/wizard/v1/ui-preferences', document.baseURI).href, { cache: 'no-store', credentials: 'same-origin' }); const j = r.ok ? await r.json() : null;
+          if (j?.replySummary && typeof j.replySummary === 'object') { box = j.replySummary; localStorage.setItem(RSUM_KEY, JSON.stringify(box)); } } catch (_) {}
+        if (!summaryUsers.size || box?.on === true) return;
+      }
+      replySummary.set({ on: flag }, flag);
+    },
+  };
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), summaryUsers = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -414,6 +476,13 @@
     }
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
+      // Short answer first (--wos-reply-summary): how long replies start and how long the agent writes the short answer,
+      // box-wide (ui-preferences replySummary; the Agent Service reads `length` while `on`). use() marks the view on for
+      // the box and is released on teardown.
+      api.replies = Object.freeze({ lengths: REPLY_LENGTHS, summary: () => replySummary.get(),
+        set(patch = {}) { if (!a.dead) replySummary.set({ ...(patch.start ? { start: patch.start } : {}), ...(patch.length ? { length: patch.length } : {}) }); },
+        use() { if (a.dead || summaryUsers.has(a.id)) return; summaryUsers.add(a.id); void replySummary.on(true);
+          a.offs.add(() => { if (summaryUsers.delete(a.id) && !summaryUsers.size) void replySummary.on(false); }); } });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
       api.layout = Object.freeze({ foundation(id) {
         if (a.dead) return () => {};
@@ -531,6 +600,8 @@
       a.ready.catch(() => {}); // teardown API is synchronous; loadTweaks owns failure reporting
       return off;
     } });
+    // Trusted packages may show and pause what the apps play (api.media above).
+    if (trusted && caps.has('media')) api.media = base.media;
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
@@ -573,12 +644,15 @@
     // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
     // boundary and every handle dies with the package.
     // Settings sections: a trusted package fills a System page of Settings (Your network, AI, Network & security,
-    // Storage & backups) with its own live node, and can open Settings at one of those pages. Released on teardown.
+    // Storage & backups) with its own live node, or puts its own options under its switch in Look (page 'look'), and can
+    // open Settings at one of the System pages. Released on teardown.
     if (caps.has('settings')) api.settings = Object.freeze({
       section(id, page, node, opts = {}) {
         if (!trusted || a.dead) throw new Error('Trusted settings required');
-        if (!['overview', 'ai', 'network', 'storage'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
+        if (!['overview', 'ai', 'network', 'storage', 'look'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
         const W = window.WosSettings; if (!W?.register) return () => {};
+        // Look: the package's own options, right under its switch in the Tweaks list.
+        if (page === 'look') { if (!W.tweakOptions) return () => {}; const off = W.tweakOptions(a.id, node); let done = false; const release = () => { if (!done) { done = true; off(); } }; a.offs.add(release); return release; }
         const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
         const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
         const off = W.register({ id: fid, page, ...(subtitle ? { subtitle } : {}), html: () => '<div class="st-tweak" data-st-tweak></div>',
@@ -636,7 +710,7 @@
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
-      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings'].includes(c))) throw new Error('Invalid manifest');
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings','media'].includes(c))) throw new Error('Invalid manifest');
       if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
       if (typeof mod.default !== 'function') throw new Error('Missing setup');
@@ -680,6 +754,8 @@
     get tweakState() { return [...tweaks.keys()]; },
     /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
+    /* chats.js: the box-wide short-answer choices (start, length) and the three lengths, for the reply's ⚙ sheet. */
+    replySummary: Object.freeze({ get: () => replySummary.get(), set: patch => replySummary.set(patch || {}), lengths: REPLY_LENGTHS }),
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
     get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },

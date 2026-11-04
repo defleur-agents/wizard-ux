@@ -54,7 +54,8 @@ test('chat-list layout: By day is the default and keeps Yesterday / Past week; B
   assert.match(chats, /data-chlayout=/);
   // Group by day switch (tweak miguel/group-by-day): only when a tweak sets --wos-chats-group-switch; it then replaces
   // the Layout picker and writes the same saved choice.
-  assert.match(chats, /\$\{LIVE\.groupSwitch \? `<h5>Layout<\/h5>/);
+  assert.match(chats, /\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
+  assert.match(chats, /\$\{LIVE\.groupSwitch \? `<button type="button" class="ch-fopt\$\{byStatus\(\) \? '' : ' on'\}" data-chgroupday aria-pressed="\$\{!byStatus\(\)\}">Group by day/);
   assert.match(chats, /closest\('\[data-chgroupday\]'\)\) \{ LIVE\.chatLayout = byStatus\(\) \? 'day' : 'status';/);
 });
 test('a repainted Chats list shows the saved auto-archive age, not the picker value it was first painted with', () => {

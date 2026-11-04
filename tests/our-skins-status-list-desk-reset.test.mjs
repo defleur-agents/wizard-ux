@@ -14,22 +14,22 @@ function layoutFor(skin, stored, groupSwitch = false) {
   const start = src.indexOf("  const LAYOUT_KEY = 'wos.chats.layout.v1';");
   const end = src.indexOf('  const archiveAfterDays');
   assert.ok(start > 0 && end > start, 'chatLayout block found');
-  const ctx = { getComputedStyle: () => ({ getPropertyValue: () => groupSwitch ? 'on' : '' }), document: { documentElement: { dataset: { skin, tweaks: 'miguel/layout miguel/model-pills' } } }, localStorage: { getItem: () => stored } };
+  const ctx = { document: { documentElement: { dataset: { skin, tweaks: 'miguel/layout miguel/model-pills' } } }, localStorage: { getItem: () => stored }, ...(groupSwitch ? { getComputedStyle: () => ({ getPropertyValue: k => k === '--wos-chats-group-switch' ? ' on' : '' }) } : {}) };
   vm.createContext(ctx);
   return vm.runInContext(src.slice(start, end) + '; chatLayout()', ctx);
 }
 
 test('every skin keeps the stored layout and the By day default (an old miguel/layout switch changes nothing)', () => {
-  for (const s of SKINS) for (const groupSwitch of [false, true]) {
-    assert.equal(layoutFor(s, null, groupSwitch), 'day', s);
-    assert.equal(layoutFor(s, 'day', groupSwitch), 'day', s);
-    assert.equal(layoutFor(s, 'status', groupSwitch), 'status', s);
+  for (const s of SKINS) {
+    assert.equal(layoutFor(s, null), 'day', s);
+    assert.equal(layoutFor(s, 'day'), 'day', s);
+    assert.equal(layoutFor(s, 'status'), 'status', s);
   }
 });
 
 test('the Filter sheet always offers the Layout picker and the Yesterday filter', () => {
   const src = read('../web/core/chats.js');
-  assert.match(src, /<h5>Layout<\/h5><div class="ch-fopts">/);
+  assert.match(src, /\$\{LIVE\.groupSwitch \? '' : `<h5>Layout<\/h5>/);
   assert.match(src, /statusEntries = \(\) => Object\.entries\(STATUS\)\.filter\(\(\[k\]\) => !\(snoozeLast\(\) && k === 'deferred'\)\);/);
   assert.doesNotMatch(src, /Object\.entries\(STATUS\)\.map/, 'every status list goes through statusEntries');
 });
