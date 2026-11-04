@@ -1969,3 +1969,43 @@ test('AI apps view: Now playing is only small bars on the playing app\'s own ico
   assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
   assert.match(js, /put\(np\.playing && bars \? bars : tile\(npRow\), 'P'/, 'the ⌥P keycap sits on that app\'s icon');
 });
+
+test('AI apps view phone: Now playing = the same small bars on the playing app\'s icon in the dock / grid; a tap on them pauses without opening the app, a press there never lifts the icon; passive and phone Home only', async () => {
+  const w = world();
+  const media = { list: [], fns: [], calls: [] };
+  w.api.media = { watch: (fn, o) => { media.fns.push([fn, o]); fn(media.list); return () => {}; }, pause: k => media.calls.push('pause:' + k), play: k => media.calls.push('play:' + k), list: () => media.list };
+  const tell = list => { media.list = list; for (const [fn] of media.fns) fn(list); };
+  (await layout()).default(w.api);
+  w.st.route = { home: true, view: 'desk', thread: null, desk: 0 }; w.emit('route', w.st.route);
+  assert.equal(media.fns.length, 1); assert.deepEqual(media.fns[0][1], { passive: true }, 'passive: the view alone never starts watching');
+  assert.equal(w.qa('.ah-np').length, 0, 'nothing plays: nothing drawn');
+  tell([{ key: 'k1', appId: 'music', playing: true }]);
+  const music = w.q('.ah-dock .ah-app[data-app="music"]'), np = music.querySelector('.ah-np');
+  assert.ok(np && np.parentNode === music.querySelector('.ah-ic'), 'the bars sit on that app\'s own icon (in the dock)');
+  assert.equal(w.qa('.ah-np').length, 1, 'only there'); assert.equal(music.dataset.media, 'playing'); assert.equal(np.getAttribute('aria-label'), 'Pause Music');
+  assert.equal(np.querySelectorAll('.ah-np-b i').length, 3);
+  // a tap on the bars pauses it and never opens the app; the rest of the icon opens it as before
+  const opened = w.st.gone.length + w.st.opened.length;
+  np.dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(media.calls, ['pause:k1']); assert.equal(w.st.gone.length + w.st.opened.length, opened, 'the app did not open');
+  // a press on the bars never starts the hold (no lift, no menu)
+  const holds = w.st.timers.filter(t => t.ms === 450).length;
+  np.dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 3, button: 0, clientX: 10, clientY: 10, pointerType: 'touch' }));
+  assert.equal(w.st.timers.filter(t => t.ms === 450).length, holds, 'no hold armed from the bars');
+  music.querySelector('.ah-tile').dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 4, button: 0, clientX: 10, clientY: 10, pointerType: 'touch' }));
+  assert.equal(w.st.timers.filter(t => t.ms === 450).length, holds + 1, 'the rest of the icon still holds / drags');
+  for (const f of w.doc.__listeners.pointerup || []) f(new FakePointerEvent('pointerup', { pointerId: 4 }));
+  // paused: the same badge says play (the tweak's css fades it), a tap plays again
+  tell([{ key: 'k1', appId: 'music', playing: false }]);
+  assert.equal(music.dataset.media, 'paused'); assert.equal(music.querySelector('.ah-np'), np); assert.equal(np.getAttribute('aria-label'), 'Play Music');
+  np.dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(media.calls, ['pause:k1', 'play:k1']);
+  // gone from the list: gone from the icon; a fresh icon never draws bars for something already paused
+  tell([]); assert.equal(w.qa('.ah-np').length, 0); assert.equal(music.dataset.media, undefined);
+  tell([{ key: 'k2', appId: 'notes', playing: false }]); assert.equal(w.qa('.ah-np').length, 0, 'paused before it was seen: nothing');
+  tell([{ key: 'k2', appId: 'notes', playing: true }]);
+  assert.ok(w.q('.ah-grid .ah-app[data-app="notes"] .ah-ic .ah-np'), 'an open app in the grid wears them too');
+  const home = read('web/layouts/ai-apps/home.js');
+  assert.match(home, /if \(layers\) api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'the phone Home only (the desktop Home grid has no layers)');
+  assert.match(home, /if \(e\.button > 0 \|\| npAt\(e\)\) return;/); assert.match(home, /if \(Date\.now\(\) < swallow \|\| npAt\(e\)\)/);
+  assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /api\.media|ah-np/, 'inside an app: no new chrome');
+});
