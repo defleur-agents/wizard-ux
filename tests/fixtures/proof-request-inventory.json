@@ -978,6 +978,24 @@
         }
       ],
       "note": "These three synthetic flows deliberately expose no owner Look file (GET/HEAD answer explicit 403 fixture_look_unavailable). Sync stops absent, preserving device-local choices. PUT is not exercised, always refused and collected; it is never forwarded or answered as a successful save."
+    },
+    "/notifications/api/marks": {
+      "status": "not-exercised",
+      "source": "web/core/notif-bell.js",
+      "kind": "write-or-stream",
+      "note": "These three proofs serve no notification items, so no mark operation is reached. POST is refused and collected, never forwarded."
+    },
+    "/notifications/api/routes": {
+      "status": "catalogued",
+      "source": "web/core/skin-host.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/notifications/api/routes"
+        }
+      ],
+      "note": "Only the read is answered; POST remains refused by the offline request fence."
     }
   }
 }

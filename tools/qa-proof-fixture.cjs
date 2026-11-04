@@ -25,6 +25,7 @@ const bodies={
  '/wizard/files':{files:[]},
  '/notifications/api/items?view=all&limit=200':{items:[]},
  '/notifications/api/count':{count:0},
+ '/notifications/api/routes':{routes:{}},
  '/troubleshoot/api/status?source=connection-banner':{overall:'ok',checks:[]},
  '/wizard-tinfoil/api/status':{configured:false,ready:false},
  '/wizard-claude/api/accounts':{accounts:[]},
