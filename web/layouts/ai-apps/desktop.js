@@ -1352,6 +1352,8 @@ export default function desktop(api) {
   // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
   const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
   const snoozeOpen = () => !!doc.querySelector?.('.boom-sheet');
+  // (the one on screen: a second Chats window, e.g. the chat ⌥X starts, can hold another hidden one)
+  const routeBtn = () => [...doc.querySelectorAll('.win .dchats .pane-main [data-notify-menu]')].find(onScreen) || null;
   const chatBtn = act => [...doc.querySelectorAll(`.win .dchats .pane-main [data-chact="${act}"]`)].find(onScreen) || null;
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
@@ -1390,7 +1392,7 @@ export default function desktop(api) {
     // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
     const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
-    if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) doc.querySelector('.win .dchats .pane-main [data-notify-menu]')?.click?.(); return true; }
+    if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
     return KEY_LIKE.test(code);
   } });
@@ -1440,7 +1442,7 @@ export default function desktop(api) {
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
     if (docked) {
       for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
-      if (frontNote()) putIn([...doc.querySelectorAll('.win .dchats .pane-main [data-notify-menu]')].find(onScreen), 'B', 'start');
+      if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
     return out;
   }, { only: true });
