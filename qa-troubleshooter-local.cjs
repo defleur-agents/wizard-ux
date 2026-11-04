@@ -4,6 +4,7 @@
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const { MODEL_OPTIONS, seedOwner } = require('./tools/qa-desktop-frame-fixture.cjs');
+const { openChats, freshRead, entrySnapshot } = require('./tools/qa-troubleshooter-entry.cjs');
 const out = process.env.QA_OUT || '/srv/work/troubleshooter-evidence', root = path.join(__dirname, 'web');
 const tsRoot = process.env.QA_TS_DIR;
 assert.ok(tsRoot && fs.existsSync(path.join(tsRoot, 'index.html')), 'stage real Troubleshooter source');
@@ -52,7 +53,8 @@ const server = http.createServer((req, res) => {
   const port = server.address().port, host = `http://wizard.fixture.ts.net:${port}`;
   const browser = await chromium.launch({ executablePath: process.env.QA_CHROME || undefined, args: ['--no-proxy-server', '--host-resolver-rules=MAP wizard.fixture.ts.net 127.0.0.1'] });
   try {
-    for (const desktop of [false, true]) {
+    // A short queued diagnostic can replay r7's exact desktop entry sequence.
+    for (const desktop of process.env.QA_ENTRY_DIAGNOSE_R7 ? [true] : [false, true]) {
       const label = desktop ? 'desktop' : 'phone';
       const ctx = await browser.newContext({ viewport: desktop ? { width: 1440, height: 1000 } : { width: 412, height: 892 }, isMobile: !desktop, hasTouch: !desktop, serviceWorkers: 'block' });
       let mode = 'down', privateDown = false, probeRequests = 0, diagnosticRequests = 0, escaped = [], writes = [], errors = [];
@@ -81,6 +83,7 @@ const server = http.createServer((req, res) => {
         if (privateDown && !u.pathname.startsWith('/wizard-os-home/') && !u.pathname.startsWith('/troubleshoot/')) return route.abort('connectionrefused');
         return route.continue();
       });
+      // Empty established-owner desktop, not the unrelated three-frame hotkeys fixture.
       await ctx.addInitScript(seedOwner, { phone: true });
       await ctx.addInitScript(() => {
         Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
@@ -90,13 +93,71 @@ const server = http.createServer((req, res) => {
       const response = await p.goto(`${host}/wizard-os-home/${desktop ? 'desktop.html' : 'index.html'}`);
       assert.equal(response.headers()['content-security-policy'], policy); receipts.push({ label, csp: response.headers()['content-security-policy'] });
       await p.waitForFunction(() => (window.__wos || window.__wux)?.chats && window.WosOutbox?.recoveryComplete && window.WizOpenApp, null, { timeout: 25000 });
-      // In-shell real entry control, not a surrogate button. Status checks retain outside/Back semantics.
-      privateDown = true;
-      await p.evaluate(() => { const A = window.__wos || window.__wux; A.openWin?.({ app: 'chats' }); WizLive.refresh(); });
-      await p.locator('[data-wxoffopen]').waitFor({ timeout: 15000 });
-      await p.locator('[data-wxoffopen]').click();
-      await p.locator('[data-wxoffhelp]').click();
-      await p.locator('[data-recovery]').waitFor();
+      // The two shells export different window APIs. Never optional-chain a phone
+      // opener on desktop, and never mistake the completion of an old read for a fault.
+      const journal = [], checkpoint = async stage => {
+        journal.push({ stage, snapshot: await p.evaluate(entrySnapshot), errors: [...errors] });
+        fs.writeFileSync(path.join(out, `${label}-entry-debug.json`), JSON.stringify(journal, null, 2));
+      };
+      if (process.env.QA_ENTRY_DIAGNOSE_R7) {
+        // Observation only: no fabricated PASS and no product/state repair. Preserve
+        // the old fire-and-forget refresh so the queued trace can settle causality.
+        await checkpoint('r7-shell-ready');
+        privateDown = true;
+        await p.evaluate(() => { const A = window.__wos || window.__wux; A.openWin?.({ app: 'chats' }); WizLive.refresh(); });
+        await checkpoint('r7-after-original-entry');
+        let outcome = 'pill-visible';
+        try { await p.locator('[data-wxoffopen]').waitFor({ timeout: 15000 }); }
+        catch (error) { outcome = String(error); }
+        await checkpoint('r7-after-original-wait');
+        await p.screenshot({ path: path.join(out, 'desktop-r7-entry.png') });
+        fs.writeFileSync(path.join(out, 'diagnostic.json'), JSON.stringify({ outcome, journal, errors, writes, escaped }, null, 2));
+        assertWriteFence(writes, host); assert.deepEqual(escaped, []);
+        // Diagnostic receipt is not a successful browser acceptance report.
+        return;
+      }
+      try {
+        await checkpoint('shell-ready');
+        const healthy = await p.evaluate(freshRead);
+        assert.ok(healthy.ok && !healthy.error && healthy.at, 'establish a completed healthy live read before the outage');
+        const actualShell = await p.evaluate(() => document.documentElement.dataset.shell);
+        assert.equal(actualShell, label);
+        if (desktop) await p.locator('#status').click();
+        else await p.evaluate(openChats);
+        await checkpoint('chats-open-healthy');
+        privateDown = true;
+        const failed = await p.evaluate(freshRead);
+        assert.equal(failed.error, 'offline', 'the read requested under privateDown must really fail');
+        assert.ok(failed.errorAt >= healthy.at);
+        await checkpoint('fresh-failure');
+        // James's actual action, before relying on any pill. This must synchronously
+        // create the ordinary app window even with every private read unavailable.
+        const chatsButton = p.locator('[data-chtroubleshoot]:visible').first();
+        await chatsButton.waitFor({ timeout: 15000 });
+        await chatsButton.click();
+        await p.locator('[data-recovery]').waitFor();
+        const chatEntry = await p.evaluate(() => {
+          const A = window.__wos || window.__wux, w = Object.values(A.wins).find(w => w.appId === 'troubleshooter');
+          return { id: w?.id, app: w?.app, text: document.querySelector('[data-recovery]')?.textContent, popup: !!document.querySelector('#wxOffline:not([hidden])') };
+        });
+        assert.ok(chatEntry.id); assert.equal(chatEntry.app, 'frame'); assert.equal(chatEntry.popup, false);
+        assert.match(chatEntry.text, /Connection help/); assert.doesNotMatch(chatEntry.text, /device.*offline|You’re offline|No connection/i);
+        receipts.push({ label, entry: 'Chats Open Troubleshooter', ...chatEntry });
+        await checkpoint('chats-troubleshooter-open');
+        await p.evaluate(id => (window.__wos || window.__wux).closeWin(id), chatEntry.id);
+        // The shared status contract promises the pill on desktop too: retain the
+        // hard visibility/click assertion, not an optional desktop skip.
+        await p.locator('[data-wxoffopen]').waitFor({ timeout: 15000 });
+        await checkpoint('pill-visible');
+        await p.locator('[data-wxoffopen]').click();
+        await p.locator('[data-wxoffhelp]').click();
+        await p.locator('[data-recovery]').waitFor();
+        await checkpoint('pill-troubleshooter-open');
+      } catch (error) {
+        await checkpoint('entry-failed').catch(() => {});
+        await p.screenshot({ path: path.join(out, `${label}-entry-failed.png`) }).catch(() => {});
+        throw error;
+      }
       const first = await p.evaluate(() => {
         const A = window.__wos || window.__wux, w = Object.values(A.wins).find(w => w.appId === 'troubleshooter');
         return { id: w?.id, app: w?.app, text: document.querySelector('[data-recovery]')?.textContent, popup: !!document.querySelector('#wxOffline:not([hidden])'), route: location.pathname };
