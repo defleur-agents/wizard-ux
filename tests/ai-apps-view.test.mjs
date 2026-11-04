@@ -203,7 +203,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(store.folded, true);
   assert.equal(w.q('.aad-rail .aad-rapps'), null, 'the rail: no apps either');
   // round 12: the rail is words with counts (plain Ready chats count in Ready only, no status rows for them); no icons
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['ready:2Ready'], 'round 16: Snoozed and Ready only (no Archive, no Working), a count over its word');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
+  assert.ok(w.q('.aad-rk[data-k="working"] .aad-rk-wk .aad-rk-spin'), 'round 22: Working carries the expanded list\'s tiny spinner beside its count');
+  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rk-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
   assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel / chat column (round 7), the view\'s ⌥ keys');
@@ -841,7 +843,7 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
-    ['Ready 2', '  Needs 1', '  Done 1'], 'round 16: Ready and its statuses, short words (no Archive, no Working)');
+    ['Working 1', 'Ready 2', '  Needs 1', '  Done 1'], 'round 22: Working, Ready and its statuses, short words (no Archive)');
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1\. Click opens the first; hover lists them$/);
@@ -1327,7 +1329,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rw[data-kind="snoozed"]').map(r => r.dataset.sid), ['z1', 'z2']); assert.equal(store.sections.snoozed, true);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['snoozed:2Snoozed', 'ready:2Ready'], 'the rail (round 16): Snoozed, then Ready');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['working:1Working', 'snoozed:2Snoozed', 'ready:2Ready'], 'the rail (round 22): Working, Snoozed, then Ready');
   // the phone's drawer: the same sections
   const p = world(); p.st.sessions.snoozed = w.st.sessions.snoozed;
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
@@ -1509,7 +1511,7 @@ test('round 18 item 3b + 4e desktop (round 19: Newest / Oldest inside each group
     const drawn = w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid);
     assert.equal(drawn.length, 8, order + ': every Ready row drawn');
     assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state), ['needs', 'approval', 'fyi', 'deferred', 'none'], order + ': grouped like the rail');
-    assert.equal(w.q('.aad-sortb'), null, 'round 19: no sort control on Ready\'s header until Settings shows it');
+    assert.ok(w.q('.aad-sech .aad-sortb'), 'round 22: the sort / group control always on Ready\'s header');
     const want = order === 'oldest' ? 'oldest' : 'newest';
     assert.equal(w.q('[data-aad-order][aria-checked="true"]').dataset.aadOrder, want, order + ': the stock choice in Settings (Priority reads as Newest)');
     const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
@@ -1687,7 +1689,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   assert.ok(!/sessions\.open[^\n]*send|leaveAfterSend/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'nothing advances on send');
 });
 
-test('round 19 item 2 desktop: the order lives in Settings (Newest / Oldest, the stock key); "Show sort control in sidebar" off at first; the control is a menu in the shell\'s type', async () => {
+test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) and Group (By status / One list) in one menu on Ready\'s header, always shown; Settings follows', async () => {
   const { w, store } = deskWorld();
   let saved = 'priority'; const sets = [];
   w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
@@ -1696,16 +1698,17 @@ test('round 19 item 2 desktop: the order lives in Settings (Newest / Oldest, the
   const node = w.st.setting[1];
   assert.equal(node.children[0].tagName + ':' + node.children[0].textContent, 'H4:AI apps view');
   assert.deepEqual(node.querySelectorAll('[data-aad-order]').map(b => b.querySelector('b').textContent + ':' + b.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false'], 'stock Priority reads as Newest');
-  assert.equal(w.q('.aad-sortb'), null, 'no sort control in the sidebar at first'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
-  const sw = node.querySelector('[data-aad-sortshown]'); assert.equal(sw.getAttribute('aria-checked'), 'false');
-  sw.dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(store.sortShown, true); assert.equal(node.querySelector('[data-aad-sortshown]').getAttribute('aria-checked'), 'true');
-  const b = w.q('.aad-sech .aad-sortb'); assert.ok(b, 'shown on Ready\'s header'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
+  assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
+  const b = w.q('.aad-sech .aad-sortb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
   b.dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false']);
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort', 'Group']);
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'By status:false', 'One list:true']);
   w.q('.aad-sortmenu [data-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(sets, ['oldest']); assert.equal(w.q('.aad-sortmenu'), null);
   assert.equal(w.q('.aad-sortb-w').textContent, 'Oldest'); assert.equal(node.querySelector('[data-aad-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(store.groupReady, true, 'grouping from the sidebar'); assert.equal(node.querySelector('[data-aad-groupready]').getAttribute('aria-checked'), 'true', 'Settings follows');
   node.querySelector('[data-aad-order="newest"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'newest']);
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
