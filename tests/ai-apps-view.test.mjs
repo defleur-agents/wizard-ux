@@ -395,6 +395,15 @@ test('search covers chats (archive too) and apps; a chat row opens its thread; a
   assert.deepEqual(w.qa('.aa-pop-i').map(b => b.dataset.act), ['pin', 'rename']);
 });
 
+test('desktop: covered AI apps panel apps never receive front-only service admission (04bd2899 C6)', () => {
+  const js = read('web/desktop/desktop.js');
+  const expression = js.match(/isFront: (\(\) => .*?), back: \(\) => closeWorkflow/)[1];
+  for (const hidden of [false, true]) for (const hosted of [false, true]) {
+    const value = vm.runInNewContext('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
+    assert.equal(value, hidden && !hosted, 'palette=' + !hidden + ', hosted=' + hosted);
+  }
+});
+
 test('phone: deferred Chats preparation never opens the drawer over a shell sheet', async () => {
   for (const which of ['settings', 'launcher']) {
     const w = world();

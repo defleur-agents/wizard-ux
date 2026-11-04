@@ -336,14 +336,14 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = !own && twinned(S, family) ? backgroundHtml(S, family, cur) : `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && twinned(S, family) ? backgroundHtml(S, family, cur) : '');
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
-  // backgrounds (Plain, the landscape pictures, the Wizard OS scenes) and a separate Dark | Light switch, instead of a colour per
-  // mode. Same cards as Colors. Picking a background keeps the mode; the mode keeps the background.
+  // backgrounds (Plain, landscape pictures, Wizard OS scenes) and a separate Dark | Light switch. Keep the
+  // independent Colors control too (the shared Look contract). Background and Mode never disappear into a palette name.
   const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
   const isLight = id => /-light$/.test(id);
   function backgroundHtml(S, family, cur) {
