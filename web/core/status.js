@@ -36,6 +36,7 @@
   // A slow server flaps for a few seconds at a time and heals itself: wait longer before saying anything. A device
   // that reports itself offline is certain, so it keeps the short wait.
   const graceMs = () => (navigator.onLine === false ? 3000 : 8000);
+  let netAlerted = false; // An online hint cannot retract feedback already shown in this outage.
   let offReturn = null, downSince = 0, graceT = 0, offDismissed = false, offOpen = false, offChecks = null, offBusy = false, offT = 0, offN = 0, offHappy = 0;
   let H = {}, net = navigator.onLine === false ? 'offline' : 'online', restoredT = 0, critHidden = '', fatalMsg = '', fatalOpen = false;
   if (net === 'offline') downSince = Date.now(); // the device said offline at boot: the grace runs from now (render re-checks)
@@ -100,10 +101,10 @@
     net = n; log('net:' + n);
     const down = n === 'offline' || n === 'reconnecting';
     if (down && !downSince) { downSince = Date.now(); clearTimeout(graceT); graceT = setTimeout(() => { graceT = 0; render(); }, graceMs() + 50); }
-    if (!down) { downSince = 0; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
+    if (!down) { downSince = 0; netAlerted = false; clearTimeout(graceT); graceT = 0; offDismissed = false; if (offOpen) recovered(); }
     render();
   }
-  const alerted = () => !!downSince && Date.now() - downSince >= graceMs();
+  const alerted = () => downSince && (netAlerted || (netAlerted = Date.now() - downSince >= graceMs()));
   // Browser connectivity is a hint: Android/VPN networks can report offline while
   // Wizard is reachable. Only fresh evidence may overrule an offline event:
   // a new successful live read, or a healthy same-origin Wizard status probe.
