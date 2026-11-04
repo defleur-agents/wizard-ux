@@ -21,7 +21,8 @@
     "miguel/refresh-button",
     "wizard/unified-inbox",
     "wizard/orb-radial",
-    "wizard/new-send-list"
+    "wizard/new-send-list",
+    "miguel/group-by-day"
   ],
   "defaults": [
     "wizard/unified-inbox"

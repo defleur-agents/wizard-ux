@@ -325,6 +325,8 @@
   const LAYOUT_KEY = 'wos.chats.layout.v1';
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => { try { return window.WosSkinHost?.snoozeOrder === 'last'; } catch (e) { return false; } };
+  // Optional control shape only; all skins retain the same saved choice and By day default.
+  const groupSwitch = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-chats-group-switch').trim() === 'on'; } catch (e) { return false; } };
   const chatLayout = () => { try { return localStorage.getItem(LAYOUT_KEY) === 'status' ? 'status' : 'day'; } catch (e) { return 'day'; } };
   const archiveAfterDays = () => { try { const v = localStorage.getItem(ARCH_KEY); if (v != null && isFinite(+v)) return +v; } catch (e) {} return 7; };
   // Agent Service owns box-wide preferences. localStorage is only an offline cache.
@@ -505,6 +507,7 @@
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
+    const layout = chatLayout();   // once per pass, not per thread
     for (const s of sessions) {
       if (s.hidden) continue;
       const t = sectionTime(s);
@@ -515,7 +518,7 @@
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
-      else if (chatLayout() === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
+      else if (layout === 'status') g.ready.push(s); // By status: everything not yet archived is Ready
       else if (!isFinite(t) || t < yB) g.pastWeek.push(s);
       else if (t < readyB) g.yesterday.push(s);
       else g.ready.push(s);
@@ -764,6 +767,7 @@
     readyByOldest: byOldest,
     get archiveAfterDays() { return archiveAfterDays(); },
     get chatLayout() { return chatLayout(); },
+    get groupSwitch() { return groupSwitch(); },
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
