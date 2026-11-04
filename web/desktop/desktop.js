@@ -1867,19 +1867,27 @@
     const size = bytes ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : '';
     return [thread, stamp, size].filter(Boolean).join(' · ');
   }
+  /* The card is the shell's own (Settings' kit: wz-card, wz-button). Discard asks again IN the card, never with the
+   * browser's confirm dialog: Wizard for Mac's WKWebView has no confirm panel, so it answered 'no' and Discard did
+   * nothing (Miguel, 4 Nov 2026: a no-speech take stuck on screen). A take with no speech offers Discard first. */
+  let discardArm = { id: '', at: 0 };
+  const discardArmed = id => discardArm.id === id && Date.now() - discardArm.at < 4000;
   function paintRecordings() {
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
-    recovery.innerHTML = takes.map(it => `<article>
+    recovery.innerHTML = takes.map(it => {
+      const empty = it.state === 'empty' && !(it.recoveryText || it.text), armed = discardArmed(it.id);
+      const retry = `<button class="wz-button ${empty ? 'quiet' : ''}" data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>`;
+      const discard = `<button class="wz-button ${empty || armed ? 'destructive' : 'quiet'}" data-record-discard="${esc(it.id)}"${armed ? ' data-armed' : ''} ${it.state === 'transcribing' ? 'disabled' : ''}>${armed ? 'Click again to discard' : 'Discard'}</button>`;
+      return `<article class="wz-card">
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
       <p class="recording-meta">${esc(recordingMeta(it))}</p>
-      <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
-      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
-      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>
-      <button data-record-download="${esc(it.id)}">Download audio</button>
-      <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
-    </article>`).join('');
+      <p class="recording-why">${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
+      <p class="recording-store" role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
+      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea>` : ''}
+      <div class="recording-acts">${empty ? discard : retry}${it.recoveryText || it.text ? `<button class="wz-button quiet" data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}<button class="wz-button quiet" data-record-download="${esc(it.id)}">Download audio</button>${empty ? retry : discard}</div>
+    </article>`;
+    }).join('');
   }
   recovery.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -1907,7 +1915,13 @@
     } else if (b.dataset.recordCopy) {
       try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
-    } else if (confirm('Discard this retained recording and transcript?')) O.remove(id);
+    } else if (b.dataset.recordDiscard) {
+      if (!discardArmed(id)) { discardArm = { id, at: Date.now() }; paintRecordings(); setTimeout(() => { if (discardArm.id === id && !discardArmed(id)) { discardArm = { id: '', at: 0 }; paintRecordings(); } }, 4100); return; }
+      discardArm = { id: '', at: 0 }; b.disabled = true; b.textContent = 'Discarding…';
+      let ok = false; try { ok = await O.remove(id); } catch (_) {}
+      paintRecordings();
+      toast(ok ? '✕' : '!', ok ? 'Recording discarded' : `Not discarded · ${O.removeError?.(id) || 'try again'}`, ok ? 1800 : 3200);
+    }
   });
   window.WosOutbox?.onChange(paintRecordings);
   window.WosOutbox?.load().then(paintRecordings);

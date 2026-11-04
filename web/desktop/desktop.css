@@ -47,12 +47,21 @@ html[data-native-chrome="mac"] .ws-list { min-width: 0; overflow-x: auto; scroll
 .clock { font: 600 12.5px/1 ui-sans-serif, system-ui, -apple-system, sans-serif; color: var(--ink-2); padding: 5px 10px; border-radius: 7px; font-variant-numeric: tabular-nums; }
 .clock:hover { background: rgba(205, 190, 255, .08); }
 #micBtn[hidden], .recording-recovery[hidden] { display: none; }
-.recording-recovery { position: fixed; right: 16px; bottom: 16px; z-index: 120; width: min(440px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; padding: 14px; border: 1px solid var(--line, #555); border-radius: 12px; background: var(--bg, #17191f); color: var(--text, #eee); box-shadow: 0 8px 32px #0008; }
-.recording-recovery article + article { margin-top: 16px; padding-top: 12px; border-top: 1px solid #666; }
-.recording-recovery p { margin: 8px 0; font-size: 13px; }
-.recording-recovery .recording-meta { margin: 4px 0 8px; color: var(--ink-2); font-size: 12px; }
-.recording-recovery button { padding: 10px; margin: 4px 4px 0 0; cursor: pointer; }
-.recording-recovery textarea { width: 100%; min-height: 80px; display: block; resize: vertical; user-select: text; }
+/* Kept recordings (desktop.js paintRecordings): a stack of shell cards (kit wz-card / wz-button), skin tokens only, so
+ * every skin, light ones too, paints it like Settings. Primary first; Discard turns red and asks again in place. */
+.recording-recovery { position: fixed; right: var(--wz-space-4); bottom: var(--wz-space-4); z-index: 120; width: min(400px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: var(--wz-space-2); font-size: var(--wz-text-sm); color: var(--wz-text); }
+.recording-recovery .wz-card { display: flex; flex-direction: column; gap: var(--wz-space-1); padding: var(--wz-space-3) var(--wz-space-4); background: var(--wz-panel); border: 1px solid var(--line-2); box-shadow: 0 12px 32px color-mix(in srgb, black 35%, transparent); }
+.recording-recovery strong { font-size: var(--wz-text-md); font-weight: 650; }
+.recording-recovery p { margin: 0; }
+.recording-recovery .recording-meta, .recording-recovery .recording-store { color: var(--wz-text-muted); }
+.recording-recovery .recording-why { color: var(--wz-text-secondary); margin-top: var(--wz-space-1); }
+.recording-recovery .recording-acts { display: flex; flex-wrap: wrap; gap: var(--wz-space-2); margin-top: var(--wz-space-2); }
+.recording-recovery .wz-button { min-height: 32px; padding: 0 var(--wz-space-3); border-radius: var(--wz-radius-pill); font-size: var(--wz-text-sm); }
+.recording-recovery .wz-button.quiet { background: transparent; border: 1px solid var(--line-2); color: var(--wz-text-secondary); }
+.recording-recovery .wz-button:not(:disabled):hover { filter: brightness(1.12); }
+.recording-recovery .wz-button.quiet:not(:disabled):hover { color: var(--wz-text); filter: none; background: var(--wz-accent-soft); }
+.recording-recovery .wz-button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.recording-recovery textarea { width: 100%; min-height: 80px; display: block; resize: vertical; user-select: text; margin-top: var(--wz-space-1); padding: var(--wz-space-2); border-radius: var(--wz-radius-tile); border: 1px solid var(--line-2); background: var(--wz-base); color: var(--wz-text); font: inherit; }
 @keyframes blinkrec { 50% { opacity: .35; } }
 .mic { width: 28px; height: 24px; border-radius: 7px; display: grid; place-items: center; color: var(--ink-2); }
 .mic svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
