@@ -455,6 +455,7 @@ export default function setup(api) {
   }, { capture: true, passive: true });
   api.listen(doc, 'touchmove', e => {
     if (!drag) return;
+    if (shellSheetOpen()) { settle(false); drag = null; return; }
     const t = e.touches[0];
     if (!t || e.touches.length !== 1) { if (drag.on) settle(false); drag = null; return; }
     const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
@@ -471,9 +472,13 @@ export default function setup(api) {
     drawer.style.transform = `translateX(${x - w}px)`; scrim.style.opacity = String(x / w);
   }, { capture: true, passive: false });
   function settle(go) {
-    if (go) return openDrawer();
+    const blocked = shellSheetOpen();
+    if (go && !blocked) return openDrawer();
     layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity');
-    api.after(220, () => { if (!open) layer.hidden = true; });
+    // A sheet can open after touchstart: remove the drag scrim on this frame,
+    // rather than leave it intercepting the sheet while the close animates.
+    if (blocked) { layer.classList.remove('is-open'); layer.hidden = true; }
+    else api.after(220, () => { if (!open) layer.hidden = true; });
   }
   const dragEnd = e => {
     if (!drag) return;

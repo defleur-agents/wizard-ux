@@ -415,6 +415,29 @@ test('phone: a sheet opened between route and deferred drawer work still wins', 
   assert.equal(w.st.newChats, 1);
 });
 
+test('phone: a shell sheet cancels a drawer drag before move or release without a stranded layer', async () => {
+  for (const phase of ['before-move', 'before-release']) {
+    const w = world(); (await layout()).default(w.api);
+    w.fire('touchstart', w.device, { touches: [{ clientX: 2, clientY: 400 }] });
+    if (phase === 'before-move') w.device.classList.add('sheet-open');
+    w.fire('touchmove', w.device, { touches: [{ clientX: 240, clientY: 400 }] });
+    if (phase === 'before-release') {
+      assert.equal(w.q('.aa-layer').hidden, false, 'drag layer was visible before the sheet opened');
+      w.device.classList.add('sheet-open');
+    }
+    w.fire('touchend', w.device, { changedTouches: [{ clientX: 240, clientY: 400 }] }); // go:true must clean up instead of stranding open:false
+    assert.equal(w.q('.aa-layer').hidden, true, 'sheet wins on the same frame at ' + phase);
+    assert.equal(w.q('.aa-layer').classList.contains('is-drag'), false);
+    w.run();
+    assert.equal(w.q('.aa-layer').classList.contains('is-open'), false);
+    assert.equal(w.html.dataset.aaDrawer, undefined);
+    assert.equal(w.st.backs.length, 0);
+    w.device.classList.remove('sheet-open');
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.html.dataset.aaDrawer, 'open', 'a cancelled drag does not break the next open');
+  }
+});
+
 test('main screen: Home and the bare list become the chat; a thread left for the list opens the drawer; an app is "app"', async () => {
   const w = world({ route: { home: true, view: 'desk', thread: null, desk: 0, app: null } });
   (await layout()).default(w.api);
