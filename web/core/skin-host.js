@@ -855,6 +855,13 @@
         },
         refresh: () => { if (live()) try { window.WosResources?.sync?.(); } catch (_) {} },
       }),
+      /* AI usage (read only): the feed's accounts as Settings › AI shows them, the default model's provider, and live(el)
+       * to keep the feed polling while el is on screen (the AI apps view's fuel gauge, 4 Nov 2026). */
+      aiUsage: Object.freeze({
+        state: () => { if (!live()) return {}; const r = window.WosResources?.state || {}; return structuredClone({ ai: r.ai || null, aiError: r.aiError || '' }); },
+        provider: () => live() ? String(window.WosModels?.defaultOption?.()?.provider || '') : '',
+        live: el => { if (live() && el?.nodeType === 1) try { window.WosResources?.watch?.(el); } catch (_) {} },
+      }),
       apps: Object.freeze({
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,

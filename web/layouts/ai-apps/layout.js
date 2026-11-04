@@ -37,7 +37,7 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto,
+import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
   pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
@@ -530,7 +530,10 @@ export default function setup(api) {
   api.listen(wsBtn, 'click', () => (sheet ? closeSheet() : openSheet()));
   api.listen(globalThis, 'wos:resources', () => { paintWs(); paintFuel(); });
   let fuelSig = '';
-  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { closeDrawer(); api.desk.settings('ai'); }); };
+  // (4 Nov 2026) the gauge stays without the network Home: read the AI usage feed directly and keep it polling while the foot shows
+  const ownFuel = () => fuelOf(api.aiUsage?.state?.(), api.aiUsage?.provider?.());
+  api.aiUsage?.live?.(foot);
+  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, pg => { closeDrawer(); api.desk.settings(pg || 'ai'); }, ownFuel); };
 
   /* ---------- Home: a New chat (the drawer's +, the name in the top bar, the orb's swipe up all land here) ---------- */
   function goHome() { draftWant = false; closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
