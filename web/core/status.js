@@ -231,8 +231,54 @@
   // Built only from the shared kit (kit/controls.css): .wz-card panel, .wz-list/.wz-row rows, .wz-pill states,
   // .wz-actions/.wz-button, .wz-icon-button. The skin colours and shapes all of it; polish.css only positions it.
   const PILL = { ok: 'ok', slow: 'warn', bad: 'error', wait: 'off', skip: 'off', run: 'off' };
+  // Calm card (off by default; tweak miguel/calm-offline sets --wos-calm-offline: on): one dotted path instead of
+  // rows and pills, one short next step with its detail muted, a small Check again with the automatic re-check time.
+  const calmOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-calm-offline').trim() === 'on'; } catch (_) { return false; } };
+  function calmFix(c) {
+    if (!c) return ['', ''];
+    if (c.internet?.state === 'bad') return ['Turn on Wi‑Fi or mobile data.', 'Or turn off airplane mode.'];
+    if (c.tailscale?.state === 'bad') return c.tailnet
+      ? ['Turn on Tailscale on this device.', 'If it’s already on, your Wizard’s computer may be off or asleep.']
+      : ['Check this device can reach your Wizard’s address.', 'The computer running it may be off or asleep.'];
+    if (c.wizard?.state === 'slow') return ['Your Wizard is busy.', 'Messages send by themselves.'];
+    if (c.wizard?.state === 'bad') return ['Your Wizard isn’t answering properly.', 'It usually recovers within a minute.'];
+    if (c.internet?.state === 'slow' || c.tailscale?.state === 'slow') return ['Connected, just slow.', ''];
+    return ['', ''];
+  }
+  let offNextAt = 0, offTick = 0;
+  const nextText = () => { const s = Math.max(0, Math.ceil((offNextAt - Date.now()) / 1000)); return offBusy ? 'Checking…' : offNextAt && s ? `Checking again in ${s} s` : ''; };
+  function tickNext() {
+    clearInterval(offTick); offTick = 0;
+    if (!offOpen || offHappy || !calmOn()) return;
+    offTick = setInterval(() => { const n = document.querySelector?.('#wxOffline [data-wxoffnext]'); if (!offOpen || !n) { clearInterval(offTick); offTick = 0; return; } n.textContent = nextText(); }, 1000);
+  }
+  function calmCard(c, happy) {
+    const offlineDevice = navigator.onLine === false || c?.internet?.state === 'bad';
+    const title = happy ? 'Back online' : offlineDevice ? 'You’re offline' : 'Can’t reach your Wizard';
+    const step = ([key, label]) => {
+      const st = happy ? 'ok' : c?.[key]?.state || 'run';
+      const name = key === 'tailscale' && c && !c.tailnet ? 'Network' : label;
+      const word = STATE_WORD[st] || '';
+      return `<li class="wx-step ${st}" data-wxck="${key}" title="${esc(happy ? 'Working' : c?.[key]?.detail || word)}"><i aria-hidden="true"></i><span>${esc(name)}</span><span class="wx-sr"> · ${esc(word)}</span></li>`;
+    };
+    const [fix, more] = happy ? ['', ''] : calmFix(c);
+    const canHelp = !happy && c && c.tailscale?.state !== 'bad' && c.internet?.state !== 'bad' && c.tailscale?.state !== 'wait';
+    return `<div class="wz-card wx-off-card wx-calm" tabindex="-1"><button type="button" class="wz-icon-button ghost wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
+      + `<h2 id="wxOffT">${esc(title)}</h2>`
+      + `<ol class="wx-path" aria-label="Connection checks">${ROWS.map(step).join('')}</ol>`
+      + (fix ? `<p class="wx-fix" role="status">${esc(fix)}${more ? `<small>${esc(more)}</small>` : ''}</p>` : '')
+      + (happy ? '' : `<div class="wx-calm-act"><button type="button" class="wx-link" data-wxoffcheck${offBusy ? ' disabled' : ''}>Check again</button>${canHelp ? '<button type="button" class="wx-link" data-wxoffhelp>More help</button>' : ''}<span class="wx-next" data-wxoffnext aria-live="off">${esc(nextText())}</span></div>`)
+      + (happy ? '' : `<p class="wx-calm-note">Messages wait here and send when you’re back.</p>`)
+      + `</div>`;
+  }
   function renderOffline() {
     const el = offEl(); if (!offOpen) { el.hidden = true; return; }
+    if (calmOn()) {
+      const had = el.contains?.(document.activeElement) ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
+      el.innerHTML = calmCard(offChecks, !!offHappy); el.hidden = false;
+      if (had) (el.querySelector?.(`[${had}]:not([disabled])`) || el.querySelector?.('.wx-calm'))?.focus?.();
+      tickNext(); return;
+    }
     const c = offChecks, happy = !!offHappy;
     const row = (key, label) => {
       const r = happy ? { state: 'ok', detail: 'Working' } : c?.[key] || { state: 'run', detail: 'Checking…' };
@@ -265,7 +311,9 @@
     if (ok) { verifyWizard(true); LIVE()?.refresh(); }
     renderOffline();
     // Re-check while it stays open and in front, backing off: 5 s, 8 s, 13 s … up to 30 s.
-    offT = setTimeout(() => { if (!document.hidden) runChecks(); else offT = setTimeout(runChecks, 5000); }, Math.min(30000, 5000 * 1.6 ** offN++));
+    const wait = Math.min(30000, 5000 * 1.6 ** offN++); offNextAt = Date.now() + wait;
+    offT = setTimeout(() => { if (!document.hidden) runChecks(); else offT = setTimeout(runChecks, 5000); }, wait);
+    if (calmOn()) renderOffline();
   }
   function openOffline() {
     if (captureBusy()) { captureChanged(); return; }
@@ -275,7 +323,7 @@
     renderOffline(); runChecks(); render();
     // Focus moves into the dialog on a control that is always enabled ("Check again" is busy while checks run).
     offReturn = document.activeElement || null;
-    setTimeout(() => { if (offOpen && !captureBusy()) document.querySelector?.('#wxOffline [data-wxoffx]')?.focus?.(); }, 0);
+    setTimeout(() => { if (offOpen && !captureBusy()) (calmOn() && document.querySelector?.('#wxOffline .wx-calm') || document.querySelector?.('#wxOffline [data-wxoffx]'))?.focus?.(); }, 0);
   }
   function dismissOffline(restoreFocus = true) {
     if (!offOpen) return false;
