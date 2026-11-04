@@ -22,8 +22,8 @@ test('Landscapes stays the default and every Wizard OS option is listed', () => 
 });
 
 test('the Background picker sits in Look, only on the Landscapes palettes', () => {
-  assert.match(settings, /wallpaper: 'appearance'/);
-  assert.match(settings, /register\(\{ id: 'wallpaper'/);
+  assert.match(settings, /\$\{deviceSkinRecovery\(\)\}\$\{wallpaperHtml\(S\)\}\$\{tweakRows\(S\)\}/, 'between the colours and the tweaks');
+  assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);
   assert.match(settings, /if \(!S\.wallpaperable\) return '';/);
   assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
 });
