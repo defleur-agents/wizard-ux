@@ -363,22 +363,24 @@
       v = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
       return Object.freeze({ on: v.on === true, start: v.start === 'expanded' ? 'expanded' : 'collapsed', length: REPLY_LENGTHS.some(l => l.id === v.length) ? v.length : 'sentences', saved: typeof v.on === 'boolean' });
     },
-    set(patch) {
+    set(patch, force = false) {
       const cur = replySummary.get();
       const next = { on: typeof patch.on === 'boolean' ? patch.on : cur.on, start: ['collapsed', 'expanded'].includes(patch.start) ? patch.start : cur.start, length: REPLY_LENGTHS.some(l => l.id === patch.length) ? patch.length : cur.length };
-      if (cur.saved && next.on === cur.on && next.start === cur.start && next.length === cur.length) return;
+      if (!force && cur.saved && next.on === cur.on && next.start === cur.start && next.length === cur.length) return;
       try { localStorage.setItem(RSUM_KEY, JSON.stringify(next)); } catch (_) {}
       window.WizLive?.putPrefs?.({ replySummary: next });
       window.dispatchEvent?.(new Event('wos:prefs'));
     },
-    // Turning the view on reads the box's saved choice first, so a fresh device never overwrites it with defaults.
+    // Turning the view on reads the box's saved choice first, so a fresh device never overwrites it with defaults, and
+    // tells the box only when the box doesn't already have it on (e.g. the box's service learnt the key after this device).
     async on(flag) {
-      if (flag && !replySummary.get().saved) {
+      let box = null;
+      if (flag) {
         try { const r = await fetch(new URL('/wizard/v1/ui-preferences', document.baseURI).href, { cache: 'no-store', credentials: 'same-origin' }); const j = r.ok ? await r.json() : null;
-          if (j?.replySummary && typeof j.replySummary === 'object') localStorage.setItem(RSUM_KEY, JSON.stringify(j.replySummary)); } catch (_) {}
+          if (j?.replySummary && typeof j.replySummary === 'object') { box = j.replySummary; localStorage.setItem(RSUM_KEY, JSON.stringify(box)); } } catch (_) {}
+        if (!summaryUsers.size || box?.on === true) return;
       }
-      if (flag && !summaryUsers.size) return;
-      replySummary.set({ on: flag });
+      replySummary.set({ on: flag }, flag);
     },
   };
   const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), summaryUsers = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')

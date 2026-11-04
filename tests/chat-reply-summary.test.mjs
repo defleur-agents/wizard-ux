@@ -108,6 +108,14 @@ test('the host: choices are box-wide prefs; the package marks the view on while 
   await f.clear();
   assert.deepEqual(JSON.parse(JSON.stringify(puts.at(-1))), { replySummary: { on: false, start: 'expanded', length: 'line' } }, 'off for the box after teardown');
   assert.equal(opts.size, 0);
+  // A device that finds the view already on for the box writes nothing at boot.
+  const g = fixture(), gp = [];
+  g.ctx.window.WizLive = { putPrefs: p => { gp.push(p); return Promise.resolve(true); } };
+  const gorig = g.ctx.fetch;
+  g.ctx.fetch = async (u, o) => String(u).includes('/wizard/v1/ui-preferences') ? { ok: true, json: async () => ({ replySummary: { on: true, start: 'collapsed', length: 'line' } }) } : gorig(u, o);
+  await g.mount('miguel/reply-summary'); await new Promise(r => setTimeout(r, 30));
+  assert.equal(gp.length, 0); assert.equal(g.host.replySummary.get().length, 'line');
+  await g.clear();
   const src = read('web/tweaks/miguel/reply-summary/tweak.js');
   assert.match(src, /'Short answers start collapsed'/);
   assert.match(src, /'Applies to new replies; earlier ones keep theirs\.'/);
