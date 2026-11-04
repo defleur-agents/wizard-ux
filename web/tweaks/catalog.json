@@ -24,7 +24,8 @@
     "miguel/reply-summary",
     "wizard/orb-radial",
     "wizard/new-send-list",
-    "miguel/now-playing"
+    "miguel/now-playing",
+    "miguel/calm-offline"
   ],
   "defaults": [
     "wizard/unified-inbox"
