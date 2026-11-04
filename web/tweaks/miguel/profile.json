@@ -15,8 +15,7 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps",
-    "miguel/notification-levels"
+    "miguel/ai-apps"
   ],
   "flags": {},
   "off": [

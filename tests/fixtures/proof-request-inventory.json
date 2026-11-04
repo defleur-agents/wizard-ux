@@ -987,7 +987,7 @@
     },
     "/notifications/api/routes": {
       "status": "catalogued",
-      "source": "web/core/skin-host.js",
+      "source": "web/core/notif-bell.js",
       "kind": "read",
       "examples": [
         {
@@ -995,7 +995,7 @@
           "path": "/notifications/api/routes"
         }
       ],
-      "note": "Only the read is answered; POST remains refused by the offline request fence."
+      "note": "Only GET is admitted by the proof fixture. Route writes remain refused."
     }
   }
 }
