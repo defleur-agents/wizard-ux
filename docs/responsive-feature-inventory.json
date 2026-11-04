@@ -221,6 +221,14 @@
       ],
       "note": "Versioned in-document Chats provider admission and lifecycle"
     },
+    "core/incognito-chat.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "classification": "shared",
+      "note": "Optional in-memory temporary chat; strict server capability plus default-off preference"
+    },
     "core/chats.js": {
       "loadedBy": [
         "phone",
@@ -869,6 +877,7 @@
     "core/features.js",
     "core/files.js",
     "core/focused-field.js",
+    "core/incognito-chat.js",
     "core/launcher-defaults.js",
     "core/launcher.js",
     "core/links.css",

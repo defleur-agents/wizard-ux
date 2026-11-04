@@ -2,7 +2,9 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One implementation per capability. See [reuse gate](app-reuse-gate.md): name a REUSE/EXTEND owner below; NEW adds a shared owner and row. `Reuse: n/a` requires no UI changes.
+One owner per capability. [Reuse gate](app-reuse-gate.md).
+
+| Temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; capability + opt-in | durable transcript/outbox |
 
 ## Apps (`WizardApp`: `/wizard-os-home/core/app-client.js`)
 
