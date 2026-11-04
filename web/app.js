@@ -1235,7 +1235,7 @@
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { closeSheets(true); placeApp(w => w.app === 'pages' && w.pageSlug === pageSlug, {app:'pages', appId:'pages', pageSlug}, opts); return true; }
-    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
@@ -1549,6 +1549,7 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
@@ -1609,7 +1610,9 @@
   // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
+    $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el));
     $$('iframe.appframe', root).forEach(f => {
+      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
@@ -2095,6 +2098,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {

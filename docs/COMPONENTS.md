@@ -24,7 +24,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin | guards, 2nd tap | Back stays; repair → source |
 | Skin/tokens/mode | `WizardApp.theme.get / onChange`, `--wz-*` roles | own storage/mode, raw colors | two skins + live change keep state |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback | literal colours in native screens |
-| Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach` | duplicate offline/address UI |
+| Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach.recoveryHtml/mountRecovery/checks` (cached Troubleshooter entry and shared evidence) | duplicate offline/address UI |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) | app transcriber | stale/foreign denied; unavailable explicit |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own inbound route | pending until accepted, ack once |

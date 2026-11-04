@@ -410,7 +410,7 @@
     // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
-    if (a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -498,6 +498,7 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
@@ -626,7 +627,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else watchFrame(el.querySelector('iframe'), el);
+    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]')); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   function watchFrame(f, el) {
@@ -978,6 +979,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;
