@@ -28,23 +28,34 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
       setAttribute() {}, classList: { contains: () => false } });
     return nodes.get(key);
   };
-  const groups = () => ({ ready: [{ id: 'chat-a' }, { id: 'chat-b' }], needs: [], working: [] });
+  const storage = new Map();
   const window = { addEventListener, dispatchEvent, WosSkinHost: { inboxList: mode, changed() {} },
+    WizConfig: { dayStart: n => n - n % 864e5 },
     WizCore: { backendApps: () => [{ id: 'notifications' }] } };
   const context = vm.createContext({ window, addEventListener, dispatchEvent,
-    document: { querySelectorAll: () => [], addEventListener() {} },
+    document: { documentElement: { dataset: {} }, querySelectorAll: () => [], addEventListener() {} },
+    navigator: {}, AbortSignal,
+    localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },
     location: { origin: 'https://wizard.example.test' },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
     setTimeout() {}, setInterval() {}, queueMicrotask() {},
     fetch: async url => { requests.push(url); return { ok: true, json: async () => url.includes('/items')
       ? { items: [{ id: 'unread-a' }, { id: 'unread-b' }, { id: 'quiet', read: true }, { id: 'done', archived: true, read: true }] }
       : { unread, needs: 0 } }; },
-    $, $$: () => [], LIVE: { ok: liveOK, groups, workGroups: groups }, live: groups,
+    $, $$: () => [],
     CHATS_APP: { id: 'wizard' }, APP: { wizard: { id: 'wizard' } },
     // Layout/Home work is outside this count regression; no production count function is mocked.
     paintOrbBadge() {}, refreshHome() {}, paintFocus() {}, layout() {}, hudMount() {},
     stage: {}, ws: [], W: {}, appOf: w => w, MOD: 'Alt+', homeOpen: false, pal: { hidden: true }, afterRender: null,
   });
+  vm.runInContext(read('web/live.js'), context);
+  const LIVE = window.WizLive, at = new Date(Date.now() - 60000).toISOString();
+  LIVE.ok = liveOK; LIVE.seen = { initializedAt: 1, threads: {} };
+  LIVE.sessions = ['chat-a', 'chat-b'].map(id => ({ id, title: id, runtime: 'direct', status: 'completed',
+    attention: { state: 'needs_you' }, updatedAt: at, previewAt: at, lastAssistantAt: at,
+    previewRole: 'assistant', preview: 'Synthetic reply', messageCount: 2 }));
+  LIVE.markSeen('chat-a'); // Both stay Ready; only chat-b contributes an unread badge.
+  context.LIVE = LIVE; context.live = () => LIVE.groups();
   vm.runInContext(read('web/core/workspace-navigation.js'), context);
   context.C = window.WizCore;
   vm.runInContext(process.env.NOTIF_SOURCE ? readFileSync(process.env.NOTIF_SOURCE, 'utf8') : read('web/core/notif-bell.js'), context);
@@ -68,14 +79,16 @@ for (const shell of ['phone', 'desktop']) {
   for (const unread of [0, 2]) {
     test(`${shell}: both preference transitions refresh actual Chats badge immediately (unread=${unread})`, async () => {
       const h = await load(shell, { unread });
-      assert.equal(h.counts.wizard, 5, 'two chat rows + three non-archived notification rows');
+      assert.equal(h.window.WizLive.workGroups().ready.length, 2, 'reading does not remove Ready rows');
+      assert.equal(h.window.WosBell.readyCount(), 3, 'Ready keeps read/snoozed notification rows');
+      assert.equal(h.counts.wizard, 3, 'one unread chat + two unread notification rows');
       assert.equal(h.counts.notifications || 0, 0);
       const reads = h.requests.length;
       h.setMode(false);
-      assert.equal(h.counts.wizard, 2, 'old notification rows leave the stored Chats count synchronously');
+      assert.equal(h.counts.wizard, 1, 'routed notification rows leave the stored Chats count synchronously');
       assert.equal(h.counts.notifications || 0, unread);
       h.setMode(true);
-      assert.equal(h.counts.wizard, 5, 'notification rows return synchronously');
+      assert.equal(h.counts.wizard, 3, 'only unread notification rows return synchronously');
       assert.equal(h.counts.notifications || 0, 0);
       assert.equal(h.requests.length, reads, 'preference refresh needs no fetch/poll/timer');
     });
@@ -85,7 +98,7 @@ for (const shell of ['phone', 'desktop']) {
     assert.equal(h.counts.wizard || 0, 0);
     assert.equal(h.counts.notifications, 2);
     h.setMode(true);
-    assert.equal(h.counts.wizard, 3, 'notification rows count even while live chats are unavailable');
+    assert.equal(h.counts.wizard, 2, 'only unread notification rows count while live chats are unavailable');
     const before = h.events.filter(type => type === 'wizard:notifications').length;
     h.prefs(); h.prefs();
     assert.equal(h.events.filter(type => type === 'wizard:notifications').length, before,
