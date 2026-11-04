@@ -49,4 +49,3 @@ It includes no-storage/no-query controls, repeated loads, narrow cleanup and sup
 Layout imports in that Node fixture are logged/stubbed, not real-browser mounting proof. The v7 forum gate
 adds real phone storage/query/control cases under deferred-then-failed catalog on both skins, checks every
 AI apps layout asset request, and reloads without re-seeding storage. Browser acceptance remains pending.
-
