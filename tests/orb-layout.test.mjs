@@ -255,13 +255,14 @@ test('Orb layout files: desktop-scoped CSS only, no second composer, no raw stor
   // name label under the orb.
   const sl = read('web/layouts/orb/layout.css'), satRule = sl.match(/\] \.ob-sat \{([^}]*)\}/)[1];
   assert.match(satRule, /background: none;/); assert.ok(!/backdrop-filter|border: 1px|box-shadow/.test(satRule), 'no container behind the app');
-  assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; paintApps\(\); for \(const s of sats\) paintBadge\(s\.el, s\.id\); \}\);/);
+  assert.match(js, /let badgeMap = api\.apps\.badges\(m => \{ badgeMap = m; paintReady\(\); paintApps\(\); for \(const s of sats\) paintBadge\(s\.el, s\.id\); \}\);/);
   assert.ok(!js.includes("'ob-name'") && !sl.includes('.ob-name'), 'no agent name label in orb mode'); assert.match(js, /sgi sg-\$\{glyphOf\(a\)\}/); assert.ok(!js.includes("'sgi sgl"), 'no letter sigils drawn');
-  // Conversations: the stock Chats list docked (no pills of its own any more); it folds to a strip with the Ready count,
+  // Conversations: the stock Chats list docked (no pills of its own any more); it folds to a strip with the unread count,
   // kept per device, and ⌥\ toggles it.
   assert.ok(!js.includes('ob-th') && !js.includes('MAX_ROWS'), 'no second list under the orb');
   assert.match(js, /api\.storage\.set\('folded', folded\);/); assert.match(js, /e\.code === 'Backslash'/);
-  assert.match(js, /badge\.textContent = n \? String\(n\) : '';/);
+  assert.match(js, /const n = badgeMap\['wizard'\] \|\| 0, text = n \? \(api\.apps\.badgeText\?\.\('wizard'\) \|\| String\(n\)\) : '';/);
+  assert.match(js, /badge\.textContent = text; badge\.hidden = !n;/);
   const lcss = read('web/layouts/orb/layout.css');
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-dock\] \{\n  top: 0; left: 0; bottom: 0; width: var\(--ob-col-w\);/, 'full height, flush left');
   assert.match(lcss, /\.panel-layer > \.win\.panel\[data-side="beside"\] \{\n  z-index: 2; top: 0; bottom: 0; left: var\(--ob-beside-left, var\(--ob-col-w\)\); right: auto; width: var\(--ob-chat-w\);/, 'a chat: a column right beside the list');

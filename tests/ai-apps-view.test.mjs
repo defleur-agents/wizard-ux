@@ -304,7 +304,7 @@ test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past 
   }
 });
 
-test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
+test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
   const w = world();
   const off = (await layout()).default(w.api);
   assert.equal(w.html.dataset.aiApps, 'on'); assert.equal(w.html.dataset.viewChrome, 'phone', 'the shared view chrome (dock without its switcher)');
@@ -316,8 +316,8 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   assert.equal(w.q('.aa-home').getAttribute('aria-label'), 'Home'); assert.equal(w.q('.aa-home').tagName, 'BUTTON');
   assert.equal(w.q('.aa-ws-i').textContent, 'M'); assert.match(w.q('.aa-dws').getAttribute('aria-label'), /Workspace: Miguel/);
   assert.equal(w.q('.aa-dws .aa-word').textContent, 'Miguel', 'the drawer header names this Wizard');
-  assert.match(w.q('.aa-menu').getAttribute('aria-label'), /2 ready/);
-  assert.equal(w.q('.aa-menu .aa-count').textContent, '2', 'the Ready count on ☰, a number (no bare dot)'); assert.equal(w.q('.aa-dot'), null);
+  assert.match(w.q('.aa-menu').getAttribute('aria-label'), /2 unread/);
+  assert.equal(w.q('.aa-menu .aa-count').textContent, '2', 'the shared unread badge on ☰, a number (no bare dot)'); assert.equal(w.q('.aa-dot'), null);
   // open the drawer
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
