@@ -78,6 +78,15 @@ test('api.media: layouts and trusted tweaks that ask for it; both shells wire th
   for (const page of ['web/index.html', 'web/desktop.html']) assert.ok(read(page).includes('<script src="core/media-watch.js"></script>'), page);
   const cat = JSON.parse(read('web/tweaks/catalog.json'));
   assert.ok(cat.tweaks.includes('miguel/now-playing')); assert.ok(!cat.defaults.includes('miguel/now-playing'), 'off by default');
-  assert.ok(JSON.parse(read('web/core/slots.json')).slots['apps-top'], 'the apps column slot is part of the contract');
+  assert.equal(JSON.parse(read('web/core/slots.json')).slots['apps-top'], undefined, 'minimal: no pill, so no apps-column slot');
+  // minimal (Miguel, 4 Nov 2026): the package mounts nothing; it holds the watcher and styles the view's icon bars
+  const tw = read('web/tweaks/miguel/now-playing/tweak.js'), css = read('web/tweaks/miguel/now-playing/tweak.css');
+  assert.doesNotMatch(tw, /slot|mount|createElement|pauseAll|np-pop/, 'no pill, no list, no Pause all, no top-bar control');
+  assert.match(tw, /return M\.watch\(\(\) => \{\}\);/);
+  assert.doesNotMatch(css, /\.np\b|np-pop|np-all|apps-top|dock-end/, 'no pill / list css left');
+  assert.match(css, /\.aad-np:is\(:hover, :focus-visible\) \.aad-np-g \{ visibility: visible; \}/, 'hover: the bars become pause');
+  assert.match(css, /\.aad-np-g::after \{ content: ""; width: 2\.5px; height: 100%;/, 'the pause glyph has a height (a flex-end parent left it 0 px tall)');
+  assert.match(css, /\.aad-vtab\[data-media="paused"\] \.aad-np \{ animation: np-gone 250ms ease 4s both; \}/, 'paused: gone after a short grace');
+  assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ''), /(^|\})\s*html\[data-tweaks~="miguel\/now-playing"\]\s*\{/, 'nothing styled at the root: idle is exactly tweak-off');
   for (const f of ['web/core/media-watch.js', 'web/core/skin-host.js', 'web/app.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /now-playing/, f + ': core never names the package');
 });
