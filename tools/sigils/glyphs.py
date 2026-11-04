@@ -354,6 +354,13 @@ def g_card():
     chip = rrect(148, 270, 62, 44, 11)
     return D(card, stripe, chip)
 
+@glyph('tag', 'A price tag with its eyelet punched out: things you sell and buy second-hand.')
+def g_tag():
+    # Upright tag (point up, eyelet near the point), then turned 45 degrees like a tag hanging on a string.
+    body = P("M256 72 L352 168 V408 A32 32 0 0 1 320 440 H192 A32 32 0 0 1 160 408 V168 Z")
+    body = U(body, stroke(body, 28))
+    return R(D(body, circle(256, 176, 34)), 45, 256, 256)
+
 @glyph('dollar', 'A dollar sign cut through a coin: what you spent, what you own.')
 def g_dollar():
     coin = circle(256, 256, 170)
