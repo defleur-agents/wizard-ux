@@ -70,6 +70,8 @@ async function boot(phone) {
     if (m) { const item = s.rows.find(x => x.id === m[1]); if (!item) return json(r, { error: 'no synthetic thread' }, 404);
       return json(r, m[2] ? { data: [{ role: 'user', content: 'Synthetic question', timestamp: item.last_active - 1 }, { role: 'assistant', content: item.preview, timestamp: item.last_active }], has_more: false } : { session: item }); }
     if (empties.has(p)) return json(r, p.endsWith('agents') ? { agents: [] } : p.endsWith('items') ? { items: [] } : p.endsWith('counts') ? { unread: 0, needs: 0 } : {});
+    if (p === PREFIX + 'data.js' || p === PREFIX + 'summaries.js') return r.fulfill({ contentType: 'application/javascript', body: '/* Synthetic QA: generated owner data intentionally absent. */' });
+    if (p === PREFIX + 'ux-changes.json') return json(r, []);
     if (p.startsWith(PREFIX)) {
       const root = path.join(TREE, 'web'), file = path.resolve(root, decodeURIComponent(p.slice(PREFIX.length) || 'index.html'));
       if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return r.fulfill({ path: file });
