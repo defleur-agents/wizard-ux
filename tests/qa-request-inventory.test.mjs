@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const require = createRequire(import.meta.url);
@@ -99,8 +99,22 @@ test('refused-*.json lands in the harness default output directory, resolved at 
  fx.resetRefusals();
 });
 
+test('census retains untracked static fetches and derives literal app reads without prefix/extension exclusions', () => {
+ const dir = mkdtempSync(path.join(tmpdir(), 'census-'));
+ try {
+  mkdirSync(path.join(dir, 'web/core'), { recursive: true });
+  writeFileSync(path.join(dir, 'web/core/web-update.js'), `fetch(url('ux-version.txt'));fetch('/another-service/api/state');fetch('/wizard-os-home/future.txt');fetch('build.css');api.data.read.app('backup','overview');api.data.read.app('new-app','status');`);
+  const found = scan(dir);
+  for (const p of ['/wizard-os-home/ux-version.txt', '/another-service/api/state', '/wizard-os-home/future.txt', '/wizard-os-home/build.css', '/backup/api/overview', '/new-app/api/status']) assert.ok(found.has(p), p);
+ } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the census finds request targets outside any known API prefix', () => {
  const found = scan(root);
  assert.ok(found.has('/mizel-live/orb-events'), 'orb-handoff endpoint must be discovered');
  assert.ok(inventory.paths['/mizel-live/orb-events']);
+ for (const p of ['/wizard-os-home/ux-version.txt', '/backup/api/overview']) {
+  assert.ok(found.has(p), p + ' discovered from production request construction');
+  assert.equal(inventory.paths[p]?.status, 'catalogued');
+ }
 });

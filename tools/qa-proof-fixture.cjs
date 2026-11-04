@@ -8,7 +8,7 @@ function app(id){return {id,name:id,url:'/'+id+'/',source:'apps.json',type:'view
 // Explicit path catalogue for these shell proofs. Query filtering/paging belongs
 // to each proof's overrides; no arbitrary session IDs or suffix matches admitted.
 const bodies={
- '/wizard/v1/bootstrap':{bootstrap:1,settings:{agent:{name:'Synthetic Wizard'},clock:{timezone:'UTC'}},endpoints:{apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions'}},
+ '/wizard/v1/bootstrap':{bootstrap:1,settings:{agent:{name:'Synthetic Wizard'},clock:{timezone:'UTC'}},capabilities:{voice:true},endpoints:{transcribe:'/wizard/voice/transcribe',apps:'/wizard/v1/apps',sessions:'/wizard/hermes/api/sessions'}},
  '/wizard/v1/setup':{first_run:false},
  '/wizard/v1/skins':{version:1,active:null,migrated:true,skins:['nebula','grove','tide','ember','signal'].map(base=>({id:'synthetic-'+base,name:'Synthetic '+base,base,tweaks:{},bytes:0,empty:true,has_script:false,has_recipe:true,forked_from:null,published:null}))},
  '/wizard/v1/my-skin?format=json':{exists:false,empty:true,bytes:0,script:{exists:false,bytes:0}},
@@ -20,6 +20,8 @@ const bodies={
  '/api/system/load':{cpuLoad:7,percentUsedMemory:12,percentUsed:10},
  '/api/system/devices':{devices:[]},
  '/api/system/health':{available:false,checks:[]},
+ // Disposable, unconfigured backup status; no credentials, repository URLs or owner state.
+ '/backup/api/overview':{backup:{configured:false,status:'not_configured',last_snapshot:null},standby:null,connector:null,active:null},
  '/wizard/files':{files:[]},
  '/notifications/api/items?view=all&limit=200':{items:[]},
  '/notifications/api/count':{count:0},
@@ -64,6 +66,8 @@ for(const method of ['GET','HEAD'])fixture.responses[method+' /morning/ready.jso
 for(const method of ['GET','HEAD'])fixture.responses[method+' /favicon.ico']={status:204,body:'',contentType:'image/x-icon'};
 // CSS is typed separately: discovery must not apply a JSON object as a stylesheet.
 for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/my-skin']={status:200,body:'',contentType:'text/css'};
+// Stable synthetic web-tree identity, not a JSON response or a changing timestamp.
+for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard-os-home/ux-version.txt']={status:200,body:'0123456789abcdef0123456789abcdef01234567\n',contentType:'text/plain'};
 function response(p,method='GET'){return responseOrRefuse(fixture,p,method);}
 // read() is strict (throws) for in-process callers/tests; response() is what routed browsers use and collects instead.
 function read(p,method='GET'){return JSON.parse(responseFor(fixture,p,method).body);}
