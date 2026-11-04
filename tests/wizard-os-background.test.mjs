@@ -24,6 +24,9 @@ test('Landscapes stays the default and every Wizard OS option is listed', () => 
 test('twinned skins show Background cards and a separate Dark | Light mode instead of a colour per mode', () => {
   assert.match(settings, /const colours = !own && twinned\(S, family\) \? backgroundHtml\(S, family, cur\) :/);
   assert.match(settings, /class="skp-card" data-bgpick=/, 'the same cards as Colors');
+  const background = settings.slice(settings.indexOf('function backgroundHtml('), settings.indexOf('function backgroundAct('));
+  assert.match(background, /color-mix\(in srgb, var\(--p-bg, var\(--wz-bg\)\)/, 'thumbnail shading follows the preview skin with a shell-token fallback');
+  assert.doesNotMatch(background, /rgba?\(\s*\d/, 'new thumbnails introduce no literal colour');
   assert.match(settings, /data-skinmode="\$\{m\}"/);
   assert.match(settings, /if \(backgroundAct\(ctx, el, pickPalette\)\) return true;/);
   assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);

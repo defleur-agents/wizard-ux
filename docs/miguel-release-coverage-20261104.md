@@ -20,6 +20,10 @@ New covered `release/miguel` tip: `257106beb72248652abef8a88ea56e013cc2c4e1`.
 
 This PR starts at merged main `48f8743600baec19e45893db3f4732690e415239` (PR #957). The phone AI apps `layout.js` is byte-identical before and after the five ports: no donor branch replacement, loss of shell-sheet guard, gesture-claim repair or deferred-Chat continuity fix. All three new drawer regression tests remain present and pass after the ports. An already-started drawer drag is cancelled immediately when a shell sheet opens.
 
+## Main integration adjustments
+
+Hosted CI found two cross-realm test failures after the Ready projection started constructing its own array: contents were the same `s-main`, but `deepStrictEqual` compared a VM-array prototype against a host array. Normalize with host `Array.from`, retain all exact isolation assertions, and cover Errors/Yesterday/Past-week projection explicitly in both adapters. The new thumbnail gradient also triggered two literal-colour style violations: use the preview's `--p-bg` with `--wz-bg` fallback and color-mix, preserving the intended shading stops instead of weakening style policy. These are integration adaptations on top of the recorded patch-equivalent ports.
+
 ## Evidence and remaining acceptance
 
 Actual browser-free tests on this combined tree: `ai-apps-view.test.mjs` 80/80 PASS; `wizard-os-background.test.mjs` 4/4 PASS. No full local npm, browser, Docker, deployment or restart. Full npm and visual acceptance remain the source-sealed parent-submitted v5 forum gate. It must pin the final merged main, retain the covered release SHA above, and inspect phone/desktop screenshots on Nebula and Obsidian light, including the phone Settings off-retap, before visual acceptance. The earlier round5 directory pinned only to #957 is superseded and must not be submitted.

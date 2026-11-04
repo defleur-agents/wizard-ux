@@ -11,7 +11,7 @@ const kinds = ['main', 'host-profile', 'container', 'restricted'];
 const src = f => readFileSync(new URL(`../web/${f}`, import.meta.url), 'utf8');
 const slice = (js, a, b) => { const i = js.indexOf(a), j = js.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return js.slice(i, j); };
 
-function world(file) {
+function world(file, groups = {}) {
   const js = src(file), calls = [];
   // one Chats window per kind, each on its own desk; a routed agent's window is the one in front
   const W = {}; kinds.forEach((k, i) => { W['w-' + k] = { id: 'w-' + k, app: 'chats', thread: `t-${k}`, agent: k === 'main' ? '' : `qa-${k}`, runtimeKind: k, desk: i }; });
@@ -22,7 +22,7 @@ function world(file) {
       threadAct: (wid, sid, act) => calls.push(['act', wid, sid, act]), openRenameSheet: (wid, sid) => calls.push(['rename', wid, sid]),
       openChat: (wid, t) => calls.push(['open', wid, t]), threadActions: () => ['snooze', 'done'], stiKind: () => '' },
     // the main agent's own groups: what the shell's Ready / Working read
-    LIVE: { ok: true, workGroups: () => ({ working: [], ready: [sess('main')], deferred: [], archive: [] }), isNew: () => false, cardAt: () => '' },
+    LIVE: { ok: true, workGroups: () => ({ working: [], ready: [sess('main')], deferred: [], archive: [], ...groups }), isNew: () => false, cardAt: () => '' },
     window: { WosChatPins: { has: () => false, toggle: id => (calls.push(['pin', id]), true) } },
     closeSheets() {}, deskOf: id => W[id]?.desk ?? -1, goDesk: n => calls.push(['desk', n]), focusWin: id => calls.push(['focus', id]),
     openApp: () => calls.push(['openApp']), toast() {}, findWin: fn => Object.values(W).find(fn) || null,
@@ -38,10 +38,17 @@ function world(file) {
 }
 
 for (const file of ['app.js', 'desktop/desktop.js']) {
+  test(`${file}: Ready includes Errors and older day groups without touching routed windows`, () => {
+    const row = (id, status = 'idle') => ({ id, title: id, status, agent: '' });
+    const w = world(file, { ready: [row('ready')], errors: [row('failed', 'failed'), row('interrupted', 'interrupted')], yesterday: [row('yesterday')], pastWeek: [row('week')] });
+    const rows = w.api.sessionList();
+    assert.deepEqual(Array.from(rows.ready, r => r.id), ['failed', 'interrupted', 'ready', 'yesterday', 'week']);
+    assert.equal(w.W['w-restricted'].thread, 't-restricted');
+  });
   test(`${file}: the AI apps drawer lists and acts on the main agent's Chats only, with routed windows open`, () => {
     const w = world(file);
     const rows = w.api.sessionList();
-    assert.deepEqual(rows.ready.map(r => r.id), ['s-main'], 'only the main agent\'s rows');
+    assert.deepEqual(Array.from(rows.ready, r => r.id), ['s-main'], 'only the main agent\'s rows');
     for (const k of kinds.slice(1)) assert.ok(!JSON.stringify(rows).includes(`qa-${k}`), `${k}: no routed row`);
     for (const a of ['done', 'snooze', 'rename']) { w.calls.length = 0; assert.equal(w.api.sessionAct('s-main', a), true, a);
       const hits = w.calls.filter(c => c[0] === 'act' || c[0] === 'rename');
