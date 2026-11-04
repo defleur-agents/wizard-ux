@@ -120,7 +120,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const running = !!layers && a.desk != null;
     if (running) { b.classList.add('is-run'); b.append(el('i', 'ah-run', { 'aria-hidden': 'true' })); }
     b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : '') + (running ? ', open' : ''));
-    api.listen(b, 'click', e => { if (Date.now() < swallow) { e.preventDefault?.(); return; } goApp(a.id, a.desk); });
+    api.listen(b, 'click', e => { if (Date.now() < swallow || npAt(e)) { e.preventDefault?.(); return; } goApp(a.id, a.desk); });
     if (layers) holdable(b, a); else pressable(b, a);
     return b;
   }
@@ -131,7 +131,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
   const liftCells = () => [...dock.querySelectorAll('.ah-app[data-group="pin"]'), ...grid.querySelectorAll('.ah-app[data-group="open"]')];
   function holdable(b, a) {
     api.listen(b, 'pointerdown', e => {
-      if (e.button > 0) return;
+      if (e.button > 0 || npAt(e)) return;   // a press on the Now playing bars is theirs (never a hold or a drag)
       const p = { b, a, x: e.clientX, y: e.clientY, pid: e.pointerId, lifted: false, moved: false, to: null, mark: null };
       p.off = api.after(HOLD, () => {
         if (press !== p) return;
@@ -185,6 +185,7 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
    * sheet would not offer (system apps, no frontend) keep a plain tap. (Round 11: no drag to rearrange any more.) */
   const HOLD = 450;   // the stock hold (home-screen-apps.js)
   let swallow = 0, press = null;
+  const npAt = e => !!e?.target?.closest?.('.ah-np');   // (Now playing: the bars on an icon, below)
   const canPin = id => !!api.apps.homeScreen?.can?.(id);
   function offer(id) { swallow = Date.now() + 700; return !!api.apps.homeScreen?.offer?.(id); }
   function pressable(b, a) {
@@ -283,8 +284,39 @@ export function homeView(api, { goApp, getMore, lit, badgeText, desks, paged = f
     const was = cells; cells = new Map();
     for (const a of list) { const s = cellSig(a), c = was.get(a.key); cells.set(a.key, c && c.__sig === s ? c : Object.assign(cell(a), { __sig: s })); }
     order = list.map(a => a.key); more ||= moreCell();
-    place();
+    place(); markMedia();
   }
+
+  /* Now playing on the phone (Miguel, 4 Nov 2026: the desktop's minimal bars, on the phone too): a playing app's icon in
+   * the dock or the grid wears small bars (.ah-np, painted by the miguel/now-playing tweak's css). A phone has no hover,
+   * so a paused app shows a small play mark instead, which fades out after a short grace. A tap on the bars pauses /
+   * plays that app without opening it (its hit area is 44 px, an invisible padding in that css); a press there never
+   * starts the hold that lifts the icon. Passive: drawn only while that tweak watches; a fresh icon never draws bars for
+   * something already paused. The phone Home only (layers); the desktop's Home grid draws none. */
+  let npOf = null;
+  function markMedia() {
+    if (!npOf || !layers) return;
+    for (const b of cells.values()) {
+      const m = npOf.get(b.dataset.app), ic = b.querySelector('.ah-ic'); let np = ic?.querySelector('.ah-np');
+      if (!m || !ic) { if (b.dataset.media) delete b.dataset.media; np?.remove(); continue; }
+      if (!np && !m.playing) { if (b.dataset.media) delete b.dataset.media; continue; }
+      if (b.dataset.media !== (m.playing ? 'playing' : 'paused')) b.dataset.media = m.playing ? 'playing' : 'paused';
+      if (!np) {
+        np = el('span', 'ah-np', { role: 'button' });
+        const bars = el('span', 'ah-np-b', { 'aria-hidden': 'true' }); bars.append(el('i'), el('i'), el('i'));
+        np.append(bars, el('span', 'ah-np-g', { 'aria-hidden': 'true' }));
+        api.listen(np, 'click', e => { e.stopPropagation?.(); e.preventDefault?.(); const x = npOf?.get(b.dataset.app); if (x) (x.playing ? api.media.pause(x.key) : api.media.play(x.key)); });
+        api.listen(np, 'contextmenu', e => { e.stopPropagation?.(); e.preventDefault?.(); });
+        ic.append(np);
+      }
+      const what = (m.playing ? 'Pause ' : 'Play ') + (b.getAttribute('title') || b.dataset.app);
+      if (np.getAttribute('aria-label') !== what) np.setAttribute('aria-label', what);
+    }
+  }
+  if (layers) api.media?.watch?.(list => {
+    const of = new Map(); for (const x of list) if (x.playing ? !of.get(x.appId)?.playing : !of.has(x.appId)) of.set(x.appId, { playing: x.playing, key: x.key });
+    npOf = of; markMedia();
+  }, { passive: true });
 
   /* ---------- pages (the desktop) ---------- */
   function paintDots(n) {
