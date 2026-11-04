@@ -177,7 +177,12 @@ async function tapThread(id, phone) {
         assert.equal(await page.evaluate(() => __badgeDoc), doc, 'skin changed live, not by reload');
         assert(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim()));
         if (phone) { for (let i = 0; i < 3; i++) await page.evaluate(() => window.__wosNativeBack?.()); }
-        else await page.locator('#dsettings [data-close]').click();
+        else {
+          // Desktop Settings may be a desk window rather than its Home modal.
+          const modalClose = page.locator('#dsettings [data-close]:visible');
+          if (await modalClose.count()) await modalClose.click();
+          else await page.locator('.win:visible').filter({ has: page.locator('[data-skinpick="obsidian-light"]') }).locator('[data-wact="close"]').click();
+        }
         await routeView('chats'); await expectCount(page, 2); await snap(mode + '-unread-two-obsidian-light', phone);
       });
       await check(mode + ': unattended open thread does not eat a later reply', async () => {
