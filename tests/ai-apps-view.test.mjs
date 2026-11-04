@@ -1956,3 +1956,12 @@ test('round 21: the views keep the open model to themselves: Desks, Orb and Apps
     assert.ok(!read(f).includes('routeOpens'), `${f} leaves every open stock`);
   for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /api\.apps\.routeOpens\?\.\(\{/);
 });
+
+test('AI apps view: Now playing has the column\'s first row (slot apps-top), marks playing apps\' rows passively and owns ⌥P', () => {
+  const js = read('web/layouts/ai-apps/desktop.js');
+  assert.match(js, /const vtNow = el\('div', 'aad-vtnow', \{ 'data-slot': 'apps-top' \}\);/);
+  assert.match(js, /vt\.append\(vtHead, vtNow, vtList, vtFoot\)/, 'the pill row sits above the apps, under the header');
+  assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
+  assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
+  assert.match(js, /if \(api\.media\?\.list\?\.\(\)\.length\) put\(vtNow\.firstElementChild, 'P'/, 'its keycap only while something is listed');
+});

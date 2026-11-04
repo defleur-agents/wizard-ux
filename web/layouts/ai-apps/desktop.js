@@ -216,7 +216,10 @@ export default function desktop(api) {
   const tidyW = el('span', 'aad-tidy-w');
   tidyBtn.append(icon('snooze', 'aad-ico aad-tidy-i'), tidyW);
   vtFoot.append(vtAll, tidyBtn);
-  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot);
+  // Now playing (4 Nov 2026): the column's first row, for the miguel/now-playing tweak's pill (slot `apps-top`); empty
+  // and 0 px tall without it, so the column is exactly as it was
+  const vtNow = el('div', 'aad-vtnow', { 'data-slot': 'apps-top' });
+  vt.id = 'aad-vt'; vt.append(vtHead, vtNow, vtList, vtFoot);
   const toast = el('div', 'aad-toast', { role: 'status' }); toast.hidden = true;
   const toastW = el('span', 'aad-toast-w'), toastU = el('button', 'aad-toast-u', { type: 'button', text: 'Undo' });
   toast.append(toastW, toastU);
@@ -1081,6 +1084,7 @@ export default function desktop(api) {
     if (!out.length) out.push(el('p', 'aad-vtnone', { text: 'No apps open.' }));
     if (drag) dragEnd(false);
     vtList.replaceChildren(...out, dropLine);
+    markMedia();
   }
   function toggleTabs() { focusLeave(); vtFolded = !vtFolded; api.storage.set('tabsFolded', vtFolded); flip([top, orbBox, ...shownDesks()], () => paintVt(true)); retileSoon(); }
   api.listen(vtTog, 'click', toggleTabs);
@@ -1342,7 +1346,7 @@ export default function desktop(api) {
    * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
    * ⌥O workspaces, ⌥K search, ⌥L fold the sidebar, ⌥N new chat, ⌥S Settings, ⌥↓ / ⌥↑ the next / previous Ready item.
    * Right: ⌥1–⌥9 and ⌥0 the first ten rows, ⌥[ / ⌥] the previous / next app (every row past ten), ⌥⇧[ / ⌥⇧] move it,
-   * ⌥A add an app, ⌥T tidy, ⌥R fold the column. In front: ⌥W close, ⌥F wide, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
+   * ⌥A add an app, ⌥T tidy, ⌥R fold the column, ⌥P pause / play what played last (Now playing). In front: ⌥W close, ⌥F wide, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
    * ⌥E archive then the next, ⌥X resolve then the next, ⌥B where this app's notifications go. Voice: ⌥Space talk (the
    * orb), ⌥D dictate, ⌥V new voice chat, ⌥C command (the shell's own). A modal in front (the app picker, Settings):
    * only its own key (⌥A, ⌥S) and Esc. Every other ⌥ key is the view's and does nothing, so nothing acts unseen on a
@@ -1378,6 +1382,8 @@ export default function desktop(api) {
     if (code === 'KeyO' && !sh) return once(() => { if (wsPop) { closeWs(); return; } if (root.dataset.aadSide === 'rail' && !narrow()) toggleSide(); openWs(); });
     if (code === 'KeyT' && !sh) return once(openTidy);
     if (code === 'KeyA' && !sh) return once(openAll);
+    // ⌥P: pause (again: play) what played last, in any app (the Now playing tweak's pill; nothing playing: nothing)
+    if (code === 'KeyP' && !sh) return once(() => api.media?.toggle?.());
     const dg = /^Digit(\d)$/.exec(code);
     if (dg) { if (!e.repeat && !sh) vtRows()[(+dg[1] + 9) % 10]?.__pick?.(); return true; }
     if (code === 'BracketLeft' || code === 'BracketRight') {
@@ -1399,6 +1405,17 @@ export default function desktop(api) {
     return KEY_LIKE.test(code);
   } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
+  /* Now playing (4 Nov 2026): a playing app's row wears data-media="playing" | "paused" (the miguel/now-playing tweak
+   * draws small bars on its icon). Passive: it hears the shell's media watcher only while that tweak watches; nothing
+   * changes without it, or on a shell without api.media. */
+  function markMedia() {
+    const of = markMedia.of; if (!of) return;
+    for (const b of vtList.querySelectorAll('.aad-vtab')) { const s = of.get(b.dataset.app); if (s) { if (b.dataset.media !== s) b.dataset.media = s; } else if (b.dataset.media) delete b.dataset.media; }
+  }
+  api.media?.watch?.(list => {
+    const of = new Map(); for (const x of list) if (x.playing || !of.has(x.appId)) of.set(x.appId, x.playing ? 'playing' : 'paused');
+    markMedia.of = of; markMedia();
+  }, { passive: true });
   const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
   /* Round 21: while left ⌥ is held, a small keycap ON each thing a key acts on, where it is (no legend card, nothing in
    * the middle): icons and buttons at their top-left corner, the next / previous Ready rows at their start (the row
@@ -1442,6 +1459,7 @@ export default function desktop(api) {
       put(tile(nb), ']', at); if (pb !== nb) put(tile(pb), '[', at);
     }
     put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
+    if (api.media?.list?.().length) put(vtNow.firstElementChild, 'P', vtFolded ? 'bl' : 'tr');
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
     if (docked) {
       for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
