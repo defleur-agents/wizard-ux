@@ -1360,7 +1360,8 @@ export default function desktop(api) {
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
     if (settingsOpen()) return code === 'KeyS' && !sh ? once(closeSettings) : KEY_LIKE.test(code);
-    if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);   // (⌥Z's own sheet: when it comes back)
+    // the snooze sheet: ⌥← again = Someday (so ⌥← ⌥← snoozes with no time, Miguel 4 Nov 2026); ⌥Z closes it
+    if (snoozeOpen()) return code === 'ArrowLeft' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-someday]')?.click?.()) : code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -1390,7 +1391,8 @@ export default function desktop(api) {
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
     if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
     // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
-    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
+    // (⌥→ archive and ⌥← snooze are back as the natural pair, Miguel 4 Nov 2026; ⌥E / ⌥Z stay as letters)
+    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
@@ -1412,7 +1414,7 @@ export default function desktop(api) {
     // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
     if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
     if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
-    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); return out; }
+    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); putIn(doc.querySelector('.boom-sheet [data-boom-someday]'), '←'); return out; }
     put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
     if (focusOn()) { put(hBack, 'H'); return out; }
     const open = root.dataset.aadSide === 'open';
@@ -1442,7 +1444,7 @@ export default function desktop(api) {
     put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
     if (docked) {
-      for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
+      for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
     return out;

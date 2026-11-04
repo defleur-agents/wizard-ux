@@ -765,7 +765,9 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   assert.match(js, /if \(code === 'KeyV' \|\| code === 'KeyC' \|\| code === 'KeyD'\) return false;/, '⌥V ⌥C ⌥D stay the shell\'s voice keys');
   assert.match(js, /if \(code === 'KeyW' && !sh && pane\) \{ if \(!e\.repeat\) \{ const d = desks\(\)\.find\(x => x\.desk === pane\.desk\); if \(d && !pins\.includes\(d\.id\)\) closeDesk\(d\); else hidePanel\(\); \} return true; \}/, '⌥W closes the panel\'s app (a pinned one hides)');
   assert.match(js, /if \(code === 'KeyW' && !sh && docked\) \{ if \(!e\.repeat\) closeChat\(\); return true; \}/, '⌥W: the docked chat back to Home');
-  assert.match(js, /\{ KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' \}\[code\]/, '⌥Z snooze, ⌥E archive, ⌥X resolve: the open item\'s own buttons');
+  assert.match(js, /\{ KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' \}\[code\]/, '⌥→ archive, ⌥← snooze (Miguel 4 Nov 2026): the natural pair is back');
+  assert.match(js, /if \(snoozeOpen\(\)\) return code === 'ArrowLeft' && !sh \? once\(\(\) => doc\.querySelector\('\.boom-sheet \[data-boom-someday\]'\)/, '⌥← again in the snooze sheet = Someday');
+  assert.match(js, /\[\['snooze', '←'\], \['done', '→'\], \['resolve', 'X'\]\]/, 'the keycaps on Snooze / Archive read ← / →');
   assert.ok(!/appFor|appChips|home\.letters|keys\.legend|keyLegend/.test(js), 'no app letters, no legend card');
   assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
