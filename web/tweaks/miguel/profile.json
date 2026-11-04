@@ -14,5 +14,6 @@
     "miguel/refresh-button",
     "miguel/archive-top"
   ],
+  "off": ["miguel/archive-top"],
   "flags": {}
 }
