@@ -343,7 +343,7 @@
   }
   // Background cards + Mode (miguel/background-cards, off by default; Miguel, 4 Nov 2026). A tweak, skin or My skin that
   // sets `--wos-look-bg-cards: on` turns a skin whose colours come in dark/light twins (Miguel's) into ONE Background row
-  // (Plain, then the same scenes as the #943/#950 picker: S.wallpapers / wallpaperThumb / setWallpaper) plus a separate
+  // (Plain, then the same scenes as the PR 943/950 picker: S.wallpapers / wallpaperThumb / setWallpaper) plus a separate
   // Dark | Light Mode switch, instead of a colour per mode. Same cards as Colors. Picking a background keeps the mode; the
   // mode keeps the background. Off = stock Colors row and the stock 'wallpaper' picker below, byte for byte.
   const bgCardsOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-look-bg-cards').trim() === 'on'; } catch (_) { return false; } };
@@ -353,7 +353,7 @@
     const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
     const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
     const onScene = /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
-    const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, rgba(11,10,16,.35), transparent 34%, transparent 66%, rgba(11,10,16,.45)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
+    const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, var(--wz-overlay), transparent 34%, transparent 66%, var(--wz-overlay)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
     const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === scenic);
     const cards = [pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, w.id === 'landscapes' ? '' : S.wallpaperThumb(w.id))) : [])].join('');
     const note = onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
