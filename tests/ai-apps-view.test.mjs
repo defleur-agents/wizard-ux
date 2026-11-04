@@ -136,7 +136,10 @@ test('standard AI apps and the personal tweak are idempotent and release cannot 
   await d.mount('miguel/ai-apps'); await settle();
   assert.equal(d.host.layout, 'ai-apps');
   await d.clear(); assert.equal(d.host.layout, 'ai-apps');
+  d.ctx.localStorage.setItem('wos.layout', 'orb');
   d.host.setStandardLayout('classic'); assert.equal(d.host.layout, 'classic');
+  d.host.setStandardLayout('ai-apps'); assert.equal(d.host.layout, 'ai-apps');
+  assert.equal(d.ctx.localStorage.getItem('wos.layout'), 'orb', 'desktop changes preserve an existing phone choice');
 });
 
 test('scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own', () => {
