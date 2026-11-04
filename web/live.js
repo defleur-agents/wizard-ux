@@ -764,7 +764,16 @@
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
-    workGroups(sessions, now) { return groupWork(sessions || this.unified(), now); },
+    workGroups(sessions, { flatReady = false } = {}) {
+      const g = groupWork(sessions || this.sessions);
+      // Status-only shell views have no Yesterday / Past week / Errors slots.
+      // Keep their inventory complete without changing stock Chats' day grouping or dispositions.
+      if (flatReady) {
+        g.ready = [...g.errors, ...g.ready, ...g.yesterday, ...g.pastWeek].sort(newestFirst);
+        g.errors = []; g.yesterday = []; g.pastWeek = [];
+      }
+      return g;
+    },
     readyByPriority: byPriority,
     readyRank,
     readyByOldest: byOldest,
