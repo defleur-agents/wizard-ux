@@ -1723,7 +1723,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   assert.ok(!/sessions\.open[^\n]*send|leaveAfterSend/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'nothing advances on send');
 });
 
-test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) and Group (By status / One list) in one menu on Ready\'s header, always shown; Settings follows', async () => {
+test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) and Group (By status / By project / One list) as two drop-downs on Ready\'s header, always shown; Settings follows', async () => {
   const { w, store } = deskWorld();
   let saved = 'priority'; const sets = [];
   w.api.sessions.order = () => saved; w.api.sessions.setOrder = o => { sets.push(o); saved = o; return true; };
@@ -1733,16 +1733,21 @@ test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) 
   assert.equal(node.children[0].tagName + ':' + node.children[0].textContent, 'H4:AI apps view');
   assert.deepEqual(node.querySelectorAll('[data-aad-order]').map(b => b.querySelector('b').textContent + ':' + b.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false'], 'stock Priority reads as Newest');
   assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
-  const b = w.q('.aad-sech .aad-sortb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
+  const b = w.q('.aad-sech .aad-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
+  const g = w.q('.aad-sech .aad-groupb'); assert.ok(g, 'round 25: grouping is its own drop-down'); assert.equal(g.querySelector('.aad-sortb-w').textContent, 'One list');
+  assert.deepEqual(w.qa('.aad-sech .aad-sortb').map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
   b.dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort', 'Group']);
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'By status:false', 'By project:false', 'One list:true']);
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'round 25: the sort menu holds only the order');
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false']);
   w.q('.aad-sortmenu [data-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(sets, ['oldest']); assert.equal(w.q('.aad-sortmenu'), null);
-  assert.equal(w.q('.aad-sortb-w').textContent, 'Oldest'); assert.equal(node.querySelector('[data-aad-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
-  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.q('.aad-orderb .aad-sortb-w').textContent, 'Oldest'); assert.equal(node.querySelector('[data-aad-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  w.q('.aad-groupb').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Group'], 'round 25: the group menu holds only the grouping');
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['By status:false', 'By project:false', 'One list:true']);
   w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true, 'grouping from the sidebar'); assert.equal(node.querySelector('[data-aad-group="status"]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  assert.equal(w.q('.aad-groupb .aad-sortb-w').textContent, 'By status');
   node.querySelector('[data-aad-order="newest"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'newest']);
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
@@ -2205,7 +2210,7 @@ test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one 
   const { w, store } = deskWorld();
   w.st.sessions.ready[0].title = 'Messenger · A'; w.st.sessions.ready[1].title = 'Wizard OS · B';
   (await layout()).default(w.api);
-  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-groupb').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aad-sortmenu [data-group="project"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupBy, 'project'); assert.equal(store.groupReady, false);
   assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['project:Messenger', 'project:Wizard OS']);
