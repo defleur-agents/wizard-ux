@@ -184,19 +184,32 @@
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
+      const worn = wornView(own);
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => viewOf(id) ? id === worn : enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
-  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps). They are ordinary switches
-   * but mutually exclusive: switching one on switches every other view off; all off = the stock shell (Desks). A device
-   * that somehow stores two on wears only the first in catalog order. */
+  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps, AI apps). One view per shell
+   * type (Miguel, 4 Nov 2026): the desktop and the phone each wear their own, or none (the stock shell, Desks). A manifest
+   * may name the shells it supports (`shells: ["desktop"]`); none named = both. The choice per shell type is kept in
+   * state.views { desktop, phone } (a view id, '' = Desks); a shell type with no choice yet keeps the old meaning: the
+   * first view switched on in the mix (catalog order) that supports this shell. */
+  const SHELLS = ['desktop', 'phone'];
+  const shellHere = () => { try { return document.documentElement?.dataset?.shell === 'desktop' ? 'desktop' : 'phone'; } catch (_) { return 'phone'; } };
   const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
-  const viewIds = () => [...manifests.keys()].filter(viewOf);
-  const wornView = own => viewIds().find(id => enabled(id, own)) || '';
+  const shellsOf = id => { const s = manifests.get(id)?.shells; const ok = Array.isArray(s) ? SHELLS.filter(x => s.includes(x)) : []; return ok.length ? ok : [...SHELLS]; };
+  const viewIds = (shell = shellHere()) => [...manifests.keys()].filter(id => viewOf(id) && shellsOf(id).includes(shell));
+  const chosenView = shell => typeof state.views?.[shell] === 'string' ? state.views[shell] : undefined;
+  const wornView = (own, shell = shellHere()) => {
+    const chosen = chosenView(shell);
+    if (chosen !== undefined) return viewIds(shell).includes(chosen) ? chosen : '';
+    return viewIds(shell).find(id => enabled(id, own)) || '';
+  };
+  const cleanViews = v => Object.fromEntries(SHELLS.filter(s => typeof v?.[s] === 'string' && (v[s] === '' || ID.test(v[s]))).map(s => [s, v[s]]));
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, on: t.id === wornView(recipe()) } : t) });
+        shell: shellHere(),
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : t) });
     },
     installed, defaults, authors,
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
@@ -204,15 +217,20 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
+    // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
+    get views() { return cleanViews(state.views); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
     async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
-    async adopt(mix) {
+    // `views` (look sync): the owner's view per shell type; a type left out has no choice yet. Left out = untouched.
+    async adopt(mix, views) {
       catalog ||= await read('tweaks/catalog.json');
       const grouped = new Set((catalog.oneOf || []).flat()), next = {};
       for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
-      state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
+      state.mix = next; state.preset = 'none'; delete state.carry;
+      if (views && typeof views === 'object') state.views = cleanViews(views);
+      Store.write(state);
       return apply();
     },
     refresh: apply,
@@ -220,8 +238,11 @@
     chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
-      if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)
-        for (const v of viewIds()) if (enabled(v, recipe()) !== (v === id && !item.on)) await setOne(v, v === id && !item.on);
+      if (item.view) {  // one view per shell type: on = this one on this type of shell, off = Desks here; the other type keeps its own
+        const shell = shellHere(); if (!item.shells.includes(shell)) return;
+        const pick = item.on ? '' : id;
+        state.views = { ...cleanViews(state.views), [shell]: pick }; Store.write(state);
+        try { window.dispatchEvent(new CustomEvent('wos:view-choice', { detail: { shell, id: pick } })); } catch (_) {}
         return apply();
       }
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.
