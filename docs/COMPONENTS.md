@@ -2,11 +2,11 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One owner per capability. [Gate](app-reuse-gate.md).
+One owner per capability: [gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits | duplicate ranking |
 
-| Offline QA | `tools/qa-synthetic-fence.cjs` | offline |
+| QA | `tools/qa-synthetic-fence.cjs` +startup/census | offline |
 
 | Temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict capability + opt-in (off) | durable transcript/outbox |
 
@@ -75,7 +75,7 @@ One owner per capability. [Gate](app-reuse-gate.md).
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) | own context menu |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` | a second share picker, sending for an app |
 | Agent screen context | `WizScreen` (`screen-text.js`) | own DOM scrape |
-| Dictation into a focused field | `WizCore` focused field (`focused-field.js`); voice `WizCore` (`voice.js`); mic choice `WosMic` (`mic.js`) | own recorder/transcriber |
+| Dictation into a focused field | `WizCore` focused field (`focused-field.js`); mono voice (`voice.js`); mic choice `WosMic` (`mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`commands.js`) | a second command parser |
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) | — |
 | Update banners/card/pop-up | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`: `card`/`popup`) | own reload timers, a second card |
