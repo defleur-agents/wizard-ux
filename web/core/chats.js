@@ -974,9 +974,12 @@ window.WizCore.chats = function createChats(H) {
   const summaryOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-summary').trim() === 'on'; } catch (_) { return false; } };
   const SUMMARY_WORDS = 120;
   const summaryOf = a => a && a.ask && !a.failed && a.final !== false && summaryOn() && String(a.plainText ?? a.text ?? '').split(/\s+/).filter(Boolean).length > SUMMARY_WORDS ? a.ask : '';
-  // The short answer is the toggle: tap it and the full reply takes its place; Show less folds it back. Collapsed unless a
-  // tweak asked the skin host for expanded (api.replies.summaryStart('expanded')). A tap on one reply wins over that default.
-  const summaryStartsOpen = () => window.WosSkinHost?.replySummaryStart === 'expanded';
+  // The short answer is the toggle: tap it and the full reply takes its place; Show less folds it back. Collapsed unless the
+  // owner chose expanded (box-wide, WosSkinHost.replySummary). A tap on one reply wins over that default.
+  const summaryStartsOpen = () => window.WosSkinHost?.replySummary?.get().start === 'expanded';
+  // The lead reads as a sentence: asks are written chat-list style, often without a final stop.
+  const leadText = s => /[.!?…"'”’»]$/u.test(s) ? s : `${s}.`;
+  const COG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
   const CHEV_SVG = '<svg class="rsum-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
   const setSummaryOpen = (msg, open) => {
     msg.classList.toggle('rsum-open', open);
@@ -1585,8 +1588,8 @@ window.WizCore.chats = function createChats(H) {
       }) : '';
       const lead = summaryOf(tn.a), rk = esc(String(bAt));
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
-      const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(lead)}</span>${CHEV_SVG}</button>`
-        + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button>${body}</div>` : body;
+      const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
+        + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
       h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
@@ -1779,6 +1782,15 @@ window.WizCore.chats = function createChats(H) {
     if (!k || !rowSheet) return;
     el.appendChild(k.sh);
     if (k.f && k.f.isConnected) { k.f.focus({ preventScroll: true }); if (k.sel) try { k.f.setSelectionRange(k.sel[0], k.sel[1]); } catch (_) {} }
+  }
+  // The reply's ⚙: how long the agent writes the short answer (box-wide; new replies only).
+  function openLengthSheet(wid, trigger) {
+    const el = track.querySelector(`[data-chats="${wid}"]`), R = window.WosSkinHost?.replySummary; if (!el || !R) return;
+    closeRowSheet();
+    const cur = R.get().length;
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Short answer length"><div class="ch-sheet-b ch-rlen"><div class="ch-sheet-t">Short answer length</div><div role="radiogroup" aria-label="Short answer length">${R.lengths.map(l => `<button type="button" role="radio" aria-checked="${l.id === cur}" data-rslen="${l.id}"><span class="ch-rlen-dot" aria-hidden="true">${l.id === cur ? '◉' : '○'}</span><span class="ch-rlen-tx"><b>${esc(l.name)}</b><small>${esc(l.hint)}</small></span></button>`).join('')}</div><p class="ch-sheet-n">Applies to new replies; earlier ones keep theirs.</p></div></div>`);
+    rowSheet = { wid, trigger, rlen: true };
+    el.querySelector('.ch-rlen [aria-checked="true"]')?.focus({ preventScroll: true });
   }
   function closeRowSheet() {
     if (!rowSheet) return false;
@@ -3055,6 +3067,8 @@ window.WizCore.chats = function createChats(H) {
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
     // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
     // The choice is kept per reply (ch(id).rsum), so live repaints keep it.
+    const rlb = e.target.closest('[data-reply-length]'); if (rlb) { openLengthSheet(id, rlb); return true; }
+    const rln = e.target.closest('[data-rslen]'); if (rln && rowSheet?.rlen) { window.WosSkinHost?.replySummary?.set({ length: rln.dataset.rslen }); closeRowSheet(); toast('✓', 'New replies use this length', 1600); return true; }
     const rsb = e.target.closest('[data-reply-summary]');
     if (rsb) { const msg = rsb.closest('.msg.a.has-rsum'); if (!msg) return true; const open = !msg.classList.contains('rsum-open'), c = ch(id);
       (c.rsum = c.rsum || new Map()).set(rsb.dataset.replySummary, open); setSummaryOpen(msg, open);

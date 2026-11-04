@@ -180,7 +180,15 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .msg.a .rsum-t { flex: 1; min-width: 0; }
 .msg.a .rsum-chev { flex: none; width: 16px; height: 16px; margin-top: 3px; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .msg.a .rsum[hidden], .msg.a .rdet[hidden] { display: none; }
-.msg.a .rless { display: flex; align-items: center; gap: 4px; margin: 0 0 4px auto; padding: 2px 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--wz-text-sm); cursor: pointer; }
+.msg.a .rtools { display: flex; justify-content: flex-end; align-items: center; gap: 2px; margin: 0 0 4px; }
+.msg.a .rless { display: flex; align-items: center; gap: 4px; padding: 2px 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--wz-text-sm); cursor: pointer; }
+.msg.a .rcog { display: grid; place-items: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--ink-3); cursor: pointer; }
+.msg.a .rcog svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.msg.a .rcog:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.ch-rlen [role="radio"] { align-items: flex-start; }
+.ch-rlen-dot { width: 20px; text-align: center; color: var(--ink-2); }
+.ch-rlen-tx { display: grid; gap: 2px; }
+.ch-rlen-tx small { font-size: var(--wz-text-sm); font-weight: 500; color: var(--ink-3); }
 .msg.a .rless .rsum-chev { width: 14px; height: 14px; margin: 0; transform: rotate(180deg); }
 .note-line { margin: 4px 0 4px 16px; padding-left: 10px; border-left: 1px solid var(--line-2); font-size: 13px; color: var(--ink-3); }
 .note-line p { margin: 0; }

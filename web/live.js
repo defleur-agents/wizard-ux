@@ -338,6 +338,8 @@
     // Pinned chats (core/chat-pins.js): the same pins on every device.
     pinnedChats: ['wos.chats.pinned.v2', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     spaces: ['wos.chats.spaces.v1', v => Array.isArray(v), JSON.stringify],
+    // Short answer first (skin-host replySummary): on, how long replies start, and the short answer's length.
+    replySummary: ['wos.chats.replySummary.v1', v => !!v && typeof v === 'object' && !Array.isArray(v) && typeof v.on === 'boolean', JSON.stringify],
   };
   let prefsOff = false;
   const putPrefs = (patch, { requireShared = false } = {}) => {
