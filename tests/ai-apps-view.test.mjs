@@ -1739,7 +1739,7 @@ test('round 21: no legend card anywhere: the shell draws only the view\'s keycap
   assert.doesNotMatch(read('web/desktop/desktop.css'), /\.kh-keys/); assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-keys/);
   assert.match(host, /guide\(fn, \{ only = false \} = \{\}\) \{/); assert.match(host, /get keysOnly\(\) \{ return \[\.\.\.keyGuides\]\.some\(g => g\.only\); \}/);
   assert.match(desk, /if \(window\.WosSkinHost\?\.keysOnly\) \{\n\s+for \(const h of window\.WosSkinHost\.keyChips\(\)\) if \(vis\(h\.el\)\) chip\(h\.el, h\.key, h\.at \|\| 'tl', h\.word \|\| ''\);\n\s+document\.documentElement\.classList\.add\('key-hints-on'\); return;/, 'only the view\'s chips, then nothing else');
-  for (const at of ['tl', 'tr', 'bl', 'right', 'mid']) assert.match(desk, new RegExp(`if \\(at === '${at}'\\) \\{`), `the keycap spot '${at}'`);
+  for (const at of ['tl', 'tr', 'bl', 'right', 'right-up', 'right-dn', 'mid']) assert.match(desk, new RegExp(`if \\(at === '${at}'\\) \\{`), `the keycap spot '${at}'`);
 });
 
 test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9 and 0 on the right column, [ ] on the neighbours, none on count badges; Home leaves the orb, the composer and ◫', async () => {

@@ -90,8 +90,8 @@ nothing in the middle; a key with nothing on screen to point at (⌥V, ⌥C) has
 
 Every other ⌥ key does nothing here (no ⌥G letters, no ⌥/ pinned guide, no app letters, no ⌥← / ⌥→, no desk keys), so
 nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
-Everything else in both panels (the Archive / Working / Snoozed headers, the fuel gauge, a row's ⋯) is a plain button:
-Tab reaches it.
+Everything else in both panels (the Archive / Working / Snoozed / Ready headers, every chat row and its ⋯) is a plain
+button Tab reaches, in order, from ⌥K's search; the right column's rows are ⌥1–⌥0 and ⌥[ ].
 
 Ready is one flat list in priority order by default (a tiny muted tag on Needs you / Your call rows); Settings › Chats
 & app screens › AI apps view › "Group Ready by status" brings the per-status sub-headers back. Notification rows wear a
