@@ -817,10 +817,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [
 
 /* round 23 (Miguel, 4 Nov 2026): the rail is a tally of marks, no numbers: a spinner per working chat (the expanded
  * list's tiny spinner), a solid dot per ready chat (amber in Ready, the ink in a status), a ring per snoozed one; rows of 4 */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-dots { display: grid; grid-template-columns: repeat(4, 0.5rem); justify-content: center; gap: 0.25rem; min-width: 0; height: auto; padding: 0.125rem 0; border-radius: 0; color: var(--aad-ink); background: none; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-dots:has(> .aad-d:only-child) { grid-template-columns: 0.5rem; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-dots:has(> .aad-d:nth-child(2):last-child) { grid-template-columns: repeat(2, 0.5rem); }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-dots:has(> .aad-d:nth-child(3):last-child) { grid-template-columns: repeat(3, 0.5rem); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; width: 2.75rem; min-width: 0; height: auto; padding: 0.125rem 0; border-radius: 0; color: var(--aad-ink); background: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d { width: 0.5rem; height: 0.5rem; box-sizing: border-box; border-radius: 50%; font-style: normal; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-dot { background: var(--aad-ink); }
