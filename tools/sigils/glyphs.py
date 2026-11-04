@@ -347,12 +347,25 @@ def g_scope():
     ticks = U(rrect(242, 92, 28, 110, 14), rrect(242, 310, 28, 110, 14), rrect(92, 242, 110, 28, 14), rrect(310, 242, 110, 28, 14))
     return U(ring, ticks, circle(256, 256, 30))
 
+@glyph('heart', 'A heart with a pulse line cut through it: your health, read from your devices.')
+def g_heart():
+    heart = P("M256 412 C200 368 92 300 92 196 C92 140 134 100 186 100 C218 100 242 116 256 142 C270 116 294 100 326 100 C378 100 420 140 420 196 C420 300 312 368 256 412 Z")
+    pulse = stroke("M70 246 H178 L212 196 L252 300 L290 222 L310 246 H442", 28)
+    return D(heart, pulse)
+
 @glyph('card', 'A payment card with its stripe and chip cut out: the benefits each card still owes you.')
 def g_card():
     card = rrect(114, 164, 284, 184, 34)
     stripe = rrect(60, 200, 392, 34, 0)
     chip = rrect(148, 270, 62, 44, 11)
     return D(card, stripe, chip)
+
+@glyph('tag', 'A price tag with its eyelet punched out: things you sell and buy second-hand.')
+def g_tag():
+    # Upright tag (point up, eyelet near the point), then turned 45 degrees like a tag hanging on a string.
+    body = P("M256 72 L352 168 V408 A32 32 0 0 1 320 440 H192 A32 32 0 0 1 160 408 V168 Z")
+    body = U(body, stroke(body, 28))
+    return R(D(body, circle(256, 176, 34)), 45, 256, 256)
 
 @glyph('dollar', 'A dollar sign cut through a coin: what you spent, what you own.')
 def g_dollar():
