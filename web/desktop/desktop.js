@@ -1768,11 +1768,22 @@
   const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
   scrim.addEventListener('click', () => closeSettings());
   const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
-  function showSettingsModal() {
+  function showSettingsModal(rehost = false) {
     if (!settingsModal) settingsFocus = document.activeElement;
+    // A visible window changing hosts is not a new open: st-pop starts at
+    // opacity zero. Mark before reparenting so no frame can replay it.
+    if (rehost) setEl.classList.add('is-rehosted'); else setEl.classList.remove('is-rehosted');
     settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-    if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
+    moveSettingsTo(document.body);
     scrim.hidden = false;
+  }
+  function moveSettingsTo(host) {
+    if (setEl.parentNode === host) return;
+    // appendChild can blur a focused descendant. Restore that same control in
+    // the same task, for promotion and demotion alike; never steal outside focus.
+    const active = document.activeElement, keep = active && setEl.contains(active);
+    host.appendChild(setEl);
+    if (keep && document.activeElement !== active) active.focus({ preventScroll: true });
   }
   function hostSettings() {
     // A view can mount while Look is already open in a desk window. Adopt its
@@ -1780,13 +1791,16 @@
     // Only undo a promoted desk window; Settings opened over Home remains a
     // Home modal. Rehost synchronously without hiding or resetting its page.
     if (settingsPromoted && !settingsOver() && !homeOpen && settingsWin()) {
-      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal');
+      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted');
       setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region'); scrim.hidden = true;
     }
-    if (!settingsModal && !setEl.hidden && settingsOver()) { settingsPromoted = true; showSettingsModal(); }
-    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
+    // Orb's panel claim also takes Home to the front and hides the desk host.
+    // Match openSettings' Home contract on every takeover, including a second
+    // enable after teardown; the live root/page must not stay on that hidden desk.
+    if (!settingsModal && !setEl.hidden && (homeOpen || settingsOver())) { settingsPromoted = true; showSettingsModal(true); }
+    if (settingsModal) { moveSettingsTo(document.body); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
+    if (host) { moveSettingsTo(host); setEl.hidden = false; return; }  // a Settings window always shows its panel
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
@@ -1826,7 +1840,7 @@
   }, true);
   function closeSettings() {
     if (settingsModal) {
-      settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
+      settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
       scrim.hidden = true; setEl.hidden = true;
       // Promotion replaces that window's presentation, not an extra modal over
       // it. Dismiss once; do not resurrect the old narrow Settings underneath.

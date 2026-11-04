@@ -66,7 +66,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
 | Uploads of any size | `WizUploads` (`uploads.js`) |
 | Files browse, preview, attach | `WosFiles` (`files.js`) |
-| Settings in both shells | `WosSettings.register` (`settings.js`; Skin/Colors + Background/Mode; shared About version identities; fail-closed update status; package System: `hasSystem`), `focus(id)`, narrow-host stack + Back, `WosFeatures`; `WizConfig.responseStyle` |
+| Settings in both shells | `WosSettings.register` (`settings.js`: Skin/Colors, Background/Mode, shared About/fail-closed updates, package `hasSystem`), `focus(id)`; desktop same-root Home/AI rehost, no entrance replay; Look/New skin shell filter (retain hidden defaults); narrow-host Back; `WosFeatures`; `WizConfig.responseStyle` |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
@@ -90,7 +90,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
 
-| Owner Look sync | `WosLookSync` (`web/core/look-sync.js`): one logical-clocked skin/tweak set per owner; per-type desktop/phone view choices preserve supported legacy views; seed legacy only once |
+| Owner Look sync | `WosLookSync` (`look-sync.js`): logical skin/tweaks + desktop/phone views; legacy seeds once; base unsent intent on GET/409 once, preserve newer PUT-time choice |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 

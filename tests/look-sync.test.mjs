@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { read } from './fixtures/tweaks.mjs';
+import lookFixture from '../tools/qa-look-file-fixture.cjs';
 
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -382,4 +383,101 @@ test('cached per-device choices seed an absent file even with no skin or legacy 
   await d.sync.sync();
   assert.deepEqual(box.doc().views, { desktop: { id: 'miguel/ai-apps', at: 0 }, phone: { id: '', at: 0 } });
   assert.deepEqual(d.views, { desktop: 'miguel/ai-apps', phone: '' });
+});
+
+test('browser gate look adapter uses the real Pages path, persists both devices and rejects stale versions', async () => {
+  const { LOOK_PATH, lookFileReply } = lookFixture;
+  assert.equal(LOOK_PATH, PATH);
+  const shared = { version: 1, doc: { version: 1, skin: { id: 'nebula', at: 1 }, tweaks: {}, views: {
+    desktop: { id: 'miguel/ai-apps', at: 2 }, phone: { id: 'miguel/orb-shell', at: 3 }
+  } } };
+  assert.equal(lookFileReply(shared, '/apps/pages/api/file', 'GET'), null, 'old fictional endpoint is not a look API');
+  const box = { req: async (url, init = {}) => {
+    const reply = lookFileReply(shared, url, init.method || 'GET', init.body ? JSON.parse(init.body) : null);
+    assert.ok(reply, 'every production sync request hits the adapter');
+    return { ok: reply.status < 300, status: reply.status, json: async () => clone(reply.body) };
+  } };
+  const opts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'] };
+  const desktop = device(box, opts), phone = device(box, opts);
+  await desktop.sync.sync(); await phone.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/ai-apps', phone: 'miguel/orb-shell' });
+  assert.deepEqual(phone.views, desktop.views);
+  const stale = lookFileReply(shared, PATH).body;
+  desktop.pickView('desktop', 'miguel/apps-home'); await desktop.flush(); await phone.sync.sync();
+  phone.pickView('phone', ''); await phone.flush(); await desktop.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/apps-home', phone: '' });
+  assert.deepEqual(phone.views, desktop.views);
+  assert.equal(shared.acceptedWrites.length, 2);
+  assert.ok(shared.doc.views.desktop.at > 3); assert.ok(shared.doc.views.phone.at > shared.doc.views.desktop.at);
+  const final = clone(shared.doc);
+  const collision = lookFileReply(shared, PATH, 'PUT', { version: stale.version, text: stale.text });
+  assert.equal(collision.status, 409); assert.deepEqual(JSON.parse(collision.body.current.text), final);
+  assert.deepEqual(shared.doc, final, 'a stale writer cannot replace another device choice');
+  assert.equal(lookFileReply(shared, PATH, 'DELETE').status, 405);
+});
+
+// Defer an actual GET/PUT without changing the production adapter or revision rules.
+function holdNext(box, method) {
+  const req = box.req; let release, began;
+  const started = new Promise(r => { began = r; });
+  const held = new Promise(r => { release = r; }); let once = true;
+  box.req = async (url, init = {}) => {
+    if (once && (init.method || 'GET') === method) { once = false; began(); await held; }
+    return req(url, init);
+  };
+  return { started, release };
+}
+const viewOpts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'], meta: { synced: true, version: 'old' } };
+const remoteViews = () => ({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'miguel/ai-apps', at: 80 }, phone: { id: 'miguel/orb-shell', at: 100 } } });
+
+test('already-synced owner choice during first GET is causally based on the observed file', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET'), d = device(box, viewOpts);
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', 'miguel/apps-home'); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 100);
+  assert.equal(d.views.phone, 'miguel/apps-home'); assert.equal(d.views.desktop, 'miguel/ai-apps');
+  assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
+});
+test('already-synced pending storage is based once, and last view switch during GET wins', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET');
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: 'miguel/apps-home', at: 1 } } } } });
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', ''); d.pickView('phone', 'miguel/apps-home');
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 200);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop, 'never clobber another shell while basing a local choice');
+  const puts = box.puts; await d.sync.sync(); assert.equal(box.puts, puts, 'settled intent is not restamped every sync');
+});
+test('already-synced persisted view intent survives reload without a new event', async () => {
+  const box = pagesBox(remoteViews());
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: '', at: 1 } } } } });
+  await d.sync.sync(); assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 100);
+});
+test('view switch during successful PUT is not reverted by adopting the older acknowledgement', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started; d.pickView('phone', '');
+  hold.release(); await syncing;
+  assert.equal(d.views.phone, '', 'a successful older save must not visibly undo a newer choice');
+  assert.equal(d.sync.state.pending.views.phone.id, '', 'old sent() only clears its own revision');
+  await d.flush(); assert.equal(box.doc().views.phone.id, ''); assert.equal(d.views.phone, '');
+});
+test('new view choice during conflicted PUT survives retry while other-shell concurrent edit is preserved', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; remote.views.phone = { id: 'miguel/orb-shell', at: 201 }; box.text = JSON.stringify(remote);
+  d.pickView('phone', ''); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 201);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop); assert.equal(d.views.phone, '');
+});
+test('a conflicting newer server choice beats an already-sent intent, not an endless local restamp', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.phone = { id: '', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.deepEqual(box.doc(), remote); assert.equal(d.views.phone, '');
+  assert.equal(box.puts, 0); assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
 });

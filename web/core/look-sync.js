@@ -91,11 +91,18 @@
     const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0)); };
     observe(meta.pending);
     const stamp = () => ++clock;
+    // An owner intent not yet based on a server observation (including restored
+    // pending storage). Base each intent once; never restamp an already-sent
+    // choice on every 409, which would defeat a genuinely newer remote writer.
+    const unbasedViews = new Set(Object.keys(meta.pending.views || {}));
+    function baseViewChoices() {
+      for (const shell of unbasedViews) if (meta.pending.views?.[shell]) meta.pending.views[shell].at = stamp();
+      unbasedViews.clear();
+    }
     function renewPending(d) {
       observe(d);
       if (meta.pending.skin && (d?.skin?.at || 0) >= meta.pending.skin.at) meta.pending.skin.at = stamp();
       for (const [id, t] of Object.entries(meta.pending.tweaks)) if ((d?.tweaks[id]?.at || 0) >= t.at) t.at = stamp();
-      for (const [shell, t] of Object.entries(meta.pending.views || {})) if ((d?.views?.[shell]?.at || 0) >= t.at) t.at = stamp();
     }
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0;
     // Experience modules from before per-shell views have no `views`: they keep the old one-view-everywhere meaning.
@@ -153,6 +160,7 @@
         let { doc, version } = await get();
         for (let tries = 0; tries < 4; tries++) {
           if (!meta.synced) renewPending(doc); else observe(doc);
+          baseViewChoices(); // also covers a synced device choosing while GET/PUT was in flight
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
           if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || Object.keys(mine.views || {}).length || dirty()) want = mine; } // seed; an untouched empty device never writes
@@ -165,7 +173,9 @@
             if (!w.ok) { doc = w.doc; version = w.version; continue; } // another device saved first: merge onto theirs
             doc = want; version = w.version; sent(pending);
           } else if (doc) sent(pending);
-          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(doc); }
+          // A PUT acknowledgement is only its captured choice. Keep a later
+          // local view visible while that newer pending revision waits to save.
+          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(merge(doc, { views: meta.pending.views })); }
           save(); last = 'ok'; break;
         }
         if (last !== 'ok') throw new Error('look busy'); // four other saves in a row: try again later
@@ -194,7 +204,7 @@
     // The owner chose a view for this type of shell (experience.js raises wos:view-choice): every shell of that type follows.
     function viewChoice(shell, id) {
       if (applying || !SHELLS.includes(shell) || typeof id !== 'string' || !(id === '' || ID.test(id))) return;
-      (meta.pending.views ||= {})[shell] = { id, at: stamp() }; save(); schedule();
+      (meta.pending.views ||= {})[shell] = { id, at: stamp() }; unbasedViews.add(shell); save(); schedule();
     }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;

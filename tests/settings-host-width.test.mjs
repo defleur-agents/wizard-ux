@@ -43,14 +43,14 @@ test('same shared Settings DOM and dispatch provide category → Look → Back i
 function hostHarness({ open = true, over = true, modal = false } = {}) {
   const body = { appendChild(n) { n.parentNode = this; } }, host = { appendChild(n) { n.parentNode = this; } };
   const attrs = {}, classes = new Set(), closed = [];
-  const setEl = { hidden: !open, parentNode: host, page: 'appearance', classList: { add: k => classes.add(k), remove: k => classes.delete(k) }, setAttribute: (k,v) => attrs[k] = v, removeAttribute: k => delete attrs[k], getClientRects: () => [1], focus() {} };
+  const setEl = { hidden: !open, parentNode: host, page: 'appearance', classList: { add: (...ks) => ks.forEach(k => classes.add(k)), remove: (...ks) => ks.forEach(k => classes.delete(k)) }, setAttribute: (k,v) => attrs[k] = v, removeAttribute: k => delete attrs[k], getClientRects: () => [1], focus() {}, contains: el => el === setEl };
   const s = { setEl, scrim: { hidden: !modal }, settingsModal: modal, settingsPromoted: false, settingsFocus: null, settingsOver: () => over, document: { body, activeElement: setEl }, homeOpen: false, focused: () => null, focusInside() {}, window: { WosScenery: { update() {} } } };
   s.over = over; s.settingsOver = () => s.over;
   let win = open ? { id: 'settings-1' } : null;
   s.settingsWin = () => win; s.winEl = () => ({ querySelector: () => host });
   s.closeWin = id => { closed.push(id); win = null; s.hostSettings(); };
   vm.createContext(s);
-  const hostStart = desktop.includes('  function showSettingsModal()') ? '  function showSettingsModal()' : '  function hostSettings()';
+  const hostStart = desktop.includes('  function showSettingsModal(') ? '  function showSettingsModal(' : '  function hostSettings()';
   vm.runInContext(slice(desktop, hostStart, '  afterRender = hostSettings;') + '\n' + slice(desktop, '  function closeSettings()', '  function toggleSettings()'), s);
   return { s, body, host, setEl, attrs, classes, closed };
 }
@@ -82,4 +82,42 @@ test('Apps/Orb keep their normal Settings window; closed Settings is never opene
   }
   assert.match(desktop, /new MutationObserver\(\(\) => hostSettings\(\)\)/);
   assert.match(desktop, /settingsHostObserver.observe\(document.documentElement, \{ attributes: true, attributeFilter: \['data-settings-over'\] \}\)/);
+});
+test('Orb panel takeover keeps Look visible through on → off → on without a new Settings open', () => {
+  const { s, setEl, host, body, closed } = hostHarness({ over: false });
+  const stored = new Map();
+  Object.assign(s, { store: { get: (k, d) => stored.has(k) ? stored.get(k) : d, set: (k, v) => stored.set(k, v) },
+    closePalette() {}, render() { host.hidden = s.homeOpen; s.hostSettings(); }, panelWins: () => [],
+    $$: () => [], stage: {}, panel: null, panelApp: null, panelList: null, panelDocked: false, panelParks: false,
+    ws: [{ wins: ['settings-1'] }], cur: 0, save() {} });
+  vm.runInContext(slice(desktop, '  function panelMode(on)', '  function paintFocus()'), s);
+  for (const on of [true, false, true, false]) {
+    s.panelMode(on);
+    assert.equal(s.setEl, setEl); assert.equal(setEl.hidden, false); assert.equal(setEl.page, 'appearance');
+    assert.equal(setEl.parentNode, on ? body : host, 'Home takeover cannot leave Settings inside a hidden desk');
+    assert.equal(s.settingsModal, on); assert.equal(s.scrim.hidden, !on);
+  }
+  assert.deepEqual(closed, [], 'automatic view preparation must not dismiss Settings');
+  s.closeSettings(); assert.deepEqual(closed, ['settings-1'], 'explicit dismissal still closes once');
+});
+test('AI apps host moves do not replay the opacity-zero modal entrance; genuine opens still animate', () => {
+  const { s, classes } = hostHarness(); s.hostSettings();
+  assert.ok(classes.has('is-rehosted'), 'mark an already-visible root before it moves');
+  assert.match(rule(css, '.dsettings.is-modal.is-rehosted'), /animation: none;/);
+  s.over = false; s.hostSettings(); assert.equal(classes.has('is-rehosted'), false);
+  s.showSettingsModal(); assert.equal(classes.has('is-rehosted'), false, 'a fresh open keeps st-pop');
+  assert.match(rule(css, '.dsettings.is-modal'), /animation: st-pop/);
+  s.closeSettings(); assert.equal(classes.has('is-rehosted'), false);
+});
+test('rehosting keeps a focused control in promotion/demotion and does not steal outside focus', () => {
+  const { s, body, host, setEl } = hostHarness(); let restores = 0;
+  const control = { focus(opts) { assert.equal(opts.preventScroll, true); restores++; s.document.activeElement = control; } };
+  const outside = { focus() { throw Error('outside focus must not be stolen'); } };
+  setEl.contains = el => el === control;
+  for (const to of [host, body]) to.appendChild = n => { n.parentNode = to; s.document.activeElement = outside; };
+  s.document.activeElement = control;
+  s.hostSettings(); assert.equal(s.document.activeElement, control); assert.equal(restores, 1);
+  s.over = false; s.hostSettings(); assert.equal(s.document.activeElement, control); assert.equal(restores, 2);
+  s.over = true; s.document.activeElement = outside; s.hostSettings();
+  assert.equal(s.document.activeElement, outside); assert.equal(restores, 2);
 });
