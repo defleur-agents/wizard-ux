@@ -7,7 +7,7 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/now-playing'].includes(id) ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/now-playing', 'miguel/ai-apps'].includes(id) ? 'desktop' : 'phone'));
   // The Orbs view and its switch act on both shells (the phone: Home only).
   if (id === 'miguel/orb-shell') test(`${id}: shipped contract on the phone shell too`, () => contract(id, check, 'phone'));
 }
