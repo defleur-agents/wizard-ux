@@ -106,6 +106,7 @@
     owner: id => String(id).replace(/::list$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
+    captureBusy: () => VOICE.state !== 'idle' || dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (vReply && ['listen','paused'].includes(VOICE.state) ? vReply.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
@@ -204,9 +205,9 @@
     return W[id];
   }
   // A window may refuse to close (an in-progress recording or temporary chat asks first).
-  function canLeave(id) {
+  function canLeave(id, checkOnly = false) {
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return false;
-    return CHATS.beforeLeave?.(id) ?? true;
+    return CHATS.beforeLeave ? CHATS.beforeLeave(id, checkOnly) : true;
   }
   // One cleanup path for a window close and a whole-desktop close. The caller owns
   // leave checks, pruning and the final render (which detaches closed app frames).
@@ -584,6 +585,10 @@
   function chatsUpDown(dir) { return stepReady(dir); }
   // After a send (Enter, or a Right ⌘ / mic voice reply) the window goes back to a focused New chat:
   // type a new one straight away, or ⌥↓ to the next Ready chat.
+  function keepNewSendList(wid, sid) {
+    if (sid !== '__new__' || !mainChats(W[wid])) return false;
+    try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-new-send-list').trim() === 'on'; } catch (_) { return false; }
+  }
   function toNewChat(wid, why) {
     const w = W[wid]; if (hud?.id === wid || !mainChats(w) || homeOpen || focused()?.id !== wid) return; // the HUD stays on its chat
     CHATS.openNewDraft(wid, ''); syncChatsPane(wid); setTimeout(() => focusInside(wid), 30); log('send:new-chat:' + why);
@@ -591,6 +596,7 @@
   stage.addEventListener('submit', e => {
     const form = e.target.closest?.('[data-chform]'), ta = form?.querySelector('textarea'); if (!ta?.value.trim()) return;
     const wel = form.closest('.win'), wid = wel?.dataset.win, w = W[wid]; if (!mainChats(w)) return;
+    if (keepNewSendList(wid, w.thread)) return;
     setTimeout(() => {
       if (W[wid] !== w || (document.activeElement && document.activeElement !== document.body && !wel.contains(document.activeElement))) return;
       toNewChat(wid, 'text');
@@ -638,7 +644,14 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         fields().bind(doc);
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
-        doc.addEventListener('keydown', e => onKey(e, true), true); doc.addEventListener('keyup', e => keyHints.up(e), true);
+        // Keyboard events never bubble out of an iframe. Use its window's capture phase,
+        // just like the shell: an app's window-level stopPropagation (e.g. an editor/modal)
+        // otherwise prevents the document hook from ever seeing desktop chords. Forward
+        // the original event, once; onKey still decides which keys belong to the app.
+        const frameWindow = doc.defaultView;
+        frameWindow.addEventListener('keydown', e => onKey(e, true), true);
+        frameWindow.addEventListener('keyup', e => keyHints.up(e), true);
+        frameWindow.addEventListener('blur', () => keyHints.hide());
         try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
@@ -672,7 +685,7 @@
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
    * Host-window fullscreen keeps this readable width; explicit monocle remains immersive. */
   function layout() {
-    const host = wsEl(cur), d = ws[cur];
+    const d = ws[cur];
     // Apply chrome before measuring, including a single app, reload and workspace switches.
     const full = !homeOpen && !!d.mono && !!d.wins.length;
     document.body.classList.toggle('desktop-fullscreen', full);
@@ -681,12 +694,21 @@
     if (!ex) { ex = document.createElement('button'); ex.id = 'exitFull'; ex.type = 'button'; ex.className = 'exit-full'; ex.title = `Exit full screen (Esc / ${MOD}F)`; ex.setAttribute('aria-label', 'Exit full screen');
       ex.innerHTML = '⤡<span>Exit full screen</span>'; ex.addEventListener('click', () => { if (ws[cur].mono) toggleMono(); }); document.body.appendChild(ex); }
     ex.hidden = !full;
-    const W_ = host.clientWidth, H_ = host.clientHeight, g = full ? 0 : 8;
-    const n = d.wins.length;
-    const rects = {};
-    if (!n || homeOpen) return;
     const configuredMax = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--desktop-window-max-width'));
     const maxWidth = configuredMax > 0 ? configuredMax : 1200;
+    // Hidden desks retain layout boxes. Size their apps before first load, in the chrome mode
+    // they will have when selected, rather than inheriting the foreground desk's stage height.
+    const barHeight = $('#bar').getBoundingClientRect().height;
+    const sizes = ws.map((dk, i) => {
+      if (!dk.wins.length) return null;
+      const host = wsEl(i), deskFull = !!dk.mono;
+      return [host.clientWidth, host.clientHeight + (deskFull ? barHeight : 0) - (full ? barHeight : 0), deskFull];
+    });
+    ws.forEach((dk, i) => { if (sizes[i]) tile(dk, ...sizes[i], maxWidth); });
+  }
+  function tile(d, W_, H_, full, maxWidth) {
+    const g = full ? 0 : 8, n = d.wins.length;
+    const rects = {};
     // Columns on request: a window that sets `share` (Video Editor's video + Feedback pair) lays the desktop out as
     // side-by-side columns in window order; windows without a share split what is left equally.
     const shared = !d.mono && n >= 2 && n <= 4 && d.wins.some(id => W[id]?.share > 0);
@@ -910,6 +932,7 @@
   function goWs(i, { from } = {}) {
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
+    if (i !== cur && !CHATS.beforeNavigate(ws[i].wins)) return;
     if (i === cur) { if (homeOpen) { leaveHome(); if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); } return; }
     homeOpen = false; store.set('homeOpen', false);
     // Preserve the later-approved empty-desktop pruning contract.
@@ -943,7 +966,7 @@
   function closeDesktop(i = cur) {
     const d = ws[i]; if (!d) return false;
     // Check every window before destroying any: a recording can refuse the close.
-    if (!d.wins.every(canLeave)) return false;
+    if (!d.wins.every(id => canLeave(id, true))) return false;
     const names = [...new Set(d.wins.map(id => appOf(W[id])?.name).filter(Boolean))].join(', ');
     [...d.wins].forEach(id => removeWin(id));
     if (!removeDesktop(d)) { save(); render(); goHome(); }
@@ -1079,6 +1102,7 @@
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
+    if (!CHATS.beforeNavigate([])) return;
     window.WosResources?.back();
     for (const id of Object.keys(W)) if (W[id].app === 'chats') CHATS.saveDraft(id);
     closePalette(); toggleKeys(false); closeSettings(); closeUsage();
@@ -1090,31 +1114,9 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
-  /* Miguel's skins: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
-   * and Working as the same dot counters. Settings stays in the top bar (one gear). No clock, thread lists, app chips or key hints. */
-  function mineHomeDots(kind, n) {
-    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
-    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, k) => `<i style="--n:${k}"></i>`).join('');
-    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
-  }
-  function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
-    const pending = OUTBOX?.unsent() || [];
-    return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
-      <div class="mh-res">${window.WosResources?.home() || ''}</div>
-      <div class="mh-gap"></div>
-      ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
-      <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:var(--green)" data-home-act="ready" aria-label="Ready ${ready}"><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${mineHomeDots('ready', ready)}</button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-home-act="working" aria-label="Working ${working}"><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${mineHomeDots('working', working)}</button>
-      </div>
-      ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
-    </div>`;
-  }
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
   function homeHtml(i) {
-    if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
@@ -1149,7 +1151,7 @@
     const act = e.target.closest('[data-wact]')?.dataset.wact;
     if (act === 'hud') return hudOn(id);
     if (act === 'hud-home') return hudDock({ to: 0 });
-    if (act === 'close' && hud?.id === id) return hudClose();
+    if (act === 'close' && hud?.id === id) return canLeave(id) && hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
@@ -1296,47 +1298,8 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
-  /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
-   * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
-   * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
-  let palFold = false;
-  function openStoreKind(kind) {
-    const url = window.WosAppKinds.storeUrl(kind);
-    const ex = findWin(w => w.app === 'frame' && w.appId === 'app-store');
-    if (ex) { ex.url = url; const f = winEl(ex.id)?.querySelector('iframe'); if (f) f.src = url; focusWin(ex.id); save(); return; }
-    newWin({ app: 'frame', appId: 'app-store', url });
-  }
-  function pickKinds() {
-    const AK = window.WosAppKinds, K = AK.kinds(APPS, APP), out = [];
-    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => a.url || a.kind !== 'wizard' ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
-    const get = k => ({ kind: 'app', get: true, name: AK.GET[k][1], run: () => openStoreKind(AK.GET[k][0]) });
-    const group = (k, list, extra = []) => out.push({ head: AK.LABELS[k], items: [...AK.sysFirst(list).map(app), ...extra, get(k)] });
-    group('apps', K.apps);
-    const n = K.wiz.length + K.agents.length + K.conns.length;
-    out.push({ fold: true, n });
-    if (palFold) {
-      group('wiz', K.wiz);
-      group('agents', K.agents, K.builder ? [{ kind: 'app', get: true, name: 'Build agents', run: o => openApp(K.builder, o) }] : []);
-      group('conns', K.conns);
-    }
-    return out;
-  }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-    if (mine() && !norm(palIn.value) && window.WosAppKinds) {
-      const blocks = pickKinds(); palItems = []; const html = [];
-      const tile = it => { const i = palItems.push(it) - 1;
-        const ic = it.get ? '<span class="ic pal-plus">+</span>' : ico('span', 'ic', it.app);
-        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`; };
-      for (const b of blocks) {
-        if (b.fold) { const i = palItems.push({ kind: 'fold', name: 'For agents', run: () => { palFold = !palFold; pickRender(); palIn.focus(); } }) - 1;
-          html.push(`<button type="button" class="pal-fold${palFold ? ' open' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-expanded="${palFold}"><span>For agents</span><small>${b.n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`); continue; }
-        html.push(`<div class="pal-grp pal-kind" role="presentation">${esc(b.head)}</div>` + b.items.map(tile).join(''));
-      }
-      palList.innerHTML = html.join(''); palSel = Math.min(palSel, palItems.length - 1);
-      return palMark(palSel);
-    }
     palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`).join('')
       || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
     palMark(palSel);
@@ -1712,6 +1675,7 @@
     finally { clearTimeout(timer); }
   }
   async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
+    if (VOICE.state === 'idle' && CHATS.incognitoActive(focused()?.id)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
@@ -1798,7 +1762,7 @@
       }
     }
     const w = vTarget && W[vTarget];
-    if (rp) { CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
+    if (rp) { const stayOnList = keepNewSendList(rp.wid, rp.sid); CHATS.sendVoiceTo(rp.wid, rp.sid, r.blob, extraFiles, sealed, modelRoute, stagedId, stagedId ? null : r.captureId, rp.steerRunId, transcript); toast('✦', 'Voice reply · waiting to send', 1400); if (stayOnList) syncChatsPane(rp.wid); else setTimeout(() => toNewChat(rp.wid, 'voice'), 180); return 'sent'; }
     if (w && aimSid) CHATS.sendChat(w.id, transcript, 'voice, aimed at this thread', r.blob, { custodyId: stagedId, captureId: stagedId ? null : r.captureId, sid: aimSid, seal: sealed, route: modelRoute, files: extraFiles });
     else {
       const item = await OUTBOX.enqueue({ ...modelRoute, custodyId: stagedId, captureId: stagedId ? null : r.captureId, sealKey: sealed?.key, typed: sealed?.text || '', ...(sealed?.reply ? { reply: sealed.reply } : {}), files: [...(sealed?.files || []), ...extraFiles], kind: aimSid && aimSid !== '__new__' ? 'reply' : 'new', sessionId: aimSid && aimSid !== '__new__' ? aimSid : '', audio: r.blob, text: transcript, instructions: vContext, how: 'voice, aimed at this thread', source: 'orb' });
@@ -1812,6 +1776,7 @@
   // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
   // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
   async function recordReply(wid, sid) {
+    if (CHATS.incognitoActive(wid)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (['listen','paused'].includes(VOICE.state)) { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
@@ -1896,6 +1861,7 @@
   window.WosOutbox?.load().then(paintRecordings);
   let dictationFinishing = false;
   async function dictate(action = 'toggle') {
+    if (VOICE.state === 'idle' && (CHATS.incognitoActive(focused()?.id) || document.activeElement?.closest?.('[data-incog-thread]'))) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { dictTarget?.release();dictTarget=null;const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }

@@ -69,7 +69,7 @@
   }
   // Distraction-free (swipe down on the orb) hides the title bar of a sole or full-screen window, so the host presents
   // that window edge to edge too: apps hide their own in-app headers the same way they do in full screen (James, 20 Oct).
-  const IMMERSIVE = '.device.immersive .win.full, body.desktop-fullscreen .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
+  const IMMERSIVE = '.device.immersive .win.full, .wsp .win.full, .device.zen .tiles[data-n="1"] .win, .device.zen .tiles.has-full .win.full';
   const presentation = f => f.closest(IMMERSIVE) ? 'immersive' : 'window';
   function context(f) { const t = tokens(); return { version: VERSION, revision, skin: t.skin, family: window.WosSkin?.familyOf?.(t.skin) || 'wizard', colorScheme: t.colorScheme, presentation: presentation(f), tokens: t.tokens }; }
 
