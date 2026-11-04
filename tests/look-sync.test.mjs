@@ -571,3 +571,67 @@ for (const field of ['skin', 'tweak']) {
     assert.equal(siblingValue(d, field), siblingRemote(remote, field)); assert.deepEqual(box.doc(), remote);
   });
 }
+
+// Before per-shell views, experience.toggle() emitted ordinary tweak events. A view-on
+// queued every view at ONE revision; those objects survive reload in wos.look-sync.v1.
+const legacyViews = ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'];
+const legacyGroup = (selected, at) => Object.fromEntries(legacyViews.map(id => [id, { on: id === selected, at }]));
+const legacyDoc = (selected, at) => ({ version: 1, skin: null, tweaks: legacyGroup(selected, at) });
+for (const synced of [false, true]) {
+  for (const restored of [false, true]) test(`legacy view group: newer 409 writer keeps a complete selection (synced=${synced}, restored=${restored})`, async () => {
+    const box = pagesBox(legacyDoc(legacyViews[1], 1000));
+    const hold = holdNext(box, 'PUT');
+    const meta = { synced, ...(restored ? { pending: { skin: null, tweaks: legacyGroup(legacyViews[0], 1) } } : {}) };
+    // The current experience interface is per-shell even when storage was written by an old module.
+    const d = device(box, { views: legacyViews, shells: true, meta });
+    if (!restored) d.toggle(legacyViews[0], true);
+    const syncing = d.sync.sync(); await hold.started;
+    const remote = legacyDoc(legacyViews[2], 1002); box.text = JSON.stringify(remote);
+    hold.release(); await syncing;
+    assert.deepEqual(on(box.doc()), [legacyViews[2]], 'never mix a newer selection with a fabricated later local off');
+    assert.deepEqual(box.doc(), remote, 'already-sent intent yields without another restamp or write');
+    assert.deepEqual(d.on(), [legacyViews[2]]);
+    assert.equal(box.puts, 0); assert.equal(d.sync.state.last, 'ok');
+    assert.deepEqual(clone(d.sync.state.pending.tweaks), {});
+    await d.sync.sync(); assert.deepEqual(box.doc(), remote, 'subsequent sync stays quiet');
+  });
+  test(`legacy view group: restored equality and independent intent order survive rebasing (synced=${synced})`, async () => {
+    const box = pagesBox(legacyDoc(legacyViews[1], 1000));
+    // Deliberately not traversal order: skin, tweaks, views, defaults must not decide chronology.
+    const pending = { skin: { id: 'obsidian-light', at: 5 }, tweaks: {
+      [ordinary]: { on: true, at: 4 }, ...legacyGroup(legacyViews[0], 2)
+    }, views: { desktop: { id: '', at: 1 } }, defaults: { 'wizard/example': { on: false, at: 3 } } };
+    const d = device(box, { views: legacyViews, shells: true, meta: { synced, pending } });
+    await d.sync.sync();
+    const doc = box.doc(), group = legacyViews.map(id => doc.tweaks[id].at);
+    assert.equal(new Set(group).size, 1, 'one legacy selection remains one revision');
+    assert.ok(doc.views.desktop.at > 1000);
+    assert.ok(doc.views.desktop.at < group[0]);
+    assert.ok(group[0] < doc.defaults['wizard/example'].at);
+    assert.ok(doc.defaults['wizard/example'].at < doc.tweaks[ordinary].at);
+    assert.ok(doc.tweaks[ordinary].at < doc.skin.at, 'independent intents retain order, not one flattened revision');
+    assert.deepEqual(on(doc), [legacyViews[0], ordinary].sort());
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes);
+  });
+  test(`legacy view group: an idle based choice yields to a newer complete selection (synced=${synced})`, async () => {
+    const box = pagesBox(legacyDoc(legacyViews[1], 1000));
+    const d = device(box, { views: legacyViews, meta: { synced } }); await d.sync.sync();
+    d.toggle(legacyViews[0], true);
+    const remote = legacyDoc(legacyViews[2], 1002); box.text = JSON.stringify(remote);
+    await d.sync.sync();
+    assert.deepEqual(box.doc(), remote); assert.deepEqual(d.on(), [legacyViews[2]]);
+    assert.equal(box.puts, 0);
+  });
+  test(`legacy view group: a new selection during 409 is based once as a group (synced=${synced})`, async () => {
+    const box = pagesBox(legacyDoc(legacyViews[1], 1000)), hold = holdNext(box, 'PUT');
+    const d = device(box, { views: legacyViews, meta: { synced } }); d.toggle(legacyViews[0], true);
+    const syncing = d.sync.sync(); await hold.started;
+    box.text = JSON.stringify(legacyDoc(legacyViews[2], 2000));
+    d.toggle(legacyViews[1], true); hold.release(); await syncing;
+    assert.deepEqual(on(box.doc()), [legacyViews[1]]);
+    const revisions = legacyViews.map(id => box.doc().tweaks[id].at);
+    assert.equal(new Set(revisions).size, 1, 'the new intent is also atomic across its off members');
+    assert.ok(revisions[0] > 2000);
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes);
+  });
+}

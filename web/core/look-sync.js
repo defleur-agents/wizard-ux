@@ -103,7 +103,15 @@
     let unbased = new WeakSet(choices(meta.pending));
     const intent = t => { if (!boxDoc || busy) unbased.add(t); return t; };
     function baseChoices() {
-      for (const t of choices(meta.pending)) if (unbased.has(t)) t.at = stamp();
+      // A legacy view selection shares one revision across its on AND off members.
+      // Rebase equality groups in original order, not field traversal order: splitting
+      // a group can let a stale off erase the winner of a concurrent selection.
+      const revisions = new Map();
+      const pending = choices(meta.pending).filter(t => unbased.has(t)).sort((a, b) => a.at - b.at);
+      for (const t of pending) {
+        if (!revisions.has(t.at)) revisions.set(t.at, stamp());
+        t.at = revisions.get(t.at);
+      }
       unbased = new WeakSet();
     }
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0 || Object.keys(meta.pending.defaults || {}).length > 0;
