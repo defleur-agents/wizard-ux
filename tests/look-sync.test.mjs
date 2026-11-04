@@ -415,3 +415,69 @@ test('browser gate look adapter uses the real Pages path, persists both devices 
   assert.deepEqual(shared.doc, final, 'a stale writer cannot replace another device choice');
   assert.equal(lookFileReply(shared, PATH, 'DELETE').status, 405);
 });
+
+// Defer an actual GET/PUT without changing the production adapter or revision rules.
+function holdNext(box, method) {
+  const req = box.req; let release, began;
+  const started = new Promise(r => { began = r; });
+  const held = new Promise(r => { release = r; }); let once = true;
+  box.req = async (url, init = {}) => {
+    if (once && (init.method || 'GET') === method) { once = false; began(); await held; }
+    return req(url, init);
+  };
+  return { started, release };
+}
+const viewOpts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'], meta: { synced: true, version: 'old' } };
+const remoteViews = () => ({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'miguel/ai-apps', at: 80 }, phone: { id: 'miguel/orb-shell', at: 100 } } });
+
+test('already-synced owner choice during first GET is causally based on the observed file', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET'), d = device(box, viewOpts);
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', 'miguel/apps-home'); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 100);
+  assert.equal(d.views.phone, 'miguel/apps-home'); assert.equal(d.views.desktop, 'miguel/ai-apps');
+  assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
+});
+test('already-synced pending storage is based once, and last view switch during GET wins', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET');
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: 'miguel/apps-home', at: 1 } } } } });
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', ''); d.pickView('phone', 'miguel/apps-home');
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 200);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop, 'never clobber another shell while basing a local choice');
+  const puts = box.puts; await d.sync.sync(); assert.equal(box.puts, puts, 'settled intent is not restamped every sync');
+});
+test('already-synced persisted view intent survives reload without a new event', async () => {
+  const box = pagesBox(remoteViews());
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: '', at: 1 } } } } });
+  await d.sync.sync(); assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 100);
+});
+test('view switch during successful PUT is not reverted by adopting the older acknowledgement', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started; d.pickView('phone', '');
+  hold.release(); await syncing;
+  assert.equal(d.views.phone, '', 'a successful older save must not visibly undo a newer choice');
+  assert.equal(d.sync.state.pending.views.phone.id, '', 'old sent() only clears its own revision');
+  await d.flush(); assert.equal(box.doc().views.phone.id, ''); assert.equal(d.views.phone, '');
+});
+test('new view choice during conflicted PUT survives retry while other-shell concurrent edit is preserved', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; remote.views.phone = { id: 'miguel/orb-shell', at: 201 }; box.text = JSON.stringify(remote);
+  d.pickView('phone', ''); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 201);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop); assert.equal(d.views.phone, '');
+});
+test('a conflicting newer server choice beats an already-sent intent, not an endless local restamp', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.phone = { id: '', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.deepEqual(box.doc(), remote); assert.equal(d.views.phone, '');
+  assert.equal(box.puts, 0); assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
+});

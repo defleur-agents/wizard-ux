@@ -259,6 +259,9 @@
   /* Tweaks are separate from color: a row of published sets to start from (Standard, Miguel's, …), then one
    * disclosure with every installed tweak as a switch. Picking a set clears the per-tweak choices. */
   const tweakSwitches = (items, attr, busy = false, by = null) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${by ? `<small class="tw-by">${t.where ? esc(t.where) + ' · ' : ''}by ${esc(by(t.author))}</small>` : ''}${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+  // One support predicate for both Look and New skin. Filter rows only: the
+  // draft map must retain hidden other-shell defaults when it is saved.
+  const shellTweaks = (items, shell) => items.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(shell));
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
@@ -269,7 +272,7 @@
     const exp = s.tweaks.filter(t => !t.builtin);
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
     const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
-    const shown = exp.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(s.shell)).map(t => t.view && s.shell ? { ...t, where } : t);
+    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
     // quick buttons. Same list whatever skin is worn; skins are looks only.
@@ -319,7 +322,7 @@
   }
   function newSkinHtml(S, draft) {
     const family = S.families.find(f => f.id === S.familyOf(draft.base));
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches(shellTweaks(draft.items || [], window.WosExperience?.state.shell).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function deviceSkinRecovery() {
     const previews = window.WosMySkin?.previews || [];
