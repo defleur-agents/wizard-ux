@@ -70,7 +70,7 @@ export const STATES = [['needs', 'Needs you'], ['approval', 'Needs approval'], [
 const KNOWN = new Set(STATES.map(s => s[0]));
 /** Round 16 (Miguel, 3 Nov 2026): the folded 52 px rail's short words, one under each count (the full STATES words in
  * its tip): Snoozed, Ready, then Ready's statuses. */
-export const RAIL_WORDS = Object.freeze({ working: 'Working', snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs', approval: 'Approve', failed: 'Error', check: 'Call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed', none: 'Other' });
+export const RAIL_WORDS = Object.freeze({ working: 'Working', snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs you', approval: 'Needs approval', failed: 'Error', check: 'Your call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed', none: 'Other' });   // round 23b: whole words (Miguel), wrapping to two lines when needed
 /** One row's status: the shell's own (row.state), else what the row says (needs / a note). */
 export function stateOf(r) {
   const s = r && typeof r.state === 'string' ? r.state : '';

@@ -835,3 +835,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-time ~ :is(.aad-pin, .aad
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rw:hover, .aad-rw.is-held, .aad-rw:focus-within) .aad-time { visibility: hidden; }
 /* round 22: By status on the rail has no Ready row over the statuses: the first one still opens the soft plate */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-sub:first-child { border-top-left-radius: 0.625rem; border-top-right-radius: 0.625rem; }
+/* round 23b: Working = one spinner + its number; the rail's words are whole ("Needs you", "Your call"), two lines at most */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-rk-wk { display: inline-flex; align-items: center; gap: 0.3125rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wn { font: 650 0.875rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-space: normal; text-align: center; overflow-wrap: normal; line-height: 1.15; }

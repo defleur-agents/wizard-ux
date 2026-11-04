@@ -204,7 +204,8 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad-rail .aad-rapps'), null, 'the rail: no apps either');
   // round 12: the rail is words with counts (plain Ready chats count in Ready only, no status rows for them); no icons
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
-  assert.deepEqual(w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className), ['aad-d is-spin'], 'round 23: one spinner per working chat, no number');
+  assert.deepEqual(w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className), ['aad-d is-spin'], 'round 23b: Working = one spinner');
+  assert.equal(w.q('.aad-rk[data-k="working"] .aad-rk-wn').textContent, '1', 'round 23b: and its number');
   assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot', 'aad-d is-dot'], 'round 23: one solid dot per ready chat');
   assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-n').textContent, '', 'no digits on the rail');
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
@@ -847,7 +848,7 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
-    ['Working 1', '  Needs 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
+    ['Working 1', '  Needs you 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
   w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
   w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
@@ -1989,7 +1990,7 @@ test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rin
   (await layout()).default(w.api);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   const wk = w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className.replace('aad-d ', ''));
-  assert.equal(wk.length, 12, 'never more than 12 marks'); assert.equal(wk.filter(k => k === 'is-spin').length, 11); assert.equal(wk.at(-1), 'is-more');
+  assert.deepEqual(wk, ['is-spin'], 'round 23b: Working is one spinner'); assert.equal(w.q('.aad-rk[data-k="working"] .aad-rk-wn').textContent, '15', 'and its number');
   assert.match(w.q('.aad-rk[data-k="working"]').getAttribute('aria-label'), /^Working, 15\./, 'the count stays in its label');
   assert.deepEqual(w.qa('.aad-rk[data-k="snoozed"] .aad-d').map(d => d.className), ['aad-d is-ring'], 'snoozed: a ring');
 });
