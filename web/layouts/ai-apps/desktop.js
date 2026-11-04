@@ -272,6 +272,7 @@ export default function desktop(api) {
     else { folded = !folded; api.storage.set('folded', folded); }
     if (q) setSearch(false);
     paintSide();
+    api.aiUsage?.live?.(foot);  // the sidebar's foot (fuel gauge) may have just come on screen
   }
   let offPeek = null;
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device

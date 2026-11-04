@@ -934,6 +934,8 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
     assert.ok(sig2.startsWith('own|62') && !box2.hidden && box2.children[0].classList.contains('vw-gauge'));
     box2.children[0].dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(pages, ['usage']);
     assert.equal(gaugeInto(w.doc, box2, sig2, () => {}, () => null), '', 'nothing readable: hidden'); assert.ok(box2.hidden);
+    // Codex P1: the phone foot is hidden at setup, so opening the drawer / sidebar re-arms the usage feed
+    for (const f of ['web/layouts/ai-apps/layout.js', 'web/layouts/ai-apps/desktop.js']) assert.ok((read(f).match(/api\.aiUsage\?\.live\?\.\(foot\)/g) || []).length >= 2, f);
   }
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state: CHATS\.stiKind\?\.\(s\) \|\| '',/);
