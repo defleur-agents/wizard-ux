@@ -97,7 +97,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) | own keyframe sets |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) | — |
 | Install prompt; `hold(on, owner?)` during tours/overlays | `WizardPwaInstall` (`web/pwa-install.js`) | own `beforeinstallprompt` listener |
-| First run (Welcome: name, AI, colour, hello; Setup app) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) | shell-specific first-run checks, a second tour launcher |
+| First run (Welcome: name, AI, colour, import, hello; Setup) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) | shell-specific first-run checks, a second tour launcher |
 
 ## App voice/audio
 
