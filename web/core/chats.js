@@ -573,8 +573,9 @@ window.WizCore.chats = function createChats(H) {
    * same place (an app, or Wizard's own alerts) fold into one row: its mark, its name, how many, the newest first.
    * Opening it opens the newest, with the rest listed under it and Done all. Anything that needs you (priority 4+)
    * keeps its own row, so it is never buried in a fold. The Chats badge still counts every item (badge == items). */
-  const noteSrc = it => it.app || 'notifications';
-  const noteSrcName = it => it.app ? (it.appName || it.app) : (window.WizConfig?.agent?.() || 'Wizard');
+  // A Notifications item about an app (tagged app:<id>, WosBell's `from`) is that app's, not the agent's.
+  const noteSrc = it => it.app || it.from || 'notifications';
+  const noteSrcName = it => it.app ? (it.appName || it.app) : it.from ? (it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
   const noteFolds = it => !it.group && (Number(it.priority) || 3) < 4;
   function fold(list) {
     const by = new Map(), out = [];
@@ -617,8 +618,9 @@ window.WizCore.chats = function createChats(H) {
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
   // An app's item (Settings › Notifications set to Chats) wears that app's own mark in the yellow tile; Notifications keeps the bell.
   function noteIcon(it) {
-    if (!it.app || !window.WizSigil) return window.WosBell?.icon || '';
-    try { const meta = window.WizCore?.appMetadata?.(it.app) || { id: it.app, name: it.appName || it.app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
+    const app = it.app || it.from;
+    if (!app || !window.WizSigil) return window.WosBell?.icon || '';
+    try { const meta = window.WizCore?.appMetadata?.(app) || { id: app, name: it.appName || it.fromName || app }; return window.WizSigil.html(meta); } catch (e) { return window.WosBell?.icon || ''; }
   }
   const noteTitle = it => notePlain(it.title) || notePlain(String(it.message || '').split('\n').find(l => l.trim())) || 'Notification';
   /* A notification row reads unlike a chat at a glance: the app's mark on a yellow tile, the app's name as a small
@@ -818,11 +820,11 @@ window.WizCore.chats = function createChats(H) {
     const r = KIT.drafts.get('new').reply, m = r && NOTIF_KEY.exec(r.key || ''); if (!m) return null;
     const it = window.WosBell?.item?.(m[1]) || null;
     // An app's item also opens that app (Open), where it can be handled for real.
-    const open = it?.app && !it.archived && window.WizCanOpen?.(it.app) ? ['app'] : [];
+    const open = it?.app && !it.archived && window.WizCanOpen?.(it.app) ? ['app'] : it?.from && !it.archived && window.WizCanOpen?.(it.from) ? ['app'] : [];
     return { id: m[1], reply: r, item: it, acts: it?.archived ? ['restore'] : [...open, ...(it?.read ? ['resolve', 'done'] : ['resolve', 'snooze', 'done'])] };
   }
   const NOTE_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
-  const noteActBtn = (NV, a) => a === 'app' ? { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${NV.item?.appName || 'the app'}` } : NACT[a] || ACT[a];
+  const noteActBtn = (NV, a) => a === 'app' ? { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${NV.item?.appName || NV.item?.fromName || 'the app'}` } : NACT[a] || ACT[a];
   function notifAct(wid, a) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
     vib(8);

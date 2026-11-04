@@ -660,7 +660,8 @@
       // An app's item (an app set to Chats in Settings › Notifications): open that app, at the item when it says where.
       open(id) {
         if (a.dead) return false;
-        const it = window.WosBell?.item?.(id); if (!it?.app || typeof window.WizOpenApp !== 'function') return false;
+        const it = window.WosBell?.item?.(id); if (!(it?.app || it?.from) || typeof window.WizOpenApp !== 'function') return false;
+        if (!it.app) return !!window.WizOpenApp(it.from);   // a Notifications item about an app: open that app
         if (!it.open) return !!window.WizOpenApp(it.app);
         let base = ''; try { base = (window.WizCore?.apps?.('mobile')?.APPS || []).find(x => x.id === it.app)?.url || ''; } catch (_) {}
         try { const u = new URL(it.open, new URL(base || `/${it.app}/`, location.origin)); if (u.origin === location.origin && window.WizOpenApp(it.app, u.pathname + u.search + u.hash)) return true; } catch (_) {}

@@ -12,8 +12,11 @@
   const counts = {}, raw = {}, more = new Set();
   // A quiet choice (the routing part's Off, say) shows no badge at all.
   const shown = (id, n) => id !== 'wizard' && (window.WosBell?.inChats?.(id) || window.WosBell?.isOff?.(id)) ? 0 : n;
+  /* Notifications' items about an app that wait outside Chats (WosBell.carry, its own routing already applied) add to
+   * that app's badge, beside what the app itself reported. */
+  const carried = {};
   function apply(id) {
-    const n = shown(id, raw[id] || 0); if ((counts[id] || 0) === n) return;
+    const n = shown(id, raw[id] || 0) + (carried[id] || 0); if ((counts[id] || 0) === n) return;
     counts[id] = n; window.dispatchEvent(new CustomEvent('wizard:app-counts', { detail: { id, n } }));
   }
   function setCount(id, n, plus) {
@@ -21,8 +24,12 @@
     raw[id] = Math.max(0, n | 0);
     if (was !== !!plus) { counts[id] = -1; } apply(id);
   }
+  function carry(map) {
+    const next = map && typeof map === 'object' ? map : {};
+    for (const id of new Set([...Object.keys(carried), ...Object.keys(next)])) { const n = Math.max(0, Math.min(999, next[id] | 0)); if ((carried[id] || 0) !== n) { if (n) carried[id] = n; else delete carried[id]; apply(id); } }
+  }
   // A routing choice changed: show every reported count again through it.
-  function rerouted() { for (const id of Object.keys(raw)) apply(id); }
+  function rerouted() { for (const id of new Set([...Object.keys(raw), ...Object.keys(carried)])) apply(id); }
   function deskCount(desk, wins, appOf) {
     if (!desk || desk.home) return 0;
     const seen = new Set(); let n = 0;
@@ -52,5 +59,5 @@
     const index = digit - 1;
     return index < count ? { kind: 'desktop', index } : index === count ? { kind: 'new', index } : null;
   }
-  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, rerouted, deskCount, deskMore, fmt, label, counts });
+  C.workspaceNav = Object.freeze({ icon, slot, digitTarget, setCount, carry, rerouted, deskCount, deskMore, fmt, label, counts });
 })();
