@@ -66,7 +66,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
 | Uploads of any size | `WizUploads` (`uploads.js`) |
 | Files browse, preview, attach | `WosFiles` (`files.js`) |
-| Settings in both shells | `WosSettings.register` (`settings.js`; Skin/Colors + Background/Mode; shared About version identities; fail-closed update status; package System: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` |
+| Settings in both shells | `WosSettings.register` (`settings.js`; Skin/Colors + Background/Mode; shared About version identities; fail-closed update status; package System: `hasSystem`), `focus(id)`, narrow-host stack + Back, `WosFeatures`; `WizConfig.responseStyle` |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |

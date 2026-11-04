@@ -49,6 +49,9 @@ Desktop (`desktop.js`, `desktop.css`):
   (off at first) adds a small Newest / Oldest menu on Ready's header. The group is mounted through the layout API's
   `desk.setting(id, node)` (core/skin-host.js).
 - Middle: the chat in a centred column with the composer.
+- Settings opens as a centred panel over the page, including when AI apps is enabled from an already-open Settings
+  window. The shared Settings surface uses category → page → Back below 700 px **host** width (also in Apps/Orb or
+  resized desktop windows); a wide desktop viewport never forces two panes into a narrow app panel.
 - Right: one apps column = Pinned · Open · + (drag to rearrange; ⌥1–⌥0 and ⌥[ ] through the shell's own key guide). An app
   opens as a panel beside the chat; panels resize by grips. An open pin wears the same 4 px running dot as the phone.
   At its foot a small "Tidy: 24h" line expands into "Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps
