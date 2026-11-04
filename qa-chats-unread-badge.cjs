@@ -55,6 +55,11 @@ async function boot(phone) {
     ['/wizard/attention', { attention: [] }],
     ['/wizard/thread-dispositions', { state: {} }],
     ['/wizard/v1/setup', { first_run: false }],
+    // Settings/desktop reads only: this offline fixture has no pairing or host metrics.
+    ['/wizard/v1/setup/phone', { step: 'unavailable', phones: [] }],
+    ['/api/system/load', { available: false, reason: 'synthetic fixture has no host metrics' }],
+    ['/api/system/devices', { devices: [] }],
+    ['/api/system/health', { available: false, reason: 'synthetic fixture has no host health' }],
     ['/wizard/ai-usage', { fetchedAt: new Date(FIXTURE_NOW).toISOString(), providers: [] }],
     ['/wizard-os-home/store-install/_updates', { mode: 'ask', chosen: true, installed: 'synthetic', latest: 'synthetic', update_available: false, unpinned: false, installing: false, interrupted: false }],
     ['/wizard-os-home/store-data/wizard/v1/installed-apps', { wam: [], shell: [], complete: true }],
@@ -97,6 +102,9 @@ async function boot(phone) {
     if (m) { const item = s.rows.find(x => x.id === m[1]); if (!item) return json(r, { error: 'no synthetic thread' }, 404);
       return json(r, m[2] ? { data: [{ role: 'user', content: 'Synthetic question', timestamp: item.last_user_at }, { role: 'assistant', content: item.preview, timestamp: item.last_active }], has_more: false } : { session: item }); }
     if (p === PREFIX + 'data.js' || p === PREFIX + 'summaries.js') return r.fulfill({ contentType: 'application/javascript', body: '/* Synthetic QA: generated owner data intentionally absent. */' });
+    // Build-generated version marker is absent in a Git export. Do not synthesize an
+    // update version: a mismatch could start an unrelated update/reload during the test.
+    if (p === PREFIX + 'ux-version.txt' && !u.search) return r.fulfill({ status: 404, contentType: 'text/plain', body: 'No generated version marker in synthetic source export.' });
     if (p === PREFIX + 'ux-changes.json') return json(r, []);
     if (p.startsWith(PREFIX)) {
       const root = path.join(TREE, 'web'), file = path.resolve(root, decodeURIComponent(p.slice(PREFIX.length) || 'index.html'));
