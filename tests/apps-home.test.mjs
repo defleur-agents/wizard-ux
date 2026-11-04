@@ -265,7 +265,7 @@ test('the phone adapter lists one entry per desk (Home and empty desks left out)
   assert.match(host, /desks: \(\) => \{ const l = live\(\) \? shell\.phoneDesks\?\.\(\) : null;/);
   assert.match(host, /Object\.freeze\(\{ id: 'apps', name: 'Apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored Apps layout goes back to Desks');
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only an unowned stale Apps layout goes back to Desks');
   assert.ok(!/Math\.random/.test(read('web/layouts/apps/layout.js')));
 });
 
