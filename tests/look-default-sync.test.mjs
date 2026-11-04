@@ -177,6 +177,22 @@ for (const newIntent of [false, true]) test(`default 409 respects causal orderin
   assert.deepEqual(b.doc.views, changed.views);
 });
 
+test('a sleeping stale device edits other look fields without erasing the newer built-in default', async () => {
+  const b = box(remote()), desktop = client(b, opts), phone = client(b, opts);
+  await desktop.c.sync(); await phone.c.sync();
+  choose(desktop, false); await desktop.c.sync();
+  const changedAt = b.doc.defaults[DEFAULT].at;
+  assert.equal(phone.state.defaults[DEFAULT], true, 'sleeping phone still has the stale enabled choice');
+  phone.state.views.phone = 'qa/view'; phone.c.viewChoice('phone', 'qa/view');
+  phone.state.mix['qa/view'] = true; phone.c.tweakChoice('qa/view', true);
+  phone.state.colour = 'obsidian'; phone.c.skinChoice('obsidian');
+  await phone.c.sync(); await desktop.c.sync();
+  assert.deepEqual(b.doc.defaults[DEFAULT], { on: false, at: changedAt }, 'stale defaults are not republished as owner intent');
+  assert.equal(b.doc.skin.id, 'obsidian'); assert.equal(b.doc.tweaks['qa/view'].on, true);
+  assert.equal(b.doc.views.phone.id, 'qa/view'); assert.equal(b.doc.views.desktop.id, 'qa/view');
+  for (const d of [desktop, phone]) { assert.equal(d.state.defaults[DEFAULT], false); assert.equal(d.state.colour, 'obsidian'); assert.equal(d.state.views.phone, 'qa/view'); assert.equal(d.state.mix['qa/view'], true); }
+});
+
 test('simultaneous independent default, per-device view and tweak edits all converge', async () => {
   const b = box(remote()), a = client(b, opts), d = client(b, opts); await a.c.sync(); await d.c.sync();
   choose(a, false); d.state.views.phone = 'qa/view'; d.c.viewChoice('phone', 'qa/view');
