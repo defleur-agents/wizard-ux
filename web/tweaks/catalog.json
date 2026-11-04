@@ -8,20 +8,17 @@
     "miguel"
   ],
   "tweaks": [
-    "miguel/swipe-strip",
     "miguel/send-and-go",
-    "miguel/model-pills",
     "miguel/hidden-pin",
     "wizard/pin-buttons",
     "miguel/snooze-someday",
     "wizard/two-orbs",
     "miguel/machines-home",
-    "miguel/arrange-download",
     "wizard/app-borders",
-    "miguel/refresh-button",
     "wizard/unified-inbox",
     "wizard/orb-radial",
     "wizard/new-send-list",
+    "miguel/no-desk-close",
     "miguel/notification-levels"
   ],
   "defaults": [
@@ -29,7 +26,6 @@
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
-    "wizard/machines-home": "miguel/machines-home",
-    "miguel/switch-row-actions": "miguel/model-pills"
+    "wizard/machines-home": "miguel/machines-home"
   }
 }

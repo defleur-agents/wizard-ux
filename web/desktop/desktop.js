@@ -410,7 +410,7 @@
     // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
-    if (a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -498,6 +498,7 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
@@ -626,7 +627,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else watchFrame(el.querySelector('iframe'), el);
+    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   function watchFrame(f, el) {
@@ -978,6 +979,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;
@@ -1815,19 +1817,29 @@
     const size = bytes ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : '';
     return [thread, stamp, size].filter(Boolean).join(' · ');
   }
+  /* The card is the shell's own (Settings' kit: wz-card, wz-button). Discard asks again IN the card, never with the
+   * browser's confirm dialog: Wizard for Mac's WKWebView has no confirm panel, so it answered 'no' and Discard did
+   * nothing (Miguel, 4 Nov 2026: a no-speech take stuck on screen). A take with no speech offers Discard first. */
+  let discardArm = { id: '', at: 0 };
+  const discardArmed = id => discardArm.id === id && Date.now() - discardArm.at < 4000;
   function paintRecordings() {
+    const focusedDiscard = document.activeElement?.dataset?.recordDiscard;
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
-    recovery.innerHTML = takes.map(it => `<article>
+    recovery.innerHTML = takes.map(it => {
+      const empty = it.state === 'empty' && !(it.recoveryText || it.text), armed = discardArmed(it.id);
+      const retry = `<button class="wz-button ${empty ? 'quiet' : ''}" data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>`;
+      const discard = `<button class="wz-button ${empty || armed ? 'destructive' : 'quiet'}" data-record-discard="${esc(it.id)}"${armed ? ' data-armed' : ''} ${it.state === 'transcribing' ? 'disabled' : ''}>${armed ? 'Confirm discard' : 'Discard'}</button>`;
+      return `<article class="wz-card">
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
       <p class="recording-meta">${esc(recordingMeta(it))}</p>
-      <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
-      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
-      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>
-      <button data-record-download="${esc(it.id)}">Download audio</button>
-      <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
-    </article>`).join('');
+      <p class="recording-why">${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
+      <p class="recording-store" role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
+      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea>` : ''}
+      <div class="recording-acts">${empty ? discard : retry}${it.recoveryText || it.text ? `<button class="wz-button quiet" data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}<button class="wz-button quiet" data-record-download="${esc(it.id)}">Download audio</button>${empty ? retry : discard}</div>
+    </article>`;
+    }).join('');
+    if (focusedDiscard) [...(recovery.querySelectorAll?.('[data-record-discard]') || [])].find(b => b.dataset.recordDiscard === focusedDiscard)?.focus({ preventScroll: true });
   }
   recovery.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -1855,7 +1867,13 @@
     } else if (b.dataset.recordCopy) {
       try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
-    } else if (confirm('Discard this retained recording and transcript?')) O.remove(id);
+    } else if (b.dataset.recordDiscard) {
+      if (!discardArmed(id)) { discardArm = { id, at: Date.now() }; paintRecordings(); setTimeout(() => { if (discardArm.id === id && !discardArmed(id)) { discardArm = { id: '', at: 0 }; paintRecordings(); } }, 4100); return; }
+      discardArm = { id: '', at: 0 }; b.disabled = true; b.textContent = 'Discarding…';
+      let ok = false; try { ok = await O.remove(id); } catch (_) {}
+      paintRecordings();
+      toast(ok ? '✕' : '!', ok ? 'Recording discarded' : `Not discarded · ${O.removeError?.(id) || 'try again'}`, ok ? 1800 : 3200);
+    }
   });
   window.WosOutbox?.onChange(paintRecordings);
   window.WosOutbox?.load().then(paintRecordings);

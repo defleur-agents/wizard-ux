@@ -38,7 +38,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', wallpaper: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   /* Connections is served by the App Manager behind its owner channel, on this origin; the page hosts it as is, so
    * its owner-only actions (Disconnect, Reconnect, agent access, Restore defaults) stay the App Manager's own. The tab
@@ -432,6 +432,15 @@
   }, act(ctx, el) {
     if (!el.closest('[data-wg-reset]')) return false;
     window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
+  } });
+  // Background: Landscapes can show its pictures or a Wizard OS hat background (Miguel, 4 Nov 2026). Per device.
+  register({ id: 'wallpaper', aliases: ['background', 'wallpaper'], available: () => typeof window.WosSkin?.setWallpaper === 'function', html() {
+    const S = window.WosSkin; if (!S.wallpaperable) return '';
+    const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
+    return `<div class="st-group wp-section"><h4>Background</h4><div class="st-seg" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}">${w.name}</button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
+  }, act(ctx, el) {
+    const b = el.closest('[data-wallpaper]'); if (!b) return false;
+    window.WosSkin.setWallpaper(b.dataset.wallpaper); ctx.render(); ctx.root.querySelector(`[data-wallpaper="${b.dataset.wallpaper}"]`)?.focus({ preventScroll: true }); ctx.haptic?.(8); return true;
   } });
   /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };

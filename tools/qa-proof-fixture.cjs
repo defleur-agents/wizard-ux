@@ -58,6 +58,8 @@ for(const id of ['qa_s_live','qa_s_old','qa_r_live','qa_r_old']){
  bodies['/wizard/hermes/api/sessions/'+id+'/messages']={data:[{id:1,role:'user',content:'Synthetic question '+id,timestamp:now-30},{id:2,role:'assistant',content:'Synthetic reply '+id,timestamp:now}],has_more:false};
 }
 const fixture={base:ORIGIN,responses:Object.fromEntries(Object.entries(bodies).flatMap(([p,body])=>['GET','HEAD','OPTIONS'].map(method=>[method+' '+p,{status:200,body:JSON.stringify(body)}])))};
+// These proofs have no owner Look file: explicitly absent, never a pretend sync success.
+for(const method of ['GET','HEAD','OPTIONS'])fixture.responses[method+' /wizard/v1/pages/wizard-look/look.json']={status:403,body:JSON.stringify({error:'fixture_look_unavailable'})};
 fixture.responses['PUT /wizard/thread-seen']={status:200,body:JSON.stringify(bodies['/wizard/thread-seen'])};
 fixture.responses['PUT /wizard/thread-dispositions']={status:200,body:JSON.stringify(bodies['/wizard/thread-dispositions'])};
 // Writes: synthetic in-memory answers only. Nothing is forwarded and nothing persists past the response.
