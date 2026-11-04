@@ -78,12 +78,13 @@ test('already flattened switches survive refresh and harmless chooseSkin', async
   }
 });
 
-test('explicit author selection enables discoverable tweak; individual off persists after restart', async () => {
+test('shared owner adoption enables discoverable tweak; individual off persists after restart', async () => {
   const f = await device({ version: 1, off: {}, preset: 'none', mix: {}, machinesHomeMoved: true });
   assert.equal(f.on(), false);
   const author = (await f.E.authors()).find(a => a.id === 'miguel');
   assert.ok(author.ids.includes(id));
-  await f.E.chooseAuthor('miguel');
+  assert.equal(f.E.chooseAuthor, undefined, 'retired author-wide action stays removed');
+  await f.E.adopt({ [id]: true });
   assert.equal(f.on(), true);
   await f.E.toggle(id);
   assert.equal(f.on(), false);
