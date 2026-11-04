@@ -1985,3 +1985,12 @@ test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rin
   assert.match(w.q('.aad-rk[data-k="working"]').getAttribute('aria-label'), /^Working, 15\./, 'the count stays in its label');
   assert.deepEqual(w.qa('.aad-rk[data-k="snoozed"] .aad-d').map(d => d.className), ['aad-d is-ring'], 'snoozed: a ring');
 });
+
+test('AI apps view: Now playing has the column\'s first row (slot apps-top), marks playing apps\' rows passively and owns ⌥P', () => {
+  const js = read('web/layouts/ai-apps/desktop.js');
+  assert.match(js, /const vtNow = el\('div', 'aad-vtnow', \{ 'data-slot': 'apps-top' \}\);/);
+  assert.match(js, /vt\.append\(vtHead, vtNow, vtList, vtFoot\)/, 'the pill row sits above the apps, under the header');
+  assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
+  assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
+  assert.match(js, /if \(api\.media\?\.list\?\.\(\)\.length\) put\(vtNow\.firstElementChild, 'P'/, 'its keycap only while something is listed');
+});
