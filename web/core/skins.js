@@ -155,13 +155,72 @@
   // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
   // files are fetched. Frozen with the scenery gate like every other skin. Landscapes Dark and Landscapes Light each rotate their own
   // half of the set, split by how bright the photo is overall (Miguel, 28 Oct 2026).
+  /* Wizard OS backgrounds (Miguel, 4 Nov 2026: "a proper main background we can call Wizard OS"). The Landscapes
+   * palettes can show the official hat instead of the rotating photos: the supplied designer raster
+   * (web/brand/wizard-mark-purple.png, never redrawn) on Void / soft lilac with an Ultraviolet glow and the faint dot
+   * grid of the app icon. Per device, like Window opacity; drawn once per size into an offscreen canvas. */
+  const WALL_KEY = 'wos.skin.wallpaper';
+  const WALLS = [
+    { id: 'landscapes', name: 'Landscapes', who: 'Landscape photos that change every minute.' },
+    { id: 'wizard', name: 'Wizard', who: 'The Wizard OS hat in the middle, glowing.' },
+    { id: 'wizard-rise', name: 'Rise', who: 'A giant Wizard OS hat rising from the corner.' },
+    { id: 'wizard-pattern', name: 'Pattern', who: 'Small Wizard OS hats, quietly repeated.' },
+  ];
+  let wall = (() => { try { const v = localStorage.getItem(WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'landscapes'; } catch (_) { return 'landscapes'; } })();
+  const WIZ = {
+    SRC: '/wizard-os-home/brand/wizard-mark-purple.png', AR: 1394 / 1876, im: null, ready: false, memo: {},
+    hat() {
+      if (!this.im) { const im = this.im = new Image(); im.decoding = 'async'; im.onload = () => { this.ready = true; this.memo = {}; wake(); }; im.src = this.SRC; }
+      return this.ready ? this.im : null;
+    },
+    get(id, light, W, H) {
+      const key = `${id}|${W}x${H}@${BGL.dpr}|${this.ready}`, slot = light ? 'l' : 'd';
+      if (this.memo[slot]?.key !== key) this.memo[slot] = { key, c: this.paint(id, light, W, H) };
+      return this.memo[slot].c;
+    },
+    paint(id, light, W, H) {
+      const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'); x.scale(BGL.dpr, BGL.dpr);
+      const M = Math.max(W, H), uv = light ? '91,63,230' : '122,92,255', im = this.hat();
+      const base = x.createLinearGradient(0, 0, W * .35, H);
+      if (light) { base.addColorStop(0, '#f7f5fd'); base.addColorStop(1, '#e7e3f4'); } else { base.addColorStop(0, '#17122b'); base.addColorStop(.55, '#0d0b16'); base.addColorStop(1, '#0B0A10'); }
+      x.fillStyle = base; x.fillRect(0, 0, W, H);
+      const glow = (cx, cy, r, a) => { const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(${uv},${a})`); g.addColorStop(1, `rgba(${uv},0)`); x.fillStyle = g; x.fillRect(0, 0, W, H); };
+      // the app icon's faint dot grid
+      x.fillStyle = light ? 'rgba(91,63,230,.07)' : 'rgba(255,255,255,.05)';
+      for (let gy = 14; gy < H; gy += 28) for (let gx = 14; gx < W; gx += 28) x.fillRect(gx, gy, 1.4, 1.4);
+      const draw = (cx, cy, h, a, blur) => {
+        if (!im) return; const w = h * this.AR;
+        x.save(); x.globalAlpha = a; if (blur) { x.shadowColor = `rgba(${uv},${light ? .35 : .7})`; x.shadowBlur = blur; }
+        x.drawImage(im, cx - w / 2, cy - h / 2, w, h); x.restore();
+      };
+      if (id === 'wizard') {
+        glow(W * .5, H * .44, M * .55, light ? .20 : .34);
+        draw(W * .5, H * .44, Math.min(H * .38, W * .5 / this.AR), light ? .92 : .95, Math.min(W, H) * .12);
+      } else if (id === 'wizard-rise') {
+        glow(W * .9, H * .95, M * .75, light ? .22 : .32);
+        const h = Math.max(H * 1.25, W * .9 / this.AR * .9);
+        draw(W - h * this.AR * .32, H + h * .12, h, light ? .2 : .26, 0);
+      } else {
+        glow(W * .5, H * .45, M * .6, light ? .14 : .24);
+        if (im) { const h = 30, w = h * this.AR, dx = 96, dy = 84;
+          x.save(); x.globalAlpha = light ? .11 : .10;
+          for (let r = 0, y = -h; y < H + h; y += dy, r++) for (let X = (r % 2) * dx / 2 - w; X < W + w; X += dx) x.drawImage(im, X, y, w, h);
+          x.restore(); }
+      }
+      // the same soft top and bottom scrim as the photos, so the clock and the bottom bar stay legible
+      const sc = x.createLinearGradient(0, 0, 0, H), ink = light ? '238,236,248' : '11,10,16';
+      sc.addColorStop(0, `rgba(${ink},${light ? .25 : .35})`); sc.addColorStop(.25, `rgba(${ink},0)`); sc.addColorStop(.75, `rgba(${ink},0)`); sc.addColorStop(1, `rgba(${ink},${light ? .3 : .45})`);
+      x.fillStyle = sc; x.fillRect(0, 0, W, H);
+      return o;
+    },
+  };
   const LANDSCAPES = (() => {
     const ALL = ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
       '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'];
     const AVG = ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'];
-    const make = (files, key, scrim) => ({
+    const make = (files, key, scrim, light) => ({
       FILES: files.map(i => ALL[i]), AVG: files.map(i => AVG[i]),
-      HOLD: 60, FADE: 2.5, KEY: key,
+      HOLD: 60, FADE: 2.5, KEY: key, LIGHT: light,
       load(s, i, W, H) {
         if (s.img[i]) return s.img[i];
         const slot = s.img[i] = { ready: false, c: null }, im = new Image();
@@ -188,6 +247,7 @@
         this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
       },
       draw(c, s, t, dt, W, H) {
+        if (wall !== 'landscapes') { c.drawImage(WIZ.get(wall, this.LIGHT, W, H), 0, 0, W, H); return; }
         const cur = s.img[s.cur];
         if (cur?.ready && t - s.shownAt > this.HOLD) {
           const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
@@ -204,7 +264,7 @@
     });
     return {
       dark: make([6, 7, 8, 10, 13, 14], 'wos.skin.landscapes.at', ['.42', '.55']),
-      light: make([0, 1, 2, 3, 4, 5, 9, 11, 12, 15], 'wos.skin.landscapes-light.at', ['.30', '.40']),
+      light: make([0, 1, 2, 3, 4, 5, 9, 11, 12, 15], 'wos.skin.landscapes-light.at', ['.30', '.40'], true),
     };
   })();
   const BG = {
@@ -431,6 +491,16 @@
       if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
+    // Background (Landscapes palettes only): 'landscapes' (the photos) or a Wizard OS hat background. Per device.
+    wallpapers: Object.freeze(WALLS.map(w => Object.freeze({ ...w }))),
+    get wallpaper() { return wall; },
+    get wallpaperable() { return /^landscapes/.test(SKINS[Math.round(pos)].id); },
+    setWallpaper(id) {
+      if (!WALLS.some(w => w.id === id)) throw new Error('Unknown background');
+      wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {}
+      wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
+      return id;
     },
     // Window opacity: null = the skin's own glass. setGlass(null) returns to it.
     get glass() { return glass; },
