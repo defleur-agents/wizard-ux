@@ -36,7 +36,7 @@
   // A quota-limited grant is still installed in Hermes' pool. Dropping its route
   // from the picker would silently steer the owner onto the single-login legacy route.
   const hasNativeClaude = connection => nativeClaudeAccounts(connection).some(a =>
-    ['ready', 'ok', 'exhausted', 'rate_limited'].includes(a.status));
+    ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status));
   const accountAtLimit = a => {
     if (!a || !['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) return false;
     if (['exhausted', 'rate_limited'].includes(a.status)) return true;
@@ -61,7 +61,6 @@
   const isTinfoil = provider => provider === 'wizard-tinfoil' || provider === 'custom:wizard-tinfoil';
   /* Miguel's skins (Dark, Light, Landscapes) carry his model UX: the private Tinfoil slot, its setup row and the bottom
    * switch. James's skins keep the stock three-model menu, so none of this shows there (team rule: taste lives in your skin). */
-  const OURS = new Set(['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light']);
   const ours = () => typeof document !== 'undefined' && (document.documentElement.dataset.tweaks || '').split(' ').includes('miguel/model-pills');
   const primaryFamilies = () => ours() ? PRIMARY : PRIMARY.filter(p => p.family !== 'tinfoil');
   const shown = list => ours() ? list : list.filter(o => !isTinfoil(o.provider));
