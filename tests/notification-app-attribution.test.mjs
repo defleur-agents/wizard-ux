@@ -69,6 +69,15 @@ test('each tagged item follows its app\'s own route; needs-you follows Notificat
   assert.ok(got.f1 && got.o1 && got.h1, 'needs-you, the agent\'s own and not-installed stay in Chats as Notifications');
 });
 
+test('carried-only installed apps remain configurable after Off, even without a feed', async () => {
+  const B = await ready(boot());
+  assert.ok(B.routes().some(r => r.id === 'sniper'));
+  B.setRoute('sniper', 'off'); await settle();
+  assert.equal(B.item('s1'), null);
+  assert.equal(B.routes().find(r => r.id === 'sniper').route, 'off');
+  B.setRoute('sniper', 'chats'); await settle(); assert.ok(B.item('s1'));
+});
+
 test('Badge apps count their carried items on their own badge, not on Notifications\'', async () => {
   const w = boot(), B = await ready(w), N = w.WizCore.workspaceNav;
   assert.equal(N.counts['card-benefits'], 1, 'the MLA review is a badge on Card Benefits');

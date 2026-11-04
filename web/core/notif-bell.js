@@ -169,7 +169,10 @@
   // Hooks: notes(items), picked(id, to), tick(force), entered(), left(); a replacement may also take attach(host).
   const P = new Proxy({}, { get: (_, k) => (...args) => {
     const live = PART.live?.impl;
-    if (live && typeof live[k] === 'function') { try { return live[k](...args); } catch (e) {} }
+    if (live) {
+      if (typeof live[k] === 'function') { try { return live[k](...args); } catch (e) {} }
+      return undefined; // optional hooks belong to the replacement too; never leak into stock IO
+    }
     return typeof STOCK[k] === 'function' ? STOCK[k](...args) : undefined;
   } });
   const own = id => Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : undefined;
@@ -478,7 +481,8 @@
   function routes() {
     const out = [];
     if (installed()) out.push({ id: 'notifications', name: nameOf('notifications'), route: route('notifications'), chats: inChats('notifications') });
-    for (const id of feedList().sort((a, b) => appName(a).localeCompare(appName(b)))) out.push({ id, name: appName(id), route: route(id), chats: inChats(id) });
+    const carried = [...LV.notes.map(fromOf), ...Object.keys(ROUTES)].filter(appInstalled);
+    for (const id of [...new Set([...feedList(), ...carried])].sort((a, b) => appName(a).localeCompare(appName(b)))) out.push({ id, name: appName(id), route: route(id), chats: inChats(id) });
     return out;
   }
 

@@ -653,8 +653,9 @@
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
         // An app's item rides with its app name, so the agent knows where it came from (and which app tools to use).
-        const title = it.app ? `${it.appName || it.app}: ${it.title || 'Item'}` : it.title;
-        const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
+        const app = it.app || it.from, name = it.appName || it.fromName || app;
+        const title = app ? `${name}: ${it.title || 'Item'}` : it.title;
+        const message = app ? `${it.message}\n\n(From the ${name} app, ${app}; item ${it.key || it.id})` : it.message;
         return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
       },
       // An app's item (an app set to Chats in Settings › Notifications): open that app, at the item when it says where.
