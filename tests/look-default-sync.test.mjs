@@ -186,5 +186,3 @@ test('simultaneous independent default, per-device view and tweak edits all conv
   assert.equal(b.doc.views.desktop.id, 'qa/view');
   for (const x of [a,d]) { assert.equal(x.state.defaults[DEFAULT], false); assert.deepEqual(x.state.views, { desktop: 'qa/view', phone: 'qa/view' }); assert.equal(x.state.mix['qa/view'], true); }
 });
-
-
