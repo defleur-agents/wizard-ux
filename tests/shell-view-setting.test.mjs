@@ -16,7 +16,7 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   let active = [];
   const loads = [];
   const s = { console, Map, Set, Date, String, URL, Event, AbortSignal, CSS: { escape: String }, setTimeout, clearTimeout, setInterval, clearInterval, JSON,
-    document: { activeElement: null, baseURI: 'https://box.test/wizard-os-home/', addEventListener() {}, querySelector: () => null },
+    document: { activeElement: null, documentElement: { dataset: { shell } }, baseURI: 'https://box.test/wizard-os-home/', addEventListener() {}, querySelector: () => null },
     navigator: { userAgent: 'Desktop' }, location: { host: 'box.test', href: 'https://box.test/wizard-os-home/index.html', origin: 'https://box.test' },
     localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v) } };
   s.window = s;
@@ -51,7 +51,9 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Mig
   const html = await look(b);
   assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'the Settings row is gone');
   assert.deepEqual(viewSwitches(html), [['miguel/orb-shell', 'Different shell view - Orb', false], ['miguel/apps-home', 'Different shell view - Apps', false]]);
-  for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^>]*><span class="st-tx"><b>[^<]+</b><small class="tw-by">by Miguel</small>`), 'listed as Miguel\'s');
+  // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
+  assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
+  for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">${shell === 'desktop' ? 'Desktop' : 'Phone'} view · by (Miguel|miguel)<`), id + ' labelled by Miguel, for this device type');
   assert.deepEqual(b.views(), [], 'a fresh device wears no view (Desks)');
 });
 
@@ -70,8 +72,7 @@ test('turning one on turns the other off; off again = Desks; one tweak reload pe
   b.tap('miguel/apps-home'); await tick(); b.tap('miguel/apps-home'); await tick();
   assert.deepEqual(b.views(), [], 'switching the worn one off = Desks (the other does not come back)');
   b.tap('miguel/apps-home'); await tick();
-  const mix = JSON.parse(storage.get(KEY)).mix;
-  assert.equal(mix['miguel/apps-home'], true); assert.notEqual(mix['miguel/orb-shell'], true, 'never stored both on');
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/apps-home' }, 'one view stored for this device type');
   const again = box({ storage }); await again.E.refresh();
   assert.deepEqual(again.views(), ['miguel/apps-home'], 'a reload keeps Apps');
   // api.settings.toggleTweak (WosExperience.toggle) takes the same path
@@ -141,4 +142,56 @@ test('core keeps only the exclusivity: no Shell view row, no chooseView, no Migu
   // Settings stays reachable in every view: neither view hides the gear
   for (const f of ['web/layouts/orb/layout.css', 'web/layouts/apps/layout.css', 'web/layouts/apps/chrome.css', 'web/layouts/orb/phone.css', 'web/tweaks/miguel/orb-shell/tweak.css', 'web/tweaks/miguel/apps-home/tweak.css'])
     assert.doesNotMatch(read(f).replace(/\/\*[\s\S]*?\*\//g, ''), /#settingsBtn[^{]*\{[^}]*display:\s*none|\.gear[^{]*\{[^}]*display:\s*none/, f);
+});
+
+// Per device type (Miguel, 4 Nov 2026): the desktop and the phone each wear their own view (or Desks). The same browser
+// storage serves both shells here, as it does for desktop.html and index.html on one origin.
+test('per shell type: the desktop wears AI apps while the phone wears Orb; each switch acts on its own type only', async () => {
+  const storage = new Map();
+  const worn = b => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
+  const desk = box({ storage }); await desk.E.refresh();
+  desk.tap('miguel/ai-apps'); await tick();
+  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
+  assert.deepEqual(worn(phone), [], 'the desktop choice leaves the phone on Desks');
+  phone.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(worn(phone), ['miguel/orb-shell']);
+  const again = box({ storage }); await again.E.refresh();
+  assert.deepEqual(worn(again), ['miguel/ai-apps'], 'the phone choice leaves the desktop on AI apps');
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/ai-apps', phone: 'miguel/orb-shell' });
+  const html = await look(phone);
+  assert.doesNotMatch(html, /data-tweak-toggle="miguel\/ai-apps"/, 'a desktop-only view is not offered on the phone');
+  assert.deepEqual(viewSwitches(html).map(v => v[2]), [true, false]);
+  await phone.E.toggle('miguel/ai-apps'); assert.deepEqual(worn(phone), ['miguel/orb-shell'], 'and cannot be switched on there');
+  phone.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(worn(phone), [], 'off on the phone = Desks on the phone');
+  const last = box({ storage }); await last.E.refresh(); assert.deepEqual(worn(last), ['miguel/ai-apps'], 'the desktop keeps its view');
+});
+
+test('the phone ignores a desktop-only view: an old mix with AI apps on, or a stray phone choice of it, is Desks there', async () => {
+  const legacy = () => new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/ai-apps': true, 'miguel/snooze-someday': true } })]]);
+  const desk = box({ storage: legacy() }); await desk.E.refresh();
+  assert.ok(desk.active().includes('miguel/ai-apps'), 'desktop: the old single view keeps its meaning');
+  const phone = box({ shell: 'phone', storage: legacy() }); await phone.E.refresh();
+  assert.ok(!phone.active().includes('miguel/ai-apps') && phone.active().includes('miguel/snooze-someday'), 'phone: stock view, other tweaks kept');
+  const stray = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: {}, views: { phone: 'miguel/ai-apps' } })]]);
+  const p2 = box({ shell: 'phone', storage: stray }); await p2.E.refresh();
+  assert.deepEqual(p2.views(), []); assert.ok(!p2.active().includes('miguel/ai-apps'));
+  assert.deepEqual(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).shells, ['desktop']);
+  for (const id of VIEWS) assert.deepEqual(JSON.parse(read(`web/tweaks/${id}/manifest.json`)).shells, ['desktop', 'phone'], id);
+});
+
+
+test('legacy single Apps choice maps to both supported shells until each explicitly chooses otherwise', async () => {
+  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/apps-home': true } })]]);
+  const desk = box({ storage }); await desk.E.refresh();
+  assert.deepEqual(desk.views(), ['miguel/apps-home']);
+  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
+  assert.deepEqual(phone.views(), ['miguel/apps-home']);
+  await desk.E.toggle('miguel/orb-shell');
+  const phoneAgain = box({ shell: 'phone', storage }); await phoneAgain.E.refresh();
+  assert.deepEqual(phoneAgain.views(), ['miguel/apps-home'], 'choosing desktop never drops legacy phone choice');
+  await phoneAgain.E.toggle('miguel/apps-home');
+  const deskAgain = box({ storage }); await deskAgain.E.refresh();
+  assert.deepEqual(deskAgain.views(), ['miguel/orb-shell']);
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/orb-shell', phone: '' });
 });
