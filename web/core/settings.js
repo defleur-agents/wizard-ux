@@ -124,7 +124,7 @@
     if (action === 'troubleshoot') { window.WizReach?.open(); return; }
     if (origin === 'everywhere') {
       if (action === 'retry') native()?.retryUnsent?.(id);
-      if (action === 'delete') native()?.deleteUnsent?.(id);
+      if (action === 'delete') { for (const row of ctx.root?.querySelectorAll('[data-ubid]') || []) if (row.dataset.ubid === id) { const b = row.querySelector('[data-ub="delete"]'); if (b) { b.disabled = true; b.textContent = 'Deleting…'; } } native()?.deleteUnsent?.(id); }
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
@@ -144,7 +144,12 @@
       const ext = /aac/.test(it.audioType) ? 'aac' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /wav/.test(it.audioType) ? 'wav' : /ogg/.test(it.audioType) ? 'ogg' : 'webm';
       a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); return;
     }
-    if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
+    if (action === 'delete') {
+      // Custody deletes must be durable before losing the original; acknowledge the tap now.
+      const buttons = [...(ctx.root?.querySelectorAll('[data-ubid]') || [])].filter(row => row.dataset.ubid === id).map(row => row.querySelector('[data-ub="delete"]')).filter(Boolean);
+      for (const b of buttons) { if (b.disabled) return; b.disabled = true; b.textContent = 'Deleting…'; }
+      Promise.resolve(ctx.outbox.remove(id)).then(ok => { ctx.render?.(); ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400); }, () => { for (const b of buttons) { b.disabled = false; b.textContent = 'Delete'; } ctx.toast?.('!', 'Could not save deletion · original kept', 2400); });
+    }
     if (action === 'open') ctx.openThread(it.sessionId);
     // Moving an audio-bearing/in-flight record to a text composer would lose custody. Never do it.
     if (action === 'edit') {
@@ -224,7 +229,7 @@
       if (!opened) ctx.toast?.('✎', esc(`Ask your Wizard: “change my ${M.active?.name || 'own'} skin so…”`), 4000);
     }
   }
-  // Settings › Look: every color in one grid (any author), then tweaks as their own choice. My skin stays an overlay.
+  // Settings › Look: choose a skin family, then one of its colours. Tweaks stay independent.
   const lookName = (S, id) => S.list.find(k => k.id === id)?.name || '';
   // Skin picker: a grid of small preview cards, one per look, in the skins' own order. Each card is a miniature of
   // that look (its background, a reply and a sent bubble, the dock with its orb) drawn in CSS from its own tokens, with
@@ -276,9 +281,9 @@
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
   }
-  function ownTiles(S) {
+  function ownTiles(S, removing) {
     const M = window.WosMySkin;
-    return (M?.recipes || []).map(skin => {
+    return (M?.recipes || []).filter(skin => skin.id !== removing).map(skin => {
       const palette = S.list.find(k => k.id === skin.base);
       return `<button type="button" class="skp-card" data-ownskin="${esc(skin.id)}" aria-pressed="${M.active?.id === skin.id}" aria-label="${esc(skin.name)}">${palette ? mini(palette) : ''}<span class="skp-nm">${esc(skin.name)}</span></button>`;
     }).join('');
@@ -292,6 +297,7 @@
     try {
       let [items, map] = await Promise.all([window.WosExperience.installed(), window.WosExperience.defaults()]);
       if (ctx.skinDraft !== draft || draft.seq !== seq) return;
+      if (draft.recoveryTweaks) map = { ...map, ...draft.recoveryTweaks };
       // A replacement group (two Home maps) is one switch: keep only the member that would load, so the draft never
       // shows two and never saves the hidden one as off (any member saved off turns the whole group off).
       for (const g of window.WosExperience.groups?.() || []) {
@@ -305,19 +311,31 @@
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
   }
   function newSkinHtml(S, draft) {
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><h4>Base skin</h4><div class="skp" role="group" aria-label="Base skins">${S.list.map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    const family = S.families.find(f => f.id === S.familyOf(draft.base));
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+  }
+  function deviceSkinRecovery() {
+    const previews = window.WosMySkin?.previews || [];
+    if (!previews.length) return '';
+    return `<details class="st-advanced"><summary>Recover device skins</summary><p>These previews are still on this device. Recover opens New skin; nothing is saved until you choose Create.</p>${previews.map(s => `<div><button type="button" data-skin-preview="${esc(s.id)}">Recover ${esc(s.name)}</button><button type="button" data-skin-preview-dismiss="${esc(s.id)}">Dismiss preview</button></div>`).join('')}</details>`;
   }
   function lookHtml(S, ctx) {
     window.WosExperience?.installed?.().catch(() => {}); // warm the tweak list for New skin
     if (ctx.skinDraft) return newSkinHtml(S, ctx.skinDraft);
     const cur = S.current, base = lookName(S, cur), own = window.WosMySkin?.active;
     loadFaces();
-    // One list of every color, whoever made it (James's five, Novaire's two, Miguel's four), in the skins' own order.
-    const colours = `<div class="skp-colours"><div class="skp" role="group" aria-label="${esc(own?.name || 'All')} skins">${S.list.map(k => skinCard(k, cur)).join('')}</div></div>`;
-    const mine = window.WosMySkin ? `<div class="skp-own"><h4>Your skins</h4><div class="skp skp-families" role="group" aria-label="Your skins">${ownTiles(S)}${newTile()}</div></div>` : '';
+    const fams = S.families || [{ id: cur, name: base, palettes: S.list.map(k => k.id) }];
+    const worn = S.familyOf?.(cur) || fams[0]?.id;
+    const family = fams.find(f => f.id === worn) || fams[0];
+    const tiles = fams.map(f => {
+      const k = S.list.find(k => k.id === (S.lastIn?.(f.id) || f.palettes[0]));
+      return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
+    }).join('');
+    const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${colours}</div>${tweakRows(S)}${mine}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -329,18 +347,33 @@
     if (!ctx.skinDraft) return false;
     ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-newskin]')?.focus(); return true;
   }, input(ctx, el) {
-    if (!ctx.skinDraft) return;
+    if (!ctx.skinDraft || ctx.skinDraft.saving) return;
     if (el.matches('[data-skin-name]')) ctx.skinDraft.name = el.value;
+    if (el.matches('[data-skin-base]')) {
+      const S = window.WosSkin, family = S.families.find(f => f.id === el.value);
+      if (family && S.familyOf(ctx.skinDraft.base) !== family.id) {
+        ctx.skinDraft.base = S.lastIn(family.id); ctx.render();
+      }
+    }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
       if (ctx.skinSaving) return true; ctx.skinSaving = true;
-      skinAction(() => M.remove(ctx.skinRemove.id), snapshot => { ctx.skinSaving = false; ctx.skinUndo = snapshot; ctx.skinRemove = null; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
+      const removed = ctx.skinRemove; ctx.skinRemoving = removed.id; ctx.skinRemove = null; ctx.render();
+      skinAction(() => M.remove(removed.id), snapshot => { ctx.skinSaving = false; ctx.skinRemoving = null; ctx.skinUndo = snapshot; ctx.render(); ctx.root.querySelector('[data-skin-undo]')?.focus(); }, e => { ctx.skinSaving = false; ctx.skinRemoving = null; if (!ctx.skinRemove) ctx.skinRemove = removed; ctx.render(); ctx.toast?.('!', e.message || 'Could not remove skin', 3000); }); return true;
     }
     if (ctx.skinRemove) return true;
     if (el.closest('[data-skin-undo]')) { if (ctx.skinSaving) return true; ctx.skinSaving = true; skinAction(() => M.restore(ctx.skinUndo), () => { ctx.skinSaving = false; ctx.skinUndo = null; ctx.render(); }, e => { ctx.skinSaving = false; ctx.toast?.('!', e.message || 'Could not restore skin', 3000); }); return true; }
     if (el.closest('[data-skin-undo-dismiss]')) { ctx.skinUndo = null; ctx.render(); return true; }
+    const dismiss = el.closest('[data-skin-preview-dismiss]');
+    if (dismiss) { M.dismissPreview(dismiss.dataset.skinPreviewDismiss); ctx.render(); return true; }
+    const preview = el.closest('[data-skin-preview]');
+    if (preview) {
+      const saved = M.previews.find(s => s.id === preview.dataset.skinPreview); if (!saved) return true;
+      ctx.skinDraft = { name: saved.name, items: [], tweaks: {}, previewId: saved.id, recoveryTweaks: { ...saved.tweaks } };
+      void draftDefaults(ctx, saved.base); return true;
+    }
     if (el.closest('[data-newskin]')) {
       ctx.skinDraft = { name: '', items: [], tweaks: {} };
       void draftDefaults(ctx, S.current);
@@ -348,12 +381,14 @@
     }
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
+      if (draft.saving) return true;
       if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
         if (draft.saving) return true; draft.saving = true; ctx.render();
-        skinAction(() => M.create(draft), () => { draft.saving = false; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; ctx.render(); }); return true;
+        const snapshot = { name: draft.name, base: draft.base, tweaks: { ...draft.tweaks } };
+        skinAction(() => M.create(snapshot), () => { if (draft.previewId) M.dismissPreview(draft.previewId); draft.saving = false; if (ctx.skinDraft !== draft) return; ctx.skinDraft = null; ctx.render(); ctx.root.querySelector('[data-ownskin][aria-pressed="true"]')?.focus(); }, e => { draft.saving = false; draft.validation = e.message; if (ctx.skinDraft === draft) ctx.render(); }); return true;
       }
       return false;
     }
@@ -368,6 +403,8 @@
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
     const quick = el.closest('[data-tweakauthor]');
     if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
+    const family = el.closest('[data-skinfamily]');
+    if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
     skinAction(() => M?.active ? M.update({ base: b.dataset.skinpick }) : S.set(b.dataset.skinpick), () => {
       void window.WosExperience?.chooseSkin?.();
@@ -500,14 +537,27 @@
   register({ id: 'selection', html: () => window.WosSelMenu?.html() || '', act: (ctx, el) => window.WosSelMenu?.act(el) });
   // Desktop bar: one mic by default; the other three voice buttons live in its menu and on their keys, and this puts
   // them back in the bar (James, 31 Oct 2026: fewer icons on the right, nothing new in their place).
+  // Phone shell only (core/orb-switcher.js is not loaded on the desktop): the row opens the Orb switcher sheet.
+  register({ id: 'orb-switcher', page: 'phone', aliases: ['orb-switcher', 'orb-radial'], available: () => !!window.WosOrbSwitcher?.available,
+    html: () => window.WosOrbSwitcher.settingsRow(),
+    act: (ctx, el) => { if (!el.closest('[data-orbsw-open]')) return false; window.WosOrbSwitcher.openSettings(); return true; } });
   register({ id: 'bar-voice-buttons', page: 'voice', available: ctx => !!ctx?.barMics?.(),
     html: ctx => { const on = !!ctx.barMics().get(), k = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt+';
       return `<div class="st-group" data-bar-mics><h4>Top bar</h4><button class="st-row" data-bar-mics-set role="switch" aria-checked="${on}"><span class="st-tx"><b>Show every voice button</b><small>${esc(`New voice chat, Dictate and Tell the computer beside the mic. Off, they are in the mic’s menu (right-click or hold) and on ${k}V, ${k}D and ${k}C.`)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`; },
     act: (ctx, el) => { const m = ctx.barMics?.(); if (!m || !el.closest('[data-bar-mics-set]')) return false; m.set(!m.get()); ctx.render?.(); return true; } });
+  // Moved from the phone adapter: one About renderer, native data/actions only in WosDevice.
+  function deviceAboutHtml() {
+    const d = window.WosDevice?.settingsState?.(); if (!d) return '';
+    return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
+      <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${d.notificationsAllowed ? `On · when ${esc(window.WizConfig.agent())} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+      <button class="st-row" data-dvupd data-settings-version="phone"><span class="st-tx"><b>Phone app (Android) ${esc(d.installed || '· version unavailable')}</b><small>${esc(d.updateDescription)}</small></span><span class="st-go">›</span></button>`;
+  }
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
     // No separate "Check for updates": the shell checks every minute and the update card offers Reload.
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
+    const observed = window.WizWebUpdate?.firstObservedVersion || '';
+    const device = deviceAboutHtml();
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div><p class="st-hint">The interface and your Wizard’s server update separately.${device ? ' The Android phone app updates separately too. Their version numbers are not comparable.' : ''}</p>${device}<details data-settings-technical><summary>Technical details</summary><div class="st-row static" data-settings-version="interface"><span class="st-tx"><b>Interface revision at first check</b><small title="${esc(observed)}">${esc(observed ? observed.slice(0, 8) : 'Not available yet')}</small></span></div><p class="st-hint" data-settings-observed-full style="overflow-wrap:anywhere">${esc(observed || 'Not available yet')}</p><p class="st-hint">The first successful version-file check, not a stamp of the code loaded in this page.</p></details>${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   // Settings › Resources shows the Home bars themselves (core/resources.js draws them into this host and keeps them
   // live); tapping a bar opens the same detail sheet as on Home (devices, health, AI accounts with reset times).

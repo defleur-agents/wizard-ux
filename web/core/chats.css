@@ -1,4 +1,15 @@
 /* Wizard UX core: Chats (list, thread, composer, attachments, voice notes, unsent bubbles). Shared by every shell. */
+.ch-incognito { border: 2px dashed var(--wz-accent, var(--accent)); border-radius: 12px; overflow: hidden; }
+.ch-incog-note { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; background: var(--wz-panel, var(--card)); color: var(--wz-text, var(--ink)); font-size: .75rem; line-height: 1.5; border-bottom: 1px solid var(--wz-border, var(--line)); }
+.ch-incog-note b { font-size: .8125rem; }
+.ch-incog-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 8px; color: var(--wz-text); background: var(--wz-surface); border-radius: 12px; flex: 0 0 auto; }
+.ch-incog-toggle:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+.ch-incognito .ch-head .pbtn { flex: 0 0 auto; }
+.ch-incognito .ch-head .ti { flex-direction: column; align-items: flex-start; gap: 2px; }
+.ch-incognito .ch-incog-toggle > span:first-child { display: none; }
+.ch-incognito .ch-compose { flex: 0 0 auto; }
+.ch-incognito .ch-msgs { min-height: 0; overflow-y: auto; }
+
 /* Native app only: a real root-scrolling WebView for Android's built-in capture.
  * No clones, capture callbacks, scroll proxies or alternate chat renderer. */
 html.wos-doc-scroll { height: auto !important; overflow-y: auto !important; overflow-x: clip !important; }
@@ -717,27 +728,7 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-unsent .tx small { font-size: 12.5px; opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ch-unsent .go { flex: none; font-size: 13px; font-weight: 700; color: var(--violet-2, #b99bff); }
 
-/* Morning: the daily check-in pinned at the top of Ready (core/chats.js morningCard). */
-.ch-morning { display: flex; align-items: center; gap: 12px; width: 100%; margin: 4px 0 10px; padding: 13px 14px; border-radius: 18px; text-align: left; color: inherit; font: inherit; cursor: pointer;
-  border: 1px solid rgba(255, 184, 107, .38); background: linear-gradient(135deg, rgba(255, 184, 107, .15), rgba(255, 111, 145, .09) 45%, rgba(143, 99, 255, .08)); }
-.ch-morning:active { transform: scale(.99); }
-.ch-morning-w { position: relative; margin: 4px 0 10px; }
-.ch-morning-w > .ch-morning { margin: 0; padding-right: 52px; }
-.ch-morning-x { position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 40px; height: 40px; border: 0; border-radius: 50%; background: none; color: inherit; font: inherit; font-size: 22px; line-height: 1; opacity: .6; cursor: pointer; }
-.ch-morning-x:hover, .ch-morning-x:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
-.ch-morning .sun { flex: none; width: 40px; height: 40px; border-radius: 50%; background: radial-gradient(circle at 50% 70%, #fff3d6, #ffb86b 40%, #ff6f91 75%); box-shadow: 0 0 18px rgba(255, 184, 107, .4); }
-.ch-morning .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ch-morning .hd { display: flex; align-items: center; gap: 8px; }
-.ch-morning .hd b { font-size: 16px; }
-.ch-morning .hd i { font-style: normal; font-size: 10.5px; letter-spacing: .05em; text-transform: uppercase; color: #ffb86b; border: 1px solid rgba(255, 184, 107, .4); border-radius: 999px; padding: 0 7px; }
-.ch-morning small { color: var(--wz-text-secondary, rgba(239, 234, 255, .7)); font-size: 13px; }
-.ch-morning .dots { display: flex; gap: 5px; margin-top: 4px; }
-.ch-morning .dots i { width: 24px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .12); }
-.ch-morning .dots i.on { background: linear-gradient(90deg, #ffb86b, #ff6f91); }
-.ch-morning .go { flex: none; font-size: 22px; opacity: .6; }
-.ch-morning.done { padding: 9px 14px; border-color: var(--wz-border, rgba(205, 190, 255, .13)); background: rgba(255, 255, 255, .03); }
-.ch-morning.done .sun { width: 26px; height: 26px; opacity: .7; }
-.ch-morning.done .hd i { color: #4fe0a8; border-color: rgba(79, 224, 168, .4); }
+
 
 /* Unified Chats (18 Oct 2026): a private agent's thread in the owner's main list wears a small lock; its header says
    Private; a private chat continuing a standard thread shows what goes with its first message. */
