@@ -41,9 +41,9 @@ async function boot(skin, saved) {
 }
 
 test('a Mizel skin with Miguel\'s tweaks on (or an old miguel/layout switch saved) loads no layout tweak', async () => {
-  const his = await boot('obsidian-light', { mix: { 'miguel/model-pills': true } });
-  assert.ok(his.active.includes('miguel/model-pills'), 'his other tweaks still load');
+  const his = await boot('obsidian-light', { mix: { 'miguel/send-and-go': true } });
+  assert.ok(his.active.includes('miguel/send-and-go'), 'his other tweaks still load');
   assert.ok(!his.active.includes('miguel/layout'), 'no layout migration');
-  const old = await boot('landscapes', { mix: { 'miguel/model-pills': true, 'miguel/layout': true } });
+  const old = await boot('landscapes', { mix: { 'miguel/send-and-go': true, 'miguel/layout': true } });
   assert.ok(!old.active.includes('miguel/layout'), 'a saved switch for the retired id does nothing');
 });
