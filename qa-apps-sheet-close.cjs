@@ -80,6 +80,7 @@ const bootstrap = {
       page.on('pageerror', error => errors.push(error.message));
       await page.goto(origin + '/wizard-os-home/?shell=phone&myskin=off', { waitUntil: 'load' });
       await page.waitForFunction(() => window.__wos?.live?.ok && window.WizCore?.apps, null, { timeout: 20000 });
+      await page.locator('#orb').focus();
       await page.evaluate(() => window.__wos.openSheet('launcher'));
       await page.waitForFunction(() => window.__wos.sheet === 'launcher' && document.querySelector('#launcher.open'));
       await page.locator('#launcher').evaluate(async element => {
@@ -93,22 +94,38 @@ const bootstrap = {
       const geometry = await close.evaluate(element => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
-        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        const bar = getComputedStyle(element, '::after');
+        const points = [
+          [rect.left + rect.width / 2, rect.top + 1],
+          [rect.right - 1, rect.top + rect.height / 2],
+          [rect.left + rect.width / 2, rect.bottom - 1],
+          [rect.left + 1, rect.top + rect.height / 2],
+          [rect.left + rect.width / 2, rect.top + rect.height / 2],
+        ];
+        const hits = points.map(([x, y]) => document.elementFromPoint(x, y));
+        const sheet = element.closest('.sheet').getBoundingClientRect();
         const orb = document.querySelector('#orbWrap')?.getBoundingClientRect();
         return {
           width: rect.width,
           height: rect.height,
           top: rect.top,
           bottom: rect.bottom,
-          visibleBar: style.backgroundColor !== 'rgba(0, 0, 0, 0)',
-          ownsHit: hit === element || element.contains(hit),
-          hit: hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${hit.className}` : 'none',
+          transparentTarget: style.backgroundColor === 'rgba(0, 0, 0, 0)',
+          visibleBar: bar.backgroundColor !== 'rgba(0, 0, 0, 0)',
+          barWidth: parseFloat(bar.width),
+          barHeight: parseFloat(bar.height),
+          insideSheet: rect.top >= sheet.top && rect.bottom <= sheet.bottom,
+          ownsHits: hits.every(hit => hit === element || element.contains(hit)),
+          hits: hits.map(hit => hit ? `${hit.tagName.toLowerCase()}#${hit.id}.${hit.className}` : 'none'),
           orb: orb ? { left: orb.left, top: orb.top, right: orb.right, bottom: orb.bottom } : null,
         };
       });
       assert.ok(geometry.width >= 44 && geometry.height >= 44, `${skin}: grip close target is at least 44px (${geometry.width}x${geometry.height})`);
+      assert.equal(geometry.transparentTarget, true, `${skin}: enlarged target remains invisible`);
       assert.equal(geometry.visibleBar, true, `${skin}: close keeps a visible grip`);
-      assert.equal(geometry.ownsHit, true, `${skin}: grip owns its centre hit point (${JSON.stringify(geometry)})`);
+      assert.deepEqual([geometry.barWidth, geometry.barHeight], [40, 4], `${skin}: visible grip remains 40x4px`);
+      assert.equal(geometry.insideSheet, true, `${skin}: full close target stays inside the clipped sheet (${JSON.stringify(geometry)})`);
+      assert.equal(geometry.ownsHits, true, `${skin}: grip owns its centre and edge hit points (${JSON.stringify(geometry)})`);
       await page.screenshot({ path: path.join(out, `${skin}.png`), animations: 'disabled' });
 
       await close.tap();
@@ -117,6 +134,7 @@ const bootstrap = {
       await close.focus();
       await close.press('Enter');
       await page.waitForFunction(() => window.__wos.sheet === null && !document.querySelector('#launcher.open'));
+      assert.equal(await page.evaluate(() => document.activeElement?.id), 'orb', `${skin}: keyboard close restores the opener`);
       assert.deepEqual(errors, [], `${skin}: no page errors`);
       report.push({ skin, geometry, tapClosed: true, keyboardClosed: true });
       await context.close();
