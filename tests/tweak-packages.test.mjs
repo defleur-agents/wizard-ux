@@ -7,7 +7,9 @@ const catalog = JSON.parse(read('web/tweaks/catalog.json'));
 const asking = (id, capabilities) => ({ id, name: id, version: '1.0.0', author: id.split('/')[0], apiVersion: 1, capabilities, description: 'test fixture' });
 for (const id of catalog.tweaks) {
   const check = (await import(new URL(`../web/tweaks/${id}/contract.mjs`, import.meta.url))).default;
-  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/now-playing'].includes(id) ? 'desktop' : 'phone'));
+  test(`${id}: shipped contract mounts / tears down against the shell fixture`, () => contract(id, check, ['miguel/send-and-go', 'miguel/orb-shell', 'miguel/now-playing'].includes(id) ? 'desktop' : 'phone'));
+  // The Orbs view and its switch act on both shells (the phone: Home only).
+  if (id === 'miguel/orb-shell') test(`${id}: shipped contract on the phone shell too`, () => contract(id, check, 'phone'));
 }
 test('the six v1 slot names remain in core markup; removing / renaming requires an API bump', () => {
   const baseline = ['thread-switch-row-end','thread-header-actions','list-top','composer-end','home-top','dock-end'];
@@ -42,7 +44,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   const storage = new Map([['wos.skin', 'obsidian']]); let skin = 'obsidian', active = [];
   const profiles = { miguel: { id: 'miguel', name: 'Miguel', version: 1, tweaks: ['miguel/send-and-go'] }, wizard: JSON.parse(read('web/tweaks/wizard/profile.json')) };
   const fams = [{ id: 'wizard', tweaks: 'wizard', palettes: ['grove'] }, { id: 'mizel', tweaks: 'miguel', palettes: ['obsidian', 'landscapes'] }];
-  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
+  const window = { WosSkin: { get current() { return skin; }, families: fams, familyOf: id => fams.find(f => f.palettes.includes(id)).id }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids.filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)); } }, addEventListener() {}, dispatchEvent() {} };
   const ctx = { window, setTimeout, document: { baseURI:'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem:k=>storage.get(k), setItem:(k,v)=>storage.set(k,v) }, fetch: async url => ({ ok:true, json: async () => { const who = url.pathname.match(/tweaks\/([^/]+)\/profile\.json$/)?.[1]; return who ? profiles[who] : JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1])); } }) };
   vm.runInNewContext(read('web/core/experience.js'), ctx); const E = window.WosExperience;
   await E.refresh(); assert.deepEqual(Array.from(active), ['miguel/send-and-go'], 'a device from before keeps what its color brought');
@@ -94,7 +96,7 @@ function wizardExperience(storage = new Map()) {
   vm.runInNewContext(read('web/core/experience.js'), {window, document:{baseURI:'https://wizard.test/wizard-os-home/',addEventListener(){}}, Event, URL, AbortSignal,
     localStorage:{getItem:k=>storage.get(k),setItem:(k,v)=>storage.set(k,v)}, fetch:async url=>{ requests.push(url.pathname); return {ok:true,json:async()=>JSON.parse(read('web/'+url.pathname.split('/wizard-os-home/')[1]))}; }});
   // Notifications in Chats is on by default for the Wizard family; these older checks are about the other tweaks.
-  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => id !== 'wizard/unified-inbox' && id !== 'wizard/machines-home'), all:()=>Array.from(active) };
+  return { window, E:window.WosExperience, storage, requests, skin:id=>{skin=id;}, active:()=>Array.from(active).filter(id => !JSON.parse(read('web/tweaks/catalog.json')).defaults.includes(id)), all:()=>Array.from(active) };
 }
 test('profile default-off applies until the owner stores a deliberate choice, including an empty off list', async () => {
   let f = wizardExperience(); await f.E.refresh(); assert.ok(!f.all().some(id => id.endsWith('/machines-home')), 'James, 31 Oct 2026: the Wizard skins keep the classic Home (no network map by default)'); assert.deepEqual(f.active(), []); assert.equal(f.E.state.tweaks.find(t => t.id === 'wizard/two-orbs').on, false);

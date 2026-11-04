@@ -23,6 +23,9 @@
     "miguel/reply-summary",
     "miguel/now-playing",
     "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps",
     "miguel/notification-levels"
   ],
   "defaults": [
