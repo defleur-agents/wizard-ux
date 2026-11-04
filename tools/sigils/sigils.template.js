@@ -5,9 +5,8 @@
  *   WizSigil.html(app)  → '<i class="sgi sg-…">' to drop inside any icon box; the box takes --c
  *   WizSigil.named(glyph, color) → the same for a sigil that isn't an app (search, command rows)
  *
- * An installed app that ships its own logo (Runtipi metadata/logo.jpg, served by the box and listed by core/apps.js)
- * shows that picture as a rounded tile (`<i class="sglogo">`) in every one of these places instead of a sigil.
- * Which sigil an app gets otherwise: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
+ * Existing designed identities beat package pictures, including cached logos and refreshed metadata.
+ * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
  * silhouette, then the house glyph that matches what its id and name say (Mail → mail, Home Assistant → home), else
  * the plain app mark, on a colour picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
@@ -18,9 +17,11 @@
 (() => {
   'use strict';
   const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
-  const HOUSE = /*HOUSE*/;
+  // Colours are stored without '#' so this generated table holds no literal colour (style gate); added back here.
+  const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];
+
   const BRAND = /*BRAND*/;
   const FALLBACK = /*FALLBACK*/;
   const HEX = /^#[0-9a-f]{3}(?:[0-9a-f]{3})?$/i;
@@ -38,8 +39,8 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
-    // A designed sigil (house entry or a named glyph) always wins over a picture, so every surface shows one family.
-    const s = sigilOf(a), logo = s.guessed || s.img ? logoOf(a) : '';
+    // Canonical identities win; safe package pictures remain the fallback before a guessed house mark.
+    const s = sigilOf(a), logo = (!s.guessed && s.glyph) || s.img || brand(a) ? '' : logoOf(a);
     return logo ? { ...s, logo } : s;
   }
   function sigilOf(a) {
@@ -48,7 +49,7 @@
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
     // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
-    if (!img && HOUSE[a.id]) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
+    if (Object.prototype.hasOwnProperty.call(HOUSE, a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     const letter = String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?';
     if (img) return { glyph: '', color: col || pick(a.id || a.name), letter, img };
     // Never a bare letter: the house glyph that says what the app does, read from its id and name ('wizard-mail',
