@@ -2042,3 +2042,12 @@ test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes 
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{[^}]*background: color-mix[^}]*border: 1\.5px solid var\(--wz-accent/, 'outlined app keycaps');
 });
+
+test('AI apps view: Now playing has the column\'s first row (slot apps-top), marks playing apps\' rows passively and owns ⌥P', () => {
+  const js = read('web/layouts/ai-apps/desktop.js');
+  assert.match(js, /const vtNow = el\('div', 'aad-vtnow', \{ 'data-slot': 'apps-top' \}\);/);
+  assert.match(js, /vt\.append\(vtHead, vtNow, vtList, vtFoot\)/, 'the pill row sits above the apps, under the header');
+  assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
+  assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
+  assert.match(js, /if \(api\.media\?\.list\?\.\(\)\.length\) put\(vtNow\.firstElementChild, 'P'/, 'its keycap only while something is listed');
+});

@@ -76,6 +76,7 @@ only keycap in the middle is ⌥H's, in the empty middle of Home while nothing c
 | ⌥⇧[ / ⌥⇧] | Move the app in front up / down |
 | ⌥A | Add an app (the + row); again closes the picker |
 | ⌥T | Tidy (the Tidy line) |
+| ⌥P | Pause what played last in any app; again plays it (the Now playing tweak's pill, top of the apps column) |
 | ⌥R | Fold / unfold the right apps column (its ◫) |
 | ⌥W | Close the app in front (a pinned one hides), else the docked chat / notification (✕ / —) |
 | ⌥F | App wide / back to the side (⤢) |
