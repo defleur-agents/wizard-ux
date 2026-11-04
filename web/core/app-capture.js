@@ -730,6 +730,7 @@
     const meeting = meetingBridge();
     if (meeting?.status) {
       const st = await meeting.status(); check();
+      if (typeof st?.recording !== 'boolean') throw fail('native_owner_uncertain', 'Native recorder status is unknown.');
       // A live status without an ID still owns the mic; never invent an ID to recover it.
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
@@ -1047,7 +1048,7 @@
    * microphone loan to the orb, start/stop/save in flight, an unknown native owner) would lose audio, so it
    * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
   function reloadCheck() {
-    const no = reason => ({ safe: false, reason, keeps: null });
+    const no = reason => ({ safe: false, reason, keeps: null, recheck: !active && preparations.size === 0 });
     if (preparations.size) return no('capture_starting');
     if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
@@ -1066,7 +1067,16 @@
       return { safe: true, reason: null, keeps: keep(s.row) };
     }
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
-    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null };
+    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
+      recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
+        [...ownedRows.values()].every(r => r.status === 'pending') };
+  }
+  // Reload may re-probe an abandoned owner, never Stop/Cancel a live session. Recovery holds the same
+  // microphone lock as Start and only commits pending custody; no ack/delete or app data is involved.
+  async function reconcileReload() {
+    await ready;
+    if (!active && !preparations.size) await recover();
+    return reloadCheck();
   }
   // Last moment before the shell reloads with a kept native meeting: let queued backup-PCM writes land (bounded).
   async function prepareReload() {
@@ -1076,7 +1086,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       const live = active?.row.id === r?.id;
       return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,
