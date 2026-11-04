@@ -1466,13 +1466,16 @@ export default function desktop(api) {
     else if (r.view === 'list' && onMainChats(r)) soon(() => { const n = api.route(); if (n.view === 'list' && onMainChats(n)) api.sessions.newChat(); });
     paintTop(r);
   }
-  let lastThread;
+  let lastThread, frontApp = '';
   function paintTop(r = api.route()) {
     if (noteOn() || r.view !== 'thread' || (r.thread && r.thread !== '__new__')) noteWant = false;
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || !onMainChats(r)) draftWant = false;
     noteRouteIntoActions(doc, '.win .dchats .pane-main');
     const h = here(r);
-    if (h.app) closeAll();
+    // an app coming to the front closes the picker; a repaint with the same app in front does not (round 21: ⌥A / + with
+    // an app open flashed shut on the next render)
+    if (h.app && h.app !== frontApp) closeAll();
+    frontApp = h.app;
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
