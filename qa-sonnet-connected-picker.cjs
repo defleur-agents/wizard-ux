@@ -16,8 +16,31 @@ const report = {fixtureOnly:true,tree:TREE,cases:[],requests:[],failures:[]};
 fs.mkdirSync(OUT,{recursive:true});
 function check(value, name, detail) { if (!value) report.failures.push({case:report.current,name,detail}); }
 const persist = () => fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(report,null,2)+'\n');
-async function opaque(page, tag) {
-  const clip = await page.locator('.ch-mpop .ch-sheet-b').evaluate(card => {
+// The label opens popHtml; Mizel's All models switch opens sheetHtml (chat-power.js).
+// A sheet may already show every family. Missing picker/rows must still fail, never skip.
+async function openPicker(page, host, root, wid) {
+  const trigger=host.locator('[data-chmodel]:visible');assert.equal(await trigger.count(),1);
+  const pop=await trigger.evaluate(n=>n.classList.contains('ch-mlabel'));
+  await trigger.click();
+  const picker=host.locator(pop?'.ch-psheet.ch-mpop':'.ch-psheet.ch-msheet');
+  await picker.waitFor({state:'visible'});assert.equal(await host.locator('.ch-psheet').count(),1);
+  const more=picker.locator('[data-mall]'),expanded=await more.count()===1;
+  if(pop)assert(expanded,'fresh compact picker must offer More models');
+  if(expanded)await more.click();
+  assert.equal(await more.count(),0,'More models consumed or complete family sheet already shown');
+  const state=await page.evaluate(({wid,root,pop,expanded})=>{
+    const c=window[root].chats.ch(wid),cur=c.newModel||WosModels.currentRoute('');
+    const list=WosModels[pop?'popHtml':'sheetHtml']({mode:'new',cur,all:expanded}).list;
+    const preferred=WosModels.visible(cur.model,cur.provider).find(o=>WosModels.family(o.value,o.provider)==='claude:sonnet');
+    const o=list.find(o=>o.value===preferred?.value&&o.provider===preferred?.provider);
+    return {list,sonnet:o,def:WosModels.defaultOption(),legacy:WosModels.options.some(o=>o.provider==='claude-subscription-directsdk-experimental'&&o.value==='claude-sonnet-5[1m]'),skin:WosSkin.current,shell:document.documentElement.dataset.shell,pop,expanded};
+  },{wid,root,pop,expanded});
+  assert.equal(await picker.locator('[data-mpick]').count(),state.list.length,'complete actual renderer rows');
+  for(let i=0;i<state.list.length;i++)assert.equal(await picker.locator(`[data-mpick="${i}"]`).count(),1);
+  return {picker,state};
+}
+async function opaque(page, tag, picker) {
+  const clip = await picker.locator('.ch-sheet-b').evaluate(card => {
     card.style.willChange='transform';
     const loud=document.createElement('div'); loud.dataset.qaLoud='';
     loud.style.cssText='position:absolute;inset:0;overflow:hidden;background:repeating-linear-gradient(90deg,#f0f 0 8px,#0f0 8px 16px);color:red;font-size:24px;pointer-events:none';
@@ -97,21 +120,17 @@ async function opaque(page, tag) {
           await page.waitForFunction(s=>WosSkin.current===s&&document.documentElement.dataset.skin===s,skin);
           await page.locator('.mz-intro').waitFor({state:'detached'});
           await page.waitForFunction(()=>!WosExperience?.state.busy);
-          await host.locator('[data-chmodel]').click();await page.locator('.ch-mpop [data-mall]').click();
-          const sonnet=page.locator('.ch-mpop [data-mpick]').filter({hasText:/Sonnet/});await sonnet.waitFor({state:'visible'});await sonnet.scrollIntoViewIfNeeded();
+          const {picker,state}=await openPicker(page,host,root,wid);
+          const index=state.list.findIndex(o=>o.value===state.sonnet?.value&&o.provider===state.sonnet?.provider);
+          assert(index>=0,'preferred Sonnet family route must have a real row');
+          const sonnet=picker.locator(`[data-mpick="${index}"]`);
+          await sonnet.waitFor({state:'visible'});assert.match(await sonnet.innerText(),/Sonnet/);await sonnet.scrollIntoViewIfNeeded();
           await page.waitForTimeout(600); // finite desk/picker transitions, not a readiness substitute
-          const state=await page.evaluate(({wid,root})=>{
-            const a=window[root],c=a.chats.ch(wid),cur=c.newModel||WosModels.currentRoute('');
-            const list=WosModels.popHtml({mode:'new',cur,all:true}).list;
-            const o=list.find(o=>WosModels.family(o.value,o.provider)==='claude:sonnet');
-            return {sonnet:o,def:WosModels.defaultOption(),legacy:WosModels.options.some(o=>o.provider==='claude-subscription-directsdk-experimental'&&o.value==='claude-sonnet-5[1m]'),skin:WosSkin.current,shell:document.documentElement.dataset.shell};
-          },{wid,root});
-          const index=await sonnet.getAttribute('data-mpick');
           check(!!state.sonnet&&state.sonnet.value==='claude-sonnet-5-5'&&state.sonnet.provider==='anthropic','connected-native-sonnet',state.sonnet);
           check(state.def.value==='gpt-6.1-sol'&&state.def.provider==='openai-codex','sol-default-unchanged',state.def);
           check(state.legacy,'legacy-option-retained');
           await page.screenshot({path:path.join(OUT,tag+'-expanded.png'),animations:'disabled'});
-          await opaque(page,tag);
+          await opaque(page,tag,picker);
           await sonnet.click();
           await page.waitForFunction(({root,wid})=>window[root].chats.ch(wid).newModel?.model?.startsWith('claude-sonnet'),{root,wid});
           const selected=await page.evaluate(({root,wid})=>window[root].chats.ch(wid).newModel,{root,wid});
@@ -120,7 +139,10 @@ async function opaque(page, tag) {
           check(await page.evaluate(()=>WosModels.defaultOption().value)==='gpt-6.1-sol','global-default-after-pick');
           await page.screenshot({path:path.join(OUT,tag+'-selected.png'),animations:'disabled'});
           // Return only this disposable draft to Sol; no API persistence or inference.
-          await host.locator('[data-chmodel]').click();await page.locator('.ch-mpop [data-mpick]').filter({hasText:/^Sol$/}).click();
+          const reset=await openPicker(page,host,root,wid);
+          const solIndex=reset.state.list.findIndex(o=>o.value==='gpt-6.1-sol'&&o.provider==='openai-codex');assert(solIndex>=0);
+          await reset.picker.locator(`[data-mpick="${solIndex}"]`).click();
+          await page.waitForFunction(({root,wid})=>{const m=window[root].chats.ch(wid).newModel;return m?.model==='gpt-6.1-sol'&&m.provider==='openai-codex';},{root,wid});
           report.cases.push({tag,state,index,selected});persist();
         }catch(e){report.failures.push({case:tag,name:'harness-error',detail:String(e.stack||e)});await page.screenshot({path:path.join(OUT,tag+'-failure.png')}).catch(()=>{});persist();}
       }
