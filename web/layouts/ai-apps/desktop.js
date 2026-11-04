@@ -972,6 +972,8 @@ export default function desktop(api) {
    * data-aad-role on their desks), the chat between the sidebar and the panel, the app docked left of the open-apps
    * column; hiding the panel leaves its app running on its desk. */
   const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
+  /** the real thread the Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
+  const behindThread = () => { const t = wsps().find(w => w.querySelector('.dchats'))?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
   let pane = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
@@ -1575,6 +1577,9 @@ export default function desktop(api) {
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
+    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
+    // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
+    else if (!chatThread) chatThread = behindThread();
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
@@ -1610,7 +1615,8 @@ export default function desktop(api) {
       }
       return false;
     },
-    shows: desk => !!pane && Number(pane.desk) === desk,
+    // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
+    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && mainChats()?.desk === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
