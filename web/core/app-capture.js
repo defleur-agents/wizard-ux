@@ -728,9 +728,16 @@
     check();
     let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
     const meeting = meetingBridge(); let meetingStatus = null;
+    const readMeetingStatus = async () => {
+      let st;
+      try { st = await meeting.status(); }
+      catch (_) { st = null; }
+      check();
+      if (typeof st?.recording !== 'boolean') recoveryError = fail('native_owner_uncertain', 'Native recorder status is unknown.');
+      return st;
+    };
     if (meeting?.status) {
-      const st = await meeting.status(); check(); meetingStatus = st;
-      if (typeof st?.recording !== 'boolean') throw fail('native_owner_uncertain', 'Native recorder status is unknown.');
+      const st = await readMeetingStatus(); meetingStatus = st;
       // A live status without an ID still owns the mic; never invent an ID to recover it.
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
@@ -772,6 +779,16 @@
         check(); recoveryError = e;
         await put({ ...row, status: 'recoverable', partial: true, recoveryError: e.code || 'native_recovery_failed' });
       }
+    }
+    // Native notification controls can start while rows/chunks are read. Never call the old idle
+    // snapshot fresh truth. A newly seen owner is blocked until a later pass adopts its real ID.
+    if (meeting?.status) {
+      const st = await readMeetingStatus();
+      const knownLive = st?.recording === true && !!st.meetingId && [...recoveryLive].some(id => {
+        const r = ownedRows.get(id); return r?.native === 'wizard-meetings' && r.nativeId === st.meetingId;
+      });
+      const unknown = st?.recording === true && !knownLive;
+      if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
     }
   }
   async function recover() {
@@ -883,6 +900,7 @@
       s.stage = 'shared capture store'; live(await ready);
       s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
       s.stage = 'recovery check'; live(await recoverLocked());
+      if (recoveryError?.code === 'native_owner_uncertain') throw recoveryError;
       const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
@@ -1005,7 +1023,13 @@
   }
   async function pending(appId) {
     validate(appId, {}); await ready; await recover();
-    return Promise.all((await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status)).map(result));
+    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
+    // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
+    if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
+        [...ownedRows.values()].some(r => r.appId === appId && r.status !== 'pending')))
+      throw recoveryError || fail('capture_custody_uncertain', 'Capture ownership is still being recovered.');
+    return Promise.all(selected.map(result));
   }
   async function ack(appId, id) {
     validate(appId, {}); await ready;
@@ -1075,10 +1099,14 @@
   }
   // Reload may re-probe an abandoned owner, never Stop/Cancel a live session. Recovery holds the same
   // microphone lock as Start and only commits pending custody; no ack/delete or app data is involved.
-  async function reconcileReload() {
-    await ready;
-    if (!active && !preparations.size) await recover();
-    return reloadCheck();
+  let reloadReconcile = null;
+  function reconcileReload() {
+    if (!reloadReconcile) reloadReconcile = (async () => {
+      await ready;
+      if (!active && !preparations.size) await recover();
+      return reloadCheck();
+    })().finally(() => { reloadReconcile = null; });
+    return reloadReconcile;
   }
   // Last moment before the shell reloads with a kept native meeting: let queued backup-PCM writes land (bounded).
   async function prepareReload() {

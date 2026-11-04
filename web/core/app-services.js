@@ -679,12 +679,14 @@
     }
     return { ok: !blocking.length, keeps, capture: cap, blocking, recording: blocking.some(b => b.kind === 'capture') };
   }
-  // Right before location.reload() with a kept meeting: let capture writes land, then take the kept app's
-  // frames out. Its own leave guard (a beforeunload prompt meant for a standalone tab) would otherwise stop the
-  // reload; removing a frame fires no beforeunload. The recorder and its journal live outside the frame.
+  // Preparation is non-destructive: an async flush may reveal new work and abort the reload.
   async function prepareReload(plan) {
+    if (plan?.keeps) await window.WizAppCapture?.prepareReload?.();
+  }
+  // Commit only after the caller's final safety check, synchronously adjacent to location.reload().
+  // Removing the kept frame avoids its standalone beforeunload prompt; its recorder lives in the shell.
+  function commitReload(plan) {
     if (!plan?.keeps) return;
-    try { await window.WizAppCapture?.prepareReload?.(); } catch (_) {}
     for (const st of [...frames.values()]) if (st.appId === plan.keeps.appId) {
       // Come back to the same place in the app (the meeting being recorded): frames keep only path + query.
       try { const l = st.frame.contentWindow.location; if (valid(st) && l.hash && l.hash !== '#' && l.hash !== '#/') sessionStorage.setItem(RETURN_KEY, JSON.stringify({ appId: st.appId, path: l.pathname + l.search, hash: l.hash.slice(0, 512), at: Date.now() })); } catch (_) {}
@@ -790,7 +792,7 @@
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, frames: updateFrames }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, commitReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();

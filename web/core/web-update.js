@@ -139,23 +139,35 @@
     // A tapped reload bursts across the screen and says "Reloading..." until the new build paints, so the
     // tap visibly worked instead of the banner looking frozen (every skin).
     if (why === 'tap') { burst(); await new Promise(r => setTimeout(r, 900)); }
-    try { H?.beforeReload?.(); } catch (_) {}
-    window.WizAppReadingPosition?.flush();
     const current = plan();
     if (current.host || !current.ok) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
       H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
     }
+    const sameKept = p => !!current.keeps === !!p.keeps && ['appId','id','meetingId'].every(k => current.keeps?.[k] === p.keeps?.[k]);
     if (current.keeps) {
       log('web:reload-keeps', current.keeps.appId);
-      try { await window.WizAppServices?.update.prepareReload?.(current); } catch (_) {}
+      try { await window.WizAppServices?.update.prepareReload?.(current); }
+      catch (_) {
+        going = false; document.querySelector('.wos-burst')?.remove(); render();
+        H?.toast?.('◌', 'Couldn’t prepare the recorder. Your audio is still kept. Try Reload again.', 3000); return false;
+      }
     }
     // Check after the animation AND asynchronous native backup flush, not merely at the original tap.
     const final = plan();
-    if (final.host || !final.ok) {
+    if (final.host || !final.ok || !sameKept(final)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
       H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
     }
+    try { H?.beforeReload?.(); } catch (_) {}
+    window.WizAppReadingPosition?.flush();
+    // Host persistence hooks may synchronously expose work too. No frame was removed yet.
+    const committed = plan();
+    if (committed.host || !committed.ok || !sameKept(committed)) {
+      going = false; document.querySelector('.wos-burst')?.remove(); render();
+      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+    }
+    window.WizAppServices?.update.commitReload?.(committed);
     log('web:reload', why); window.__wosReloading = why; location.reload(); return true;
   }
   function reload(why, checked = false) {

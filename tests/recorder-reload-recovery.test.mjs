@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import {readFileSync} from 'node:fs';
 import {randomUUID} from 'node:crypto';
-const read = name => readFileSync(new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
+const read = name => readFileSync(process.env.QA_REVIEW_CORE ? process.env.QA_REVIEW_CORE+'/'+name+'.js' : new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
 const source = read('app-capture');
 function extract(from,to,ctx) {
   const a=source.indexOf(from),b=source.indexOf(to,a); assert.ok(a>=0&&b>a,from);
@@ -21,7 +21,7 @@ function service(cap,appId='mizel') {
   const window={WizCore:{apps:()=>({APPS:[{id:appId,name:'Synthetic Recorder',kind:'wizard',url:'/'+appId+'/'}]})},WizAppCapture:{reloadCheck:()=>cap},dispatchEvent(){}};
   vm.runInNewContext(read('app-services'),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
-  return {host,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
+  return {host,window,frame,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
 test('shared durable custody never overrides app-owned capture or dirty-work holds',()=>{
   const cap=capture().reloadCheck(); assert.equal(cap.durable,true);
@@ -71,11 +71,11 @@ test('stale native ID-less reservation becomes pending without deleting metadata
     const data=[row],ctx={ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:false,unknownMeetingActive:false,active:null,
       rows:async()=>data,changed(){},meetingBridge:()=>({status:async()=>st}),W:{},put:async r=>{data[0]=r;ctx.ownedRows.set(r.id,r)},fail:(code,message)=>Object.assign(Error(message),{code}),crypto:{randomUUID},Date};
     extract('  async function recoverLocked(', '  async function recover()',ctx);
-    if(st===null){await assert.rejects(ctx.recoverLocked({}),e=>e.code==='native_owner_uncertain');assert.equal(data[0],row);}
+    if(st===null){await ctx.recoverLocked({});assert.equal(ctx.recoveryError.code,'native_owner_uncertain');assert.equal(data[0].status,'recoverable');}
     else {await ctx.recoverLocked({});assert.equal(data[0].status,st.recording?'recoverable':'pending');assert.equal(data[0].bytes,32000);assert.deepEqual(data[0].meta,row.meta);}
   }
 });
-function updater() {
+function updater(host={}) {
   const timers=[],toasts=[],events=[],els=new Map();let revision='a'.repeat(40),reloads=0,p={ok:true,blocking:[],recording:false,capture:{recheck:true}};
   function element(){return {classList:{toggle(){}},setAttribute(){},dataset:{},addEventListener(){},innerHTML:'',remove(){els.delete('burst')}};}
   const body={appendChild(el){if(el.id)els.set(el.id,el);else if(el.className==='wos-burst')els.set('burst',el)}};
@@ -83,7 +83,7 @@ function updater() {
     querySelector:s=>s==='.wos-burst'?els.get('burst'):null,getElementById:id=>els.get(id),createElement:element,addEventListener(){},querySelectorAll:()=>[]};
   const window={WizAppServices:{update:{announce(){},reloadPlan:()=>p,prepareReload:async()=>{}}},WizAppCapture:{reconcileReload:async()=>{}},WizAppReadingPosition:{flush(){}}};
   const ctx={window,document,URL,location:{href:'https://fixture.invalid/wizard-os-home/',reload(){reloads++}},navigator:{onLine:true},fetch:async u=>({ok:true,text:async()=>revision,json:async()=>({updates:[]})}),setTimeout:(f,ms)=>{timers.push([f,ms]);return timers.length},clearTimeout(){},setInterval:()=>1,clearInterval(){},addEventListener(){}};
-  vm.runInNewContext(read('web-update'),ctx);const web=window.WizWebUpdate;web.init({shell:'phone',mount:()=>body,busy:()=>false,toast:(...a)=>toasts.push(a),log:(...a)=>events.push(a)});
+  vm.runInNewContext(read('web-update'),ctx);const web=window.WizWebUpdate;web.init({shell:'phone',mount:()=>body,busy:()=>false,toast:(...a)=>toasts.push(a),log:(...a)=>events.push(a),...host});
   return {web,window,timers,toasts,els,events,get reloads(){return reloads},set plan(v){p=v},get plan(){return p},set revision(v){revision=v}};
 }
 const tick=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
@@ -109,4 +109,101 @@ test('hung recorder check has a bounded UI wait without cancelling the underlyin
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
   f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');await tick();
   f.timers.find(([,ms])=>ms===15000)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
+});
+
+test('aborted native flush preserves the actual frame, hold and registered observers; commit alone detaches',async()=>{
+  const f=service({safe:true,keeps:{appId:'mizel'}});
+  let finish,removed=0,detached=0;
+  f.frame.removeEventListener=()=>detached++;
+  f.frame.remove=()=>{removed++;f.frame.isConnected=false};
+  f.window.WizAppReadingPosition={};
+  f.window.WizAppCapture.prepareReload=()=>new Promise(r=>finish=r);
+  const hold=f.facade.update.hold('Mizel recording');
+  const plan=f.plan();assert.equal(plan.ok,true);
+  const work=f.host.update.prepareReload(plan);await tick();
+  assert.equal(removed,0);assert.equal(f.host.inspect()[0].ready,true);
+  assert.deepEqual(Array.from(f.host.inspect()[0].holds),['Mizel recording']);
+  // Native flush completes, but unrelated unsaved work now vetoes the shell reload.
+  const notes=f.facade.update.hold('Unsaved notes');finish();await work;
+  assert.equal(f.plan().ok,false);assert.equal(removed,0);assert.equal(f.host.inspect()[0].ready,true);
+  assert.equal(f.host.inspect()[0].holds.length,2);
+  hold.release(); // exact facade is still authorized after an aborted preparation
+  assert.equal(f.host.inspect()[0].holds.length,1);assert.equal(detached,0);
+  notes.release();f.host.update.commitReload(f.plan());
+  assert.equal(removed,1);assert.equal(detached,1);assert.equal(f.host.inspect().length,0);
+});
+test('host becomes busy during animation or native flush: no host hook, commit, removal or reload',async()=>{
+  for(const during of ['animation','flush']) {
+    let busy=false,hooks=0,commits=0,finish;
+    const f=updater({busy:()=>busy,beforeReload:()=>hooks++});
+    f.plan={ok:true,keeps:{appId:'mizel'},blocking:[],recording:false};
+    f.window.WizAppServices.update.commitReload=()=>commits++;
+    f.window.WizAppServices.update.prepareReload=()=>new Promise(r=>finish=r);
+    f.web.reload('tap');if(during==='animation')busy=true;
+    f.timers.find(([,ms])=>ms===900)[0]();await tick();
+    if(during==='flush'){assert.ok(finish);busy=true;finish();await tick();}
+    assert.equal(hooks,0);assert.equal(commits,0);assert.equal(f.reloads,0);
+  }
+});
+test('native preparation failure is not swallowed into a reload',async()=>{
+  const f=updater();let commits=0;f.plan={ok:true,keeps:{appId:'mizel'},blocking:[]};
+  f.window.WizAppServices.update.prepareReload=async()=>{throw Error('unknown flush')};
+  f.window.WizAppServices.update.commitReload=()=>commits++;
+  f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();
+  assert.equal(f.reloads,0);assert.equal(commits,0);assert.match(f.toasts.at(-1)[1],/still kept/);
+});
+test('timed-out Reload retries join one underlying recovery until it settles',async()=>{
+  let release,calls=0;const c=capture({ready:Promise.resolve(),recover:()=>{calls++;return new Promise(r=>release=r)}});
+  const a=c.reconcileReload(),b=c.reconcileReload();assert.equal(a,b);await tick();assert.equal(calls,1);
+  release();await a;c.recover=async()=>calls++;await c.reconcileReload();assert.equal(calls,2);
+});
+for(const status of ['missing','reject'])test(`unknown native ${status} still repairs browser rows without declaring quiet`,async()=>{
+  const original={id:'browser',appId:'recorder-fixture',status:'recording',bytes:32000,meta:{meetingId:'synthetic'}};
+  let row=original;
+  const c={active:null,ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:false,unknownMeetingActive:false,recoveryError:null,
+    rows:async()=>[row],changed(){},meetingBridge:()=>({status:async()=>{if(status==='reject')throw Error('offline');return {};}}),W:{},
+    put:async r=>{row=r;c.ownedRows.set(r.id,r)},fail:(code,message)=>Object.assign(Error(message),{code}),crypto:{randomUUID},Date};
+  extract('  async function recoverLocked(', '  async function recover()',c);await c.recoverLocked({});
+  assert.equal(row.status,'pending');assert.equal(row.bytes,32000);assert.equal(row.meta,original.meta);
+  assert.equal(c.recoveryError.code,'native_owner_uncertain');assert.equal(capture(c).reloadCheck().safe,false);
+});
+test('notification start during row writes invalidates the earlier idle native snapshot',async()=>{
+  let calls=0,row={id:'browser',appId:'fixture',status:'recording',bytes:1,meta:{}};
+  const c={active:null,ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:false,unknownMeetingActive:false,
+    rows:async()=>[row],changed(){},meetingBridge:()=>({status:async()=>++calls===1?{recording:false}:{recording:true,meetingId:'new-native'}}),W:{},
+    put:async r=>{row=r;c.ownedRows.set(r.id,r)},fail:(code,message)=>Object.assign(Error(message),{code}),crypto:{randomUUID},Date};
+  extract('  async function recoverLocked(', '  async function recover()',c);await c.recoverLocked({});
+  assert.equal(calls,2);assert.equal(c.unknownMeetingActive,true);assert.equal(capture(c).reloadCheck().safe,false);
+});
+test('consumed warm preparation release cannot close input now owned by a session',async()=>{
+  let closed=0,stopped=0;
+  const c={preparations:new Map(),active:null,changed(){},validate:()=>({}),crypto:{randomUUID},Date,
+    setTimeout,clearTimeout,DEFAULT_LIMIT:100000,START_BOUND_MS:10000,PROMPT_BOUND_MS:60000,Promise,
+    startRun:async s=>{assert.equal(s.ctx,p.ctx);c.discardPrepared('fixture','warm');throw Error('late setup failure')}};
+  extract('  function discardPrepared(', '  async function streamChunks(',c);
+  const p={id:'warm',appId:'fixture',ctx:{close(){closed++;return Promise.resolve()}},display:Promise.resolve({getTracks:()=>[{stop(){stopped++}}]})};
+  c.preparations.set(p.id,p);
+  // Execute the exact production consumption path, then replay the app's late catch release.
+  extract('  async function start(appId,', '  async function startRun(',c);
+  await assert.rejects(c.start('fixture',{kind:'meeting',preparedId:p.id}),/late setup failure/);
+  c.discardPrepared('fixture',p.id);
+  assert.equal(closed,0);assert.equal(stopped,0);
+});
+test('unknown native status cannot become an empty app-custody proof, but repaired browser takes remain accessible',async()=>{
+  const row={id:'browser',appId:'fixture',status:'pending',bytes:32000};let data=[];
+  const c={validate(){},ready:Promise.resolve(),recover:async()=>{},rows:async()=>data,result:async r=>r,
+    recoveryError:Object.assign(Error('native unknown'),{code:'native_owner_uncertain'}),unknownMeetingActive:false,ownershipLoaded:true,ownedRows:new Map(),
+    fail:(code,message)=>Object.assign(Error(message),{code})};
+  extract('  async function pending(appId)', '  async function ack(',c);
+  await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
+  data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
+});
+test('a different native take appearing during flush cannot inherit the prior take preparation',async()=>{
+  const f=updater();let finish,commits=0;
+  f.plan={ok:true,keeps:{appId:'fixture',id:'original',meetingId:'original'}};
+  f.window.WizAppServices.update.prepareReload=()=>new Promise(r=>finish=r);
+  f.window.WizAppServices.update.commitReload=()=>commits++;
+  f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();
+  f.plan={ok:true,keeps:{appId:'fixture',id:'new',meetingId:'new'}};finish();await tick();
+  assert.equal(f.reloads,0);assert.equal(commits,0);
 });
