@@ -4,7 +4,7 @@
 
 One owner per capability. [Reuse gate](app-reuse-gate.md).
 
-| Offline QA | `tools/qa-synthetic-fence.cjs` | explicit responses; no network |
+| Offline QA | `tools/qa-synthetic-fence.cjs` | offline |
 
 | Optional temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict server capability + local opt-in (off) | durable transcript/draft/outbox |
 
