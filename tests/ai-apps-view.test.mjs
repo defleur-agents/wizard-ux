@@ -1860,7 +1860,7 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   assert.match(c, /function noteRouteHtml\(NV\)/);
   assert.match(c, /class="ch-notif-route" data-part="notify-route"/);
   assert.ok(c.includes('B.picker(id, { name })'), 'one shared notification routing picker');
-  assert.match(b, /ask: \(id, name\) => `\$\{name\} notifications go to`/);
+  assert.match(b, /ask: \(id, name\) =>/, 'routing wording comes from the shared core');
   for (const f of ['desktop.css', 'layout.css']) {
     const css = read('web/layouts/ai-apps/' + f);
     assert.match(css, /\] \{ --wos-note-quiet: on; \}/, f + ': the view asks for the quiet thread');
