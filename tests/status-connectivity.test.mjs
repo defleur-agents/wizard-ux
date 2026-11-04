@@ -109,7 +109,7 @@ test('owner navigation during a lasting failure opens checks; X tucks them into 
   const html = h.pop().innerHTML;
   assert.match(html, /Can’t reach your Wizard/); assert.match(html, /data-wxck="internet"/); assert.match(html, /data-wxck="tailscale"/); assert.match(html, /data-wxck="wizard"/);
   assert.match(html, /wx-ck bad" data-wxck="tailscale"/); assert.match(html, /Open the Tailscale app/);
-  assert.match(html, /saved on this device still open/); assert.doesNotMatch(html, /data-wxoffhelp/, 'no Troubleshooter while it can’t load');
+  assert.match(html, /saved on this device still open/); assert.match(html, /data-wxoffhelp/, 'local Troubleshooter is always available');
   assert.equal(h.ctx.WizCore.status.back(), 'offline', 'Back/Esc hides it');
   assert.equal(h.pop().hidden, true); assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
   assert.match(h.banner().innerHTML, /data-wxnet="reconnecting"/); assert.match(h.banner().innerHTML, /data-wxoffopen/);
@@ -130,10 +130,10 @@ test('opening moves focus to an enabled control inside the dialog; hiding return
   h.ctx.WizCore.status.back();
   assert.equal(before.focused, 1, 'focus goes back where it was');
 });
-test('any Troubleshoot button while Wizard can’t be reached opens the same pop-up', () => {
+test('an explicit Troubleshoot request opens the real app, never the checks pop-up', () => {
   const h = setup(); h.success();
   h.ctx.dispatch = null; h.event('wizreachexplain');
-  assert.equal(h.pop().hidden, false);
+  assert.equal(h.ctx.WizReach.opened, 1); assert.equal(h.pop(), undefined);
 });
 test('a retryable saved message never turns healthy chat reads into a connection warning', () => {
   const h = setup(); h.success(); const O = h.ctx.WosOutbox;
@@ -264,4 +264,14 @@ test('calm offline card (miguel/calm-offline): one dotted path, one short next s
   assert.match(html, /Turn on Tailscale on this device\.<small>/, 'one short step, detail muted');
   assert.match(html, /data-wxoffcheck/); assert.match(html, /data-wxoffnext/);
   h.clickPop('[data-wxoffcheck]'); assert.equal(h.ctx.WosOutbox.retries, 1, 'Check again still retries saved messages');
+});
+
+test('calm offline opt-in stays off in author presets and its text panel is fully opaque', () => {
+  const profile = JSON.parse(readFileSync(new URL('../web/tweaks/miguel/profile.json', import.meta.url), 'utf8'));
+  assert.ok(profile.off.includes('miguel/calm-offline'));
+  const css = readFileSync(new URL('../web/tweaks/miguel/calm-offline/tweak.css', import.meta.url), 'utf8');
+  const panel = css.match(/\.wz-card\.wx-calm\s*\{([^}]+)\}/)[1];
+  assert.match(panel, /background: var\(--wz-base\)/);
+  assert.match(panel, /backdrop-filter: none/);
+  assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
 });

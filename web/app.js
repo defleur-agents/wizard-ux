@@ -366,8 +366,6 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
   addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
-  // A link or view opened from a chat keeps that chat where it was: swiping back lands on the same thread.
-  const openedFrom = (desk, chatId) => !!desk && desk.wins.some(x => W[x]?.from?.win === chatId || W[x]?.bound === chatId);
   function goDesk(n, silent) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
@@ -380,9 +378,6 @@
     if (moved) lastMove = null; // a tap, link or app open is a choice; swipeDesk re-marks swipes
     if (moved) window.WosResources?.back();
     // A Home card's chip is a quick look: leaving the Chats desk puts it back to all chats. Chips James picks stay.
-    // Miguel's skins (Dark, Light, Landscapes): Chats you leave go back to the session list, so coming back to Chats
-    // always starts on the list and it is clear where you are.
-    if (moved && from && ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '')) for (const id of from.wins) { const w = W[id]; if (w?.app === 'chats' && w.thread && !to.wins.includes(id) && !openedFrom(to, id)) chatsBack(w); }
     if (moved) for (const id in W) { const c = CHATS.CH[id]; if (W[id].app === 'chats' && c?.fromCard && !desks[n].wins.includes(id)) { c.fromCard = false; c.coach = false; CHATS.setFilter(W[id], ''); } }
     placeTrack(0, true); renderDots(); save(); scheduleParking(); syncImmersive(); syncReviewChip(); syncBound();
     window.WosScenery?.[idx === HOME ? 'poke' : 'update'](); // scenery hook: Home animates, any other desk freezes it
@@ -418,20 +413,6 @@
     if (typeof paintOrbBadge === 'function') try { paintOrbBadge(); } catch (_) {}
     paintOrbApp();
     const mk = i => `<button class="ddot sig${desks[i].wins.length ? ' filled' : ''}${desks[i].home ? ' dhome' : ''}${isReviewDesk(i) ? ' review' : ''}" data-goto="${i}" aria-label="${esc(deskName(i))}">${deskSigil(i)}</button>`;
-    /* Miguel's skins: a symmetric dock. Exactly three fixed slots each side of the orb (which is the current desk):
-     * the three desks to the left, the three to the right; New desk (an empty-desk outline, not a plus, so it never
-     * reads as New chat) takes the first free slot on the right; unused slots stay as blanks so nothing shifts. */
-    if (['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '')) {
-      const NEWD = '<button class="ddot sig dplus dnew" data-plus aria-label="New desk: pick an app"><span class="dsg"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3.2" stroke-dasharray="3.1 2.6"/></svg></span></button>';
-      const gap = '<span class="dslot" aria-hidden="true"></span>';
-      const near = (h, k) => h.replace('class="ddot', `class="ddot ${k}`);
-      const Ls = [idx - 3, idx - 2, idx - 1].map((i, n) => i >= 0 ? near(mk(i), 'd' + (3 - n)) : gap);
-      let plus = !atPickerEnd();
-      const Rs = [idx + 1, idx + 2, idx + 3].map((i, n) => i < desks.length ? near(mk(i), 'd' + (n + 1)) : plus ? (plus = false, near(NEWD, 'd' + (n + 1))) : gap);
-      $('#dotsL').className = 'desk-dots left sym'; $('#dotsR').className = 'desk-dots right sym';
-      $('#dotsL').innerHTML = Ls.join(''); $('#dotsR').innerHTML = Rs.join('');
-      return;
-    }
     $('#dotsL').className = 'desk-dots left'; $('#dotsR').className = 'desk-dots right';
     const L = []; for (let i = Math.max(0, idx - 3); i < idx; i++) L.push(i);
     const R = []; for (let i = idx + 1; i <= Math.min(desks.length - 1, idx + 3); i++) R.push(i);
@@ -528,11 +509,9 @@
     }).join('');
     const cap = wins.length === 1 && winTitle(wins[0]) !== winApp(wins[0]).name ? winTitle(wins[0]) : '';
     const accessible = wins.length > 1 ? `${wins.length} windows: ${wins.map(w => winTitle(w)).join(', ')}` : name;
-    // Miguel's skins: each desk card carries the same count badge as its dock mark (Ready chats, unread notifications…).
-    const badge = (() => { if (!oursSkin()) return ''; const n = window.WizCore?.workspaceNav?.deskCount(d, W, winApp) || 0; return n ? `<b class="ov-badge" aria-label="${n} new">${window.WizCore.workspaceNav.fmt(n)}</b>` : ''; })();
     return `<div class="ov-card${here ? ' here' : ''}${d.home ? ' ov-home' : ''}${rv ? ' review' : ''}" data-ov="${d.id}" role="button" tabindex="0"${here ? ' aria-current="true"' : ''} style="--ov-c:${primary.color};--ov-c2:${c2}" aria-label="${esc(accessible)}${here ? ', current desk' : ''}${rv ? ', review' : ''}">
       <div class="ov-chrome"><span class="ov-state">${here ? '<span class="ov-here">Here</span>' : ''}${rv ? '<span class="ov-review">Review</span>' : ''}</span>${d.home ? '' : `${ovDl(d)}<button class="ov-x" data-ovx="${d.id}" aria-label="Close ${esc(name)}">✕</button>`}</div>
-      ${badge}<div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
+      <div class="ov-body ov-n${Math.min(wins.length, 4)}">${body}</div>
       <div class="ov-top"><b>${esc(wins.length > 1 ? `${wins.length} windows` : name)}</b>${cap ? `<small>${esc(cap)}</small>` : ''}</div></div>`;
   }
   function renderOverview() {
@@ -556,7 +535,7 @@
   function openOverview(mode) {
     if (!ovEl) { ovEl = document.createElement('div'); ovEl.id = 'overview'; ovEl.className = 'ov'; device.appendChild(ovEl); bindOverview(ovEl); }
     closeSheets(true); if (LINKS && LINKS.isOpen()) LINKS.close();
-    const pill = mode === 'pill' && (oursSkin() || orbUpVar() === 'pill');
+    const pill = mode === 'pill' && orbUpVar() === 'pill';
     if (!ovEl.classList.contains('open')) { ovEl.classList.toggle('ov-pill', pill); device.classList.toggle('ov-pill-open', pill); }
     const wasOpen = ovEl.classList.contains('open');
     renderOverview(); void ovEl.offsetWidth;
@@ -758,7 +737,11 @@
    * user aim, opts.here) may share an existing desk; app openers pass opts through and never pick a desk. */
   // Directly beside the desk in front, Home included (James, 11 Oct 2026: from Home, Yesterday and every other
   // app open on the desk right next to Home; Chats just moves one to the right).
-  function insertPos() { return idx + 1; }
+  // With workspace sync on, desk order is shared by every device, so a phone-only placement reshuffles the owner's
+  // other devices too (Miguel, 1 Nov 2026: Backup and Calendar kept jumping to desktops 1 and 2). Then a new app
+  // opens on a new desk at the end, and an app already open opens on its desk where it is (bringBeside).
+  const sharedDeskOrder = () => { const s = window.WosWorkspaceSync?.current; return !!s && s.on && !s.absent; };
+  function insertPos() { return sharedDeskOrder() ? desks.length : idx + 1; }
   function openWin(obj, opts = {}) {
     if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
     const w = { id: newId(), ...obj }; W[w.id] = w;
@@ -1235,7 +1218,7 @@
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { closeSheets(true); placeApp(w => w.app === 'pages' && w.pageSlug === pageSlug, {app:'pages', appId:'pages', pageSlug}, opts); return true; }
-    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
@@ -1258,6 +1241,7 @@
   /* Move an open window to where a new app would open (insertPos: right beside this desk, Home included.
    * A window alone on its desk takes its whole desk along; one sharing a desk gets a desk of its own. */
   function bringBeside(id) {
+    if (sharedDeskOrder()) return;
     const from = deskOf(id); if (from < 0 || from === idx) return;
     const t = insertPos(); if (from === t) return;
     if (desks[from].wins.length === 1) {
@@ -1422,14 +1406,6 @@
   window.__wosEverywhere = () => { if (sheet === 'settings') renderSettings(); return true; };
 
   /* ---------------- home desk ---------------- */
-  /* Miguel's skins (22 Oct): Ready / Working as a glyph plus one dot per chat, so the count reads at a glance without a
-   * number (check = ready, spinning arc = working, whose dots pulse in turn). More than 12 shows 12 dots and a small +. */
-  function homeDots(kind, n) {
-    if (!['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '')) return '';
-    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
-    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, i) => `<i style="--n:${i}"></i>`).join('');
-    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
-  }
   function renderHome() {
     const L = live(), needs = L.needs.length;
     // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
@@ -1446,8 +1422,8 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${homeDots('ready', ready)}</button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${homeDots('working', working)}</button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span></button>
+        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}
       ${sideCard()}
@@ -1474,15 +1450,11 @@
     if (last > 0 && !desks[last].wins.length) return goDesk(last);
     foldOpen.agents = foldOpen.dev = false; desks.push(blank({})); syncDesks(); renderDots(); goDesk(desks.length - 1, true); // the empty desk titles itself; a label flash would cover its search pill
   }
-  /* Miguel's skins (Dark, Light, Landscapes): the launcher and New desk sort apps by what they are, with no Recent row.
-   * Same order as the App Store: Apps = anything with a screen you use; Agent apps = backend-only apps your agent uses
-   * (tap = its settings sheet); Agents = agent chats + the Agents app; Connectors = sign-ins to another service. James's skins keep his layout. */
-  const oursSkin = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || '');
-  /* Swipe up on the orb opens Desks instead of Apps: Miguel's skins always; any other skin when its CSS (or the owner's
+  /* Swipe up on the orb opens Desks instead of Apps when a skin's CSS (or the owner's
    * My skin) sets `--wos-orb-swipe-up` on <html>: `desks` = the regular overview, `pill` = Miguel's pill panel (the skin
    * or My skin then carries the .ov-pill styling, as Miguel's skin.css does). */
   const orbUpVar = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-orb-swipe-up').trim(); } catch (_) { return ''; } };
-  const orbUpDesks = () => oursSkin() || ['desks', 'pill'].includes(orbUpVar());
+  const orbUpDesks = () => ['desks', 'pill'].includes(orbUpVar());
   /* App kinds (core/app-kinds.js, shared with the desktop selector): Apps, Agent apps, Agents, Connectors, system apps
    * first and ringed; every group ends with a "+ Get ..." tile for its App Store section, and Agents also has
    * "+ Build agents" (the Agents app, where agents are made and managed). */
@@ -1549,6 +1521,7 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
@@ -1609,7 +1582,9 @@
   // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
+    $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el, W[el.closest('.win')?.dataset.win]?.url));
     $$('iframe.appframe', root).forEach(f => {
+      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
@@ -1642,7 +1617,7 @@
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
     try { if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(win, (W[id] && (APP[W[id].appId]?.url || W[id].url)) || win.location.pathname, LINKS); } catch (e) {}
-    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+    try { if (W[id]) { const here = win.location.pathname + win.location.search + (W[id].appId === 'troubleshooter' ? win.location.hash : ''); const want = APP[W[id].appId]?.url || '';
       // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
       // painted before its app was known would stick on the wrong page for good.
       const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
@@ -1935,7 +1910,6 @@
       const top = body.scrollTop; body.innerHTML = html; body.__lhtml = html;
       body.scrollTop = live ? top : body.scrollHeight;
     };
-    if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
       // Recent is a placement, not a second copy of the Apps catalogue. Resolve aliases before deduping.
       const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
@@ -2095,6 +2069,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {
