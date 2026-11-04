@@ -50,10 +50,10 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   const exp = {
     get mix() { return clone(d.mix); },
     adopt(m, v) { d.adopted++; d.mix = { ...m }; if (v && typeof v === 'object') d.views = { ...v }; },
-    ...(shells ? { get views() { return clone(d.views); } } : {}),
     get state() { return { busy: false, tweaks: views.map(id => ({ id, view: 'v' })) }; },
     tweakIds: async () => { if (!known) throw new Error('offline'); return known; },
   };
+  if (shells) Object.defineProperty(exp, 'views', { get: () => clone(d.views) });
   const S = {
     get chosen() { return d.skin; }, get current() { return d.skin || 'nebula'; },
     has: id => ['nebula', 'obsidian', 'obsidian-light', 'landscapes'].includes(id),
@@ -354,4 +354,32 @@ test('sync merges views per type: two desktops follow each other, two phones fol
   assert.deepEqual(mac.views, { desktop: 'miguel/ai-apps', phone: '' }); assert.deepEqual(phone.views, mac.views);
   assert.deepEqual(clone(L.merge({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'a/b', at: 5 } } }, { version: 1, skin: null, tweaks: {}, views: { desktop: { id: '', at: 4 }, phone: { id: 'c/d', at: 1 } } })).views,
     { desktop: { id: 'a/b', at: 5 }, phone: { id: 'c/d', at: 1 } }, 'per type, newest wins');
+});
+
+
+test('per-type choices observe future revisions, survive stale first sync and never use device time', async () => {
+  const future = 9000000000000;
+  const box = pagesBox({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'miguel/ai-apps', at: future }, phone: { id: 'miguel/apps-home', at: future } } });
+  const opts = { shells: true, clock: () => 1, views: ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'] };
+  const stale = device(box, opts);
+  stale.pickView('phone', 'miguel/orb-shell'); // made offline, before seeing the box
+  await stale.flush();
+  assert.equal(box.doc().views.phone.id, 'miguel/orb-shell');
+  assert.ok(box.doc().views.phone.at > future);
+  assert.equal(box.doc().views.desktop.id, 'miguel/ai-apps');
+  stale.pickView('desktop', ''); await stale.flush();
+  assert.ok(box.doc().views.desktop.at > box.doc().views.phone.at);
+  const follower = device(box, opts); await follower.sync.sync();
+  assert.deepEqual(follower.views, { desktop: '', phone: 'miguel/orb-shell' });
+  const puts = box.puts, adopts = follower.adopted;
+  for (let n = 0; n < 4; n++) { await follower.sync.sync(); follower.sync.settle(); }
+  assert.equal(box.puts, puts); assert.equal(follower.adopted, adopts, 'settled device does not reapply');
+});
+
+test('cached per-device choices seed an absent file even with no skin or legacy mix', async () => {
+  const box = pagesBox(), d = device(box, { shells: true });
+  d.views = { desktop: 'miguel/ai-apps', phone: '' };
+  await d.sync.sync();
+  assert.deepEqual(box.doc().views, { desktop: { id: 'miguel/ai-apps', at: 0 }, phone: { id: '', at: 0 } });
+  assert.deepEqual(d.views, { desktop: 'miguel/ai-apps', phone: '' });
 });

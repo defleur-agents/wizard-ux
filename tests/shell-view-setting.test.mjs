@@ -179,3 +179,19 @@ test('the phone ignores a desktop-only view: an old mix with AI apps on, or a st
   assert.deepEqual(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).shells, ['desktop']);
   for (const id of VIEWS) assert.deepEqual(JSON.parse(read(`web/tweaks/${id}/manifest.json`)).shells, ['desktop', 'phone'], id);
 });
+
+
+test('legacy single Apps choice maps to both supported shells until each explicitly chooses otherwise', async () => {
+  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/apps-home': true } })]]);
+  const desk = box({ storage }); await desk.E.refresh();
+  assert.deepEqual(desk.views(), ['miguel/apps-home']);
+  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
+  assert.deepEqual(phone.views(), ['miguel/apps-home']);
+  await desk.E.toggle('miguel/orb-shell');
+  const phoneAgain = box({ shell: 'phone', storage }); await phoneAgain.E.refresh();
+  assert.deepEqual(phoneAgain.views(), ['miguel/apps-home'], 'choosing desktop never drops legacy phone choice');
+  await phoneAgain.E.toggle('miguel/apps-home');
+  const deskAgain = box({ storage }); await deskAgain.E.refresh();
+  assert.deepEqual(deskAgain.views(), ['miguel/orb-shell']);
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/orb-shell', phone: '' });
+});

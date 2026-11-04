@@ -155,7 +155,7 @@
           if (!meta.synced) renewPending(doc); else observe(doc);
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
-          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || dirty()) want = mine; } // seed; an untouched empty device never writes
+          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || Object.keys(mine.views || {}).length || dirty()) want = mine; } // seed; an untouched empty device never writes
           else if (dirty()) want = merge(doc, pending);
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
           else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
