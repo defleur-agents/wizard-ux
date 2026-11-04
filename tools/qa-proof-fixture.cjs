@@ -55,6 +55,8 @@ for(const id of ['qa_s_live','qa_s_old','qa_r_live','qa_r_old']){
  bodies['/wizard/hermes/api/sessions/'+id+'/messages']={data:[{id:1,role:'user',content:'Synthetic question '+id,timestamp:now-30},{id:2,role:'assistant',content:'Synthetic reply '+id,timestamp:now}],has_more:false};
 }
 const fixture={base:ORIGIN,responses:Object.fromEntries(Object.entries(bodies).flatMap(([p,body])=>['GET','HEAD','OPTIONS'].map(method=>[method+' '+p,{status:200,body:JSON.stringify(body)}])))};
+fixture.responses['PUT /wizard/thread-seen']={status:200,body:JSON.stringify(bodies['/wizard/thread-seen'])};
+fixture.responses['PUT /wizard/thread-dispositions']={status:200,body:JSON.stringify(bodies['/wizard/thread-dispositions'])};
 // Writes: synthetic in-memory answers only. Nothing is forwarded and nothing persists past the response.
 fixture.responses['POST /wizard/v1/ui-preferences/seed']={status:200,body:JSON.stringify({preferences:bodies['/wizard/v1/ui-preferences']})};
 // Ready declaration for the registry's Morning record: this catalogue ships no app bytes, so the shell sees it as unavailable and installs no extension. Proofs that load Morning's real extension serve it themselves from the pinned checkout.

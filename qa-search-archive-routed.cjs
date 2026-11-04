@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fx=require('./tools/qa-proof-fixture.cjs');
-fx.failAtExit(); // collect-all: one run reports every uncatalogued request, then exits non-zero
+fx.failAtExit(() => OUT); // collect-all: one run reports every uncatalogued request, then exits non-zero
 if(process.argv[2]||process.env.QA_URL)throw Error('Owner/network origins refused');
 const TREE = process.env.QA_TREE || __dirname;
 const OUT = process.env.QA_OUT || path.join(require('os').tmpdir(), 'wizard-search-archive-last');
@@ -28,7 +28,8 @@ const ROUTED = 'qa-host', ag = { id: ROUTED, label: 'Synthetic routed', privacy:
       if (method === 'PUT') { writes.push({ method, path: u.pathname }); prefs = { ...prefs, ...req.postDataJSON() }; }
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(prefs) });
     }
-    if (!['GET', 'HEAD'].includes(method)) { writes.push({ method, path: u.pathname }); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, record: {} }) }); }
+    // Writes are in-memory observations only when the shared catalogue lists them; any other write is refused (451) and collected, never a fabricated success.
+    if (!['GET', 'HEAD'].includes(method)) { writes.push({ method, path: u.pathname }); return route.fulfill(fx.response(u.pathname, method)); }
     if (u.pathname === '/wizard/v1/agents') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ agents: [{ id: 'hermes', is_default: true, label: 'Hermes', harness: 'hermes', privacy: 'standard', status: 'running' }, { id: ROUTED, label: 'Synthetic routed', harness: 'hermes', privacy: 'standard', status: 'running' }] }) });
     if (u.pathname === '/wizard/hermes/api/sessions') { const ag = u.searchParams.get('agent') || '', first = (u.searchParams.get('offset') || '0') === '0'; const data = !first ? [] : ag === ROUTED ? routed : ag ? [] : sessions; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data, has_more: false, limit: 100, offset: 0, snapshot: 'qa' }) }); }
     if (u.pathname === '/wizard/thread-seen') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: { initializedAt: 1, threads: {} } }) });

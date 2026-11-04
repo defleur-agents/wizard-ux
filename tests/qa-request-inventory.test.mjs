@@ -73,10 +73,33 @@ test('a run with refusals continues, then exits non-zero with the full list and 
 test('all three harnesses use the shared collect-all fence and never answer unknown paths with a silent success', () => {
  for (const name of HARNESSES) {
   const src = readFileSync(path.join(root, name), 'utf8');
-  assert.match(src, /fx\.failAtExit\(\)/, name);
+  assert.match(src, /fx\.failAtExit\(/, name);
   assert.doesNotMatch(src, /Uncatalogued/, name);
  }
  const instant = readFileSync(path.join(root, HARNESSES[0]), 'utf8');
  assert.doesNotMatch(instant, /return json\(\{\}\);/);
  assert.ok(!existsSync(path.join(root, 'qa-hosted-notes-read.cjs.disabled')));
+});
+
+test('refused-*.json lands in the harness default output directory, resolved at exit, and writes are never silent successes', () => {
+ const dir = mkdtempSync(path.join(tmpdir(), 'refused-default-'));
+ try {
+  const cp = spawnSync(process.execPath, ['-e', `const fx=require(${JSON.stringify(path.join(root, 'tools/qa-proof-fixture.cjs'))});fx.failAtExit(()=>OUT);const OUT=${JSON.stringify(dir)};fx.response('/wizard/x','POST')`], { encoding: 'utf8', env: { ...process.env, QA_OUT: '', QA_REFUSED_DIR: '' } });
+  assert.equal(cp.status, 1);
+  assert.equal(readdirSync(dir).filter(f => f.startsWith('refused-')).length, 1);
+ } finally { rmSync(dir, { recursive: true, force: true }); }
+ for (const name of HARNESSES) assert.match(readFileSync(path.join(root, name), 'utf8'), /failAtExit\(\(\) => (?:out|OUT)\)/, name);
+ const search = readFileSync(path.join(root, HARNESSES[2]), 'utf8');
+ assert.doesNotMatch(search, /ok: true, record/);
+ assert.match(search, /writes\.push\(\{ method, path: u\.pathname \}\); return route\.fulfill\(fx\.response\(u\.pathname, method\)\)/);
+ fx.resetRefusals();
+ assert.equal(fx.response('/wizard/thread-seen', 'PUT').status, 200);
+ assert.equal(fx.response('/wizard/hermes/api/sessions', 'DELETE').status, 451);
+ fx.resetRefusals();
+});
+
+test('the census finds request targets outside any known API prefix', () => {
+ const found = scan(root);
+ assert.ok(found.has('/mizel-live/orb-events'), 'orb-handoff endpoint must be discovered');
+ assert.ok(inventory.paths['/mizel-live/orb-events']);
 });

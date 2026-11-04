@@ -40,11 +40,12 @@ function responseOrRefuse(fixture, url, method = 'GET') {
   return { status: 451, contentType: 'application/json', body: JSON.stringify({ error: 'synthetic_request_refused', request: key }) };
  }
 }
-function failAtExit(outDir = process.env.QA_REFUSED_DIR || process.env.QA_OUT) {
+// outDir may be a thunk (() => OUT): harnesses compute their default output directory after requiring the fixture.
+function failAtExit(outDir) {
  const name = require.main ? path.basename(require.main.filename).replace(/\.[cm]?js$/, '') : 'harness';
  process.on('exit', () => {
-  const rows = refused();
-  if (outDir) { try { fs.mkdirSync(outDir, { recursive: true }); fs.writeFileSync(path.join(outDir, 'refused-' + name + '.json'), JSON.stringify(rows, null, 2) + '\n'); } catch (_) {} }
+  const rows = refused(), dir = process.env.QA_REFUSED_DIR || (typeof outDir === 'function' ? outDir() : outDir) || process.env.QA_OUT;
+  if (dir) { try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, 'refused-' + name + '.json'), JSON.stringify(rows, null, 2) + '\n'); } catch (_) {} }
   if (rows.length) { console.error('REFUSED ' + rows.length + ' uncatalogued synthetic request(s) in ' + name + ':\n' + rows.map(r => '  ' + r.request + (r.count > 1 ? ' x' + r.count : '')).join('\n')); process.exitCode = 1; }
  });
 }
