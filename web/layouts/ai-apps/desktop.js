@@ -748,7 +748,9 @@ export default function desktop(api) {
   function railGo(key) {
     closeFly();
     const s = readSessions(), ids = railRows(s, key, readyOrder(), groupBy()).map(r => r.id); if (!ids.length) return;
-    const a = railNow(), nx = railNext(ids, a && a.key === key ? curChat() : null); if (!nx) return;
+    // The current chat stays marked across a grouping switch; the first click on a different rail row still starts it.
+    const a = railNow(), same = a && a.key === key && (!railLast || railLast === key);
+    const nx = railNext(ids, same ? curChat() : null); if (!nx) return;
     openChat(nx.id, key);
   }
   function openChat(id, key) {

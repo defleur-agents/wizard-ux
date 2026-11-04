@@ -289,7 +289,12 @@ export function railRows(s, key, order, mode) {
 export function railActive(s, cur, last, order, mode) {
   if (!cur) return null;
   const at = key => { const ids = railRows(s, key, order, mode === 'subjects' ? 'subject' : undefined).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
-  if (last) { const a = at(last); if (a) return a; }
+  // A remembered Ready/status/subject key must not win after its row disappears on a grouping switch.
+  const common = last === 'working' || last === 'snoozed';
+  const visible = mode === 'subjects' ? common || String(last).startsWith('subj:')
+    : mode === 'groups' ? last !== 'ready' && !String(last).startsWith('subj:')
+    : mode === 'list' ? common || last === 'ready' : true;
+  if (last && visible) { const a = at(last); if (a) return a; }
   // round 24b (Miguel, 4 Nov 2026: By subject on the folded rail too): each subject alone, as 'groups' does statuses
   if (mode === 'subjects') { const sg = subjectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
   // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
