@@ -42,8 +42,9 @@
   // excludes cross-origin and unregistered pages.
   // Settings embeds (.st-embed, e.g. Settings › Connections) take the theme too, so they follow the skin like the page
   // around them; they never mark the Settings window .wz-themed (that window is the shell's own).
-  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe, .st-embed iframe')];
-  const themedWin = f => f.closest('.st-embed') ? null : f.closest('.win');
+  // The Welcome's Bring your AI step (.wl-embed) shows the Importer app's own screen: it takes the theme too.
+  const winFrames = () => [...document.querySelectorAll('.win iframe, .linksheet iframe, .st-embed iframe, .wl-embed iframe')];
+  const themedWin = f => f.closest('.st-embed') || f.closest('.wl-embed') ? null : f.closest('.win');
   const frameOf = src => src ? winFrames().find(f => f.contentWindow === src) || null : null;
 
   function tokens() {

@@ -41,7 +41,8 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   const w = read('web/core/welcome.js'), s = read('web/core/settings.js'), e = read('web/core/experience.js');
   assert.match(w, /const cur = S\.current, list = S\.list;/, 'first run lists every color, not one skin\'s');
   assert.doesNotMatch(w, /fam\.palettes/);
-  assert.match(s, /data-tweakauthor=/, 'a quick button per author');
+  assert.doesNotMatch(s, /data-tweakauthor=/, 'one flat list: no per-author quick button (Miguel, 1 Nov 2026)');
+  assert.match(s, /tweakSwitches\(list, 'data-tweak-toggle', s\.busy, name\)/, 'a switch per tweak');
   assert.doesNotMatch(s, /data-tweakpreset/, 'no preset sets: everything starts off');
   assert.match(e, /chooseSkin\(\) \{ if \(error \|\| wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick never swaps the tweak set');
   for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');

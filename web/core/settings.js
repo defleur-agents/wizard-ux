@@ -36,7 +36,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', wallpaper: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   /* Connections is served by the App Manager behind its owner channel, on this origin; the page hosts it as is, so
    * its owner-only actions (Disconnect, Reconnect, agent access, Restore defaults) stay the App Manager's own. The tab
@@ -253,7 +253,7 @@
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   /* Tweaks are separate from color: a row of published sets to start from (Standard, Miguel's, …), then one
    * disclosure with every installed tweak as a switch. Picking a set clears the per-tweak choices. */
-  const tweakSwitches = (items, attr, busy = false) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+  const tweakSwitches = (items, attr, busy = false, by = null) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${by ? `<small class="tw-by">by ${esc(by(t.author))}</small>` : ''}${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
@@ -262,18 +262,12 @@
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
     const exp = s.tweaks.filter(t => !t.builtin);
-    const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    // One section per author (Miguel, 31 Oct 2026): a switch that turns all of theirs on or off, then each tweak by itself.
-    // Same list whatever skin is worn; skins are looks only.
-    const order = [...(authorList || []).map(a => a.id), ...exp.map(t => t.author)].filter((who, i, all) => all.indexOf(who) === i);
-    const groups = order.map(who => {
-      const mine = exp.filter(t => t.author === who); if (!mine.length) return '';
-      const on = mine.filter(t => t.on).length, all = on === mine.length;
-      const head = `<button type="button" class="st-row tw-row tw-all" data-tweakauthor="${esc(who)}" role="switch" aria-checked="${all}"${s.busy ? ' disabled' : ''}><span class="st-tx"><b>All of ${esc(name(who))}’s</b><small>${on} of ${mine.length} on</small></span><span class="sw ${all ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`;
-      return `<div class="tw-author" role="group" aria-label="${esc(name(who))}’s tweaks"><h5>${esc(name(who))}’s tweaks</h5>${head}${rows(mine)}</div>`;
-    }).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
+    // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
+    // quick buttons. Same list whatever skin is worn; skins are looks only.
+    const list = [...exp].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
+    const rows = tweakSwitches(list, 'data-tweak-toggle', s.busy, name);
+    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
   }
   let authorList = null;
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
@@ -401,8 +395,6 @@
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');
     if (my) { mySkinAction(ctx, my.dataset.myskin, event); return true; }
-    const quick = el.closest('[data-tweakauthor]');
-    if (quick) { void window.WosExperience?.chooseAuthor?.(quick.dataset.tweakauthor).catch(e => ctx.toast?.('!', e.message, 2400)); ctx.haptic?.(8); return true; }
     const family = el.closest('[data-skinfamily]');
     if (family) { skinAction(() => M?.active ? M.leave() : undefined, () => { S.setFamily(family.dataset.skinfamily); void window.WosExperience?.chooseSkin?.(); for (const m of mounts) m.render(); ctx.haptic?.(8); }, e => ctx.toast?.('!', e.message, 3000)); return true; }
     const b = el.closest('[data-skinpick]'); if (!b) return false;
@@ -427,6 +419,15 @@
   }, act(ctx, el) {
     if (!el.closest('[data-wg-reset]')) return false;
     window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
+  } });
+  // Background: Landscapes can show its pictures or a Wizard OS hat background (Miguel, 4 Nov 2026). Per device.
+  register({ id: 'wallpaper', aliases: ['background', 'wallpaper'], available: () => typeof window.WosSkin?.setWallpaper === 'function', html() {
+    const S = window.WosSkin; if (!S.wallpaperable) return '';
+    const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
+    return `<div class="st-group wp-section"><h4>Background</h4><div class="st-seg" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}">${w.name}</button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
+  }, act(ctx, el) {
+    const b = el.closest('[data-wallpaper]'); if (!b) return false;
+    window.WosSkin.setWallpaper(b.dataset.wallpaper); ctx.render(); ctx.root.querySelector(`[data-wallpaper="${b.dataset.wallpaper}"]`)?.focus({ preventScroll: true }); ctx.haptic?.(8); return true;
   } });
   /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
