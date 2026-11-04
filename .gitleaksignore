@@ -14,4 +14,5 @@ ca12ba85181eff0d029a828b6cd31ad23ed4f984:web/core/notif-bell.js:generic-api-key:
 1acc8bcd4a40ff4bb0e3fe272db747e813ff34b0:tools/flight/r32/source-manifest.json:sentry-access-token:3540
 # Public localStorage key names; verified declaration and storage consumers.
 e4d8da50dd3edfa1c038fca580c68d8ab2a33087:web/core/notif-bell.js:generic-api-key:24
+ca12ba85181eff0d029a828b6cd31ad23ed4f984:web/core/notif-bell.js:generic-api-key:29
 c01bdf7d9131f2766fcd0a502c25a757509eecce:web/core/apps.js:generic-api-key:87
