@@ -96,7 +96,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Need | Use |
 |---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
-| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
+| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; built-in layouts (`api.apps` / `api.desk`); `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
 | Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
