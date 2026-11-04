@@ -210,8 +210,11 @@ export default function setup(api) {
   let open = false, offBack = null, q = '';
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
   const secOpen = sectionsOpen(api.storage.get('sections'));
+  // Shell sheets own interaction while Chats prepares behind a Look toggle. A
+  // thread → list route is not an owner request to put the drawer over Settings.
+  const shellSheetOpen = () => !!doc.querySelector('.sheet-open');
   function openDrawer() {
-    if (open) return; open = true; closeMenu();
+    if (open || shellSheetOpen()) return; open = true; closeMenu();
     readSessions(); paintDrawer(true);
     layer.hidden = false; layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity');
     api.frame(() => layer.classList.add('is-open'));
@@ -441,7 +444,7 @@ export default function setup(api) {
   api.listen(doc, 'pointerdown', e => { if (e.pointerType === 'touch' && e.isPrimary !== false) touchPid = e.pointerId; }, true);
   api.listen(doc, 'touchstart', e => {
     drag = null;
-    if (open || menu || sheet || root.dataset.vcSheet || e.touches.length !== 1) return;
+    if (open || menu || sheet || shellSheetOpen() || root.dataset.vcSheet || e.touches.length !== 1) return;
     const t = e.touches[0], tg = e.target;
     // under the top bar only, never from the composer (its + sits at the edge), the dock or a sheet
     if (t.clientY <= top.getBoundingClientRect().bottom || tg?.closest?.('.ch-compose, #dock, .aa-sheet, .vc-sheet')) return;
@@ -452,6 +455,7 @@ export default function setup(api) {
   }, { capture: true, passive: true });
   api.listen(doc, 'touchmove', e => {
     if (!drag) return;
+    if (shellSheetOpen()) { settle(false); drag = null; return; }
     const t = e.touches[0];
     if (!t || e.touches.length !== 1) { if (drag.on) settle(false); drag = null; return; }
     const dx = t.clientX - drag.x, dy = t.clientY - drag.y;
@@ -468,9 +472,13 @@ export default function setup(api) {
     drawer.style.transform = `translateX(${x - w}px)`; scrim.style.opacity = String(x / w);
   }, { capture: true, passive: false });
   function settle(go) {
-    if (go) return openDrawer();
+    const blocked = shellSheetOpen();
+    if (go && !blocked) return openDrawer();
     layer.classList.remove('is-drag'); drawer.style.removeProperty('transform'); scrim.style.removeProperty('opacity');
-    api.after(220, () => { if (!open) layer.hidden = true; });
+    // A sheet can open after touchstart: remove the drag scrim on this frame,
+    // rather than leave it intercepting the sheet while the close animates.
+    if (blocked) { layer.classList.remove('is-open'); layer.hidden = true; }
+    else api.after(220, () => { if (!open) layer.hidden = true; });
   }
   const dragEnd = e => {
     if (!drag) return;
