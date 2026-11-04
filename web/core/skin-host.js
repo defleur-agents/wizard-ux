@@ -29,11 +29,10 @@
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
-    // Miguel's miguel/ai-apps tweak wears it (phone only for now): the ChatGPT / Claude / Perplexity phone layout, a top
-    // bar, a left drawer (apps, then the chats) and the chat with its composer as the main screen.
+    // Built-in AI apps (designed by Miguel): standard desktop view; also worn by his optional phone tweak.
     Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Chats and apps side by side on desktop; a top bar and drawer on phone', css: true, js: true }),
   ]);
-  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
+  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // a stale layout without either core or tweak ownership goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
   let standardLayout = null; // core-selected desktop view; independent of a tweak's lifetime

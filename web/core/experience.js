@@ -18,6 +18,10 @@
   let desktopView = '';
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
+  // Retain the pre-flatten choices across concurrent refreshes AND an interrupted first migration.
+  const DESKTOP_SEED = 'wos.desktop-view-migration.v1';
+  let desktopMigration = null;
+  if (desktop && !desktopView) try { const seed = JSON.parse(localStorage.getItem(DESKTOP_SEED)); if (seed?.version === 1 && seed.off && typeof seed.off === 'object') desktopMigration = seed; } catch (_) {}
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
   // Tweak files are static per release: read each once per page (a failure is forgotten so the next call retries).
@@ -154,9 +158,12 @@
   async function apply(warm = false) {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
+      // Capture before wornOwner/flattening can discard explicit offs. Never publish this to Look sync.
+      if (desktop && !desktopView && !desktopMigration) {
+        desktopMigration = copy(state);
+        try { desktopMigration.materializedLayout = localStorage.getItem('wos.layout'); localStorage.setItem(DESKTOP_SEED, JSON.stringify(desktopMigration)); } catch (_) {}
+      }
       const who = wornOwner();
-      // Snapshot before preset flattening loses explicit false values. No snapshot is published to Look sync.
-      const legacy = { ...state, mix: { ...(state.mix || {}) } };
       // A legacy layout can boot before this deferred module; the worn family now owns it.
       if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
       catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults();
@@ -193,7 +200,7 @@
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      if (desktop && !desktopView) migrateDesktopView(legacy);
+      if (desktop && !desktopView) migrateDesktopView(desktopMigration);
       if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
       await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => desktop && layoutForView(id) ? false : !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
       if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
@@ -205,13 +212,14 @@
   const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
   const viewIds = () => [...manifests.keys()].filter(viewOf);
   const layoutForView = id => { const layout = manifests.get(id)?.layout; return viewOf(id) && desktopViews.includes(layout) ? layout : ''; };
-  function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); } catch (_) {} }
+  function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); localStorage.removeItem?.(DESKTOP_SEED); } catch (_) {} }
   function migrateDesktopView(legacy) {
     // A true or false view switch is a choice; unrelated tweaks / preset migrations are not.
     const views = viewIds().filter(layoutForView);
-    const explicit = views.some(id => typeof legacy.mix?.[id] === 'boolean');
+    const offs = legacy.carry || legacy.off?.[legacy.preset || legacyOwner()] || [];
+    const explicit = views.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(recipe(), id) === 'boolean');
     const chosen = views.find(id => enabled(id, recipe()));
-    let oldLayout = ''; try { oldLayout = localStorage.getItem('wos.layout'); } catch (_) {}
+    const oldLayout = legacy.materializedLayout;
     rememberDesktopView(chosen ? layoutForView(chosen) : explicit ? 'classic' : desktopViews.includes(oldLayout) ? oldLayout : 'ai-apps');
   }
   const wornView = own => desktop ? viewIds().find(id => layoutForView(id) === desktopView) || '' : viewIds().find(id => enabled(id, own)) || '';
