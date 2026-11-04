@@ -9,7 +9,6 @@
   ],
   "tweaks": [
     "miguel/send-and-go",
-    "miguel/hidden-pin",
     "wizard/pin-buttons",
     "miguel/snooze-someday",
     "wizard/two-orbs",
@@ -18,13 +17,15 @@
     "wizard/unified-inbox",
     "wizard/orb-radial",
     "wizard/new-send-list",
-    "miguel/no-desk-close"
+    "miguel/no-desk-close",
+    "miguel/archive-top"
   ],
   "defaults": [
     "wizard/unified-inbox"
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
-    "wizard/machines-home": "miguel/machines-home"
+    "wizard/machines-home": "miguel/machines-home",
+    "miguel/switch-row-actions": "miguel/model-pills"
   }
 }
