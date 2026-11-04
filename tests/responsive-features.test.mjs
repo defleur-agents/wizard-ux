@@ -43,7 +43,7 @@ test('shell adapters cannot retain a second Settings renderer, picker, or hardco
   assert.doesNotMatch(read('web/core/polish.css'), /html\[data-shell="desktop"\] \.st-/);
   const settings = read('web/core/settings.js');
   assert.doesNotMatch(settings, /data-layoutpick|data-layout-row/);
-  assert.doesNotMatch(settings, /data-skinfamily=/, 'colors are one list, not grouped by skin');
+  assert.match(settings, /data-skinfamily=/, 'skin families and their colours stay separate in the shared renderer');
   assert.match(settings, /<h4>Skin<\/h4>/);
   assert.match(settings, /data-newskin/);
   assert.match(read('web/core/deeplink.js'), /WosSettings\?\.features\.some/);

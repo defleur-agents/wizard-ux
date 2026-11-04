@@ -58,7 +58,8 @@ test('Welcome: branded, offers Claude (recommended), ChatGPT and Tinfoil, and op
 test('Welcome: Back peels the sign-in, then steps back, and both shells ask it first', () => {
   const js = read('web/core/welcome.js');
   assert.match(js, /function back\(\)[^]*?provider = null[^]*?step === 'hello'\) \{ step = 'look'/);
-  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
+  // #880 adds outside-dismiss options; Welcome still owns the first Back step.
+  assert.match(read('web/app.js'), /function backStep\(skipHosted(?:, \{ outside = false \} = \{\})?\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
   assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\s*\{ const w = window\.WosWelcome\?\.back\(\)/);
 });
 
