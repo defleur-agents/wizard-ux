@@ -107,7 +107,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
 }
 const layout = () => import(new URL('web/layouts/ai-apps/layout.js', root).href);
 
-test('packaging: an ordinary Miguel view tweak, off by default; the phone and the desktop wear AI apps', async () => {
+test('packaging: an ordinary Miguel view tweak, off by default; the desktop wears AI apps, the phone keeps its stock view', async () => {
   const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));
   assert.equal(man.name, 'Different shell view - AI apps'); assert.equal(man.view, 'AI apps'); assert.deepEqual(man.capabilities, ['layout']);
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
@@ -116,9 +116,9 @@ test('packaging: an ordinary Miguel view tweak, off by default; the phone and th
   assert.ok(!/ai-apps/.test(read('web/core/experience.js')), 'no migration turns it on');
   const p = fixture({ shell: 'phone' });
   await p.mount('miguel/ai-apps'); await settle();
-  assert.equal(p.host.layout, 'ai-apps'); assert.equal(p.doc.documentElement.dataset.layout, 'ai-apps');
-  assert.ok(p.doc.head.children.some(l => /layouts\/ai-apps\/layout\.css/.test(l.href || '')));
-  await p.clear(); assert.equal(p.host.layout, 'classic'); assert.ok(!p.doc.head.children.some(l => /layouts\//.test(l.href || '')));
+  assert.equal(p.host.layout, 'classic', 'desktop only (Miguel, 4 Nov 2026): the phone keeps its stock view');
+  assert.ok(!p.doc.head.children.some(l => /layouts\//.test(l.href || '')), 'no layout css on the phone');
+  await p.clear(); assert.equal(p.host.layout, 'classic');
   const d = fixture({ shell: 'desktop' });
   await d.mount('miguel/ai-apps'); await settle();
   assert.equal(d.host.layout, 'ai-apps', 'the desktop wears it too (desktop.js)'); assert.equal(d.doc.documentElement.dataset.layout, 'ai-apps');
