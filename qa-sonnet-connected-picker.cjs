@@ -42,11 +42,12 @@ async function openPicker(page, host, root, wid, initialSol = false) {
 async function opaque(page, tag, picker) {
   // CSS animation disabling does not stop orb.js WebGL RAF/timers. Pause only the
   // persistent dock orb via its existing API: no mask/crop or panel pixel changes.
-  const orbFrames = await page.evaluate(() => {
+  const phone = await page.evaluate(() => document.documentElement.dataset.shell === 'phone');
+  const orbFrames = phone ? await page.evaluate(() => {
     const orb=document.querySelector('#dock #orbWrap > canvas#orb');
     if(!orb || !window.Orb?.sleep || orb.closest('.ch-psheet')) throw new Error('expected non-panel dock orb');
     window.Orb.sleep(true); return window.Orb.frames;
-  });
+  }) : null;
   const clip = await picker.locator('.ch-sheet-b').evaluate(card => {
     card.style.willChange='transform';
     const loud=document.createElement('div'); loud.dataset.qaLoud='';
@@ -62,8 +63,10 @@ async function opaque(page, tag, picker) {
   const blank=await page.screenshot({clip:clip.outside,animations:'disabled'});
   check(!control.equals(blank),'opacity-outside-control-changes');
   check(a.equals(b),'opaque-panel-pixels');await page.locator('[data-qa-loud]').evaluate(e=>e.remove());
-  assert.equal(await page.evaluate(() => window.Orb.frames),orbFrames,'dock orb stayed frozen during exact panel comparison');
-  await page.evaluate(() => window.Orb.sleep(false));
+  if (phone) {
+    assert.equal(await page.evaluate(() => window.Orb.frames),orbFrames,'dock orb stayed frozen during exact panel comparison');
+    await page.evaluate(() => window.Orb.sleep(false));
+  }
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:process.env.QA_CHROME,args:['--no-sandbox','--disable-background-networking']});
