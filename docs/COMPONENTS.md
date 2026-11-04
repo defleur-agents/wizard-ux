@@ -6,7 +6,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits | duplicate ranking |
 
-| Offline QA | `tools/qa-synthetic-fence.cjs` +collect | offline |
+| QA | `tools/qa-synthetic-fence.cjs` +startup/census | offline |
 
 | Temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict capability + opt-in (off) | durable transcript/outbox |
 
