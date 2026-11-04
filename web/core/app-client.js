@@ -193,7 +193,10 @@
     const hit = keyMatch(e); if (!hit) return;
     e.preventDefault();
     if (e.repeat && !/^Arrow/.test(hit.key)) return;   // held down: only the arrows repeat
-    keyDone = hit.key; hit.el.click();
+    keyDone = hit.key;
+    // a field as the target ('/' to search): it takes the typing too (a click alone never focuses a field)
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(hit.el.tagName || '') || hit.el.isContentEditable) hit.el.focus?.({ preventScroll: true });
+    hit.el.click();
   }
   addEventListener('keydown', onAppKey);
   // (Space activates a focused button on keyup: the key already clicked its own target)

@@ -70,6 +70,9 @@ test('a plain key clicks the first live control marked with it, normalised (Spac
   p.press('ArrowDown'); p.press('/'); p.press('?', { shiftKey: true });
   assert.deepEqual([down.clicks, search.clicks, ask.clicks], [1, 1, 1], '⇧ is fine where the character needs it (?)');
   e = p.press('x'); assert.equal(e.defaultPrevented, false, 'an unmarked key is left alone');
+  const find = el('input', { 'data-wz-key': 's' }); let focus = 0; find.focus = () => { focus++; }; find.parentNode = p.body; p.body.children.push(find);
+  e = p.press('s'); assert.deepEqual([find.clicks, focus, e.defaultPrevented], [1, 1, true], 'a field as the target takes the typing (no s typed into it)');
+  p.body.children.pop();
   assert.deepEqual([...p.WizardApp.keys.list()].map(k => [k.key, k.label]), [['Space', 'Play / pause'], ['j', ''], ['j', ''], ['ArrowDown', ''], ['/', ''], ['?', '']]);
 });
 

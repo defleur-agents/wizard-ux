@@ -113,7 +113,8 @@ write.
   `[inert]` or `aria-hidden="true"`) and enabled (not `disabled`, not `aria-disabled="true"`), and is used up
   (`preventDefault`). Not with ⌥ / Ctrl / ⌘ (those are the shell's and the browser's), not with ⇧ unless the character
   needs it (`?`), not while composing text, not while focus is in an input, textarea, select or `contenteditable`,
-  and not when the app's own handler already called `preventDefault`. Held down, only the arrows repeat.
+  and not when the app's own handler already called `preventDefault`. Held down, only the arrows repeat. A field as
+  the target (a search box on `/`) is focused as well, so typing goes on there.
 - An open modal (`[aria-modal="true"]`, `[role="dialog"]` not hidden, `dialog[open]`) keeps the keys: only targets
   inside the topmost one count.
 - `WizardApp.keys.list()` returns the live targets `[{ el, key, label }]` with exactly those rules.
