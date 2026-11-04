@@ -281,12 +281,13 @@ const R = {
 };
 hat.onload = () => {
   const light = Q.get('light') === '1';
-  // A query string selects only the five actual scenes, never an Object/prototype method.
+  // A query string selects only the six actual scenes, never an Object/prototype method.
   switch (C) {
-    case 'summit': R.summit(light); break;
     case 'lake': R.lake(light); break;
-    case 'constellation': R.constellation(light); break;
-    case 'silk': R.silk(light); break;
+    case 'valley': R.valley(light); break;
+    case 'moonrise': R.moonrise(light); break;
+    case 'sea': R.sea(light); break;
+    case 'clouds': R.clouds(light); break;
     case 'glass': R.glass(light); break;
     default: document.title = 'Invalid scene'; return;
   }
