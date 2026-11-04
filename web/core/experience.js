@@ -196,7 +196,7 @@
     get installedReady() { return !!installedP?.settled; },
     refresh: apply,
     // A color pick never changes tweaks; kept so older callers stay harmless.
-    chooseSkin() { if (wornOwner() !== owner) return apply(); return Promise.resolve(); },
+    chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.

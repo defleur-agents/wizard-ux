@@ -115,9 +115,9 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-confirm h3 { font-size:var(--wz-text-heading); margin: 0 0 12px; }
 .st-confirm p { color: var(--wz-text-secondary); font-size:var(--wz-text-md); }
 .dsettings .st-root { overflow: hidden; padding-bottom: 16px; }
-.st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); height: 100%; gap: 24px; }
+.st-desktop { display: grid; grid-template-columns: 280px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: 100%; gap: 24px; }
 .st-desktop .st-index { overflow-y: auto; padding-right: 16px; border-right: 1px solid var(--wz-border); }
-.st-desktop .st-page { overflow-y: auto; min-width: 0; padding-right: 8px; }
+.st-desktop .st-page { overflow-y: auto; min-height: 0; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
 @media (max-width: 700px) {
@@ -155,10 +155,12 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-root .sk-row { padding: 0; margin: 0 0 8px; }
 .st-root .sk-row .sk-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; padding: 0; margin: 0 4px 6px; }
 .st-root .sk-row .sk-head small { font-size:var(--wz-text-md); font-weight: 500; color: var(--wz-text-secondary); }
-/* Phone: the dock floats over the sheet's foot, so the last line must scroll clear of it. */
-.st-phone { padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+/* The sheet already ends above the dock and browser/native safe inset.
+ * Only edge spacing belongs inside its actual scroll owner. */
+.settings-body.st-root { padding-bottom: var(--wz-space-5); }
 .st-desktop .st-seg { max-width: 360px; }
-.st-desktop .st-page { padding-bottom: 32px; }
+/* A shrinkable grid track keeps this padded scroller inside the clipped panel. */
+.st-desktop .st-page { padding-bottom: var(--wz-space-5); }
 
 /* Minimal: feature modules keep their own markup, but nothing reads as a box on the page. */
 .st-root .us-row { padding: 12px 4px; margin: 0; border: 0; border-bottom: 1px solid var(--wz-border); border-radius: 0; background: transparent; }

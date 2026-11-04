@@ -668,7 +668,7 @@ body {
 .unsent-card.fail { border-color: rgba(255, 190, 85, .45); }
 
 /* ---------- Settings sheet ---------- */
-.settings { top: calc(40px + var(--safe-t)); bottom: calc(var(--dock-h) + var(--safe-b) - 12px); transform: translateY(calc(-100% - 60px)); opacity: 0; }
+.settings { --wz-settings-nav-clearance: calc(var(--dock-h) + var(--safe-b)); top: calc(40px + var(--safe-t)); bottom: calc(var(--wz-settings-nav-clearance) + var(--wz-space-2)); transform: translateY(calc(-100% - 60px)); opacity: 0; }
 .settings.open { transform: none; opacity: 1; }
 .settings-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 14px 14px; scrollbar-width: none; touch-action: pan-y; overscroll-behavior: contain; }
 .settings-body::-webkit-scrollbar { display: none; }
