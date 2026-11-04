@@ -1824,6 +1824,13 @@ window.WizCore.chats = function createChats(H) {
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
   // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
+  const streamEnded = st => {
+    if (st.terminal) return true;
+    // The complete done trailer is the older service's final-answer receipt,
+    // emitted before its SSE terminal frame; partial markers are not receipts.
+    const marker = String(st.text || '').match(/\[WIZARD_STATUS_V1\]\s*(\{[\s\S]*\})\s*\[\/WIZARD_STATUS_V1\]\s*$/);
+    try { return !!marker && JSON.parse(marker[1]).state === 'done'; } catch (_) { return false; }
+  };
   const streamShown = (st, turns) => {
     const got = bare(st.text);
     // A stale Working row or recent outbox receipt can reopen an earlier run AFTER the latest answer landed.
@@ -1879,7 +1886,11 @@ window.WizCore.chats = function createChats(H) {
     // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
     // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
     // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
-    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
+    // A textual match is not run identity while tokens are still arriving. In
+    // particular a new "Yes." prefix must not close its subscriber just because
+    // an older turn said the same thing. Only a terminal replay can be deduped
+    // without a changed transcript; completed streams have no later deltas.
+    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || (streamEnded(st) && streamShown(st, turns)))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';

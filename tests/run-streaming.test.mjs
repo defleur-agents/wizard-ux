@@ -41,6 +41,19 @@ test('earlier-turn replay matching keeps the existing per-turn length, final and
     [turn('Before.\n![Image](/wizard/attachments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "wizard-inline-0")\nAfter.'), newer]), true);
 });
 
+// A fresh run can begin with the complete text of any older answer. The
+// subscriber must stay open for its later tokens, even if a newer answer is
+// already in the transcript baseline. Replay dedupe only earns terminal scope.
+for (const agent of ['', 'host-profile', 'container', 'restricted']) test(`live matching old words never closes a new stream (${agent || 'main'})`, () => {
+ const w={id:'w',thread:'sid'},c={},row={status:'running',runId:'fresh-run'};let callback,closed=0;
+ const ctx={LIVE:{pendingRun:()=>'',session:()=>row,openRunStream:(_s,_a,_r,cb)=>(callback=cb,{close:()=>closed++})},W:{w},elOf:()=>({}),agentRec:()=>({privacy:'standard'}),isWorking:()=>true,esc:s=>s,md:s=>s,renderThreadLive(){},loadThread:async()=>{},setTimeout:()=>1,clearTimeout(){}};
+ vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='),chats.indexOf('  function renderThread(w, el, keep)')),ctx);
+ const turns=[{notes:[],a:{at:1,text:'Yes.',final:true}},{notes:[],a:{at:2,text:'A different newest answer.',final:true}}];
+ ctx.syncStream(w,c,turns,agent);const baseline=c.stream.baseline;
+ callback({text:'Yes.',terminal:false});assert.match(ctx.syncStream(w,c,turns,agent),/Yes\./);assert.equal(c.stream.landed,false);assert.equal(closed,0);
+ callback({text:'Yes. And here is the important new explanation.',terminal:false});assert.match(ctx.syncStream(w,c,turns,agent),/important new explanation/);assert.equal(c.stream.baseline,baseline);assert.equal(closed,0);
+});
+
 // Continue exercising all neighbouring stream lifecycle cases below.
 function harness() {
   const sources = [], frames = [], timers = [], calls = [];
