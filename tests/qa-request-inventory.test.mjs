@@ -103,6 +103,7 @@ test('census retains untracked static fetches and derives literal app reads with
  const dir = mkdtempSync(path.join(tmpdir(), 'census-'));
  try {
   mkdirSync(path.join(dir, 'web/core'), { recursive: true });
+  writeFileSync(path.join(dir, 'web/ux-version.txt'), 'generated but untracked');
   writeFileSync(path.join(dir, 'web/core/web-update.js'), `fetch(url('ux-version.txt'));fetch('/another-service/api/state');fetch('/wizard-os-home/future.txt');fetch('build.css');api.data.read.app('backup','overview');api.data.read.app('new-app','status');`);
   const found = scan(dir);
   for (const p of ['/wizard-os-home/ux-version.txt', '/another-service/api/state', '/wizard-os-home/future.txt', '/wizard-os-home/build.css', '/backup/api/overview', '/new-app/api/status']) assert.ok(found.has(p), p);
