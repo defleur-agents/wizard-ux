@@ -1853,7 +1853,8 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
     assert.match(css, /\.ch-notif-route\.is-quiet \{[^}]*container-type: normal; \}/, f + ': the quiet line sizes to its words (core makes .ch-notif-route a size container, which squeezed it to one word a line)');
   }
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /if \(code === 'KeyB' && !sh\) \{ if \(!e\.repeat && docked && frontNote\(\)\) doc\.querySelector\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
+  assert.match(js, /if \(code === 'KeyB' && !sh\) \{ if \(!e\.repeat && docked && frontNote\(\)\) routeBtn\(\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
+  assert.match(js, /const routeBtn = \(\) => \[\.\.\.doc\.querySelectorAll\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\]\.find\(onScreen\) \|\| null;/, 'the routing line on screen (live: after ⌥X a hidden Chats window held the first one)');
   assert.match(js, /if \(act\) \{ if \(!e\.repeat\) chatBtn\(act\)\?\.click\?\.\(\); return true; \}/, 'round 21: ⌥Z / ⌥E / ⌥X click the open item\'s own Snooze / Archive / Resolve');
   assert.match(js, /\[data-chact="done"\], \.win \.dchats \.pane-main \[data-chact="resolve"\]'\); if \(b && docked\) nextAfterAct\(\);/, 'Archive / Resolve (button or key) then the next Ready one');
   assert.ok(!read('web/layouts/ai-apps/home.js').match(/APP_LETTERS = \[\.\.\.'[^']*B/), 'B is no app letter any more');
