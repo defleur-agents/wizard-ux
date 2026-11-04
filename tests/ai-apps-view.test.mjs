@@ -206,8 +206,9 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
   assert.deepEqual(w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className), ['aad-d is-spin'], 'round 23b: Working = one spinner');
   assert.equal(w.q('.aad-rk[data-k="working"] .aad-rk-wn').textContent, '1', 'round 23b: and its number');
-  assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot', 'aad-d is-dot'], 'round 23: one solid dot per ready chat');
-  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-n').textContent, '', 'no digits on the rail');
+  assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot'], 'round 23c: Ready = ONE amber dot, not a dot per chat');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-wn').textContent, '2', 'round 23c: and its number');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.js'), /DOTS_MAX|aad-dots/, 'round 23c: no tally of dots past four (looked weird)');
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
@@ -1854,8 +1855,29 @@ test('round 20 item 9 / round 22: Ready is one flat list in priority order by de
   assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 2, 'grouped: the times too');
 });
 
+test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
+  const c = read('web/core/chats.js');
+  assert.match(c, /const all = \[cur, \.\.\.sib\]\.sort\(\(a, b\) => noteAt\(b\) - noteAt\(a\)\)/, 'stable order: clicking through never reshuffles');
+  assert.match(c, /class="msg a ch-notif is-quiet is-open"[^`]*aria-current="true"/, 'the open one is marked');
+  assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
+  assert.match(c, /if \(stay\.length > 1\) \{/, 'Archive / Snooze in a stack stays and opens the next one');
+  assert.match(c, /const at = stay\.findIndex\(i => i\.id === n\.id\), nx = stay\[at \+ 1\] \|\| stay\[at - 1\];/);
+  assert.match(read('web/layouts/ai-apps/desktop.js'), /\.ch-nstack \.ch-ncard'\)\.length \|\| 0\) > 0\) return;/, 'the list does not jump to the next Ready chat while the stack has more');
+  for (const f of ['desktop.css', 'layout.css']) assert.match(read('web/layouts/ai-apps/' + f), /\.ch-tacts > \.ch-tacts-gap \{ flex: 1 0 0; height: 0; \}/, f + ': Snooze / Archive on the far side, wrapping together');
+});
+
 test('round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\'s keys', () => {
   const c = read('web/core/chats.js'), b = read('web/core/notif-bell.js');
+  assert.match(c, /const noteQuiet = \(\) => \{ try \{ return getComputedStyle\(document\.documentElement\)\.getPropertyValue\('--wos-note-quiet'\)\.trim\(\) === 'on';/, 'off unless a view asks');
+  assert.match(c, /class="ch-notif-route is-quiet" data-part="notify-route"><button type="button" class="ch-nr-b" data-notify-menu/);
+  assert.match(c, /From <b>\$\{esc\(name\)\}<\/b>\$\{where \? ` · \$\{esc\(where\)\}` : ''\}/, "'From Messenger · shows in Chats ▾'");
+  assert.match(c, /<div class="ch-nr-menu" role="menu" hidden>\$\{B\.picker\(id, \{ name \}\)\}<\/div>/, 'the choices are the one shared picker (Badge, Chats, … whatever the part offers)');
+  assert.match(c, /class="ch-notif-hsrc"/, 'the source\'s icon, name and time under the title');
+  assert.match(c, /if \(a === 'resolve'\) return \{ label: `Have \$\{who\} handle it`/, 'the ask names the agent (was the unclear "Resolve")');
+  assert.match(c, /if \(a === 'app'\) return \{ label: `Open \$\{app\}`/, 'Open names the app');
+  assert.match(c, /const tacts = NV \? \(NQ \? '' : noteTactsHtml\(NV, false\)\)/, 'quiet: the buttons sit inside the open card, not under the list');
+  assert.doesNotMatch(c.split('\n').find(l => l.trim().startsWith('if (NQ) msgs =')), /ch-notif-src|mmeta/, 'no second Notification label');
+  assert.match(b, /function routeLabel\(id\)/);
   // Shared main's unified inbox owns the notification thread; the layout must reuse its picker.
   assert.match(c, /function noteRouteHtml\(NV\)/);
   assert.match(c, /class="ch-notif-route" data-part="notify-route"/);
