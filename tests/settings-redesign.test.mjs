@@ -132,7 +132,7 @@ test('twinned Look keeps independent Skin and Colors with Background and Mode in
     S.setWallpaper = () => {}; S.wallpaper = 'landscapes';
     S.wallpapers = [{ id: 'landscapes', name: 'Landscapes' }]; S.wallpaperThumb = () => '';
     h.view.focus('look');
-    assert.match(h.root.innerHTML, /<h4>Skin<\/h4>[^]*<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"/);
+    assert.match(h.root.innerHTML, /<h4>Skin<\/h4>[^]*<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"/);
     assert.doesNotMatch(h.root.innerHTML, /data-skinpick="nebula"/, 'Colors remain scoped to the chosen family');
   }
 });
