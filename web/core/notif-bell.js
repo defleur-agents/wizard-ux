@@ -4,17 +4,18 @@
  * hidden while a Notifications window is open: its desk mark already carries the same count as a badge, so the
  * owner sees one or the other, never both. Shells expose WizAppOpen(id) and call WosBell.paint() on window changes.
  *
- * Where each app's notifications go (Settings › Notifications; Miguel, 1 Nov 2026: "badges or my unified inbox, but
- * not both"): one choice per app, Badge or Chats. Badge = the count on the app's own icon, nothing in Chats. Chats =
- * its items wait in Chats (yellow threads with Open / Done / Snooze, counted in Chats' Ready badge) and its own icon
- * shows no count. Default (Miguel, 3 Nov 2026: "notifications should come in the same place chat threads come in"):
- * Chats, for Notifications' own alerts and for every app that publishes an inbox feed; an app without a feed can
- * only show a badge. Chats needs a package that lists inbox threads (wizard/unified-inbox, on by default); without
- * one everything is a badge. Saved per device (`wos.notify.route.v1`); a part may keep it on the box instead.
+ * Where each source's notifications go (Settings › Notifications; Miguel, 1–4 Nov 2026: one place per source, never
+ * a badge AND a row): Chats · Badge · Morning report · Off, loudest to quietest (see "Routing" below). Chats = its items
+ * wait in Chats (yellow threads with Open / Archive / Snooze, counted in Chats' Ready badge) and its icon shows no
+ * count; Badge = the count on its own icon, nothing in Chats. Default (Miguel, 3 Nov 2026: "notifications should come
+ * in the same place chat threads come in"): Chats, for Notifications' own alerts and for every app that publishes an
+ * inbox feed; an app without a feed can only show a badge. Chats needs a package that lists inbox threads
+ * (wizard/unified-inbox, on by default); without one everything is a badge. Saved on the box (Notifications
+ * /api/routes), the same on every device; this device keeps a copy as the fallback.
  *
- * Where things go is one replaceable part, `notify-routing` (version 1): the stock part below is the
- * Badge | Chats choice. A trusted tweak (skin-host `notify` capability) may replace it whole, e.g. to add more
- * choices or more sources carried by Notifications; core only renders what the part answers and never names a tweak. */
+ * Where things go is one replaceable part, `notify-routing` (version 1): the stock part below is the levels above.
+ * A trusted tweak (skin-host `notify` capability) may replace it whole; core only renders what the part answers and
+ * never names a tweak. */
 (() => {
   'use strict';
   const S = { unread: 0, needs: 0, ok: false, at: 0 };
@@ -25,35 +26,136 @@
   const readJson = (k, d) => { try { const v = JSON.parse(store?.getItem(k) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : d; } catch (e) { return d; } };
   const writeJson = (k, v) => { try { store?.setItem(k, JSON.stringify(v)); } catch (e) {} };
 
-  /* ---- Routing: Badge or Chats, per app ---- */
+  /* ---- Routing: notification levels, one place per source (Miguel, 2–4 Nov 2026) ----
+   * Chats · Badge · Morning report · Off, loudest to quietest. Morning report (stored `daily`) = one line in the next
+   * Morning Report (its Overnight section reads Notifications /api/daily); only for Notifications' own alerts and System
+   * notices, greyed out for an app's feed (Mail, Messenger), which would lose its point waiting a day. Off = no badge,
+   * nothing in Chats, kept in Notifications' own history.
+   * System: notices about Wizard itself (app updates, app connections, Wizard updates) come through Notifications but
+   * route on their own rows (`system:<kind>`), default Morning report. One that needs the owner (tagged `needs-you`,
+   * priority 4+, or a title asking for him) never goes quiet: it routes as Notifications. System notices set to Badge
+   * count on the Settings cog; opening Settings › Notifications is seeing them. A notice is System when its sender tags
+   * it `wizard-system,<kind>`, else by known title.
+   * Saved ON THE BOX (Notifications /notifications/api/routes), so every device shows the same. This device's copy
+   * (`wos.notify.route.v1`) is only the fallback: a cold start, Notifications not answering, or no Notifications app. A
+   * choice made offline is sent on the next sync. One-time move: a box with nothing saved takes this device's saved
+   * choices (the same key the old Badge | Chats picker and the opt-in levels tweak used) once, then the box wins. */
   const ROUTE_KEY = 'wos.notify.route.v1';
   const APPID = /^[a-z0-9][a-z0-9-]{0,63}$/;
   let ROUTES = readJson(ROUTE_KEY, {});
-  /* The stock `notify-routing` part: Badge | Chats. Every method is pure data; core escapes and renders it. */
+  const TO = ['chats', 'badge', 'daily', 'off'];
+  const SYSTEM = [
+    { kind: 'app-updates', name: 'App updates', title: /^(\d+ apps? updated|App updates need a look)$/i },
+    { kind: 'connections', name: 'App connections', title: /^(App connection added|Connection needs your OK)$/i },
+    { kind: 'wizard-updates', name: 'Wizard updates', title: /^(App Manager updated|Wizard OS updated|Your release needs you to finish an update)$/i },
+  ];
+  const SYSID = /^system:([a-z-]{1,40})$/;
+  const sysOf = id => { const m = SYSID.exec(String(id || '')); return m ? SYSTEM.find(k => k.kind === m[1]) || null : null; };
+  const validId = id => APPID.test(id) || !!sysOf(id);
+  const dailyOk = id => id === 'notifications' || !!sysOf(id);
+  const LABEL = { chats: 'Chats', badge: 'Badge', daily: 'Morning report', off: 'Off' };
+  // The Morning Report's own coffee cup (its house sigil, sigils.css .sg-coffee), so the choice reads as that app.
+  const CUP = 'M96 235H349V236Q353 236 357 236Q381 236 399 253Q416 270 416 295Q416 320 399 337Q381 354 357 354Q346 354 336 351C316 389 275 414 222 414C148 414 96 365 96 297V281H349V297C349 306 348 315 346 323Q351 325 357 325Q369 325 378 316Q387 307 387 295Q387 282 378 274Q369 265 357 265Q353 265 349 266V260H96ZM173 213Q162 199 163 181Q164 172 171 156Q176 144 176 138Q177 130 172 122Q169 117 170 110Q172 104 177 101Q183 97 189 99Q195 100 199 105Q209 123 207 141Q206 152 199 168Q195 180 194 184Q194 189 198 194Q202 199 201 205Q200 212 195 216Q190 220 184 219Q177 218 173 213ZM251 213Q240 199 241 181Q242 172 249 156Q254 144 254 138Q255 130 250 122Q247 117 248 110Q250 104 255 101Q260 97 267 99Q273 100 276 105Q287 123 285 141Q284 152 277 168Q273 180 272 184Q272 189 275 194Q280 199 279 205Q278 212 273 216Q268 220 262 219Q255 218 251 213Z';
+  const ICON = { daily: { viewBox: '0 0 512 512', d: CUP, cls: 'wos-route-mr' }, off: { viewBox: '0 0 16 16', circle: [8, 8, 5.5], d: 'M4.2 11.8l7.6-7.6' } };
+  // Which System kind a Notifications item is: the sender's tags (`wizard-system` + kind), else its known title.
+  function sysKind(it) {
+    if (!it || it.app) return null;
+    const tags = Array.isArray(it.tags) ? it.tags.map(String) : [];
+    if (tags.includes('wizard-system')) { const k = SYSTEM.find(k => tags.includes(k.kind)); if (k) return k; }
+    const t = String(it.title || '').trim();
+    return SYSTEM.find(k => k.title.test(t)) || null;
+  }
+  // Needs the owner: tagged so, high priority, or a title that asks for him. Never silenced by a System row.
+  const needsYou = it => (Array.isArray(it.tags) && it.tags.includes('needs-you')) || (Number(it.priority) || 3) >= 4
+    || /need(s)? (a look|your OK|you)/i.test(String(it.title || ''));
+  const LV = { notes: [], snapshot: null, seen: new Set(), sync: { at: 0, pending: {}, busy: false } };
+  const unreadNote = i => !i.read && !i.archived && !LV.seen.has(i.id);
+  const sourceOfNote = it => { const k = sysKind(it); return k && !needsYou(it) ? 'system:' + k.kind : 'notifications'; };
+  const badgedSystem = () => LV.notes.filter(i => unreadNote(i) && sysOf(sourceOfNote(i)) && route(sourceOfNote(i)) === 'badge');
+  const recentSystem = () => LV.notes.filter(i => sysKind(i)).sort((a, b) => b.time - a.time).slice(0, 8)
+    .map(i => ({ title: i.title || sysKind(i).name, text: String(i.message || '').slice(0, 160), time: i.time, fresh: unreadNote(i), needs: needsYou(i) }));
+  /* The box copy: read every 30 s at most (and at once after a pick); a pick made while Notifications is down is kept
+   * pending and sent on the next sync. GET/POST /notifications/api/routes only. */
+  const ROUTES_URL = '/notifications/api/routes';
+  async function getBoxRoutes() { const r = await timed(fetch(ROUTES_URL, { cache: 'no-store', credentials: 'same-origin' })); return r.ok ? r.json() : null; }
+  async function saveBoxRoutes(routes) {
+    const r = await timed(fetch(ROUTES_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routes }) }));
+    return !!r.ok;
+  }
+  const keepable = (k, v) => validId(k) && TO.includes(v) && (v !== 'daily' || dailyOk(k));
+  async function syncRoutes(force) {
+    const Y = LV.sync;
+    if (!installed() || Y.busy || (!force && Date.now() - Y.at < 30e3)) return;
+    Y.busy = true; Y.at = Date.now();
+    try {
+      const up = Object.keys(Y.pending).length ? { ...Y.pending } : null;
+      if (up && await saveBoxRoutes(up)) for (const k of Object.keys(up)) if (Y.pending[k] === up[k]) delete Y.pending[k];
+      const d = await getBoxRoutes();
+      if (!d || !d.routes || typeof d.routes !== 'object') return;
+      if (!d.saved) {
+        // One-time move: a box with nothing saved takes this device's choices, then every device follows the box.
+        const keep = {}; for (const [k, v] of Object.entries(ROUTES)) if (keepable(k, v)) keep[k] = v;
+        if (Object.keys(keep).length) await saveBoxRoutes(keep);
+        return;
+      }
+      HOST.adopt({ ...d.routes, ...Y.pending });
+    } catch (e) {} finally { Y.busy = false; }
+  }
+  /* The stock `notify-routing` part. Every method is pure data; core escapes and renders it. */
   const STOCK = Object.freeze({
-    // Chats unless the owner turned it down: what an app wants him to see lands where his chats are. A quieter
-    // choice saved by another part (Morning report, Off) reads as Badge here, the quietest stock place.
-    route: (id, stored) => stored === undefined || stored === 'chats' ? 'chats' : 'badge',
-    accepts: (id, to) => APPID.test(id) && ['badge', 'chats'].includes(to),
-    choices: () => [{ to: 'badge', label: 'Badge' }, { to: 'chats', label: 'Chats' }],
-    quiet: () => false,          // true = no badge and nothing in Chats (kept in Notifications' own history)
-    carried: () => false,        // true = a source Notifications carries besides its own alerts (lives in its list)
-    sourceOf: () => 'notifications',  // which source a Notifications item routes as
-    name: () => '',
-    describe: (r, off) => r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats',
-    ask: (id, name) => `${name} notifications go to`,
-    moved: (id, now, from, name) => { const back = now === 'badge' ? 'chats' : 'badge'; return { back, text: `${name} moved to ${back === 'chats' ? 'badges' : 'Chats'} · ` }; },
-    intro: () => ({ lead: [['Each app tells you in one place: a '], ['Badge', true], [' on its icon, or a thread in '], ['Chats', true], [' that waits with Archive and Snooze. The Chats badge counts everything waiting in Chats.']], foot: 'Every app listed starts in Chats. Apps not listed here only show badges. Saved on this device.' }),
-    groups: () => [],            // more Settings groups: [{ key, title, hint, rows: [source ids], list?: { title, items } }]
-    attention: () => null,       // { n, label, short }: a count on the Settings cog and a row in Settings
-    readsAll: () => false,       // read Notifications' whole list even while it is not routed to Chats
+    // A source with no saved choice: apps and Notifications' own alerts start in Chats (Chats is the inbox), System in
+    // the Morning report. An unknown or no-longer-allowed value reads as Badge, the quietest place that still shows it.
+    route: (id, stored) => {
+      const r = stored !== undefined ? stored : sysOf(id) ? 'daily' : 'chats';
+      return TO.includes(r) && (r !== 'daily' || dailyOk(id)) ? r : 'badge';
+    },
+    accepts: (id, to) => keepable(id, to),
+    choices: (id, name) => TO.map(to => ({ to, label: LABEL[to], ...(ICON[to] ? { icon: ICON[to] } : {}),
+      ...(to === 'daily' ? { disabled: !dailyOk(id), title: dailyOk(id) ? 'One line in tomorrow’s Morning Report' : `${name} would lose its point waiting for the Morning Report` } : {}) })),
+    quiet: (id, r) => r === 'off' || r === 'daily',   // true = no badge and nothing in Chats (kept in Notifications' history)
+    carried: id => !!sysOf(id),                       // a source Notifications carries besides its own alerts
+    sourceOf: it => sourceOfNote(it),                 // which source a Notifications item routes as
+    name: id => sysOf(id)?.name || '',
+    describe(r, off) {
+      if (sysOf(r.id)) return r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · listed below' : r.route === 'chats' && !off ? 'In Chats' : 'Badge on the Settings cog';
+      return r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · kept in its own history' : r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats';
+    },
+    // "Notifications go to", "App updates go to", "Messenger notifications go to" (never "Notifications notifications").
+    ask: (id, name) => id === 'notifications' || sysOf(id) ? `${name} go to` : `${name} notifications go to`,
+    moved(id, r, from, name) {
+      const back = TO.includes(from) && from !== r ? from : r === 'badge' ? 'chats' : 'badge';
+      const text = r === 'off' ? `${name} turned off · ` : r === 'daily' ? `${name} moved to the Morning Report · ` : `${name} moved to ${r === 'badge' ? 'badges' : 'Chats'} · `;
+      return { back, text };
+    },
+    intro: () => ({ lead: [['Each app tells you in one place: a thread in '], ['Chats', true], [' that waits with Archive and Snooze, a '], ['Badge', true], [' on its icon, a line in the '], ['Morning report', true], [', or '], ['Off', true], ['. The Chats badge counts everything waiting in Chats.']],
+      foot: installed() ? 'Every app listed starts in Chats. Apps not listed here only show badges. The same on every device.' : 'Every app listed starts in Chats. Apps not listed here only show badges. Saved on this device.' }),
+    // More Settings groups: [{ key, title, hint, rows: [source ids], list?: { title, items } }]
+    groups: () => installed() ? [{ key: 'sys', title: 'System', hint: 'About Wizard itself, not your apps. Anything that needs you, like a failed update, still reaches you as Notifications do.',
+      rows: SYSTEM.map(k => 'system:' + k.kind), list: { title: 'Recent', items: LV.snapshot || recentSystem() } }] : [],
+    // { n, label, short }: a count on the Settings cog and a row in Settings (System notices set to Badge).
+    attention: () => { const n = badgedSystem().length; return n ? { n, label: 'new from Wizard', short: 'new' } : null; },
+    readsAll: () => true,        // read Notifications' whole list even while it is not routed to Chats (System rows)
+    notes(items) { LV.notes = Array.isArray(items) ? items : []; for (const id of [...LV.seen]) { const i = LV.notes.find(x => x.id === id); if (!i || i.read || i.archived) LV.seen.delete(id); } },
+    picked(id, to) { LV.sync.pending = { ...LV.sync.pending, [id]: to }; void syncRoutes(true); },
+    tick(force) { void syncRoutes(force); },
+    // Opening Settings › Notifications is seeing the System notices: the cog clears, the list keeps their dots.
+    entered() {
+      LV.snapshot = recentSystem();
+      const ids = badgedSystem().map(i => i.id); if (!ids.length) return;
+      for (const id of ids) LV.seen.add(id);
+      HOST.changed(); void mark(ids, { read: true });
+    },
+    left() { LV.snapshot = null; },
   });
   const PART = { version: 1, live: null };
   // The part as core calls it: the replacement while one is live, stock when it has no such method or it throws.
-  // Hooks only a replacement has (stock: nothing): notes(items), picked(id, to), tick(force), entered(), left(), attach(host).
+  // Hooks: notes(items), picked(id, to), tick(force), entered(), left(); a replacement may also take attach(host).
   const P = new Proxy({}, { get: (_, k) => (...args) => {
     const live = PART.live?.impl;
-    if (live && typeof live[k] === 'function') { try { return live[k](...args); } catch (e) {} }
+    if (live) {
+      if (typeof live[k] === 'function') { try { return live[k](...args); } catch (e) {} }
+      return undefined; // optional hooks belong to the replacement too; never leak into stock IO
+    }
     return typeof STOCK[k] === 'function' ? STOCK[k](...args) : undefined;
   } });
   const own = id => Object.prototype.hasOwnProperty.call(ROUTES, id) ? ROUTES[id] : undefined;
@@ -341,6 +443,8 @@
   addEventListener('storage', e => { if (e && e.key === ROUTE_KEY) { ROUTES = readJson(ROUTE_KEY, {}); rerouted(); loadItems(); } });
   setInterval(() => { if (!document.hidden) refresh(); }, 60000);
   setTimeout(refresh, 800);
+  // The box's saved choices, at once (a device without Notifications keeps its own copy).
+  void syncRoutes(true);
   const nameOf = id => { const own = P.name(id); if (own) return String(own); const n = appName(id); return id === 'notifications' && n === 'notifications' ? 'Notifications' : n; };
   /* The list Settings › Notifications shows: Notifications (when installed), then every app with a feed, by name. */
   function routes() {
@@ -368,7 +472,7 @@
   const TOID = /^[a-z][a-z0-9-]{0,19}$/;
   function picker(id, { name, off = false } = {}) {
     id = String(id || ''); const nm = name || nameOf(id), now = route(id), cur = off && now === 'chats' ? 'badge' : now;
-    const got = P.choices(id, nm), list = (Array.isArray(got) ? got : STOCK.choices()).filter(c => c && TOID.test(String(c.to))).slice(0, 6);
+    const got = P.choices(id, nm), list = (Array.isArray(got) ? got : STOCK.choices(id, nm)).filter(c => c && TOID.test(String(c.to))).slice(0, 6);
     return `<div class="st-seg st-nr-seg wos-route" role="radiogroup" aria-label="Where ${escH(nm)} notifications go">${list.map(c => { const to = String(c.to); return `<button type="button" role="radio" data-notify-route="${escH(id)}" data-notify-to="${to}" aria-checked="${cur === to}"${(to === 'chats' && off) || c.disabled === true ? ' disabled' : ''}${c.title ? ` title="${escH(String(c.title).slice(0, 200))}"` : ''}>${ROUTE_ICON[to] && !c.icon ? ROUTE_ICON[to] : partIcon(c.icon)}<span>${escH(String(c.label || to).slice(0, 40))}</span></button>`; }).join('')}</div>`;
   }
   /* Picked Badge from inside Chats: its items have already left Chats (setRoute). The shell's own toast says so, with
@@ -404,7 +508,9 @@
     }));
   }
   const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, routes, discover, picker, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+  /** The label of where this source goes now (its picker's choice: Chats, Badge, Morning report, Off). */
+  function routeLabel(id) { id = String(id || ''); const now = route(id), got = P.choices(id, nameOf(id)), list = Array.isArray(got) ? got : STOCK.choices(id, nameOf(id)); const c = list.find(x => x && String(x.to) === now); return c ? String(c.label || now).slice(0, 40) : ''; }
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
     entered: () => { P.entered(); }, left: () => { P.left(); },
     get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
