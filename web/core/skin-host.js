@@ -221,7 +221,7 @@
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
     a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear(); a.on.home.clear();
-    for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
+    for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) { claims.delete(id); backClaims.delete(id); if (!backClaims.size) claimAt = -Infinity; } }
     a.claims.clear();
   }
 
