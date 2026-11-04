@@ -3017,6 +3017,9 @@
     dock: () => null,
     locked: () => false,
     toast: text => toast('◇', text, 2400),
+    // Now playing (api.media): an app's own name and mark, and bringing that app to the front.
+    mediaApp: id => { const a = APP[id]; return a ? { name: a.name || id, icon: ico('span', 'np-ic', a) } : null; },
+    mediaOpen: id => !!window.WizOpenApp?.(id),
   });
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
