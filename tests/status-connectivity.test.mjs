@@ -233,6 +233,15 @@ test('a short outage shows nothing: the pill waits 8 s on a slow server and 3 s 
   const d = setup(false); d.advance(3500); d.settle(); d.ctx.WizCore.status.refresh();
   assert.equal(d.ctx.WizCore.status.state.offline, 'pill', 'device offline: short wait');
 });
+test('an alerted device outage stays visible when the browser hint becomes online, then resets for a new outage', () => {
+  const h = setup(false); h.advance(3500); h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.ctx.WizCore.status.state.offline, 'pill');
+  h.ctx.navigator.onLine = true; h.event('online');
+  assert.equal(h.ctx.WizCore.status.state.offline, 'pill', 'online hint cannot retract the pill');
+  h.success(); assert.equal(h.state(), 'restored', 'confirmed recovery still reports Back online');
+  h.L.error = 'offline'; h.L.emit(); h.advance(3500); h.settle(); h.ctx.WizCore.status.refresh();
+  assert.equal(h.ctx.WizCore.status.state.offline, '', 'a new server outage gets a fresh grace');
+});
 test('tapping the pill opens the checks; an outside tap, X and capture tuck them back; recovery clears them', () => {
   const h = setup(); h.success(); h.L.error = 'offline'; h.L.emit(); h.grace();
   h.openPill(); assert.equal(h.pop().hidden, false);
