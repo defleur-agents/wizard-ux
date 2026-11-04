@@ -1889,3 +1889,73 @@ test('round 20: a modal in front (the app picker, Settings) takes only its own â
   assert.equal(keys[2].down({ altKey: true, code: 'Backslash' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   keys[2].down({ altKey: true, code: 'Backslash' });
 });
+
+test('round 21 desktop: one left/right model: apps and their links on the right (one window, taken to the page), other links in the same panel, no view beside a thread, an app\'s Reply in the left column with the app kept', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  let R = null; const paths = [], links = [];
+  Object.assign(w.api.apps, { routeOpens: h => { R = h; return () => { R = null; }; }, path: (id, p) => { paths.push([id, p]); return true; }, openLink: (u, t) => { links.push([u, t]); return true; } });
+  (await layout()).default(w.api);
+  assert.ok(R && typeof R.open === 'function' && typeof R.shows === 'function', 'the view holds the opens');
+  const stock = () => assert.fail('the stock way would open another window');
+  // a notification's Open (three clicks): the app's own desk each time, taken to the page; never a new desk
+  for (let i = 0; i < 3; i++) { assert.equal(R.open('app', Object.freeze({ id: 'money', path: '/money/bills' }), stock), true); w.run(); }
+  assert.deepEqual(w.st.gone, [4, 4, 4], 'its desk (Money is desk 4)'); assert.equal(w.st.opened.filter(x => x === 'money').length, 0, 'no second Money');
+  assert.deepEqual(paths, [['money', '/money/bills'], ['money', '/money/bills'], ['money', '/money/bills']]);
+  // an app that is not open yet gets its desk once (the stock + sheet's way); no page = no path
+  assert.equal(R.open('app', { id: 'movies', path: '' }, stock), true); w.run(); assert.deepEqual(w.st.opened, ['movies']); assert.equal(paths.length, 3);
+  // a link tapped in a reply: an app's page = that app; a page no app owns = the one link panel
+  assert.equal(R.open('link', { url: '/mail/inbox/7', title: 'Mail', app: 'mail' }, stock), true); w.run(); assert.equal(w.st.gone.at(-1), 2); assert.deepEqual(paths.at(-1), ['mail', '/mail/inbox/7']);
+  assert.equal(R.open('link', { url: '/reports/q3.html', title: 'Q3', app: '' }, stock), true); assert.deepEqual(links, [['/reports/q3.html', 'Q3']]);
+  assert.equal(R.open('beside', { url: '/money/', app: 'money' }, stock), true, 'no review-mode view beside a thread: links open when tapped');
+  // Money in front as the panel; its Reply: the main Chats' new chat (the stock go), docked LEFT as a chat; Money stays right
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app', 'Money is the panel'); assert.equal(R.shows(4), true, 'its Reply is admitted there'); assert.equal(R.shows(2), false);
+  let went = 0;
+  const receipt = R.open('draft', Object.freeze({ from: 'money' }), () => { went++; w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route); return { kind: 'unsent-draft' }; });
+  assert.equal(receipt, true); assert.equal(went, 1);
+  assert.equal(w.html.dataset.aadChat, 'on', 'the Reply is a chat in the left column'); assert.equal(chatDesk.dataset.aadRole, 'chat');
+  assert.equal(appDesk.dataset.aadRole, 'app', 'the app stays on the right'); assert.equal(w.html.dataset.aadSplit, 'on');
+  assert.equal(w.html.dataset.aadNew, 'false', 'never the see-through Home'); assert.equal(w.q('.aad-tt').textContent, 'New chat');
+  w.emit('render'); assert.equal(w.html.dataset.aadChat, 'on', 'repaints keep it docked');
+  // its âœ• closes the column (Home's new chat: no column again); the app stays
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aadChat, undefined, 'closed: Home again, no column'); assert.equal(appDesk.dataset.aadRole, 'app');
+  // an app's chat (openThread): the stock go, a thread docks like any chat
+  assert.equal(R.open('thread', { sid: 'r1', from: 'money' }, () => { w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); return true; }), true);
+  assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.q('.aad-tt').textContent, 'Ready one');
+  // a Reply that could not open still counts as placed (the caller reports the failure), nothing docks for it
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
+  assert.equal(R.open('draft', { from: 'money' }, () => { throw new Error('Main Chats unavailable'); }), true); assert.equal(w.html.dataset.aadChat, undefined);
+});
+
+test('round 21 phone: an app (or its link) opens full screen on its own desk, taken to the page; an app\'s Reply opens the chat and Back returns to the app; other links stay stock', async () => {
+  const p = world();
+  let R = null; const paths = [];
+  Object.assign(p.api.apps, { routeOpens: h => { R = h; return () => { R = null; }; }, path: (id, x) => { paths.push([id, x]); return true; } });
+  (await layout()).default(p.api);
+  const stock = () => assert.fail('the stock way would stack another window');
+  for (let i = 0; i < 3; i++) assert.equal(R.open('app', { id: 'money', path: '/money/bills' }, stock), true);
+  assert.deepEqual(p.st.gone, [4, 4, 4]); assert.equal(p.st.opened.length, 0); assert.equal(paths.length, 3);
+  assert.equal(R.open('link', { url: '/notes/n/2', title: '', app: 'notes' }, stock), true); assert.equal(p.st.gone.at(-1), 5); assert.deepEqual(paths.at(-1), ['notes', '/notes/n/2']);
+  assert.equal(R.open('link', { url: '/reports/q3.html', title: '', app: '' }, () => true), false, 'a page no app owns: the stock page with its own Back');
+  assert.equal(R.open('beside', { url: '/money/' }, stock), true, 'nothing opens beside a thread by itself');
+  // Reply from Money: the chat, and Back returns to Money
+  p.st.route = { home: false, view: 'desk', thread: null, desk: 4, app: 'money' }; p.emit('route', p.st.route);
+  assert.equal(R.open('draft', { from: 'money' }, () => { p.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' }; p.emit('route', p.st.route); return { kind: 'unsent-draft' }; }), true);
+  assert.equal(p.st.backs.length, 1, 'Back is armed'); const n = p.st.gone.length;
+  p.st.backs.pop()(); assert.equal(p.st.gone.length, n + 1); assert.equal(p.st.gone.at(-1), 4, 'Back lands on Money');
+  // leaving that chat another way gives Back back to the stock order
+  R.open('thread', { sid: 'r1', from: 'money' }, () => { p.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1, app: 'chats' }; p.emit('route', p.st.route); return true; });
+  assert.equal(p.st.backs.length, 1, 'Back is armed again for the chat it opened (one entry at a time)');
+  p.st.route = { home: false, view: 'desk', thread: null, desk: 3, app: 'music' }; p.emit('route', p.st.route);
+  assert.equal(p.st.backs.length, 0, 'left the chat: released');
+});
+
+test('round 21: the views keep the open model to themselves: Desks, Orb and Apps never hold it; the stock paths stay in core', () => {
+  for (const f of ['web/layouts/orb/layout.js', 'web/layouts/orb/phone.js', 'web/layouts/apps/layout.js', 'web/layouts/apps/desktop.js', 'web/layouts/apps/chrome.js'])
+    assert.ok(!read(f).includes('routeOpens'), `${f} leaves every open stock`);
+  for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /api\.apps\.routeOpens\?\.\(\{/);
+});

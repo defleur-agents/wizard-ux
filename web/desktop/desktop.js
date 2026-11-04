@@ -394,6 +394,15 @@
   const hostedOpenable = id => { const a = APP[id]; if (!a?.url || a.kind !== 'wizard') return null; try { if (new URL(a.url, location.origin).origin !== location.origin) return null; } catch (e) { return null; } return a; };
   window.WizCanOpen = id => !!hostedOpenable(id);
   window.WizAppOpen = id => Object.values(W).some(w => w && w.appId === id);
+  // Take a frame window to another page (its saved url too); an app page at the same address stays as it is.
+  function framePage(w, rel) {
+    w.url = rel; save();
+    const f = winEl(w.id)?.querySelector('iframe'); if (!f) { render(); return true; }
+    let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
+    // (replace: a page change never adds a Back step of its own)
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(appOf(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    return true;
+  }
   function closeWorkflow(w) {
     if (!w?.workflow || W[w.id] !== w) return false;
     const origin = w.returnWid; closeWin(w.id);
@@ -406,7 +415,10 @@
     let u; try { u = new URL(path, location.href); } catch (_) { return false; }
     const rel = u.pathname + u.search + u.hash;
     if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
-    return !!newWin({ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws[cur].focus });
+    const go = () => !!newWin({ app: 'frame', appId: id, url: rel, workflow: true, returnWid: ws[cur].focus });
+    // a layout placing the shell's opens (apps.routeOpens): the app where it shows apps, at that page
+    const r = window.WosSkinHost?.routeOpen?.('app', { id, path: rel }, go); if (r) return true;
+    return go();
   };
   // Only trusted system windows may ask; check the actual sender frame, never a claimed app id.
   addEventListener('message', async e => {
@@ -451,7 +463,9 @@
     const a = appAt(url);
     if (a && !setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openAppLink(url, title, true));
-    return !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
+    const go = () => !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
+    const r = window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;
+    return go();
   }
   window.WosAppSetup?.init({ getApp: id => APP[id], isFront: id => focused()?.appId === id });
   function openApp(a, opts = {}) {
@@ -462,6 +476,8 @@
     // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
+    // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
+    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;
     if (a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
@@ -495,6 +511,8 @@
     focusWin(w.id); CHATS.openChat(w.id, sid);
     setTimeout(() => focusInside(w.id), 30);
   }
+  // An app's chat (its Reply on a thread) in the main Chats, for a layout that keeps chats apart from apps (routeOpens)
+  function threadFromApp(sid, opts = {}) { if (!CHATS.prepThread(sid, opts)) return false; openThread(sid); return true; }
   function openChatsList() {
     window.WosResources?.back(); closeSettings(); closePalette();
     openApp(APP.wizard);
@@ -693,7 +711,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => CHATS.openHosted(w.id, f, sid, opts), openContextDraft: (key, text) => { let cw = (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, openContextDraft: (key, text) => { const go = main => { let cw = main ? findWin(mainChats) : (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, () => go(true)); if (r) { if (!r.value) throw new Error('Main Chats unavailable'); return r.value; } return go(false); }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) || (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id))) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -2768,7 +2786,8 @@
     parent: document.body, mode: 'pane',
     onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
     // A page preview opens as a window like any other (wizard-os#265 rule 7): ✕, ⌥W and Esc close it, Keep is not needed.
-    asWindow: (url, title) => { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }); return true; },
+    asWindow: (url, title) => { const o = appAt(url), go = () => { newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }); return true; };
+      return window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: o ? o.id : '' }, go) ? true : go(); },   // a layout placing opens: its panel
   }) : null;
   // A link to a page inside an installed app opens as that app's window (its services: shared microphone,
   // Back, theme), not in the plain link pane (James, 19 Oct 2026: Outline said "not connected to Wizard").
@@ -2941,6 +2960,17 @@
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
     openAppDesk: id => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
       if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
+    // A layout placing the shell's opens (apps.routeOpens): the app's window (the one in front first) at one of its own
+    // pages, and one link page no app owns on a desk of its own, reused and taken to the next link (never a second).
+    showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
+      if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
+      const mine = x => x?.app === 'frame' && x.appId === id, w = mine(W[ws[cur].focus]) ? W[ws[cur].focus] : ws[cur].wins.map(x => W[x]).find(mine) || findWin(mine); if (!w) return false;
+      return framePage(w, rel); },
+    openLinkDesk: (url, title) => { let u; try { u = new URL(url, location.href); } catch (_) { return false; } if (u.origin !== location.origin) return false; const rel = u.pathname + u.search + u.hash;
+      const at = ws.findIndex(d => d.wins.some(x => W[x]?.app === 'frame' && W[x].appId === 'link'));
+      if (at >= 0) { const w = W[ws[at].wins.find(x => W[x]?.app === 'frame' && W[x].appId === 'link')]; if (title) w.title = title; goWs(at); framePage(w, rel); return true; }
+      const obj = { app: 'frame', appId: 'link', url: rel, title: title || u.pathname.split('/').filter(Boolean).pop() || 'Page' };
+      if (ws[cur].wins.length) { ws.push(freshDesk()); newWin(obj, { ws: ws.length - 1 }); return true; } newWin(obj); return true; },
     // The Orb and Apps views' app sheet: close an app (its desks; the Orb panel quits it), and an App Store page on a
     // desk of its own (the Store window opened before goes; the page's Get opens the app right after it installs).
     // The AI apps view's tab strip: a tab's ✕ = the stock close of that desk (round 13)

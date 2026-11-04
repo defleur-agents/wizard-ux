@@ -337,6 +337,8 @@
    * the Working / Ready threads with the actions Chats offers on each, Snooze / Done through Chats' own threadAct
    * (so a snooze tweak's interception applies), the owner's quick apps, Home and Settings › Look. */
   const emptyHomes = new Set();   // layouts that asked for desktop.js closeWin to go Home when a desk empties
+  const openRoutes = new Set();   // layouts that place the shell's own opens themselves (apps.routeOpens); none = stock
+  let routing = 0;                // a held route is running: opens it starts itself take the stock way (no loop)
   /* An installed app's own logo: exactly the picture every other app-icon place shows (WizSigil.of(app).logo over the
    * box's list of installed logos; placeholders already excluded, a designed sigil wins), so a layout never draws a different
    * logo for the same app than the Desks view. A same-origin URL carrying the image's hash; null when it has none. */
@@ -861,6 +863,23 @@
           const off = () => { insetHolders.delete(a); insetOrbs.delete(a); insetPlaces.delete(a); a.offs.delete(off); insetSync(); }; a.offs.add(off); return off;
         },
         all: () => { if (live()) shell.openPicker?.(); },
+        /* One place for every open the shell starts by itself (the AI apps view, round 21: apps and links on the right,
+         * chats an app starts on the left). While held, open(kind, detail, go) is asked first and returns true when it
+         * placed it: 'app' { id, path } (a notification's Open, a launcher, a command, a chat's app button), 'link'
+         * { url, title, app } (a link tapped in a reply; app = the installed app that owns it, else ''), 'draft'
+         * { from } (an app's Reply on an item), 'thread' { sid, from } (an app opening a chat) and 'beside' { url } (the
+         * view a reply binds beside its thread; true = none). go() runs the shell's own way for it; drafts and threads go
+         * to the main Chats wherever it is. shows(desk) says whether the layout shows that desk's app on screen (an app's
+         * Reply is admitted there). Released on teardown; nobody holding it = stock, byte for byte. */
+        routeOpens({ open, shows } = {}) {
+          if (!live() || typeof open !== 'function') return () => {};
+          const h = { a, open: guard(a, 'apps.routeOpens', open), shows: typeof shows === 'function' ? guard(a, 'apps.routeOpens shows', shows) : null };
+          openRoutes.add(h); const off = () => { openRoutes.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        // Take the open window of an installed app to one of its own pages (same origin, a path that app owns); false when
+        // it has no window. And one link page (no app owns it) on a desk of its own, reused: the view's right panel.
+        path: (id, path) => live() && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) && typeof path === 'string' && path ? !!shell.showAppPath?.(id, path) : false,
+        openLink: (url, title = '') => live() && typeof url === 'string' && url ? !!shell.openLinkDesk?.(url, String(title || '').slice(0, 80)) : false,
         /* Every app by kind, as the launcher groups them (core/app-kinds.js): { apps, wiz (agent apps), agents, conns
          * (connectors), dev } of { id, name, icon, system }; null on a shell without kinds. openAny(id) opens any of them
          * like openDesk (an agent app with no screen shows its settings sheet). */
@@ -1576,6 +1595,23 @@
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
+    /* app.js / desktop.js / bound-view.js: an open the shell starts by itself (apps.routeOpens). A holder that placed it
+     * gives { value } (what its go() returned); null = nobody did: the caller opens it the stock way. Opens a holder
+     * starts while it runs are never routed again. */
+    routeOpen(kind, detail = {}, go = null) {
+      if (routing || !openRoutes.size) return null;
+      for (const h of [...openRoutes]) {
+        if (h.a.dead) continue;
+        let out, ran = false;
+        const g = () => { if (!ran) { ran = true; out = typeof go === 'function' ? go() : undefined; } return out; };
+        routing++;
+        let took; try { took = h.open(String(kind), Object.freeze({ ...detail }), g); } finally { routing--; }
+        if (took === true) return Object.freeze({ value: out });
+      }
+      return null;
+    },
+    /* desktop.js: the layout holding the opens shows this desk's app on screen (beside the desk in front). */
+    routeShows(desk) { for (const h of openRoutes) if (!h.a.dead && h.shows && h.shows(desk) === true) return true; return false; },
     /* desktop.js: a layout without desks holds the right-side panel (everything opens there, desks stay put). */
     get panelMode() { return panelOn && (panelHold > 0 || [...panelHolders].some(l => !l.dead)); },
     get layoutState() { return { id: layoutId, active: !!layoutRec, disabled: disabled.has('layout:' + layoutId), mounts: layoutRec?.mounts.size || 0 }; },
