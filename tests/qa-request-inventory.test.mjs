@@ -56,16 +56,17 @@ test('unknown requests are refused (451, no data) and ALL of them are collected,
 test('a run with refusals continues, then exits non-zero with the full list and refused-*.json; a clean run exits 0', () => {
  const dir = mkdtempSync(path.join(tmpdir(), 'refused-'));
  try {
-  const script = body => `const fx=require(${JSON.stringify(path.join(root, 'tools/qa-proof-fixture.cjs'))});fx.failAtExit(${JSON.stringify(dir)});${body}`;
-  const bad = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/one','GET');fx.response('/wizard/two','POST');console.log('still running');process.exit(0)`)], { encoding: 'utf8' });
+  const tenv = { ...process.env, T_FIXTURE: path.join(root, 'tools/qa-proof-fixture.cjs'), T_DIR: dir, QA_OUT: '', QA_REFUSED_DIR: '' };
+  const script = body => `const fx=require(process.env.T_FIXTURE);fx.failAtExit(process.env.T_DIR);${body}`;
+  const bad = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/one','GET');fx.response('/wizard/two','POST');console.log('still running');process.exit(0)`)], { encoding: 'utf8', env: tenv });
   assert.equal(bad.status, 1); assert.match(bad.stdout, /still running/);
   assert.match(bad.stderr, /REFUSED 2 uncatalogued/); assert.match(bad.stderr, /GET \/wizard\/one/); assert.match(bad.stderr, /POST \/wizard\/two/);
   const file = readdirSync(dir).find(f => f.startsWith('refused-'));
   assert.deepEqual(JSON.parse(readFileSync(path.join(dir, file), 'utf8')).map(r => r.request), ['GET /wizard/one', 'POST /wizard/two']);
-  const clean = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/v1/bootstrap','GET')`)], { encoding: 'utf8' });
+  const clean = spawnSync(process.execPath, ['-e', script(`fx.response('/wizard/v1/bootstrap','GET')`)], { encoding: 'utf8', env: tenv });
   assert.equal(clean.status, 0);
   // A harness that already failed keeps its own code.
-  const failed = spawnSync(process.execPath, ['-e', script(`process.exitCode=2`)], { encoding: 'utf8' });
+  const failed = spawnSync(process.execPath, ['-e', script(`process.exitCode=2`)], { encoding: 'utf8', env: tenv });
   assert.equal(failed.status, 2);
  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -84,7 +85,7 @@ test('all three harnesses use the shared collect-all fence and never answer unkn
 test('refused-*.json lands in the harness default output directory, resolved at exit, and writes are never silent successes', () => {
  const dir = mkdtempSync(path.join(tmpdir(), 'refused-default-'));
  try {
-  const cp = spawnSync(process.execPath, ['-e', `const fx=require(${JSON.stringify(path.join(root, 'tools/qa-proof-fixture.cjs'))});fx.failAtExit(()=>OUT);const OUT=${JSON.stringify(dir)};fx.response('/wizard/x','POST')`], { encoding: 'utf8', env: { ...process.env, QA_OUT: '', QA_REFUSED_DIR: '' } });
+  const cp = spawnSync(process.execPath, ['-e', "const fx=require(process.env.T_FIXTURE);fx.failAtExit(()=>OUT);const OUT=process.env.T_DIR;fx.response('/wizard/x','POST')"], { encoding: 'utf8', env: { ...process.env, T_FIXTURE: path.join(root, 'tools/qa-proof-fixture.cjs'), T_DIR: dir, QA_OUT: '', QA_REFUSED_DIR: '' } });
   assert.equal(cp.status, 1);
   assert.equal(readdirSync(dir).filter(f => f.startsWith('refused-')).length, 1);
  } finally { rmSync(dir, { recursive: true, force: true }); }
