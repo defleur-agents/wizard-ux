@@ -49,7 +49,8 @@ function hostHarness({ open = true, over = true, modal = false } = {}) {
   s.settingsWin = () => win; s.winEl = () => ({ querySelector: () => host });
   s.closeWin = id => { closed.push(id); win = null; s.hostSettings(); };
   vm.createContext(s);
-  vm.runInContext(slice(desktop, '  function showSettingsModal()', '  afterRender = hostSettings;') + '\n' + slice(desktop, '  function closeSettings()', '  function toggleSettings()'), s);
+  const hostStart = desktop.includes('  function showSettingsModal()') ? '  function showSettingsModal()' : '  function hostSettings()';
+  vm.runInContext(slice(desktop, hostStart, '  afterRender = hostSettings;') + '\n' + slice(desktop, '  function closeSettings()', '  function toggleSettings()'), s);
   return { s, body, host, setEl, attrs, classes, closed };
 }
 test('mounting AI apps promotes an already-open Settings window without replacing its page/root', () => {
