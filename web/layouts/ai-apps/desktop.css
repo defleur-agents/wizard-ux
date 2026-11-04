@@ -823,7 +823,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-rk-wk { 
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wn { font: 650 0.875rem / 1 var(--wz-font-ui); font-variant-numeric: tabular-nums; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-space: normal; text-align: center; overflow-wrap: normal; line-height: 1.15; }
 
-/* round 24b (Miguel, 4 Nov 2026): By subject on the folded rail, each subject's word at most two lines */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="subj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; font-size: 0.5625rem; letter-spacing: -.03em; max-width: none; margin-inline: -3px; }
+/* round 24b (Miguel, 4 Nov 2026): By project on the folded rail, each project's word at most two lines */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; font-size: 0.5625rem; letter-spacing: -.03em; max-width: none; margin-inline: -3px; }
 /* (a word wider than the rail ends in a fade, never broken mid-word) */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="subj:"] { overflow: hidden; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] { overflow: hidden; }

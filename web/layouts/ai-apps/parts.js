@@ -239,25 +239,29 @@ export function readySort(rows, order) {
 export function readyGroups(rows, order) {
   return stateGroups(rows).map(g => ({ ...g, word: g.state === 'none' ? 'No status' : g.word, rows: readySort(g.rows, order) }));
 }
-/** Round 24 (Miguel, 4 Nov 2026: "add by subject so these are grouped Wizard OS, Messenger, etc."): Ready grouped by
- * each chat's subject (the reply's status line, stock Chats' By subject), a sub-header per subject, its rows in the
- * chosen order. Subjects with something waiting on him first, then the bigger ones, then A–Z; notifications under
- * 'Notifications' and chats with no subject under 'Other', both last. [{ state: 'subj:<name>', word, rows }]. Pure. */
-export const NOTES_SUBJECT = 'Notifications', NO_SUBJECT = 'Other';
-export const subjectOf = r => r?.note ? NOTES_SUBJECT : String(r?.subject || '').replace(/\s+/g, ' ').trim() || NO_SUBJECT;
-export function subjectGroups(rows, order) {
+/** Round 24c (Miguel, 4 Nov 2026: "they should be one and the same, just use project"): Ready grouped by each chat's
+ * project, the part of its title before ' · ' ("Wizard OS · Hotkeys" → Wizard OS), a sub-header per project, its rows
+ * in the chosen order. Projects with something waiting on him first, then the bigger ones, then A–Z; notifications
+ * under 'Notifications' and titles with no project under 'Other', both last. [{ state: 'proj:<name>', word, rows }]. Pure. */
+export const NOTES_PROJECT = 'Notifications', NO_PROJECT = 'Other';
+export const projectOf = r => {
+  if (r?.note) return NOTES_PROJECT;
+  const t = String(r?.title || '').replace(/\s+/g, ' ').trim(), i = t.indexOf('·');
+  return (i > 0 ? t.slice(0, i).trim() : '') || NO_PROJECT;
+};
+export function projectGroups(rows, order) {
   const by = new Map();
-  for (const r of rows || []) { const k = subjectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
-  const tail = k => k === NO_SUBJECT ? 2 : k === NOTES_SUBJECT ? 1 : 0, waits = k => by.get(k).filter(r => rankOf(r) <= 1).length;
+  for (const r of rows || []) { const k = projectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
+  const tail = k => k === NO_PROJECT ? 2 : k === NOTES_PROJECT ? 1 : 0, waits = k => by.get(k).filter(r => rankOf(r) <= 1).length;
   return [...by.keys()].sort((a, b) => tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
-    .map(k => ({ state: 'subj:' + k, word: k, rows: readySort(by.get(k), order) }));
+    .map(k => ({ state: 'proj:' + k, word: k, rows: readySort(by.get(k), order) }));
 }
-/** Ready's grouping: 'status' (sub-headers per status), 'subject' (per subject) or 'none' (one list, still in the
+/** Ready's grouping: 'status' (sub-headers per status), 'project' (per project) or 'none' (one list, still in the
  * status order). Any other value reads as 'none'. */
-export const GROUP_MODES = Object.freeze([['status', 'By status'], ['subject', 'By subject'], ['none', 'One list']]);
-export const groupMode = m => m === 'status' || m === 'subject' ? m : 'none';
+export const GROUP_MODES = Object.freeze([['status', 'By status'], ['project', 'By project'], ['none', 'One list']]);
+export const groupMode = m => m === 'status' || m === 'project' ? m : 'none';
 /** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
-export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'subject' ? subjectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
+export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'project' ? projectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
 /** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
  * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
 export function readyStep(ids, cur, dir) {
@@ -280,23 +284,23 @@ export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
   if (key === 'ready') return readyFlat(s?.ready || [], order, mode);
-  // (round 24b: a subject on the folded rail, 'subj:<name>')
-  if (String(key).startsWith('subj:')) return (subjectGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
+  // (round 24b: a project on the folded rail, 'proj:<name>')
+  if (String(key).startsWith('proj:')) return (projectGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
   return (readyGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
 }
 /** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
  * status group holding it, else Ready / Snoozed. { key, i, n } (i zero-based) or null. Pure. */
 export function railActive(s, cur, last, order, mode) {
   if (!cur) return null;
-  const at = key => { const ids = railRows(s, key, order, mode === 'subjects' ? 'subject' : undefined).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
-  // A remembered Ready/status/subject key must not win after its row disappears on a grouping switch.
+  const at = key => { const ids = railRows(s, key, order, mode === 'projects' ? 'project' : undefined).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
+  // A remembered Ready/status/project key must not win after its row disappears on a grouping switch.
   const common = last === 'working' || last === 'snoozed';
-  const visible = mode === 'subjects' ? common || String(last).startsWith('subj:')
-    : mode === 'groups' ? last !== 'ready' && !String(last).startsWith('subj:')
+  const visible = mode === 'projects' ? common || String(last).startsWith('proj:')
+    : mode === 'groups' ? last !== 'ready' && !String(last).startsWith('proj:')
     : mode === 'list' ? common || last === 'ready' : true;
   if (last && visible) { const a = at(last); if (a) return a; }
-  // round 24b (Miguel, 4 Nov 2026: By subject on the folded rail too): each subject alone, as 'groups' does statuses
-  if (mode === 'subjects') { const sg = subjectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
+  // round 24b (Miguel, 4 Nov 2026: By project on the folded rail too): each project alone, as 'groups' does statuses
+  if (mode === 'projects') { const sg = projectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
   // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
   const g = mode === 'list' ? null : stateGroups(s?.ready || []).find(x => (mode === 'groups' || x.state !== 'none') && x.rows.some(r => r.id === cur));
   return (g && at(g.state)) || (mode === 'groups' ? null : at('ready')) || at('snoozed') || at('working');

@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, subjectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -281,8 +281,8 @@ export default function desktop(api) {
    * Chats & app screens and kept where stock Chats keeps its order (api.sessions.order; its Priority or By subject
    * reads as Newest here). The sidebar's own sort control shows only when 'Show sort control in sidebar' is on. */
   const readyOrder = () => groupOrder(api.sessions.order?.());
-  // (round 20 item 9: off = one flat Ready; round 24: 'status' / 'subject' / 'none', the old on/off switch read as status / none)
-  const groupBy = () => api.storage.get('groupReady') === true ? 'status' : api.storage.get('groupBy') === 'subject' ? 'subject' : 'none';
+  // (round 20 item 9: off = one flat Ready; round 24c: 'status' / 'project' / 'none', the old on/off switch read as status / none, a saved 'subject' as project)
+  const groupBy = () => api.storage.get('groupReady') === true ? 'status' : ['project', 'subject'].includes(api.storage.get('groupBy')) ? 'project' : 'none';
   const groupReady = () => groupBy() === 'status';
   // round 22: the rows' times stay true ("5m" becomes "6m") without a repaint: one cheap text pass every 10 s
   const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
@@ -658,7 +658,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.subject || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -692,12 +692,12 @@ export default function desktop(api) {
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
           // the chosen order (item 3: group first, then the order inside each)
-          // (round 24: or one per subject, Wizard OS, Messenger, … under their own headers)
-          const groups = groupBy() === 'subject' ? subjectGroups(rows, readyOrder()) : readyGroups(rows, readyOrder());
+          // (round 24c: or one per project, Wizard OS, Messenger, … under their own headers)
+          const groups = groupBy() === 'project' ? projectGroups(rows, readyOrder()) : readyGroups(rows, readyOrder());
           for (const g of groups) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
-            const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('subj:') ? 'subject' : g.state, role: 'heading', 'aria-level': '4' });
+            const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
             gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
             body.append(gh, ...g.rows.map(r => chatRow(r, h.thread)));
           }
@@ -743,7 +743,7 @@ export default function desktop(api) {
   let railLast = '';
   // (an app in front with a chat docked beside it: that chat is the current one, so ⌥↓ / ⌥↑ step from it)
   const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || (h.app && chatThread ? (chatThread === NOTE ? stepAt : chatThread) : null) || null; };
-  const railMode = () => ({ status: 'groups', subject: 'subjects' })[groupBy()] || 'list';   // (round 24b: By subject folds to its subjects)
+  const railMode = () => ({ status: 'groups', project: 'projects' })[groupBy()] || 'list';   // (round 24b: By project folds to its projects)
   const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder(), railMode());
   function railGo(key) {
     closeFly();
@@ -796,7 +796,7 @@ export default function desktop(api) {
     if (root.dataset.aadSide !== 'rail') return;
     // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
     // status alone (plain chats as 'Other'), no Ready total over them
-    const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'subject' ? subjectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
+    const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
     const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
@@ -806,7 +806,7 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each subject)
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     else out.push(railRow('ready', ready.length, 'Ready', '', act));
     rList.replaceChildren(...out);
     if (fly) paintFly();
@@ -1530,7 +1530,7 @@ export default function desktop(api) {
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)
-      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder(), railMode()); return a && [...rList.querySelectorAll('.aad-rk')].find(n => n.dataset.k === a.key); };   // (a subject key may hold any character)
+      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder(), railMode()); return a && [...rList.querySelectorAll('.aad-rk')].find(n => n.dataset.k === a.key); };   // (a project key may hold any character)
       const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
       // (beside the rail word, never over its count; both on one word: ↑ over ↓)
       if (n1) put(n1, '↓', p1 === n1 ? 'right-dn' : 'right'); if (p1) put(p1, '↑', p1 === n1 ? 'right-up' : 'right');
