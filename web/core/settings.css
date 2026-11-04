@@ -120,8 +120,16 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-desktop .st-page { overflow-y: auto; min-height: 0; min-width: 0; padding-right: 8px; }
 .st-desktop .st-page-head button { display: none; }
 .st-desktop .st-page-head { min-height: 48px; }
-@media (max-width: 700px) {
-  .st-desktop { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+/* A desktop window/app panel can be narrow on a wide screen. Use the existing
+ * Settings container, not the viewport, and the same category → page → Back
+ * stack as the phone. Each visible pane owns its scroll inside the clipped host. */
+@container settings (max-width: 700px) {
+  .st-desktop { display: block; }
+  .st-desktop .st-index { height: 100%; padding-right: 0; border-right: 0; }
+  .st-desktop .st-page { height: 100%; padding-right: 0; }
+  .st-desktop.st-in-page .st-index { display: none; }
+  .st-desktop:not(.st-in-page) .st-page { display: none; }
+  .st-desktop .st-page-head button { display: block; }
 }
 
 .st-title:focus, .st-page-head h3:focus { outline: none; }
@@ -274,6 +282,8 @@ a.st-row { color: inherit; text-decoration: none; }
 .dsettings-scrim { position: fixed; inset: 0; z-index: 39; background: color-mix(in srgb, var(--wz-base) 38%, transparent); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: st-fade 180ms ease both; }
 .dsettings-scrim[hidden] { display: none; }
 .dsettings.is-modal { inset: 50% auto auto 50%; transform: translate(-50%, -50%); width: min(980px, calc(100vw - 64px)); height: min(720px, calc(100vh - 96px)); border: 1px solid var(--wz-border); border-radius: 22px; overflow: hidden; box-shadow: 0 30px 80px -24px color-mix(in srgb, var(--wz-base) 60%, transparent); animation: st-pop 200ms cubic-bezier(.2, .8, .2, 1) both; }
+/* Moving an already-open root between hosts must not replay an opacity-zero entrance. */
+.dsettings.is-modal.is-rehosted { animation: none; }
 @keyframes st-fade { from { opacity: 0; } }
 @keyframes st-pop { from { opacity: 0; transform: translate(-50%, -48%) scale(.98); } }
 @media (prefers-reduced-motion: reduce) { .dsettings.is-modal, .dsettings-scrim { animation: none; } }
@@ -282,12 +292,8 @@ a.st-row { color: inherit; text-decoration: none; }
 .wg-section [data-wg-val] { flex: none; font-variant-numeric: tabular-nums; font-weight: 650; color: var(--wz-text, var(--wz-text)); }
 .wg-section .wg-range { display: block; width: 100%; min-height: 44px; margin: 0; accent-color: var(--wz-accent, var(--violet-2, var(--wz-accent))); cursor: pointer; }
 .wg-section .wg-reset { min-height: 44px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--wz-text-secondary); font: inherit; font-size:var(--wz-text-sm); cursor: pointer; }
-/* Background picker (Landscapes): one small picture per background, the chosen one ringed. */
-.wp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(7.5rem, 1fr)); gap: var(--wz-space-3) var(--wz-space-2); }
-.wp-tile { display: flex; flex-direction: column; gap: var(--wz-space-1); padding: 0; border: 0; background: transparent; color: var(--wz-text-secondary); font: inherit; font-size: var(--wz-text-sm); text-align: left; cursor: pointer; }
-.wp-tile i { display: block; aspect-ratio: 16 / 10; border-radius: var(--wz-radius-tile); background: var(--wz-surface) center / cover no-repeat; box-shadow: inset 0 0 0 .0625rem var(--wz-border); }
-.wp-tile[aria-checked="true"] { color: var(--wz-text); font-weight: 600; }
-.wp-tile[aria-checked="true"] i { box-shadow: 0 0 0 .1875rem var(--wz-accent); }
+/* Background + Mode (twinned skins): the Background cards reuse the skin cards (core/skins.css); Mode is a .st-seg. */
+.st-root .skp-colours .st-seg { margin: var(--wz-space-2) 0 var(--wz-space-4); max-width: 20rem; }
 
 /* Settings › Connections: the App Manager's view, framed edge to edge under the page title. */
 /* The desktop shell positions every window's iframe over its whole body (.wbody iframe); this one fills its own box. */

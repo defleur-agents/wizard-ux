@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { read } from './fixtures/tweaks.mjs';
+import lookFixture from '../tools/qa-look-file-fixture.cjs';
 
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -42,17 +43,18 @@ function pagesBox(doc = null, { routes = true } = {}) {
 }
 
 // One device: its own storage, skin and tweak mix (what experience.js and skins.js hold), the real look-sync code.
-function device(box, { mix = {}, skin = null, views = [], meta = null, clock, known = null } = {}) {
+function device(box, { mix = {}, skin = null, views = [], meta = null, clock, known = null, shells = false } = {}) {
   const store = new Map(meta ? [['wos.look-sync.v1', JSON.stringify(meta)]] : []);
   const timers = [];
-  const d = { mix: { ...mix }, skin, adopted: 0 };
+  const d = { mix: { ...mix }, skin, adopted: 0, views: {} };
   let sync;
   const exp = {
     get mix() { return clone(d.mix); },
-    adopt(m) { d.adopted++; d.mix = { ...m }; },
+    adopt(m, v) { d.adopted++; d.mix = { ...m }; if (v && typeof v === 'object') d.views = { ...v }; },
     get state() { return { busy: false, tweaks: views.map(id => ({ id, view: 'v' })) }; },
     tweakIds: async () => { if (!known) throw new Error('offline'); return known; },
   };
+  if (shells) Object.defineProperty(exp, 'views', { get: () => clone(d.views) });
   const S = {
     get chosen() { return d.skin; }, get current() { return d.skin || 'nebula'; },
     has: id => ['nebula', 'obsidian', 'obsidian-light', 'landscapes'].includes(id),
@@ -66,6 +68,8 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   // An owner's switch: experience.js writes the mix and raises wos:tweak-choice.
   d.toggle = (id, on) => { if (on) d.mix[id] = true; else delete d.mix[id]; sync.tweakChoice(id, on); };
   d.on = () => Object.keys(d.mix).filter(id => d.mix[id]).sort();
+  // A per-type view choice: experience.js stores it and raises wos:view-choice.
+  d.pickView = (shell, id) => { d.views[shell] = id; sync.viewChoice(shell, id); };
   return d;
 }
 const on = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
@@ -305,3 +309,265 @@ test('both shells load look sync after experience.js; it lives in the owner\'s F
   assert.equal(L.PATH, PATH);
   assert.doesNotMatch(read('web/core/look-sync.js'), /\/wizard\/v1\/skins|ui-preferences/, 'no other store, no skin folder writes');
 });
+
+// Per device type views (Miguel, 4 Nov 2026): look.json gains `views: { desktop, phone }`, merged per type.
+const MIGUEL = { version: 1, skin: { id: 'landscapes', at: 1793788925203 }, tweaks: { 'miguel/apps-home': { on: false, at: 1793694648727 }, 'miguel/orb-shell': { on: false, at: 1793694691203 }, 'miguel/ai-apps': { on: true, at: 1793695091045 }, 'miguel/reply-summary': { on: true, at: 1793724651099 } }, updated: '2026-11-04T10:42:05.813Z' };
+
+test('old look.json: parsed as before (no views key), worn without a write; its single view keeps the old meaning', async () => {
+  const parsed = clone(L.parse(JSON.stringify(MIGUEL)));
+  assert.deepEqual(Object.keys(parsed), ['version', 'skin', 'tweaks'], 'no views key appears for an old file');
+  assert.equal(parsed.tweaks['miguel/ai-apps'].on, true);
+  const box = pagesBox(MIGUEL), before = box.text;
+  const views = ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'];
+  const mac = device(box, { views, shells: true, meta: { version: null, synced: true } });
+  await mac.sync.sync(); mac.sync.settle(); await mac.flush();
+  assert.deepEqual(mac.on(), ['miguel/ai-apps', 'miguel/reply-summary'], 'the old view stays switched on in the mix');
+  assert.deepEqual(mac.views, {}, 'no per-type choice yet: each shell reads the old meaning (experience.js)');
+  assert.equal(box.puts, 0); assert.equal(box.text, before, 'the file stays byte for byte');
+});
+
+test('new look.json: an older shell parses it without breaking (unknown views dropped), a newer one keeps both types', () => {
+  const doc = { ...MIGUEL, views: { desktop: { id: 'miguel/ai-apps', at: 7 }, phone: { id: '', at: 8 }, watch: { id: 'x/y', at: 1 } } };
+  assert.deepEqual(clone(L.parse(JSON.stringify(doc))).views, { desktop: { id: 'miguel/ai-apps', at: 7 }, phone: { id: '', at: 8 } });
+  assert.equal(L.parse(JSON.stringify({ ...doc, views: { desktop: { id: '../x', at: 1 }, phone: 'orb' } })).views, undefined, 'malformed entries dropped');
+  // what an older shell's parse kept: version/skin/tweaks only, so its old meaning still reads the file.
+  const old = { version: 1, skin: doc.skin, tweaks: doc.tweaks };
+  assert.deepEqual(clone(L.parse(JSON.stringify(old))), clone(L.parse(JSON.stringify(MIGUEL))));
+});
+
+test('sync merges views per type: two desktops follow each other, two phones follow each other, simultaneous picks keep both', async () => {
+  const box = pagesBox(MIGUEL);
+  let t = 2e12; const clock = () => ++t;
+  const opts = { shells: true, clock, views: ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'] };
+  const mac = device(box, opts), pwa = device(box, opts), phone = device(box, opts), tablet = device(box, opts);
+  for (const d of [mac, pwa, phone, tablet]) await d.sync.sync();
+  // At the same moment: the phone picks Orb, the Mac picks Desks.
+  phone.pickView('phone', 'miguel/orb-shell'); mac.pickView('desktop', '');
+  box.race(2); await Promise.all([phone.flush(), mac.flush()]);
+  assert.deepEqual(Object.fromEntries(Object.entries(box.doc().views).map(([k, v]) => [k, v.id])), { desktop: '', phone: 'miguel/orb-shell' }, 'both types kept');
+  assert.equal(box.doc().tweaks['miguel/ai-apps'].on, true, 'the old entry is left for older shells');
+  for (const d of [mac, pwa, phone, tablet]) await d.sync.sync();
+  for (const d of [mac, pwa, phone, tablet]) assert.deepEqual(d.views, { desktop: '', phone: 'miguel/orb-shell' });
+  // A later pick on one type wins over an older one of that type and leaves the other type alone.
+  pwa.pickView('desktop', 'miguel/ai-apps'); await pwa.flush();
+  tablet.pickView('phone', ''); await tablet.flush();
+  for (const d of [mac, phone]) await d.sync.sync();
+  assert.deepEqual(mac.views, { desktop: 'miguel/ai-apps', phone: '' }); assert.deepEqual(phone.views, mac.views);
+  assert.deepEqual(clone(L.merge({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'a/b', at: 5 } } }, { version: 1, skin: null, tweaks: {}, views: { desktop: { id: '', at: 4 }, phone: { id: 'c/d', at: 1 } } })).views,
+    { desktop: { id: 'a/b', at: 5 }, phone: { id: 'c/d', at: 1 } }, 'per type, newest wins');
+});
+
+
+test('per-type choices observe future revisions, survive stale first sync and never use device time', async () => {
+  const future = 9000000000000;
+  const box = pagesBox({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'miguel/ai-apps', at: future }, phone: { id: 'miguel/apps-home', at: future } } });
+  const opts = { shells: true, clock: () => 1, views: ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'] };
+  const stale = device(box, opts);
+  stale.pickView('phone', 'miguel/orb-shell'); // made offline, before seeing the box
+  await stale.flush();
+  assert.equal(box.doc().views.phone.id, 'miguel/orb-shell');
+  assert.ok(box.doc().views.phone.at > future);
+  assert.equal(box.doc().views.desktop.id, 'miguel/ai-apps');
+  stale.pickView('desktop', ''); await stale.flush();
+  assert.ok(box.doc().views.desktop.at > box.doc().views.phone.at);
+  const follower = device(box, opts); await follower.sync.sync();
+  assert.deepEqual(follower.views, { desktop: '', phone: 'miguel/orb-shell' });
+  const puts = box.puts, adopts = follower.adopted;
+  for (let n = 0; n < 4; n++) { await follower.sync.sync(); follower.sync.settle(); }
+  assert.equal(box.puts, puts); assert.equal(follower.adopted, adopts, 'settled device does not reapply');
+});
+
+test('cached per-device choices seed an absent file even with no skin or legacy mix', async () => {
+  const box = pagesBox(), d = device(box, { shells: true });
+  d.views = { desktop: 'miguel/ai-apps', phone: '' };
+  await d.sync.sync();
+  assert.deepEqual(box.doc().views, { desktop: { id: 'miguel/ai-apps', at: 0 }, phone: { id: '', at: 0 } });
+  assert.deepEqual(d.views, { desktop: 'miguel/ai-apps', phone: '' });
+});
+
+test('browser gate look adapter uses the real Pages path, persists both devices and rejects stale versions', async () => {
+  const { LOOK_PATH, lookFileReply } = lookFixture;
+  assert.equal(LOOK_PATH, PATH);
+  const shared = { version: 1, doc: { version: 1, skin: { id: 'nebula', at: 1 }, tweaks: {}, views: {
+    desktop: { id: 'miguel/ai-apps', at: 2 }, phone: { id: 'miguel/orb-shell', at: 3 }
+  } } };
+  assert.equal(lookFileReply(shared, '/apps/pages/api/file', 'GET'), null, 'old fictional endpoint is not a look API');
+  const box = { req: async (url, init = {}) => {
+    const reply = lookFileReply(shared, url, init.method || 'GET', init.body ? JSON.parse(init.body) : null);
+    assert.ok(reply, 'every production sync request hits the adapter');
+    return { ok: reply.status < 300, status: reply.status, json: async () => clone(reply.body) };
+  } };
+  const opts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'] };
+  const desktop = device(box, opts), phone = device(box, opts);
+  await desktop.sync.sync(); await phone.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/ai-apps', phone: 'miguel/orb-shell' });
+  assert.deepEqual(phone.views, desktop.views);
+  const stale = lookFileReply(shared, PATH).body;
+  desktop.pickView('desktop', 'miguel/apps-home'); await desktop.flush(); await phone.sync.sync();
+  phone.pickView('phone', ''); await phone.flush(); await desktop.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/apps-home', phone: '' });
+  assert.deepEqual(phone.views, desktop.views);
+  assert.equal(shared.acceptedWrites.length, 2);
+  assert.ok(shared.doc.views.desktop.at > 3); assert.ok(shared.doc.views.phone.at > shared.doc.views.desktop.at);
+  const final = clone(shared.doc);
+  const collision = lookFileReply(shared, PATH, 'PUT', { version: stale.version, text: stale.text });
+  assert.equal(collision.status, 409); assert.deepEqual(JSON.parse(collision.body.current.text), final);
+  assert.deepEqual(shared.doc, final, 'a stale writer cannot replace another device choice');
+  assert.equal(lookFileReply(shared, PATH, 'DELETE').status, 405);
+});
+
+// Defer an actual GET/PUT without changing the production adapter or revision rules.
+function holdNext(box, method) {
+  const req = box.req; let release, began;
+  const started = new Promise(r => { began = r; });
+  const held = new Promise(r => { release = r; }); let once = true;
+  box.req = async (url, init = {}) => {
+    if (once && (init.method || 'GET') === method) { once = false; began(); await held; }
+    return req(url, init);
+  };
+  return { started, release };
+}
+const viewOpts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'], meta: { synced: true, version: 'old' } };
+const remoteViews = () => ({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'miguel/ai-apps', at: 80 }, phone: { id: 'miguel/orb-shell', at: 100 } } });
+
+test('already-synced owner choice during first GET is causally based on the observed file', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET'), d = device(box, viewOpts);
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', 'miguel/apps-home'); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 100);
+  assert.equal(d.views.phone, 'miguel/apps-home'); assert.equal(d.views.desktop, 'miguel/ai-apps');
+  assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
+});
+test('already-synced pending storage is based once, and last view switch during GET wins', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'GET');
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: 'miguel/apps-home', at: 1 } } } } });
+  const syncing = d.sync.sync(); await hold.started;
+  d.pickView('phone', ''); d.pickView('phone', 'miguel/apps-home');
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, 'miguel/apps-home'); assert.ok(box.doc().views.phone.at > 200);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop, 'never clobber another shell while basing a local choice');
+  const puts = box.puts; await d.sync.sync(); assert.equal(box.puts, puts, 'settled intent is not restamped every sync');
+});
+test('already-synced persisted view intent survives reload without a new event', async () => {
+  const box = pagesBox(remoteViews());
+  const d = device(box, { ...viewOpts, meta: { synced: true, version: 'old', pending: { views: { phone: { id: '', at: 1 } } } } });
+  await d.sync.sync(); assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 100);
+});
+test('view switch during successful PUT is not reverted by adopting the older acknowledgement', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started; d.pickView('phone', '');
+  hold.release(); await syncing;
+  assert.equal(d.views.phone, '', 'a successful older save must not visibly undo a newer choice');
+  assert.equal(d.sync.state.pending.views.phone.id, '', 'old sent() only clears its own revision');
+  await d.flush(); assert.equal(box.doc().views.phone.id, ''); assert.equal(d.views.phone, '');
+});
+test('new view choice during conflicted PUT survives retry while other-shell concurrent edit is preserved', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.desktop = { id: 'miguel/orb-shell', at: 200 }; remote.views.phone = { id: 'miguel/orb-shell', at: 201 }; box.text = JSON.stringify(remote);
+  d.pickView('phone', ''); hold.release(); await syncing;
+  assert.equal(box.doc().views.phone.id, ''); assert.ok(box.doc().views.phone.at > 201);
+  assert.deepEqual(box.doc().views.desktop, remote.views.desktop); assert.equal(d.views.phone, '');
+});
+test('a conflicting newer server choice beats an already-sent intent, not an endless local restamp', async () => {
+  const box = pagesBox(remoteViews()), hold = holdNext(box, 'PUT'), d = device(box, viewOpts); await d.sync.sync();
+  d.pickView('phone', 'miguel/apps-home');
+  const syncing = d.sync.sync(); await hold.started;
+  const remote = box.doc(); remote.views.phone = { id: '', at: 200 }; box.text = JSON.stringify(remote);
+  hold.release(); await syncing;
+  assert.deepEqual(box.doc(), remote); assert.equal(d.views.phone, '');
+  assert.equal(box.puts, 0); assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
+});
+
+// Sibling fields share the same causal-intent rules as views and built-in defaults.
+const ordinary = 'miguel/swipe-strip';
+const siblingDoc = () => ({ version: 1, skin: { id: 'obsidian', at: 1000 }, tweaks: { [ordinary]: { on: true, at: 1000 } }, views: { desktop: { id: '', at: 900 } } });
+const siblingValue = (d, field) => field === 'skin' ? d.skin : !!d.mix[ordinary];
+const siblingRemote = (doc, field) => field === 'skin' ? doc.skin.id : doc.tweaks[ordinary].on;
+const chooseSibling = (d, field) => {
+  if (field === 'skin') { d.skin = 'obsidian-light'; d.sync.skinChoice(d.skin); }
+  else d.toggle(ordinary, false);
+};
+const siblingWant = field => field === 'skin' ? 'obsidian-light' : false;
+// Hold the response AFTER the server processed the request, not merely the request.
+function holdSiblingAck(box) {
+  const req = box.req; let release, began, once = true;
+  const started = new Promise(r => { began = r; }), held = new Promise(r => { release = r; });
+  box.req = async (url, init = {}) => {
+    const response = await req(url, init);
+    if (once && init.method === 'PUT') { once = false; began(); await held; }
+    return response;
+  };
+  return { started, release };
+}
+for (const field of ['skin', 'tweak']) {
+  for (const synced of [false, true]) test(`sibling ${field}: choice during first GET stays selected (synced=${synced})`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'GET');
+    const d = device(box, { skin: 'obsidian', mix: { [ordinary]: true }, shells: true, meta: { synced } });
+    const syncing = d.sync.sync(); await hold.started;
+    chooseSibling(d, field); assert.equal(siblingValue(d, field), siblingWant(field));
+    hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), siblingWant(field), 'GET adoption must not revert the local choice');
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+    const chosen = field === 'skin' ? box.doc().skin : box.doc().tweaks[ordinary];
+    assert.ok(chosen.at > 1000, 'intent is based above the complete observed document');
+    assert.deepEqual(box.doc().views, siblingDoc().views);
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes, 'settled choice is quiet');
+  });
+  test(`sibling ${field}: successful PUT ACK cannot undo a newer unsent choice`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdSiblingAck(box), d = device(box, { shells: true, meta: { synced: true } });
+    await d.sync.sync(); d.pickView('desktop', 'miguel/apps-home');
+    const syncing = d.sync.sync(); await hold.started;
+    assert.equal(box.puts, 1, 'server has already accepted the older view PUT');
+    chooseSibling(d, field); hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), siblingWant(field), 'older ACK must not paint over the choice');
+    assert.equal(field === 'skin' ? d.sync.state.pending.skin.id : d.sync.state.pending.tweaks[ordinary].on, siblingWant(field), 'newer intent remains pending');
+    await d.flush();
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+    assert.equal(box.doc().views.desktop.id, 'miguel/apps-home');
+    const follower = device(box, { shells: true }); await follower.sync.sync();
+    assert.equal(siblingValue(follower, field), siblingWant(field), 'another device reads the saved choice');
+  });
+  for (const newIntent of [false, true]) test(`sibling ${field}: 409 bases only a new intent during PUT (new=${newIntent})`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'PUT'), d = device(box, { shells: true, meta: { synced: true } });
+    await d.sync.sync(); chooseSibling(d, field);
+    const syncing = d.sync.sync(); await hold.started;
+    const remote = siblingDoc();
+    remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001;
+    remote.views.desktop = { id: 'miguel/ai-apps', at: 2002 }; box.text = JSON.stringify(remote);
+    if (newIntent) chooseSibling(d, field);
+    hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), newIntent ? siblingWant(field) : siblingRemote(remote, field));
+    assert.equal(siblingRemote(box.doc(), field), newIntent ? siblingWant(field) : siblingRemote(remote, field));
+    const revision = field === 'skin' ? box.doc().skin.at : box.doc().tweaks[ordinary].at;
+    if (newIntent) assert.ok(revision > 2002, 'new unsent intent observes the 409 document once');
+    else assert.equal(revision, field === 'skin' ? 2000 : 2001, 'already-sent intent cannot defeat a genuinely newer writer');
+    assert.deepEqual(box.doc().views, remote.views, 'independent remote view survives');
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes);
+  });
+  test(`sibling ${field}: first-sync sent intent yields to a newer 409 writer`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'PUT'), d = device(box);
+    chooseSibling(d, field);
+    const syncing = d.sync.sync(); await hold.started;
+    const remote = siblingDoc(); remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001; box.text = JSON.stringify(remote);
+    hold.release(); await syncing;
+    assert.deepEqual(box.doc(), remote, 'first-sync retries must not renew an already-sent intent');
+    assert.equal(siblingValue(d, field), siblingRemote(remote, field));
+  });
+  test(`sibling ${field}: restored pending choice is based once after reload`, async () => {
+    const pending = { skin: field === 'skin' ? { id: 'obsidian-light', at: 1 } : null, tweaks: field === 'tweak' ? { [ordinary]: { on: false, at: 1 } } : {} };
+    const box = pagesBox(siblingDoc()), d = device(box, { shells: true, meta: { synced: true, pending } });
+    await d.sync.sync(); assert.equal(siblingValue(d, field), siblingWant(field));
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+  });
+  test(`sibling ${field}: an idle observed choice does not erase a newer remote edit`, async () => {
+    const box = pagesBox(siblingDoc()), d = device(box, { meta: { synced: true } }); await d.sync.sync();
+    chooseSibling(d, field);
+    const remote = siblingDoc(); remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001; box.text = JSON.stringify(remote);
+    await d.sync.sync();
+    assert.equal(siblingValue(d, field), siblingRemote(remote, field)); assert.deepEqual(box.doc(), remote);
+  });
+}

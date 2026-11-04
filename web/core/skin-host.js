@@ -29,13 +29,14 @@
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
-    // Built-in AI apps (designed by Miguel): standard desktop view; also worn by his optional phone tweak.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Chats and apps side by side on desktop; a top bar and drawer on phone', css: true, js: true }),
+    // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
+    // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
   ]);
-  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // a stale layout without either core or tweak ownership goes back to Classic
+  const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
-  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
-  let standardLayout = null; // core-selected desktop view; independent of a tweak's lifetime
+  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
+  let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -806,7 +807,7 @@
       /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
        * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
        * chips stay off; ⌥/ still pins the guide). guide(fn, { only }): fn() → [{ el, key, word, at, frame?, app?, name?, free? }] chips the hold-⌥ guide adds (frame: el
-       * sits in that same-origin app frame; app: the app's own plain key, drawn outlined; free: a spot the layout knows is
+       * sits in that same-origin app frame; app: the app's own ⌥ key (data-wz-key), named by the app; free: a spot the layout knows is
        * empty, drawn without the hit test). */
       keys: Object.freeze({
         on({ down, up, hold = false } = {}) {
@@ -1063,14 +1064,14 @@
     const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived), by = new Map(), sets = [];
     for (const it of all) {
       if (Number(it.priority) >= 4) { sets.push([it]); continue; }
-      const k = (it.app || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
+      const k = (it.app || it.from || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
     }
     for (const l of by.values()) if (l.length < 2) sets.push(l); else sets.push(l.slice().sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0)));
     return sets.map(l => {
-      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : (window.WizConfig?.agent?.() || 'Wizard');
+      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : it.from ? String(it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
       if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
       return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
-        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
         unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
     });
   }
@@ -1629,7 +1630,6 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
-    // The standard desktop choice owns the same built-in renderer, without loading a personal tweak.
     setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
@@ -1731,12 +1731,19 @@
     try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
     // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
     if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
-    // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
+    // ?layout=<id> only tries layouts supported by this shell. An unsupported link is ignored,
+    // so it cannot overwrite another valid local choice. This runs before paint/CSS and attach/import.
     try {
       const q = new URLSearchParams(location.search).get('layout');
       if (q === 'classic') localStorage.removeItem(LAYOUT_KEY); else if (layoutOf(q)) localStorage.setItem(LAYOUT_KEY, q);
     } catch (_) {}
-    try { const l = localStorage.getItem(LAYOUT_KEY); if (layoutOf(l)) { layoutId = l; paintLayout(l); } } catch (_) {}
+    try {
+      const l = localStorage.getItem(LAYOUT_KEY), known = LAYOUTS.find(x => x.id === l);
+      // wos.layout is a device-local materialized hint, not the per-shell shared choice.
+      // Drop only a known unsupported hint; never touch experience/views, skin, mix or unknown keys.
+      if (known?.shells && !known.shells.includes(env().shell)) localStorage.removeItem(LAYOUT_KEY);
+      else if (layoutOf(l)) { layoutId = l; paintLayout(l); }
+    } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = host;

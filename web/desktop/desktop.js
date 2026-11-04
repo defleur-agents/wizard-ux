@@ -717,7 +717,7 @@
     if (!f) return;
     // servicesAs: a companion view gets its owning installed app's Back/services.
     const w = W[el.dataset.win], a = w && APP[w.servicesAs || w.appId];
-    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, openContextDraft: (key, text) => { const go = main => { let cw = main ? findWin(mainChats) : (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, () => go(true)); if (r) { if (!r.value) throw new Error('Main Chats unavailable'); return r.value; } return go(false); }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) || (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id))) });
+    if (a?.url) f._appDetach = window.WizAppServices?.attach(f, { appId: a.id, path: a.url, isFront: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id) && pal.hidden && !CHATS.isHosted(w.id)) || !homeOpen && ws[cur].focus === w.id && ws[cur].wins.includes(w.id) && pal.hidden && !CHATS.isHosted(w.id), back: () => closeWorkflow(w), openThread: (sid, opts) => { const r = window.WosSkinHost?.routeOpen?.('thread', { sid, from: a.id }, () => threadFromApp(sid, opts)); return r ? r.value === true : CHATS.openHosted(w.id, f, sid, opts); }, openContextDraft: (key, text) => { const go = main => { let cw = main ? findWin(mainChats) : (globalThis.WosSkinHost?.panelMode ? panelWins() : ws[cur].wins.map(id => W[id])).find(mainChats); if (!cw) cw = newWin({ app: 'chats', thread: null }); focusWin(cw.id); const receipt = CHATS.openContextDraft(cw.id, key, text); CHATS.renderChats(cw); syncChatsPane(cw.id); setTimeout(() => focusInside(cw.id), 30); return receipt; }; const r = window.WosSkinHost?.routeOpen?.('draft', { from: a.id }, () => go(true)); if (r) { if (!r.value) throw new Error('Main Chats unavailable'); return r.value; } return go(false); }, isVisible: () => (globalThis.WosSkinHost?.panelMode && panelHas(w.id)) || !homeOpen && ws[cur].wins.includes(w.id) && (!ws[cur].mono || ws[cur].focus === w.id) && pal.hidden && !CHATS.isHosted(w.id) || (pal.hidden && !CHATS.isHosted(w.id) && !!window.WosSkinHost?.routeShows?.(wsOf(w.id))) });
     f.addEventListener('load', () => {
       // A refused frame (CSP frame-ancestors / X-Frame-Options) lands on an unreadable error document.
       let bad = false;
@@ -1764,14 +1764,43 @@
    * the window goes (however it goes) the panel is hidden and parked on <body>. */
   const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
   // From Home, Settings opens as a centred panel over Home instead of a window on a desk (Home is not a desk).
-  let settingsModal = false;
+  let settingsModal = false, settingsPromoted = false;
   const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
   scrim.addEventListener('click', () => closeSettings());
   const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
+  function showSettingsModal(rehost = false) {
+    if (!settingsModal) settingsFocus = document.activeElement;
+    // A visible window changing hosts is not a new open: st-pop starts at
+    // opacity zero. Mark before reparenting so no frame can replay it.
+    if (rehost) setEl.classList.add('is-rehosted'); else setEl.classList.remove('is-rehosted');
+    settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
+    moveSettingsTo(document.body);
+    scrim.hidden = false;
+  }
+  function moveSettingsTo(host) {
+    if (setEl.parentNode === host) return;
+    // appendChild can blur a focused descendant. Restore that same control in
+    // the same task, for promotion and demotion alike; never steal outside focus.
+    const active = document.activeElement, keep = active && setEl.contains(active);
+    host.appendChild(setEl);
+    if (keep && document.activeElement !== active) active.focus({ preventScroll: true });
+  }
   function hostSettings() {
-    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
+    // A view can mount while Look is already open in a desk window. Adopt its
+    // centred-panel contract without closing, remounting or resetting Look.
+    // Only undo a promoted desk window; Settings opened over Home remains a
+    // Home modal. Rehost synchronously without hiding or resetting its page.
+    if (settingsPromoted && !settingsOver() && !homeOpen && settingsWin()) {
+      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted');
+      setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region'); scrim.hidden = true;
+    }
+    // Orb's panel claim also takes Home to the front and hides the desk host.
+    // Match openSettings' Home contract on every takeover, including a second
+    // enable after teardown; the live root/page must not stay on that hidden desk.
+    if (!settingsModal && !setEl.hidden && (homeOpen || settingsOver())) { settingsPromoted = true; showSettingsModal(true); }
+    if (settingsModal) { moveSettingsTo(document.body); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
+    if (host) { moveSettingsTo(host); setEl.hidden = false; return; }  // a Settings window always shows its panel
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
@@ -1784,6 +1813,10 @@
   let voiceMenuBack = () => false;  // set once the one-mic menu exists
   // A layout that has no Home to show Settings over (html[data-settings-over]) keeps it the centred panel everywhere.
   const settingsOver = () => document.documentElement.hasAttribute('data-settings-over');
+  // Only this view contract can move an already-open Settings host. Observe it
+  // directly: an otherwise idle view need not cause a shell render after mount.
+  const settingsHostObserver = new MutationObserver(() => hostSettings());
+  settingsHostObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-settings-over'] });
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
@@ -1791,10 +1824,7 @@
     // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
     // A layout may ask for it over the page everywhere (settingsOver: the AI apps view, like Claude's settings modal).
     if (homeOpen || settingsOver()) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
-      if (!settingsModal) settingsFocus = document.activeElement;
-      settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-      if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
-      scrim.hidden = false;
+      showSettingsModal();
     } else if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
@@ -1810,8 +1840,11 @@
   }, true);
   function closeSettings() {
     if (settingsModal) {
-      settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
+      settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
       scrim.hidden = true; setEl.hidden = true;
+      // Promotion replaces that window's presentation, not an extra modal over
+      // it. Dismiss once; do not resurrect the old narrow Settings underneath.
+      if (settingsPromoted) { settingsPromoted = false; const w = settingsWin(); if (w) closeWin(w.id); }
       if (settingsWin()) hostSettings();  // back into its desk window (shown there again)
       if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
       window.WosScenery?.update(); return;
@@ -2327,7 +2360,7 @@
     // screen readers.
     const NAMES = Object.fromEntries([...SPEAK, ...TYPE, ...READY, ...GO, ...WIN].map(([k, n]) => [k, n]));
     // opt.frame: n sits inside that same-origin app frame (its box is moved by the frame's offset and hit-tested in the
-    // frame's own page); opt.app: an app's own plain key (outlined, no ⌥ meaning); opt.free: a spot the layout knows is
+    // frame's own page); opt.app: an app's own ⌥ key (data-wz-key, named by the app); opt.free: a spot the layout knows is
     // empty (no hit test).
     function chip(n, label, at = 'below', word = '', opt = null) {
       const f = opt?.frame || null, fr = f ? f.getBoundingClientRect() : null, r0 = n.getBoundingClientRect();
@@ -2344,7 +2377,7 @@
       }
       const c = document.createElement('b');
       c.className = 'kh-chip' + (word ? ' kh-lab' : '') + (opt?.app ? ' kh-app' : ''); c.innerHTML = word ? `<kbd>${esc(label)}</kbd>${esc(word)}` : esc(label);
-      c.setAttribute('aria-label', opt?.app ? `${label}: ${opt.name || label}` : `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
+      c.setAttribute('aria-label', opt?.app ? `${ALT} ${label}: ${opt.name || label}` : `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
       const w = c.offsetWidth, h = c.offsetHeight;
       let x = r.left + r.width / 2 - w / 2, y = r.bottom + 24 > innerHeight ? r.top - h - 3 : r.bottom + 3; // near the bottom: above it
       if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }
@@ -2954,13 +2987,16 @@
       const G = LIVE?.ok ? LIVE.workGroups() : null; if (!G) return null;
       const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
       const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
-        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', rank: Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),
+        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', rank: CHATS.stiKind?.(s) === 'failed' ? 1 : Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),
           needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
           actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s).filter(a => KEEP.includes(a))] }; };
       // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
       // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
       const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
-      const ready = G.ready || [];
+      // Every chat not archived, working or snoozed is Ready here: this view has no Errors or day sections, so a failed /
+      // interrupted chat (stock Errors) and, under the By day layout, Yesterday / Past week join Ready (its Error group;
+      // its own time order). Leaving them out hid those chats from the sidebar and the rail altogether.
+      const ready = [...(G.errors || []), ...(G.ready || []), ...(G.yesterday || []), ...(G.pastWeek || [])];
       return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
         snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
     },

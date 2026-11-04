@@ -15,8 +15,9 @@ const read = p => fs.readFileSync(root + p, 'utf8');
 const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32, 7)]);
 const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(32, 3)]);
 
-function box() {
+function box(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wux-logos-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const put = (store, id, body) => { const d = path.join(dir, 'apps', store, id, 'metadata'); fs.mkdirSync(d, { recursive: true }); fs.writeFileSync(path.join(d, 'logo.jpg'), body); };
   return { dir, put };
 }
@@ -34,8 +35,8 @@ test('image type comes from the bytes, not the logo.jpg name', () => {
   assert.equal(sniffImage(Buffer.from('{"not":"an image"}')), '');
 });
 
-test('only registered apps with a real logo are listed; placeholders and junk are not', () => {
-  const b = box();
+test('only registered apps with a real logo are listed; placeholders and junk are not', t => {
+  const b = box(t);
   b.put('wizardapps', 'jet', JPG);
   b.put('wizardapps', 'plain', Buffer.from('this is not an image at all'));
   b.put('wizardapps', 'unregistered', PNG);
@@ -54,8 +55,8 @@ test('only registered apps with a real logo are listed; placeholders and junk ar
   assert.deepEqual(placeholder.list(), {});
 });
 
-test('a symlinked logo.jpg is refused, and the size cap holds for the bytes read', () => {
-  const b = box(); b.put('s', 'real', PNG);
+test('a symlinked logo.jpg is refused, and the size cap holds for the bytes read', t => {
+  const b = box(t); b.put('s', 'real', PNG);
   const elsewhere = path.join(b.dir, 'elsewhere.png'); fs.writeFileSync(elsewhere, PNG);
   const d = path.join(b.dir, 'apps', 's', 'link', 'metadata'); fs.mkdirSync(d, { recursive: true });
   fs.symlinkSync(elsewhere, path.join(d, 'logo.jpg'));
@@ -67,12 +68,12 @@ test('a symlinked logo.jpg is refused, and the size cap holds for the bytes read
   assert.deepEqual(grown.list(), {});
 });
 
-test('a changed logo gets a new version (cache-busting by content)', () => {
-  const b = box(); b.put('s', 'jet', JPG);
+test('a changed logo gets a new version (cache-busting by content)', t => {
+  const b = box(t); b.put('s', 'jet', JPG);
   const logos = createAppLogos({ readWam: () => ({ apps: [{ id: 'jet', urn: 'jet:s' }] }), runtipiRoot: b.dir });
   const v1 = logos.list().jet;
   const f = path.join(b.dir, 'apps/s/jet/metadata/logo.jpg');
-  fs.writeFileSync(f, PNG); const t = new Date(Date.now() + 5000); fs.utimesSync(f, t, t);
+  fs.writeFileSync(f, PNG); const modified = new Date(Date.now() + 5000); fs.utimesSync(f, modified, modified);
   const v2 = logos.list().jet;
   assert.ok(v1 && v2 && v1 !== v2, `${v1} → ${v2}`);
   assert.equal(logos.get('jet').type, 'image/png');
@@ -80,8 +81,8 @@ test('a changed logo gets a new version (cache-busting by content)', () => {
   assert.deepEqual(logos.list(), {});
 });
 
-test('Store data serves the logo list and hash-stamped logos, read-only and bounded', async () => {
-  const b = box(); b.put('wizardapps', 'jet', JPG);
+test('Store data serves the logo list and hash-stamped logos, read-only and bounded', async t => {
+  const b = box(t); b.put('wizardapps', 'jet', JPG);
   const appLogos = createAppLogos({ readWam: () => ({ apps: [{ id: 'jet', urn: 'jet:wizardapps' }] }), runtipiRoot: b.dir });
   const s = http.createServer(createStoreDataRoutes({ appLogos, fetchImpl: async () => { throw new Error('no network'); } }));
   await new Promise(r => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}${PREFIX}`;

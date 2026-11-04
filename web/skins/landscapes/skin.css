@@ -756,6 +756,12 @@ html[data-skin^="landscapes"] .rs-barsw { filter: drop-shadow(0 1px 1.5px rgba(0
 html[data-skin^="landscapes"] :is(.rs-bl, .rs-bv) { color: #fff; }
 html[data-skin^="landscapes"] .rs-bs { background: rgba(255, 255, 255, .28); }
 html[data-skin^="landscapes"] .rs-bf { background: #fff; }
+/* Settings › Resources sits on the panel, not the wallpaper: plain ink there (white text vanished on Landscapes Light). */
+html[data-skin^="landscapes"] .st-res .rs-barsw { filter: none; }
+html[data-skin^="landscapes"] .st-res .rs-bl { color: var(--wz-text-secondary, var(--ink-2)); }
+html[data-skin^="landscapes"] .st-res .rs-br:not(.rs-br-off) .rs-bv:not(.rs-empty):not(.rs-crit) { color: var(--wz-text, var(--ink)); }
+html[data-skin^="landscapes"] .st-res .rs-br:not(.rs-br-off) .rs-bs { background: color-mix(in srgb, var(--wz-text, var(--ink)) 14%, transparent); }
+html[data-skin^="landscapes"] .st-res .rs-bf { background: var(--wz-text, var(--ink)); }
 
 /* Home bars never clip at the corners (the widget base rounds and hides overflow). */
 html[data-skin^="landscapes"] [data-home-resources] .rs-barsw.rs-widget.wz-home-widget { overflow: visible; border-radius: 0; }

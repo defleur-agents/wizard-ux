@@ -49,6 +49,9 @@ Desktop (`desktop.js`, `desktop.css`):
   (off at first) adds a small Newest / Oldest menu on Ready's header. The group is mounted through the layout API's
   `desk.setting(id, node)` (core/skin-host.js).
 - Middle: the chat in a centred column with the composer.
+- Settings opens as a centred panel over the page, including when AI apps is enabled from an already-open Settings
+  window. The shared Settings surface uses category → page → Back below 700 px **host** width (also in Apps/Orb or
+  resized desktop windows); a wide desktop viewport never forces two panes into a narrow app panel.
 - Right: one apps column = Pinned · Open · + (drag to rearrange; ⌥1–⌥0 and ⌥[ ] through the shell's own key guide). An app
   opens as a panel beside the chat; panels resize by grips. An open pin wears the same 4 px running dot as the phone.
   At its foot a small "Tidy: 24h" line expands into "Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps
@@ -89,8 +92,8 @@ only keycap in the middle is ⌥H's, in the empty middle of Home while nothing c
 | ⌥D | Dictate into the box (the composer) |
 | ⌥V / ⌥C | New voice chat / command (the shell's own; no keycap) |
 
-Every other ⌥ key does nothing here (no ⌥G letters, no ⌥/ pinned guide, no app letters, no desk keys), so
-nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
+With an app in front, an ⌥ letter it marks is the app's (App keys below). Every other ⌥ key does nothing here (no ⌥G
+letters, no ⌥/ pinned guide, no desk keys), so nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
 Everything else in both panels (the Archive / Working / Snoozed / Ready headers, every chat row and its ⋯) is a plain
 button Tab reaches, in order, from ⌥K's search; the right column's rows are ⌥1–⌥0 and ⌥[ ].
 
@@ -102,28 +105,38 @@ menu is the shared `WosBell.picker`.
 
 ## App keys
 
-Every app can be driven from the keyboard too, with plain keys (no ⌥). The app marks a control; the app SDK
-(`core/app-client.js`, `WizardApp`, framed in Wizard or opened on its own) does the rest, so there is no key code to
-write.
+One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of an app included. Plain keys never act
+for Wizard in an app; they are the app's own business (typing, its own shortcuts). The app marks a control; the app SDK
+(`core/app-client.js`, `WizardApp`) and the shell do the rest, so there is no key code to write.
 
 - Mark a button with `data-wz-key="<key>"`, optionally `data-wz-key-label="Play / pause"` (else its `aria-label`).
-  Keys: `Space`, `Enter`, `ArrowUp` / `ArrowDown` / `ArrowLeft` / `ArrowRight`, or one printable character in lower
-  case (`j`, `k`, `/`, `r`, `n`, `s`; `?` is fine). `Escape` is never an app key: it is Back (the shell's).
-- A key press clicks the first match in page order that is visible (has a box, width > 0, not inside `[hidden]`,
-  `[inert]` or `aria-hidden="true"`) and enabled (not `disabled`, not `aria-disabled="true"`), and is used up
-  (`preventDefault`). Not with ⌥ / Ctrl / ⌘ (those are the shell's and the browser's), not with ⇧ unless the character
-  needs it (`?`), not while composing text, not while focus is in an input, textarea, select or `contenteditable`,
-  and not when the app's own handler already called `preventDefault`. Held down, only the arrows repeat. A field as
-  the target (a search box on `/`) is focused as well, so typing goes on there.
+  The key means ⌥ + key. Keys: one lower-case letter `a`–`z`, or `/`, `,`, `.`, `;`. No Space, Enter, arrows, digits,
+  brackets or Escape (Escape is Back, the shell's).
+- Reserved for Wizard, never an app's (also with ⇧): ⌥1–⌥0, ⌥[ ⌥], ⌥↑ ⌥↓ ⌥← ⌥→, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the
+  voice keys ⌥D ⌥V ⌥C. A mark on `h`, `w`, `s`, `d`, `v` or `c` is ignored. The list is one constant,
+  `RESERVED_KEYS` in `web/layouts/ai-apps/desktop.js` (the SDK carries its letters).
+- The key is read from `e.code` (`KeyJ` → `j`, `Slash` → `/`, `Comma`, `Period`, `Semicolon`), never `e.key`, since
+  macOS ⌥ turns letters into symbols. Only ⌥ (no ⇧, Ctrl or ⌘), not while composing, not when the app already called
+  `preventDefault`; held down it fires once. It works while focus is in a field of the app (⌥ combos type nothing we
+  keep). It clicks the first match in page order that is visible (has a box, width > 0, not inside `[hidden]`,
+  `[inert]` or `aria-hidden="true"`) and enabled (not `disabled`, not `aria-disabled="true"`); a field as the target
+  (`/` to search) is focused as well, so typing goes on there.
 - An open modal (`[aria-modal="true"]`, `[role="dialog"]` not hidden, `dialog[open]`) keeps the keys: only targets
-  inside the topmost one count.
-- `WizardApp.keys.list()` returns the live targets `[{ el, key, label }]` with exactly those rules.
+  inside the topmost one count. A `contenteditable` target is focused like a field.
+- `WizardApp.keys.list()` returns the live targets `[{ el, key, label }]` with exactly those rules;
+  `WizardApp.keys.match(e)` the target an ⌥ key event would press.
+- Framed in Wizard the shell presses the key (it knows what is in front and which keys are Wizard's), so the framed SDK
+  never acts itself (no double press). Opened on its own (a browser tab) the SDK handles ⌥ + key with the same rules.
 
 In the AI apps view (desktop): picking an app (⌥1–⌥0, ⌥[ ], a click on its row, an Open) moves the keyboard into its
-panel, so its plain keys work at once; plain keys are never the shell's while an app has the keyboard, and ⌥ keys
-inside the app still reach the shell. Holding left ⌥ with an app in front also draws the app's own keys on its
-controls as OUTLINED keycaps (the accent outline, plain key, no ⌥), beside the view's filled ⌥ keycaps; they follow the
-same no-overlap placement. Apps that use an older SDK copy are read with the same rules (`[data-wz-key]`).
+panel. While the app is in front, ⌥ + a key it marks presses that control, whether the key comes from the shell or from
+inside the app's frame, also while typing in the app. A letter the app claims beats the view's own meaning for that
+letter while the app is in front (⌥K = the app's key if it marks `k`, else search; ⌥R, ⌥A, ⌥L the same); an unclaimed
+letter keeps the view's meaning. Reserved keys always stay Wizard's. In the shell's own composer, ⌥E / ⌥U / ⌥I and
+⌥← / ⌥→ stay the field's. Holding left ⌥ with an app in front draws the app's keys on its controls in the SAME keycap
+as Wizard's (one style, capital letter); a view key the app claims loses its own keycap meanwhile. Apps that use an
+older SDK copy are read with the same rules (`[data-wz-key]`). In the other views (Desks, Orb) framed apps get no app
+keys yet.
 
 ## How it is built
 

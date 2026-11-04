@@ -12,15 +12,12 @@
     write(value) { try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (_) {} },
   };
   const copy = value => JSON.parse(JSON.stringify(value));
-  const desktop = document.documentElement?.dataset.shell === 'desktop';
-  const DESKTOP_VIEW = 'wos.desktop-view.v1';
+  const desktop = document.documentElement?.dataset?.shell === 'desktop';
+  const DESKTOP_VIEW = 'wos.desktop-view.v1', DESKTOP_SEED = 'wos.desktop-view-migration.v1';
   const desktopViews = ['classic', 'ai-apps', 'orb', 'apps'];
-  let desktopView = '';
+  let desktopView = '', desktopMigration = null;
   try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
-  // Retain the pre-flatten choices across concurrent refreshes AND an interrupted first migration.
-  const DESKTOP_SEED = 'wos.desktop-view-migration.v1';
-  let desktopMigration = null;
   if (desktop && !desktopView) try { const seed = JSON.parse(localStorage.getItem(DESKTOP_SEED)); if (seed?.version === 1 && seed.off && typeof seed.off === 'object') desktopMigration = seed; } catch (_) {}
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
@@ -113,7 +110,7 @@
       const off = new Set(state.defaultsOff || []); on ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; Store.write(state);
       if (recipe()) await window.WosMySkin.update({ tweaks: { [id]: on } });
-      // Safe appearance preference only: never the per-device personal-script approval.
+      // Safe built-in preference only, never personal-script approval.
       try { window.dispatchEvent(new CustomEvent('wos:tweak-choice', { detail: { id, on, scope: 'default' } })); } catch (_) {}
       return;
     }
@@ -158,7 +155,8 @@
   async function apply(warm = false) {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
-      // Capture before wornOwner/flattening can discard explicit offs. Never publish this to Look sync.
+      // Retain explicit legacy offs across overlapping refreshes / interrupted migration.
+      // This local fallback is never a shared per-shell choice or a Look-sync seed.
       if (desktop && !desktopView && !desktopMigration) {
         desktopMigration = copy(state);
         try { desktopMigration.materializedLayout = localStorage.getItem('wos.layout'); localStorage.setItem(DESKTOP_SEED, JSON.stringify(desktopMigration)); } catch (_) {}
@@ -201,40 +199,65 @@
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
       if (desktop && !desktopView) migrateDesktopView(desktopMigration);
-      if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => desktop && layoutForView(id) ? false : !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
-      if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
+      const worn = wornView(own);
+      if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
+      if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
-  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps). They are ordinary switches
-   * but mutually exclusive: switching one on switches every other view off; all off = the stock shell (Desks). A device
-   * that somehow stores two on wears only the first in catalog order. */
+  /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps, AI apps). One view per shell
+   * type (Miguel, 4 Nov 2026): the desktop and the phone each wear their own, or none (the stock shell, Desks). A manifest
+   * may name the shells it supports (`shells: ["desktop"]`); none named = both. The choice per shell type is kept in
+   * state.views { desktop, phone } (a view id, '' = Desks); a shell type with no choice yet keeps the old meaning: the
+   * first view switched on in the mix (catalog order) that supports this shell. */
+  const SHELLS = ['desktop', 'phone'];
+  const shellHere = () => { try { return document.documentElement?.dataset?.shell === 'desktop' ? 'desktop' : 'phone'; } catch (_) { return 'phone'; } };
   const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
-  const viewIds = () => [...manifests.keys()].filter(viewOf);
+  const shellsOf = id => { const s = manifests.get(id)?.shells; const ok = Array.isArray(s) ? SHELLS.filter(x => s.includes(x)) : []; return ok.length ? ok : [...SHELLS]; };
+  const viewIds = (shell = shellHere()) => [...manifests.keys()].filter(id => viewOf(id) && shellsOf(id).includes(shell));
+  const chosenView = shell => typeof state.views?.[shell] === 'string' ? state.views[shell] : undefined;
   const layoutForView = id => { const layout = manifests.get(id)?.layout; return viewOf(id) && desktopViews.includes(layout) ? layout : ''; };
   function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); localStorage.removeItem?.(DESKTOP_SEED); } catch (_) {} }
   function migrateDesktopView(legacy) {
-    // A true or false view switch is a choice; unrelated tweaks / preset migrations are not.
-    const views = viewIds().filter(layoutForView);
+    const ids = viewIds('desktop').filter(layoutForView);
     const offs = legacy.carry || legacy.off?.[legacy.preset || legacyOwner()] || [];
-    const explicit = views.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(recipe(), id) === 'boolean');
-    const chosen = views.find(id => enabled(id, recipe()));
+    const explicit = ids.some(id => typeof legacy.mix?.[id] === 'boolean' || offs.includes(id) || typeof recipeChoice(recipe(), id) === 'boolean');
+    const chosen = ids.find(id => enabled(id, recipe()));
     const oldLayout = legacy.materializedLayout;
     rememberDesktopView(chosen ? layoutForView(chosen) : explicit ? 'classic' : desktopViews.includes(oldLayout) ? oldLayout : 'ai-apps');
   }
-  const wornView = own => desktop ? viewIds().find(id => layoutForView(id) === desktopView) || '' : viewIds().find(id => enabled(id, own)) || '';
+  // Canonical shared per-shell intent wins, including explicit Desks ('').
+  // A supported old shared single-view choice still wins over the local default.
+  function effectiveDesktopView() {
+    const chosen = chosenView('desktop');
+    if (chosen !== undefined) return viewIds('desktop').includes(chosen) ? layoutForView(chosen) || 'classic' : 'classic';
+    const legacy = viewIds('desktop').find(id => enabled(id, recipe()));
+    return legacy ? layoutForView(legacy) || 'classic' : desktopView || 'ai-apps';
+  }
+  const wornView = (own, shell = shellHere()) => {
+    const chosen = chosenView(shell);
+    if (chosen !== undefined) return viewIds(shell).includes(chosen) ? chosen : '';
+    if (desktop && shell === 'desktop') return viewIds(shell).find(id => layoutForView(id) === effectiveDesktopView()) || '';
+    return viewIds(shell).find(id => enabled(id, own)) || '';
+  };
+  const cleanViews = v => Object.fromEntries(SHELLS.filter(s => typeof v?.[s] === 'string' && (v[s] === '' || ID.test(v[s]))).map(s => [s, v[s]]));
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, on: t.id === wornView(recipe()) } : t) });
+        shell: shellHere(),
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : t) });
     },
     installed, defaults, authors,
-    get desktopView() { return desktop ? desktopView : null; },
+    get desktopView() { return desktop ? effectiveDesktopView() : null; },
     get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id, credit: l?.credit || '' }; }) : []; },
     chooseDesktopView(id) {
       if (!desktop || !desktopViews.includes(id)) return Promise.resolve();
+      const pick = id === 'classic' ? '' : viewIds('desktop').find(v => layoutForView(v) === id);
+      if (pick === undefined) return Promise.resolve();
+      state.views = { ...cleanViews(state.views), desktop: pick }; Store.write(state);
       rememberDesktopView(id);
-      window.WosSkinHost.setStandardLayout?.(id); changed(); // same-frame selection and layout paint, before I/O
+      window.WosSkinHost.setStandardLayout?.(id); changed(); // paint before I/O
+      try { window.dispatchEvent(new CustomEvent('wos:view-choice', { detail: { shell: 'desktop', id: pick } })); } catch (_) {}
       return apply();
     },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
@@ -243,20 +266,25 @@
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
     get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
+    // The view chosen per shell type ({ desktop, phone }: a view id, '' = Desks; a missing type = no choice yet).
+    get views() { return cleanViews(state.views); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
     async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
-    async adopt(mix, defaults = {}) {
+    // `views` (look sync): the owner's view per shell type; a type left out has no choice yet. Left out = untouched.
+    async adopt(mix, views, defaults = {}) {
       catalog ||= await read('tweaks/catalog.json');
       const grouped = new Set((catalog.oneOf || []).flat()), next = {};
       for (const id of catalog.tweaks) if (!globalIds().includes(id) && !grouped.has(id)) next[id] = false;
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
-      // Older look documents have no defaults: retain local choices until the upgrade seeds them.
+      // Old files omit defaults: retain local offs until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
       const shared = recipe() ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
       for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
       state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
-      state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
+      state.mix = next; state.preset = 'none'; delete state.carry;
+      if (views && typeof views === 'object') state.views = cleanViews(views);
+      Store.write(state);
       return apply();
     },
     refresh: apply,
@@ -265,8 +293,11 @@
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
       if (desktop && layoutForView(id)) return experience.chooseDesktopView(item.on ? 'classic' : layoutForView(id));
-      if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)
-        for (const v of viewIds()) if (enabled(v, recipe()) !== (v === id && !item.on)) await setOne(v, v === id && !item.on);
+      if (item.view) {  // one view per shell type: on = this one on this type of shell, off = Desks here; the other type keeps its own
+        const shell = shellHere(); if (!item.shells.includes(shell)) return;
+        const pick = item.on ? '' : id;
+        state.views = { ...cleanViews(state.views), [shell]: pick }; Store.write(state);
+        try { window.dispatchEvent(new CustomEvent('wos:view-choice', { detail: { shell, id: pick } })); } catch (_) {}
         return apply();
       }
       // A oneOf group is one switch: off = this member off (that turns the group off); on = clear every member's off.

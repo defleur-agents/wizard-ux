@@ -23,7 +23,8 @@ test('desktop Settings opens as a window and every way of closing the window hid
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);
   const host = slice(desk, '  function hostSettings() {', '  afterRender = hostSettings;');
-  assert.match(host, /if \(host\) \{ if \(setEl\.parentNode !== host\) host\.appendChild\(setEl\); setEl\.hidden = false; return; \}/);
+  assert.match(host, /if \(host\) \{ moveSettingsTo\(host\); setEl\.hidden = false; return; \}/);
+  assert.match(desk, /host\.appendChild\(setEl\);\n    if \(keep && document\.activeElement !== active\) active\.focus\(\{ preventScroll: true \}\);/, 'rehosting preserves the focused descendant');
   assert.match(host, /setEl\.hidden = true;/);
   assert.match(desk, /if \(w\.app === 'settings'\) return '<div class="settings-host"><\/div>';/);
   assert.match(desk, /if \(w\.app === 'settings'\) return \{ id: 'settings', name: 'Settings'/, 'title bar names it Settings');

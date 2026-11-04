@@ -21,10 +21,16 @@ test('Landscapes stays the default and every Wizard OS option is listed', () => 
   assert.match(skins, /setWallpaper\(id\) \{/);
 });
 
-test('the Background picker sits in Look, only on the Landscapes palettes', () => {
-  assert.match(settings, /wallpaper: 'appearance'/);
-  assert.match(settings, /register\(\{ id: 'wallpaper'/);
-  assert.match(settings, /if \(!S\.wallpaperable\) return '';/);
+test('twinned skins keep Colors alongside Background cards and separate Dark | Light mode', () => {
+  assert.match(settings, /!own && twinned\(S, family\) \? backgroundHtml\(S, family, cur\) : ''/);
+  assert.match(settings, /const colours = `<div class="skp-colours"><h4>Colors<\/h4>/, 'the separate Color control stays on every skin');
+  assert.match(settings, /class="skp-card" data-bgpick=/, 'the same cards as Colors');
+  const background = settings.slice(settings.indexOf('function backgroundHtml('), settings.indexOf('function backgroundAct('));
+  assert.match(background, /color-mix\(in srgb, var\(--p-bg, var\(--wz-bg\)\)/, 'thumbnail shading follows the preview skin with a shell-token fallback');
+  assert.doesNotMatch(background, /rgba?\(\s*\d/, 'new thumbnails introduce no literal colour');
+  assert.match(settings, /data-skinmode="\$\{m\}"/);
+  assert.match(settings, /if \(backgroundAct\(ctx, el, pickPalette\)\) return true;/);
+  assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);
   assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
 });
 

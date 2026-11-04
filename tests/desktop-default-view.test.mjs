@@ -1,9 +1,10 @@
 // The real experience migration and shared host API; no browser or installed owner state.
+const clone = x => JSON.parse(JSON.stringify(x));
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
+const read = p => readFileSync(process.env.WIZARD_DESKTOP_SOURCE_ROOT ? process.env.WIZARD_DESKTOP_SOURCE_ROOT + '/' + p : new URL('../' + p, import.meta.url), 'utf8');
 function boot({ shell = 'desktop', saved, choice, layout, preset, own, deferManifest, skin, storage } = {}) {
   const store = storage || new Map();
   if (skin) store.set('wos.skin', skin);
@@ -15,11 +16,12 @@ function boot({ shell = 'desktop', saved, choice, layout, preset, own, deferMani
     get layout() { return current; }, setLayout(id) { current = id; },
     setStandardLayout(id) { current = id; }, get tweakState() { return active; },
     async loadTweaks(ids) { active = ids; } };
-  const W = { WosMySkin: { active: own }, WosSkin: {current:'nebula', families:[{id:'mizel',tweaks:'miguel'}], familyOf:id=>id==='obsidian'?'mizel':'wizard'}, WosSkinHost:H, addEventListener(){}, dispatchEvent(){} };
+  const events = [];
+  const W = { WosMySkin: { active: own }, WosSkin: {current:'nebula', families:[{id:'mizel',tweaks:'miguel'}], familyOf:id=>id==='obsidian'?'mizel':'wizard'}, WosSkinHost:H, addEventListener(){}, dispatchEvent(e){ events.push(e); } };
   vm.runInNewContext(read('web/core/experience.js'), { window:W, document:{documentElement:{dataset:{shell}}, baseURI:'https://wizard.test/wizard-os-home/', addEventListener(){}},
-    Event,URL,AbortSignal,setTimeout(){}, localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},
+    Event,CustomEvent:class { constructor(type,{detail}={}) {this.type=type;this.detail=detail;} },URL,AbortSignal,setTimeout(){}, localStorage:{getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)},
     fetch:async u=>{ if (deferManifest && u.pathname.endsWith('/manifest.json')) await deferManifest(); return {ok:true,json:async()=>JSON.parse(read('web/'+u.pathname.split('/wizard-os-home/')[1]))}; } });
-  return { E:W.WosExperience,H,store,active:()=>active };
+  return { E:W.WosExperience,H,W,events,store,active:()=>active };
 }
 const state = mix => ({version:1,off:{},preset:'none',mix,defaultsMigrated:true,machinesHomeMoved:true});
 for (const [name, options, expected] of [
@@ -59,6 +61,28 @@ test('interrupted migration survives a reload after preset flattening',async()=>
  const a=f.E.refresh();await atManifest;const g=boot({storage:f.store});await g.E.refresh();assert.equal(g.H.layout,'classic');release();await a;
 });
 
+test('unchosen desktop default never becomes a shared view seed or tweak choice', async()=>{
+ const f=boot();await f.E.refresh();
+ assert.deepEqual(clone(f.E.views),{});assert.ok(!f.E.mix['miguel/ai-apps']);
+ assert.ok(!f.events.some(e=>e.type==='wos:view-choice'||e.type==='wos:tweak-choice'));
+});
+for (const [id,layout] of [['','classic'],['miguel/orb-shell','orb'],['miguel/apps-home','apps'],['miguel/ai-apps','ai-apps']]) test(`shared desktop intent ${id||'Desks'} overrides the local default`,async()=>{
+ const f=boot();await f.E.refresh();await f.E.adopt({}, {desktop:id,phone:'miguel/orb-shell'});
+ assert.equal(f.H.layout,layout);assert.equal(f.E.views.phone,'miguel/orb-shell');
+ assert.ok(!f.active().some(id=>['miguel/ai-apps','miguel/apps-home','miguel/orb-shell'].includes(id)));
+});
+test('explicit desktop choice publishes only canonical view intent, preserving phone and shared defaults',async()=>{
+ const f=boot();await f.E.refresh();await f.E.adopt({}, {desktop:'',phone:'miguel/orb-shell'}, {'wizard/unified-inbox':false});
+ const before=f.E.defaultChoices;await f.E.chooseDesktopView('ai-apps');
+ assert.deepEqual(clone(f.E.views),{desktop:'miguel/ai-apps',phone:'miguel/orb-shell'});
+ assert.deepEqual(clone(f.E.defaultChoices),clone(before));
+ assert.deepEqual(clone(f.events.filter(e=>e.type==='wos:view-choice').map(e=>e.detail)),[{shell:'desktop',id:'miguel/ai-apps'}]);
+ assert.ok(!f.events.some(e=>e.type==='wos:tweak-choice'));
+ await f.E.adopt({}, {desktop:'',phone:'miguel/orb-shell'});assert.equal(f.H.layout,'classic','newer shared Desks wins over device cache');
+});
+test('legacy shared supported view still wins before per-shell choices exist',async()=>{
+ const f=boot();await f.E.refresh();await f.E.adopt({'miguel/orb-shell':true},{});assert.equal(f.H.layout,'orb');
+});
 test('migration is one-shot, including explicitly all views off',async()=>{
  const f=boot({saved:state({'miguel/orb-shell':false,'miguel/apps-home':false,'miguel/ai-apps':false})});await f.E.refresh();assert.equal(f.H.layout,'classic');
  const g=boot({choice:f.store.get('wos.desktop-view.v1')});await g.E.refresh();assert.equal(g.H.layout,'classic');

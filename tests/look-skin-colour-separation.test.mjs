@@ -177,3 +177,28 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: slow Create saves a sn
   assert.equal(next.name, 'Second');
   h.view.destroy();
 });
+
+for (const shell of ['phone', 'desktop']) test(`${shell}: New skin shares Look's shell filter without erasing hidden defaults`, async () => {
+  const h = look(shell, true);
+  const items = [
+    { id: 'miguel/ai-apps', name: 'AI apps', view: 'AI apps', shells: ['desktop'] },
+    { id: 'miguel/orb-shell', name: 'Orb', view: 'Orb', shells: ['phone', 'desktop'] },
+    { id: 'test/phone', name: 'Phone only', view: 'Phone', shells: ['phone'] },
+    { id: 'test/ordinary', name: 'Ordinary', shells: ['desktop'] },
+  ];
+  const defaults = Object.fromEntries(items.map(t => [t.id, true]));
+  h.s.WosExperience.state = { shell, tweaks: items };
+  h.s.WosExperience.installed = async () => items;
+  h.s.WosExperience.defaults = async () => ({ ...defaults });
+  h.view.render();
+  const visible = id => id === 'miguel/ai-apps' ? shell === 'desktop' : id === 'test/phone' ? shell === 'phone' : true;
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id));
+  h.act('data-newskin', '');
+  for (let n = 0; n < 10; n++) await Promise.resolve();
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-draft-tweak="${t.id}"`), visible(t.id), t.id);
+  assert.deepEqual(JSON.parse(JSON.stringify(h.view.context.skinDraft.tweaks)), defaults, 'filter presentation, not other-shell state');
+  h.input('data-skin-name', 'Keep both devices'); h.act('data-draft-tweak', 'miguel/orb-shell');
+  h.act('data-skin-create', '');
+  assert.deepEqual(h.s.WosMySkin.created.tweaks, { ...defaults, 'miguel/orb-shell': false });
+  h.view.destroy();
+});

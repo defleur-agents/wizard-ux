@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -83,6 +83,16 @@ export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400
 export const COLS = { tabs: 200, tabsRail: 52 };
 export const TIDY_EVERY = 3600e3;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
+/** One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of the app in front included
+ * (docs/ai-apps-view.md › App keys). These ⌥ keys are Wizard's and never go to an app (⇧ variants too): ⌥1–⌥0, ⌥[ ⌥],
+ * the ⌥ arrows, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. */
+export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
+  'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
+/** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
+ * never e.key (macOS ⌥ turns letters into symbols): KeyJ → 'j', Slash → '/'; '' for anything else. */
+const APP_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
+export const appKeyOf = code => { const c = String(code || ''); if (RESERVED_KEYS.includes(c)) return ''; const m = /^Key([A-Z])$/.exec(c); return m ? m[1].toLowerCase() : APP_PUNCT[c] || ''; };
+export const isAppKey = k => typeof k === 'string' && /^[a-z/,.;]$/.test(k) && !(/^[a-z]$/.test(k) && RESERVED_KEYS.includes('Key' + k.toUpperCase()));
 export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyS' || String(e.key).toLowerCase() === 's');
 
 export default function desktop(api) {
@@ -456,7 +466,8 @@ export default function desktop(api) {
   };
   let chatsFresh = false;
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
-   * takes the keyboard once it is the panel, so its plain keys (data-wz-key, core/app-client.js) reach it at once. */
+   * takes the keyboard once it is the panel (its own typing, its own plain keys); its ⌥ keys (data-wz-key) the view
+   * presses for it (App keys, at the key handler). */
   let focusWant = '', focusing = false;
   const paneFrame = () => [...(pane?.el?.querySelectorAll?.('.win iframe') || [])].find(f => !f.closest('.win.gone')) || null;
   function focusFrame(tries = 0) {
@@ -549,14 +560,16 @@ export default function desktop(api) {
   }
 
   /* ---------- a chat row: click opens it; ⋯ (on hover) or a right click opens its menu ---------- */
-  function chatRow(s, cur) {
+  function chatRow(s, cur, inProject = false) {
     const wrap = el('div', 'aad-rw' + (s.id === cur ? ' is-cur' : ''), { 'data-sid': s.id, 'data-kind': s.kind });
     if (khMarks.has(s.id)) wrap.dataset.aadKh = khMarks.get(s.id);   // (round 21: a repaint while ⌥ is held keeps the room for its keycap)
     const b = el('button', 'aad-row aad-chat', { type: 'button', ...(s.id === cur ? { 'aria-current': 'page' } : {}) });
     // a notification (round 5; round 20 item 6, Miguel: it stands out, subtly, in amber): a small amber bell before its
     // title in normal text; its unread dot amber too (a chat's stays the accent)
     if (s.note) { wrap.dataset.note = ''; b.append(icon('bell', 'aad-ico aad-bell')); }
-    b.append(el('span', 'aad-row-t', { text: s.title }));
+    // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
+    const t0 = inProject ? titleInProject(s) : s.title;
+    b.append(el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) }));
     // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
@@ -598,22 +611,23 @@ export default function desktop(api) {
     if (!menu) return;
     menu.card.remove(); menu.wrap.classList.remove('is-held'); menu = null; offMenuBack?.(); offMenuBack = null;
   }
-  /** round 19 item 2 / round 22 (Miguel, 4 Nov 2026: sort and group right in the sidebar, no Settings dive): Ready's
-   * header menu: Sort (Newest / Oldest first) and Group (By status / One list), the current ones checked */
-  function openSortMenu(btn) {
+  /** round 19 item 2 / round 22 / round 25 (Miguel, 4 Nov 2026: sort and group right in the sidebar, as two separate
+   * drop-downs, since they are two different choices): kind 'sort' lists Newest / Oldest first, kind 'group' lists
+   * By status / By project / One list, the current one checked */
+  function openSortMenu(btn, kind = 'sort') {
     if (menu?.wrap === btn) { closeMenu(); return; }
     closeMenu();
-    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': 'Sort and group Ready' });
+    const isSort = kind === 'sort';
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
     const item = (on, w0, attrs, fn) => {
       const it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), ...attrs });
       it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
       api.listen(it, 'click', () => { closeMenu(); fn(); });
       return it;
     };
-    card.append(el('h3', 'aad-pop-h', { text: 'Sort' }));
-    for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
-    card.append(el('h3', 'aad-pop-h aad-pop-h2', { text: 'Group' }));
-    for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
+    card.append(el('h3', 'aad-pop-h', { text: isSort ? 'Sort' : 'Group' }));
+    if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
+    else for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
     const r = btn.getBoundingClientRect();
     card.style.left = Math.round(Math.max(8, Math.min(r.right - 200, (globalThis.innerWidth || 1440) - 216))) + 'px';
@@ -700,22 +714,27 @@ export default function desktop(api) {
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
             const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
             gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
-            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread)));
+            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
           }
         } else if (on) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
           else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : EMPTY[k] }));
         }
         if (k === 'ready') {
-          // round 22 (Miguel, 4 Nov 2026: "sort and group concisely inside the expanded view"): always on Ready's header,
-          // a quiet word for the order (Newest / Oldest) whose menu also holds the grouping; never a native select
+          // round 22 / round 25 (Miguel, 4 Nov 2026): always on Ready's header, two quiet drop-downs: the grouping
+          // (By status / By project / One list) and the order (Newest / Oldest); never a native select
           const row = el('div', 'aad-sech');
           const word0 = (GROUP_ORDERS.find(([v]) => v === readyOrder()) || GROUP_ORDERS[0])[1];
-          const gw0 = (GROUP_MODES.find(([v]) => v === groupBy()) || GROUP_MODES[2])[1].toLowerCase();
-          const sort = el('button', 'aad-sortb', { type: 'button', 'aria-haspopup': 'menu', 'aria-label': `Sort and group: ${word0}, ${gw0}. Change`, title: 'Sort and group Ready' });
-          sort.append(el('span', 'aad-sortb-w', { text: word0.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
-          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort); });
-          row.append(hd, sort);
+          const gw0 = (GROUP_MODES.find(([v]) => v === groupBy()) || GROUP_MODES[2])[1];
+          const dd = (cls, kind, text, aria, title) => {
+            const b = el('button', 'aad-sortb ' + cls, { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': aria, title });
+            b.append(el('span', 'aad-sortb-w', { text }), icon('down', 'aad-ico aad-sortb-c'));
+            api.listen(b, 'click', e => { e.stopPropagation?.(); openSortMenu(b, kind); });
+            return b;
+          };
+          const group = dd('aad-groupb', 'group', gw0, `Group: ${gw0}. Change`, 'Group Ready');
+          const sort = dd('aad-orderb', 'sort', word0.replace(' first', ''), `Sort: ${word0}. Change`, 'Sort Ready');
+          row.append(hd, group, sort);
           out.push(row, body);
         } else out.push(hd, body);
       }
@@ -825,7 +844,7 @@ export default function desktop(api) {
     const items = rows.map(r => {
       const it = el('button', 'aad-pop-i aad-fly-i' + (r.id === cur ? ' is-cur' : ''), { type: 'button', role: 'menuitem', 'data-sid': r.id, ...(r.id === cur ? { 'aria-current': 'true' } : {}) });
       if (r.note) { it.dataset.note = ''; it.append(icon('bell', 'aad-ico aad-bell')); }   // (round 20 item 6: the amber bell here too)
-      it.append(el('span', 'aad-fly-t', { text: r.title || 'Untitled' }), el('span', 'aad-fly-at', { text: shortTime(r.at, now) }));
+      it.append(el('span', 'aad-fly-t', { text: (key.startsWith('proj:') ? titleInProject(r) : r.title) || 'Untitled' }), el('span', 'aad-fly-at', { text: shortTime(r.at, now) }));
       api.listen(it, 'click', () => { const k = fly?.key || key; closeFly(); openChat(r.id, k); });
       return it;
     });
@@ -1429,6 +1448,10 @@ export default function desktop(api) {
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
     if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;
+    // the app in front: ⌥ + a key it marks (data-wz-key) presses that control, also from inside its frame and while
+    // typing there; a letter it claims beats the view's own meaning for it while it is in front (⌥K = its key, not
+    // search); Wizard's keys (RESERVED_KEYS) never reach it; nothing marked: the view's meaning below
+    if (!sh && appFront()) { const t = appTarget(appKeyOf(code)); if (t) { if (!e.repeat) pressApp(t); return true; } }
     if (code === 'Space' && !sh) return once(() => api.voice.talk());
     if ((code === 'ArrowDown' || code === 'ArrowUp') && !sh) { if (!e.repeat || here().thread) stepReady(code === 'ArrowDown' ? 1 : -1); return true; }
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
@@ -1546,24 +1569,35 @@ export default function desktop(api) {
       for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
-    // the app in front: its own plain keys (data-wz-key) on its own controls, outlined keycaps (no ⌥)
-    if (pane) { const f = paneFrame(); if (f) for (const t of frameKeys(f).slice(0, 24)) out.push({ el: t.el, key: keyCap(t.key), at: 'tl', frame: f, app: true, name: t.label || '' }); }
+    // the app in front: its own ⌥ keys (data-wz-key) on its own controls, the same keycaps as Wizard's (one anchor); a
+    // letter it claims takes the view's keycap for that letter away (the app wins it while in front)
+    if (appFront()) {
+      const f = paneFrame(), ks = f ? frameKeys(f).slice(0, 24) : [], caps = new Set(ks.map(t => keyCap(t.key)));
+      if (ks.length) { for (let i = out.length - 1; i >= 0; i--) if (caps.has(out[i].key)) out.splice(i, 1); for (const t of ks) out.push({ el: t.el, key: keyCap(t.key), at: 'tl', frame: f, app: true, name: t.label || '' }); }
+    }
     return out;
   }, { only: true });
   /* App keys: what the app in front marks with data-wz-key (core/app-client.js WizardApp.keys.list(); an app on an older
-   * SDK copy: the same rules read here); its keycap reads the letter, an arrow, ↵ or Space. */
+   * SDK copy: the same rules read here), only the keys an app may have (isAppKey: a letter or / , . ; not Wizard's);
+   * its keycap reads the letter in capitals. */
+  const appFront = () => !!pane && !focusOn();
+  const appTarget = k => { const f = k ? paneFrame() : null; return f ? frameKeys(f).find(t => t.key === k) || null : null; };
+  function pressApp(t) {
+    const n = t.el;
+    // a field as the target ('/' to search) takes the typing too (a click alone never focuses a field)
+    try { if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName || '') || n.isContentEditable) n.focus?.({ preventScroll: true }); n.click?.(); } catch (_) {}
+  }
   function frameKeys(f) {
     let w = null, d = null; try { w = f.contentWindow; d = f.contentDocument; } catch (_) { return []; }
     if (!d || !w) return [];
-    try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return l; } catch (_) {}
+    try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return [...l].filter(t => t && t.el && isAppKey(t.key)); } catch (_) {}
     const box = n => n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
     const modal = [...d.querySelectorAll('[aria-modal="true"], [role="dialog"]:not([hidden]), dialog[open]')].filter(box).pop() || d;
     return [...modal.querySelectorAll('[data-wz-key]')].filter(n => box(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true')
       .map(n => ({ el: n, key: n.getAttribute('data-wz-key') || '', label: n.getAttribute('data-wz-key-label') || n.getAttribute('aria-label') || '' }))
-      .filter(t => /^(Space|Enter|Arrow(Up|Down|Left|Right))$/.test(t.key) || ([...t.key].length === 1 && t.key.trim() && t.key === t.key.toLowerCase()));
+      .filter(t => isAppKey(t.key));
   }
-  const ARROW_CAPS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '↵', Space: 'Space' };
-  const keyCap = k => ARROW_CAPS[k] || String(k).toUpperCase();
+  const keyCap = k => String(k).toUpperCase();
   function midFree() {
     const r = hMid.getBoundingClientRect?.(); if (!r || typeof doc.elementFromPoint !== 'function') return true;
     const hit = doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
