@@ -1957,11 +1957,15 @@ test('round 21: the views keep the open model to themselves: Desks, Orb and Apps
   for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /api\.apps\.routeOpens\?\.\(\{/);
 });
 
-test('AI apps view: Now playing has the column\'s first row (slot apps-top), marks playing apps\' rows passively and owns ⌥P', () => {
+test('AI apps view: Now playing is only small bars on the playing app\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon', () => {
   const js = read('web/layouts/ai-apps/desktop.js');
-  assert.match(js, /const vtNow = el\('div', 'aad-vtnow', \{ 'data-slot': 'apps-top' \}\);/);
-  assert.match(js, /vt\.append\(vtHead, vtNow, vtList, vtFoot\)/, 'the pill row sits above the apps, under the header');
+  assert.doesNotMatch(js, /apps-top|aad-vtnow|vtNow/, 'the pill row at the top of the column is gone');
+  assert.match(js, /vt\.append\(vtHead, vtList, vtFoot\)/, 'the column is exactly as before Now playing');
   assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
+  assert.match(js, /np = el\('button', 'aad-np', \{ type: 'button', tabindex: '-1' \}\);/, 'the bars are a button on the icon');
+  assert.match(js, /api\.listen\(np, 'click', e => \{ e\.stopPropagation\?\.\(\);[^\n]*api\.media\.pause\(x\.key\) : api\.media\.play\(x\.key\)/, 'a click pauses / plays that app and never reaches the row (which opens it)');
+  assert.match(js, /closest\?\.\('\.aad-vtx, \.aad-np'\)\) return;/, 'pressing the bars never starts a row drag');
+  assert.match(js, /if \(!np && !m\.playing\) \{/, 'a fresh row draws no bars for something already paused');
   assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
-  assert.match(js, /if \(api\.media\?\.list\?\.\(\)\.length\) put\(vtNow\.firstElementChild, 'P'/, 'its keycap only while something is listed');
+  assert.match(js, /put\(np\.playing && bars \? bars : tile\(npRow\), 'P'/, 'the ⌥P keycap sits on that app\'s icon');
 });
