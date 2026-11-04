@@ -1,7 +1,7 @@
-// App keys (Miguel, 4 Nov 2026: drive every app from the keyboard). The contract app authors follow
-// (docs/ai-apps-view.md › App keys): a control marked data-wz-key="<key>" is clicked by that plain key; the behaviour
-// lives in the app SDK (core/app-client.js), framed and standalone, and WizardApp.keys.list() hands the shell the live
-// targets it marks while left ⌥ is held. Pinned here with a small fake page.
+// App keys (Miguel, 4 Nov 2026: drive every app from the keyboard; one anchor: ⌥ for every Wizard key, apps' too). The
+// contract app authors follow (docs/ai-apps-view.md › App keys): a control marked data-wz-key="<key>" is clicked by ⌥ +
+// that key (read from e.code). Standalone the SDK (core/app-client.js) presses it; framed the shell does (the framed SDK
+// never acts); WizardApp.keys.list() hands the shell the live targets. Pinned here with a small fake page.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -39,6 +39,8 @@ class Node0 {
 }
 const el = (tag, attrs, ...kids) => new Node0(tag, attrs, kids);
 
+const codeOf = k => /^[a-z]$/i.test(k) ? 'Key' + k.toUpperCase() : { '/': 'Slash', ',': 'Comma', '.': 'Period', ';': 'Semicolon', ' ': 'Space', '[': 'BracketLeft', '`': 'Backquote' }[k] || (/^\d$/.test(k) ? 'Digit' + k : k);
+
 function load({ framed = false } = {}) {
   const listeners = {}, head = el('head'), body = el('body');
   const document = { head, body, documentElement: el('html', {}, head, body), activeElement: body, dataset: {}, hidden: false,
@@ -50,7 +52,7 @@ function load({ framed = false } = {}) {
   ctx.parent = framed ? { postMessage() {}, WizHomeScreenPolicy: null } : ctx;
   vm.runInNewContext(client, ctx);
   const press = (key, o = {}) => {
-    const e = { type: 'keydown', key, code: o.code || '', altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false, isComposing: false, defaultPrevented: false,
+    const e = { type: 'keydown', key, code: o.code || codeOf(key), altKey: true, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false, isComposing: false, defaultPrevented: false,
       target: body, ...o, preventDefault() { this.defaultPrevented = true; } };
     for (const fn of listeners.keydown || []) fn(e);
     return e;
@@ -58,80 +60,103 @@ function load({ framed = false } = {}) {
   return { ctx, document, body, press, WizardApp: ctx.WizardApp };
 }
 
-test('a plain key clicks the first live control marked with it, normalised (Space, letters lower-cased), and is used up', () => {
+const add = (p, ...ns) => { for (const n of ns) { n.parentNode = p.body; p.body.children.push(n); } return ns; };
+
+test('⌥ + a marked key clicks the first live control marked with it, read from e.code (macOS ⌥ letters are symbols), and is used up', () => {
   const p = load();
-  const play = el('button', { 'data-wz-key': 'Space', 'data-wz-key-label': 'Play / pause' });
-  const nextA = el('button', { 'data-wz-key': 'j' }), nextB = el('button', { 'data-wz-key': 'j' });
-  const down = el('button', { 'data-wz-key': 'ArrowDown' }), search = el('button', { 'data-wz-key': '/' }), ask = el('button', { 'data-wz-key': '?' });
-  p.body.children.push(...[play, nextA, nextB, down, search, ask].map(n => (n.parentNode = p.body, n)));
-  let e = p.press(' ', { code: 'Space' }); assert.equal(play.clicks, 1); assert.equal(e.defaultPrevented, true, 'the page does not scroll');
-  p.press('j'); assert.deepEqual([nextA.clicks, nextB.clicks], [1, 0], 'first in page order wins');
-  p.press('J', { capsLock: true }); assert.equal(nextA.clicks, 2, 'Caps Lock: the same key');
-  p.press('ArrowDown'); p.press('/'); p.press('?', { shiftKey: true });
-  assert.deepEqual([down.clicks, search.clicks, ask.clicks], [1, 1, 1], '⇧ is fine where the character needs it (?)');
+  const [nextA, nextB, search, prev, dot, semi, comma] = add(p, ...['j', 'j', '/', 'k', '.', ';', ','].map(k => el('button', { 'data-wz-key': k, 'data-wz-key-label': k === 'j' ? 'Next' : '' })));
+  let e = p.press('∆', { code: 'KeyJ' }); assert.deepEqual([nextA.clicks, nextB.clicks, e.defaultPrevented], [1, 0, true], 'first in page order wins; ⌥J types ∆ on a Mac: e.code decides');
+  p.press('÷', { code: 'Slash' }); p.press('˚', { code: 'KeyK' }); p.press('≥', { code: 'Period' }); p.press('…', { code: 'Semicolon' }); p.press('≤', { code: 'Comma' });
+  assert.deepEqual([search, prev, dot, semi, comma].map(n => n.clicks), [1, 1, 1, 1, 1]);
   e = p.press('x'); assert.equal(e.defaultPrevented, false, 'an unmarked key is left alone');
-  const find = el('input', { 'data-wz-key': 's' }); let focus = 0; find.focus = () => { focus++; }; find.parentNode = p.body; p.body.children.push(find);
-  e = p.press('s'); assert.deepEqual([find.clicks, focus, e.defaultPrevented], [1, 1, true], 'a field as the target takes the typing (no s typed into it)');
+  const find = el('input', { 'data-wz-key': 'f' }); let focus = 0; find.focus = () => { focus++; }; add(p, find);
+  e = p.press('ƒ', { code: 'KeyF' }); assert.deepEqual([find.clicks, focus, e.defaultPrevented], [1, 1, true], 'a field as the target is focused too (it takes the typing)');
   p.body.children.pop();
-  assert.deepEqual([...p.WizardApp.keys.list()].map(k => [k.key, k.label]), [['Space', 'Play / pause'], ['j', ''], ['j', ''], ['ArrowDown', ''], ['/', ''], ['?', '']]);
+  assert.deepEqual([...p.WizardApp.keys.list()].map(k => [k.key, k.label]), [['j', 'Next'], ['j', 'Next'], ['/', ''], ['k', ''], ['.', ''], [';', ''], [',', '']]);
+  assert.equal(p.WizardApp.keys.match({ altKey: true, code: 'KeyJ' }), nextA);
 });
 
-test('never with ⌥ / Ctrl / ⌘ (the shell\'s), ⇧ as a variant, while typing, composing, or once the app handled the key; Escape is never an app key', () => {
+test('plain keys no longer act: j, Space, Enter, arrows do nothing (the app\'s own business again)', () => {
   const p = load();
-  const j = el('button', { 'data-wz-key': 'j' }), sp = el('button', { 'data-wz-key': 'Space' }), esc = el('button', { 'data-wz-key': 'Escape' });
-  const field = el('input'), area = el('textarea'), sel = el('select'), rich = el('div', { contenteditable: '' }, el('span'));
-  p.body.children.push(...[j, sp, esc, field, area, sel, rich].map(n => (n.parentNode = p.body, n)));
-  for (const o of [{ altKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { defaultPrevented: true }, { target: field }, { target: area }, { target: sel }, { target: rich.children[0] }]) {
+  const [j] = add(p, el('button', { 'data-wz-key': 'j' }));
+  for (const [key, code] of [['j', 'KeyJ'], [' ', 'Space'], ['Enter', 'Enter'], ['ArrowDown', 'ArrowDown']]) {
+    const e = p.press(key, { code, altKey: false }); assert.equal(e.defaultPrevented, false, code);
+  }
+  assert.equal(j.clicks, 0, 'plain j does nothing');
+});
+
+test('the key set: one lower-case letter or / , . ; — never Wizard\'s own (h w s d v c), Space, Enter, arrows, digits, brackets, Escape, capitals', () => {
+  const p = load();
+  const bad = ['h', 'w', 's', 'd', 'v', 'c', 'Space', 'Enter', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', '1', '0', '[', ']', '`', 'Escape', 'J', '?', '-', 'ab', ''];
+  const nodes = add(p, ...bad.map(k => el('button', { 'data-wz-key': k })));
+  assert.deepEqual([...p.WizardApp.keys.list()], [], 'none of them is ever listed');
+  for (const code of ['KeyH', 'KeyW', 'KeyS', 'KeyD', 'KeyV', 'KeyC', 'Space', 'Enter', 'ArrowUp', 'Digit1', 'Digit0', 'BracketLeft', 'Backquote', 'Escape']) p.press('', { code });
+  assert.ok(nodes.every(n => n.clicks === 0), 'and never pressed');
+});
+
+test('only ⌥ alone (not ⇧ / Ctrl / ⌘ with it), not composing, not once the app handled it; works while typing in a field; held down fires once', () => {
+  const p = load();
+  const [j] = add(p, el('button', { 'data-wz-key': 'j' }));
+  for (const o of [{ shiftKey: true }, { ctrlKey: true }, { metaKey: true }, { isComposing: true }, { defaultPrevented: true }]) {
     const e = p.press('j', o); assert.equal(j.clicks, 0, JSON.stringify(Object.keys(o))); if (!o.defaultPrevented) assert.equal(e.defaultPrevented, false);
   }
-  p.press('J', { shiftKey: true }); p.press(' ', { shiftKey: true }); assert.deepEqual([j.clicks, sp.clicks], [0, 0], '⇧J, ⇧Space: not the plain key');
-  p.press('Escape'); assert.equal(esc.clicks, 0, 'Escape stays Back');
-  assert.ok(!p.WizardApp.keys.list().some(k => k.el === esc), 'and is never listed');
+  const field = el('input'), rich = el('div', { contenteditable: '' }, el('span')); add(p, field, rich);
+  p.press('j', { target: field }); p.press('j', { target: rich.children[0] }); assert.equal(j.clicks, 2, '⌥J from inside a field still presses it');
+  const e = p.press('j', { repeat: true }); assert.equal(j.clicks, 2, 'held down: once'); assert.equal(e.defaultPrevented, true, 'still not typed into the page');
 });
 
-test('only visible, enabled controls count; an open modal keeps the keys to itself; held keys repeat only for arrows', () => {
+test('only visible, enabled controls count; an open modal keeps the keys to itself', () => {
   const p = load();
   const hid = el('button', { 'data-wz-key': 'n', hidden: '' }), inHidden = el('div', { hidden: '' }, el('button', { 'data-wz-key': 'n' }));
   const inert = el('div', { inert: '' }, el('button', { 'data-wz-key': 'n' })), aria = el('div', { 'aria-hidden': 'true' }, el('button', { 'data-wz-key': 'n' }));
   const off = el('button', { 'data-wz-key': 'n', disabled: '' }), ariaOff = el('button', { 'data-wz-key': 'n', 'aria-disabled': 'true' });
   const noBox = el('button', { 'data-wz-key': 'n' }); noBox.box = false;
-  const live = el('button', { 'data-wz-key': 'n' }), right = el('button', { 'data-wz-key': 'ArrowRight' });
-  p.body.children.push(...[hid, inHidden, inert, aria, off, ariaOff, noBox, live, right].map(n => (n.parentNode = p.body, n)));
+  const live = el('button', { 'data-wz-key': 'n' }), right = el('button', { 'data-wz-key': 'l' });
+  add(p, hid, inHidden, inert, aria, off, ariaOff, noBox, live, right);
   p.press('n'); assert.equal(live.clicks, 1, 'the one that can be seen and used');
   assert.deepEqual([...p.WizardApp.keys.list()].map(k => k.el), [live, right]);
-  // a modal: only its own targets (the topmost); the page behind is out of reach
-  const sheetBtn = el('button', { 'data-wz-key': 's' }), sheet = el('div', { role: 'dialog' }, sheetBtn);
-  const dlgBtn = el('button', { 'data-wz-key': 'Enter' }), dlg = el('dialog', { open: '' }, dlgBtn);
-  p.body.children.push(sheet, dlg); sheet.parentNode = dlg.parentNode = p.body;
+  const sheetBtn = el('button', { 'data-wz-key': 'o' }), sheet = el('div', { role: 'dialog' }, sheetBtn);
+  const dlgBtn = el('button', { 'data-wz-key': 'y' }), dlg = el('dialog', { open: '' }, dlgBtn);
+  add(p, sheet, dlg);
   p.press('n'); assert.equal(live.clicks, 1, 'behind the modal: nothing');
-  p.press('Enter'); assert.equal(dlgBtn.clicks, 1, 'the topmost modal\'s own key');
-  p.press('s'); assert.equal(sheetBtn.clicks, 0, 'a lower modal is behind the top one');
+  p.press('y'); assert.equal(dlgBtn.clicks, 1, 'the topmost modal\'s own key');
+  p.press('o'); assert.equal(sheetBtn.clicks, 0, 'a lower modal is behind the top one');
   assert.deepEqual([...p.WizardApp.keys.list()].map(k => k.el), [dlgBtn]);
-  dlg.attrs = {}; dlg.box = false; sheet.attrs.hidden = ''; sheet.box = false;
-  // held down: arrows repeat, other keys are used up once
-  let e = p.press('n', { repeat: true }); assert.equal(live.clicks, 1); assert.equal(e.defaultPrevented, true, 'still not typed into the page');
-  p.press('ArrowRight', { repeat: true }); p.press('ArrowRight', { repeat: true }); assert.equal(right.clicks, 2);
 });
 
-test('framed apps get the same keys (the shell passes plain keys on), and the SDK exposes keys.list for the shell', () => {
+test('framed: the SDK never presses (the shell does, no double fire) but still lists its targets for the shell', () => {
   const p = load({ framed: true });
-  const b = el('button', { 'data-wz-key': 'k' }); b.parentNode = p.body; p.body.children.push(b);
-  p.press('k'); assert.equal(b.clicks, 1);
+  const [b] = add(p, el('button', { 'data-wz-key': 'k' }));
+  const e = p.press('˚', { code: 'KeyK' }); assert.deepEqual([b.clicks, e.defaultPrevented], [0, false]);
+  p.press('k', { altKey: false }); assert.equal(b.clicks, 0);
   assert.equal(typeof p.WizardApp.keys.list, 'function'); assert.equal(p.WizardApp.keys.list()[0].el, b);
   assert.ok(Object.isFrozen(p.WizardApp.keys));
+  assert.match(client, /if \(!framed\) addEventListener\('keydown', e => \{\n\s+const hit = keyMatch\(e\);/, 'the SDK\'s own ⌥ handler is standalone only');
+  assert.doesNotMatch(client, /keyDone|Arrow\(Up\|Down/, 'no plain-key click left');
 });
 
-test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-tested in its own page, drawn outlined; plain keys from a frame are never the shell\'s', () => {
+test('the reserved list is one exported constant, and the SDK\'s letters agree with it', async () => {
+  const m = await import('../web/layouts/ai-apps/desktop.js').catch(() => null);
+  const src = read('web/layouts/ai-apps/desktop.js');
+  const want = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0', 'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC'];
+  const lit = /export const RESERVED_KEYS = Object\.freeze\((\[[^\]]*\])\);/.exec(src); assert.ok(lit, 'exported once');
+  assert.deepEqual(JSON.parse(lit[1].replace(/'/g, '"')), want);
+  const letters = want.filter(c => /^Key/.test(c)).map(c => c.slice(3).toLowerCase()).sort().join('');
+  assert.equal(/const RESERVED_LETTERS = '([a-z]+)';/.exec(client)[1].split('').sort().join(''), letters);
+  if (m) {
+    assert.deepEqual([...m.RESERVED_KEYS], want);
+    assert.deepEqual(['KeyJ', 'Slash', 'Comma', 'Period', 'Semicolon', 'KeyK', 'KeyH', 'KeyW', 'Space', 'Digit1', 'BracketLeft', 'ArrowDown', 'Enter', 'Quote'].map(m.appKeyOf), ['j', '/', ',', '.', ';', 'k', '', '', '', '', '', '', '', '']);
+    assert.deepEqual(['j', '/', 'h', 's', 'Space', 'J', 'ArrowUp'].map(m.isAppKey), [true, true, false, false, false, false, false]);
+  }
+});
+
+test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-tested in its own page, in Wizard\'s own keycap; ⌥ keys in a frame reach the shell', () => {
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /const ox = fr \? fr\.left \+ \(f\.clientLeft \|\| 0\) : 0, oy = fr \? fr\.top \+ \(f\.clientTop \|\| 0\) : 0;/);
   assert.match(desk, /if \(f\) \{ const inner = n\.ownerDocument\.elementFromPoint\(hx - ox, hy - oy\);/);
-  assert.match(desk, /c\.className = 'kh-chip' \+ \(word \? ' kh-lab' : ''\) \+ \(opt\?\.app \? ' kh-app' : ''\);/);
-  assert.match(desk, /opt\?\.app \? `\$\{label\}: \$\{opt\.name \|\| label\}` : `\$\{ALT\} /, 'an app key reads without ⌥');
-  // ⌥ inside an app frame still reaches the shell (keys + the hold-⌥ release)
+  assert.match(desk, /opt\?\.app \? `\$\{ALT\} \$\{label\}: \$\{opt\.name \|\| label\}`/, 'an app key reads with ⌥ too');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'no second (outlined) keycap style');
   assert.match(desk, /(doc|frameWindow)\.addEventListener\('keydown', e => onKey\(e, true\), true\);\s*(doc|frameWindow)\.addEventListener\('keyup', e => \{ keyHints\.up\(e\);/);
-  // past the layout's keys, a plain key from a frame stops at the ⌥ gate (Escape excepted: Back)
-  assert.match(desk, /if \(f\?\.app === 'chats' && !keyHints\.pinned\(\) && plain && !fromFrame\)/);
-  assert.match(desk, /if \(!e\.altKey \|\| e\.metaKey \|\| e\.ctrlKey\) \{\n\s+return;\n\s+\}/);
   const host = read('web/core/skin-host.js');
   assert.match(host, /c\.frame\?\.tagName === 'IFRAME' \? \{ frame: c\.frame \} : \{\}/, 'the frame passes through keyChips');
   assert.match(host, /c\.app === true \? \{ app: true, name:/);
@@ -139,7 +164,8 @@ test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-t
 
 test('docs: the App keys section app authors follow', () => {
   const doc = read('docs/ai-apps-view.md');
-  const sec = doc.slice(doc.indexOf('## App keys'));
+  const sec = doc.slice(doc.indexOf('## App keys'), doc.indexOf('## How it is built'));
   assert.ok(doc.includes('## App keys'), 'a section of its own');
-  for (const w of ['data-wz-key', 'data-wz-key-label', 'WizardApp.keys.list()', 'Escape', 'aria-modal', 'OUTLINED', 'ArrowUp', 'contenteditable']) assert.ok(sec.includes(w), w);
+  for (const w of ['data-wz-key', 'data-wz-key-label', 'WizardApp.keys.list()', 'e.code', 'RESERVED_KEYS', '⌥1–⌥0', '⌥[ ⌥]', '⌥H', '⌥W', '⌥S', '⌥Space', '⌥D ⌥V ⌥C', 'aria-modal', 'SAME keycap', 'contenteditable']) assert.ok(sec.includes(w), w);
+  assert.doesNotMatch(sec, /OUTLINED|with plain keys \(no ⌥\)|`Space`, `Enter`, `ArrowUp`/, 'no plain-key language left');
 });
