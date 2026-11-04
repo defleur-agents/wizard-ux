@@ -2374,7 +2374,8 @@
       if (at === 'tr') { x = r.right - Math.round(w * .55); y = r.top - Math.round(h * .45); }   // … its top-right corner
       if (at === 'bl') { x = r.left - Math.round(w * .45); y = r.bottom - Math.round(h * .55); } // … its bottom-left corner
       if (at === 'right') { x = r.right + 3; y = r.top + r.height / 2 - h / 2; }                // just right of it (a small chevron)
-      if (at === 'right-2') { x = r.right + 3; y = r.bottom - h + 2; }                          // … its lower half (a second key on it)
+      if (at === 'right-up') { x = r.right + 3; y = r.top + r.height / 2 - h - 1; }            // … two keys on it: the upper one
+      if (at === 'right-dn') { x = r.right + 3; y = r.top + r.height / 2 + 1; }                // … and the lower one
       if (at === 'mid') { x = r.left + r.width / 2 - w / 2; y = r.top + r.height / 2 - h / 2; }  // on its middle (a thin grip)
       if (at === 'bottom-in') { x = r.left + r.width / 2 - w / 2; y = r.bottom - h - 6; }
       if (at && typeof at === 'object') { x = at.x - w; y = at.y; at.x = x - 6; } // Speak words: one row, right to left, ending under the last speak button
