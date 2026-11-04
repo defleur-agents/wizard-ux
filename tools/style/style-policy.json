@@ -49,12 +49,12 @@
   "exceptions": [
     {
       "path": "web/core/skins.css",
-      "sha256": "a7a09e969a6d55b6d879fda794d8a913370f0b40eeb01f9f584d4d5eead0e899",
+      "sha256": "afcd346fba636be9e25c50cd4f1ba60e66eb0fdcb49854bb18ed9ec93039b6ac",
       "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
     },
     {
       "path": "web/core/skins.js",
-      "sha256": "32b009431870b5976efd989c91dc6a1ed7416fd79215ca18d670963611ebbca4",
+      "sha256": "6bdec28e324b53613d4fc7dfa3fbe8ee34b289fe769ad46d27e3852f2675dc4c",
       "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
     }
   ]

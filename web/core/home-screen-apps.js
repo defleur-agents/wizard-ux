@@ -36,7 +36,7 @@
     const glyph = header.querySelector('.sgi');
     const computed = glyph && getComputedStyle(glyph);
     // Keep existing house/glyph pins; only brand-only apps need the brand mask.
-    const mask = computed && computed.getPropertyValue(!sigil.glyph && glyph.classList.contains('sgb') ? '--sgb' : '--sg').trim();
+    const mask = computed && computed.getPropertyValue((!sigil.glyph || sigil.guessed) && glyph.classList.contains('sgb') ? '--sgb' : '--sg').trim();
     // Match the renderer's same-origin file whitelist; never load an external mask.
     const match = mask?.match(/^url\(["']?((?:data:image\/svg\+xml[^"')]+|\/(?!\/)[A-Za-z0-9._~\/-]+\.(?:svg|png|webp)))["']?\)$/);
     let image = null;
