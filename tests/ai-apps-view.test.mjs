@@ -1613,6 +1613,8 @@ test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥
   const g2 = w.st.gone.length; assert.ok(alt('Digit0'), '⌥0 = the tenth row (none here)'); assert.equal(w.st.gone.length, g2);
   const g1 = w.st.gone.length; assert.ok(alt('Digit3', true)); assert.equal(w.st.gone.length, g1, '⌥⇧3 does nothing here');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 2 }; w.emit('route', w.st.route);
+  assert.ok(alt('KeyA')); w.emit('render'); assert.equal(w.html.dataset.vcSheet, 'open', 'with an app in front ⌥A\'s picker stays open through a repaint (live: it flashed shut)');
+  assert.ok(alt('KeyA')); assert.equal(w.html.dataset.vcSheet, undefined);
   assert.ok(alt('BracketRight')); assert.equal(w.st.gone.at(-1), 4, '⌥] = the next row (Notes)');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route);
   assert.ok(alt('BracketLeft')); assert.equal(w.st.gone.at(-1), 2, '⌥[ = the previous row (Maps)');
