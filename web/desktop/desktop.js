@@ -1774,8 +1774,16 @@
     // opacity zero. Mark before reparenting so no frame can replay it.
     if (rehost) setEl.classList.add('is-rehosted'); else setEl.classList.remove('is-rehosted');
     settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-    if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
+    moveSettingsTo(document.body);
     scrim.hidden = false;
+  }
+  function moveSettingsTo(host) {
+    if (setEl.parentNode === host) return;
+    // appendChild can blur a focused descendant. Restore that same control in
+    // the same task, for promotion and demotion alike; never steal outside focus.
+    const active = document.activeElement, keep = active && setEl.contains(active);
+    host.appendChild(setEl);
+    if (keep && document.activeElement !== active) active.focus({ preventScroll: true });
   }
   function hostSettings() {
     // A view can mount while Look is already open in a desk window. Adopt its
@@ -1790,9 +1798,9 @@
     // Match openSettings' Home contract on every takeover, including a second
     // enable after teardown; the live root/page must not stay on that hidden desk.
     if (!settingsModal && !setEl.hidden && (homeOpen || settingsOver())) { settingsPromoted = true; showSettingsModal(true); }
-    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
+    if (settingsModal) { moveSettingsTo(document.body); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
+    if (host) { moveSettingsTo(host); setEl.hidden = false; return; }  // a Settings window always shows its panel
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;

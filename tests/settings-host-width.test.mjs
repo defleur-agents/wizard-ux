@@ -43,7 +43,7 @@ test('same shared Settings DOM and dispatch provide category → Look → Back i
 function hostHarness({ open = true, over = true, modal = false } = {}) {
   const body = { appendChild(n) { n.parentNode = this; } }, host = { appendChild(n) { n.parentNode = this; } };
   const attrs = {}, classes = new Set(), closed = [];
-  const setEl = { hidden: !open, parentNode: host, page: 'appearance', classList: { add: (...ks) => ks.forEach(k => classes.add(k)), remove: (...ks) => ks.forEach(k => classes.delete(k)) }, setAttribute: (k,v) => attrs[k] = v, removeAttribute: k => delete attrs[k], getClientRects: () => [1], focus() {} };
+  const setEl = { hidden: !open, parentNode: host, page: 'appearance', classList: { add: (...ks) => ks.forEach(k => classes.add(k)), remove: (...ks) => ks.forEach(k => classes.delete(k)) }, setAttribute: (k,v) => attrs[k] = v, removeAttribute: k => delete attrs[k], getClientRects: () => [1], focus() {}, contains: el => el === setEl };
   const s = { setEl, scrim: { hidden: !modal }, settingsModal: modal, settingsPromoted: false, settingsFocus: null, settingsOver: () => over, document: { body, activeElement: setEl }, homeOpen: false, focused: () => null, focusInside() {}, window: { WosScenery: { update() {} } } };
   s.over = over; s.settingsOver = () => s.over;
   let win = open ? { id: 'settings-1' } : null;
@@ -108,4 +108,16 @@ test('AI apps host moves do not replay the opacity-zero modal entrance; genuine 
   s.showSettingsModal(); assert.equal(classes.has('is-rehosted'), false, 'a fresh open keeps st-pop');
   assert.match(rule(css, '.dsettings.is-modal'), /animation: st-pop/);
   s.closeSettings(); assert.equal(classes.has('is-rehosted'), false);
+});
+test('rehosting keeps a focused control in promotion/demotion and does not steal outside focus', () => {
+  const { s, body, host, setEl } = hostHarness(); let restores = 0;
+  const control = { focus(opts) { assert.equal(opts.preventScroll, true); restores++; s.document.activeElement = control; } };
+  const outside = { focus() { throw Error('outside focus must not be stolen'); } };
+  setEl.contains = el => el === control;
+  for (const to of [host, body]) to.appendChild = n => { n.parentNode = to; s.document.activeElement = outside; };
+  s.document.activeElement = control;
+  s.hostSettings(); assert.equal(s.document.activeElement, control); assert.equal(restores, 1);
+  s.over = false; s.hostSettings(); assert.equal(s.document.activeElement, control); assert.equal(restores, 2);
+  s.over = true; s.document.activeElement = outside; s.hostSettings();
+  assert.equal(s.document.activeElement, outside); assert.equal(restores, 2);
 });
