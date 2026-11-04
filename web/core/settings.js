@@ -253,7 +253,7 @@
   const skinCard = (k, cur) => `<button type="button" class="skp-card" data-skinpick="${esc(k.id)}" aria-pressed="${k.id === cur}" aria-label="${esc(k.name)}">${mini(k)}<span class="skp-nm" style="${esc(faceCss(k.face))}">${esc(k.name)}</span></button>`;
   /* Tweaks are separate from color: a row of published sets to start from (Standard, Miguel's, …), then one
    * disclosure with every installed tweak as a switch. Picking a set clears the per-tweak choices. */
-  const tweakSwitches = (items, attr, busy = false, by = null) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${by ? `<small class="tw-by">by ${esc(by(t.author))}</small>` : ''}${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+  const tweakSwitches = (items, attr, busy = false, by = null) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${by ? `<small class="tw-by">${t.where ? esc(t.where) + ' · ' : ''}by ${esc(by(t.author))}</small>` : ''}${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
@@ -262,10 +262,13 @@
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
     const exp = s.tweaks.filter(t => !t.builtin);
+    // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
+    const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
+    const shown = exp.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(s.shell)).map(t => t.view && s.shell ? { ...t, where } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
     // quick buttons. Same list whatever skin is worn; skins are looks only.
-    const list = [...exp].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
+    const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
     // A live tweak's own options (api.settings.section(id, 'look', node)) sit right under its switch.
     const rows = tweakOpts.size ? list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('') : tweakSwitches(list, 'data-tweak-toggle', s.busy, name);
     return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;

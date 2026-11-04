@@ -5,14 +5,19 @@
  * carrying the newer text, every save kept in Pages history). It has no page.json, so it is never listed as a page.
  * Each device still paints its last copy (wos.skin, wos.skin-tweaks.v1) at first frame; the box copy then wins.
  *
- *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, updated }
+ *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, views?: { desktop?: { id, at }, phone?: { id, at } }, updated }
  *
  * `at` = when that choice was made (ms). 0 = carried over from a device's old local set (a seed): never newer than a
  * real change. Merging is per choice, newest wins, so two devices switching different tweaks keep both. A device with
  * nothing on never writes until its owner changes something. The first device with tweaks on seeds the box; a device
  * syncing for the first time with more tweaks on than the box's seeds replaces those seeds (the set in daily use beats
  * one just being set up) and keeps every real change made since. Shell views
- * (manifest `view`) stay exclusive: the newest one switched on is kept. Offline or failing box: the device keeps its
+ * (manifest `view`) are chosen per shell type (Miguel, 4 Nov 2026): `views.desktop` / `views.phone` = the view id worn on
+ * every desktop / every phone ('' = Desks), merged per type, newest wins; all his desktops match, all his phones match.
+ * A type with no entry (every file from before) keeps the old meaning: the view switched on in `tweaks` is worn on every
+ * shell it supports, and those legacy view entries stay exclusive (the newest one on is kept). `views` is only written
+ * once a per-type choice is made, so an untouched file stays byte for byte as it was; an older shell ignores `views`
+ * (its parse drops unknown fields) and, if it saves, the file falls back to the old meaning. Offline or failing box: the device keeps its
  * own copy, retries with backoff, and sends its changes when the box answers. Other devices pick a change up on their
  * next load or when they come back to the foreground.
  *
@@ -22,6 +27,7 @@
   const PATH = '/wizard/v1/pages/wizard-look/look.json', META = 'wos.look-sync.v1';
   const ID = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/, SKIN = /^[a-z0-9][a-z0-9-]{0,47}$/;
   const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const SHELLS = ['desktop', 'phone'];
   const at = v => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
   const empty = () => ({ version: 1, skin: null, tweaks: {} });
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -33,6 +39,7 @@
     const out = empty();
     if (isObj(j.skin) && typeof j.skin.id === 'string' && SKIN.test(j.skin.id)) out.skin = { id: j.skin.id, at: at(j.skin.at) };
     if (isObj(j.tweaks)) for (const [id, t] of Object.entries(j.tweaks)) if (ID.test(id) && isObj(t) && typeof t.on === 'boolean') out.tweaks[id] = { on: t.on, at: at(t.at) };
+    if (isObj(j.views)) for (const s of SHELLS) { const v = j.views[s]; if (isObj(v) && typeof v.id === 'string' && (v.id === '' || ID.test(v.id))) (out.views ||= {})[s] = { id: v.id, at: at(v.at) }; }
     return out;
   }
   // Per choice, newest wins; a tie keeps the box's.
@@ -40,11 +47,21 @@
     const out = { version: 1, skin: box?.skin || null, tweaks: { ...(box?.tweaks || {}) } };
     if (mine?.skin && (!out.skin || mine.skin.at > out.skin.at)) out.skin = mine.skin;
     for (const [id, t] of Object.entries(mine?.tweaks || {})) if (!out.tweaks[id] || t.at > out.tweaks[id].at) out.tweaks[id] = t;
+    for (const s of SHELLS) {  // per shell type, newest wins; the key only appears once a type has a choice
+      const a = box?.views?.[s], b = mine?.views?.[s], v = b && (!a || b.at > a.at) ? b : a;
+      if (v) (out.views ||= {})[s] = v;
+    }
     return out;
   }
   const onIds = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
   const mixOn = mix => Object.keys(mix || {}).filter(id => ID.test(id) && mix[id] === true).sort();
-  const pick = (doc, keep) => ({ version: 1, skin: doc.skin && keep(doc.skin) ? doc.skin : null, tweaks: Object.fromEntries(Object.entries(doc.tweaks).filter(([, t]) => keep(t))) });
+  const pick = (doc, keep) => {
+    const out = { version: 1, skin: doc.skin && keep(doc.skin) ? doc.skin : null, tweaks: Object.fromEntries(Object.entries(doc.tweaks).filter(([, t]) => keep(t))) };
+    for (const s of SHELLS) if (doc.views?.[s] && keep(doc.views[s])) (out.views ||= {})[s] = doc.views[s];
+    return out;
+  };
+  // The view each shell type wears by its own choice ({ desktop: id, phone: '' }); a type without one is left out.
+  const shellViews = doc => Object.fromEntries(SHELLS.filter(s => doc?.views?.[s]).map(s => [s, doc.views[s].id]));
   const seeds = doc => pick(doc, t => !t.at), changes = doc => pick(doc, t => t.at > 0);
   // One shell view at a time (views = ids in catalog order): the newest one on wins, a tie keeps the first.
   function exclusive(doc, views) {
@@ -69,8 +86,10 @@
     // What a set switches on here: retired ids on the box are never worn, or this device would never match the box and
     // re-apply every tweak on every pass (settle() after each apply: a reload storm that flickers the whole shell).
     const wear = doc => onIds(doc).filter(live);
-    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
-    const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0;
+    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks, ...(meta.pending.views ? { views: meta.pending.views } : {}) } })); } catch (_) {} };
+    const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0;
+    // Experience modules from before per-shell views have no `views`: they keep the old one-view-everywhere meaning.
+    const perShell = () => { try { return isObj(exp.views); } catch (_) { return false; } };
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
     // What this device runs now, as seeds.
     function local() {
@@ -103,14 +122,16 @@
       applying = true;
       try {
         if (doc.skin && doc.skin.id !== skin.current && skin.has(doc.skin.id)) skin.set(doc.skin.id);
-        const want = wear(doc);
-        if (!same(want, mixOn(exp.mix).filter(live))) exp.adopt(Object.fromEntries(want.map(id => [id, true])));
+        const want = wear(doc), views = shellViews(doc);
+        if (perShell() ? !same(want, mixOn(exp.mix).filter(live)) || !same(views, exp.views) : !same(want, mixOn(exp.mix).filter(live))) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined);
       } finally { applying = false; }
     }
     // Drop only what this pass delivered; a change made meanwhile stays queued.
     function sent(p) {
       if (p.skin && meta.pending.skin && meta.pending.skin.at === p.skin.at) meta.pending.skin = null;
       for (const [id, t] of Object.entries(p.tweaks)) if (meta.pending.tweaks[id]?.at === t.at) delete meta.pending.tweaks[id];
+      for (const [s, t] of Object.entries(p.views || {})) if (meta.pending.views?.[s]?.at === t.at) delete meta.pending.views[s];
+      if (meta.pending.views && !Object.keys(meta.pending.views).length) delete meta.pending.views;
     }
     async function sync() {
       if (off) return;
@@ -150,6 +171,11 @@
       if (applying || !ID.test(String(id))) return;
       meta.pending.tweaks[id] = { on: !!value, at: now() }; save(); schedule();
     }
+    // The owner chose a view for this type of shell (experience.js raises wos:view-choice): every shell of that type follows.
+    function viewChoice(shell, id) {
+      if (applying || !SHELLS.includes(shell) || typeof id !== 'string' || !(id === '' || ID.test(id))) return;
+      (meta.pending.views ||= {})[shell] = { id, at: now() }; save(); schedule();
+    }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
       meta.pending.skin = { id, at: now() }; save(); schedule();
@@ -171,7 +197,7 @@
       if (!same(want, onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(want.map(id => [id, true]))); } finally { applying = false; } }
     }
     return {
-      sync, schedule, tweakChoice, skinChoice, settle,
+      sync, schedule, tweakChoice, viewChoice, skinChoice, settle,
       stop() { off = true; cancel(timer); },
       get state() { return { last, off, busy, synced: meta.synced, pending: JSON.parse(JSON.stringify(meta.pending)) }; },
     };
@@ -187,6 +213,7 @@
   });
   window.WosLookSync.current = sync;
   window.addEventListener('wos:tweak-choice', e => sync.tweakChoice(e.detail?.id, e.detail?.on));
+  window.addEventListener('wos:view-choice', e => sync.viewChoice(e.detail?.shell, e.detail?.id));
   window.addEventListener('wos:skin', e => sync.skinChoice(e.detail));
   window.addEventListener('wos:experience', () => { if (!E.state.busy) sync.settle(); });
   // Back in the foreground: another device may have changed the set meanwhile.

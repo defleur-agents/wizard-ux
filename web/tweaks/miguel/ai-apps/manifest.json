@@ -7,6 +7,9 @@
   "capabilities": [
     "layout"
   ],
-  "description": "Like the ChatGPT, Claude and Perplexity desktop apps: your chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in one column on the right (pinned, then open, then +), an app opening as a panel beside the chat. Desktop only: the phone keeps the standard phone view. Works with every skin. One shell view at a time: on turns Orb and Apps off; all off = Desks",
-  "view": "AI apps"
+  "description": "Like the ChatGPT, Claude and Perplexity desktop apps: your chats in a sidebar on the left that folds to a slim rail, the chat in a centred column, your apps in one column on the right (pinned, then open, then +), an app opening as a panel beside the chat. Desktop only: the phone keeps the standard phone view. Works with every skin. One view per device type (desktop, phone); all off = Desks",
+  "view": "AI apps",
+  "shells": [
+    "desktop"
+  ]
 }
