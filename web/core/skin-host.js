@@ -1010,7 +1010,7 @@
     const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived), by = new Map(), sets = [];
     for (const it of all) {
       if (Number(it.priority) >= 4) { sets.push([it]); continue; }
-      const k = (it.app || it.from || 'notifications') + (it.read ? ':later' : ':new');   // from: a Notifications item about an app if (!by.has(k)) by.set(k, []); by.get(k).push(it);
+      const k = (it.app || it.from || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
     }
     for (const l of by.values()) if (l.length < 2) sets.push(l); else sets.push(l.slice().sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0)));
     return sets.map(l => {
