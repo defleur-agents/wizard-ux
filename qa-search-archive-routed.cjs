@@ -32,7 +32,7 @@ const ROUTED = 'qa-host', ag = { id: ROUTED, label: 'Synthetic routed', privacy:
     if (u.pathname === '/wizard/hermes/api/sessions') { const ag = u.searchParams.get('agent') || '', first = (u.searchParams.get('offset') || '0') === '0'; const data = !first ? [] : ag === ROUTED ? routed : ag ? [] : sessions; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ object: 'list', data, has_more: false, limit: 100, offset: 0, snapshot: 'qa' }) }); }
     if (u.pathname === '/wizard/thread-seen') return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ state: { initializedAt: 1, threads: {} } }) });
     if (u.pathname === '/wizard/v1/boomerangs') return route.fulfill({ status: 200, contentType: 'application/json', body: '{"reminders":[]}' });
-    if (u.pathname.startsWith('/wizard/')) return route.fulfill({json:fx.read(u.pathname)});
+    if (u.pathname.startsWith('/wizard/')) return route.fulfill(fx.response(u.pathname+(u.pathname==='/wizard/v1/my-skin'?u.search:''),method));
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m) {
       const rel = (m[1] || 'index.html').split('?')[0], file = path.join(TREE, 'web', rel);

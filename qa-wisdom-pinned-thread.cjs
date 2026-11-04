@@ -222,7 +222,8 @@ for(const width of (process.env.QA_BASELINE==='1'?[390]:[390,1280]))for(const sk
     await native.waitFor();assert.equal(await native.inputValue(),kept);extra.status='pass';
    }
   }
-  for(const f of ['discussions.js','wisdom.js','offline.js','sw.js','wizard-appearance.css']){
+  // Verify the app's complete pinned static inventory, not legacy live-only filenames.
+  for(const f of Object.keys(manifest.files).filter(f=>f.startsWith('static/')).map(f=>f.slice(7))){
    const h=await frame.evaluate(async f=>{const r=await fetch(f,{cache:'no-store'});if(!r.ok)throw Error('Asset unavailable');return [...new Uint8Array(await crypto.subtle.digest('SHA-256',await r.arrayBuffer()))].map(x=>x.toString(16).padStart(2,'0')).join('')},f);
    assert.equal(h,manifest.files['static/'+f],f);c.assets[f]=h;
   }
