@@ -17,9 +17,11 @@ export default async function check(f) {
   assert.equal(dock.children.length, 0, 'playing: still no pill in the bar'); assert.equal(slotted(), 0, 'nor in any slot');
   push([]);
   await f.clear(); assert.equal(subs.size, 0, 'teardown stops watching'); assert.equal(f.doc.head.children.length, 0);
-  // the phone: not yet
+  // the phone: the same (the AI apps view draws the bars on its Home icons); still nothing mounted in any slot
   f.doc.documentElement.dataset.shell = 'phone'; await f.mount('miguel/now-playing');
-  assert.equal(subs.size, 0, 'phone: nothing watched, nothing drawn');
-  await f.clear(); f.doc.documentElement.dataset.shell = 'desktop';
+  assert.equal(subs.size, 1, 'phone: watching while on');
+  push([{ key: 'm:1', appId: 'music', kind: 'audio', playing: true, at: 2, title: 'Song', artist: '' }]);
+  assert.equal(slotted(), 0, 'phone: no pill, no chrome inside an app'); push([]);
+  await f.clear(); assert.equal(subs.size, 0, 'phone teardown stops watching'); f.doc.documentElement.dataset.shell = 'desktop';
   delete f.ctx.window.WosMedia;
 }
