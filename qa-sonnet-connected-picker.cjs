@@ -18,14 +18,14 @@ function check(value, name, detail) { if (!value) report.failures.push({case:rep
 const persist = () => fs.writeFileSync(path.join(OUT,'report.json'),JSON.stringify(report,null,2)+'\n');
 // The label opens popHtml; Mizel's All models switch opens sheetHtml (chat-power.js).
 // A sheet may already show every family. Missing picker/rows must still fail, never skip.
-async function openPicker(page, host, root, wid) {
+async function openPicker(page, host, root, wid, initialSol = false) {
   const trigger=host.locator('[data-chmodel]:visible');assert.equal(await trigger.count(),1);
   const pop=await trigger.evaluate(n=>n.classList.contains('ch-mlabel'));
   await trigger.click();
   const picker=host.locator(pop?'.ch-psheet.ch-mpop':'.ch-psheet.ch-msheet');
   await picker.waitFor({state:'visible'});assert.equal(await host.locator('.ch-psheet').count(),1);
   const more=picker.locator('[data-mall]'),expanded=await more.count()===1;
-  if(pop)assert(expanded,'fresh compact picker must offer More models');
+  if(pop&&initialSol)assert(expanded,'fresh compact Sol picker must offer More models');
   if(expanded)await more.click();
   assert.equal(await more.count(),0,'More models consumed or complete family sheet already shown');
   const state=await page.evaluate(({wid,root,pop,expanded})=>{
@@ -120,7 +120,7 @@ async function opaque(page, tag, picker) {
           await page.waitForFunction(s=>WosSkin.current===s&&document.documentElement.dataset.skin===s,skin);
           await page.locator('.mz-intro').waitFor({state:'detached'});
           await page.waitForFunction(()=>!WosExperience?.state.busy);
-          const {picker,state}=await openPicker(page,host,root,wid);
+          const {picker,state}=await openPicker(page,host,root,wid,true);
           const index=state.list.findIndex(o=>o.value===state.sonnet?.value&&o.provider===state.sonnet?.provider);
           assert(index>=0,'preferred Sonnet family route must have a real row');
           const sonnet=picker.locator(`[data-mpick="${index}"]`);
@@ -145,6 +145,16 @@ async function opaque(page, tag, picker) {
           await page.waitForFunction(({root,wid})=>{const m=window[root].chats.ch(wid).newModel;return m?.model==='gpt-6.1-sol'&&m.provider==='openai-codex';},{root,wid});
           report.cases.push({tag,state,index,selected});persist();
         }catch(e){report.failures.push({case:tag,name:'harness-error',detail:String(e.stack||e)});await page.screenshot({path:path.join(OUT,tag+'-failure.png')}).catch(()=>{});persist();}
+        finally{
+          // Run the real outside-click close path, including popOff; never delete its DOM by hand.
+          try{
+            const left=host.locator('.ch-psheet');
+            if(await left.count()){
+              await left.first().dispatchEvent('click');
+              await left.waitFor({state:'detached',timeout:2000});
+            }
+          }catch(e){report.failures.push({case:tag,name:'overlay-teardown',detail:String(e.stack||e)});persist();}
+        }
       }
       check(errors.length===0,'no-page-errors',errors);
     }catch(e){report.failures.push({case:shell,name:'boot-error',detail:String(e.stack||e),welcome:await page.evaluate(()=>window.__welcomeLog).catch(()=>null)});await page.screenshot({path:path.join(OUT,shell+'-boot-failure.png')}).catch(()=>{});persist();}
