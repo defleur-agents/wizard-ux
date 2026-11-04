@@ -125,10 +125,23 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
     assert.match(chats.slice(start, start + 350), /INC\?\.active/, method)
   }
   assert.match(chats, /const incognitoAction = isNew &&/); assert.ok(chats.includes('${chip}${incognitoAction}')); assert.match(chats, /w.thread !== '__new__'/)
-  assert.match(chats, /beforeLeave: id => !INC\?\.active/)
+  assert.match(chats, /beforeLeave: \(id, checkOnly = false\) => !INC\?\.active/)
   for (const file of ['index.html', 'desktop.html']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /core\/incognito-chat.js/)
-  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id\)/)
+  for (const file of ['app.js', 'desktop/desktop.js']) assert.match(readFileSync(new URL('../web/' + file, import.meta.url), 'utf8'), /CHATS.beforeLeave\(id(?:, checkOnly)?\)/)
 })
+test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
+  const s = rig(); await s.component.start('one', s.agent); await s.component.start('two', s.agent);
+  assert.equal(s.component.close('one',false,true),true);
+  s.setConfirm(false); assert.equal(s.component.close('two',false,true),false);
+  assert.equal(s.component.active('one'),true);assert.equal(s.component.active('two'),true);
+  assert.equal(s.calls.filter(c=>c.init?.method==='DELETE').length,0);
+  s.component.endAll();
+});
+test('Settings registration follows dependency and scrub checks before active index mutation', () => {
+  for(const f of ['index.html','desktop.html']) {const s=readFileSync(new URL('../web/'+f,import.meta.url),'utf8');assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}
+  const phone=readFileSync(new URL('../web/app.js',import.meta.url),'utf8');
+  assert.match(phone,/if \(n !== SC.at && !CHATS.beforeNavigate\(desks\[n\]\?\.wins \|\| \[\]\)\) return;\s*if \(n !== SC.at\)/);
+});
 test('terminal reply uses the final run output, not a partial stream', async () => {
   const s = rig({ manualStream: true, fetchImpl: async path => path.endsWith('/incognito') ? { ok: true, json: async () => ({ session_id: 'incog_' + 'c'.repeat(32) }) } : { ok: true, json: async () => ({ run_id: 'synthetic-run' }) } })
   await s.component.start('one', s.agent); await s.component.send('one', 'synthetic-final-canary')

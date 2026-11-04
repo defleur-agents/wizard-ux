@@ -738,6 +738,7 @@
     if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
+    if (n !== SC.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
@@ -1910,7 +1911,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => backStep());
+  $('#scrim').addEventListener('click', () => backStep(undefined, { outside: true }));
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -3739,7 +3740,7 @@
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }
-  function backStep(skipHosted) {
+  function backStep(skipHosted, { outside = false } = {}) {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
     { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
@@ -3764,7 +3765,7 @@
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
-    if (sheet === 'settings' && settingsView?.back()) return 'settings-page';
+    if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page';
     if (sheet) { closeSheets(); return 'sheet'; }
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];

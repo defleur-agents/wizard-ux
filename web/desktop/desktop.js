@@ -205,9 +205,9 @@
     return W[id];
   }
   // A window may refuse to close (an in-progress recording or temporary chat asks first).
-  function canLeave(id) {
+  function canLeave(id, checkOnly = false) {
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return false;
-    return CHATS.beforeLeave ? CHATS.beforeLeave(id) : true;
+    return CHATS.beforeLeave ? CHATS.beforeLeave(id, checkOnly) : true;
   }
   // One cleanup path for a window close and a whole-desktop close. The caller owns
   // leave checks, pruning and the final render (which detaches closed app frames).
@@ -959,7 +959,7 @@
   function closeDesktop(i = cur) {
     const d = ws[i]; if (!d) return false;
     // Check every window before destroying any: a recording can refuse the close.
-    if (!d.wins.every(canLeave)) return false;
+    if (!d.wins.every(id => canLeave(id, true))) return false;
     const names = [...new Set(d.wins.map(id => appOf(W[id])?.name).filter(Boolean))].join(', ');
     [...d.wins].forEach(id => removeWin(id));
     if (!removeDesktop(d)) { save(); render(); goHome(); }

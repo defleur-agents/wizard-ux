@@ -2,7 +2,7 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-Reuse declarations name an entry point below; NEW adds a shared owner and row. `Reuse: n/a` requires no UI changes.
+One owner per capability. [Reuse gate](app-reuse-gate.md).
 
 | Optional temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict server capability + local opt-in (off) | durable transcript/draft/outbox |
 
@@ -58,7 +58,7 @@ Reuse declarations name an entry point below; NEW adds a shared owner and row. `
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) | shared/native import; separate comment, agent + chat; durable |
 | Uploads of any size | `WizUploads` (`uploads.js`) | single-fetch uploads |
 | Files browse, preview, attach | `WosFiles` (`files.js`) | own picker |
-| Settings in both shells | `WosSettings.register` (`settings.js`; separate Skin/Color; package System: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
+| Settings in both shells | `WosSettings.register` (`settings.js`; separate Skin/Color; shared About version identities; fail-closed update status; package System: `hasSystem`), `focus(id)`, `WosFeatures`; `WizConfig.responseStyle` | shell-only pages |
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) | hard-coded agent names or colours |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) | type ≠ UX |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) | — |

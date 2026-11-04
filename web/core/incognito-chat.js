@@ -31,9 +31,10 @@
       return r.json();
     };
     const destroyRemote = s => s.base && fetchImpl(s.base, { method: 'DELETE', credentials: 'same-origin', cache: 'no-store', keepalive: true }).catch(() => {});
-    function close(wid, force = false) {
+    function close(wid, force = false, checkOnly = false) {
       const s = open.get(wid); if (!s) return true;
       if (!force && !confirm('End incognito chat? It will be erased.')) return false;
+      if (checkOnly) return true;
       open.delete(wid); clearInterval(s.lease); s.stream?.close(); s.abort.abort();
       const el = elOf(wid); if (el?.querySelector('[data-incog-thread]')) el.replaceChildren();
       s.draft = ''; s.lastInput = ''; s.messages.length = 0; s.output = ''; s.steps = []; void destroyRemote(s); return true;
