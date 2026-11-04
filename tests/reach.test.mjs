@@ -162,6 +162,17 @@ test('checks: a slow link is timed and called slow, without a speed test', async
   assert.equal(c.tailscale.state, 'slow'); assert.match(c.tailscale.detail, /address answered/);
   assert.ok(h.calls.length <= 4, 'a handful of tiny requests (internet, ping, the existing diagnosis), no download');
 });
+test('late detailed checks are marked stale after newer successful evidence', async () => {
+  let release, calls = 0;
+  const h = setup({ fetch: async url => {
+    if (url.endsWith('/ping') && ++calls === 1) return new Promise((_, reject) => { release = () => reject(Error('old failure')); });
+    return response();
+  } });
+  const old = h.api.checks();
+  assert.equal((await h.api.diagnose(0)).layer, 'send');
+  release(); assert.equal((await old).stale, true);
+  assert.equal((await h.api.diagnose()).layer, 'send');
+});
 test('late failed diagnosis cannot replace newer successful connection evidence', async () => {
   let release, calls = 0;
   const h = setup({ fetch: async url => {
