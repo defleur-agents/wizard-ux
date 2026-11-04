@@ -132,6 +132,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the phone and th
 test('standard AI apps and the personal tweak are idempotent and release cannot remove the standard view', async () => {
   const d = fixture({ shell: 'desktop' });
   d.host.setStandardLayout('ai-apps'); await settle();
+  assert.ok(!d.ctx.localStorage.getItem('wos.layout'), 'desktop default must not leak into the phone legacy layout key');
   await d.mount('miguel/ai-apps'); await settle();
   assert.equal(d.host.layout, 'ai-apps');
   await d.clear(); assert.equal(d.host.layout, 'ai-apps');
