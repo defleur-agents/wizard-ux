@@ -7,7 +7,9 @@
   const device = document.getElementById('device');
   device.classList.add('immersive');
   const win = document.createElement('article');
-  win.id = 'singleApp'; win.className = 'win full'; win.dataset.win = key;
+  // Chats uses this DOM identity in selectors; the JSON storage key is not a selector-safe window id.
+  const wid = 'single-app';
+  win.id = 'singleApp'; win.className = 'win full'; win.dataset.win = wid;
   device.appendChild(win);
   let frame = null, app = null, detach = null, mountedURL = '', loaded = false, cut = 0, top = 0;
   const read = () => { const durable = policy.presentationRoute?.(); if (durable !== undefined) return durable; try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } };
@@ -20,6 +22,30 @@
     }
     return true;
   } });
+  // EXTEND the single-app host, REUSE the real Chats host. No nested shell, workspace or second composer.
+  const threadWindow = { id:wid, appId:id, app:'frame', thread:null };
+  const replyVoice = window.WizChatsHost?.replyRecorder?.({appId:id, chats:() => chats,
+    repaint:() => {
+      chats?.refreshCompose(wid);
+      chats?.PW?.paintMic(!!replyVoice?.recordingFor(), replyVoice?.recordingFor());
+    }, toast});
+  const chats = window.WizChatsHost?.create({
+    recordReply:(wid, sid) => replyVoice?.recordReply(wid, sid),
+    recordingFor:() => replyVoice?.recordingFor(),
+    win: value => value === wid ? threadWindow : null,
+    root: () => win, save: () => checkpoint(), layout() {}, toast,
+    title: () => policy.displayName(app || {id, name:'Thread'}),
+    viewContext: () => ({kind:'thread', appId:id}),
+    visible: () => frame?.isConnected ? [wid] : [], front: () => wid,
+    openLink: url => links?.open(url),
+    captureBusy: () => !!window.WizAppCapture?.getState?.()?.active,
+  });
+  chats?.bind(win);
+  win.addEventListener('click', e => {
+    if (!chats?.isHosted(wid)) return;
+    if (e.target.closest('[data-chback]') && replyVoice?.back()) return;
+    chats.click(e, wid);
+  });
   function checkpoint() {
     if (!loaded || !frame || !app) return;
     try {
@@ -35,6 +61,7 @@
     } catch (_) {}
   }
   function unavailable(text = 'This app is no longer installed on this Wizard.') {
+    chats?.forget(wid);
     checkpoint(); detach?.(); detach = null; frame?.remove(); frame = null; loaded = false;
     win.replaceChildren(); const view = document.createElement('div'); view.className = 'single-unavailable';
     const title = document.createElement('h2'); title.textContent = 'App unavailable';
@@ -66,6 +93,8 @@
     if (window.WosChat?.viewer?.close?.()) return 'media';
     if (window.WizLinks?.backMenu?.()) return 'link-menu';
     if (links?.back()) return 'link';
+    if (replyVoice?.back()) return 'recording';
+    if (chats?.isHosted(wid)) { if (chats.closeOverlay()) return 'chat-overlay'; if (chats.beforeLeave(wid)) chats.threadBack(threadWindow); return 'thread'; }
     if (!frame || !loaded) return 'root';
     const step = window.WizAppServices?.back(frame);
     if (['handled','pending','stay'].includes(step)) { checkpoint(); return 'app'; }
@@ -83,7 +112,7 @@
     return 'root'; // Android always consumes, including repeated root Back.
   };
   window.WizAppServices?.guardBack(() => { window.__wosNativeBack(); return true; }, toast);
-  window.WizCore.bridge?.handle({ back:window.__wosNativeBack });
+  window.WizCore.bridge?.handle({ back:window.__wosNativeBack, dictation: text => { if (chats?.isHosted(wid)) chats.insertText(wid, text); } });
   let mountGeneration = 0;
   async function mount() {
     const generation = ++mountGeneration;
@@ -99,7 +128,7 @@
     const next = registry.APP[id];
     if (!next || next.kind !== 'wizard' || !next.url || !policy.within(next.url, next.url) || policy.isShell(next.url)) { unavailable(); return; }
     if (frame && mountedURL === next.url) { app = next; return; }
-    checkpoint(); detach?.(); app = next; mountedURL = next.url; loaded = false;
+    checkpoint(); chats?.forget(wid); detach?.(); app = next; mountedURL = next.url; loaded = false;
     win.replaceChildren(); frame = document.createElement('iframe'); frame.className = 'appframe'; frame.title = policy.displayName(next);
     frame.setAttribute('allow','microphone; clipboard-read; clipboard-write; autoplay; fullscreen'); frame.referrerPolicy = 'same-origin';
     const saved = read();
@@ -107,7 +136,11 @@
     // Attach before frontend scripts run: shared capture/share/appearance/reading, not a nested shell.
     win.appendChild(frame);
     const mountedFrame = frame;
-    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url, isVisible:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible', isFront:() => frame === mountedFrame && mountedFrame.isConnected && document.visibilityState === 'visible' && document.hasFocus(), readingStorage:localStorage });
+    detach = window.WizAppServices?.attach(frame, { appId:id, path:next.url,
+      openThread: (sid, opts) => chats?.openHosted(wid, frame, sid, opts) === true,
+      isVisible: () => !!frame?.isConnected && !chats?.isHosted(wid) && frame === mountedFrame && document.visibilityState === 'visible',
+      isFront:() => frame === mountedFrame && mountedFrame.isConnected && !chats?.isHosted(wid) && document.visibilityState === 'visible' && document.hasFocus(),
+      back: () => { window.__wosNativeBack(); return true; }, readingStorage:localStorage });
     frame.addEventListener('load', () => {
       if (frame !== mountedFrame) return;
       try {
