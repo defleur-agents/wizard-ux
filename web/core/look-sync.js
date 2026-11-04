@@ -5,7 +5,7 @@
  * carrying the newer text, every save kept in Pages history). It has no page.json, so it is never listed as a page.
  * Each device still paints its last copy (wos.skin, wos.skin-tweaks.v1) at first frame; the box copy then wins.
  *
- *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, views?: { desktop?: { id, at }, phone?: { id, at } }, updated }
+ *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, defaults?: { '<author>/<id>': { on, at } }, views?: { desktop?: { id, at }, phone?: { id, at } }, updated }
  *
  * `at` = an observed logical revision (not a device clock). 0 = an old local seed: never newer than a
  * real change. Merging is per choice, newest wins, so two devices switching different tweaks keep both. A device with
@@ -18,8 +18,8 @@
  * shell it supports, and those legacy view entries stay exclusive (the newest one on is kept). `views` is only written
  * once a per-type choice is made, so an untouched file stays byte for byte as it was; an older shell ignores `views`
  * (its parse drops unknown fields) and, if it saves, the file falls back to the old meaning. Offline or failing box: the device keeps its
- * own copy, retries with backoff, and sends its changes when the box answers. Other devices pick a change up on their
- * next load or when they come back to the foreground.
+ * own copy, retries with backoff, and sends its changes when the box answers. Active foreground shells refresh every
+ * 30 seconds and on load/foreground events. Built-in switches do not change owned recipes or script approval.
  *
  *   WosLookSync.create({ req, store, exp, skin }) → { sync, schedule, stop, state }   (started below for the shell) */
 (() => {
@@ -39,6 +39,7 @@
     const out = empty();
     if (isObj(j.skin) && typeof j.skin.id === 'string' && SKIN.test(j.skin.id)) out.skin = { id: j.skin.id, at: at(j.skin.at) };
     if (isObj(j.tweaks)) for (const [id, t] of Object.entries(j.tweaks)) if (ID.test(id) && isObj(t) && typeof t.on === 'boolean') out.tweaks[id] = { on: t.on, at: at(t.at) };
+    if (isObj(j.defaults)) for (const [id, t] of Object.entries(j.defaults)) if (ID.test(id) && isObj(t) && typeof t.on === 'boolean') (out.defaults ||= {})[id] = { on: t.on, at: at(t.at) };
     if (isObj(j.views)) for (const s of SHELLS) { const v = j.views[s]; if (isObj(v) && typeof v.id === 'string' && (v.id === '' || ID.test(v.id))) (out.views ||= {})[s] = { id: v.id, at: at(v.at) }; }
     return out;
   }
@@ -47,6 +48,8 @@
     const out = { version: 1, skin: box?.skin || null, tweaks: { ...(box?.tweaks || {}) } };
     if (mine?.skin && (!out.skin || mine.skin.at > out.skin.at)) out.skin = mine.skin;
     for (const [id, t] of Object.entries(mine?.tweaks || {})) if (!out.tweaks[id] || t.at > out.tweaks[id].at) out.tweaks[id] = t;
+    for (const [id, t] of Object.entries(box?.defaults || {})) (out.defaults ||= {})[id] = t;
+    for (const [id, t] of Object.entries(mine?.defaults || {})) if (!out.defaults?.[id] || t.at > out.defaults[id].at) (out.defaults ||= {})[id] = t;
     for (const s of SHELLS) {  // per shell type, newest wins; the key only appears once a type has a choice
       const a = box?.views?.[s], b = mine?.views?.[s], v = b && (!a || b.at > a.at) ? b : a;
       if (v) (out.views ||= {})[s] = v;
@@ -57,6 +60,7 @@
   const mixOn = mix => Object.keys(mix || {}).filter(id => ID.test(id) && mix[id] === true).sort();
   const pick = (doc, keep) => {
     const out = { version: 1, skin: doc.skin && keep(doc.skin) ? doc.skin : null, tweaks: Object.fromEntries(Object.entries(doc.tweaks).filter(([, t]) => keep(t))) };
+    for (const [id, t] of Object.entries(doc.defaults || {})) if (keep(t)) (out.defaults ||= {})[id] = t;
     for (const s of SHELLS) if (doc.views?.[s] && keep(doc.views[s])) (out.views ||= {})[s] = doc.views[s];
     return out;
   };
@@ -73,7 +77,7 @@
     return { ...doc, tweaks };
   }
 
-  function create({ req, store, exp, skin, now = () => Date.now(), later = (f, ms) => setTimeout(f, ms), cancel = t => clearTimeout(t), on = () => {} }) {
+  function create({ req, store, exp, skin, active = () => true, now = () => Date.now(), later = (f, ms) => setTimeout(f, ms), cancel = t => clearTimeout(t), on = () => {} }) {
     const load = () => {
       try {
         const m = JSON.parse(store.getItem(META));
@@ -81,30 +85,33 @@
       } catch (_) {}
       return { version: null, synced: false, pending: empty() };
     };
-    let meta = load(), busy = false, again = false, timer = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null, known = null;
+    let meta = load(), busy = false, again = false, timer = 0, refresh = 0, fails = 0, off = false, applying = false, last = 'idle', boxDoc = null, known = null;
     const live = id => !known || known.has(id); // retired ids an old device still stores are no choice: never seeded, never counted
     // What a set switches on here: retired ids on the box are never worn, or this device would never match the box and
     // re-apply every tweak on every pass (settle() after each apply: a reload storm that flickers the whole shell).
     const wear = doc => onIds(doc).filter(live);
-    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks, ...(meta.pending.views ? { views: meta.pending.views } : {}) } })); } catch (_) {} };
+    const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks, ...(meta.pending.defaults ? { defaults: meta.pending.defaults } : {}), ...(meta.pending.views ? { views: meta.pending.views } : {}) } })); } catch (_) {} };
     let clock = 0;
-    const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0)); };
+    const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0), ...Object.values(d?.defaults || {}).map(t => t.at || 0)); };
     observe(meta.pending);
     const stamp = () => ++clock;
     // An owner intent not yet based on a server observation (including restored
     // pending storage). Base each intent once; never restamp an already-sent
     // choice on every 409, which would defeat a genuinely newer remote writer.
     const unbasedViews = new Set(Object.keys(meta.pending.views || {}));
-    function baseViewChoices() {
+    const unbasedDefaults = new Set(Object.keys(meta.pending.defaults || {}));
+    function baseChoices() {
       for (const shell of unbasedViews) if (meta.pending.views?.[shell]) meta.pending.views[shell].at = stamp();
       unbasedViews.clear();
+      for (const id of unbasedDefaults) if (meta.pending.defaults?.[id]) meta.pending.defaults[id].at = stamp();
+      unbasedDefaults.clear();
     }
     function renewPending(d) {
       observe(d);
       if (meta.pending.skin && (d?.skin?.at || 0) >= meta.pending.skin.at) meta.pending.skin.at = stamp();
       for (const [id, t] of Object.entries(meta.pending.tweaks)) if ((d?.tweaks[id]?.at || 0) >= t.at) t.at = stamp();
     }
-    const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0;
+    const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0 || Object.keys(meta.pending.defaults || {}).length > 0;
     // Experience modules from before per-shell views have no `views`: they keep the old one-view-everywhere meaning.
     const perShell = () => { try { return isObj(exp.views); } catch (_) { return false; } };
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
@@ -116,6 +123,10 @@
       if (perShell()) for (const [shell, id] of Object.entries(exp.views)) (doc.views ||= {})[shell] = { id, at: 0 };
       return doc;
     }
+    const defaultChoices = () => exp.defaultChoices || {};
+    const defaultSeeds = () => Object.fromEntries(Object.entries(defaultChoices()).filter(([id, on]) => ID.test(id) && typeof on === 'boolean').map(([id, on]) => [id, { on, at: 0 }]));
+    const wornDefaults = doc => Object.fromEntries(Object.entries(doc.defaults || {}).filter(([id]) => Object.hasOwn(defaultChoices(), id)).map(([id, t]) => [id, t.on]));
+    const defaultsMatch = doc => Object.entries(wornDefaults(doc)).every(([id, on]) => defaultChoices()[id] === on);
     const absent = () => Object.assign(new Error('absent'), { absent: true });
     async function get() {
       const r = await req(PATH, { cache: 'no-store', credentials: 'same-origin' });
@@ -141,7 +152,7 @@
       try {
         if (doc.skin && doc.skin.id !== skin.current && skin.has(doc.skin.id)) skin.set(doc.skin.id);
         const want = wear(doc), views = shellViews(doc);
-        if (perShell() ? !same(want, mixOn(exp.mix).filter(live)) || !same(views, exp.views) : !same(want, mixOn(exp.mix).filter(live))) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined);
+        if (!same(want, mixOn(exp.mix).filter(live)) || (perShell() && !same(views, exp.views)) || !defaultsMatch(doc)) exp.adopt(Object.fromEntries(want.map(id => [id, true])), perShell() ? views : undefined, wornDefaults(doc));
       } finally { applying = false; }
     }
     // Drop only what this pass delivered; a change made meanwhile stays queued.
@@ -150,6 +161,8 @@
       for (const [id, t] of Object.entries(p.tweaks)) if (meta.pending.tweaks[id]?.at === t.at) delete meta.pending.tweaks[id];
       for (const [s, t] of Object.entries(p.views || {})) if (meta.pending.views?.[s]?.at === t.at) delete meta.pending.views[s];
       if (meta.pending.views && !Object.keys(meta.pending.views).length) delete meta.pending.views;
+      for (const [id, t] of Object.entries(p.defaults || {})) if (meta.pending.defaults?.[id]?.at === t.at) delete meta.pending.defaults[id];
+      if (meta.pending.defaults && !Object.keys(meta.pending.defaults).length) delete meta.pending.defaults;
     }
     async function sync() {
       if (off) return;
@@ -160,13 +173,17 @@
         let { doc, version } = await get();
         for (let tries = 0; tries < 4; tries++) {
           if (!meta.synced) renewPending(doc); else observe(doc);
-          baseViewChoices(); // also covers a synced device choosing while GET/PUT was in flight
+          baseChoices(); // also covers a synced device choosing while GET/PUT was in flight
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
           if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || Object.keys(mine.views || {}).length || dirty()) want = mine; } // seed; an untouched empty device never writes
           else if (dirty()) want = merge(doc, pending);
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
           else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
+          // Upgrade old files without replacing an existing default or per-shell choice.
+          const defaults = merge({ defaults: doc?.defaults }, { defaults: defaultSeeds() });
+          const sharedDefaults = merge(defaults, { defaults: pending.defaults }).defaults;
+          if (sharedDefaults) want = { ...(want || doc || empty()), defaults: sharedDefaults };
           if (want) want = exclusive(want, views());
           if (want && !same(want, doc)) {
             const w = await put(want, version);
@@ -175,7 +192,7 @@
           } else if (doc) sent(pending);
           // A PUT acknowledgement is only its captured choice. Keep a later
           // local view visible while that newer pending revision waits to save.
-          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(merge(doc, { views: meta.pending.views })); }
+          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(merge(doc, { views: meta.pending.views, defaults: meta.pending.defaults })); }
           save(); last = 'ok'; break;
         }
         if (last !== 'ok') throw new Error('look busy'); // four other saves in a row: try again later
@@ -206,6 +223,10 @@
       if (applying || !SHELLS.includes(shell) || typeof id !== 'string' || !(id === '' || ID.test(id))) return;
       (meta.pending.views ||= {})[shell] = { id, at: stamp() }; unbasedViews.add(shell); save(); schedule();
     }
+    function defaultChoice(id, value) {
+      if (applying || !ID.test(String(id)) || typeof value !== 'boolean' || !Object.hasOwn(defaultChoices(), id)) return;
+      (meta.pending.defaults ||= {})[id] = { on: value, at: stamp() }; unbasedDefaults.add(id); save(); schedule();
+    }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
       meta.pending.skin = { id, at: stamp() }; save(); schedule();
@@ -227,8 +248,17 @@
       if (!same(want, onIds(mine))) { applying = true; try { exp.adopt(Object.fromEntries(want.map(id => [id, true]))); } finally { applying = false; } }
     }
     return {
-      sync, schedule, tweakChoice, viewChoice, skinChoice, settle,
-      stop() { off = true; cancel(timer); },
+      sync, schedule, tweakChoice, viewChoice, defaultChoice, skinChoice, settle,
+      start() {
+        if (off || refresh) return;
+        const poll = async () => {
+          refresh = 0; if (off) return;
+          if (active() && !busy && !timer) await sync();
+          if (!off) refresh = later(poll, 30000);
+        };
+        refresh = later(poll, 30000);
+      },
+      stop() { off = true; cancel(timer); cancel(refresh); timer = refresh = 0; },
       get state() { return { last, off, busy, synced: meta.synced, pending: JSON.parse(JSON.stringify(meta.pending)) }; },
     };
   }
@@ -238,18 +268,23 @@
   if (!E || !S || typeof window.fetch !== 'function' || typeof E.adopt !== 'function') return;
   const sync = create({
     req: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(15000) }),
-    store: localStorage, exp: E,
+    store: localStorage, exp: E, active: () => !document.hidden,
     skin: { get chosen() { return S.chosen; }, get current() { return S.current; }, has: id => S.list.some(s => s.id === id), set: id => S.set(id) },
   });
   window.WosLookSync.current = sync;
-  window.addEventListener('wos:tweak-choice', e => sync.tweakChoice(e.detail?.id, e.detail?.on));
+  window.addEventListener('wos:tweak-choice', e => e.detail?.scope === 'default' ? sync.defaultChoice(e.detail?.id, e.detail?.on) : sync.tweakChoice(e.detail?.id, e.detail?.on));
   window.addEventListener('wos:view-choice', e => sync.viewChoice(e.detail?.shell, e.detail?.id));
   window.addEventListener('wos:skin', e => sync.skinChoice(e.detail));
-  window.addEventListener('wos:experience', () => { if (!E.state.busy) sync.settle(); });
+  // Wait for experience's first migration before publishing this device's seeds.
+  let started = false, woke = 0;
+  const begin = () => {
+    if (started || E.state.busy || E.state.error || !E.state.tweaks.length) return;
+    started = true; sync.start(); woke = Date.now(); void sync.sync();
+  };
+  window.addEventListener('wos:experience', () => { if (!started) begin(); else if (!E.state.busy) sync.settle(); });
   // Back in the foreground: another device may have changed the set meanwhile.
-  let woke = 0;
-  const wake = () => { if (document.hidden || Date.now() - woke < 3000) return; woke = Date.now(); void sync.sync(); };
+  const wake = () => { if (!started) return begin(); if (document.hidden || Date.now() - woke < 3000) return; woke = Date.now(); void sync.sync(); };
   for (const type of ['focus', 'online', 'pageshow']) window.addEventListener(type, wake);
   document.addEventListener('visibilitychange', wake);
-  woke = Date.now(); void sync.sync();
+  begin();
 })();
