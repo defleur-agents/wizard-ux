@@ -2084,3 +2084,37 @@ test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes 
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{[^}]*background: color-mix[^}]*border: 1\.5px solid var\(--wz-accent/, 'outlined app keycaps');
 });
+
+test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music started a voice take): the mouse never parks the keyboard on the orb, a focused orb talks on Enter and on Space only when Tab put it there; a click on the app bar gives the keyboard back to the app', async () => {
+  const { w } = deskWorld();
+  const talks = []; w.api.voice.talk = () => talks.push('talk');
+  const stage = new El('div'); stage.id = 'stage';
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; const win = new El('div'); win.className = 'win'; const frame = new El('iframe'); win.append(frame); appDesk.append(win);
+  stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  let focused = 0;
+  frame.contentWindow = { focus() {}, WizardApp: { keys: { list: () => [] } } };
+  frame.contentDocument = { readyState: 'complete', URL: 'https://box.example/music/' };
+  frame.focus = () => { focused++; w.doc.activeElement = frame; };
+  (await layout()).default(w.api);
+  const orb = w.q('.aad-orbbtn');
+  const md = new FakePointerEvent('mousedown', { button: 0 }); orb.dispatchEvent(md);
+  assert.equal(md.defaultPrevented, true, 'a click on the orb leaves the keyboard where it was (the app)');
+  const key = (k, extra = {}) => { const e = new FakePointerEvent('keydown', { key: k, ...extra }); orb.dispatchEvent(e); return e; };
+  assert.equal(key(' ').defaultPrevented, undefined, 'a plain Space on an orb the mouse focused does not talk');
+  assert.deepEqual(talks, []);
+  key('Enter'); assert.deepEqual(talks, ['talk'], 'Enter on the focused orb talks');
+  orb.matches = sel => sel === ':focus-visible';
+  key(' '); assert.deepEqual(talks, ['talk', 'talk'], 'Space too once Tab focused it');
+  // Music in front: a click on the panel bar (its name, its tools, ⤢) hands the keyboard to Music's frame
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 3, app: 'music' }; w.emit('route', w.st.route);
+  assert.equal(appDesk.dataset.aadRole, 'app');
+  for (let k = 0; k < 4; k++) w.run();
+  focused = 0; w.doc.activeElement = null;
+  const bar = w.q('.aad-ptop'), down = new FakePointerEvent('mousedown', { button: 0 });
+  w.q('.aad-ptn').dispatchEvent(down); assert.equal(down.defaultPrevented, true, 'the bar never takes the keyboard itself');
+  w.q('.aad-ptn').dispatchEvent(new FakePointerEvent('click'));
+  for (let k = 0; k < 4 && !focused; k++) w.run();
+  assert.ok(focused >= 1 && w.doc.activeElement === frame, 'the app has the keyboard again');
+  assert.ok(bar);
+});
