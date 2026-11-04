@@ -18,7 +18,7 @@ const stamp = age => new Date(now - age).toISOString();
 const sessions = [
   { id: 'qa-main-sync', title: 'Main sync', updated_at: stamp(DAY + 1000), message_count: 2 },
   { id: 'qa-meeting-chat', title: 'Meeting summaries', updated_at: stamp(3 * DAY), message_count: 2 },
-  { id: 'qa-error', title: 'Synthetic failed chat', updated_at: stamp(1000), message_count: 2, wizard_status: 'failed' },
+  { id: 'qa-error', title: 'Synthetic failed chat', updated_at: stamp(1000), message_count: 2, status: 'failed' },
   { id: 'qa-ready', title: 'Synthetic ready chat', updated_at: stamp(1000), message_count: 2 },
 ].map(s => ({ agent: main, agent_id: main, source: 'api_server', ...s }));
 const notes = [{ id: 'qa-granola-summary', title: 'Meeting summaries · synthetic recap', message: 'Synthetic meeting recap only.', time: now / 1000, source: 'granola', priority: 3, read: false, archived: false }];
@@ -54,6 +54,8 @@ async function route(r) {
     return r.fulfill({ status: 200, contentType: mime, body: fs.readFileSync(file) });
   }
   if (p === '/wizard/v1/bootstrap') return json(r, { settings, endpoints: { apps: '/wizard/v1/apps', sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs' }, capabilities: {} });
+  if (p === '/wizard/v1/setup') return json(r, { first_run: false });
+  if (p === '/wizard/hermes/api/model/options') return json(r, { model: 'fixture', provider: 'fixture', providers: [{ slug: 'fixture', name: 'Synthetic connected provider', authenticated: true, is_current: true, models: ['fixture'] }] });
   if (p === '/wizard/v1/settings') return json(r, settings);
   if (p === '/wizard/v1/agents') return json(r, { agents: [{ id: main, label: 'QA Operator', privacy: 'standard', is_default: true, status: 'running', harness: 'hermes', appearance: { glyph: 'star', hue: 270 } }] });
   if (p === '/wizard/v1/apps') return json(r, { apps, chats: { default: 'wizard-chats' } });
@@ -110,7 +112,8 @@ async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); aw
       Object.defineProperty(context, 'request', { value: new Proxy({}, { get() { throw Error('APIRequestContext forbidden in offline acceptance'); } }) });
       await context.route('**/*', route); await context.routeWebSocket('**/*', ws => ws.close());
       await context.addInitScript(({ kind }) => {
-        localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.wsync.off', 'true');
+        localStorage.setItem('wux.shell', kind);
+        localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.welcome.v1', 'done'); localStorage.setItem('wos.wsync.off', 'true');
         localStorage.setItem('wos.skin', kind === 'phone' ? 'obsidian' : 'nebula');
         localStorage.setItem('wos.myskin.js.ok', 'qa-approval-' + kind);
         localStorage.setItem('wos.skin-tweaks.v1', JSON.stringify({ version: 1, preset: 'none', mix: {}, defaultsMigrated: true, machinesHomeMoved: true, defaultsOff: kind === 'desktop' ? ['wizard/unified-inbox'] : [] }));
@@ -119,6 +122,8 @@ async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); aw
       p.on('pageerror', e => failures.push(kind + ': ' + e.stack));
       await p.goto(ORIGIN + '/wizard-os-home/' + (kind === 'desktop' ? 'desktop.html' : ''), { waitUntil: 'domcontentloaded' });
       await p.waitForFunction(() => (window.__wux || window.__wos)?.live.ok && WosLookSync.current.state.last === 'ok' && WosSkinHost.layout === 'ai-apps', null, { timeout: 45000 });
+      await p.waitForFunction(() => (window.__welcomeLog || []).some(x => String(x).includes('boot:true:done:false')), null, { timeout: 10000 });
+      check(await p.evaluate(() => !WosWelcome.active && !WosTour?.active), kind + ': real onboarding bootstrap completed without interception');
       check(await p.evaluate(() => WosSkin.current === 'obsidian' && WosSkinHost.inboxList), kind + ': colour, view and inbox converge at startup');
     }
     const phone = contexts[0]._qaPage, desktop = contexts[1]._qaPage;
