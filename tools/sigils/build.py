@@ -86,8 +86,10 @@ HOUSE = {
     'sniper':        ('scope',    4,   0.12),
     'card-benefits': ('card',     145, None),
     'money':         ('dollar',   152, 0.13),
+    'second-hand':   ('tag',      118, None),   # Second Hand: a price tag, green-gold between Maps (114) and Trackhunt (128)
     'profiles':      ('profile',  296, None),
     'defleur-video': ('clip',     268, None),
+    'wizard-podcasts':('podcast', 89,  None),   # Podcasts: amber, in the widest free gap (Wisdom 78 / Cinequeue 100)
     'notes':         ('notes',    356, None),   # Notes: rose, in the gap between Music (344) and Calendar (8)
     'wizard-notes':  ('notes',    356, None),
     'morning':       ('coffee',   46,  None),   # Morning (installed id) wears Morning report's cup
@@ -98,6 +100,32 @@ HOUSE = {
     # Agents (the app): two layered hats drawn from brand masks in style.css; its tile glass is a quiet periwinkle,
     # neither the main agent's purple nor the private agent's green, so both hats read on it.
     'agents':        ('agents',   270, 0.10),
+    # Every app on a Wizard box wears a house sigil (Miguel, 1 Nov 2026): a designed sigil beats a shipped picture, so
+    # the launcher, dock, Desks and Orbs all show one family of marks.
+    'wizard-mail':    ('mail',     214, None),
+    'wizard-microsoft':('mail',    236, 0.09),
+    'wizard-google':  ('mail',     176, 0.09),
+    'smart-home':     ('home',     188, None),
+    'wizard-health':  ('heart',    12,  None),
+    'wizard-apple-health':('heart', 2,  0.12),
+    'wizard-whoop':   ('heart',    24,  0.06),
+    'wizard-oura':    ('heart',    290, 0.07),
+    'wizard-garmin':  ('heart',    226, 0.08),
+    'wizard-polar':   ('heart',    350, 0.08),
+    'wizard-coros':   ('heart',    40,  0.08),
+    'wizard-fitbit':  ('heart',    170, 0.08),
+    'wizard-withings':('heart',    200, 0.06),
+    'wizard-youtube-music':('music', 4, 0.12),
+    'wizard-monarch': ('dollar',   120, 0.08),
+    'wizard-simplefin':('dollar',  176, 0.06),
+    'wizard-brightdata':('globe',  238, 0.08),
+    'wizard-twitterapi':('social', 210, 0.07),
+    'backup':         ('cloud',    224, 0.10),
+    'contacts':       ('social',   336, None),
+    'carlos-crm-demo':('social',   300, 0.08),
+    'maverick-command':('console', 60,  0.10),
+    'pr-board':       ('projects', 160, 0.08),
+    'setup':          ('wrench',   260, 0.06),
 }
 # Approved identities that keep their house mask over a legacy package picture.
 # Scoped to Notes (style/ICONS.md); other apps retain shipped-logo precedence.
@@ -137,7 +165,7 @@ def main():
     style = open(os.path.join(HERE, 'style.css')).read()
     open(out_css, 'w').write(style.rstrip() + '\n\n' + '\n'.join(css) + '\n')
 
-    house = {k: [g, tone(h, c)] for k, (g, h, c) in HOUSE.items()}
+    house = {k: [g, tone(h, c).lstrip('#')] for k, (g, h, c) in HOUSE.items()}  # '#' is added back in sigils.js
     for k, (g, _, _) in HOUSE.items():
         assert g in lib or g in MASKS, (k, g)
     js = open(os.path.join(HERE, 'sigils.template.js')).read()

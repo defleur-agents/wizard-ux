@@ -216,7 +216,26 @@ window.WizCore.chats = function createChats(H) {
   const KIT = window.WosChat;
   const INC = window.WizCore.incognitoChats?.({ win: id => W[id], elOf: id => elOf(id), paint: id => { const w = W[id]; if (w) renderChats(w); }, grow: growTa, toast, kit: KIT });
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
-  const PIN = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
+  const PIN0 = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
+  // Pins can be turned off in the Filter sheet (View › Pins): no Pinned section, no Pin in the menu, no row pin. Saved
+  // pins are kept, so turning Pins back on restores them.
+  const PINS_KEY = 'wos.chats.pins.v1';
+  const pinsOn = () => { try { return localStorage.getItem(PINS_KEY) !== '0'; } catch (e) { return true; } };
+  // The retired miguel/hidden-pin tweak becomes this setting once: a device that wore it starts with Pins off.
+  try {
+    if (localStorage.getItem(PINS_KEY) == null) {
+      const v = JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}'), id = 'miguel/hidden-pin';
+      const chosen = localStorage.getItem('wos.skin'), S = window.WosSkin;
+      const family = chosen && (S?.families || []).find(f => f.id === S.familyOf?.(chosen));
+      const owner = typeof v.preset === 'string' ? v.preset : family?.tweaks;
+      const offs = Array.isArray(v.carry) ? v.carry : Array.isArray(v.off?.miguel) ? v.off.miguel : [];
+      const hidden = v.mix?.[id] === true || (owner === 'miguel' && v.mix?.[id] !== false && !offs.includes(id));
+      if (hidden) localStorage.setItem(PINS_KEY, '0');
+    }
+  } catch (e) {}
+  const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
+  paintPins();
+  const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
   const BOOM = () => window.WosBoomerang || null;
   const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
   const TOPIC = window.WosTopicEmoji;
@@ -249,8 +268,7 @@ window.WizCore.chats = function createChats(H) {
     deferred: { label: 'Snoozed', syn: ['snooze', 'defer', 'deferred', 'later', 'boomerang', 'parked'], empty: 'Nothing snoozed.', test: s => deferredOf(s) || Boolean(BOOM()?.nextFor(s.id)) },
   };
   const FILTERS = STATUS; // app.js (Home cards) names a status filter
-  // Miguel's skins list by status only, so a Yesterday filter has nothing to show there.
-  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(k === 'yesterday' && ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''))).filter(([k]) => !(snoozeLast() && k === 'deferred'));
+  const statusEntries = () => Object.entries(STATUS).filter(([k]) => !(snoozeLast() && k === 'deferred'));
   const subjectOf = s => String(s.attention?.subject || '').trim();
   function subjects() {
     const n = new Map(); for (const s of (LIVE.ok ? LIVE.unified() : [])) { if (s.hidden) continue; const k = subjectOf(s); if (k) n.set(k, (n.get(k) || 0) + 1); }
@@ -446,7 +464,7 @@ window.WizCore.chats = function createChats(H) {
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -787,21 +805,35 @@ window.WizCore.chats = function createChats(H) {
 
   // Opinionated: Compact list (titles only, no previews), chosen in the Filter sheet, cached per device and persisted by Agent Service.
   const COMPACT_KEY = 'wos.chats.compact.v1';
-  // Miguel's skins (Dark, Light, Landscapes) default to the compact list; an explicit choice in Filter always wins.
-  const OUR_SKINS = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
   // Regenerate sits under the last reply only for a skin (or My skin) that asks: `html[data-skin] { --wos-reply-regenerate: on; }`.
   const regenOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-regenerate').trim() === 'on'; } catch (_) { return false; } };
-  const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');
+  // Reply summary (off by default): a skin, tweak or My skin that sets `--wos-reply-summary: on` gets every long reply
+  // led by its own plain-words ask (the agent's status line) with the full text folded under Details.
+  const summaryOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-summary').trim() === 'on'; } catch (_) { return false; } };
+  const SUMMARY_WORDS = 120;
+  const summaryOf = a => a && a.ask && !a.failed && a.final !== false && summaryOn() && String(a.plainText ?? a.text ?? '').split(/\s+/).filter(Boolean).length > SUMMARY_WORDS ? a.ask : '';
+  // The short answer is the toggle: tap it and the full reply takes its place; Show less folds it back. Collapsed unless the
+  // owner chose expanded (box-wide, WosSkinHost.replySummary). A tap on one reply wins over that default.
+  const summaryStartsOpen = () => window.WosSkinHost?.replySummary?.get().start === 'expanded';
+  // The lead reads as a sentence: asks are written chat-list style, often without a final stop.
+  const leadText = s => /[.!?…"'”’»]$/u.test(s) ? s : `${s}.`;
+  const COG_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+  const CHEV_SVG = '<svg class="rsum-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  const setSummaryOpen = (msg, open) => {
+    msg.classList.toggle('rsum-open', open);
+    const lead = msg.querySelector('.bub > .rsum'), full = msg.querySelector('.bub > .rdet');
+    if (lead) lead.hidden = open; if (full) full.hidden = !open;
+  };
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => window.WosSkinHost?.snoozeOrder === 'last';
-  const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v == null ? OUR_SKINS.includes(document.documentElement.dataset.skin || '') : v === '1'; } catch (e) { return false; } };
+  const compactOn = () => { try { const v = localStorage.getItem(COMPACT_KEY); return v === '1'; } catch (e) { return false; } };
   function filterSheet(w, c) {
     const opt = (k, key, label, on) => `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chfopt="${k}:${esc(key)}"><i class="ch-fdot ${k === 'status' ? key : 'subject'}"></i>${esc(label)}${on ? '<b>✓</b>' : ''}</button>`;
     return `<div class="ch-fsheet" data-chfsheet><div class="ch-fcard" role="dialog" aria-label="Filter chats"><div class="ch-fh"><b>Filter</b>${c.filter ? '<button type="button" data-chfclear>Clear</button>' : ''}</div>
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${focusSection(w)}
-      ${ourSkin() ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
-      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
+      ${LIVE.groupSwitch ? '' : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
+      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button><button type="button" class="ch-fopt${pinsOn() ? ' on' : ''}" data-chpins>Pins${pinsOn() ? '<b>✓</b>' : ''}</button>${LIVE.groupSwitch ? `<button type="button" class="ch-fopt${byStatus() ? '' : ' on'}" data-chgroupday aria-pressed="${!byStatus()}">Group by day${byStatus() ? '' : '<b>✓</b>'}</button>` : ''}</div>
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
@@ -1404,7 +1436,11 @@ window.WizCore.chats = function createChats(H) {
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
       }) : '';
-      h += `<div class="msg a"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${body}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      const lead = summaryOf(tn.a), rk = esc(String(bAt));
+      const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
+      const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
+        + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
+      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
@@ -1511,7 +1547,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? notePlain(s.title) || 'Alert' : s.title)}</div>
       ${nid ? '<button type="button" data-rsopen><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Open</button>' : ''}
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
-      <button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
+      ${PIN.on?.() !== false ? `<button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>` : ''}
       <button type="button" data-rsspacepicker>${PIN_SVG}${spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}`}
@@ -1592,6 +1628,15 @@ window.WizCore.chats = function createChats(H) {
     if (!k || !rowSheet) return;
     el.appendChild(k.sh);
     if (k.f && k.f.isConnected) { k.f.focus({ preventScroll: true }); if (k.sel) try { k.f.setSelectionRange(k.sel[0], k.sel[1]); } catch (_) {} }
+  }
+  // The reply's ⚙: how long the agent writes the short answer (box-wide; new replies only).
+  function openLengthSheet(wid, trigger) {
+    const el = track.querySelector(`[data-chats="${wid}"]`), R = window.WosSkinHost?.replySummary; if (!el || !R) return;
+    closeRowSheet();
+    const cur = R.get().length;
+    el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Short answer length"><div class="ch-sheet-b ch-rlen"><div class="ch-sheet-t">Short answer length</div><div role="radiogroup" aria-label="Short answer length">${R.lengths.map(l => `<button type="button" role="radio" aria-checked="${l.id === cur}" data-rslen="${l.id}"><span class="ch-rlen-dot" aria-hidden="true">${l.id === cur ? '◉' : '○'}</span><span class="ch-rlen-tx"><b>${esc(l.name)}</b><small>${esc(l.hint)}</small></span></button>`).join('')}</div><p class="ch-sheet-n">Applies to new replies; earlier ones keep theirs.</p></div></div>`);
+    rowSheet = { wid, trigger, rlen: true };
+    el.querySelector('.ch-rlen [aria-checked="true"]')?.focus({ preventScroll: true });
   }
   function closeRowSheet() {
     if (!rowSheet) return false;
@@ -2859,7 +2904,9 @@ window.WizCore.chats = function createChats(H) {
     }
     if (e.target.closest('[data-chfbtn]')) { const c = ch(id); c.sheet = c.sheet === 'status' ? false : 'status'; c.focus = false; rerenderList(w); return true; }
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
+    if (e.target.closest('[data-chgroupday]')) { LIVE.chatLayout = byStatus() ? 'day' : 'status'; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
+    if (e.target.closest('[data-chpins]')) { const on = !pinsOn(); try { localStorage.setItem(PINS_KEY, on ? '1' : '0'); } catch (err) {} paintPins(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; }
@@ -2898,6 +2945,14 @@ window.WizCore.chats = function createChats(H) {
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
+    // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
+    // The choice is kept per reply (ch(id).rsum), so live repaints keep it.
+    const rlb = e.target.closest('[data-reply-length]'); if (rlb) { openLengthSheet(id, rlb); return true; }
+    const rln = e.target.closest('[data-rslen]'); if (rln && rowSheet?.rlen) { window.WosSkinHost?.replySummary?.set({ length: rln.dataset.rslen }); closeRowSheet(); toast('✓', 'New replies use this length', 1600); return true; }
+    const rsb = e.target.closest('[data-reply-summary]');
+    if (rsb) { const msg = rsb.closest('.msg.a.has-rsum'); if (!msg) return true; const open = !msg.classList.contains('rsum-open'), c = ch(id);
+      (c.rsum = c.rsum || new Map()).set(rsb.dataset.replySummary, open); setSummaryOpen(msg, open);
+      if (e.detail === 0) msg.querySelector(open ? '.rless' : '.bub > .rsum')?.focus({ preventScroll: true }); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
     const mdl = e.target.closest('[data-mdl]'); if (mdl) { e.preventDefault(); const m = ch(id).media?.[+mdl.dataset.mdl]; if (m) KIT.download(m); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }

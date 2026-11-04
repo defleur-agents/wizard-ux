@@ -919,6 +919,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/core/skins/wizard/{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
     "/wizard-os-home/core/skins/macos/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
@@ -960,6 +966,18 @@
         }
       ],
       "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
+    },
+    "/wizard/v1/pages/wizard-look/look.json": {
+      "status": "catalogued",
+      "source": "web/core/look-sync.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard/v1/pages/wizard-look/look.json"
+        }
+      ],
+      "note": "These three synthetic flows deliberately expose no owner Look file (GET/HEAD answer explicit 403 fixture_look_unavailable). Sync stops absent, preserving device-local choices. PUT is not exercised, always refused and collected; it is never forwarded or answered as a successful save."
     }
   }
 }

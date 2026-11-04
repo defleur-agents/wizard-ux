@@ -2,8 +2,10 @@
  *   Built on main f3cb2e21 · "2 behind main · 120 own changes"
  * Sources, nothing polled, no token in the browser:
  *   my-release.json  an owner's own release (written by my-release): the main commit it sits on and his own changes;
- *                    "behind" is the App Manager's updates status (WosUpdates.state.release.behind), which my-release
- *                    keeps current, so nothing extra is asked.
+ *                    "behind" is the App Manager's updates status (WosUpdates.state.release.behind) where my-release
+ *                    keeps it current, so nothing extra is asked. Public WAM's updates status has no release.behind:
+ *                    then, if my-release.json names the full base commit (base.sha, or a 40-hex base.ref), the base is
+ *                    compared with main the same way as a published image (store-install/_main-compare).
  *   build.json       stamped into every published image (Dockerfile, WIZARD_UX_COMMIT): the commit it was built
  *                    from. The App Manager compares it with main (store-install/_main-compare, GitHub's public API,
  *                    cached an hour there); asked when About is drawn, at most once an hour (10 min after a failure).
@@ -34,7 +36,10 @@
     loading = true;
     (async () => {
       const mine = await json(at('my-release.json'));
-      if (mine && SHORT.test(mine.base?.ref || '') && Array.isArray(mine.changes)) info = { kind: 'mine', base: mine.base.ref, own: mine.changes.length };
+      if (mine && SHORT.test(mine.base?.ref || '') && Array.isArray(mine.changes)) {
+        const full = [mine.base.sha, mine.base.ref].find(c => FULL.test(c || '')) || null;
+        info = { kind: 'mine', base: mine.base.ref, own: mine.changes.length, commit: full };
+      }
       else {
         const b = await json(at('build.json'));
         info = FULL.test(b?.commit || '') ? { kind: 'image', commit: b.commit } : { kind: 'none' };
@@ -80,7 +85,13 @@
     if (info.kind === 'mine') {
       const st = updates(), behind = count(st?.release?.behind) ? st.release.behind : null;
       const own = info.own ? `${info.own} own ${info.own === 1 ? 'change' : 'changes'} · ` : '';
-      return row(`Built on main ${info.base.slice(0, 8)}`, st || updFailed ? words(behind, info.own) : `${own}checking main…`);
+      const title = `Built on main ${info.base.slice(0, 8)}`;
+      if (!st && !updFailed) return row(title, `${own}checking main…`);
+      if (behind !== null || !info.commit) return row(title, words(behind, info.own));
+      // No release.behind (public WAM): compare the full base commit with main; own changes stay my-release's count.
+      compare();
+      if (!cmp) return row(title, `${own}checking main…`);
+      return row(title, words(cmp.error ? null : cmp.behind, info.own));
     }
     compare();
     if (!cmp) return row(`Built from ${info.commit.slice(0, 8)}`, 'Checking main…');
