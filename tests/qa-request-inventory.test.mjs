@@ -119,3 +119,11 @@ test('the census finds request targets outside any known API prefix', () => {
   assert.equal(inventory.paths[p]?.status, 'catalogued');
  }
 });
+
+test('Look file fixture is explicitly absent and its writes remain refused', () => {
+ fx.resetRefusals();
+ const answer=fx.response('/wizard/v1/pages/wizard-look/look.json','GET');
+ assert.equal(answer.status,403);assert.equal(JSON.parse(answer.body).error,'fixture_look_unavailable');
+ assert.equal(fx.response('/wizard/v1/pages/wizard-look/look.json','PUT').status,451);
+ fx.resetRefusals();
+});
