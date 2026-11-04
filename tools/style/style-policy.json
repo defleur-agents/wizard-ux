@@ -54,7 +54,7 @@
     },
     {
       "path": "web/core/skins.js",
-      "sha256": "32b009431870b5976efd989c91dc6a1ed7416fd79215ca18d670963611ebbca4",
+      "sha256": "4d4ae0effc4940de04994b9ade4ee9b8c9fb4fe5483df770bef536aa895c947a",
       "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
     }
   ]
