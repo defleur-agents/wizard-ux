@@ -68,6 +68,23 @@
   // Needs the owner: tagged so, high priority, or a title that asks for him. Never silenced by a System row.
   const needsYou = it => (Array.isArray(it.tags) && it.tags.includes('needs-you')) || (Number(it.priority) || 3) >= 4
     || /need(s)? (a look|your OK|you)/i.test(String(it.title || ''));
+  /* The app a Notifications item is about (Miguel, 4 Nov 2026: the agent's group held Sniper scans, backups and sales):
+   * its sender tags it `app:<id>` (the cron relay's CRON_JOB_APPS, notify's `app`). It is then listed under that app
+   * (its name, its mark) and goes where that app's notifications go; one that needs the owner keeps following
+   * Notifications' own choice, like System notices. An app that is not installed (yet) leaves it the agent's own. */
+  const APP_TAG = /^app:([a-z0-9][a-z0-9-]{0,63})$/;
+  function appInstalled(id) {
+    if (!id || id === 'notifications' || id === 'wizard') return false;
+    try { if ((window.WizCore?.apps?.('mobile')?.APPS || []).some(a => a && a.id === id)) return true; } catch (e) {}
+    try { if ((window.WizCore?.backendApps?.() || []).some(a => a && a.id === id)) return true; } catch (e) {}
+    return false;
+  }
+  function fromOf(it) {
+    if (!it || it.app) return '';
+    const tag = (Array.isArray(it.tags) ? it.tags : []).map(t => APP_TAG.exec(String(t))?.[1]).find(Boolean);
+    const id = tag || (typeof it.from === 'string' && APPID.test(it.from) ? it.from : '');
+    return appInstalled(id) ? id : '';
+  }
   const LV = { notes: [], snapshot: null, seen: new Set(), sync: { at: 0, pending: {}, busy: false } };
   const unreadNote = i => !i.read && !i.archived && !LV.seen.has(i.id);
   const sourceOfNote = it => { const k = sysKind(it); return k && !needsYou(it) ? 'system:' + k.kind : 'notifications'; };
@@ -172,7 +189,19 @@
   // Quiet (a part's Off, say): no badge anywhere and nothing in Chats. Never true for the stock part.
   const isOff = id => { id = String(id || ''); return !!id && id !== 'wizard' && P.quiet(id, route(id)) === true; };
   // The source that decides one item: its app, else what the part says (stock: Notifications').
-  const routeIdOf = it => it?.app ? String(it.app) : String(P.sourceOf(it) || 'notifications');
+  const routeIdOf = it => it?.app ? String(it.app) : it?.from && !needsYou(it) ? String(it.from) : String(P.sourceOf(it) || 'notifications');
+  // One item in Chats? An item Notifications carries for an app is there while that app is set to Chats and Chats can
+  // list it (no feed of the app's own needed); everything else as its source decides.
+  function itemInChats(it) {
+    const id = routeIdOf(it);
+    return it && !it.app && it.from && id === it.from ? route(id) === 'chats' && chatsReady() && installed() : inChats(id);
+  }
+  // Unread items Notifications carries for an app that are not in Chats (and not Off): they count on that app's badge.
+  function carriedCounts() {
+    const n = {};
+    for (const i of NOTES.all) if (i.from && !i.read && !i.archived && routeIdOf(i) === i.from && !itemInChats(i) && !isOff(i.from)) n[i.from] = (n[i.from] || 0) + 1;
+    return n;
+  }
   function setRoute(id, to) {
     id = String(id || ''); if (id === 'wizard' || P.accepts(id, to) !== true) return false;
     if (route(id) === to) return true;
@@ -184,7 +213,7 @@
   // Something changed what goes where: drop items that no longer belong in Chats at once, recount every badge.
   // Items stay loaded (IN.all) so turning Chats back on shows them at once, with no read and no flicker.
   function rerouted() {
-    const keep = Object.freeze(IN.all.filter(i => inChats(routeIdOf(i))));
+    const keep = Object.freeze(IN.all.filter(itemInChats));
     if (JSON.stringify(keep) !== JSON.stringify(IN.items)) { IN.items = keep; for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} } }
     window.WizCore?.workspaceNav?.rerouted?.();
     paint();
@@ -238,6 +267,7 @@
     // The raw count; workspace-navigation shows it as a badge only while Notifications is set to Badge. Items the part
     // routes as another source (none for the stock part) count there instead, never here.
     window.WizCore?.workspaceNav?.setCount('notifications', Math.max(0, S.unread - away()));
+    window.WizCore?.workspaceNav?.carry?.(carriedCounts());
     for (const b of document.querySelectorAll('[data-chbell]')) {
       const h = html(); if (!h) { b.remove(); continue; }
       const t = document.createElement('div'); t.innerHTML = h; const nb = t.firstElementChild;
@@ -260,7 +290,8 @@
   // paragraphs and long diagnostic output. Legacy items without editor details use their complete body.
   const cleanItem = i => Object.freeze({ id: str(i.id, 128), title: str(i.title, 300), message: str(i.message, 8000), details: String(i.details || i.message || ''), time: Number(i.time) || 0, source: str(i.source, 40), priority: Number(i.priority) || 3, link: str(i.link, 2000), read: !!i.read, archived: !!i.archived,
     ...(Array.isArray(i.tags) ? { tags: Object.freeze(i.tags.slice(0, 8).map(t => str(t, 40))) } : {}),
-    ...(i.app ? { app: str(i.app, 64), appName: str(i.appName, 80), key: str(i.key, 200), open: str(i.open, 500) } : {}) });
+    ...(i.app ? { app: str(i.app, 64), appName: str(i.appName, 80), key: str(i.key, 200), open: str(i.open, 500) } : {}),
+    ...(() => { const f = fromOf(i); return f ? { from: f, fromName: str(appName(f), 80) } : {}; })() });
 
   /* App inbox feeds (Wizard OS inbox feed v1): an installed app that serves GET /<app>/api/inbox → { inbox: 1, items }
    * lists what needs the owner now (what its badge counts), one item per thing. Read only for apps set to Chats (and
@@ -365,11 +396,11 @@
       if (wantNotes && notes && Array.isArray(notes.items)) gotNotes(notes.items);
       // A failed Notifications read keeps its last items; Notifications set to Badge lists none. With the whole list
       // read, only what routes to Chats is listed there.
-      const got = notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app);
-      const base = !wantNotes ? [] : !all ? got : got.filter(i => i && (routeIdOf(i) === 'notifications' ? route('notifications') === 'chats' : inChats(routeIdOf(i))));
+      const got = (notes && Array.isArray(notes.items) ? notes.items : IN.items.filter(i => !i.app)).filter(i => i && i.id).map(cleanItem);
+      const base = !wantNotes ? [] : !all ? got : got.filter(i => routeIdOf(i) === 'notifications' ? route('notifications') === 'chats' : itemInChats(i));
       const before = JSON.stringify(IN.items);
       IN.all = Object.freeze([...base, ...apps].filter(i => i && i.id).map(cleanItem).sort((a, b) => b.time - a.time));
-      IN.items = Object.freeze(IN.all.filter(i => inChats(routeIdOf(i))));
+      IN.items = Object.freeze(IN.all.filter(itemInChats));
       for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
       if (before !== JSON.stringify(IN.items)) inboxChanged();
     } catch (e) {}
@@ -450,7 +481,8 @@
   function routes() {
     const out = [];
     if (installed()) out.push({ id: 'notifications', name: nameOf('notifications'), route: route('notifications'), chats: inChats('notifications') });
-    for (const id of feedList().sort((a, b) => appName(a).localeCompare(appName(b)))) out.push({ id, name: appName(id), route: route(id), chats: inChats(id) });
+    const carried = [...LV.notes.map(fromOf), ...Object.keys(ROUTES)].filter(appInstalled);
+    for (const id of [...new Set([...feedList(), ...carried])].sort((a, b) => appName(a).localeCompare(appName(b)))) out.push({ id, name: appName(id), route: route(id), chats: inChats(id) });
     return out;
   }
 
@@ -510,7 +542,7 @@
   const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
   /** The label of where this source goes now (its picker's choice: Chats, Badge, Morning report, Off). */
   function routeLabel(id) { id = String(id || ''); const now = route(id), got = P.choices(id, nameOf(id)), list = Array.isArray(got) ? got : STOCK.choices(id, nameOf(id)); const c = list.find(x => x && String(x.to) === now); return c ? String(c.label || now).slice(0, 40) : ''; }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
     entered: () => { P.entered(); }, left: () => { P.left(); },
     get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();
