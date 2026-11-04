@@ -67,7 +67,7 @@ function experience(skin, saved) {
 
 test('Show pin buttons starts off for fresh, saved mix and unflattened legacy devices; an explicit opt-in persists', async () => {
   for (const skin of ['nebula','obsidian','novairecito','sepia']) {
-    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/model-pills':true}}, {version:1,off:{wizard:[],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
+    for (const saved of [undefined, {version:1,off:{},preset:'none',mix:{'miguel/send-and-go':true}}, {version:1,off:{wizard:[],miguel:[]}}, {version:1,off:{},preset:'miguel'}]) {
       let f = experience(skin,saved); await f.E.refresh();
       assert.equal(f.E.state.error,''); assert.ok(!f.active().includes(PIN),skin);
       assert.equal(f.E.state.tweaks.find(t=>t.id===PIN)?.on,false);

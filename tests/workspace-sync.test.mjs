@@ -118,6 +118,23 @@ function fakeBox() {
   const res = (status, j) => ({ status, json: async () => JSON.parse(JSON.stringify(j)) });
   return box;
 }
+test('two clients keep automatic desk placement guarded during cold and resumed reads', async () => {
+  const box = fakeBox(), handle = box.handle;
+  let release;
+  box.handle = (url, o) => o.method === 'GET' && !/wait=[1-9]/.test(url)
+    ? new Promise(resolve => { release = () => resolve(handle(url, o)); }) : handle(url, o);
+  const phone = client(new Map(), box, 'phone', []);
+  const desktop = client(new Map(), { handle }, 'desktop', []);
+  try {
+    assert.equal(phone.api.ok, null); assert.equal(phone.api.absent, false);
+    await tick(10);
+    assert.equal(phone.api.absent, false, 'pending GET is not an absent API');
+    release(); await tick(30);
+    phone.event('focus'); await tick(10);
+    assert.equal(phone.api.ok, null); assert.equal(phone.api.absent, false, 'wake still protects shared order');
+  } finally { phone.api.stop(); desktop.api.stop(); release?.(); }
+});
+
 const tick = (ms = 30) => new Promise(r => setTimeout(r, ms));
 async function settle(cond, n = 100) { for (let i = 0; i < n && !cond(); i++) await tick(); }
 
