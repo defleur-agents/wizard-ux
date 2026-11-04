@@ -289,7 +289,7 @@ export default function setup(api) {
    * Open, a chat's app button) or a link an app owns = that app full screen, its one window reused and taken to the page;
    * no view opens beside a thread by itself. A Reply / a chat an app starts opens the chat, and Back returns to the app
    * (while that chat is in front). Links no app owns keep the stock page with its own Back. */
-  let backOff = null, backDesk = -1;
+  let backOff = null, backDesk = -1, draftWant = false;   // draftWant: the new chat in front holds an app's Reply (a chat, never Home)
   const dropBack = () => { backOff?.(); backOff = null; backDesk = -1; };
   api.apps.routeOpens?.({
     open(kind, d, go) {
@@ -304,6 +304,7 @@ export default function setup(api) {
         closeMenu(); closeSheet(); closeDrawer(); dropBack();
         let ok = false; try { ok = !!go(); } catch (_) { ok = false; }
         if (ok && d.from) { const from = d.from; backDesk = api.route().desk; backOff = api.back.push(() => { backOff = null; backDesk = -1; goApp(from); }); }
+        if (ok && kind === 'draft') { draftWant = true; paintTop(); }
         return true;
       }
       return false;
@@ -532,7 +533,7 @@ export default function setup(api) {
   const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { closeDrawer(); api.desk.settings('ai'); }); };
 
   /* ---------- Home: a New chat (the drawer's +, the name in the top bar, the orb's swipe up all land here) ---------- */
-  function goHome() { closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
+  function goHome() { draftWant = false; closeMenu(); closeSheet(); closeDrawer(); api.sessions.newChat(); }
 
   /* ---------- the orb in the composer (round 6, Miguel: the orb replaces the microphone) ----------
    * The composer keeps an empty slot where the mic was (layout.css: the grid's 'orb' column, right, before Send); the
@@ -577,12 +578,13 @@ export default function setup(api) {
     paintTop(r);
   }
   function paintTop(r = api.route()) {
+    if (r.home || r.view !== 'thread' || r.thread !== '__new__' || (r.app && r.app !== 'chats')) draftWant = false;
     noteRouteIntoActions(doc, '.win.app-chats');
     const app = r.app && r.app !== 'chats' ? r.app : '';
     root.dataset.aiFront = r.home ? 'chat' : app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     // Home = a New chat: nothing but the skin's background, the composer and the orb
     // a notification opened from the list is a New chat holding the note: a chat, never Home (round 7)
-    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !noteThread(doc, '.win.app-chats');
+    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !noteThread(doc, '.win.app-chats') && !draftWant;
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
     homeShow(home);
     if (!home && app) closeSheet();
@@ -591,7 +593,7 @@ export default function setup(api) {
   }
   api.on('route', r => { markUsed(r); onRoute(r); api.after(420, syncOrb); });   // again once the chat's desk has slid in
   api.on('render', () => { if (open) { readSessions(); paintDrawer(); } paintTop(); });
-  api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
+  api.on('home', () => { draftWant = false; soon(() => { if (api.route().home) api.sessions.newChat(); }); });
   api.on('voice', () => paintTop());
   readSessions(); paintTop(); paintBadges();
   if (api.route().home) soon(() => api.sessions.newChat());
