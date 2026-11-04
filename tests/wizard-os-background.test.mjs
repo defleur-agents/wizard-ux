@@ -2,6 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
+import vm from 'node:vm';
 
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const skins = read('web/core/skins.js'), settings = read('web/core/settings.js');
@@ -25,4 +26,16 @@ test('the Background picker sits in Look, only on the Landscapes palettes', () =
   assert.match(settings, /register\(\{ id: 'wallpaper'/);
   assert.match(settings, /if \(!S\.wallpaperable\) return '';/);
   assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
+});
+
+test('wallpaper generator dispatches only explicit scenes, never query-selected methods', () => {
+ const page=read('tools/brand/wallpapers.html');
+ const callback=page.slice(page.indexOf('hat.onload ='),page.indexOf('</script>'));
+ for(const C of ['summit','lake','constellation','silk','glass','constructor','toString','__proto__','hasOwnProperty','bogus']){
+  const calls=[],R={};for(const scene of ['summit','lake','constellation','silk','glass'])R[scene]=light=>calls.push([scene,light]);
+  const context={hat:{},Q:new URLSearchParams('light=1'),C,R,document:{title:''}};
+  vm.runInNewContext(callback+';hat.onload()',context);
+  if(['summit','lake','constellation','silk','glass'].includes(C)){assert.deepEqual(calls,[[C,true]]);assert.equal(context.document.title,'done')}
+  else {assert.deepEqual(calls,[]);assert.equal(context.document.title,'Invalid scene')}
+ }
 });
