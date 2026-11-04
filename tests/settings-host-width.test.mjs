@@ -45,6 +45,7 @@ function hostHarness({ open = true, over = true, modal = false } = {}) {
   const attrs = {}, classes = new Set(), closed = [];
   const setEl = { hidden: !open, parentNode: host, page: 'appearance', classList: { add: k => classes.add(k), remove: k => classes.delete(k) }, setAttribute: (k,v) => attrs[k] = v, removeAttribute: k => delete attrs[k], getClientRects: () => [1], focus() {} };
   const s = { setEl, scrim: { hidden: !modal }, settingsModal: modal, settingsPromoted: false, settingsFocus: null, settingsOver: () => over, document: { body, activeElement: setEl }, homeOpen: false, focused: () => null, focusInside() {}, window: { WosScenery: { update() {} } } };
+  s.over = over; s.settingsOver = () => s.over;
   let win = open ? { id: 'settings-1' } : null;
   s.settingsWin = () => win; s.winEl = () => ({ querySelector: () => host });
   s.closeWin = id => { closed.push(id); win = null; s.hostSettings(); };
@@ -61,6 +62,17 @@ test('mounting AI apps promotes an already-open Settings window without replacin
   assert.equal(s.settingsPromoted, true);
   s.hostSettings(); assert.deepEqual(closed, [], 'promotion is idempotent and does not close during a toggle');
   s.closeSettings(); assert.deepEqual(closed, ['settings-1']); assert.equal(setEl.hidden, true); assert.equal(s.scrim.hidden, true);
+});
+test('leaving AI apps restores a promoted desk window without hiding/remounting Look', () => {
+  const { s, setEl, host, attrs, closed } = hostHarness(); s.hostSettings();
+  s.over = false; s.hostSettings();
+  assert.equal(s.settingsModal, false); assert.equal(s.settingsPromoted, false); assert.equal(s.scrim.hidden, true);
+  assert.equal(setEl.parentNode, host); assert.equal(setEl.hidden, false); assert.equal(setEl.page, 'appearance'); assert.equal(attrs['aria-modal'], undefined);
+  assert.deepEqual(closed, []); s.closeSettings(); assert.deepEqual(closed, ['settings-1']);
+});
+test('a Home modal is not demoted when the modal-only view leaves', () => {
+  const { s, body, setEl } = hostHarness({modal:true}); s.document.body.appendChild(setEl);
+  s.homeOpen = true; s.over = false; s.hostSettings(); assert.equal(s.settingsModal, true); assert.equal(setEl.parentNode, body);
 });
 test('Apps/Orb keep their normal Settings window; closed Settings is never opened by view mount', () => {
   for (const options of [{over:false}, {open:false}]) {

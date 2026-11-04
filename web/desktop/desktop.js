@@ -1777,6 +1777,12 @@
   function hostSettings() {
     // A view can mount while Look is already open in a desk window. Adopt its
     // centred-panel contract without closing, remounting or resetting Look.
+    // Only undo a promoted desk window; Settings opened over Home remains a
+    // Home modal. Rehost synchronously without hiding or resetting its page.
+    if (settingsPromoted && !settingsOver() && !homeOpen && settingsWin()) {
+      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal');
+      setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region'); scrim.hidden = true;
+    }
     if (!settingsModal && !setEl.hidden && settingsOver()) { settingsPromoted = true; showSettingsModal(); }
     if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
