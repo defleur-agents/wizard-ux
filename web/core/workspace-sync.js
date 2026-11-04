@@ -140,6 +140,7 @@
     // survive a reload and are merged and pushed when the box answers again.
     let st = ls.get(key, null) || { rev: -1, base: null, last: null };
     let lastLocal = st.last || null;
+    let absent = false;
     let closed = [], info = { device: '', at: '' }, ok = null, timer = 0, busy = false, again = false, applying = false, alive = true;
     const off = () => ls.get(OFF, false) === true;
     const persist = () => { st.last = lastLocal; ls.set(key, st); };
@@ -244,7 +245,7 @@
         } catch (e) {
           if (!alive) break;
           if (controller.woken) continue;
-          if (e.absent) { ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
+          if (e.absent) { absent = true; ok = null; emit(); return; } // this box has no workspace sync: one-device shell, quietly
           ok = false; emit(); fails++;
           await pause(Math.min(30000, 1500 * 2 ** Math.min(fails, 5)));
         } finally {
@@ -274,7 +275,7 @@
         for (const type of ['pageshow', 'focus', 'online']) window.removeEventListener?.(type, wake);
         for (const type of ['visibilitychange', 'resume']) document.removeEventListener?.(type, wake);
       },
-      get on() { return !off(); }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
+      get on() { return !off(); }, get absent() { return absent; }, get ok() { return ok; }, get closed() { return closed; }, get info() { return info; }, get name() { return name; }, get rev() { return st.rev; },
     };
     window.WosWorkspaceSync.current = api;
     return api;
