@@ -925,7 +925,12 @@ export default function desktop(api) {
   api.listen(orbBtn, 'pointerdown', e => { if (!e.button) down(e, orbBtn, { drag: true }); });
   api.listen(orbBtn, 'pointermove', move);
   api.listen(orbBtn, 'pointerup', () => up(true)); api.listen(orbBtn, 'pointercancel', () => up(false));
-  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
+  /* Plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music's play/pause started a voice take). A
+   * click never parks the keyboard on the orb (the mouse never focuses it, so a later Space can't talk), and a focused
+   * orb talks on Enter; on Space only when Tab put it there (:focus-visible). Wizard's voice key stays ⌥Space. */
+  api.listen(orbBtn, 'mousedown', e => e.preventDefault());
+  const tabbed = n => { try { return n.matches(':focus-visible'); } catch (_) { return false; } };
+  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || (e.key === ' ' && tabbed(orbBtn))) { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
   /* the composer (round 6, Miguel: the orb replaces the microphone): the orb sits INSIDE it, in the slot where the mic
    * was (desktop.css: the grid's 'orb' column, right, before the round Send that shows with words); off a chat, back to
@@ -1244,6 +1249,9 @@ export default function desktop(api) {
   }
   paintWide();
   api.listen(pX, 'click', () => hidePanel());
+  // a click anywhere on the app panel's bar hands the keyboard back to the app (its buttons never keep it)
+  api.listen(pTop, 'mousedown', e => e.preventDefault());
+  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { focusWant = pane.id; focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
   api.listen(pW, 'click', () => setWide(!wide));
   // a slow app: its placeholder in the panel's place at once (faded in after a beat), gone once its frame has loaded
