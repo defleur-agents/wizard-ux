@@ -17,7 +17,8 @@
     "wizard/unified-inbox",
     "wizard/orb-radial",
     "wizard/new-send-list",
-    "miguel/no-desk-close"
+    "miguel/no-desk-close",
+    "miguel/archive-top"
   ],
   "defaults": [
     "wizard/unified-inbox"

@@ -7,7 +7,11 @@
     "miguel/send-and-go",
     "miguel/snooze-someday",
     "miguel/machines-home",
-    "miguel/no-desk-close"
+    "miguel/no-desk-close",
+    "miguel/archive-top"
   ],
-  "flags": {}
+  "flags": {},
+  "off": [
+    "miguel/archive-top"
+  ]
 }
