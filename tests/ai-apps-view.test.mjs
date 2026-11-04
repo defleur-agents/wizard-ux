@@ -113,7 +113,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the phone and th
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(cat.tweaks.includes('miguel/ai-apps') && !cat.defaults.includes('miguel/ai-apps'), 'listed, never a default');
   assert.ok(prof.tweaks.includes('miguel/ai-apps') && prof.off.includes('miguel/ai-apps'), 'off in his profile until he turns it on');
-  assert.ok(!/ai-apps/.test(read('web/core/experience.js')), 'no migration turns it on');
+  assert.ok(!/miguel\/ai-apps/.test(read('web/core/experience.js')), 'the standard desktop choice never depends on a personal tweak');
   const p = fixture({ shell: 'phone' });
   await p.mount('miguel/ai-apps'); await settle();
   assert.equal(p.host.layout, 'ai-apps'); assert.equal(p.doc.documentElement.dataset.layout, 'ai-apps');
@@ -126,7 +126,16 @@ test('packaging: an ordinary Miguel view tweak, off by default; the phone and th
   const host = read('web/core/skin-host.js');
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored AI apps layout goes back to Desks');
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
+});
+
+test('standard AI apps and the personal tweak are idempotent and release cannot remove the standard view', async () => {
+  const d = fixture({ shell: 'desktop' });
+  d.host.setStandardLayout('ai-apps'); await settle();
+  await d.mount('miguel/ai-apps'); await settle();
+  assert.equal(d.host.layout, 'ai-apps');
+  await d.clear(); assert.equal(d.host.layout, 'ai-apps');
+  d.host.setStandardLayout('classic'); assert.equal(d.host.layout, 'classic');
 });
 
 test('scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own', () => {

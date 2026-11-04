@@ -31,11 +31,12 @@
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it (phone only for now): the ChatGPT / Claude / Perplexity phone layout, a top
     // bar, a left drawer (apps, then the chats) and the chat with its composer as the main screen.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Like the AI chat apps: a top bar, a left drawer with your apps and chats, the chat in the middle (phone)', css: true, js: true }),
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Chats and apps side by side on desktop; a top bar and drawer on phone', css: true, js: true }),
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
+  let standardLayout = null; // core-selected desktop view; independent of a tweak's lifetime
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -1280,7 +1281,7 @@
         if (layoutId !== id || (!layoutRec && !layoutSeq)) setLayout(id);
         layoutHolder = a.id;
         let released = false;
-        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id) setLayout('classic'); } };
+        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id && standardLayout !== id) setLayout('classic'); } };
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
@@ -1604,7 +1605,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if (VIEW_LAYOUTS.has(layoutId) && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if (VIEW_LAYOUTS.has(layoutId) && standardLayout !== layoutId && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
@@ -1629,6 +1630,8 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
+    // The standard desktop choice owns the same built-in renderer, without loading a personal tweak.
+    setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout); return standardLayout; },
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },

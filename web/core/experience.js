@@ -12,6 +12,11 @@
     write(value) { try { localStorage.setItem(KEY, JSON.stringify(value)); } catch (_) {} },
   };
   const copy = value => JSON.parse(JSON.stringify(value));
+  const desktop = document.documentElement?.dataset.shell === 'desktop';
+  const DESKTOP_VIEW = 'wos.desktop-view.v1';
+  const desktopViews = ['classic', 'ai-apps', 'orb', 'apps'];
+  let desktopView = '';
+  try { const saved = localStorage.getItem(DESKTOP_VIEW); if (desktopViews.includes(saved)) desktopView = saved; } catch (_) {}
   let state = Store.read() || { version: 1, off: {} };
   let retried = false;  // one quiet retry when a slow network made the whole set fail to load
   let catalog = null, slots = null, set = null, owner = null, manifests = new Map(), generation = 0, error = '', busy = false;
@@ -150,6 +155,8 @@
     const seq = ++generation; busy = true; error = ''; changed();
     try {
       const who = wornOwner();
+      // Snapshot before preset flattening loses explicit false values. No snapshot is published to Look sync.
+      const legacy = { ...state, mix: { ...(state.mix || {}) } };
       // A legacy layout can boot before this deferred module; the worn family now owns it.
       if (window.WosSkinHost.layout === 'two-orb' && !window.WosSkinHost.tweakState.includes('wizard/two-orbs')) window.WosSkinHost.setLayout('classic');
       catalog ||= await read('tweaks/catalog.json'); slots ||= await read('core/slots.json'); migrateDefaults();
@@ -186,7 +193,10 @@
       const all = [...new Set([...catalog.tweaks, ...globalIds()])];
       manifests = new Map(await Promise.all(all.map(async id => [id, await read(`tweaks/${id}/manifest.json`)])));
       if (seq !== generation) return;
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
+      if (desktop && !desktopView) migrateDesktopView(legacy);
+      if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => enabled(id, own)), own).filter(id => desktop && layoutForView(id) ? false : !viewOf(id) || id === wornView(own)), slots, { teamAuthors: catalog.teamAuthors });
+      if (desktop) window.WosSkinHost.setStandardLayout?.(desktopView);
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
   /* Shell views: a tweak whose manifest names a `view` wears a whole shell (e.g. Orb, Apps). They are ordinary switches
@@ -194,13 +204,31 @@
    * that somehow stores two on wears only the first in catalog order. */
   const viewOf = id => { const v = manifests.get(id)?.view; return typeof v === 'string' && v.trim() ? v.trim().slice(0, 24) : ''; };
   const viewIds = () => [...manifests.keys()].filter(viewOf);
-  const wornView = own => viewIds().find(id => enabled(id, own)) || '';
+  const layoutForView = id => { const layout = manifests.get(id)?.layout; return viewOf(id) && desktopViews.includes(layout) ? layout : ''; };
+  function rememberDesktopView(id) { desktopView = id; try { localStorage.setItem(DESKTOP_VIEW, id); } catch (_) {} }
+  function migrateDesktopView(legacy) {
+    // A true or false view switch is a choice; unrelated tweaks / preset migrations are not.
+    const views = viewIds().filter(layoutForView);
+    const explicit = views.some(id => typeof legacy.mix?.[id] === 'boolean');
+    const chosen = views.find(id => enabled(id, recipe()));
+    let oldLayout = ''; try { oldLayout = localStorage.getItem('wos.layout'); } catch (_) {}
+    rememberDesktopView(chosen ? layoutForView(chosen) : explicit ? 'classic' : desktopViews.includes(oldLayout) ? oldLayout : 'ai-apps');
+  }
+  const wornView = own => desktop ? viewIds().find(id => layoutForView(id) === desktopView) || '' : viewIds().find(id => enabled(id, own)) || '';
   const experience = {
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, on: t.id === wornView(recipe()) } : t) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, on: t.id === wornView(recipe()) } : t) });
     },
     installed, defaults, authors,
+    get desktopView() { return desktop ? desktopView : null; },
+    get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id, credit: l?.credit || '' }; }) : []; },
+    chooseDesktopView(id) {
+      if (!desktop || !desktopViews.includes(id)) return Promise.resolve();
+      rememberDesktopView(id);
+      window.WosSkinHost.setStandardLayout?.(id); changed(); // same-frame selection and layout paint, before I/O
+      return apply();
+    },
     // Replacement groups (catalog `oneOf`): each loads only its first enabled member. Read after installed() settles.
     groups: () => (catalog?.oneOf || []).map(g => [...g]),
     get installedReady() { return !!installedP?.settled; },
@@ -228,6 +256,7 @@
     chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      if (desktop && layoutForView(id)) return experience.chooseDesktopView(item.on ? 'classic' : layoutForView(id));
       if (item.view) {  // one shell view at a time: on = this one only, off = every view off (Desks)
         for (const v of viewIds()) if (enabled(v, recipe()) !== (v === id && !item.on)) await setOne(v, v === id && !item.on);
         return apply();
