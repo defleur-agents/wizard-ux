@@ -31,11 +31,11 @@ test('the Background picker sits in Look, only on the Landscapes palettes', () =
 test('wallpaper generator dispatches only explicit scenes, never query-selected methods', () => {
  const page=read('tools/brand/wallpapers.html');
  const callback=page.slice(page.indexOf('hat.onload ='),page.indexOf('</script>'));
- for(const C of ['summit','lake','constellation','silk','glass','constructor','toString','__proto__','hasOwnProperty','bogus']){
-  const calls=[],R={};for(const scene of ['summit','lake','constellation','silk','glass'])R[scene]=light=>calls.push([scene,light]);
+ for(const C of ['lake','valley','moonrise','sea','clouds','glass','constructor','toString','__proto__','hasOwnProperty','bogus']){
+  const calls=[],R={};for(const scene of ['lake','valley','moonrise','sea','clouds','glass'])R[scene]=light=>calls.push([scene,light]);
   const context={hat:{},Q:new URLSearchParams('light=1'),C,R,document:{title:''}};
   vm.runInNewContext(callback+';hat.onload()',context);
-  if(['summit','lake','constellation','silk','glass'].includes(C)){assert.deepEqual(calls,[[C,true]]);assert.equal(context.document.title,'done')}
+  if(['lake','valley','moonrise','sea','clouds','glass'].includes(C)){assert.deepEqual(calls,[[C,true]]);assert.equal(context.document.title,'done')}
   else {assert.deepEqual(calls,[]);assert.equal(context.document.title,'Invalid scene')}
  }
 });
