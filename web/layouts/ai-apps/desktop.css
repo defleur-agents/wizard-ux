@@ -824,6 +824,8 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-dot { background: va
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="ready"] .aad-d.is-dot { background: var(--amber, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-ring { border: 0.09375rem solid var(--aad-ink-2); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-none { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 22%, transparent); }
+/* nothing ready (Miguel, 4 Nov 2026: it looked weird): the empty ring alone, no leftover grey count plate behind it */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="ready"].is-zero .aad-rk-n.aad-dots { height: auto; color: var(--aad-ink); background: none; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-more { display: grid; place-items: center; color: var(--aad-ink-2); font: 600 0.625rem / 1 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="working"] { margin-bottom: 0.25rem; }
 @media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { animation-duration: 3s; } }
