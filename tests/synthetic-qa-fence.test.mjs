@@ -49,6 +49,16 @@ test('browser and APIRequestContext share the same closed response-only catalogu
  const unsafe={get(){network++;}};unsafe.get('https://owner.example/private');assert.equal(network,1);
 });
 
+test('binary fixture assets preserve exact bytes and malformed encodings fail shut', async()=>{
+ const bytes=Buffer.from([0,128,255,13,10,195,169]);
+ const fixture={base:FIXTURE_ORIGIN,responses:{'GET /binary':{status:200,body:bytes.toString('base64'),encoding:'base64'}}};
+ assert.deepEqual(responseFor(fixture,'/binary').body,bytes);
+ let fulfilled;const ctx={async route(g,h){await h({request:()=>({url:()=>FIXTURE_ORIGIN+'/binary',method:()=>'GET'}),fulfill:r=>fulfilled=r,abort:()=>assert.fail('valid binary aborted')});},async routeWebSocket(){}};
+ await fenceContext(ctx,fixture);assert.deepEqual(fulfilled.body,bytes);assert.deepEqual(await (await ctx.request.get(FIXTURE_ORIGIN+'/binary')).body(),bytes);
+ for(const body of ['!not base64','AB==','abc']){fixture.responses['GET /binary'].body=body;assert.throws(()=>responseFor(fixture,'/binary'),/Invalid fixture base64/);}
+ fixture.responses['GET /binary'].encoding='hex';assert.throws(()=>responseFor(fixture,'/binary'),/Uncatalogued/);
+});
+
 test('admission cannot be enabled by a flag, loopback name, URL credentials or a live path',()=>{
  for(const base of ['https://owner.example','http://localhost','http://127.0.0.1','http://wizard-qa.invalid/live','http://user@wizard-qa.invalid','https://wizard-qa.invalid']) assert.throws(()=>admit(base,'missing'),/origins refused/);
  const dir=mkdtempSync(path.join(tmpdir(),'qa-catalogue-'));

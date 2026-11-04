@@ -16,8 +16,9 @@ function responseFor(fixture, url, method = 'GET') {
  if (u.origin !== fixture.base) throw Error('Non-fixture origin refused before network: ' + u.origin);
  const key = method.toUpperCase() + ' ' + u.pathname + u.search;
  const row = fixture.responses[key];
- if (!row || typeof row.body !== 'string' || !Number.isInteger(row.status)) throw Error('Uncatalogued fixture request: ' + key);
- return { status: row.status, contentType: row.contentType || 'application/json', body: row.body };
+ if (!row || typeof row.body !== 'string' || !Number.isInteger(row.status) || ![undefined, 'base64'].includes(row.encoding)) throw Error('Uncatalogued fixture request: ' + key);
+ if (row.encoding === 'base64' && (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(row.body) || Buffer.from(row.body, 'base64').toString('base64') !== row.body)) throw Error('Invalid fixture base64');
+ return { status: row.status, contentType: row.contentType || 'application/json', body: row.encoding === 'base64' ? Buffer.from(row.body, 'base64') : row.body };
 }
 async function fenceContext(ctx, fixture, denied = []) {
  // Browser routing does NOT cover APIRequestContext. Replace that escape hatch
@@ -25,8 +26,8 @@ async function fenceContext(ctx, fixture, denied = []) {
  const request = async (url, init = {}) => {
   const row = responseFor(fixture, url, init.method || 'GET');
   return { ok: () => row.status >= 200 && row.status < 300, status: () => row.status,
-   body: async () => Buffer.from(row.body), text: async () => row.body,
-   json: async () => JSON.parse(row.body), dispose: async () => {} };
+   body: async () => Buffer.from(row.body), text: async () => row.body.toString(),
+   json: async () => JSON.parse(row.body.toString()), dispose: async () => {} };
  };
  const api = { fetch: request, dispose: async () => {} };
  for (const method of ['get','head','post','put','patch','delete']) api[method] = (url, init = {}) => request(url, { ...init, method: method.toUpperCase() });
