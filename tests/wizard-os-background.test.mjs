@@ -21,10 +21,12 @@ test('Landscapes stays the default and every Wizard OS option is listed', () => 
   assert.match(skins, /setWallpaper\(id\) \{/);
 });
 
-test('the Background picker sits in Look, only on the Landscapes palettes', () => {
-  assert.match(settings, /\$\{deviceSkinRecovery\(\)\}\$\{wallpaperHtml\(S\)\}\$\{tweakRows\(S\)\}/, 'between the colours and the tweaks');
+test('twinned skins show Background cards and a separate Dark | Light mode instead of a colour per mode', () => {
+  assert.match(settings, /const colours = !own && twinned\(S, family\) \? backgroundHtml\(S, family, cur\) :/);
+  assert.match(settings, /class="skp-card" data-bgpick=/, 'the same cards as Colors');
+  assert.match(settings, /data-skinmode="\$\{m\}"/);
+  assert.match(settings, /if \(backgroundAct\(ctx, el, pickPalette\)\) return true;/);
   assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);
-  assert.match(settings, /if \(!S\.wallpaperable\) return '';/);
   assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
 });
 
