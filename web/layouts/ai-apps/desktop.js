@@ -216,10 +216,7 @@ export default function desktop(api) {
   const tidyW = el('span', 'aad-tidy-w');
   tidyBtn.append(icon('snooze', 'aad-ico aad-tidy-i'), tidyW);
   vtFoot.append(vtAll, tidyBtn);
-  // Now playing (4 Nov 2026): the column's first row, for the miguel/now-playing tweak's pill (slot `apps-top`); empty
-  // and 0 px tall without it, so the column is exactly as it was
-  const vtNow = el('div', 'aad-vtnow', { 'data-slot': 'apps-top' });
-  vt.id = 'aad-vt'; vt.append(vtHead, vtNow, vtList, vtFoot);
+  vt.id = 'aad-vt'; vt.append(vtHead, vtList, vtFoot);
   const toast = el('div', 'aad-toast', { role: 'status' }); toast.hidden = true;
   const toastW = el('span', 'aad-toast-w'), toastU = el('button', 'aad-toast-u', { type: 'button', text: 'Undo' });
   toast.append(toastW, toastU);
@@ -1111,7 +1108,7 @@ export default function desktop(api) {
   }
   api.listen(vtList, 'pointerdown', e => {
     if (e.button || drag) return;
-    const b = e.target?.closest?.('.aad-vtab'); if (!b || e.target.closest?.('.aad-vtx')) return;
+    const b = e.target?.closest?.('.aad-vtab'); if (!b || e.target.closest?.('.aad-vtx, .aad-np')) return;
     drag = { b, pid: e.pointerId, x0: e.clientX, y0: e.clientY, y: e.clientY, on: false, to: null, hold: null };
     drag.hold = api.after(DRAG_HOLD_MS, () => { if (drag && !drag.on) { dragStart(); dragMove(drag.y); } });
   });
@@ -1436,7 +1433,7 @@ export default function desktop(api) {
     if (code === 'KeyO' && !sh) return once(() => { if (wsPop) { closeWs(); return; } if (root.dataset.aadSide === 'rail' && !narrow()) toggleSide(); openWs(); });
     if (code === 'KeyT' && !sh) return once(openTidy);
     if (code === 'KeyA' && !sh) return once(openAll);
-    // ⌥P: pause (again: play) what played last, in any app (the Now playing tweak's pill; nothing playing: nothing)
+    // ⌥P: pause (again: play) what played last, in any app (Now playing: the bars on its icon; nothing playing: nothing)
     if (code === 'KeyP' && !sh) return once(() => api.media?.toggle?.());
     const dg = /^Digit(\d)$/.exec(code);
     if (dg) { if (!e.repeat && !sh) vtRows()[(+dg[1] + 9) % 10]?.__pick?.(); return true; }
@@ -1459,15 +1456,32 @@ export default function desktop(api) {
     return KEY_LIKE.test(code);
   } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
-  /* Now playing (4 Nov 2026): a playing app's row wears data-media="playing" | "paused" (the miguel/now-playing tweak
-   * draws small bars on its icon). Passive: it hears the shell's media watcher only while that tweak watches; nothing
-   * changes without it, or on a shell without api.media. */
+  /* Now playing (4 Nov 2026, minimal): a playing app's row wears data-media="playing" | "paused" and its icon small
+   * bars (.aad-np, drawn by the miguel/now-playing tweak's css). Hovering the bars turns them into pause; a click
+   * pauses that app (paused: play again) without opening it. Paused bars stop and fade out (the tweak's css); a fresh
+   * row never draws bars for something already paused. Passive: it hears the shell's media watcher only while that
+   * tweak watches, so nothing is drawn without it, or on a shell without api.media. */
   function markMedia() {
     const of = markMedia.of; if (!of) return;
-    for (const b of vtList.querySelectorAll('.aad-vtab')) { const s = of.get(b.dataset.app); if (s) { if (b.dataset.media !== s) b.dataset.media = s; } else if (b.dataset.media) delete b.dataset.media; }
+    for (const b of vtList.querySelectorAll('.aad-vtab')) {
+      const m = of.get(b.dataset.app), ic = b.querySelector('.aad-vti'); let np = ic?.querySelector('.aad-np');
+      if (!m || !ic) { if (b.dataset.media) delete b.dataset.media; np?.remove(); continue; }
+      if (!np && !m.playing) { if (b.dataset.media) delete b.dataset.media; continue; }
+      if (b.dataset.media !== (m.playing ? 'playing' : 'paused')) b.dataset.media = m.playing ? 'playing' : 'paused';
+      if (!np) {
+        np = el('button', 'aad-np', { type: 'button', tabindex: '-1' });
+        const bars = el('span', 'aad-np-b', { 'aria-hidden': 'true' }); bars.append(el('i'), el('i'), el('i'));
+        np.append(bars, el('span', 'aad-np-g', { 'aria-hidden': 'true' }));
+        api.listen(np, 'click', e => { e.stopPropagation?.(); e.preventDefault?.(); const x = markMedia.of?.get(b.dataset.app); if (x) (x.playing ? api.media.pause(x.key) : api.media.play(x.key)); });
+        api.listen(np, 'auxclick', e => e.stopPropagation?.());
+        ic.append(np);
+      }
+      const what = (m.playing ? 'Pause ' : 'Play ') + (appName(b.dataset.app) || b.dataset.app);
+      if (np.getAttribute('aria-label') !== what) { np.setAttribute('aria-label', what); np.title = m.playing ? 'Pause' : 'Play'; }
+    }
   }
   api.media?.watch?.(list => {
-    const of = new Map(); for (const x of list) if (x.playing || !of.has(x.appId)) of.set(x.appId, x.playing ? 'playing' : 'paused');
+    const of = new Map(); for (const x of list) if (x.playing ? !of.get(x.appId)?.playing : !of.has(x.appId)) of.set(x.appId, { playing: x.playing, key: x.key });
     markMedia.of = of; markMedia();
   }, { passive: true });
   const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
@@ -1515,7 +1529,9 @@ export default function desktop(api) {
       put(tile(nb), ']', at); if (pb !== nb) put(tile(pb), '[', at);
     }
     put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
-    if (api.media?.list?.().length) put(vtNow.firstElementChild, 'P', vtFolded ? 'bl' : 'tr');
+    // ⌥P on the icon of what played last: on its bars while they play, else on the icon itself
+    const np = api.media?.list?.()[0], npRow = np && rows.find(b => b.dataset.app === np.appId);
+    if (npRow) { const bars = npRow.querySelector('.aad-np'); put(np.playing && bars ? bars : tile(npRow), 'P', np.playing && bars ? 'mid' : 'bl'); }
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (docked) put(cX, 'W');
     midH();
     if (docked) {
