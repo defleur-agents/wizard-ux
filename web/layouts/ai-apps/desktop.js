@@ -70,7 +70,7 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
+import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
 import { homeView } from './home.js';
@@ -272,6 +272,7 @@ export default function desktop(api) {
     else { folded = !folded; api.storage.set('folded', folded); }
     if (q) setSearch(false);
     paintSide();
+    api.aiUsage?.live?.(foot);  // the sidebar's foot (fuel gauge) may have just come on screen
   }
   let offPeek = null;
   // which sections are open (Ready open, Working and Archive folded at first), kept on this device
@@ -836,7 +837,10 @@ export default function desktop(api) {
   }
   function closeFly() { flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
   let fuelSig = '';
-  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, () => { unpeek(); api.desk.settings('ai'); }); };
+  // (4 Nov 2026) the gauge stays without the network Home: read the AI usage feed directly and keep it polling while the foot shows
+  const ownFuel = () => fuelOf(api.aiUsage?.state?.(), api.aiUsage?.provider?.());
+  api.aiUsage?.live?.(foot);
+  const paintFuel = () => { fuelSig = gaugeInto(doc, fuel, fuelSig, pg => { unpeek(); api.desk.settings(pg || 'ai'); }, ownFuel); };
   function paintBadges() {
     paintFuel();
     paintVt();
