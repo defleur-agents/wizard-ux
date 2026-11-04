@@ -2,6 +2,17 @@
  * Banners (offline / reconnecting / back online, critical issues), the fatal card, body-search snippets,
  * the Drafts section, and the voice provider card in Settings. */
 
+/* Local connection help lives inside the ordinary Troubleshooter window. No floating panel. */
+.wz-recovery { width: 100%; height: 100%; min-height: 0; display: flex; flex-direction: column; overflow: auto; color: var(--wz-text, var(--ink)); background: linear-gradient(var(--wz-panel, var(--bg)), var(--wz-panel, var(--bg))), var(--wz-base, var(--bg)); font: var(--wz-text-md)/var(--wz-line-height) var(--wz-font-ui); }
+.wz-recovery > details { flex: 0 0 auto; padding: 16px; }
+.wz-recovery summary { cursor: pointer; font-weight: 650; }
+.wz-recovery-help { max-width: 680px; margin: 0 auto; }
+.wz-recovery h2 { font-size: var(--wz-text-heading); margin: 16px 0 8px; }
+.wz-recovery p { color: var(--wz-text-secondary, var(--ink-2)); margin: 12px 0; }
+.wz-recovery .wz-list { margin: 16px 0; }
+.wz-recovery iframe { position: static !important; flex: 1 0 380px; width: 100%; min-height: 380px; border: 0; }
+.wz-recovery iframe[hidden] { display: none !important; }
+
 /* ---------- banners (same glass as the native update banner, .dv-update) ---------- */
 /* They live in the top strip (the phone's status bar, the desktop's top bar) as one-line pills, so they never
  * cover a window, a search box or a composer. While one shows, it sits over the clock. */
