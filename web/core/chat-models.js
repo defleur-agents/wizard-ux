@@ -36,7 +36,7 @@
   // A quota-limited grant is still installed in Hermes' pool. Dropping its route
   // from the picker would silently steer the owner onto the single-login legacy route.
   const hasNativeClaude = connection => nativeClaudeAccounts(connection).some(a =>
-    ['ready', 'ok', 'exhausted', 'rate_limited'].includes(a.status));
+    ['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status));
   const accountAtLimit = a => {
     if (!a || !['ready', 'ok', 'connected', 'exhausted', 'rate_limited'].includes(a.status)) return false;
     if (['exhausted', 'rate_limited'].includes(a.status)) return true;

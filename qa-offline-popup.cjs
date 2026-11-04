@@ -4,6 +4,7 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 if(process.argv[2]||process.env.QA_URL)throw Error('Owner/network origins refused');
 const fx=require('./tools/qa-proof-fixture.cjs');
+fx.failAtExit(() => OUT); // collect-all: one run reports every uncatalogued request, then exits non-zero
 const BASE=fx.ORIGIN+'/wizard-os-home/';
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-offline-results');
 const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -48,6 +49,10 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
       await page.goto(url, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.WizLive?.ok && window.WizLive.sessions.length && window.WizCore?.status && (window.__wos || window.__wux), null, { timeout: 60000 });
       assert.equal(await page.evaluate(() => document.documentElement.dataset.shell), shell);
+      // Desktop intentionally hides its mic without a configured transcriber. The synthetic
+      // bootstrap must advertise voice before this proof asks that mic to remain reachable.
+      await page.waitForFunction(() => WizConfig.live && WizConfig.has('voice'));
+      await page.locator(phone ? '#orb' : '#micBtn').waitFor({ state: 'visible' });
       // A healthy synthetic fixture must boot without deleting product UI.
       await page.evaluate(() => WizLive.refresh()); // drain any previous refresh before fault injection
       async function recover() {
@@ -104,7 +109,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
           const orb = document.querySelector(phone ? '#orb' : '#micBtn');
           const r = orb.getBoundingClientRect(), card = document.querySelector('.wx-off-card'), c = card.getBoundingClientRect();
           const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-          return { orbHit: !!hit && !card.contains(hit) && (hit === orb || orb.contains(hit) || !!(hit.closest && hit.closest('#orbWrap')) || !!(orb.closest('#orbWrap') && orb.closest('#orbWrap').contains(hit))), hit: hit?.id || hit?.tagName, card: { x: c.x, y: c.y, w: c.width, h: c.height, bottom: c.bottom }, orb: { top: r.top, bottom: r.bottom }, bg: getComputedStyle(card).backgroundColor, dialogModal: card.parentElement.getAttribute('aria-modal') };
+          return { orbHit: r.width > 0 && r.height > 0 && !!hit && !card.contains(hit) && (hit === orb || orb.contains(hit) || !!(hit.closest && hit.closest('#orbWrap')) || !!(orb.closest('#orbWrap') && orb.closest('#orbWrap').contains(hit))), hit: hit?.id || hit?.tagName, card: { x: c.x, y: c.y, w: c.width, h: c.height, bottom: c.bottom }, orb: { top: r.top, bottom: r.bottom }, bg: getComputedStyle(card).backgroundColor, dialogModal: card.parentElement.getAttribute('aria-modal') };
         }, phone);
         assert.ok(geometry.orbHit, `${shell} ${skin} orb/mic remains the hit target: ${JSON.stringify(geometry)}`);
         assert.equal(geometry.dialogModal, 'false');
