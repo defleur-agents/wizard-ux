@@ -63,6 +63,7 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   sync = L.create({ req: box.req, store: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }, exp, skin: S,
     now: clock || (() => Date.now()), later: (f, ms) => { const t = { f, ms }; timers.push(t); return t; }, cancel: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); } });
   d.sync = sync;
+  d.saved = () => JSON.parse(store.get('wos.look-sync.v1') || 'null');
   d.flush = async () => { while (timers.length) { const t = timers.shift(); await t.f(); await tick(); } };
   d.timers = timers;
   // An owner's switch: experience.js writes the mix and raises wos:tweak-choice.
@@ -594,6 +595,7 @@ for (const synced of [false, true]) {
     assert.equal(box.puts, 0); assert.equal(d.sync.state.last, 'ok');
     assert.deepEqual(clone(d.sync.state.pending.tweaks), {});
     await d.sync.sync(); assert.deepEqual(box.doc(), remote, 'subsequent sync stays quiet');
+    assert.deepEqual(d.saved().pending.tweaks, {}, 'settled group is not restored again on the next boot');
   });
   test(`legacy view group: restored equality and independent intent order survive rebasing (synced=${synced})`, async () => {
     const box = pagesBox(legacyDoc(legacyViews[1], 1000));
