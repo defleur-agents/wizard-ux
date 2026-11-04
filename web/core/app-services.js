@@ -672,10 +672,14 @@
     if (!cap.safe) blocking.push({ appId: null, kind: 'capture', reason: cap.reason || 'capture' });
     for (const st of frames.values()) for (const reason of st.holds.values()) {
       const capture = CAPTURE_HOLD.test(reason);
-      if (capture && keeps && st.appId === keeps.appId) continue;
+      // The serving Recorder starts this hold even after a failed Start clears its engine. A stopped
+      // task save can also retain it. Only its exact audio holds may follow proven durable custody;
+      // notes/other work and unknown owners remain protected. This never acknowledges/deletes audio.
+      const recorder = st.appId === 'mizel' && /^Mizel (recording|capture or durable task save)$/i.test(reason);
+      if (capture && cap.safe && ((keeps && st.appId === keeps.appId) || (recorder && cap.durable === true))) continue;
       blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
     }
-    return { ok: !blocking.length, keeps, blocking, recording: blocking.some(b => b.kind === 'capture') };
+    return { ok: !blocking.length, keeps, capture: cap, blocking, recording: blocking.some(b => b.kind === 'capture') };
   }
   // Right before location.reload() with a kept meeting: let capture writes land, then take the kept app's
   // frames out. Its own leave guard (a beforeunload prompt meant for a standalone tab) would otherwise stop the
