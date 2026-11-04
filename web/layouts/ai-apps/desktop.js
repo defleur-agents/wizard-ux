@@ -138,6 +138,7 @@ export default function desktop(api) {
   const litFirst = list => [...list.filter(a => lit(a.id)), ...list.filter(a => !lit(a.id))];
 
   /* ---------- the sidebar ---------- */
+  const khMarks = new Map();   // the Ready rows wearing ↓ / ↑ while ⌥ is held (sid → key)
   const side = el('nav', 'aad-side', { 'aria-label': 'Sidebar' });
   const head = el('div', 'aad-sh');
   // round 7 (Miguel): the workspace switcher IS the header (this Wizard's name; a click opens the switcher menu), where
@@ -530,6 +531,7 @@ export default function desktop(api) {
   /* ---------- a chat row: click opens it; ⋯ (on hover) or a right click opens its menu ---------- */
   function chatRow(s, cur) {
     const wrap = el('div', 'aad-rw' + (s.id === cur ? ' is-cur' : ''), { 'data-sid': s.id, 'data-kind': s.kind });
+    if (khMarks.has(s.id)) wrap.dataset.aadKh = khMarks.get(s.id);   // (round 21: a repaint while ⌥ is held keeps the room for its keycap)
     const b = el('button', 'aad-row aad-chat', { type: 'button', ...(s.id === cur ? { 'aria-current': 'page' } : {}) });
     // a notification (round 5; round 20 item 6, Miguel: it stands out, subtly, in amber): a small amber bell before its
     // title in normal text; its unread dot amber too (a chat's stays the accent)
@@ -1398,14 +1400,15 @@ export default function desktop(api) {
   const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
   /* Round 21: while left ⌥ is held, a small keycap ON each thing a key acts on, where it is (no legend card, nothing in
    * the middle): icons and buttons at their top-left corner, the next / previous Ready rows at their start (the row
-   * makes room), app rows 1–9 / 0 on the icon's top-left, [ ] on the icon's top-right of the row they go to. No keycap
+   * makes room; folded: beside the rail word), app rows 1–9 / 0 on the icon's top-left, [ ] on the icon's top-right of
+   * the row they go to (folded: bottom-left, clear of the count badge). No keycap
    * for a key with nothing to point at (⌥V, ⌥C); count badges step back while ⌥ is held. */
   const focusOn = () => root.dataset.aadFocus != null;
   const frontNote = () => chatThread === NOTE || here().note;
   const settingsOpen = () => { const n = doc.getElementById?.('dsettings'); return !!n && !n.hidden && n.parentNode === doc.body; };   // (the centred Settings panel)
   api.keys.guide(() => {
     const out = [], put = (n, key, at = 'tl') => { if (shown(n)) out.push({ el: n, key, at }); }, putIn = (n, key, at = 'tl') => { if (onScreen(n)) out.push({ el: n, key, at }); };
-    for (const r of side.querySelectorAll('.aad-rw[data-aad-kh]')) delete r.dataset.aadKh;
+    for (const r of side.querySelectorAll('.aad-rw[data-aad-kh]')) delete r.dataset.aadKh; khMarks.clear();
     // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
     if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
     if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
@@ -1419,20 +1422,21 @@ export default function desktop(api) {
     if (open) {
       // ↓ / ↑ on the very rows ⌥↓ / ⌥↑ open (the drawn Ready, in its order)
       // (the row makes room at its start while ⌥ is held, data-aad-kh, so the keycap never touches its title)
-      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row'); if (shown(b)) { w.dataset.aadKh = k; put(b, k, 'inside-l'); } };
+      const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row'); if (shown(b)) { w.dataset.aadKh = k; khMarks.set(id, k); put(b, k, 'inside-l'); } };
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)
       const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
       const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
-      if (n1) put(n1, '↓'); if (p1 && p1 !== n1) put(p1, '↑'); else if (p1) put(p1, '↑', 'bl');
+      if (n1) put(n1, '↓', 'right'); if (p1) put(p1, '↑', p1 !== n1 ? 'right' : 'right-2');   // (beside the rail word: never over its count)
     }
     put(vtTog, 'R');
     const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), tile = b => b.querySelector('.aad-tile') || b;
     rows.forEach((b, k) => { if (k < 10) put(tile(b), String((k + 1) % 10)); });
     if (rows.length > 1) {
       const nb = rows[i < 0 ? 0 : (i + 1) % rows.length], pb = rows[i < 0 ? rows.length - 1 : (i - 1 + rows.length) % rows.length];
-      put(tile(nb), ']', 'tr'); if (pb !== nb) put(tile(pb), '[', 'tr');
+      const at = vtFolded ? 'bl' : 'tr';   // (folded: under the icon, clear of its count badge)
+      put(tile(nb), ']', at); if (pb !== nb) put(tile(pb), '[', at);
     }
     put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
