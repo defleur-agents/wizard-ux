@@ -80,15 +80,15 @@ nothing in the middle; a key with nothing on screen to point at (⌥V, ⌥C) has
 | ⌥W | Close the app in front (a pinned one hides), else the docked chat / notification (✕ / —) |
 | ⌥F | App wide / back to the side (⤢) |
 | ⌥− / ⌥= | App narrower / wider (the panel's edge) |
-| ⌥Z | Snooze the item in front (Snooze) |
-| ⌥E | Archive it, then the next Ready item opens (Archive) |
+| ⌥← (⌥Z) | Snooze the item in front (Snooze); ⌥← again in the snooze sheet = Someday |
+| ⌥→ (⌥E) | Archive it, then the next Ready item opens (Archive) |
 | ⌥X | Resolve the notification ("Have <agent> handle it"), then the next |
 | ⌥B | Where this app's notifications go (the "From … · shows in …" line) |
 | ⌥Space | Talk (the orb) |
 | ⌥D | Dictate into the box (the composer) |
 | ⌥V / ⌥C | New voice chat / command (the shell's own; no keycap) |
 
-Every other ⌥ key does nothing here (no ⌥G letters, no ⌥/ pinned guide, no app letters, no ⌥← / ⌥→, no desk keys), so
+Every other ⌥ key does nothing here (no ⌥G letters, no ⌥/ pinned guide, no app letters, no desk keys), so
 nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
 Everything else in both panels (the Archive / Working / Snoozed / Ready headers, every chat row and its ⋯) is a plain
 button Tab reaches, in order, from ⌥K's search; the right column's rows are ⌥1–⌥0 and ⌥[ ].
