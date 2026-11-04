@@ -36,7 +36,7 @@ test('without workspace sync the phone still brings an open app beside Home', ()
 });
 
 test('with workspace sync on the phone leaves the shared desk order alone', () => {
-  for (const ok of [true, false]) { // in sync, or offline with edits still to send
+  for (const ok of [true, false, null]) { // in sync, or offline with edits still to send
     const p = phone({ on: true, ok }); p.bringBeside('w3');
     assert.deepEqual(p.order(), ['home', 'd1', 'd2', 'd3']);
   }
@@ -49,8 +49,8 @@ test('with workspace sync on a new app opens on a new desk at the end, not besid
   assert.deepEqual(off.order(), ['home', 'dn', 'd1', 'd2', 'd3']);
 });
 
-test('the box without the sync API (ok stays null) keeps the old phone behaviour', () => {
-  const p = phone({ on: true, ok: null }); p.bringBeside('w3');
+test('the box with a confirmed absent sync API keeps the old phone behaviour', () => {
+  const p = phone({ on: true, ok: null, absent: true }); p.bringBeside('w3');
   assert.deepEqual(p.order(), ['home', 'd3', 'd1', 'd2']);
 });
 
