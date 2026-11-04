@@ -5,7 +5,7 @@
     "qa-offline-popup.cjs",
     "qa-search-archive-routed.cjs"
   ],
-  "policy": "A path found in web/ must be classified here (tests/qa-request-inventory.test.mjs). Unclassified or not-exercised paths are refused with HTTP 451, collected and fail the run at exit with the full list. Static assets under /wizard-os-home/ are served only from tracked web/ files.",
+  "policy": "Every discovered network path in web/ is classified. Existing shell files are served locally by staticResponse; absent/generated assets, relative shell fetches and literal skin-host app reads require explicit catalogue entries. Unknown paths fail closed and are collected. Dynamic URL construction still requires the runtime fence.",
   "transports": {
     "fetch": "every catalogued path above",
     "XMLHttpRequest": "none in the three flows (refused if issued)",
@@ -900,6 +900,66 @@
         }
       ],
       "note": "Registry apps that provide ready-extension. Shared catalogue answers 404 (no app bytes); the instant-taps proof serves the pinned Morning declaration itself."
+    },
+    "/wizard-os-home/install/at": {
+      "status": "not-exercised",
+      "source": "web/core/app-identity.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/offline-apps.json": {
+      "status": "not-exercised",
+      "source": "web/core/offline-session.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/store-install/_slots/chats": {
+      "status": "not-exercised",
+      "source": "web/core/settings.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/core/skins/macos/{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/ux-version.txt": {
+      "status": "catalogued",
+      "source": "web/core/web-update.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/wizard-os-home/ux-version.txt"
+        }
+      ],
+      "note": "v11 refusal: explicit synthetic stable text/plain web-tree fingerprint. No upstream or mutation."
+    },
+    "/wizard-os-home/ux-changes.json": {
+      "status": "not-exercised",
+      "source": "web/core/web-update.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/wizard-os-home/install": {
+      "status": "not-exercised",
+      "source": "web/install.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
+    "/backup/api/overview": {
+      "status": "catalogued",
+      "source": "web/tweaks/miguel/machines-home/tweak.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/backup/api/overview"
+        }
+      ],
+      "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
     }
   }
 }
