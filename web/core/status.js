@@ -175,8 +175,7 @@
         const full = diagnosis?.message || 'Checking the connection to Wizard. Messages are kept on this device while we retry.';
         // The same request-neutral words every read surface uses (WizReach.label); a device that is simply offline
         // also says what still happens to what you write.
-        const short = net === 'offline' || diagnosis?.layer === 'device-offline' ? 'Offline · messages send when you’re back'
-          : String(window.WizReach?.label?.('read', { diagnosis }) || diagnosis?.short || 'Reconnecting…').replace(/ · retrying$/, '');
+        const short = String(window.WizReach?.label?.('read', { diagnosis }) || diagnosis?.short || 'Reconnecting…').replace(/ · retrying$/, '');
         parts.push(`<div class="wx-banner net ${kind}" role="status" title="${esc(full)}" data-wxnet="${kind}"><span class="wx-row"><span class="wx-spin" aria-hidden="true"></span><button type="button" class="wx-s" data-wxoffopen aria-label="${esc(short)}. Show connection checks">${esc(short)}</button></span></div>`);
       }
     }
@@ -238,17 +237,16 @@
       const name = key === 'tailscale' && c && !c.tailnet ? 'Your Wizard’s network' : label;
       return `<li class="wz-row wx-ck ${r.state}" data-wxck="${key}"><span class="wz-main"><b>${esc(name)}</b><small>${esc(r.detail)}</small></span><span class="wz-pill ${PILL[r.state] || 'off'}">${STATE_WORD[r.state] || ''}</span></li>`;
     };
-    const offlineDevice = navigator.onLine === false || c?.internet?.state === 'bad';
-    const title = happy ? 'Back online' : offlineDevice ? 'You’re offline' : 'Can’t reach your Wizard';
-    const fix = happy ? '' : fixFor(c);
-    const canHelp = !happy && c && c.tailscale?.state !== 'bad' && c.internet?.state !== 'bad' && c.tailscale?.state !== 'wait';
+    const title = happy ? 'Back online' : 'Can’t reach your Wizard';
+    const fix = happy ? '' : c?.help || fixFor(c);
+    const canHelp = !happy;
     const had = el.contains?.(document.activeElement) ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
     el.innerHTML = `<div class="wz-card wx-off-card"><button type="button" class="wz-icon-button ghost wx-off-x" data-wxoffx aria-label="Hide. Keep using saved chats">×</button>`
       + `<h2 id="wxOffT">${esc(title)}</h2>`
       + `<p class="wx-off-sub">${happy ? 'Everything is connected again.' : 'Chats saved on this device still open. New messages wait here and send by themselves when you’re back.'}</p>`
       + `<ul class="wz-list">${ROWS.map(([k, l]) => row(k, l)).join('')}</ul>`
       + (fix ? `<p class="wx-off-sub" role="status">${esc(fix)}</p>` : '')
-      + (happy ? '' : `<div class="wz-actions"><button type="button" class="wz-button" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wz-button secondary" data-wxoffhelp>More help</button>' : ''}</div>`)
+      + (happy ? '' : `<div class="wz-actions"><button type="button" class="wz-button" data-wxoffcheck${offBusy ? ' disabled' : ''}>${offBusy ? 'Checking…' : 'Check again'}</button>${canHelp ? '<button type="button" class="wz-button secondary" data-wxoffhelp>Open Troubleshooter</button>' : ''}</div>`)
       + `</div>`;
     el.hidden = false;
     // A re-check re-renders the card: keep keyboard focus on the same control (or the close button if it went).
@@ -316,7 +314,7 @@
   // Cheap catch-all for things with no event (the thread in front changed, the inbox opened or closed).
   addEventListener('wizreachchange', render);
   // Troubleshoot from any button while nothing of the Wizard answers (outside the phone app): unfold what to check.
-  addEventListener('wizreachexplain', () => openOffline());
+  addEventListener('wizreachexplain', () => window.WizReach?.open());
   addEventListener('resize', () => { lastHtml = ''; render(); });
   setInterval(() => {
     if (document.hidden || !document.getElementById('wxBanners')) return;
