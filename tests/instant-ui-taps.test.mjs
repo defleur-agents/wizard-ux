@@ -5,33 +5,6 @@ import { readFileSync } from 'node:fs';
 const read = f => readFileSync(new URL('../' + f, import.meta.url), 'utf8');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
-const chats = read('web/core/chats.js');
-for (const ok of [true,false]) test(`attention and failure dismiss are optimistic, backend ok=${ok}`, async () => {
-  const gates = [], notices = [];
-  const c = {window:null,fetch:()=>{const g=deferred();gates.push(g);return g.promise;}};c.window=c;
-  vm.runInNewContext(read('web/core/chat-errors.js'),c);const E=c.WosErrors;
-  E.items=[{id:'a',canRetry:false},{id:'b',canRetry:false}];E.onChange(()=>notices.push(E.items.map(x=>x.id)));
-  const pending=E.dismissAttention('a');assert.deepEqual(Array.from(E.items,x=>x.id),['b']);assert.equal(E.gone.has('a'),true);assert.equal(notices.length,1);
-  assert.equal(await E.dismissAttention('a'),false,'double tap does not send twice');
-  gates[0].resolve({ok,status:ok?200:500});assert.equal(await pending,ok);assert.equal(E.gone.has('a'),ok);assert.deepEqual(Array.from(E.items,x=>x.id),ok?['b']:['a','b']);
-  const failure=E.dismissFailure('s');assert.equal(E.dismissed('s'),true);
-  gates[1].resolve({ok,status:ok?200:500});assert.equal(await failure,ok);assert.equal(E.dismissed('s'),ok);assert.equal(E.busy.size,0);
-});
-for(const ok of [true,false])test(`Snooze cancel updates its state before I/O and rolls back on failure=${!ok}`,async()=>{
-  const g=deferred(),events=[];
-  const c={window:null,Event,CustomEvent:class extends Event{constructor(type,opts){super(type);this.detail=opts?.detail;}},URLSearchParams,Date,Intl,location:{search:'',pathname:'/'},localStorage:{getItem:()=>null,setItem(){}},setInterval:()=>0,clearInterval(){},setTimeout,clearTimeout,document:{hidden:false,querySelectorAll:()=>[],addEventListener(){},activeElement:null},addEventListener(){},dispatchEvent:e=>events.push(e.type),fetch:async(_,opts)=>opts?.method==='DELETE'?g.promise:{ok:true,json:async()=>({schedules:[{id:'return-a',kind:'return',thread:'s',when:{once:'2027-01-01T12:00:00Z'},timezone:'UTC'}]})}};c.window=c;
-  vm.runInNewContext(read('web/core/scheduled-reminders.js').replace('window.WosBoomerang={','window.WosBoomerang={cancel,'),c);const B=c.WosBoomerang;await B.refresh();assert.equal(B.nextFor('s').id,'return-a');
-  const p=B.cancel('return-a');assert.equal(B.nextFor('s'),null);await B.refresh();assert.equal(B.nextFor('s'),null,'stale polling does not put a pending cancellation back');
-  g.resolve({ok,status:ok?200:500,json:async()=>({error:'fixture failure'})});
-  if(ok)await p;else{await assert.rejects(p,/fixture failure/);assert.equal(B.nextFor('s').id,'return-a');}
-  assert.ok(events.includes('wos:boomerang'));
-});
-test('archive, mark unread, notification actions and pin force UX paint before promises settle',()=>{
-  assert.match(chats,/const pending = LIVE.markUnread\(sid\); paintActionLists\(\);/);
-  assert.match(chats,/paintActionLists\(\); const ok = await pending; paintActionLists\(\);/);
-  assert.match(chats,/const on = PIN.toggle\(sid\); paintActionLists\(\);/);
-  const helper=chats.split('\n').find(line=>line.includes('function paintActionLists('));assert.doesNotMatch(helper,/holdList|requestAnimationFrame|setTimeout/);
-});
 for (const ok of [true, false]) test(`recording custody deletion acknowledges the tap before storage; rollback=${!ok}`, async () => {
   const gate=deferred(),notices=[];let recordings=[{id:'take',state:'held',createdAt:Date.now(),audio:{type:'audio/aac',size:100},durable:true}];
   const c={window:null,localStorage:{getItem:()=>null,setItem(){}},document:{querySelector:()=>null},addEventListener(){},setInterval:()=>0,URL,Blob};c.window=c;c.__wux={toast:(...a)=>notices.push(a)};

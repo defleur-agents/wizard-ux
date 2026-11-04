@@ -48,22 +48,18 @@
     async _attention(id, action) {
       const it = E.items.find(x => x.id === id); if (!it || E.busy.has(id)) return false;
       if (action === 'retry' && !it.canRetry) return false;
-      const index = E.items.indexOf(it), dismiss = action === 'dismiss';
-      E.busy.set(id, action);
-      if (dismiss) { E.gone.add(id); E.items = E.items.filter(x => x.id !== id); }
-      E.emit();
+      E.busy.set(id, action); E.emit();
       try { await post(`/wizard/attention/${encodeURIComponent(id)}/${action}`); E.gone.add(id); E.items = E.items.filter(x => x.id !== id); return true; }
-      catch (e) { if (dismiss) { E.gone.delete(id); if (!E.items.some(x => x.id === id)) E.items.splice(index, 0, it); } return false; }
+      catch (e) { return false; }
       finally { E.busy.delete(id); E.emit(); }
     },
     retryAttention(id) { return E._attention(id, 'retry'); },
     dismissAttention(id) { return E._attention(id, 'dismiss'); },
     async dismissFailure(sid) {
       if (!sid || E.busy.has(sid)) return false;
-      const prev = E.cleared.get(sid);
-      E.busy.set(sid, 'dismiss'); E.cleared.set(sid, Date.now()); E.emit();
-      try { await post(`/wizard/session-failure/${encodeURIComponent(sid)}/dismiss`); return true; }
-      catch (e) { if (prev === undefined) E.cleared.delete(sid); else E.cleared.set(sid, prev); return false; }
+      E.busy.set(sid, 'dismiss'); E.emit();
+      try { await post(`/wizard/session-failure/${encodeURIComponent(sid)}/dismiss`); E.cleared.set(sid, Date.now()); return true; }
+      catch (e) { return false; }
       finally { E.busy.delete(sid); E.emit(); }
     },
     // A dismissed failure stays out of Errors until Wizard's list catches up (or two minutes pass).
