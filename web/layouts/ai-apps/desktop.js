@@ -1318,6 +1318,8 @@ export default function desktop(api) {
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
   /** Archive / Resolve on the open item, by key or button: then the next Ready one (the one ⌥↓ would open) */
   function nextAfterAct() {
+    // a notification stack moves to its own next one in place (core/chats.js notifAct); the list moves on after the last
+    if ((doc.querySelectorAll('.win .dchats .pane-main .ch-nstack .ch-ncard').length || 0) > 0) return;
     const ids = readyIds(), cur = curChat(); if (!cur || ids.length < 2 || !ids.includes(cur)) return;
     const nx = readyStep(ids, cur, 1); if (!nx || nx.id === cur) return;
     api.after(450, () => { if (!readyIds().includes(nx.id)) return; stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id); });

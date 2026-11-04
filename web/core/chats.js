@@ -850,6 +850,19 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
     if (a === 'app') return true; // the app opens on top; the item stays until the app (or Archive) clears it
+    // A stack stays open until it is all handled (Miguel, 4 Nov 2026): Archive / Snooze on one of several moves to the
+    // next one in place (the older neighbour, else the newer); only the last one closes the chat.
+    const stay = (a === 'done' || a === 'snooze') && noteQuiet() && n.item ? [n.item, ...noteSiblings(n.item)].sort((x, y) => noteAt(y) - noteAt(x)) : [];
+    if (stay.length > 1) {
+      const at = stay.findIndex(i => i.id === n.id), nx = stay[at + 1] || stay[at - 1];
+      const d = KIT.drafts.get('new');
+      if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+      ch(w.id).draft = '';
+      window.WosSkinHost.inboxAct('open', nx.id);
+      toast({ done: '✓', snooze: '◷' }[a], `${{ done: 'Archived', snooze: 'Snoozed' }[a]} · ${stay.length - 1} left`, 1400);
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+      return true;
+    }
     // The notification leaves the chat window; an untouched draft goes with it (typed words stay as a draft).
     const d = KIT.drafts.get('new');
     if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);

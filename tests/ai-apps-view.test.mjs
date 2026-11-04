@@ -1842,6 +1842,9 @@ test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the
   assert.match(c, /const all = \[cur, \.\.\.sib\]\.sort\(\(a, b\) => noteAt\(b\) - noteAt\(a\)\)/, 'stable order: clicking through never reshuffles');
   assert.match(c, /class="msg a ch-notif is-quiet is-open"[^`]*aria-current="true"/, 'the open one is marked');
   assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
+  assert.match(c, /if \(stay\.length > 1\) \{/, 'Archive / Snooze in a stack stays and opens the next one');
+  assert.match(c, /const at = stay\.findIndex\(i => i\.id === n\.id\), nx = stay\[at \+ 1\] \|\| stay\[at - 1\];/);
+  assert.match(read('web/layouts/ai-apps/desktop.js'), /\.ch-nstack \.ch-ncard'\)\.length \|\| 0\) > 0\) return;/, 'the list does not jump to the next Ready chat while the stack has more');
   for (const f of ['desktop.css', 'layout.css']) assert.match(read('web/layouts/ai-apps/' + f), /\.ch-tacts > \.ch-tacts-gap \{ flex: 1 0 0; height: 0; \}/, f + ': Snooze / Archive on the far side, wrapping together');
 });
 
