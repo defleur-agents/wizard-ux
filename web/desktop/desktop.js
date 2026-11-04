@@ -1764,11 +1764,26 @@
    * the window goes (however it goes) the panel is hidden and parked on <body>. */
   const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
   // From Home, Settings opens as a centred panel over Home instead of a window on a desk (Home is not a desk).
-  let settingsModal = false;
+  let settingsModal = false, settingsPromoted = false;
   const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
   scrim.addEventListener('click', () => closeSettings());
   const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
+  function showSettingsModal() {
+    if (!settingsModal) settingsFocus = document.activeElement;
+    settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
+    if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
+    scrim.hidden = false;
+  }
   function hostSettings() {
+    // A view can mount while Look is already open in a desk window. Adopt its
+    // centred-panel contract without closing, remounting or resetting Look.
+    // Only undo a promoted desk window; Settings opened over Home remains a
+    // Home modal. Rehost synchronously without hiding or resetting its page.
+    if (settingsPromoted && !settingsOver() && !homeOpen && settingsWin()) {
+      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal');
+      setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region'); scrim.hidden = true;
+    }
+    if (!settingsModal && !setEl.hidden && settingsOver()) { settingsPromoted = true; showSettingsModal(); }
     if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
     if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
@@ -1784,6 +1799,10 @@
   let voiceMenuBack = () => false;  // set once the one-mic menu exists
   // A layout that has no Home to show Settings over (html[data-settings-over]) keeps it the centred panel everywhere.
   const settingsOver = () => document.documentElement.hasAttribute('data-settings-over');
+  // Only this view contract can move an already-open Settings host. Observe it
+  // directly: an otherwise idle view need not cause a shell render after mount.
+  const settingsHostObserver = new MutationObserver(() => hostSettings());
+  settingsHostObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-settings-over'] });
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
@@ -1791,10 +1810,7 @@
     // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
     // A layout may ask for it over the page everywhere (settingsOver: the AI apps view, like Claude's settings modal).
     if (homeOpen || settingsOver()) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
-      if (!settingsModal) settingsFocus = document.activeElement;
-      settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-      if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
-      scrim.hidden = false;
+      showSettingsModal();
     } else if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
@@ -1812,6 +1828,9 @@
     if (settingsModal) {
       settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
       scrim.hidden = true; setEl.hidden = true;
+      // Promotion replaces that window's presentation, not an extra modal over
+      // it. Dismiss once; do not resurrect the old narrow Settings underneath.
+      if (settingsPromoted) { settingsPromoted = false; const w = settingsWin(); if (w) closeWin(w.id); }
       if (settingsWin()) hostSettings();  // back into its desk window (shown there again)
       if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
       window.WosScenery?.update(); return;

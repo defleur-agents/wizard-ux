@@ -29,13 +29,13 @@
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
-    // Miguel's miguel/ai-apps tweak wears it (phone only for now): the ChatGPT / Claude / Perplexity phone layout, a top
-    // bar, a left drawer (apps, then the chats) and the chat with its composer as the main screen.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Like the AI chat apps: a top bar, a left drawer with your apps and chats, the chat in the middle (phone)', css: true, js: true }),
+    // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
+    // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
-  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
+  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -1729,12 +1729,19 @@
     try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
     // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
     if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
-    // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
+    // ?layout=<id> only tries layouts supported by this shell. An unsupported link is ignored,
+    // so it cannot overwrite another valid local choice. This runs before paint/CSS and attach/import.
     try {
       const q = new URLSearchParams(location.search).get('layout');
       if (q === 'classic') localStorage.removeItem(LAYOUT_KEY); else if (layoutOf(q)) localStorage.setItem(LAYOUT_KEY, q);
     } catch (_) {}
-    try { const l = localStorage.getItem(LAYOUT_KEY); if (layoutOf(l)) { layoutId = l; paintLayout(l); } } catch (_) {}
+    try {
+      const l = localStorage.getItem(LAYOUT_KEY), known = LAYOUTS.find(x => x.id === l);
+      // wos.layout is a device-local materialized hint, not the per-shell shared choice.
+      // Drop only a known unsupported hint; never touch experience/views, skin, mix or unknown keys.
+      if (known?.shells && !known.shells.includes(env().shell)) localStorage.removeItem(LAYOUT_KEY);
+      else if (layoutOf(l)) { layoutId = l; paintLayout(l); }
+    } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = host;
