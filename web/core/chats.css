@@ -171,12 +171,17 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .steps summary { list-style: none; cursor: pointer; padding: 4px 2px; display: flex; gap: 6px; align-items: center; }
 .steps summary::-webkit-details-marker { display: none; }
 .steps.live summary { color: var(--cyan); }
-/* Reply summary (--wos-reply-summary: on): the reply's plain-words ask first, the full reply folded under Details. */
-.msg.a .rsum { margin: 0 0 6px; font-weight: 600; }
-.msg.a .rdet > summary { list-style: none; cursor: pointer; padding: 4px 0; color: var(--ink-3); font-size: var(--wz-text-sm); }
-.msg.a .rdet > summary::-webkit-details-marker { display: none; }
-.msg.a .rdet > summary::before { content: '▸ '; }
-.msg.a .rdet[open] > summary::before { content: '▾ '; }
+/* Reply summary (--wos-reply-summary: on): the short answer is one tappable block; tapping it shows the full reply in
+ * its place, and Show less folds it back. */
+.msg.a .rsum { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--glass, transparent); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.msg.a .rsum:hover { border-color: var(--line-2); }
+.msg.a .rsum:focus-visible, .msg.a .rless:focus-visible { outline: 2px solid var(--violet-2); outline-offset: 2px; }
+.msg.a .rsum-t { flex: 1; min-width: 0; }
+.msg.a .rsum-chev { flex: none; width: 16px; height: 16px; margin-top: 3px; fill: none; stroke: var(--ink-3); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.msg.a .rsum[hidden], .msg.a .rdet[hidden] { display: none; }
+.msg.a .rless { display: flex; align-items: center; gap: 4px; margin: 0 0 4px auto; padding: 2px 4px; border: 0; background: none; color: var(--ink-3); font: inherit; font-size: var(--wz-text-sm); cursor: pointer; }
+.msg.a .rless .rsum-chev { width: 14px; height: 14px; margin: 0; transform: rotate(180deg); }
 .note-line { margin: 4px 0 4px 16px; padding-left: 10px; border-left: 1px solid var(--line-2); font-size: 13px; color: var(--ink-3); }
 .note-line p { margin: 0; }
 .dots { display: inline-flex; gap: 3px; } .dots b { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: typing 1.2s infinite; }

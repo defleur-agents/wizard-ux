@@ -823,6 +823,15 @@ window.WizCore.chats = function createChats(H) {
   const summaryOn = () => { try { return getComputedStyle(document.documentElement).getPropertyValue('--wos-reply-summary').trim() === 'on'; } catch (_) { return false; } };
   const SUMMARY_WORDS = 120;
   const summaryOf = a => a && a.ask && !a.failed && a.final !== false && summaryOn() && String(a.plainText ?? a.text ?? '').split(/\s+/).filter(Boolean).length > SUMMARY_WORDS ? a.ask : '';
+  // The short answer is the toggle: tap it and the full reply takes its place; Show less folds it back. Collapsed unless a
+  // tweak asked the skin host for expanded (api.replies.summaryStart('expanded')). A tap on one reply wins over that default.
+  const summaryStartsOpen = () => window.WosSkinHost?.replySummaryStart === 'expanded';
+  const CHEV_SVG = '<svg class="rsum-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+  const setSummaryOpen = (msg, open) => {
+    msg.classList.toggle('rsum-open', open);
+    const lead = msg.querySelector('.bub > .rsum'), full = msg.querySelector('.bub > .rdet');
+    if (lead) lead.hidden = open; if (full) full.hidden = !open;
+  };
   const ourSkin = () => OUR_SKINS.includes(document.documentElement.dataset.skin || '');
   // A tweak asked the skin host for Snooze = lowest priority, bottom of Ready (api.nav.snoozeOrder('last'); docs/snooze-last.md).
   const snoozeLast = () => window.WosSkinHost?.snoozeOrder === 'last';
@@ -1424,9 +1433,11 @@ window.WizCore.chats = function createChats(H) {
         placed.add(image.id);
         return mediaBlock(c, [image]); // same thumbnail, gallery and viewer as bottom attachments
       }) : '';
-      const lead = summaryOf(tn.a);
-      const shown = lead ? `<p class="rsum" data-reply-summary>${esc(lead)}</p><details class="rdet" data-reply-details="${esc(String(bAt))}"><summary>Details</summary>${body}</details>` : body;
-      h += `<div class="msg a${lead ? ' has-rsum' : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      const lead = summaryOf(tn.a), rk = esc(String(bAt));
+      const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
+      const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(lead)}</span>${CHEV_SVG}</button>`
+        + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button>${body}</div>` : body;
+      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
     }
     return h;
@@ -1998,7 +2009,6 @@ window.WizCore.chats = function createChats(H) {
     const keepImgs = keepLoadedImages(el);
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
-    const openDetails = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-reply-details][open]')].map(e => e.dataset.replyDetails)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
@@ -2022,8 +2032,6 @@ window.WizCore.chats = function createChats(H) {
       restoreSheet(el, keepSheet);
     }
     for (const detail of el.querySelectorAll('[data-run-original]')) if (detail.open !== openContexts.has(detail.dataset.runOriginal)) detail.open = openContexts.has(detail.dataset.runOriginal);
-    // An opened reply's Details stays open across live repaints of the same thread.
-    for (const detail of el.querySelectorAll('[data-reply-details]')) if (detail.open !== openDetails.has(detail.dataset.replyDetails)) detail.open = openDetails.has(detail.dataset.replyDetails);
     if (!morphed) keepImgs(el);
     el.dataset.draftFor = dkey; c.draft = draft; c.draftFor = dkey;
     el.dataset.notificationId = NV?.id || '';
@@ -2879,6 +2887,12 @@ window.WizCore.chats = function createChats(H) {
     const ca = e.target.closest('[data-chact]'); if (ca && w.thread) { threadAct(id, w.thread, ca.dataset.chact); return true; }
     if (e.target.closest('[data-chstop]')) { const s = LIVE.session(w.thread); if (s && LIVE.cancelSend) { e.target.closest('[data-chstop]').disabled = true; stopPendingSend(w, w.thread, s.runId || ''); } else if (s?.runId) { e.target.closest('[data-chstop]').disabled = true; toast('■', 'Stopping…', 1400); LIVE.stop(s.runId).catch(() => { toast('!', 'Couldn’t stop · try again', 2600); renderThreadNow(w); }); } return true; }
     const apb = e.target.closest('[data-approve]'); if (apb) { chooseApproval(id, apb.dataset.approve, apb.dataset.controlKey, apb.closest('.appr')?.querySelector('[data-clarify-answer]')?.value); return true; }
+    // Short answer ⇄ full reply. Only its own two buttons toggle, so links and text selection in the reply never do.
+    // The choice is kept per reply (ch(id).rsum), so live repaints keep it.
+    const rsb = e.target.closest('[data-reply-summary]');
+    if (rsb) { const msg = rsb.closest('.msg.a.has-rsum'); if (!msg) return true; const open = !msg.classList.contains('rsum-open'), c = ch(id);
+      (c.rsum = c.rsum || new Map()).set(rsb.dataset.replySummary, open); setSummaryOpen(msg, open);
+      if (e.detail === 0) msg.querySelector(open ? '.rless' : '.bub > .rsum')?.focus({ preventScroll: true }); return true; }
     if (e.target.closest('[data-chearlier]')) { const c = ch(id), el = elOf(id); c.show = (c.show || PAGE) + PAGE; renderThread(w, el, true); return true; }
     const mdl = e.target.closest('[data-mdl]'); if (mdl) { e.preventDefault(); const m = ch(id).media?.[+mdl.dataset.mdl]; if (m) KIT.download(m); return true; }
     const mi = e.target.closest('[data-mi]'); if (mi) { e.preventDefault(); openMedia(id, +mi.dataset.mi); return true; }

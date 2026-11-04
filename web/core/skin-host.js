@@ -350,7 +350,7 @@
 
   /* Tweaks extend the existing package host: same guards, listeners, frames and disposal. */
   const homeHtml = new WeakMap();   // Home element -> the markup paintHome last wrote
-  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
+  const tweaks = new Map(), interceptors = new Map(), snoozeLast = new Set(), summaryOpen = new Set(), inboxThreads = new Map(), overlays = []; // inboxThreads: package -> {act} // snoozeLast: packages holding snoozeOrder('last')
   let tweakSeq = 0, slotContract = null;
   const safeTweakId = id => /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9-]*$/.test(id);
   const tweakUrl = (id, file) => stamp(new URL(`tweaks/${id}/${file}`, document.baseURI).href);
@@ -409,6 +409,16 @@
     }
     if (caps.has('layout')) {
       Object.assign(api, { listen: base.listen, frame: base.frame, gesture: base.gesture });
+      // Long replies led by their short answer (--wos-reply-summary) start collapsed; a package may ask for them to
+      // start expanded (chats.js reads host.replySummaryStart). Released on teardown.
+      api.replies = Object.freeze({ summaryStart(mode) {
+        if (a.dead) return;
+        if (mode !== 'expanded' && mode !== 'collapsed') throw new Error('Unknown start');
+        const had = summaryOpen.has(a.id);
+        if (mode === 'expanded') summaryOpen.add(a.id); else summaryOpen.delete(a.id);
+        if (!had && mode === 'expanded') a.offs.add(() => { if (summaryOpen.delete(a.id)) window.dispatchEvent?.(new Event('wos:prefs')); });
+        if (had !== summaryOpen.has(a.id)) window.dispatchEvent?.(new Event('wos:prefs'));
+      } });
       // Borrow a built-in layout through the same host; disposal invalidates the handle.
       api.layout = Object.freeze({ foundation(id) {
         if (a.dead) return () => {};
@@ -544,11 +554,11 @@
     // done, or answer it in a new chat (the shell's context-draft path; `words` sends at once). No fetch crosses this
     // boundary and every handle dies with the package.
     // Settings sections: a trusted package fills a System page of Settings (Your network, AI, Network & security,
-    // Storage & backups) with its own live node, and can open Settings at one of those pages. Released on teardown.
+    // Storage & backups) or Chats & app screens with its own live node, and can open Settings at one of those pages. Released on teardown.
     if (caps.has('settings')) api.settings = Object.freeze({
       section(id, page, node, opts = {}) {
         if (!trusted || a.dead) throw new Error('Trusted settings required');
-        if (!['overview', 'ai', 'network', 'storage'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
+        if (!['overview', 'ai', 'network', 'storage', 'chats'].includes(page) || !node || typeof node.append !== 'function') throw new Error('Invalid settings section');
         const W = window.WosSettings; if (!W?.register) return () => {};
         const fid = ('tweak-' + a.id + '-' + id).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 80);
         const subtitle = typeof opts.subtitle === 'function' ? guard(a, 'settings.subtitle', opts.subtitle) : null;
@@ -558,7 +568,7 @@
         let done = false; const release = () => { if (!done) { done = true; off(); node.remove?.(); } };
         a.offs.add(release); return release;
       },
-      open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage'].includes(page)) shell?.openSettings?.(page); },
+      open: page => { if (!a.dead && ['overview', 'ai', 'network', 'storage', 'chats'].includes(page)) shell?.openSettings?.(page); },
       refresh: () => { if (!a.dead) window.WosSettings?.refresh?.(); },
     });
     if (caps.has('inbox')) api.inbox = Object.freeze({
@@ -649,6 +659,8 @@
     get tweakState() { return [...tweaks.keys()]; },
     /* live.js / chats.js: 'last' while a live tweak holds api.nav.snoozeOrder('last'); otherwise 'default' (stock). */
     get snoozeOrder() { return snoozeLast.size ? 'last' : 'default'; },
+    /* chats.js: 'expanded' while a live package holds api.replies.summaryStart('expanded'); otherwise 'collapsed'. */
+    get replySummaryStart() { return summaryOpen.size ? 'expanded' : 'collapsed'; },
     /* chats.js: a live package shows notifications as threads; inboxAct runs its Done / Snooze / Restore. */
     get inboxThreads() { return inboxThreads.size > 0; },
     get inboxList() { for (const h of inboxThreads.values()) if (h.list) return true; return false; },
