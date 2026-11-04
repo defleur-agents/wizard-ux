@@ -18,7 +18,14 @@
     "wizard/orb-radial",
     "wizard/new-send-list",
     "miguel/no-desk-close",
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/group-by-day",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ],
   "defaults": [
     "wizard/unified-inbox"

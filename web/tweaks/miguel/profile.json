@@ -8,10 +8,22 @@
     "miguel/snooze-someday",
     "miguel/machines-home",
     "miguel/no-desk-close",
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/group-by-day",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ],
   "flags": {},
   "off": [
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/now-playing",
+    "miguel/calm-offline",
+    "miguel/orb-shell",
+    "miguel/apps-home",
+    "miguel/ai-apps"
   ]
 }
