@@ -48,6 +48,7 @@ One owner per capability. [Gate](app-reuse-gate.md).
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) | local menus |
 | App setup | `WosAppSetup` (`app-setup.js`) | app-local setup |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` | duplicate Chats/Focus |
+| Chats lifecycle | `WizCore.chats` (`chats.js`): `forget` cancels owned timers; transcript completions/retries require registered state identity | stale disposed paints |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host | domain code in core |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage | skin-local duplicate |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) | whole-view `innerHTML` on every live tick |
