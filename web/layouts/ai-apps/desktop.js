@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -549,14 +549,16 @@ export default function desktop(api) {
   }
 
   /* ---------- a chat row: click opens it; ⋯ (on hover) or a right click opens its menu ---------- */
-  function chatRow(s, cur) {
+  function chatRow(s, cur, inProject = false) {
     const wrap = el('div', 'aad-rw' + (s.id === cur ? ' is-cur' : ''), { 'data-sid': s.id, 'data-kind': s.kind });
     if (khMarks.has(s.id)) wrap.dataset.aadKh = khMarks.get(s.id);   // (round 21: a repaint while ⌥ is held keeps the room for its keycap)
     const b = el('button', 'aad-row aad-chat', { type: 'button', ...(s.id === cur ? { 'aria-current': 'page' } : {}) });
     // a notification (round 5; round 20 item 6, Miguel: it stands out, subtly, in amber): a small amber bell before its
     // title in normal text; its unread dot amber too (a chat's stays the accent)
     if (s.note) { wrap.dataset.note = ''; b.append(icon('bell', 'aad-ico aad-bell')); }
-    b.append(el('span', 'aad-row-t', { text: s.title }));
+    // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
+    const t0 = inProject ? titleInProject(s) : s.title;
+    b.append(el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) }));
     // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
@@ -701,7 +703,7 @@ export default function desktop(api) {
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
             const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
             gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
-            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread)));
+            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
           }
         } else if (on) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
@@ -831,7 +833,7 @@ export default function desktop(api) {
     const items = rows.map(r => {
       const it = el('button', 'aad-pop-i aad-fly-i' + (r.id === cur ? ' is-cur' : ''), { type: 'button', role: 'menuitem', 'data-sid': r.id, ...(r.id === cur ? { 'aria-current': 'true' } : {}) });
       if (r.note) { it.dataset.note = ''; it.append(icon('bell', 'aad-ico aad-bell')); }   // (round 20 item 6: the amber bell here too)
-      it.append(el('span', 'aad-fly-t', { text: r.title || 'Untitled' }), el('span', 'aad-fly-at', { text: shortTime(r.at, now) }));
+      it.append(el('span', 'aad-fly-t', { text: (key.startsWith('proj:') ? titleInProject(r) : r.title) || 'Untitled' }), el('span', 'aad-fly-at', { text: shortTime(r.at, now) }));
       api.listen(it, 'click', () => { const k = fly?.key || key; closeFly(); openChat(r.id, k); });
       return it;
     });

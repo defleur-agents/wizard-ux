@@ -2279,6 +2279,10 @@ test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one 
   w.q('.aad-sortmenu [data-group="project"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupBy, 'project'); assert.equal(store.groupReady, false);
   assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['project:Messenger', 'project:Wizard OS']);
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-row-t').map(n => n.textContent).sort(), ['A', 'B'], 'round 26: rows drop the project the header already says');
+  assert.equal(w.q('#aad-sec-ready .aad-row-t').title.includes(' · '), true, 'the full title stays as its tip');
+  assert.equal(P.titleInProject({ title: 'Wizard OS · Hotkeys' }), 'Hotkeys'); assert.equal(P.titleInProject({ title: 'No project here' }), 'No project here');
+  assert.equal(P.titleInProject({ title: 'Mail · x', note: true }), 'Mail · x', 'notifications keep their title');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rk').map(n => n.dataset.k).filter(k => k.startsWith('proj:')).sort(), ['proj:Messenger', 'proj:Wizard OS'], 'folded: one rail row per project');
   assert.ok(!w.qa('.aad-rk').some(n => n.dataset.k === 'ready'), 'no Ready total over them');
