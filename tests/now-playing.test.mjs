@@ -20,7 +20,7 @@ function rig() {
   }
   function fire(el, type) {
     for (const fn of [...(el.h.get(type) || [])]) fn({ type, target: el, currentTarget: el });
-    if (el.isConnected) for (const fn of [...(el.ownerDocument.h.get(type) || [])]) fn({ type, target: el });
+    if (el.isConnected && el.ownerDocument) for (const fn of [...(el.ownerDocument.h.get(type) || [])]) fn({ type, target: el });
   }
   class MO { constructor(fn) { this.fn = fn; } observe() { rig.observing++; } disconnect() { rig.observing--; } }
   rig.observing = 0;
@@ -68,6 +68,15 @@ test('Now playing leaves out what makes no sound, drops closed apps, and puts ev
   a.f.isConnected = false; M._test.prune(); await tick(); assert.equal(last.length, 0, 'closing the app drops it at once');
   off();
   assert.equal(a.proto.play, orig, 'prototype restored'); assert.equal([...a.doc.h.values()].reduce((n, s) => n + s.size, 0), 0, 'document listeners removed');
+});
+
+test('frame reload after teardown cannot rearm observation; re-enable still observes', async () => {
+  const { M, frame, fire } = rig(), a = frame('music'), original = a.proto.play;
+  const off = M.watch(() => {}); off();
+  fire(a.f, 'load'); await tick();
+  assert.equal(a.proto.play, original); assert.equal(M._test.docs, 0); assert.equal(M._test.protos, 0);
+  const again = M.watch(() => {}); assert.notEqual(a.proto.play, original); again();
+  assert.equal(a.proto.play, original);
 });
 
 test('api.media: layouts and trusted tweaks that ask for it; both shells wire the app names and the watcher', () => {

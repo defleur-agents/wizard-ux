@@ -24,7 +24,7 @@
   const active = new Set(), passive = new Set();
   const recs = new Map();          // key -> { key, el, frame, appId, kind, at, stopAt, gone }
   const keyOf = new WeakMap();     // element -> key
-  const frameOn = new WeakMap();   // frame -> load handler
+  const frameOn = new Map();   // frame -> load handler
   let docs = [], protos = [];      // [{ doc, fn }], [{ P, orig, ours }] while armed
   let mo = null, seq = 0, order = 0, queued = false, sweep = 0, lastSig = '';
   const isDoc = typeof document !== 'undefined';
@@ -77,7 +77,7 @@
     try { for (const el of d.querySelectorAll('audio, video')) if (playing(el)) note(track(frame, el), 'play'); } catch (_) {}
   }
   function armFrame(f) {
-    if (!f || f.tagName !== 'IFRAME' || !f.dataset?.ownApp) return;
+    if (!active.size || !f || f.tagName !== 'IFRAME' || !f.dataset?.ownApp) return;
     if (!frameOn.has(f)) { const on = () => { prune(); armDoc(f); }; frameOn.set(f, on); f.addEventListener('load', on); }
     armDoc(f);
   }
@@ -109,6 +109,8 @@
     for (const x of docs) try { for (const t of EVENTS) x.doc.removeEventListener(t, x.fn, true); } catch (_) {}
     for (const x of protos) try { if (x.P.play === x.ours) x.P.play = x.orig; } catch (_) {}
     for (const r of recs.values()) if (!r.el.isConnected) for (const t of EVENTS) r.el.removeEventListener(t, onEl, true);
+    for (const [f, fn] of frameOn) f.removeEventListener('load', fn);
+    frameOn.clear();
     docs = []; protos = []; recs.clear(); clearTimeout(sweep); sweep = 0; lastSig = '';
   }
 
