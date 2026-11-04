@@ -54,7 +54,8 @@ for (const [label, saved] of [
     const f = await device(saved);
     assert.equal(f.on(), false);
     assert.equal(f.saved().preset, 'none', 'legacy profile really flattened');
-    assert.equal(f.saved().mix['miguel/hidden-pin'], true, 'active profile behavior preserved');
+    assert.equal(f.saved().mix['miguel/no-desk-close'], true, 'active profile behavior preserved');
+    assert.notEqual(f.saved().mix['miguel/hidden-pin'], true, 'retired Pins tweak is not restored');
     assert.notEqual(f.saved().mix['miguel/swipe-strip'], true, 'retired tweak is not restored');
     if (saved?.off.miguel.includes('miguel/send-and-go')) {
       assert.notEqual(f.saved().mix['miguel/send-and-go'], true, 'unrelated explicit off preserved');

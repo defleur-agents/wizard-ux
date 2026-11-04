@@ -216,7 +216,26 @@ window.WizCore.chats = function createChats(H) {
   const KIT = window.WosChat;
   const INC = window.WizCore.incognitoChats?.({ win: id => W[id], elOf: id => elOf(id), paint: id => { const w = W[id]; if (w) renderChats(w); }, grow: growTa, toast, kit: KIT });
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
-  const PIN = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
+  const PIN0 = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
+  // Pins can be turned off in the Filter sheet (View › Pins): no Pinned section, no Pin in the menu, no row pin. Saved
+  // pins are kept, so turning Pins back on restores them.
+  const PINS_KEY = 'wos.chats.pins.v1';
+  const pinsOn = () => { try { return localStorage.getItem(PINS_KEY) !== '0'; } catch (e) { return true; } };
+  // The retired miguel/hidden-pin tweak becomes this setting once: a device that wore it starts with Pins off.
+  try {
+    if (localStorage.getItem(PINS_KEY) == null) {
+      const v = JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}'), id = 'miguel/hidden-pin';
+      const chosen = localStorage.getItem('wos.skin'), S = window.WosSkin;
+      const family = chosen && (S?.families || []).find(f => f.id === S.familyOf?.(chosen));
+      const owner = typeof v.preset === 'string' ? v.preset : family?.tweaks;
+      const offs = Array.isArray(v.carry) ? v.carry : Array.isArray(v.off?.miguel) ? v.off.miguel : [];
+      const hidden = v.mix?.[id] === true || (owner === 'miguel' && v.mix?.[id] !== false && !offs.includes(id));
+      if (hidden) localStorage.setItem(PINS_KEY, '0');
+    }
+  } catch (e) {}
+  const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
+  paintPins();
+  const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
   const BOOM = () => window.WosBoomerang || null;
   const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
   const TOPIC = window.WosTopicEmoji;
@@ -445,7 +464,7 @@ window.WizCore.chats = function createChats(H) {
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button></div>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -797,7 +816,7 @@ window.WizCore.chats = function createChats(H) {
       <h5>Status</h5><div class="ch-fopts">${statusEntries().map(([k, f]) => opt('status', k, f.label, c.filter === k)).join('')}</div>
       ${focusSection(w)}
       ${LIVE.groupSwitch ? `<h5>Layout</h5><div class="ch-fopts"><button type="button" class="ch-fopt${byStatus() ? '' : ' on'}" data-chgroupday aria-pressed="${!byStatus()}">Group by day${byStatus() ? '' : '<b>✓</b>'}</button></div>` : `<h5>Layout</h5><div class="ch-fopts">${[['day', 'By day'], ['status', 'By status']].map(([v, l]) => { const on = (byStatus() ? 'status' : 'day') === v; return `<button type="button" class="ch-fopt${on ? ' on' : ''}" data-chlayout="${v}">${l}${on ? '<b>✓</b>' : ''}</button>`; }).join('')}</div>`}
-      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button></div>
+      <h5>View</h5><div class="ch-fopts"><button type="button" class="ch-fopt${compactOn() ? ' on' : ''}" data-chcompact>Compact · titles only${compactOn() ? '<b>✓</b>' : ''}</button><button type="button" class="ch-fopt${pinsOn() ? ' on' : ''}" data-chpins>Pins${pinsOn() ? '<b>✓</b>' : ''}</button></div>
       </div></div>`;
   }
   function focusLabel(w) { const f = focusOf(w); return !f ? 'All' : f.kind === 'agent' ? agentRec(f.key).label : spaces().find(s => s.id === f.key)?.name || 'All'; }
@@ -1507,7 +1526,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="${nid ? 'Alert' : 'Thread'} actions"><div class="ch-sheet-b"><div class="ch-sheet-t">${esc(nid ? notePlain(s.title) || 'Alert' : s.title)}</div>
       ${nid ? '<button type="button" data-rsopen><svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg>Open</button>' : ''}
       ${nid ? '' : `<button type="button" data-rsrename>${RENAME_SVG}Rename</button>
-      <button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>
+      ${PIN.on?.() !== false ? `<button type="button" data-part="pin-action" data-rspin>${PIN_SVG}${PIN.has(sid) ? 'Unpin' : 'Pin'}</button>` : ''}
       <button type="button" data-rsspacepicker>${PIN_SVG}${spacesOf(sid).length ? `Move to ${SPACE.one}…` : `Add to a ${SPACE.one}…`}</button>
       ${spacesOf(sid).map(space => `<button type="button" data-rsspace="${esc(space.id)}" data-add="false">${PIN_SVG}Remove from ${SPACE.one} · ${esc(space.name)}</button>`).join('')}
       ${topicOn() ? `<button type="button" data-rsemo><span class="ch-sheet-emoji">${TOPIC.get(`thread:${sid}`, [subjectOf(s), s.title, s.preview].filter(Boolean).join(' '))}</span>Choose emoji</button>` : ''}`}
@@ -2857,6 +2876,7 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chfclear]')) { const c = ch(id); c.sheet = false; c.coach = false; clearAll(w); return true; }
     if (e.target.closest('[data-chgroupday]')) { LIVE.chatLayout = byStatus() ? 'day' : 'status'; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const lay = e.target.closest('[data-chlayout]'); if (lay) { LIVE.chatLayout = lay.dataset.chlayout; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
+    if (e.target.closest('[data-chpins]')) { const on = !pinsOn(); try { localStorage.setItem(PINS_KEY, on ? '1' : '0'); } catch (err) {} paintPins(); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     if (e.target.closest('[data-chcompact]')) { const on = !compactOn(); try { localStorage.setItem(COMPACT_KEY, on ? '1' : '0'); } catch (err) {} LIVE.putPrefs?.({ compact: on }); for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } return; }
     const fo = e.target.closest('[data-chfopt]'); if (fo) { const c = ch(id), [k, ...r] = fo.dataset.chfopt.split(':'), key = r.join(':'); c.sheet = false; c.coach = false;
       if (k === 'status') { c.filter = c.filter === key ? '' : key; c.filterFrom = null; }
