@@ -1677,7 +1677,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   assert.equal(needs.querySelector('.aad-rk-p').textContent, '1/3', 'its place, under the word');
   w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));   // One list
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
-  assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), false);
+  assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), true, 'switching grouping keeps the current chat marked on the visible Ready row');
   assert.equal(click('ready'), 'n3', 'another item: its first chat (Ready = the whole grouped list)');
   assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'n2');
   assert.equal(click('snoozed'), 's1'); assert.equal(w.q('.aad-rk[data-k="snoozed"] .aad-rk-p'), null, 'one chat: no 1/1');
@@ -2197,3 +2197,13 @@ test('round 24c (Miguel, 4 Nov 2026: "just use project"): Group By project: one 
   assert.ok(!w.qa('.aad-rk').some(n => n.dataset.k === 'ready'), 'no Ready total over them');
   store.groupBy = 'subject'; assert.equal(P.groupMode('subject'), 'none');
 });
+
+test('a remembered rail key cannot hide the current chat marker after switching grouping', async () => {
+ const P=await import(new URL('web/layouts/ai-apps/parts.js',root).href);
+ const sessions={ready:[{id:'qa-project-current',title:'Wizard OS · Rail',state:'needs'}]};
+ assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','projects').key,'proj:Wizard OS');
+ assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','list').key,'ready');
+ assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
+ assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
+});
+

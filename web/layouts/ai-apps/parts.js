@@ -293,8 +293,13 @@ export function railRows(s, key, order, mode) {
 export function railActive(s, cur, last, order, mode) {
   if (!cur) return null;
   const at = key => { const ids = railRows(s, key, order, mode === 'projects' ? 'project' : undefined).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
-  if (last) { const a = at(last); if (a) return a; }
-  // round 24b (Miguel, 4 Nov 2026: on the folded rail too): each project alone, as 'groups' does statuses
+  // A remembered Ready/status/project key must not win after its row disappears on a grouping switch.
+  const common = last === 'working' || last === 'snoozed';
+  const visible = mode === 'projects' ? common || String(last).startsWith('proj:')
+    : mode === 'groups' ? last !== 'ready' && !String(last).startsWith('proj:')
+    : mode === 'list' ? common || last === 'ready' : true;
+  if (last && visible) { const a = at(last); if (a) return a; }
+  // round 24b (Miguel, 4 Nov 2026: By project on the folded rail too): each project alone, as 'groups' does statuses
   if (mode === 'projects') { const sg = projectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
   // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
   const g = mode === 'list' ? null : stateGroups(s?.ready || []).find(x => (mode === 'groups' || x.state !== 'none') && x.rows.some(r => r.id === cur));
