@@ -8,8 +8,9 @@
  * Existing designed identities beat package pictures, including cached logos and refreshed metadata.
  * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
- * silhouette, then a safe package logo, then a disc with the app's initial cut out, on a colour picked from its id. Every mark is a mask
- * in the same box, so a fallback is never bigger, squarer or more opaque than a designed sigil.
+ * silhouette, then the house glyph that matches what its id and name say (Mail → mail, Home Assistant → home), else
+ * the plain app mark, on a colour picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
+ * fallback is never bigger, squarer or more opaque than a designed sigil.
  * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
  */
@@ -38,24 +39,50 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
-    // James: restore already-built icons, not one-off exceptions or new artwork.
-    // A package picture is a fallback only; it cannot erase a glyph, house/alias,
-    // custom mask or product brand, nor bypass the skin's shared hover treatment.
-    const s = sigilOf(a), logo = s.glyph || s.img || brand(a) ? '' : logoOf(a);
-    return logo ? { ...s, logo } : s;
+    // Canonical identities win; safe package pictures remain the fallback before a guessed house mark.
+    const s = sigilOf(a), logo = (!s.guessed && s.glyph) || s.img || brand(a) ? '' : logoOf(a);
+    return logo ? { ...s, glyph: '', logo } : s;
   }
   function sigilOf(a) {
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
-    // Package file metadata must not replace the canonical house identity either.
+    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
     if (Object.prototype.hasOwnProperty.call(HOUSE, a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
-    return { glyph: '', color: col || pick(a.id || a.name), letter: String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?', ...(img ? { img } : {}) };
+    const letter = String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?';
+    if (img) return { glyph: '', color: col || pick(a.id || a.name), letter, img };
+    // Never a bare letter: the house glyph that says what the app does, read from its id and name ('wizard-mail',
+    // 'Home Assistant', 'Apple Health'), else the plain app mark. `letter` stays for callers that want an initial.
+    return { glyph: guess(a), color: col || pick(a.id || a.name), letter, guessed: true };
+  }
+  // Specific before general: the first row with a word in the app's id or name that starts with one of its stems wins.
+  const GUESS = [
+    ['mail', 'mail|gmail|email|outlook|microsoft|google|inbox'], ['calendar', 'calendar|schedul|agenda|booking'],
+    ['social', 'contact|people|crm|friend|twitter|social|reddit|feed'], ['profile', 'profile|account|identity'],
+    ['cloud', 'backup|restore|snapshot|cloud|drive|storage'], ['home', 'home|house|assistant|light|thermostat'],
+    ['heart', 'health|fit|whoop|oura|garmin|polar|coros|withings|sleep|workout|heart|monitor|status'],
+    ['music', 'music|spotify|youtube|song|radio|audio|podcast'], ['card', 'card|credit'],
+    ['dollar', 'money|bank|financ|budget|monarch|simplefin|plaid|teller|wallet|pay|invoice|tax'],
+    ['cine', 'movie|film|cine|netflix|watch'], ['clip', 'video|clip|edit'], ['image', 'camera|photo|image|gallery|picture'],
+    ['chats', 'chat|message|messenger|sms|telegram|whatsapp|line(?: |$)|discord|slack'], ['side', 'phone|call|dial'],
+    ['pin', 'map|grab|uber|ride|taxi|travel|trip|place|location'], ['bag', 'shop|store|market|buy|lazada|amazon|food|eat|meal|restaurant|order'],
+    ['search', 'search|find|lookup'],
+    ['globe', 'browser|chrome|safari|firefox|web|data|bright|scrap|internet'], ['notes', 'note|journal|obsidian|doc|writ'],
+    ['files', 'file|folder'], ['projects', 'board|pr(?: |$)|project|kanban|task|todo|issue|pipeline'],
+    ['console', 'command|console|terminal|shell|ssh|code|dev'], ['coffee', 'news|report|brief|morning|digest'],
+    ['bell', 'notif|alert|remind'], ['secret', 'secret|password|vault|key'], ['wave', 'record|voice|transcri|speech'],
+    ['wrench', 'setting|setup|config|troubleshoot|repair|fix|tool'], ['notes', 'book|read|learn|librar'],
+    ['spark', 'ai(?: |$)|gpt|claude|llm|model|agent|bot'],
+  ].map(([g, stems]) => [g, new RegExp(`(?:^| )(?:${stems})`)]);
+  function guess(a) {
+    const words = `${a.id || ''} ${a.name || ''}`.toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    const row = GUESS.find(([g, re]) => NAMES.has(g) && re.test(words));
+    return row ? row[0] : 'apps';
   }
   // Fallback marks are masks too, never painted text or an <img>: whatever a skin paints into `.sgi` (a gradient,
   // its ink colour, a filter) lands only inside the shape, at the same box, so no app can show up as a square slab.
-  //   letter → a disc with the app's initial cut out of it (house style: one silhouette, one bite)
+  //   letter → a disc with an initial cut out of it, only for named() callers passing a character (apps never get one)
   //   img    → the app's own same-origin icon file, used as the silhouette
   const LETTER = ch => "url('data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><mask id="m"><rect width="512" height="512" fill="#fff"/><text x="256" y="256" dy=".35em" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-weight="800" font-size="196" fill="#000">${esc(ch)}</text></mask><circle cx="256" cy="256" r="164" mask="url(#m)"/></svg>`).replace(/'/g, '%27') + "')";
   function named(glyph, color) {
@@ -70,10 +97,10 @@
     a = a || {};
     const s = of(a), b = brand(a);
     if (s.logo) return `<i class="sglogo" aria-hidden="true" style="--logo:url('${esc(s.logo)}')"></i>`;
-    if (b) return (s.glyph ? named(s.glyph) : named(s.letter)).replace('class="sgi', `class="sgi${b}`);
+    if (b) return named(s.glyph || 'apps').replace('class="sgi', `class="sgi${b}`);
     if (s.glyph) return named(s.glyph);
     if (s.img) return `<i class="sgi sgl sgimg" aria-hidden="true" style="--sg:url('${esc(s.img)}')">${esc(s.letter)}</i>`;
-    return named(s.letter);
+    return named(s.glyph || 'apps');
   }
   // A whole icon box: <tag class="cls sgt" style="--c:…">glyph extra</tag>. Apps from the registry carry
   // sgc/sgh already; anything else (a window's fallback, a command row) is worked out here.

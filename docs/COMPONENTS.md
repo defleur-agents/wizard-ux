@@ -26,7 +26,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Back in app; leave on dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates repair app URL + origin |
 | Skin/tokens/mode | `WizardApp.theme.get / onChange`, `--wz-*` roles |
 | Native Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles, Nebula fallback |
-| Native offline/connect | `ReachScreen` / `ReachPolicy` (+`TailscaleGuide`), `ConnectActivity` / `ServerSettings`; web `WizReach` |
+| Connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach` (local help/checks) |
 | Transcribe audio | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` (rechecks) |
 | Share out (people → apps → Other) | `WizardApp.share.text / file` |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
@@ -88,19 +88,20 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
 
+| Owner Look sync | `WosLookSync` (`web/core/look-sync.js`): one logical-clocked skin/tweak set per owner; seed legacy only once |
+
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
 | Need | Use |
 |---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
-| Skins, backgrounds, scenery, switches (`--wos-orb-swipe-up`, `--wos-reply-regenerate`/`-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; tweaks: `core/slots.json` incl. `home-main`+`paintHome`, `windowRefresh`, beside, inbox+list, `data.read` resources/app, `back.push`), `WosExperience` (`web/core/experience.js`), `WosMySkin` (`web/core/my-skin.js`; bad `skin.js` off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`) |
-| Skin, scenery and tweak switches | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
+| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`); `api.orb.switcher()` awaits readiness/retry; `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list, `data.read`, `back.push`; `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
 | Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) |
 | Install prompt; `hold(on, owner?)` during tours/overlays | `WizardPwaInstall` (`web/pwa-install.js`) |
-| First run (Welcome: name, AI, colour, hello; Setup app) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) |
+| First run (Welcome: name, AI, colour, import, hello; Setup) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) |
 
 ## App voice/audio
 

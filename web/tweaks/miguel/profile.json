@@ -4,15 +4,16 @@
   "version": 1,
   "skin": "obsidian",
   "tweaks": [
-    "miguel/swipe-strip",
     "miguel/send-and-go",
-    "miguel/model-pills",
-    "miguel/hidden-pin",
     "miguel/snooze-someday",
     "miguel/machines-home",
-    "miguel/arrange-download",
-    "miguel/refresh-button",
+    "miguel/no-desk-close",
+    "miguel/archive-top",
+    "miguel/group-by-day",
     "miguel/reply-summary"
   ],
-  "flags": {}
+  "flags": {},
+  "off": [
+    "miguel/archive-top"
+  ]
 }

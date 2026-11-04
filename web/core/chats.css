@@ -842,3 +842,8 @@ html[data-shell="phone"] .ch-msgs .bub table { font-size: 15px; }
 .ch-boom.due { opacity: 1; filter: drop-shadow(0 0 4px var(--violet-2)); }
 .ch-boom-ic { display: inline-block; width: 18px; font-size: 14px; line-height: 18px; text-align: center; }
 .msg.boom-flash > .bub { box-shadow: 0 0 0 2px var(--violet-2); transition: box-shadow .3s ease; }
+
+/* Pins off (Filter › View › Pins): rows reclaim the pin's room (was the miguel/hidden-pin tweak). */
+html[data-pins="off"] .ch-row-wrap > .ch-row.ch-row { padding-right: 12px; }
+html[data-pins="off"] .ch-row-wrap.diagnosed > .ch-row.ch-row { padding-right: 90px; }
+html[data-pins="off"] .ch-row-wrap .ch-row-signin { right: 10px; }
