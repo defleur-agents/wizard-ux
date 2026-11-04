@@ -113,9 +113,19 @@ const intersects = (a, b) => a.left < b.right && a.right > b.left && a.top < b.b
           assert.equal(state.badgeText, count ? (count === 8 ? '12' : '1') : '', `${skin}/${width}: authoritative count badge`);
           for (const [index, dot] of state.dots.entries()) {
             assert.equal(intersects(dot, state.handle), false, `${skin}/${width}/count-${count}: dot ${index} clears scrub handle`);
-            if (state.badge) assert.equal(intersects(dot, state.badge), false, `${skin}/${width}/count-${count}: dot ${index} clears count badge`);
+            if (state.badge) assert.equal(intersects(dot, state.badge), false, `${skin}/${width}/count-${count}: dot ${index} clears count badge (${JSON.stringify({ dot, badge: state.badge })})`);
           }
           if (count === 8) {
+            const motion = await page.evaluate(async () => {
+              const orb = document.querySelector('#orbWrap');
+              orb.dataset.mode = 'listen';
+              await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              const moons = document.querySelector('#moons');
+              const animation = getComputedStyle(moons).animationName;
+              orb.dataset.mode = 'idle';
+              return animation;
+            });
+            assert.equal(motion, 'none', `${skin}/${width}: voice mode cannot rotate safe angles over controls`);
             await page.screenshot({ path: path.join(out, `${skin}-${width}.png`), animations: 'disabled' });
           }
           report.push({ skin, width, count, dots: state.dots.length, badge: state.badgeText });

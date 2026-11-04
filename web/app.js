@@ -2059,8 +2059,8 @@
   function moonAngle(k, count) {
     if (count <= 1) return -Math.PI / 2;
     const start = Math.PI * 3 / 4;
-    const badgeStart = Math.PI * 19 / 12;
-    const badgeEnd = Math.PI * 23 / 12;
+    const badgeStart = Math.PI * 14 / 9;
+    const badgeEnd = Math.PI * 35 / 18;
     const end = Math.PI * 9 / 4;
     const firstArc = badgeStart - start;
     const safeSpan = firstArc + end - badgeEnd;
