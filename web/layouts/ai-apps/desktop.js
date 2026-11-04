@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, STATE_TAG } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -280,9 +280,11 @@ export default function desktop(api) {
    * reads as Newest here). The sidebar's own sort control shows only when 'Show sort control in sidebar' is on. */
   const readyOrder = () => groupOrder(api.sessions.order?.());
   const groupReady = () => api.storage.get('groupReady') === true;   // (round 20 item 9: off = one flat Ready)
-  let tagRows = false;
+  // round 22: the rows' times stay true ("5m" becomes "6m") without a repaint: one cheap text pass every 10 s
+  const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
+  api.after(10e3, tickTimes);
   const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
-  const setGroup = on => { api.storage.set('groupReady', !!on); paintSetting(); paintList(true); };
+  const setGroup = on => { api.storage.set('groupReady', !!on); paintSetting(); paintList(true); paintRail(true); };
   const GROUPINGS = [[true, 'By status'], [false, 'One list']];
   api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
@@ -538,8 +540,9 @@ export default function desktop(api) {
     // title in normal text; its unread dot amber too (a chat's stays the accent)
     if (s.note) { wrap.dataset.note = ''; b.append(icon('bell', 'aad-ico aad-bell')); }
     b.append(el('span', 'aad-row-t', { text: s.title }));
-    // round 20 item 9: in the flat Ready (the default) a tiny muted tag says Needs you / Your call (FYI, Done: none)
-    if (tagRows && s.kind === 'ready' && STATE_TAG[stateOf(s)]) b.append(el('span', 'aad-tag', { 'data-state': stateOf(s), text: STATE_TAG[stateOf(s)] }));
+    // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
+    // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
+    if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
@@ -666,7 +669,7 @@ export default function desktop(api) {
         if (on && k === 'ready' && rows.length && !groupReady()) {
           // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready in priority order by default (the order ⌥↓ walks), a tiny
           // muted tag on Needs you / Your call rows; 'Group Ready by status' in Settings brings the sub-headers back
-          tagRows = true; body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread))); tagRows = false;
+          body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread)));
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
           // the chosen order (item 3: group first, then the order inside each)
@@ -720,7 +723,8 @@ export default function desktop(api) {
   let railLast = '';
   // (an app in front with a chat docked beside it: that chat is the current one, so ⌥↓ / ⌥↑ step from it)
   const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || (h.app && chatThread ? (chatThread === NOTE ? stepAt : chatThread) : null) || null; };
-  const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder());
+  const railMode = () => groupReady() ? 'groups' : 'list';
+  const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder(), railMode());
   function railGo(key) {
     closeFly();
     const s = readSessions(), ids = railRows(s, key, readyOrder()).map(r => r.id); if (!ids.length) return;
@@ -747,9 +751,11 @@ export default function desktop(api) {
   }
   function paintRail(force = false) {
     if (root.dataset.aadSide !== 'rail') return;
-    const s = sessions || readSessions(), ready = s.ready || [], groups = stateGroups(ready).filter(g => g.state !== 'none'), act = railNow();
+    // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
+    // status alone (plain chats as 'Other'), no Ready total over them
+    const s = sessions || readSessions(), ready = s.ready || [], grouped = groupReady(), groups = grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
-    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, groups.map(g => g.state + g.rows.length), act]);
+    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, grouped, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (always, its count may be 0), then Ready's statuses
@@ -757,7 +763,8 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    out.push(railRow('ready', ready.length, 'Ready', '', act), ...groups.map(g => railRow('ready', g.rows.length, g.word, g.state, act)));
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));
+    else out.push(railRow('ready', ready.length, 'Ready', '', act));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
@@ -1433,7 +1440,7 @@ export default function desktop(api) {
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
     } else {
       // folded: on the rail word whose group holds it (its status, else Ready)
-      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
+      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder(), railMode()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
       const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
       // (beside the rail word, never over its count; both on one word: ↑ over ↓)
       if (n1) put(n1, '↓', p1 === n1 ? 'right-dn' : 'right'); if (p1) put(p1, '↑', p1 === n1 ? 'right-up' : 'right');
