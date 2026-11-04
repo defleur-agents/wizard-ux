@@ -222,7 +222,17 @@ window.WizCore.chats = function createChats(H) {
   const PINS_KEY = 'wos.chats.pins.v1';
   const pinsOn = () => { try { return localStorage.getItem(PINS_KEY) !== '0'; } catch (e) { return true; } };
   // The retired miguel/hidden-pin tweak becomes this setting once: a device that wore it starts with Pins off.
-  try { if (localStorage.getItem(PINS_KEY) == null && JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}')?.mix?.['miguel/hidden-pin'] === true) localStorage.setItem(PINS_KEY, '0'); } catch (e) {}
+  try {
+    if (localStorage.getItem(PINS_KEY) == null) {
+      const v = JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}'), id = 'miguel/hidden-pin';
+      const chosen = localStorage.getItem('wos.skin'), S = window.WosSkin;
+      const family = chosen && (S?.families || []).find(f => f.id === S.familyOf?.(chosen));
+      const owner = typeof v.preset === 'string' ? v.preset : family?.tweaks;
+      const offs = Array.isArray(v.carry) ? v.carry : Array.isArray(v.off?.miguel) ? v.off.miguel : [];
+      const hidden = v.mix?.[id] === true || (owner === 'miguel' && v.mix?.[id] !== false && !offs.includes(id));
+      if (hidden) localStorage.setItem(PINS_KEY, '0');
+    }
+  } catch (e) {}
   const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
   paintPins();
   const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
