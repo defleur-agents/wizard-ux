@@ -90,7 +90,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
 
-| Owner Look sync | `WosLookSync` (`look-sync.js`): logical skin/tweaks + desktop/phone views; legacy seeds once; base unsent intent on GET/409 once, preserve newer PUT-time choice |
+| Owner Look sync | `WosLookSync` (`look-sync.js`): logical skin/tweaks/defaults + desktop/phone views; legacy seeds; base unsent intent once; preserve PUT-time choices; foreground refresh |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
