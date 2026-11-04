@@ -38,7 +38,7 @@
   const disabled = new Set();       // skin ids whose script failed this page
   const claims = new Set();         // pointer ids a skin gesture has claimed
   const requested = [];             // asset URLs requested (diagnostics + tests)
-  let importer = url => import(url);
+  let importer = url => import(url), orbRetry = 0;
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
@@ -542,6 +542,30 @@
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
+    // The orb hold is shell-owned (pointer capture + voice custody); raw gesture.claim cannot
+    // replace it safely. A trusted layout+nav tweak borrows this lazy, reversible adapter.
+    if (trusted && caps.has('layout') && caps.has('nav')) api.orb = Object.freeze({ switcher() {
+      if (a.dead || base.env.shell !== 'phone' || !shell?.orbSwitcher) return () => {};
+      let stopped = false, instance = null;
+      const off = () => { if (stopped) return; stopped = true; instance?.dispose(); a.offs.delete(off); };
+      a.offs.add(off);
+      const href = stamp(new URL('core/orb-switcher.js', document.baseURI).href); requested.push(href);
+      // A saved ON choice is not a ready handler. Include this lazy dependency in
+      // package readiness; one failed import otherwise leaves an inert "active" tweak.
+      a.ready = bounded(importer(href), 8000).catch(e => {
+        if (stopped || a.dead) return null;
+        // Browsers cache rejected ES modules by URL. Keep the release stamp but
+        // use one fresh key; an explicit later refresh gets a fresh retry too.
+        const retry = href + (href.includes('?') ? '&' : '?') + 'orb-retry=' + (++orbRetry);
+        requested.push(retry); return bounded(importer(retry), 30000);
+      }).then(mod => {
+        if (stopped || a.dead) return;
+        instance = mod.default(shell.orbSwitcher);
+        window.WosSettings?.refresh?.();
+      }).catch(e => { off(); throw e; });
+      a.ready.catch(() => {}); // teardown API is synchronous; loadTweaks owns failure reporting
+      return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
@@ -673,6 +697,8 @@
         try {
           a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
           if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
+          if (a.ready) await a.ready;
+          if (seq !== tweakSeq) return false;
         } catch (e) { dispose(a, 'error'); throw e; }
       } catch (e) {
         if (seq !== tweakSeq) return false;

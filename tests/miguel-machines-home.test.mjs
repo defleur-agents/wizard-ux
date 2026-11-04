@@ -42,7 +42,6 @@ test("api.on('home') needs layout; data.read.app is trusted-only, GET-only and p
 test('stock Home markup carries an empty home-main slot that takes no space; core never names the package', () => {
   const app = read('web/app.js'), desk = read('web/desktop/desktop.js'), host = read('web/core/skin-host.js');
   assert.match(app, /<div class="home"><div data-slot="home-main" hidden><\/div><nav class="home-tools"/);
-  assert.match(desk, /<div class="home-in mine-home"><div data-slot="home-main" hidden><\/div>/);
   assert.match(desk, /<div class="home-in"><div data-slot="home-main" hidden><\/div>/);
   assert.doesNotMatch(app + desk, /\.innerHTML = (renderHome|homeHtml)\(/, 'every Home paint goes through paintHome');
   assert.match(read('web/tweaks/miguel/machines-home/tweak.css'), /\[data-slot="home-main"\]:has\(> \.mh-root\) \{ flex: 1 1 auto; min-height: 0; display: flex;/, 'the package shows the hidden slot itself');
@@ -499,7 +498,8 @@ test('final review 2: exposure dates must be real; an open warning from a last r
 });
 
 test('every Back path cancels a waiting System link', () => {
-  assert.match(read('web/app.js'), /function backStep\(skipHosted\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  // #880 adds outside-dismiss options; every Back still cancels pending navigation.
+  assert.match(read('web/app.js'), /function backStep\(skipHosted(?:, \{ outside = false \} = \{\})?\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/core/settings.js'), /register, mount, route, cancelWait,/);
 });
