@@ -38,7 +38,7 @@
   let H = null, el = null, step = 'ai', provider = null, pollT = 0, connected = false, sending = false, booted = false, installing = '', installError = '', sendError = '';
   // The name step: asked = this Welcome starts with it; after = the step it hands over to.
   let asked = false, after = 'ai', saving = false, nameError = '', prefill = '';
-  // Bring your AI (wizard-ux #898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
+  // Bring your AI (wizard-ux issue 898, Miguel 4 Nov 2026): an optional step before Say hello, only on a Wizard that has the
   // Importer app. It embeds that app's own screen, like the provider sign-in step, so there is one Importer, two ways in.
   const IMPORTER = 'importer';
   let bringOpen = false;
