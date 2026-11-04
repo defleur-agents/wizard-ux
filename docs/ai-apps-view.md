@@ -58,13 +58,13 @@ Desktop (`desktop.js`, `desktop.css`):
 
 One base key, ⌥ (Option / Alt), plus one mnemonic letter; ⇧ only for the reverse of a plain key (round 21). Hold left ⌥:
 a small keycap sits ON each thing a key acts on, where it is (icons and buttons at their top-left corner, the next /
-previous Ready rows at their start, app rows 1–9 / 0 on the icon, [ ] on the rows they go to). No legend card and
-nothing in the middle; a key with nothing on screen to point at (⌥V, ⌥C) has no keycap. App count badges step back while
+previous Ready rows at their start, app rows 1–9 / 0 on the icon, [ ] on the rows they go to). No legend card; the
+only keycap in the middle is ⌥H's, in the empty middle of Home while nothing covers it. A key with nothing on screen to point at (⌥V, ⌥C) has no keycap. App count badges step back while
 ⌥ is held. With the app picker or Settings in front only its own key (⌥A, ⌥S) and Esc work; its ✕ wears that key.
 
 | Key | In the AI apps view (keycap on) |
 | --- | --- |
-| ⌥H | Home: both sides, the chat and the app away; again = back exactly as it was (the workspace name; ◫ at the top left while away). ⌥` the same |
+| ⌥H | Home: both sides, the chat and the app away; again = back exactly as it was (the workspace name; the app panel's icon; the empty middle of Home; ◫ at the top left while away). ⌥` the same |
 | ⌥O | Workspaces (the ▾ next to the name) |
 | ⌥K | Search chats and apps (🔍) |
 | ⌥L | Fold / unfold the left sidebar (its ◫); Ctrl/⌘⇧S too |
@@ -99,6 +99,30 @@ Ready is one flat list in priority order by default (a tiny muted tag on Needs y
 small amber bell and amber unread dot (folded per app, e.g. "Money (48) · …"); an opened notification reads as a quiet
 thread (`--wos-note-quiet`): its source line, a thin amber edge, and one muted "From X · shows in Chats ▾" line whose
 menu is the shared `WosBell.picker`.
+
+## App keys
+
+Every app can be driven from the keyboard too, with plain keys (no ⌥). The app marks a control; the app SDK
+(`core/app-client.js`, `WizardApp`, framed in Wizard or opened on its own) does the rest, so there is no key code to
+write.
+
+- Mark a button with `data-wz-key="<key>"`, optionally `data-wz-key-label="Play / pause"` (else its `aria-label`).
+  Keys: `Space`, `Enter`, `ArrowUp` / `ArrowDown` / `ArrowLeft` / `ArrowRight`, or one printable character in lower
+  case (`j`, `k`, `/`, `r`, `n`, `s`; `?` is fine). `Escape` is never an app key: it is Back (the shell's).
+- A key press clicks the first match in page order that is visible (has a box, width > 0, not inside `[hidden]`,
+  `[inert]` or `aria-hidden="true"`) and enabled (not `disabled`, not `aria-disabled="true"`), and is used up
+  (`preventDefault`). Not with ⌥ / Ctrl / ⌘ (those are the shell's and the browser's), not with ⇧ unless the character
+  needs it (`?`), not while composing text, not while focus is in an input, textarea, select or `contenteditable`,
+  and not when the app's own handler already called `preventDefault`. Held down, only the arrows repeat.
+- An open modal (`[aria-modal="true"]`, `[role="dialog"]` not hidden, `dialog[open]`) keeps the keys: only targets
+  inside the topmost one count.
+- `WizardApp.keys.list()` returns the live targets `[{ el, key, label }]` with exactly those rules.
+
+In the AI apps view (desktop): picking an app (⌥1–⌥0, ⌥[ ], a click on its row, an Open) moves the keyboard into its
+panel, so its plain keys work at once; plain keys are never the shell's while an app has the keyboard, and ⌥ keys
+inside the app still reach the shell. Holding left ⌥ with an app in front also draws the app's own keys on its
+controls as OUTLINED keycaps (the accent outline, plain key, no ⌥), beside the view's filled ⌥ keycaps; they follow the
+same no-overlap placement. Apps that use an older SDK copy are read with the same rules (`[data-wz-key]`).
 
 ## How it is built
 

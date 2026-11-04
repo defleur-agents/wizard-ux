@@ -236,8 +236,10 @@ export default function desktop(api) {
 
   // round 21: ⌥H Home hides both sides; this one quiet ◫ at the top left (where the sidebar was) puts everything back (⌥H)
   const hBack = el('button', 'aad-ib aad-hback', { type: 'button', 'aria-label': 'Everything back as it was (⌥H)', title: 'Back as it was (⌥H)' }); hBack.append(icon('side'));
+  // (app keys round: the empty middle of Home, where ⌥H's keycap sits while ⌥ is held; nothing drawn, never clickable)
+  const hMid = el('div', 'aad-hmid', { 'aria-hidden': 'true' });
   const scene = el('div', 'aad');
-  scene.append(shade, side, top, pLoad, vt, toast, orbBox, hBack);
+  scene.append(shade, side, top, pLoad, vt, toast, orbBox, hBack, hMid);
   api.mount(scene);
 
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
@@ -445,7 +447,7 @@ export default function desktop(api) {
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
   const goApp = (id, desk = null, then = null) => {
-    unpeek(); closeAll();
+    unpeek(); closeAll(); focusWant = id === CHATS ? '' : id;
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
@@ -454,6 +456,19 @@ export default function desktop(api) {
     if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); api.after(60, go); } else go();
   };
   let chatsFresh = false;
+  /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
+   * takes the keyboard once it is the panel, so its plain keys (data-wz-key, core/app-client.js) reach it at once. */
+  let focusWant = '', focusing = false;
+  const paneFrame = () => [...(pane?.el?.querySelectorAll?.('.win iframe') || [])].find(f => !f.closest('.win.gone')) || null;
+  function focusFrame(tries = 0) {
+    if (!focusWant) { focusing = false; return; }
+    const f = pane && pane.id === focusWant ? paneFrame() : null;
+    if (!f || !frameReady(pane.el)) { if (tries < 60) api.after(150, () => focusFrame(tries + 1)); else { focusWant = ''; focusing = false; } return; }
+    try { f.focus?.({ preventScroll: true }); f.contentWindow?.focus?.(); } catch (_) {}
+    // (the shell can still focus the window itself right after the desk switch: once more, then it is the app's)
+    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1)); return; }
+    focusWant = ''; focusing = false;
+  }
   function appCell(a) {
     const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === here().app ? { 'aria-current': 'page' } : {}) });
     const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
@@ -1161,6 +1176,7 @@ export default function desktop(api) {
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
+    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
     const chat = pane || chatOn ? wsps().find(w => w.querySelector('.dchats')) : null;
@@ -1466,7 +1482,9 @@ export default function desktop(api) {
     if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
     if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); putIn(doc.querySelector('.boom-sheet [data-boom-someday]'), '←'); return out; }
     put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
-    if (focusOn()) { put(hBack, 'H'); return out; }
+    // ⌥H in the empty middle of Home too (focus or not), only while nothing covers it
+    const midH = () => { if (!pane && !docked && !fly && !q && !wsPop && !menu && !tidyPop && midFree()) out.push({ el: hMid, key: 'H', at: 'mid', free: true }); };
+    if (focusOn()) { put(hBack, 'H'); midH(); return out; }
     const open = root.dataset.aadSide === 'open';
     if (open) { put(wsName, 'H', 'below'); put(wsBtn.querySelector('.aad-wsc'), 'O', 'right'); }
     put(open ? togBtn : rTog, 'L'); put(open ? findBtn : rFind, 'K'); put(open ? newBtn : rNew, 'N'); put(open ? setBtn : rSet, 'S');
@@ -1493,13 +1511,35 @@ export default function desktop(api) {
     }
     put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
     if (api.media?.list?.().length) put(vtNow.firstElementChild, 'P', vtFolded ? 'bl' : 'tr');
-    if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
+    if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (docked) put(cX, 'W');
+    midH();
     if (docked) {
       for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
+    // the app in front: its own plain keys (data-wz-key) on its own controls, outlined keycaps (no ⌥)
+    if (pane) { const f = paneFrame(); if (f) for (const t of frameKeys(f).slice(0, 24)) out.push({ el: t.el, key: keyCap(t.key), at: 'tl', frame: f, app: true, name: t.label || '' }); }
     return out;
   }, { only: true });
+  /* App keys: what the app in front marks with data-wz-key (core/app-client.js WizardApp.keys.list(); an app on an older
+   * SDK copy: the same rules read here); its keycap reads the letter, an arrow, ↵ or Space. */
+  function frameKeys(f) {
+    let w = null, d = null; try { w = f.contentWindow; d = f.contentDocument; } catch (_) { return []; }
+    if (!d || !w) return [];
+    try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return l; } catch (_) {}
+    const box = n => n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
+    const modal = [...d.querySelectorAll('[aria-modal="true"], [role="dialog"]:not([hidden]), dialog[open]')].filter(box).pop() || d;
+    return [...modal.querySelectorAll('[data-wz-key]')].filter(n => box(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true')
+      .map(n => ({ el: n, key: n.getAttribute('data-wz-key') || '', label: n.getAttribute('data-wz-key-label') || n.getAttribute('aria-label') || '' }))
+      .filter(t => /^(Space|Enter|Arrow(Up|Down|Left|Right))$/.test(t.key) || ([...t.key].length === 1 && t.key.trim() && t.key === t.key.toLowerCase()));
+  }
+  const ARROW_CAPS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '↵', Space: 'Space' };
+  const keyCap = k => ARROW_CAPS[k] || String(k).toUpperCase();
+  function midFree() {
+    const r = hMid.getBoundingClientRect?.(); if (!r || typeof doc.elementFromPoint !== 'function') return true;
+    const hit = doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return !hit?.closest?.('button, a[href], input, textarea, select, iframe, [role="dialog"], .msg, .aad-side, .aad-vt, .aad-toast, .vc-sheet, h1, h2, h3, p, li');
+  }
 
   /* ---------- the main area: Home (the new chat), a chat docked beside the sidebar, an app as the panel ---------- */
   function here(r = api.route()) {
