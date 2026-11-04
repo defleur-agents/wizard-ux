@@ -70,6 +70,20 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
 }
 const on = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
 
+test('an existing skin without tweaks seeds the box; a fresh install still does not', async () => {
+  const box = pagesBox(), first = device(box, { skin: 'obsidian-light' });
+  await first.sync.sync(); assert.equal(box.doc().skin.id, 'obsidian-light');
+  const second = device(box); await second.sync.sync(); assert.equal(second.skin, 'obsidian-light');
+});
+test('logical revisions preserve a later edit despite skewed device clocks and a future legacy stamp', async () => {
+  const box = pagesBox({ version: 1, skin: { id: 'obsidian', at: 9000000000000 }, tweaks: { 'miguel/swipe-strip': { on: true, at: 9000000000000 } } });
+  const slow = device(box, { clock: () => 1 }); await slow.sync.sync();
+  slow.toggle('miguel/swipe-strip', false); slow.sync.skinChoice('obsidian-light'); await slow.flush();
+  assert.equal(box.doc().tweaks['miguel/swipe-strip'].on, false); assert.equal(box.doc().skin.id, 'obsidian-light');
+  const fast = device(box, { clock: () => 19000000000000 }); await fast.sync.sync();
+  assert.equal(fast.skin, 'obsidian-light'); assert.deepEqual(fast.on(), []);
+});
+
 test('server wins on load: a device wears the box set and skin, without writing', async () => {
   const box = pagesBox({ version: 1, skin: { id: 'obsidian-light', at: 5 }, tweaks: { 'miguel/layout': { on: true, at: 5 }, 'miguel/swipe-strip': { on: true, at: 0 } } });
   const mac = device(box, { mix: { 'miguel/send-and-go': true }, skin: 'nebula', meta: { version: 'old', synced: true } });

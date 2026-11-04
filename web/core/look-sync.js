@@ -7,7 +7,7 @@
  *
  *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, updated }
  *
- * `at` = when that choice was made (ms). 0 = carried over from a device's old local set (a seed): never newer than a
+ * `at` = an observed logical revision (not a device clock). 0 = an old local seed: never newer than a
  * real change. Merging is per choice, newest wins, so two devices switching different tweaks keep both. A device with
  * nothing on never writes until its owner changes something. The first device with tweaks on seeds the box; a device
  * syncing for the first time with more tweaks on than the box's seeds replaces those seeds (the set in daily use beats
@@ -70,6 +70,15 @@
     // re-apply every tweak on every pass (settle() after each apply: a reload storm that flickers the whole shell).
     const wear = doc => onIds(doc).filter(live);
     const save = () => { try { store.setItem(META, JSON.stringify({ version: meta.version, synced: meta.synced, pending: { skin: meta.pending.skin, tweaks: meta.pending.tweaks } })); } catch (_) {} };
+    let clock = 0;
+    const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0)); };
+    observe(meta.pending);
+    const stamp = () => ++clock;
+    function renewPending(d) {
+      observe(d);
+      if (meta.pending.skin && (d?.skin?.at || 0) >= meta.pending.skin.at) meta.pending.skin.at = stamp();
+      for (const [id, t] of Object.entries(meta.pending.tweaks)) if ((d?.tweaks[id]?.at || 0) >= t.at) t.at = stamp();
+    }
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0;
     const views = () => { try { return (exp.state?.tweaks || []).filter(t => t.view).map(t => t.id); } catch (_) { return []; } };
     // What this device runs now, as seeds.
@@ -120,9 +129,10 @@
         if (!known) try { known = new Set(await exp.tweakIds()); } catch (_) { /* catalog unreadable now: count every id */ }
         let { doc, version } = await get();
         for (let tries = 0; tries < 4; tries++) {
+          if (!meta.synced) renewPending(doc); else observe(doc);
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
-          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || dirty()) want = mine; } // seed; an untouched empty device never writes
+          if (!doc) { const mine = merge(local(), pending); if (onIds(mine).length || mine.skin || dirty()) want = mine; } // seed; an untouched empty device never writes
           else if (dirty()) want = merge(doc, pending);
           // First sync of a device whose old local set is bigger than the box's seeds: its seeds replace them; real changes stay.
           else if (!meta.synced && onIds(local()).length > onIds(seeds(doc)).filter(live).length) want = merge(changes(doc), local());
@@ -148,11 +158,19 @@
     function schedule(ms = 600) { if (off) return; cancel(timer); timer = later(sync, ms); }
     function tweakChoice(id, value) {
       if (applying || !ID.test(String(id))) return;
-      meta.pending.tweaks[id] = { on: !!value, at: now() }; save(); schedule();
+      const group = views();
+      if (group.includes(id)) {
+        if (value) { const at = stamp(); for (const key of group) meta.pending.tweaks[key] = { on: key === id, at }; }
+        else {
+          const selected = group.find(key => key !== id && meta.pending.tweaks[key]?.on);
+          meta.pending.tweaks[id] = { on: false, at: selected ? meta.pending.tweaks[selected].at : stamp() };
+        }
+      } else meta.pending.tweaks[id] = { on: !!value, at: stamp() };
+      save(); schedule();
     }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
-      meta.pending.skin = { id, at: now() }; save(); schedule();
+      meta.pending.skin = { id, at: stamp() }; save(); schedule();
     }
     // Views are known once the tweaks have loaded. A box copy with two views on (an older client, the agent) is fixed
     // on the box too (the newest one stays), so a stale view never comes back; a device-only both-on is fixed here.
