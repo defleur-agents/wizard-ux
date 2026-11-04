@@ -1063,14 +1063,14 @@
     const all = (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived), by = new Map(), sets = [];
     for (const it of all) {
       if (Number(it.priority) >= 4) { sets.push([it]); continue; }
-      const k = (it.app || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
+      const k = (it.app || it.from || 'notifications') + (it.read ? ':later' : ':new'); if (!by.has(k)) by.set(k, []); by.get(k).push(it);
     }
     for (const l of by.values()) if (l.length < 2) sets.push(l); else sets.push(l.slice().sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0)));
     return sets.map(l => {
-      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : (window.WizConfig?.agent?.() || 'Wizard');
+      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : it.from ? String(it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
       if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
       return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
-        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || ''), appName: String(it.appName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
         unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
     });
   }

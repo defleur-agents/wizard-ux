@@ -117,3 +117,15 @@ test('chats.js lists them under the app: its name, its mark, one fold per app', 
   assert.equal(noteSrcName(o('x', 1)), 'Oscar');
   assert.match(noteIcon(s('x', 1)), /data-sigil="Sniper"/);
 });
+
+test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the app too', () => {
+  const host = read('web/core/skin-host.js');
+  const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
+  const items = [{ id: 's1', title: 'Sniper daily scan', time: 30, from: 'sniper', fromName: 'Sniper', priority: 2 }, { id: 's2', title: 'Daily Sniper outcome', time: 20, from: 'sniper', fromName: 'Sniper', priority: 2 },
+    { id: 'o1', title: 'Release review', time: 10, priority: 2 }, { id: 'o2', title: 'Whiteboard', time: 5, priority: 2 }];
+  const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Oscar' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };
+  vm.runInNewContext(src + ';globalThis.noteRows = noteRows;', ctx);
+  const rows = JSON.parse(JSON.stringify(ctx.noteRows()));
+  assert.deepEqual(rows.map(r => r.title), ['Sniper (2) · Sniper daily scan · Daily Sniper outcome', 'Oscar (2) · Release review · Whiteboard']);
+  assert.equal(rows[0].app, 'sniper');
+});
