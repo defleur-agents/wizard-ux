@@ -192,12 +192,41 @@
         },
         onLevel(fn) { const g = guard(a, 'orb.onLevel', fn); a.levels.add(g); levels.add(g); return () => { a.levels.delete(g); levels.delete(g); }; },
       }),
+      /* Now playing (core/media-watch.js): what the installed apps play, newest first ([{ key, appId, app, kind, playing,
+       * title, artist }]), and pausing it. watch(fn) arms the watcher (nothing is watched while nobody holds it) and is
+       * released on teardown; { passive: true } only listens while someone else holds it. icon(appId) = the shell's own
+       * app mark (a fresh node), open(appId) = bring that app to the front. */
+      media: Object.freeze({
+        list: () => mediaList(a),
+        watch(fn, { passive = false } = {}) {
+          const M = isDoc && window.WosMedia; if (a.dead || !M || typeof fn !== 'function') return () => {};
+          const g = guard(a, 'media.watch', () => fn(mediaList(a)));
+          const off0 = M.watch(g, { passive: passive === true });
+          const off = () => { off0(); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        pause: key => !a.dead && !!(isDoc && window.WosMedia?.pause(String(key))),
+        play: key => !a.dead && !!(isDoc && window.WosMedia?.play(String(key))),
+        pauseAll: () => !a.dead && !!(isDoc && window.WosMedia?.pauseAll()),
+        toggle: () => !a.dead && !!(isDoc && window.WosMedia?.toggle()),
+        icon(id) {
+          const h = !a.dead && typeof id === 'string' ? shell?.mediaApp?.(id)?.icon : '';
+          if (!h || !isDoc) return null;
+          const t = document.createElement('template'); t.innerHTML = String(h); return t.content.firstElementChild || null;
+        },
+        open: id => !a.dead && typeof id === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(id) && !!shell?.mediaOpen?.(id),
+      }),
       storage: Object.freeze({
         get(key) { try { const v = localStorage.getItem(`wos.skin.${a.id}.${key}`); return v == null ? null : JSON.parse(v); } catch (_) { return null; } },
         set(key, value) { try { localStorage.setItem(`wos.skin.${a.id}.${key}`, JSON.stringify(value)); } catch (_) {} },
       }),
     };
     return Object.freeze(api);
+  }
+
+  // The Now playing list with each app's own name (the shell's catalog), for api.media.
+  function mediaList(a) {
+    const M = isDoc && window.WosMedia; if (!M || a.dead) return [];
+    return M.list().map(x => Object.freeze({ ...x, app: String(shell?.mediaApp?.(x.appId)?.name || x.appId) }));
   }
 
   /* ---------- script lifecycle ---------- */
@@ -571,6 +600,8 @@
       a.ready.catch(() => {}); // teardown API is synchronous; loadTweaks owns failure reporting
       return off;
     } });
+    // Trusted packages may show and pause what the apps play (api.media above).
+    if (trusted && caps.has('media')) api.media = base.media;
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
@@ -679,7 +710,7 @@
       const response = await bounded(fetch(tweakUrl(id, 'manifest.json')), ms);  // release-stamped: cacheable
       if (!response.ok) throw new Error('Manifest unavailable');
       const m = await response.json();
-      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings'].includes(c))) throw new Error('Invalid manifest');
+      if (m.id !== id || m.author !== id.split('/')[0] || typeof m.version !== 'string' || !Array.isArray(m.capabilities) || m.capabilities.some(c => !['layout','nav','models','data.read','inbox','settings','media'].includes(c))) throw new Error('Invalid manifest');
       if (m.apiVersion !== contract.apiVersion) throw new Error('Incompatible API version');
       const mod = await bounded(importer(tweakUrl(id, 'tweak.js')), ms);
       if (typeof mod.default !== 'function') throw new Error('Missing setup');

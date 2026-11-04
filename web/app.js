@@ -4142,6 +4142,9 @@
     relayout: () => { try { syncImmersive(); } catch (_) {} },
     appOrb: () => { const f = frontAppFrame(); return f ? window.WizAppServices?.orb?.of(f) || null : null; },
     appOrbTap: () => { const f = frontAppFrame(); return !!f && !!window.WizAppServices?.orb?.tap(f); },
+    // Now playing (api.media): an app's own name and mark, and bringing that app to the front.
+    mediaApp: id => { const a = APP[id]; return a ? { name: a.name || id, icon: ico('span', 'np-ic', a) } : null; },
+    mediaOpen: id => !!window.WizOpenApp?.(id),
   });
   // The app window in front (no sheet over it): the only app that may wear the agent orb.
   function frontAppFrame() {

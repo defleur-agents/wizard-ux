@@ -21,6 +21,7 @@
     "miguel/archive-top",
     "miguel/group-by-day",
     "miguel/reply-summary",
+    "miguel/now-playing",
     "miguel/calm-offline"
   ],
   "defaults": [
