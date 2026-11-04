@@ -42,14 +42,15 @@ function pagesBox(doc = null, { routes = true } = {}) {
 }
 
 // One device: its own storage, skin and tweak mix (what experience.js and skins.js hold), the real look-sync code.
-function device(box, { mix = {}, skin = null, views = [], meta = null, clock, known = null } = {}) {
+function device(box, { mix = {}, skin = null, views = [], meta = null, clock, known = null, shells = false } = {}) {
   const store = new Map(meta ? [['wos.look-sync.v1', JSON.stringify(meta)]] : []);
   const timers = [];
-  const d = { mix: { ...mix }, skin, adopted: 0 };
+  const d = { mix: { ...mix }, skin, adopted: 0, views: {} };
   let sync;
   const exp = {
     get mix() { return clone(d.mix); },
-    adopt(m) { d.adopted++; d.mix = { ...m }; },
+    adopt(m, v) { d.adopted++; d.mix = { ...m }; if (v && typeof v === 'object') d.views = { ...v }; },
+    ...(shells ? { get views() { return clone(d.views); } } : {}),
     get state() { return { busy: false, tweaks: views.map(id => ({ id, view: 'v' })) }; },
     tweakIds: async () => { if (!known) throw new Error('offline'); return known; },
   };
@@ -66,6 +67,8 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   // An owner's switch: experience.js writes the mix and raises wos:tweak-choice.
   d.toggle = (id, on) => { if (on) d.mix[id] = true; else delete d.mix[id]; sync.tweakChoice(id, on); };
   d.on = () => Object.keys(d.mix).filter(id => d.mix[id]).sort();
+  // A per-type view choice: experience.js stores it and raises wos:view-choice.
+  d.pickView = (shell, id) => { d.views[shell] = id; sync.viewChoice(shell, id); };
   return d;
 }
 const on = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();
@@ -304,4 +307,51 @@ test('both shells load look sync after experience.js; it lives in the owner\'s F
     assert.match(read(f), /<script defer src="core\/experience\.js"><\/script>\n  <script defer src="core\/look-sync\.js"><\/script>/, f);
   assert.equal(L.PATH, PATH);
   assert.doesNotMatch(read('web/core/look-sync.js'), /\/wizard\/v1\/skins|ui-preferences/, 'no other store, no skin folder writes');
+});
+
+// Per device type views (Miguel, 4 Nov 2026): look.json gains `views: { desktop, phone }`, merged per type.
+const MIGUEL = { version: 1, skin: { id: 'landscapes', at: 1793788925203 }, tweaks: { 'miguel/apps-home': { on: false, at: 1793694648727 }, 'miguel/orb-shell': { on: false, at: 1793694691203 }, 'miguel/ai-apps': { on: true, at: 1793695091045 }, 'miguel/reply-summary': { on: true, at: 1793724651099 } }, updated: '2026-11-04T10:42:05.813Z' };
+
+test('old look.json: parsed as before (no views key), worn without a write; its single view keeps the old meaning', async () => {
+  const parsed = clone(L.parse(JSON.stringify(MIGUEL)));
+  assert.deepEqual(Object.keys(parsed), ['version', 'skin', 'tweaks'], 'no views key appears for an old file');
+  assert.equal(parsed.tweaks['miguel/ai-apps'].on, true);
+  const box = pagesBox(MIGUEL), before = box.text;
+  const views = ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'];
+  const mac = device(box, { views, shells: true, meta: { version: null, synced: true } });
+  await mac.sync.sync(); mac.sync.settle(); await mac.flush();
+  assert.deepEqual(mac.on(), ['miguel/ai-apps', 'miguel/reply-summary'], 'the old view stays switched on in the mix');
+  assert.deepEqual(mac.views, {}, 'no per-type choice yet: each shell reads the old meaning (experience.js)');
+  assert.equal(box.puts, 0); assert.equal(box.text, before, 'the file stays byte for byte');
+});
+
+test('new look.json: an older shell parses it without breaking (unknown views dropped), a newer one keeps both types', () => {
+  const doc = { ...MIGUEL, views: { desktop: { id: 'miguel/ai-apps', at: 7 }, phone: { id: '', at: 8 }, watch: { id: 'x/y', at: 1 } } };
+  assert.deepEqual(clone(L.parse(JSON.stringify(doc))).views, { desktop: { id: 'miguel/ai-apps', at: 7 }, phone: { id: '', at: 8 } });
+  assert.equal(L.parse(JSON.stringify({ ...doc, views: { desktop: { id: '../x', at: 1 }, phone: 'orb' } })).views, undefined, 'malformed entries dropped');
+  // what an older shell's parse kept: version/skin/tweaks only, so its old meaning still reads the file.
+  const old = { version: 1, skin: doc.skin, tweaks: doc.tweaks };
+  assert.deepEqual(clone(L.parse(JSON.stringify(old))), clone(L.parse(JSON.stringify(MIGUEL))));
+});
+
+test('sync merges views per type: two desktops follow each other, two phones follow each other, simultaneous picks keep both', async () => {
+  const box = pagesBox(MIGUEL);
+  let t = 2e12; const clock = () => ++t;
+  const opts = { shells: true, clock, views: ['miguel/orb-shell', 'miguel/apps-home', 'miguel/ai-apps'] };
+  const mac = device(box, opts), pwa = device(box, opts), phone = device(box, opts), tablet = device(box, opts);
+  for (const d of [mac, pwa, phone, tablet]) await d.sync.sync();
+  // At the same moment: the phone picks Orb, the Mac picks Desks.
+  phone.pickView('phone', 'miguel/orb-shell'); mac.pickView('desktop', '');
+  box.race(2); await Promise.all([phone.flush(), mac.flush()]);
+  assert.deepEqual(Object.fromEntries(Object.entries(box.doc().views).map(([k, v]) => [k, v.id])), { desktop: '', phone: 'miguel/orb-shell' }, 'both types kept');
+  assert.equal(box.doc().tweaks['miguel/ai-apps'].on, true, 'the old entry is left for older shells');
+  for (const d of [mac, pwa, phone, tablet]) await d.sync.sync();
+  for (const d of [mac, pwa, phone, tablet]) assert.deepEqual(d.views, { desktop: '', phone: 'miguel/orb-shell' });
+  // A later pick on one type wins over an older one of that type and leaves the other type alone.
+  pwa.pickView('desktop', 'miguel/ai-apps'); await pwa.flush();
+  tablet.pickView('phone', ''); await tablet.flush();
+  for (const d of [mac, phone]) await d.sync.sync();
+  assert.deepEqual(mac.views, { desktop: 'miguel/ai-apps', phone: '' }); assert.deepEqual(phone.views, mac.views);
+  assert.deepEqual(clone(L.merge({ version: 1, skin: null, tweaks: {}, views: { desktop: { id: 'a/b', at: 5 } } }, { version: 1, skin: null, tweaks: {}, views: { desktop: { id: '', at: 4 }, phone: { id: 'c/d', at: 1 } } })).views,
+    { desktop: { id: 'a/b', at: 5 }, phone: { id: 'c/d', at: 1 } }, 'per type, newest wins');
 });
