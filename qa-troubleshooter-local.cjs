@@ -132,7 +132,10 @@ const server = http.createServer((req, res) => {
         await checkpoint('fresh-failure');
         // James's actual action, before relying on any pill. This must synchronously
         // create the ordinary app window even with every private read unavailable.
-        const chatsButton = p.locator('[data-chtroubleshoot]:visible').first();
+        // Phone keeps earlier Chats windows mounted off-screen; click the copy the owner can actually see.
+        await p.waitForFunction(() => [...document.querySelectorAll('[data-chtroubleshoot]')].some(b => { const r = b.getBoundingClientRect(); return r.width && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; }), null, { timeout: 15000 });
+        await p.evaluate(() => { const all = [...document.querySelectorAll('[data-chtroubleshoot]')]; all.forEach(b => b.removeAttribute('data-qa-onscreen')); const b = all.find(b => { const r = b.getBoundingClientRect(); return r.width && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight; }); b.setAttribute('data-qa-onscreen', ''); });
+        const chatsButton = p.locator('[data-chtroubleshoot][data-qa-onscreen]');
         await chatsButton.waitFor({ timeout: 15000 });
         await chatsButton.click();
         await p.locator('[data-recovery]').waitFor();
