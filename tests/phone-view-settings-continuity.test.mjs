@@ -42,6 +42,14 @@ test('phone AI apps preparation preserves the exact Settings sheet and Look page
     assert.deepEqual(closes, []); assert.deepEqual(parks, [], 'do not lift Settings onto the old desk');
   }
 });
+test('enabling AI apps over the existing frontmost Chats list keeps Settings without a desk transition', () => {
+  const { ctx, closes, parks, panel } = fixture({ settings: true, existing: true });
+  ctx.idx = 1;
+  assert.equal(ctx.showChats()?.id, 'c');
+  assert.equal(ctx.idx, 1); assert.equal(ctx.sheet, 'settings');
+  assert.deepEqual(panel, { page: 'appearance', open: true });
+  assert.deepEqual(closes, []); assert.deepEqual(parks, []);
+});
 test('ordinary chat navigation still dismisses launchers, and explicit desk navigation still parks Settings', () => {
   for (const existing of [true, false]) {
     const { ctx, closes } = fixture({ settings: false, existing });
