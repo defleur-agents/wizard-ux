@@ -918,6 +918,23 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
   assert.ok(sig && !box.hidden && box.children[0].classList.contains('vw-gauge') && box.children[0].getAttribute('data-go') === null);
   box.children[0].dispatchEvent(new FakePointerEvent('click')); assert.equal(opened, 1);
   assert.equal(gaugeInto(w.doc, box, sig, () => {}), sig, 'unchanged: no repaint');
+  {
+    // 4 Nov 2026: with the network Home off (no live gauge) the view draws its own from the AI usage feed, Resources on a click
+    const { fuelOf } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+    const now = new Date().toISOString(), feed = { ai: { providers: [
+      { id: 'claude:a', provider: 'claude', providerName: 'Claude', fetchedAt: now, limits: [{ label: 'Weekly', remainingPercent: 62 }, { label: '5 hours', remainingPercent: 90 }] },
+      { id: 'chatgpt:b', provider: 'chatgpt', providerName: 'ChatGPT', fetchedAt: now, limits: [{ label: 'Weekly', remainingPercent: 20 }] },
+      { id: 'claude:c', provider: 'claude', providerName: 'Claude', status: 'signed_out', limits: [] }] } };
+    assert.deepEqual(fuelOf(feed, 'anthropic'), { left: 62, names: ['Claude'], old: false }, 'the default model\'s accounts, weekly limit');
+    assert.equal(fuelOf(feed, '').left, 41, 'no default: every plan account');
+    assert.equal(fuelOf({ ai: { providers: [] } }, 'claude'), null);
+    src.remove?.(); w.device.children = w.device.children.filter(n => n !== src);
+    const box2 = new El('div'); w.device.append(box2); const pages = [];
+    const sig2 = gaugeInto(w.doc, box2, '', pg => pages.push(pg), () => fuelOf(feed, 'claude'));
+    assert.ok(sig2.startsWith('own|62') && !box2.hidden && box2.children[0].classList.contains('vw-gauge'));
+    box2.children[0].dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(pages, ['usage']);
+    assert.equal(gaugeInto(w.doc, box2, sig2, () => {}, () => null), '', 'nothing readable: hidden'); assert.ok(box2.hidden);
+  }
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state: CHATS\.stiKind\?\.\(s\) \|\| '',/);
 });

@@ -124,17 +124,59 @@ export function noteRouteIntoActions(doc, scope = '') {
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)
  * and opens Settings › AI. Returns the copy's signature so callers repaint only on change. */
-export function gaugeInto(doc, box, last, open) {
+export function gaugeInto(doc, box, last, open, own) {
   const src = [...doc.querySelectorAll('.mh-gauge')].find(n => !n.classList.contains('is-still') && !n.closest('[data-fuel-copy]'));
-  const sig = src && typeof src.cloneNode === 'function' ? `${src.getAttribute('data-s')}|${src.getAttribute('aria-label')}|${src.querySelectorAll('.on').length}` : '';
+  // (4 Nov 2026: with the network Home off there is no live gauge to copy, so the view draws its own from the AI usage feed)
+  const g = !src && typeof own === 'function' ? own() : null;
+  const sig = src && typeof src.cloneNode === 'function' ? `${src.getAttribute('data-s')}|${src.getAttribute('aria-label')}|${src.querySelectorAll('.on').length}`
+    : g ? `own|${g.left}|${g.names.join(',')}|${g.old ? 1 : 0}` : '';
   if (sig === last) return last;
   if (!sig) { box.replaceChildren(); box.hidden = true; return sig; }
-  const c = src.cloneNode(true);
+  const c = src ? src.cloneNode(true) : fuelEl(doc, g);
   for (const n of [c, ...c.querySelectorAll('[id]')]) n.removeAttribute('id');
   c.removeAttribute('data-go'); c.classList.add('vw-gauge');
   box.replaceChildren(c); box.hidden = false;
-  c.addEventListener('click', open);
+  // (the own gauge opens Settings › Resources, the AI usage page; Settings › AI exists only with the network Home)
+  c.addEventListener('click', () => src ? open() : open('usage'));
   return sig;
+}
+/** The AI fuel left, read straight from the AI usage feed (resources state) when the network Home is off: the default
+ * model's own accounts (plan limits over credit), else every plan account, else every credit balance; each account
+ * counts its tightest weekly limit left. null while nothing is readable. Pure. */
+export function fuelOf(state, provider) {
+  const subs = [];
+  for (const p of state?.ai?.providers || []) {
+    const kind = String(p.provider || p.id || '').split(':')[0], ls = Array.isArray(p.limits) ? p.limits : [], wk = ls.filter(l => /week/i.test(l.label));
+    const pick = (wk.length ? wk : ls).reduce((a, l) => l && Number.isFinite(l.remainingPercent) && (!a || l.remainingPercent < a.remainingPercent) ? l : a, null);
+    let left = pick ? pick.remainingPercent : null, unit = 'plan';
+    const paid = p.paid;
+    if (left == null && paid?.type === 'credits' && paid.limitMinor > 0 && paid.balanceMinor != null) { left = 100 * paid.balanceMinor / paid.limitMinor; unit = 'credit'; }
+    const out = p.signedOut === true || p.status === 'signed_out' || p.status === 'auth' || p.status === 'unavailable';
+    if (left == null || out) continue;
+    const at = Date.parse(p.fetchedAt || state?.ai?.fetchedAt || '');
+    subs.push({ kind, unit, group: p.providerName || kind, left: Math.max(0, Math.min(100, left)), old: p.status === 'stale' || !at || Date.now() - at > 300000 });
+  }
+  if (!subs.length) return null;
+  const pv = String(provider || '').toLowerCase();
+  const want = pv ? (subs.find(s => s.kind === pv || s.group.toLowerCase() === pv || pv.startsWith(s.kind + ':'))?.kind
+    || (/^(claude|claude-code|anthropic)$/.test(pv) ? 'claude' : /^(openai|openai-codex|codex|chatgpt)$/.test(pv) ? 'chatgpt' : /^tinfoil$/.test(pv) ? 'tinfoil' : '')) : '';
+  const mine = want ? subs.filter(s => s.kind === want) : [], unit = mine.some(s => s.unit === 'plan') ? 'plan' : 'credit';
+  const pool = mine.filter(s => s.unit === unit), plans = subs.filter(s => s.unit === 'plan');
+  const use = pool.length ? pool : plans.length ? plans : subs;
+  const left = Math.round(use.reduce((n, s) => n + s.left, 0) / use.length);
+  return { left, names: [...new Set(use.map(s => s.group))], old: !!state?.aiError || use.some(s => s.old) };
+}
+/** The fuel tag drawn by the view itself: E, ten cells, F (the network Home's look, classes and words). */
+export function fuelEl(doc, g) {
+  const s = g.left <= 10 ? 'no' : g.left <= 25 ? 'tight' : 'ok', on = Math.round(g.left / 10), old = g.old ? ' (last reading)' : '';
+  const b = doc.createElement('button'); b.type = 'button'; b.className = 'mh-gauge'; b.setAttribute('data-s', s);
+  b.setAttribute('aria-label', `AI fuel: ${g.left}% left${old}, ${g.names.join(' and ')}. Open AI in Settings`);
+  b.setAttribute('title', `AI fuel · ${g.names.join(' + ')} · ${g.left}% left${old}`);
+  const ef = t => { const x = doc.createElement('span'); x.className = 'mh-g-ef'; x.textContent = t; return x; };
+  const cells = doc.createElement('span'); cells.className = 'mh-g-cells'; cells.setAttribute('aria-hidden', 'true');
+  for (let i = 0; i < 10; i++) { const c = doc.createElement('i'); if (i < on) c.className = 'on'; cells.append(c); }
+  b.append(ef('E'), cells, ef('F'));
+  return b;
 }
 /** The box of one column of a grid row (the composer's orb slot, round 6): its middle in viewport px and its size
  * ({ x, y, d }), on the grid's last row. Read from the resolved tracks, so it is right whether the composer is one line
