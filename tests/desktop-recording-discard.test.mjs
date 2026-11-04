@@ -54,7 +54,7 @@ test('Discard removes a kept recording without the browser confirm() (it returns
   assert.equal(h.section().hidden, false, 'the card shows');
   await h.click('record-discard');
   assert.deepEqual(h.removed, [], 'one click only asks again, in the card');
-  assert.match(h.button('record-discard').text, /Click again to discard/);
+  assert.match(h.button('record-discard').text, /Confirm discard/);
   await h.click('record-discard');
   assert.deepEqual(h.removed, ['r1'], 'the second click discards');
   assert.equal(h.section().hidden, true, 'the card goes');
