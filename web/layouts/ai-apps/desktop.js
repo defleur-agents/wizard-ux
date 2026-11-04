@@ -779,13 +779,14 @@ export default function desktop(api) {
     const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, grouped, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
-    // Snoozed (when there are any), Ready (always, its count may be 0), then Ready's statuses
+    // Snoozed (when there are any), Ready (only when something is ready), then Ready's statuses
     // round 22 (Miguel, 4 Nov 2026): Working comes back on the rail (only while chats work), its count beside the
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
     if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));
-    else out.push(railRow('ready', ready.length, 'Ready', '', act));
+    // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
+    else if (ready.length) out.push(railRow('ready', ready.length, 'Ready', '', act));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
