@@ -1,0 +1,41 @@
+'use strict';
+// This admission is deliberately offline: an env flag or a loopback hostname is
+// not proof that a service is synthetic. Only a reserved, unroutable origin and
+// an explicit local response catalogue are admitted. Unknown requests fail shut.
+const fs = require('node:fs'), path = require('node:path');
+const FIXTURE_ORIGIN = 'http://wizard-qa.invalid';
+function admit(base, fixture) {
+ const u = new URL(base);
+ if (u.href !== FIXTURE_ORIGIN + '/' || !fixture) throw Error('Synthetic fixture origin and QA_FIXTURE required; owner/network origins refused');
+ const document = JSON.parse(fs.readFileSync(fixture, 'utf8'));
+ if (document.synthetic !== true || !document.responses || Array.isArray(document.responses)) throw Error('Invalid synthetic response catalogue');
+ return { base: FIXTURE_ORIGIN, responses: document.responses };
+}
+function responseFor(fixture, url, method = 'GET') {
+ const u = new URL(url, fixture.base);
+ if (u.origin !== fixture.base) throw Error('Non-fixture origin refused before network: ' + u.origin);
+ const key = method.toUpperCase() + ' ' + u.pathname + u.search;
+ const row = fixture.responses[key];
+ if (!row || typeof row.body !== 'string' || !Number.isInteger(row.status)) throw Error('Uncatalogued fixture request: ' + key);
+ return { status: row.status, contentType: row.contentType || 'application/json', body: row.body };
+}
+async function fenceContext(ctx, fixture, denied = []) {
+ // Browser routing does NOT cover APIRequestContext. Replace that escape hatch
+ // with an in-memory facade; never bind or call the original request object.
+ const request = async (url, init = {}) => {
+  const row = responseFor(fixture, url, init.method || 'GET');
+  return { ok: () => row.status >= 200 && row.status < 300, status: () => row.status,
+   body: async () => Buffer.from(row.body), text: async () => row.body,
+   json: async () => JSON.parse(row.body), dispose: async () => {} };
+ };
+ const api = { fetch: request, dispose: async () => {} };
+ for (const method of ['get','head','post','put','patch','delete']) api[method] = (url, init = {}) => request(url, { ...init, method: method.toUpperCase() });
+ Object.defineProperty(ctx, 'request', { value: Object.freeze(api), configurable: false });
+ await ctx.route('**/*', async route => {
+  try { return await route.fulfill(responseFor(fixture, route.request().url(), route.request().method())); }
+  catch (error) { denied.push(String(error)); return route.abort('blockedbyclient'); }
+ });
+ // No socket can escape a response-only fixture.
+ await ctx.routeWebSocket('**/*', ws => ws.close());
+}
+module.exports = { admit, responseFor, fenceContext, FIXTURE_ORIGIN };

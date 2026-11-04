@@ -131,11 +131,15 @@ test('every persistent Chats adapter has an Incognito early return; both shells 
 })
 test('preflight of a desktop close never destroys an earlier accepted chat', async () => {
   const s = rig(); await s.component.start('one', s.agent); await s.component.start('two', s.agent);
+  const before = s.calls.length;
   assert.equal(s.component.close('one',false,true),true);
   s.setConfirm(false); assert.equal(s.component.close('two',false,true),false);
   assert.equal(s.component.active('one'),true);assert.equal(s.component.active('two'),true);
-  assert.equal(s.calls.filter(c=>c.init?.method==='DELETE').length,0);
+  assert.equal(s.calls.length - before, 0, 'preflight must issue no request of any method');
+  assert.equal(s.calls.filter(c=>c.method==='DELETE').length,0);
   s.component.endAll();
+  assert.equal(s.calls.length - before, 2, 'destructive negative control must hit the real recorder');
+  assert.equal(s.calls.filter(c=>c.method==='DELETE').length,2);
 });
 test('Settings registration follows dependency and scrub checks before active index mutation', () => {
   for(const f of ['index.html','desktop.html']) {const s=readFileSync(new URL('../web/'+f,import.meta.url),'utf8');assert.ok(s.indexOf('core/settings.js')<s.indexOf('core/incognito-chat.js'));}

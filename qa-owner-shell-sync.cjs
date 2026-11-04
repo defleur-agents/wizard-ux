@@ -1,12 +1,14 @@
 'use strict';
-// Delivered HTTPS only. Read-only data; no source/asset replacement, fake messages or live writes.
+// Offline synthetic shell only. Asset equality is against the explicit catalogue.
+const { admit, fenceContext } = require('./tools/qa-synthetic-fence.cjs');
+const fixture = admit(process.env.QA_BASE, process.env.QA_FIXTURE);
 const { chromium } = require('./tools/qa-playwright.cjs');
 const { shellPath, inViewport } = require('./tools/qa-shell-state.cjs');
 const fs = require('node:fs'), path = require('node:path'), crypto = require('node:crypto');
 const BASE = process.env.QA_BASE, OUT = process.env.QA_OUT, SHA = process.env.QA_SHA;
 if (!BASE || !OUT || !SHA) throw Error('Set QA_BASE, QA_OUT, QA_SHA');
 fs.mkdirSync(OUT, { recursive: true });
-const report = { base: BASE, expectedSha: SHA, cases: [], limitations: ['Browser viewports, not a physical handset', 'Read-only upstream; no audio/send/install action is exercised', 'Workspace sync disabled in disposable QA storage; no synthetic server data'] };
+const report = { base: BASE, expectedSha: SHA, cases: [], limitations: ['Browser viewports, not a physical handset', 'Offline response catalogue; no upstream, audio/send/install action', 'Workspace sync disabled; disposable synthetic threads only'] };
 const assert = (c, m) => { if (!c) throw Error(m); };
 const visible = p => p.evaluate(geometry => {
  const intersects = new Function('return (' + geometry + ')')();
@@ -31,12 +33,7 @@ const visible = p => p.evaluate(geometry => {
     localStorage.setItem('wos.skin', s); localStorage.setItem('wos.tour.v1', 'true'); localStorage.setItem('wos.tour.done', '1');
     localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.rvCoached', 'true'); localStorage.setItem('wos.obsidian.live', 'true');
    }, skin);
-   await ctx.route('**/*', route => {
-    const q = route.request(), u = new URL(q.url());
-    if (!['GET', 'HEAD'].includes(q.method())) { r.blockedWrites.push({ method: q.method(), path: u.pathname }); return route.fulfill({ status: 403, contentType: 'application/json', body: '{"error":"Read-only acceptance run"}' }); }
-    if (u.origin !== new URL(BASE).origin) { r.failedRequests.push({ externalBlocked: u.origin + u.pathname }); return route.abort(); }
-    return route.continue();
-   });
+   await fenceContext(ctx, fixture, r.failedRequests);
    const p = await ctx.newPage(); p.setDefaultTimeout(15000); p.setDefaultNavigationTimeout(45000);
    p.on('pageerror', e => r.errors.push(String(e)));
    p.on('requestfailed', q => r.failedRequests.push({ url: q.url(), error: q.failure()?.errorText }));
@@ -69,7 +66,7 @@ const visible = p => p.evaluate(geometry => {
       const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.left < innerWidth;
      }), null, { timeout: 30000 });
      let sid = await p.evaluate(() => [...document.querySelectorAll('[data-chopen]')].find(el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.left >= 0 && r.left < innerWidth; })?.dataset.chopen || null);
-     assert(sid, 'No actual read-only thread row was available; cannot claim nested coverage');
+     assert(sid === 'synthetic-qa-thread', 'Only the disposable synthetic-qa-thread may be opened');
      await shot('chats');
      if (desktop) await p.evaluate(id => __wux.openThread(id), sid); else await p.evaluate(id => __wos.openWizardThread(id), sid);
      await p.waitForTimeout(1400); const before = await visible(p); r.threadBefore = before;
