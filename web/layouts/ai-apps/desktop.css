@@ -847,4 +847,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wn { font: 650 0.875re
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-space: normal; text-align: center; overflow-wrap: normal; line-height: 1.15; }
 
 /* round 24b (Miguel, 4 Nov 2026): By subject on the folded rail, each subject's word at most two lines */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="subj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="subj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; font-size: 0.5625rem; letter-spacing: -.02em; }
+/* (a word wider than the rail ends in a fade, never broken mid-word) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="subj:"] { overflow: hidden; }
