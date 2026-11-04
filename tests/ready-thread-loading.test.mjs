@@ -10,7 +10,7 @@ const start=source.indexOf('  async function loadThread('),end=source.indexOf('\
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b});return {promise,resolve,reject}};
 function harness({pending=[],messages=async()=>['answer'],approval=async()=>false,detail=async()=>({}),live}={}){
  const c={readNav:1},w={id:'w',thread:'A'},row={id:'A',status:'completed',messageCount:2,detailNeeded:true},paints=[],retry=[];
- const context={Date,JSON,Number,Promise,clearTimeout(){},INC:null,PW:null,W:{w},ch:()=>c,turnsCurrent:()=>true,threadOnScreen:()=>true,
+ const context={Date,JSON,Number,Promise,clearTimeout(){},INC:null,PW:null,CH:{w:c},W:{w},ch:()=>c,turnsCurrent:()=>true,threadOnScreen:()=>true,
   pendingFor:()=>pending,isWorking:()=>false,LIVE:{session:()=>row,busy:()=>false,listTrusted:()=>true,cachedMessages:()=>null,contentKey:()=> 'v1',messages,sessionInfo:detail,forgetMessages(){}},
   toTurns:rows=>rows,retireLanded:()=>false,loadApproval:approval,elOf:()=>({}),track:{querySelector:()=>({})},
   renderLive:()=>paints.push([...c.turns]),renderThreadLive:()=>paints.push('error'),retryRead:(...args)=>retry.push(args),

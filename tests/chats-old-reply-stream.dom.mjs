@@ -103,11 +103,17 @@ test('a genuinely new stream remains visible until a new transcript answer lands
   } finally { h.close(); }
 });
 
-test('a longer new answer ending like an old short answer is not retired', () => {
+test('a longer new answer ending like an old short answer is not retired', async () => {
   const h = harness({ transcript: [row('user', 'First?', 0), row('assistant', 'Yes.', 1), ...rows] });
   try {
     h.paint(); h.emit('Here is the new explanation with additional words. Yes.');
     assert.equal(h.c.stream.landed, false);
     assert.match(h.el.querySelector('[data-streaming] .bub').textContent, /additional words\. Yes\.$/);
+    // The terminal snapshot starts a transcript read. Dispose before it lands,
+    // while the host deliberately still returns the old window record.
+    h.chats.forget(h.w.id);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.c.stream, null);
+    assert.equal(h.c.turns.at(-1).a.text, B);
   } finally { h.close(); }
 });
