@@ -50,9 +50,7 @@ try {for(const shell of ['phone','desktop']){
   }
   await p.evaluate(()=>__wos.openSettings());await p.locator('#settings [data-st-page]').first().tap();
   assert.notEqual(await p.locator('#settings [data-settings-root]').getAttribute('data-settings-page'),'');
-  await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),'settings','nested outside uses Settings Back first');
-  assert.equal(await p.locator('#settings [data-settings-root]').getAttribute('data-settings-page'),'');
-  await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),null);
+  await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),null,'one outside tap dismisses nested Settings');
   assert.equal(p.frames().filter(f=>f.url().includes('/store/index.html')).length,1,'app remains mounted');
  }else{
   for(const [button,layer] of [['#searchBtn','#palette'],['#keysBtn','#keyHints']]){
