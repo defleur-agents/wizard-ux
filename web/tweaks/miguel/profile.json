@@ -16,6 +16,7 @@
   ],
   "flags": {},
   "off": [
+    "miguel/group-by-day",
     "miguel/archive-top",
     "miguel/now-playing",
     "miguel/calm-offline"

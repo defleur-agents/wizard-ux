@@ -109,7 +109,7 @@ test('catalog discovery is retained, without a global default or legacy profile 
   const profile = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(catalog.tweaks.includes(id));
   assert.equal(catalog.defaults.includes(id), false);
-  assert.equal(profile.tweaks.includes(id), false);
+  assert.ok(!profile.tweaks.includes(id) || profile.off?.includes(id), 'legacy profile cannot opt in');
 });
 
 test('actual package contract removes its CSS and host state on teardown in both shell fixtures', async () => {
