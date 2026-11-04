@@ -1873,6 +1873,7 @@
   let discardArm = { id: '', at: 0 };
   const discardArmed = id => discardArm.id === id && Date.now() - discardArm.at < 4000;
   function paintRecordings() {
+    const focusedDiscard = document.activeElement?.dataset?.recordDiscard;
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
     recovery.innerHTML = takes.map(it => {
@@ -1888,6 +1889,7 @@
       <div class="recording-acts">${empty ? discard : retry}${it.recoveryText || it.text ? `<button class="wz-button quiet" data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}<button class="wz-button quiet" data-record-download="${esc(it.id)}">Download audio</button>${empty ? retry : discard}</div>
     </article>`;
     }).join('');
+    if (focusedDiscard) [...(recovery.querySelectorAll?.('[data-record-discard]') || [])].find(b => b.dataset.recordDiscard === focusedDiscard)?.focus({ preventScroll: true });
   }
   recovery.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;

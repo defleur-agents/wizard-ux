@@ -28,8 +28,10 @@ function harness(item) {
     onChange: fn => listeners.push(fn),
     load: () => ({ then: fn => fn() }),
   };
+  let focusRestored = 0;
   const document = {
-    createElement: () => (section = { hidden: false, innerHTML: '', handlers: {}, setAttribute() {}, addEventListener(t, f) { this.handlers[t] = f; } }),
+    activeElement: null,
+    createElement: () => (section = { hidden: false, innerHTML: '', handlers: {}, setAttribute() {}, addEventListener(t, f) { this.handlers[t] = f; }, querySelectorAll() { return [{ dataset: { recordDiscard: item.id }, focus() { focusRestored++; document.activeElement = this; } }]; } }),
     body: { appendChild() {} },
   };
   const env = { document, window: { WosOutbox: outbox }, OUTBOX: outbox, LIVE: { session: () => null }, toast: (...a) => toasts.push(a),
@@ -43,8 +45,8 @@ function harness(item) {
     const key = sel.replace(/-(\w)/g, (_, c) => c.toUpperCase());
     return { text: m[4], attrs: m[1] + m[3], b: { dataset: { [key]: m[2] }, disabled: false, textContent: m[4] } };
   };
-  const click = async sel => { const { b } = button(sel); await section.handlers.click({ target: { closest: () => b } }); };
-  return { section: () => section, button, click, removed, toasts };
+  const click = async sel => { const { b } = button(sel); document.activeElement = b; await section.handlers.click({ target: { closest: () => b } }); };
+  return { section: () => section, button, click, removed, toasts, focused: () => focusRestored };
 }
 
 const take = { id: 'r1', kind: 'new', state: 'empty', error: 'No speech in that recording · original recording kept', durable: true, audio: { size: 17 * 1024 }, createdAt: 1 };
@@ -55,6 +57,7 @@ test('Discard removes a kept recording without the browser confirm() (it returns
   await h.click('record-discard');
   assert.deepEqual(h.removed, [], 'one click only asks again, in the card');
   assert.match(h.button('record-discard').text, /Confirm discard/);
+  assert.equal(h.focused(), 1, 'keyboard focus follows the armed button after repaint');
   await h.click('record-discard');
   assert.deepEqual(h.removed, ['r1'], 'the second click discards');
   assert.equal(h.section().hidden, true, 'the card goes');
