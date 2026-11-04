@@ -155,13 +155,36 @@
   // calls). Each app load starts on the next one, and every minute on Home moves on with a 2.5 s crossfade; only the current and next
   // files are fetched. Frozen with the scenery gate like every other skin. Landscapes Dark and Landscapes Light each rotate their own
   // half of the set, split by how bright the photo is overall (Miguel, 28 Oct 2026).
+  /* Wizard OS backgrounds (Miguel, 4 Nov 2026: "a proper main background we can call Wizard OS"). The Landscapes
+   * palettes can show a Wizard OS scene instead of the rotating photos. Each scene is baked from the supplied designer
+   * hat (web/brand/wizard-mark-white.png, never redrawn) by tools/brand/wallpapers.html, one image per palette (night /
+   * day) and per shape (wide desktop, tall phone), cover-fitted once like the photos. Per device, like Window opacity. */
+  const WALL_KEY = 'wos.skin.wallpaper';
+  const WALLS = [
+    { id: 'landscapes', name: 'Photos', who: 'Landscape photos that change every minute.' },
+    { id: 'lake', name: 'Lake', who: 'The Wizard hat as a mountain on a still lake: aurora and a lit door by night, sunrise by day.' },
+    { id: 'glass', name: 'Glass', who: 'The Wizard hat in frosted glass over soft colour.' },
+  ];
+  let wall = (() => { try { const v = localStorage.getItem(WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'landscapes'; } catch (_) { return 'landscapes'; } })();
+  const WIZ = {
+    memo: {},
+    get(id, light, W, H) {
+      const file = `${id}${light ? '-light' : ''}-${H > W * 1.1 ? 'tall' : 'wide'}`, key = `${W}x${H}@${BGL.dpr}`;
+      let m = this.memo[file];
+      if (!m) { m = this.memo[file] = { im: new Image(), ready: false, key: '', c: null }; m.im.decoding = 'async'; m.im.onload = () => { m.ready = true; wake(); }; m.im.src = `/wizard-os-home/core/skins/wizard/${file}.webp`; }
+      if (!m.ready) return null;
+      if (m.key !== key) { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), im = m.im, k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+        x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h); m.c = o; m.key = key; }
+      return m.c;
+    },
+  };
   const LANDSCAPES = (() => {
     const ALL = ['00-10-9', '01-10-10', '02-10-11', '03-10-12', '04-10-13', '05-10-14-day', '06-10-14-night', '07-10-15-day', '08-10-15-night',
       '09-11-big-sur-day', '10-11-big-sur-night', '11-26-tahoe-beach-dawn', '12-26-tahoe-beach-day', '13-26-tahoe-beach-dusk', '14-26-tahoe-beach-night', '15-27-golden-gate-bridge'];
     const AVG = ['#347883', '#937b75', '#71747c', '#715c63', '#9b8773', '#6d5d5a', '#232d43', '#4f4d60', '#18253e', '#40576a', '#0d1b2e', '#8a818c', '#4d8da3', '#405877', '#0d1011', '#87736a'];
-    const make = (files, key, scrim) => ({
+    const make = (files, key, scrim, light) => ({
       FILES: files.map(i => ALL[i]), AVG: files.map(i => AVG[i]),
-      HOLD: 60, FADE: 2.5, KEY: key,
+      HOLD: 60, FADE: 2.5, KEY: key, LIGHT: light,
       load(s, i, W, H) {
         if (s.img[i]) return s.img[i];
         const slot = s.img[i] = { ready: false, c: null }, im = new Image();
@@ -188,6 +211,7 @@
         this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
       },
       draw(c, s, t, dt, W, H) {
+        if (wall !== 'landscapes') { const w = WIZ.get(wall, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = this.LIGHT ? '#ece8f6' : '#0B0A10'; c.fillRect(0, 0, W, H); } return; }
         const cur = s.img[s.cur];
         if (cur?.ready && t - s.shownAt > this.HOLD) {
           const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
@@ -204,7 +228,7 @@
     });
     return {
       dark: make([6, 7, 8, 10, 13, 14], 'wos.skin.landscapes.at', ['.42', '.55']),
-      light: make([0, 1, 2, 3, 4, 5, 9, 11, 12, 15], 'wos.skin.landscapes-light.at', ['.30', '.40']),
+      light: make([0, 1, 2, 3, 4, 5, 9, 11, 12, 15], 'wos.skin.landscapes-light.at', ['.30', '.40'], true),
     };
   })();
   const BG = {
@@ -431,6 +455,16 @@
       if (!['framed', 'borderless'].includes(foundation)) throw new Error('Unknown foundation');
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
+    },
+    // Background (Landscapes palettes only): 'landscapes' (the photos) or a Wizard OS hat background. Per device.
+    wallpapers: Object.freeze(WALLS.map(w => Object.freeze({ ...w }))),
+    get wallpaper() { return wall; },
+    get wallpaperable() { return /^landscapes/.test(SKINS[Math.round(pos)].id); },
+    setWallpaper(id) {
+      if (!WALLS.some(w => w.id === id)) throw new Error('Unknown background');
+      wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {}
+      wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
+      return id;
     },
     // Window opacity: null = the skin's own glass. setGlass(null) returns to it.
     get glass() { return glass; },
