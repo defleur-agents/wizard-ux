@@ -195,7 +195,8 @@
       };
       if (id === 'wizard') {
         glow(W * .5, H * .44, M * .55, light ? .20 : .34);
-        draw(W * .5, H * .44, Math.min(H * .38, W * .5 / this.AR), light ? .92 : .95, Math.min(W, H) * .12);
+        const narrow = W < 700; // phones: a quieter hat behind the app grid
+        draw(W * .5, H * .44, Math.min(H * (narrow ? .3 : .38), W * .5 / this.AR), narrow ? (light ? .3 : .38) : (light ? .92 : .95), Math.min(W, H) * .12);
       } else if (id === 'wizard-rise') {
         glow(W * .9, H * .95, M * .75, light ? .22 : .32);
         const h = Math.max(H * 1.25, W * .9 / this.AR * .9);
