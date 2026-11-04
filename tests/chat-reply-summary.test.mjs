@@ -19,14 +19,14 @@ const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexO
 
 function render(rows, { on, start = 'collapsed', chosen = null }) {
   const ctx = { getComputedStyle: () => ({ getPropertyValue: name => name === '--wos-reply-summary' && on ? ' on' : name === '--wos-reply-regenerate' ? '' : '' }),
-    document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' }, WosSkinHost: { replySummaryStart: start } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
+    document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' }, WosSkinHost: { replySummary: { get: () => ({ start }) } } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
     replyCard: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
   vm.createContext(ctx);
-  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
+  vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
   return KIT.parseRows(rows).map((tn, i, all) => ctx.turnHtml({ texts: [], ...(chosen ? { rsum: new Map(chosen) } : {}) }, tn, i === all.length - 1, false, null, null)).join('');
 }
 const long = Array.from({ length: 160 }, (_, i) => `word${i}`).join(' ');
-const ask = 'New chat groups are live. Say if the 11 groups feel right';
+const ask = 'New chat groups are live. Say if the 11 groups feel right.';
 const rows = [{ role: 'user', timestamp: 1, content: 'Do the thing' }, { role: 'assistant', timestamp: 2, content: long, wizard_ask: ask, wizard_state: 'check' }];
 
 const lead = `<button type="button" class="rsum" data-reply-summary="2000" aria-expanded="false"`;
@@ -35,7 +35,8 @@ test('on: a long reply shows only its ask, as one button; the full reply waits h
   const html = render(rows, { on: true });
   assert.match(html, /<div class="msg a has-rsum"/);
   assert.ok(html.includes(`${lead}><span class="rsum-t">${ask}</span><svg class="rsum-chev"`), 'the whole short answer is the toggle');
-  assert.ok(html.includes(`${full} hidden><button type="button" class="rless" data-reply-summary="2000" aria-expanded="true">Show less`));
+  assert.ok(html.includes(`${full} hidden><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length"`), 'the ⚙ sits beside Show less');
+  assert.match(html, /<button type="button" class="rless" data-reply-summary="2000" aria-expanded="true">Show less/);
   assert.ok(html.indexOf(full) < html.indexOf('word159'), 'the full reply sits in the hidden block');
   assert.doesNotMatch(html, /<details class="rdet"|<summary>Details<\/summary>/, 'no separate Details control');
   assert.match(html, /data-mcopy="0"/, 'Copy still copies the full reply');
@@ -44,9 +45,16 @@ test('on: a long reply shows only its ask, as one button; the full reply waits h
 test('on: "start expanded" shows the full reply with the short answer hidden; a reply the owner tapped keeps its own state', () => {
   const open = render(rows, { on: true, start: 'expanded' });
   assert.match(open, /<div class="msg a has-rsum rsum-open"/);
-  assert.ok(open.includes(`${lead} hidden>`) && open.includes(`${full}><button type="button" class="rless"`));
+  assert.ok(open.includes(`${lead} hidden>`) && open.includes(`${full}><div class="rtools">`));
   assert.match(render(rows, { on: true, start: 'expanded', chosen: [['2000', false]] }), /<div class="msg a has-rsum"[^]*class="rdet" data-reply-details="2000" hidden>/);
   assert.match(render(rows, { on: true, chosen: [['2000', true]] }), /<div class="msg a has-rsum rsum-open"/);
+});
+
+test('the lead reads as a sentence: a missing final stop is added, an existing one or a closing quote is kept', () => {
+  const lead = a => render([rows[0], { ...rows[1], wizard_ask: a }], { on: true }).match(/<span class="rsum-t">(.*?)<\/span>/)[1];
+  assert.equal(lead('Groups are live. Say if they feel right'), 'Groups are live. Say if they feel right.');
+  for (const a of ['Done.', 'Ship it?', 'Live!', 'Wait for it…', 'Reply “ship”', 'Reply ‘ship’', 'Say «go»']) assert.equal(lead(a), a);
+  assert.equal(lead('He said "go"'), 'He said &quot;go&quot;');
 });
 
 test('on: short replies, replies without an ask and failed turns stay as they are', () => {
@@ -81,19 +89,35 @@ test('only the two toggle buttons switch a reply, the choice is kept per reply a
   assert.doesNotMatch(chats, /openDetails/, 'state comes from the per-reply choice, not a DOM restore');
 });
 
-test('the host: api.replies.summaryStart is held by the package and released on teardown; Settings › Chats takes its switch', async () => {
+test('the host: choices are box-wide prefs; the package marks the view on while it lives and puts its options under its Look switch', async () => {
   const f = fixture();
-  f.lsMap.set('wos.skin.miguel/reply-summary.start', JSON.stringify('expanded'));
-  const sections = [];
-  f.ctx.window.WosSettings = { register: s => { sections.push(s); return () => sections.splice(sections.indexOf(s), 1); } };
+  const puts = [], opts = new Map();
+  f.ctx.window.WizLive = { putPrefs: p => { puts.push(p); return Promise.resolve(true); } };
+  f.ctx.window.WosSettings = { register: () => () => {}, tweakOptions: (id, node) => { opts.set(id, node); return () => opts.delete(id); } };
+  const orig = f.ctx.fetch;
+  f.ctx.fetch = async (u, o) => String(u).includes('/wizard/v1/ui-preferences') ? { ok: true, json: async () => ({ replySummary: { on: false, start: 'expanded', length: 'paragraph' } }) } : orig(u, o);
   await f.mount('miguel/reply-summary');
-  assert.equal(f.host.replySummaryStart, 'expanded');
-  assert.deepEqual(sections.map(s => s.page), ['chats']);
+  for (let i = 0; i < 20 && !puts.length; i++) await new Promise(r => setTimeout(r, 5));
+  const R = f.host.replySummary;
+  // A fresh device reads the box's saved choice before turning the view on, never overwriting it with defaults.
+  assert.deepEqual(JSON.parse(JSON.stringify(puts.at(-1))), { replySummary: { on: true, start: 'expanded', length: 'paragraph' } });
+  assert.deepEqual([...opts.keys()], ['miguel/reply-summary'], 'its options sit under its own switch in Look');
+  R.set({ length: 'line' });
+  assert.deepEqual(JSON.parse(JSON.stringify(puts.at(-1))), { replySummary: { on: true, start: 'expanded', length: 'line' } });
+  assert.deepEqual([...R.lengths].map(l => l.name), ['One short line', 'Two sentences', 'Short paragraph']);
   await f.clear();
-  assert.equal(f.host.replySummaryStart, 'collapsed'); assert.equal(sections.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(puts.at(-1))), { replySummary: { on: false, start: 'expanded', length: 'line' } }, 'off for the box after teardown');
+  assert.equal(opts.size, 0);
   const src = read('web/tweaks/miguel/reply-summary/tweak.js');
   assert.match(src, /'Short answers start collapsed'/);
+  assert.match(src, /'Applies to new replies; earlier ones keep theirs\.'/);
   assert.deepEqual(JSON.parse(read('web/tweaks/miguel/reply-summary/manifest.json')).capabilities, ['layout', 'settings']);
+  assert.match(read('web/live.js'), /replySummary: \['wos\.chats\.replySummary\.v1'/, 'live.js caches the box-wide choice');
+});
+
+test('Look lists a tweak\'s own options under its switch only while it is on; other rows are unchanged', () => {
+  const settings = read('web/core/settings.js');
+  assert.match(settings, /t\.on && tweakOpts\.has\(t\.id\) \? `<div class="tw-opts" data-tweak-opts=/);
 });
 
 test('the switch is CSS only: the tweak sets --wos-reply-summary and core never tests the package id', () => {

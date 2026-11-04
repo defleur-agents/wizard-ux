@@ -257,7 +257,8 @@
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
     const exp = s.tweaks.filter(t => !t.builtin);
-    const rows = list => tweakSwitches(list, 'data-tweak-toggle', s.busy);
+    // A live tweak's own options (api.settings.section(id, 'look', node)) sit right under its switch.
+    const rows = list => list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // One section per author (Miguel, 31 Oct 2026): a switch that turns all of theirs on or off, then each tweak by itself.
     // Same list whatever skin is worn; skins are looks only.
@@ -271,6 +272,11 @@
     return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}${groups}</div>`;
   }
   let authorList = null;
+  const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
+  function tweakOptions(id, node) {
+    tweakOpts.set(id, node); for (const m of mounts) m.render();
+    return () => { if (tweakOpts.get(id) === node) { tweakOpts.delete(id); node.remove?.(); for (const m of mounts) m.render(); } };
+  }
   window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
@@ -322,7 +328,8 @@
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
     return lookHtml(S, ctx);
-  }, deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove),
+  }, deferRefresh: ctx => !!(ctx.skinDraft || ctx.skinRemove) || [...tweakOpts.values()].some(n => n.contains?.(document.activeElement) && document.activeElement?.matches?.('input, textarea')),
+  painted(ctx, section) { for (const slot of section?.querySelectorAll?.('[data-tweak-opts]') || []) { const n = tweakOpts.get(slot.dataset.tweakOpts); if (n && n.parentNode !== slot) slot.append(n); } },
   leave(ctx) { ctx.skinDraft = null; ctx.skinRemove = null; },
   back(ctx) {
     if (ctx.skinRemove) { ctx.skinRemove = null; ctx.render(); return true; }
@@ -730,5 +737,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();
