@@ -70,7 +70,7 @@ export const STATES = [['needs', 'Needs you'], ['approval', 'Needs approval'], [
 const KNOWN = new Set(STATES.map(s => s[0]));
 /** Round 16 (Miguel, 3 Nov 2026): the folded 52 px rail's short words, one under each count (the full STATES words in
  * its tip): Snoozed, Ready, then Ready's statuses. */
-export const RAIL_WORDS = Object.freeze({ working: 'Working', snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs', approval: 'Approve', failed: 'Error', check: 'Call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed' });
+export const RAIL_WORDS = Object.freeze({ working: 'Working', snoozed: 'Snoozed', ready: 'Ready', needs: 'Needs', approval: 'Approve', failed: 'Error', check: 'Call', fyi: 'FYI', done: 'Done', deferred: 'Snoozed', none: 'Other' });
 /** One row's status: the shell's own (row.state), else what the row says (needs / a note). */
 export function stateOf(r) {
   const s = r && typeof r.state === 'string' ? r.state : '';
@@ -267,12 +267,13 @@ export function railRows(s, key, order) {
 }
 /** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
  * status group holding it, else Ready / Snoozed. { key, i, n } (i zero-based) or null. Pure. */
-export function railActive(s, cur, last, order) {
+export function railActive(s, cur, last, order, mode) {
   if (!cur) return null;
   const at = key => { const ids = railRows(s, key, order).map(r => r.id), i = ids.indexOf(cur); return i < 0 ? null : { key, i, n: ids.length }; };
   if (last) { const a = at(last); if (a) return a; }
-  const g = stateGroups(s?.ready || []).find(x => x.state !== 'none' && x.rows.some(r => r.id === cur));
-  return (g && at(g.state)) || at('ready') || at('snoozed') || at('working');
+  // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
+  const g = mode === 'list' ? null : stateGroups(s?.ready || []).find(x => (mode === 'groups' || x.state !== 'none') && x.rows.some(r => r.id === cur));
+  return (g && at(g.state)) || (mode === 'groups' ? null : at('ready')) || at('snoozed') || at('working');
 }
 /** A rail item clicked: its first chat, or (when the chat in front is already in it) the next one, wrapping. */
 export const railNext = (ids, cur) => readyStep(ids, cur, 1);

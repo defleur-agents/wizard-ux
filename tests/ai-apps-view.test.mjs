@@ -843,7 +843,10 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
-    ['Working 1', 'Ready 2', '  Needs 1', '  Done 1'], 'round 22: Working, Ready and its statuses, short words (no Archive)');
+    ['Working 1', '  Needs 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
+  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
+  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1\. Click opens the first; hover lists them$/);
@@ -1652,8 +1655,11 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.st.sessions.snoozed = [{ id: 's1', title: 'Later', kind: 'snoozed', at: at(0), actions: [] }];
   const stage = new El('div'); stage.id = 'stage'; const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats';
   chatDesk.append(dchats); stage.append(chatDesk); w.html.children[0].append(stage);
+  w.api.storage.set('groupReady', true);   // (round 22: the rail shows the statuses only when grouped)
   (await layout()).default(w.api);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'rail');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'needs', 'fyi', 'none'], 'round 22: grouped, plain chats as Other, no Ready row');
+  assert.equal(w.q('.aad-rk[data-k="none"] .aad-rk-w').textContent, 'Other');
   const go = id => { w.st.route = id.startsWith('notif:') ? { home: false, view: 'thread', thread: '__new__', desk: 1 } : { home: false, view: 'thread', thread: id, desk: 1 }; w.emit('route', w.st.route); };
   const click = k => { w.q(`.aad-rk[data-k="${k}"]`).dispatchEvent(new FakePointerEvent('click')); const id = w.st.opened.at(-1).replace(/^thread:/, ''); go(id); return id; };
   assert.deepEqual([click('needs'), click('needs'), click('needs'), click('needs')], ['n3', 'n2', 'n1', 'n3'], 'first (Newest inside the group), then the next, wrapping');
@@ -1661,6 +1667,8 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   const needs = w.q('.aad-rk[data-k="needs"]');
   assert.ok(needs.classList.contains('is-on') && needs.getAttribute('aria-current') === 'true', 'the current group marked');
   assert.equal(needs.querySelector('.aad-rk-p').textContent, '1/3', 'its place, under the word');
+  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));   // One list
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
   assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), false);
   assert.equal(click('ready'), 'n3', 'another item: its first chat (Ready = the whole grouped list)');
   assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'n2');
@@ -1669,6 +1677,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
   go('n3'); alt('ArrowDown'); assert.equal(w.st.opened.at(-1), 'thread:n2');
   // hover: a flyout after 300 ms listing the group's chats (title, time); a pick opens one, rail still folded
+  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));   // By status again
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   w.st.timers.length = 0;
   w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('pointerenter'));
@@ -1818,20 +1827,22 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
-test('round 20 item 9: Ready is one flat list in priority order by default (tags on Needs you / Your call); Group Ready by status brings the sub-headers back', async () => {
+test('round 20 item 9 / round 22: Ready is one flat list in priority order by default (each row its time since the last message, no status tags); Group Ready by status brings the sub-headers back', async () => {
   const { w, store } = deskWorld();
   w.st.sessions.ready[0].state = 'fyi'; w.st.sessions.ready[1].state = 'needs';
+  w.st.sessions.ready[0].at = new Date(Date.now() - 5 * 60e3).toISOString(); w.st.sessions.ready[1].at = new Date(Date.now() - 3 * 3600e3).toISOString();
   (await layout()).default(w.api);
   assert.equal(w.q('.aad-grp'), null, 'no sub-headers');
   assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid), ['r2', 'r1'], 'priority order: Needs you first');
-  assert.deepEqual(w.qa('.aad-tag').map(t => t.textContent), ['Needs you'], 'a tag on Needs you only (FYI none)');
+  assert.equal(w.q('.aad-tag'), null, 'round 22: no status tags');
+  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 2, 'round 22: each Ready row shows how long ago');
+  assert.deepEqual(times.map(t => t.textContent), ['3h', '5m'], 'its time since the last message (Needs you first)');
+  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
   const sw = w.q('[data-aad-groupready]'); assert.ok(sw, 'the Settings switch'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first');
   sw.dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true);
   assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi'], 'grouped: the sub-headers');
-  assert.equal(w.q('.aad-tag'), null, 'grouped: no tags (the headers say it)');
-  const { STATE_TAG } = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
-  assert.equal(STATE_TAG.fyi, undefined); assert.equal(STATE_TAG.done, undefined); assert.equal(STATE_TAG.check, 'Your call');
+  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 2, 'grouped: the times too');
 });
 
 test('round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\'s keys', () => {
