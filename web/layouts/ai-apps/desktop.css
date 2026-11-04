@@ -734,6 +734,10 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-stg .aad-stg-n { margin: 
  * and the composer */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-focus] { --aad-side: 0px; --aad-rs: 0px; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-focus] :is(.aad-side, .aad-vt, .aad-grip) { visibility: hidden; opacity: 0; pointer-events: none; }
+/* round 21: ⌥H Home hides both sides; one quiet ◫ where the sidebar was puts everything back (⌥H again) */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hback { display: none; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-focus] .aad-hback { display: grid; position: fixed; left: 12px; top: 12px; z-index: 5; opacity: .7; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-focus] .aad-hback:hover { opacity: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-side, .aad-vt) { transition: opacity 180ms ease; }
 /* hold-⌥ hints: a keycap (skin tokens, the shell's type) on each target's top-left corner, unlike the round amber
  * count badges, which step back while ⌥ is held */
@@ -746,9 +750,6 @@ html[data-shell="desktop"][data-layout="ai-apps"] .kh-chip {
 html[data-shell="desktop"][data-layout="ai-apps"].key-hints-on :is(.aad-vtb, .aad-rk-n.is-badge) { opacity: .35; }
 /* the Ready row ⌥↓ / ⌥↑ open makes room at its start for its keycap, so the keycap never touches the title */
 html[data-shell="desktop"][data-layout="ai-apps"].key-hints-on .aad-rw[data-aad-kh] .aad-chat { padding-left: 34px; }
-html[data-shell="desktop"][data-layout="ai-apps"] .kh-keys { background: var(--aad-canvas); color: var(--aad-ink-2); border-color: var(--aad-line); }
-html[data-shell="desktop"][data-layout="ai-apps"] .kh-keys :is(h4, kbd) { color: var(--aad-ink); }
-html[data-shell="desktop"][data-layout="ai-apps"] .kh-keys kbd { background: var(--aad-canvas); border-color: color-mix(in srgb, var(--aad-ink) 28%, transparent); }
 /* item 6: a notification row: a small amber bell, its title in normal text, its unread dot amber */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-bell { color: var(--amber, var(--wz-warning)); opacity: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-st.is-new { background: var(--amber, var(--wz-warning)); }

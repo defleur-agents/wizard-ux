@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, keyLegend, STATE_TAG } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, STATE_TAG } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -146,7 +146,7 @@ export default function desktop(api) {
   // round 8 (Miguel): text only and a small chevron, no disc before the name
   const wsName = el('span', 'aad-wsn');
   wsBtn.append(wsName, icon('down', 'aad-ico aad-wsc'));
-  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); findBtn.append(icon('search'));
+  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
   // (round 18 item 4a, Miguel: the Ready count sits on Ready's own header, as on the rail; none on ◫ any more)
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
@@ -157,8 +157,8 @@ export default function desktop(api) {
   head.append(wsBtn, findBtn, searchBox, cancelBtn, togBtn);
   const scroll = el('div', 'aad-scroll');
   const foot = el('div', 'aad-foot');
-  const newBtn = el('button', 'aad-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); newBtn.append(icon('plus'));
-  const setBtn = el('button', 'aad-set', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); setBtn.append(icon('cog'));
+  const newBtn = el('button', 'aad-new', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); newBtn.append(icon('plus'));
+  const setBtn = el('button', 'aad-set', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); setBtn.append(icon('cog'));
   // round 7: the cog on the left, the AI fuel gauge between, + on the right
   const fuel = el('div', 'aad-fuel', { 'data-fuel-copy': '' }); fuel.hidden = true;
   foot.append(setBtn, fuel, newBtn);
@@ -166,9 +166,9 @@ export default function desktop(api) {
   // a short word (round 12's words, not icons) … the cog. (No Ready count on its ◫: Ready is right under it.)
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
-  const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat' }); rNew.append(icon('plus'));
-  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search' }); rFind.append(icon('search'));
-  const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings' }); rSet.append(icon('cog'));
+  const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
+  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); rFind.append(icon('search'));
+  const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
   rail.append(rTog, rNew, rFind, rList, rSet);
   const panel = el('div', 'aad-panel'); panel.append(head, scroll, foot);
@@ -208,7 +208,7 @@ export default function desktop(api) {
   const vtFoot = el('div', 'aad-vtf');
   // All apps: the list's last row, kept in view under it (the grid as a sheet, ⌥T)
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
-  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥T)' });
+  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
   vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
@@ -230,8 +230,10 @@ export default function desktop(api) {
   orbBox.append(cv, fb, micG, orbBtn);
 
 
+  // round 21: ⌥H Home hides both sides; this one quiet ◫ at the top left (where the sidebar was) puts everything back (⌥H)
+  const hBack = el('button', 'aad-ib aad-hback', { type: 'button', 'aria-label': 'Everything back as it was (⌥H)', title: 'Back as it was (⌥H)' }); hBack.append(icon('side'));
   const scene = el('div', 'aad');
-  scene.append(shade, side, top, pLoad, vt, toast, orbBox);
+  scene.append(shade, side, top, pLoad, vt, toast, orbBox, hBack);
   api.mount(scene);
 
   // the + sheet in three levels and room under hosted apps for the floating orb, from the shared view chrome; the orb's
@@ -253,9 +255,9 @@ export default function desktop(api) {
     if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
     if (open) closeFly();
-    togBtn.title = 'Close sidebar (Ctrl+Shift+S)';
+    togBtn.title = 'Close sidebar (⌥L)';
     togBtn.setAttribute('aria-expanded', String(open)); rTog.setAttribute('aria-expanded', String(open));
-    rTog.title = 'Open sidebar (Ctrl+Shift+S)';
+    rTog.title = 'Open sidebar (⌥L)';
     if (open) paintList(); else paintRail();
     applySizes();
     // the desks' windows are laid out in pixels: lay them out again for the new width
@@ -464,7 +466,6 @@ export default function desktop(api) {
   const oneEach = () => { const seen = new Set(); return desks().filter(d => d.id !== CHATS && !seen.has(d.id) && seen.add(d.id)); };
   // (round 16 item 7: no All apps grid any more; Home's model still gives the ⌥ letters, never shown)
   const home = homeView(api, { goApp: (id, desk) => goApp(id, desk), getMore: () => api.apps.openDesk('app-store'), lit, badgeText, desks: oneEach, paged: true, menu: (a, at) => openAppMenu(a, at) });
-  const appFor = k => home.appFor(k);
   /* the picker (round 16 item 7; the shared sheet, chrome.js): installed apps neither open nor pinned, For people open,
    * For agents folded, + Get more last (the App Store as it is); ⌥T or the column's + */
   const allOpenNow = () => !!chrome.isOpen;
@@ -513,8 +514,6 @@ export default function desktop(api) {
     menu = { card, wrap: cellEl || card }; offMenuBack = api.back.push(closeMenu);
     api.after(0, () => card.querySelector('button')?.focus?.({ preventScroll: true }));
   }
-  /** The app icons on screen with their letters (for the hold-⌥ hints): Home's page in view. */
-  const appChips = () => home.chips().filter(c => shown(c.el));
   // round 15: the grid shows in the All apps sheet only (Home is the clean background and the composer)
   function paintHome() {
     if (root.dataset.aiFront !== 'list') root.dataset.aadHome = ''; else delete root.dataset.aadHome;
@@ -1070,7 +1069,7 @@ export default function desktop(api) {
     const mode = vtFolded ? 'rail' : 'open';
     if (root.dataset.aadTabs !== mode) { root.dataset.aadTabs = mode; applySizes(); }
     vtTog.setAttribute('aria-expanded', String(!vtFolded));
-    vtTog.setAttribute('aria-label', vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = vtFolded ? 'Expand' : 'Fold to icons';
+    vtTog.setAttribute('aria-label', vtFolded ? 'Show the apps\' names' : 'Fold the apps to icons'); vtTog.title = vtFolded ? 'Expand (⌥R)' : 'Fold to icons (⌥R)';
     const { pinned, others } = vtTabs();
     const sig = JSON.stringify([mode, frontDesk() ?? '', pinned.map(d => d.desk + d.id + d.name + badgeText(d.id)), others.map(d => d.desk + d.id + d.name + badgeText(d.id))]);
     if (!force && sig === vtDrawn && vtList.childElementCount) return; vtDrawn = sig;
@@ -1261,7 +1260,7 @@ export default function desktop(api) {
   // line that expands in place into 'Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps always stay
   // open.' (parts.js tidySentence, the phone's sheet too); folded to the rail it opens beside the column
   let tidyPop = null, offTidyBack = null;
-  function paintTidy() { const k = tidyKey(); tidyW.textContent = `Tidy: ${TIDY_SHORT[k]}`; tidyBtn.setAttribute('aria-label', `Tidy up: ${k === 'off' ? 'off' : `close apps you haven't used in ${TIDY_WORDS[k]}`}. Change`); tidyBtn.title = 'Tidy up: close apps you haven\'t used for a while (pinned apps always stay open)'; }
+  function paintTidy() { const k = tidyKey(); tidyW.textContent = `Tidy: ${TIDY_SHORT[k]}`; tidyBtn.setAttribute('aria-label', `Tidy up: ${k === 'off' ? 'off' : `close apps you haven't used in ${TIDY_WORDS[k]}`}. Change`); tidyBtn.title = 'Tidy up: close apps you haven\'t used for a while (pinned apps always stay open) · ⌥T'; }
   function closeTidy() { if (!tidyPop) return; tidyPop.remove(); tidyPop = null; offTidyBack?.(); offTidyBack = null; tidyBtn.setAttribute('aria-expanded', 'false'); }
   function openTidy() {
     if (tidyPop) { closeTidy(); return; } closeMenu();
@@ -1274,10 +1273,8 @@ export default function desktop(api) {
   api.listen(doc, 'pointerdown', e => { if (tidyPop && !tidyPop.contains(e.target) && !tidyBtn.contains(e.target)) closeTidy(); }, true);
   paintTidy();
 
-  /* ---------- ⌥ keys: every desktop ⌥ key keeps working; the hold-⌥ hints map onto this view ----------
-   * ⌥\ the sidebar (Ctrl / ⌘ ⇧ S too), ⌥T All apps, ⌥W closes what is in front (the panel's app; a pinned one hides;
-   * else the docked chat), ⌥F the panel wider, ⌥` Home; ⌥ + a free letter an app (the pinned icons and the open tabs
-   * wear them while ⌥ is held). Esc: All apps, then the wide panel, then the panel hides, then the chat column. */
+  /* ---------- keys (round 21 below): Esc steps back one layer: the picker, then the wide panel, then the panel hides,
+   * then the chat column ---------- */
   const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
   api.keys.on({ down: e => {
     if (e.key === 'Escape' && drag?.on) { dragEnd(false); return true; }   // (round 16: Esc cancels a drag)
@@ -1315,6 +1312,7 @@ export default function desktop(api) {
       if (st.wide) api.after(500, () => setWide(true));
     });
   }
+  api.listen(hBack, 'click', () => focusOut());
   /** the rails come back as they are now (a side opened by hand, a chat or an app opened): the stash stays for ⌥. */
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
   /** Archive / Resolve on the open item, by key or button: then the next Ready one (the one ⌥↓ would open) */
@@ -1333,100 +1331,117 @@ export default function desktop(api) {
     const ids = readyIds();
     if (!ids.length) { showToast('Nothing ready right now'); return; }
     const r = api.route(), h = here(r), cc = h.app ? curChat() : null;
-    const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && (h.note || r.thread === '__new__') ? stepAt : cc && ids.includes(cc) ? cc : null;
-    const nx = readyStep(ids, cur, dir); if (!nx) return;
+    // (round 21: the item in front exactly as the hints read it, so ⌥↓ opens the row wearing ↓; nothing in front: ⌥↓ the
+    // first, ⌥↑ the last)
+    const cur = h.thread && ids.includes(h.thread) ? h.thread : stepAt && ids.includes(stepAt) && h.note ? stepAt : cc && ids.includes(cc) ? cc : null;
+    const nx = cur == null && dir < 0 ? { id: ids[ids.length - 1], wrapped: false } : readyStep(ids, cur, dir); if (!nx) return;
     if (nx.wrapped && dir > 0) showToast('Back to the top of Ready');
     stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id);
   }
+  /* Round 21 (Miguel, 4 Nov 2026: the keys as obvious as possible): ⌥ + a mnemonic letter, ⇧ only for the reverse /
+   * variant of a plain key, every key reachable from where it acts. Left: ⌥H Home (again = everything back as it was),
+   * ⌥O workspaces, ⌥K search, ⌥L fold the sidebar, ⌥N new chat, ⌥S Settings, ⌥↓ / ⌥↑ the next / previous Ready item.
+   * Right: ⌥1–⌥9 and ⌥0 the first ten rows, ⌥[ / ⌥] the previous / next app (every row past ten), ⌥⇧[ / ⌥⇧] move it,
+   * ⌥A add an app, ⌥T tidy, ⌥R fold the column. In front: ⌥W close, ⌥F wide, ⌥− / ⌥= narrower / wider, ⌥Z snooze,
+   * ⌥E archive then the next, ⌥X resolve then the next, ⌥B where this app's notifications go. Voice: ⌥Space talk (the
+   * orb), ⌥D dictate, ⌥V new voice chat, ⌥C command (the shell's own). A modal in front (the app picker, Settings):
+   * only its own key (⌥A, ⌥S) and Esc. Every other ⌥ key is the view's and does nothing, so nothing acts unseen on a
+   * hidden desk (no ⌥G letters, no ⌥/ pinned guide: holding ⌥ is the guide). */
+  const KEY_LIKE = /^(Key[A-Z]|Digit\d|Arrow|Bracket|Backslash|Period|Comma|Minus|Equal|Backquote|Space|Slash|Enter|Semicolon|Quote)/;
+  const closeSettings = () => doc.querySelector('#dsettings .st-close')?.click?.();
+  // (inside the Chats desk, which can carry [hidden] while the view shows it: on screen = it has a box)
+  const onScreen = n => !!n && typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
+  const snoozeOpen = () => !!doc.querySelector?.('.boom-sheet');
+  const chatBtn = act => [...doc.querySelectorAll(`.win .dchats .pane-main [data-chact="${act}"]`)].find(onScreen) || null;
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
-    /* round 20 (a modal in front: the app picker or Settings): only its own key (⌥T / ⌥O, ⌥,), voice and ⌥/ go
-     * through; every other view key is consumed so nothing acts unseen behind it (the hold-⌥ legend lists just those) */
-    { const m = allOpenNow() ? /^(KeyT|KeyO|KeyS|KeyV|KeyC|KeyD|Slash)$/ : settingsOpen() ? /^(Comma|KeyS|KeyV|KeyC|KeyD|Slash)$/ : null;
-      if (m && /^(Key[A-Z]|Digit\d|Arrow|Bracket|Backslash|Period|Comma|Minus|Equal|Backquote|Space|Slash)/.test(e.code || '') && !m.test(e.code)) return true; }
-    if ((e.code === 'ArrowDown' || e.code === 'ArrowUp') && !e.shiftKey) { if (!e.repeat || here().thread) stepReady(e.code === 'ArrowDown' ? 1 : -1); return true; }
-    if (e.code === 'Backslash' && !e.shiftKey) { if (!e.repeat) toggleSide(); return true; }
-    // round 20: ⌥⇧\ folds / unfolds the apps column; ⌥. Focus (everything away, again = back exactly as it was)
-    if (e.code === 'Backslash' && e.shiftKey) { if (!e.repeat) toggleTabs(); return true; }
-    if (e.code === 'Period' && !e.shiftKey) { if (!e.repeat) (focusStash ? focusOut : focusIn)(); return true; }
-    /* round 20 item 8: the open item's own keys stay the stock ones (⌥→ Archive, ⌥← Snooze, ⌥X Resolve: their chips sit
-     * on the buttons); Archive and Resolve then open the next Ready item, as ⌥↓ would. ⌥B: where this source's
-     * notifications go (the routing menu under the notification). */
-    if ((e.code === 'ArrowRight' || (e.code === 'KeyX' && frontNote())) && !e.shiftKey && docked && !typing() && doc.querySelector(`.win .dchats .pane-main [data-chact="${e.code === 'KeyX' ? 'resolve' : 'done'}"]`)) { if (!e.repeat) nextAfterAct(); return false; }
-    if (e.code === 'KeyB' && !e.shiftKey) { if (!e.repeat && docked && frontNote()) doc.querySelector('.win .dchats .pane-main [data-notify-menu]')?.click?.(); return true; }
-    if (e.code === 'KeyT' && !e.shiftKey) { if (!e.repeat) (allOpenNow() ? closeAll : openAll)(); return true; }
-    /* round 18 item 3c (Miguel: audit every ⌥ key; stock meanings kept where they still mean something here):
-     * ⌥O (stock: the apps palette) = the view's one app picker, as ⌥T; ⌥I (stock: the chat list, again its search) =
-     * the sidebar's search; ⌥1–9 = the right column's rows top to bottom (stock: desk N, invisible here); ⌥[ / ⌥] =
-     * the previous / next row (stock: windows, then desks); ⌥⇧[ / ⌥⇧] = move the row in front up / down (stock: move the
-     * desk); ⌥− / ⌥= = the app panel narrower / wider (stock: the focused window); ⌥⇧1–9 (move a window to desk N) and
-     * ⌥W on Home (it closed the Chats window behind Home) do nothing here. */
-    if (e.code === 'KeyO' && !e.shiftKey) { if (!e.repeat) (allOpenNow() ? closeAll : openAll)(); return true; }
-    if (e.code === 'KeyI' && !e.shiftKey) { if (!e.repeat) setSearch(true); return true; }
-    const dg = /^Digit([1-9])$/.exec(e.code || '');
-    if (dg) { if (!e.repeat && !e.shiftKey) vtRows()[+dg[1] - 1]?.__pick?.(); return true; }
-    if (e.code === 'BracketLeft' || e.code === 'BracketRight') {
-      const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), dir = e.code === 'BracketRight' ? 1 : -1;
-      if (e.shiftKey) { if (!e.repeat && i >= 0) rows[i].__move?.(dir); return true; }
+    const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
+    if (settingsOpen()) return code === 'KeyS' && !sh ? once(closeSettings) : KEY_LIKE.test(code);
+    if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);   // (⌥Z's own sheet: when it comes back)
+    // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
+    if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
+    // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
+    if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;
+    if (code === 'Space' && !sh) return once(() => api.voice.talk());
+    if ((code === 'ArrowDown' || code === 'ArrowUp') && !sh) { if (!e.repeat || here().thread) stepReady(code === 'ArrowDown' ? 1 : -1); return true; }
+    // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
+    if ((code === 'KeyH' || code === 'Backquote') && !sh) return once(() => (focusOn() && focusStash ? focusOut : focusIn)());
+    if (code === 'KeyS' && !sh) return once(settings);
+    if (code === 'KeyN' && !sh) return once(newChat);
+    if (code === 'KeyK' && !sh) return once(() => setSearch(true));
+    if (code === 'KeyL' && !sh) return once(toggleSide);
+    if (code === 'KeyR' && !sh) return once(toggleTabs);
+    if (code === 'KeyO' && !sh) return once(() => { if (wsPop) { closeWs(); return; } if (root.dataset.aadSide === 'rail' && !narrow()) toggleSide(); openWs(); });
+    if (code === 'KeyT' && !sh) return once(openTidy);
+    if (code === 'KeyA' && !sh) return once(openAll);
+    const dg = /^Digit(\d)$/.exec(code);
+    if (dg) { if (!e.repeat && !sh) vtRows()[(+dg[1] + 9) % 10]?.__pick?.(); return true; }
+    if (code === 'BracketLeft' || code === 'BracketRight') {
+      const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), dir = code === 'BracketRight' ? 1 : -1;
+      if (sh) { if (!e.repeat && i >= 0) rows[i].__move?.(dir); return true; }
       if (rows.length) rows[i < 0 ? (dir > 0 ? 0 : rows.length - 1) : (i + dir + rows.length) % rows.length].__pick?.();
       return true;
     }
-    if ((e.code === 'Minus' || e.code === 'Equal') && !e.shiftKey) { if (pane) setSize('app', sizes().app[0] + (e.code === 'Equal' ? 64 : -64), true); return true; }
-    if (e.code === 'KeyW' && !e.shiftKey && !pane && !docked) return true;
-    if (e.code === 'KeyW' && !e.shiftKey && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
-    if (e.code === 'KeyW' && !e.shiftKey && docked) { if (!e.repeat) closeChat(); return true; }
-    if (e.code === 'KeyF' && !e.shiftKey && pane) { if (!e.repeat) setWide(!wide); return true; }
-    if (e.code === 'Backquote' && !e.shiftKey && (pane || docked || allOpenNow())) { if (!e.repeat) goHome(); return true; }
-    const k = /^Key([A-Z])$/.exec(e.code || '')?.[1], id = k && !e.shiftKey && appFor(k);
-    if (id) { if (!e.repeat) goApp(id); return true; }
-    return false;
+    if ((code === 'Minus' || code === 'Equal') && !sh) { if (pane && !wide) setSize('app', sizes().app[0] + (code === 'Equal' ? 64 : -64), true); return true; }
+    if (code === 'KeyW' && !sh && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
+    if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
+    if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
+    // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
+    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
+    if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
+    if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) doc.querySelector('.win .dchats .pane-main [data-notify-menu]')?.click?.(); return true; }
+    if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
+    return KEY_LIKE.test(code);
   } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
   const shown = n => !!n && n.isConnected !== false && !n.closest?.('[hidden]') && (typeof n.getClientRects !== 'function' || n.getClientRects().length > 0);
-  /* Round 20 (Miguel, 3 Nov 2026: hints that read at a glance, in every state): while left ⌥ is held, a keycap on the
-   * top-left corner of every target visible now that has a key (no words: the legend names them; app count badges
-   * stay as they are and step back), and one compact legend card above the composer of the keys valid now that have
-   * no single target, grouped (parts.js keyLegend). Right-column rows wear 1–9 by place (⌥[ ] walk the same order);
-   * rows past 9 their app letter. */
+  /* Round 21: while left ⌥ is held, a small keycap ON each thing a key acts on, where it is (no legend card, nothing in
+   * the middle): icons and buttons at their top-left corner, the next / previous Ready rows at their start (the row
+   * makes room), app rows 1–9 / 0 on the icon's top-left, [ ] on the icon's top-right of the row they go to. No keycap
+   * for a key with nothing to point at (⌥V, ⌥C); count badges step back while ⌥ is held. */
   const focusOn = () => root.dataset.aadFocus != null;
   const frontNote = () => chatThread === NOTE || here().note;
   const settingsOpen = () => { const n = doc.getElementById?.('dsettings'); return !!n && !n.hidden && n.parentNode === doc.body; };   // (the centred Settings panel)
   api.keys.guide(() => {
-    const out = [], put = (n, key, at = 'tl') => { if (shown(n)) out.push({ el: n, key, at }); };
+    const out = [], put = (n, key, at = 'tl') => { if (shown(n)) out.push({ el: n, key, at }); }, putIn = (n, key, at = 'tl') => { if (onScreen(n)) out.push({ el: n, key, at }); };
     for (const r of side.querySelectorAll('.aad-rw[data-aad-kh]')) delete r.dataset.aadKh;
-    // a modal in front: its own close key on its ✕ (what is behind sits under its scrim)
-    if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'T'); return out; }
-    if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), ','); return out; }
-    put(orbBtn, 'S');
-    if (focusOn()) return out;
+    // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
+    if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
+    if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
+    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); return out; }
+    put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
+    if (focusOn()) { put(hBack, 'H'); return out; }
     const open = root.dataset.aadSide === 'open';
-    put(open ? togBtn : rTog, '\\'); put(open ? findBtn : rFind, 'I'); put(open ? newBtn : rNew, 'N'); put(open ? setBtn : rSet, ',');
+    if (open) { put(wsName, 'H', 'below'); put(wsBtn.querySelector('.aad-wsc'), 'O', 'right'); }
+    put(open ? togBtn : rTog, 'L'); put(open ? findBtn : rFind, 'K'); put(open ? newBtn : rNew, 'N'); put(open ? setBtn : rSet, 'S');
     const ids = readyIds(), cur = curChat(), nx = ids.length ? readyStep(ids, ids.includes(cur) ? cur : null, 1) : null, pv = ids.length > 2 && ids.includes(cur) ? readyStep(ids, cur, -1) : null;
     if (open) {
       // ↓ / ↑ on the very rows ⌥↓ / ⌥↑ open (the drawn Ready, in its order)
       // (the row makes room at its start while ⌥ is held, data-aad-kh, so the keycap never touches its title)
       const row = (id, k) => { const w = id && [...side.querySelectorAll('.aad-rw[data-kind="ready"]')].find(r => r.dataset.sid === id); const b = w?.querySelector('.aad-row'); if (shown(b)) { w.dataset.aadKh = k; put(b, k, 'inside-l'); } };
       if (nx && nx.id !== cur) row(nx.id, '↓'); if (pv && pv.id !== cur) row(pv.id, '↑');
-    } else if (nx) put(rList.querySelector('.aad-rk[data-k="ready"]'), '↓');
-    put(vtTog, '⇧\\');
-    const ks = home.letters();
-    vtRows().forEach((b, i) => { const k = i < 9 ? String(i + 1) : ks[b.dataset.app]; if (k) put(b.querySelector('.aad-tile') || b, k); });
-    put(vtAll, 'T');
-    if (pane) { put(pX, 'W'); put(pW, 'F'); } else if (docked) put(cX, 'W');
+    } else {
+      // folded: on the rail word whose group holds it (its status, else Ready)
+      const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
+      const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
+      if (n1) put(n1, '↓'); if (p1 && p1 !== n1) put(p1, '↑'); else if (p1) put(p1, '↑', 'bl');
+    }
+    put(vtTog, 'R');
+    const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), tile = b => b.querySelector('.aad-tile') || b;
+    rows.forEach((b, k) => { if (k < 10) put(tile(b), String((k + 1) % 10)); });
+    if (rows.length > 1) {
+      const nb = rows[i < 0 ? 0 : (i + 1) % rows.length], pb = rows[i < 0 ? rows.length - 1 : (i - 1 + rows.length) % rows.length];
+      put(tile(nb), ']', 'tr'); if (pb !== nb) put(tile(pb), '[', 'tr');
+    }
+    put(vtAll.querySelector('.aad-vti') || vtAll, 'A'); put(tidyBtn.querySelector('.aad-tidy-i') || tidyBtn, 'T');
+    if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); } else if (docked) put(cX, 'W');
+    if (docked) {
+      for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
+      if (frontNote()) putIn([...doc.querySelectorAll('.win .dchats .pane-main [data-notify-menu]')].find(onScreen), 'B', 'start');
+    }
     return out;
-  });
-  api.keys.legend?.(({ pinned }) => {
-    const rs = (sessions || readSessions()).ready || [], d = pane && desks().find(x => x.desk === pane.desk);
-    const groups = keyLegend({ side: root.dataset.aadSide === 'open' ? 'open' : 'rail', tabs: vtFolded ? 'rail' : 'open', pane: !!pane, wide, pinnedPane: !!d && pins.includes(d.id),
-      docked, item: docked ? (frontNote() ? 'note' : 'chat') : '', ready: rs.length, rows: vtRows().length, home: !pane && !docked && !allOpenNow(), sheet: allOpenNow(),
-      settings: !allOpenNow() && settingsOpen(), focus: focusOn() ? 'on' : focusStash ? 'stash' : '', pinned });
-    // a modal: one short line just above it (its ✕ keeps its keycap), never over its content
-    if (allOpenNow() || settingsOpen()) return { near: doc.querySelector('.vc-sheet .vc-card') || doc.getElementById?.('dsettings'), line: true, groups };
-    // (the free middle between the two sides: the card centres there and never covers a sidebar or the apps column)
-    const L = focusOn() ? 0 : side.getBoundingClientRect?.().right || 0, R0 = focusOn() ? (globalThis.innerWidth || 1440) : vt.getBoundingClientRect?.().left || (globalThis.innerWidth || 1440);
-    return { near: homeComposer() || orbBox, span: [L, R0], groups };
-  });
-  api.keys.guide(() => appChips());
+  }, { only: true });
 
   /* ---------- the main area: Home (the new chat), a chat docked beside the sidebar, an app as the panel ---------- */
   function here(r = api.route()) {

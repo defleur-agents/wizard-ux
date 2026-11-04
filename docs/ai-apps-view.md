@@ -49,45 +49,49 @@ Desktop (`desktop.js`, `desktop.css`):
   (off at first) adds a small Newest / Oldest menu on Ready's header. The group is mounted through the layout API's
   `desk.setting(id, node)` (core/skin-host.js).
 - Middle: the chat in a centred column with the composer.
-- Right: one apps column = Pinned · Open · + (drag to rearrange; ⌥ letters through the shell's own key guide). An app
+- Right: one apps column = Pinned · Open · + (drag to rearrange; ⌥1–⌥0 and ⌥[ ] through the shell's own key guide). An app
   opens as a panel beside the chat; panels resize by grips. An open pin wears the same 4 px running dot as the phone.
   At its foot a small "Tidy: 24h" line expands into "Tidy up: close apps you haven't used in [24 hours ▾]. Pinned apps
   always stay open." (Off / 12 hours / 24 hours / 1 week).
 
 ## Keys (desktop)
 
-One base key, ⌥ (Option / Alt). Hold left ⌥ (round 20): a small keycap sits on the top-left corner of every target you
-can see that has a key (the right column's rows wear 1–9 by place, app count badges step back), and one compact card
-above the composer lists, in plain words, only the keys that do something in the current state (no Ready chats: no
-↑ ↓; nothing open: no W, F, − =; a notification in front: X ← → B). ⌥/ keeps it open. With the app picker or Settings in
-front, the view takes only that modal's own key (⌥T / ⌥,), voice and ⌥/: a one-line legend sits above the modal and its
-✕ wears the key.
+One base key, ⌥ (Option / Alt), plus one mnemonic letter; ⇧ only for the reverse of a plain key (round 21). Hold left ⌥:
+a small keycap sits ON each thing a key acts on, where it is (icons and buttons at their top-left corner, the next /
+previous Ready rows at their start, app rows 1–9 / 0 on the icon, [ ] on the rows they go to). No legend card and
+nothing in the middle; a key with nothing on screen to point at (⌥V, ⌥C) has no keycap. App count badges step back while
+⌥ is held. With the app picker or Settings in front only its own key (⌥A, ⌥S) and Esc work; its ✕ wears that key.
 
-| Key | In the AI apps view |
+| Key | In the AI apps view (keycap on) |
 | --- | --- |
-| ⌥[ / ⌥] | Previous / next app in the right column (wraps); ⌥⇧[ / ⌥⇧] move the app in front up / down |
-| ⌥1–9 | The app at that place in the right column |
-| ⌥↓ / ⌥↑ | Next / previous Ready item exactly as the sidebar draws it (notifications included); wraps |
-| ⌥` | Home |
-| ⌥. | Focus: both sides away, chat and app closed, only Home and the composer; again = back exactly as it was (in memory only) |
-| ⌥\\, Ctrl/⌘⇧S | Fold / unfold the left sidebar |
-| ⌥⇧\\ | Fold / unfold the apps column |
-| ⌥F | App panel wide / back to the side |
-| ⌥− / ⌥= | App panel narrower / wider |
-| ⌥W | Close the app in front (a pinned one hides) or the docked chat / notification; nothing on Home |
-| ⌥← | Snooze the item in front |
-| ⌥→ | Archive the item in front, then the next Ready item opens |
-| ⌥X | Resolve the notification in front, then the next Ready item opens |
-| ⌥B | Where this app's notifications go (the menu under the notification; same picker as Settings › Notifications) |
-| ⌥N, ⌥Enter | New chat |
-| ⌥T, ⌥O | Add an app (the picker); again closes it |
-| ⌥I | Search chats and apps (the sidebar's search) |
-| ⌥, | Settings (again closes it) |
-| ⌥G | Letters on everything (stock pick) |
-| ⌥/ | Keep the key guide open |
-| ⌥S ⌥V ⌥C ⌥D | Talk, new voice chat, command, dictate (stock) |
-| ⌥ + A E J K M Q U Y | Open the app wearing that letter (right column rows past 9, Home icons) |
-| ⌥⇧1–9 | Nothing (no desks to move windows to) |
+| ⌥H | Home: both sides, the chat and the app away; again = back exactly as it was (the workspace name; ◫ at the top left while away). ⌥` the same |
+| ⌥O | Workspaces (the ▾ next to the name) |
+| ⌥K | Search chats and apps (🔍) |
+| ⌥L | Fold / unfold the left sidebar (its ◫); Ctrl/⌘⇧S too |
+| ⌥N | New chat (+) |
+| ⌥S | Settings (the cog); again closes it |
+| ⌥↓ / ⌥↑ | Next / previous Ready item as the sidebar draws it, notification rows included (on those rows; folded: on the rail word holding it) |
+| ⌥1–⌥9, ⌥0 | The first ten apps in the right column (on each icon) |
+| ⌥[ / ⌥] | Previous / next app, wraps; every row past ten (on those rows) |
+| ⌥⇧[ / ⌥⇧] | Move the app in front up / down |
+| ⌥A | Add an app (the + row); again closes the picker |
+| ⌥T | Tidy (the Tidy line) |
+| ⌥R | Fold / unfold the right apps column (its ◫) |
+| ⌥W | Close the app in front (a pinned one hides), else the docked chat / notification (✕ / —) |
+| ⌥F | App wide / back to the side (⤢) |
+| ⌥− / ⌥= | App narrower / wider (the panel's edge) |
+| ⌥Z | Snooze the item in front (Snooze) |
+| ⌥E | Archive it, then the next Ready item opens (Archive) |
+| ⌥X | Resolve the notification ("Have <agent> handle it"), then the next |
+| ⌥B | Where this app's notifications go (the "From … · shows in …" line) |
+| ⌥Space | Talk (the orb) |
+| ⌥D | Dictate into the box (the composer) |
+| ⌥V / ⌥C | New voice chat / command (the shell's own; no keycap) |
+
+Every other ⌥ key does nothing here (no ⌥G letters, no ⌥/ pinned guide, no app letters, no ⌥← / ⌥→, no desk keys), so
+nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
+Everything else in both panels (the Archive / Working / Snoozed headers, the fuel gauge, a row's ⋯) is a plain button:
+Tab reaches it.
 
 Ready is one flat list in priority order by default (a tiny muted tag on Needs you / Your call rows); Settings › Chats
 & app screens › AI apps view › "Group Ready by status" brings the per-status sub-headers back. Notification rows wear a

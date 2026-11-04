@@ -773,25 +773,18 @@
       }),
       /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
        * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
-       * chips stay off; ⌥/ still pins the guide). guide(fn): fn() → [{ el, key, word }] chips the ⌥/ guide adds. */
+       * chips stay off; ⌥/ still pins the guide). guide(fn, { only }): fn() → [{ el, key, word, at }] chips the hold-⌥ guide adds. */
       keys: Object.freeze({
         on({ down, up, hold = false } = {}) {
           if (!live()) return () => {};
           const h = { a, hold: !!hold, down: typeof down === 'function' ? guard(a, 'keys.down', down) : null, up: typeof up === 'function' ? guard(a, 'keys.up', up) : null };
           keyHandlers.add(h); const off = () => { keyHandlers.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
         },
-        guide(fn) {
+        // only: true = the hold-⌥ guide shows just this layout's chips (none of the desktop's own, no footer line)
+        guide(fn, { only = false } = {}) {
           if (!live() || typeof fn !== 'function') return () => {};
-          const g = guard(a, 'keys.guide', fn); keyGuides.add(g);
+          const g = guard(a, 'keys.guide', fn); g.only = only === true; keyGuides.add(g);
           const off = () => { keyGuides.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
-        },
-        /* legend(fn): fn({ pinned }) → { near, groups: [{ name, keys: [[key, word], …] }] }: the hold-⌥ guide's one
-         * compact card of the keys that have no single target, valid right now, in plain words, centred above `near`
-         * (e.g. the composer) and clear of every chip (the AI apps view, round 20). */
-        legend(fn) {
-          if (!live() || typeof fn !== 'function') return () => {};
-          const g = guard(a, 'keys.legend', fn); keyLegends.add(g);
-          const off = () => { keyLegends.delete(g); a.offs.delete(off); }; a.offs.add(off); return off;
         },
       }),
       sessions: Object.freeze({
@@ -1069,7 +1062,7 @@
     }
     return Object.freeze(o);
   }
-  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set(), keyLegends = new Set();   // layout-only: api.voice.onCommand, api.keys
+  const commandUis = new Set(), keyHandlers = new Set(), keyGuides = new Set();   // layout-only: api.voice.onCommand, api.keys
   let panelOn = false, panelHold = 0;
   function panelSync() {
     const on = [...panelHolders].some(l => !l.dead);
@@ -1623,15 +1616,7 @@
     keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
     get holdKeys() { return [...keyHandlers].some(h => h.hold && !h.a.dead); },
     keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 40)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at }); } return out; },
-    keyLegend(ctx = {}) {
-      for (const fn of [...keyLegends]) {
-        const l = fn(Object.freeze({ pinned: !!ctx.pinned })); if (!l || !Array.isArray(l.groups)) continue;
-        const groups = l.groups.slice(0, 6).map(g => ({ name: String(g?.name || '').slice(0, 24), keys: (Array.isArray(g?.keys) ? g.keys : []).slice(0, 10).filter(k => Array.isArray(k) && typeof k[0] === 'string').map(([k, w]) => [k.slice(0, 8), String(w || '').slice(0, 32)]) })).filter(g => g.keys.length);
-        const span = Array.isArray(l.span) && l.span.length === 2 && l.span.every(Number.isFinite) && l.span[1] > l.span[0] ? [l.span[0], l.span[1]] : null;
-        if (groups.length) return { near: l.near || null, span, line: l.line === true, groups };
-      }
-      return null;
-    },
+    get keysOnly() { return [...keyGuides].some(g => g.only); },
     /* app.js: the dock orb's swipes a worn layout asked for ({ up, side, down }: null = nothing, 'home'), or null = stock. */
     orbSwipes() { for (const [l, m] of orbSwipeHolders) if (!l.dead) return m; return null; },
     /* app.js: the dock orb was tapped while idle. True when a layout handled it. */
