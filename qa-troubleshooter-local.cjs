@@ -3,6 +3,7 @@
  * Public probe fulfillment is synthetic positive Internet evidence, NOT a real Internet outage/device proof. */
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
+const { MODEL_OPTIONS, seedOwner } = require('./tools/qa-desktop-frame-fixture.cjs');
 const out = process.env.QA_OUT || '/srv/work/troubleshooter-evidence', root = path.join(__dirname, 'web');
 const tsRoot = process.env.QA_TS_DIR;
 assert.ok(tsRoot && fs.existsSync(path.join(tsRoot, 'index.html')), 'stage real Troubleshooter source');
@@ -17,7 +18,7 @@ const server = http.createServer((req, res) => {
   if (!['GET', 'HEAD'].includes(req.method)) { res.writeHead(403); return res.end(); }
   if (u.pathname === '/recovery-fallback/') {
     res.writeHead(200, { 'Content-Type': 'text/html', 'Content-Security-Policy': policy });
-    return res.end('<!doctype html><meta name="viewport" content="width=device-width"><title>Dark fallback</title><link rel="stylesheet" href="/wizard-os-home/core/polish.css"><script src="/wizard-os-home/core/reach.js"></script><body>');
+    return res.end('<!doctype html><meta name="viewport" content="width=device-width"><title>Dark fallback</title><link rel="stylesheet" href="/wizard-os-home/kit/wizard-tokens.css"><link rel="stylesheet" href="/wizard-os-home/kit/controls.css"><link rel="stylesheet" href="/wizard-os-home/core/polish.css"><script src="/wizard-os-home/core/reach.js"></script><body>');
   }
   let file;
   if (u.pathname.startsWith('/wizard-os-home/')) file = path.join(root, u.pathname.slice('/wizard-os-home/'.length) || 'index.html');
@@ -28,6 +29,7 @@ const server = http.createServer((req, res) => {
     return res.end(req.method === 'HEAD' ? '' : fs.readFileSync(file));
   }
   if (u.pathname.endsWith('/bootstrap')) return json(res, { bootstrap: 1, display: { agent_name: 'Wizard', owner_name: 'Synthetic QA' }, capabilities: {} });
+  if (u.pathname.endsWith('/api/model/options')) return json(res, MODEL_OPTIONS);
   if (u.pathname.endsWith('/setup')) return json(res, { first_run: false, complete: true, seen: true });
   if (u.pathname.endsWith('/api/sessions')) return json(res, { sessions: [] });
   if (u.pathname.endsWith('/v1/runs')) return json(res, { runs: [] });
@@ -59,6 +61,7 @@ const server = http.createServer((req, res) => {
         if (privateDown && !u.pathname.startsWith('/wizard-os-home/') && !u.pathname.startsWith('/troubleshoot/')) return route.abort('connectionrefused');
         return route.continue();
       });
+      await ctx.addInitScript(seedOwner, { phone: true });
       await ctx.addInitScript(() => {
         Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
         for (const [k, v] of Object.entries({ 'wos.coached': 'true', 'wos.voiceTipSeen': 'true', 'wos.tour.v1': 'true', 'wos.tour.done': '1' })) localStorage.setItem(k, v);
