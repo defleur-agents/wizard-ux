@@ -204,7 +204,8 @@ test('review fixes: one Home map at a time, boot guess expires, unreadable usage
   assert.ok(!cat.tweaks.includes('wizard/machines-home') && cat.tweaks.includes('miguel/machines-home'));
   // The oneOf mechanism stays for any later pair of packages that fill the same place.
   const group = { oneOf: [['miguel/machines-home', 'wizard/machines-home']] };
-  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => viewOf\(id\) \? id === worn : enabled\(id, own\)\), own\)/);
+  // Phone: unchanged rule. Desktop: a standard layout view is worn by the shell itself, never loaded as a tweak.
+  assert.match(exp, /loadTweaks\(oneOf\(all\.filter\(id => desktop && layoutForView\(id\) \? false : viewOf\(id\) \? id === worn : enabled\(id, own\)\), own\)/);
   const src1 = 'return ' + exp.match(/const oneOf = (\(ids, own = recipe\(\)\) => .*);\n/)[1];
   const make = (offs = [], recipeOff = []) => new Function('catalog', 'recipe', 'recipeChoice', 'offFor', 'owner', 'globalOff', src1)(group, () => null, (own, id) => recipeOff.includes(id) ? false : undefined, () => offs, 'miguel', () => false);
   const pick = make();  // the shipped function
