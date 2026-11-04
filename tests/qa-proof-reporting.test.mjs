@@ -75,3 +75,40 @@ test('known-empty proof endpoints are explicit entries in the shared closed cata
   assert.equal(fx.read('/wizard/hermes/api/sessions').data[0].id, 'tap-thread');
   assert.throws(() => fx.read('/wizard/v1/setup', 'POST'), /Uncatalogued fixture request/);
 });
+
+
+test('startup discovery has explicit synthetic skins and My skin responses', () => {
+  const skins = fx.read('/wizard/v1/skins');
+  assert.equal(skins.active, null);
+  assert.deepEqual(skins.skins.map(s => s.base), ['nebula', 'grove', 'tide', 'ember', 'signal']);
+  for (const s of skins.skins) { assert.equal(s.has_script, false); assert.equal(s.has_recipe, true); }
+  assert.equal(fx.response('/wizard/v1/my-skin').contentType, 'text/css');
+  assert.equal(fx.response('/wizard/v1/my-skin').body, '');
+  assert.equal(fx.read('/wizard/v1/my-skin?format=json').script.exists, false);
+  for (const p of ['/wizard/v1/pages', '/wizard/v1/agent-options', '/wizard/v1/app-bindings', '/wizard/v1/schedules', '/wizard/ai-usage', '/troubleshoot/api/status', '/wizard-tinfoil/api/status', '/wizard-claude/api/accounts', '/wizard-os-home/store-data/wizard/v1/app-logos', '/wizard-os-home/store-data/wizard/v1/installed-apps', '/wizard-os-home/store-install/_updates']) assert.doesNotThrow(() => fx.read(p), p);
+  for (const p of ['/wizard/v1/skins/owner', '/wizard/v1/my-skin?format=other']) assert.throws(() => fx.response(p), /Uncatalogued/);
+});
+
+test('Wisdom verifies every pinned static asset, never nonexistent legacy files', async () => {
+  const wisdom = readFileSync(new URL('../qa-wisdom-pinned-thread.cjs', import.meta.url), 'utf8');
+  const start = wisdom.indexOf('  for(const f of ', wisdom.indexOf("extra.status='pass'"));
+  const end = wisdom.indexOf('  await Promise.all(staticReads);', start);
+  const manifest = { files: { 'static/discussions.js':'a', 'static/wisdom.js':'b', 'static/wizard-appearance.css':'c', 'static/icon.svg':'d' } };
+  const seen = [], c = { assets:{} }, frame = {evaluate:async (fn,f) => {seen.push(f);assert.ok(Object.hasOwn(manifest.files,'static/'+f), 'asset is actually pinned: '+f);return manifest.files['static/'+f];}};
+  await vm.runInNewContext(`(async()=>{${wisdom.slice(start,end)}})()`,{manifest,c,frame,assert});
+  assert.deepEqual(seen.sort(),Object.keys(manifest.files).map(f=>f.slice(7)).sort());
+});
+
+
+test('production My skin startup follows only catalogued CSS and metadata reads', async () => {
+  const calls = [], store = new Map();
+  const ctx = { Event, URLSearchParams, location:{search:''}, addEventListener(){}, dispatchEvent(){},
+    localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,String(v)),removeItem:k=>store.delete(k)},
+    WosSkin:{current:'nebula',list:[{id:'nebula'}]},
+    fetch:async (url,init={})=>{calls.push(url);const r=fx.response(url,init.method||'GET');return {ok:true,status:r.status,headers:{get:()=>r.contentType},json:async()=>JSON.parse(r.body),text:async()=>r.body};}};
+  ctx.window=ctx;
+  vm.runInNewContext(readFileSync(new URL('../web/core/my-skin.js',import.meta.url),'utf8'),ctx);
+  await ctx.WosMySkin.refresh();
+  assert.deepEqual([...new Set(calls)],['/wizard/v1/skins','/wizard/v1/my-skin','/wizard/v1/my-skin?format=json']);
+  assert.equal(ctx.WosMySkin.state.loaded,true);
+});

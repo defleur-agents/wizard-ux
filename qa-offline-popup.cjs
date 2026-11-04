@@ -33,7 +33,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         }
         if (failed && u.pathname.startsWith('/wizard/')) return route.abort('internetdisconnected');
         if(u.pathname.startsWith('/wizard-os-home/'))return fx.staticResponse(route,path.join(__dirname,'web'),u.pathname.slice('/wizard-os-home/'.length));
-        return route.fulfill({json:fx.read(u.pathname)});
+        return route.fulfill(fx.response(u.pathname+(u.pathname==='/wizard/v1/my-skin'?u.search:''),req.method()));
       });
       const page = await ctx.newPage();
       page.on('pageerror', e => errors.push(e.message));

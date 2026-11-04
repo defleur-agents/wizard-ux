@@ -52,7 +52,7 @@ async function scenario(browser, origin, desktop, thread, status, skin = 'obsidi
     if (u.pathname === '/wizard/v1/agents') return json({agents:[{id:'hermes',label:'Wizard',is_default:true,harness:'hermes',status:'running',privacy:'standard',model:{provider:'fixture',model:'fixture'}}]});
     if (u.pathname === '/wizard/thread-seen') return json({state:{initializedAt:1,threads:{}}});
     if (u.pathname === '/wizard/v1/ui-preferences') return json({spaces:[],pinnedChats:[],readyOrder:'newest',migrations:{'launcher.v1':true}});
-    if (u.pathname.startsWith('/wizard/')) return json(fx.read(u.pathname));
+    if (u.pathname.startsWith('/wizard/')) return r.fulfill(fx.response(u.pathname+(u.pathname==='/wizard/v1/my-skin'?u.search:''),q.method()));
     if(!['GET','HEAD'].includes(q.method()))return json({error:'Synthetic refusal'},403);
     if (!u.pathname.startsWith('/wizard-os-home/')) return json({});
     return r.continue();
