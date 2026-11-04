@@ -46,11 +46,13 @@ for (const file of ['app.js', 'desktop/desktop.js']) {
     assert.equal(w.W['w-restricted'].thread, 't-restricted');
   });
   test(`${file}: the AI apps drawer lists and acts on the main agent's Chats only, with routed windows open`, () => {
-    const w = world(file);
+    // its failed chats and By day's Yesterday / Past week too, which this view folds into Ready
+    const main = (id, extra = {}) => ({ id, title: id, agent: '', runtimeKind: 'main', status: 'idle', ...extra });
+    const w = world(file, { errors: [main('s-main-e', { status: 'interrupted' })], yesterday: [main('s-main-y')], pastWeek: [main('s-main-p')] });
     const rows = w.api.sessionList();
-    assert.deepEqual(Array.from(rows.ready, r => r.id), ['s-main'], 'only the main agent\'s rows');
+    assert.deepEqual(Array.from(rows.ready, r => r.id), ['s-main-e', 's-main', 's-main-y', 's-main-p'], 'only the main agent\'s rows, its failed and earlier-day chats included');
     for (const k of kinds.slice(1)) assert.ok(!JSON.stringify(rows).includes(`qa-${k}`), `${k}: no routed row`);
-    for (const a of ['done', 'snooze', 'rename']) { w.calls.length = 0; assert.equal(w.api.sessionAct('s-main', a), true, a);
+    for (const sid of ['s-main', 's-main-e', 's-main-y', 's-main-p']) for (const a of ['done', 'snooze', 'rename']) { w.calls.length = 0; assert.equal(w.api.sessionAct(sid, a), true, a);
       const hits = w.calls.filter(c => c[0] === 'act' || c[0] === 'rename');
       assert.equal(hits.length, 1, a); assert.equal(hits[0][1], 'w-main', `${a} lands on the main Chats window`);
       for (const k of kinds.slice(1)) assert.ok(!w.calls.some(c => c[1] === 'w-' + k), `${a}: ${k} window untouched`);
