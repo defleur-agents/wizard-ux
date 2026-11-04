@@ -95,21 +95,16 @@
     const observe = d => { clock = Math.max(clock, d?.skin?.at || 0, ...Object.values(d?.tweaks || {}).map(t => t.at || 0), ...Object.values(d?.views || {}).map(t => t.at || 0), ...Object.values(d?.defaults || {}).map(t => t.at || 0)); };
     observe(meta.pending);
     const stamp = () => ++clock;
-    // An owner intent not yet based on a server observation (including restored
-    // pending storage). Base each intent once; never restamp an already-sent
-    // choice on every 409, which would defeat a genuinely newer remote writer.
-    const unbasedViews = new Set(Object.keys(meta.pending.views || {}));
-    const unbasedDefaults = new Set(Object.keys(meta.pending.defaults || {}));
+    // Before the first observation (also restored storage), or while a request
+    // is in flight, an intent needs that response as its causal base. An idle
+    // choice already has an observed base: a newer remote writer can beat it.
+    // Traverse every field together; never restamp an already-sent choice on 409.
+    const choices = doc => [doc.skin, ...Object.values(doc.tweaks || {}), ...Object.values(doc.views || {}), ...Object.values(doc.defaults || {})].filter(Boolean);
+    let unbased = new WeakSet(choices(meta.pending));
+    const intent = t => { if (!boxDoc || busy) unbased.add(t); return t; };
     function baseChoices() {
-      for (const shell of unbasedViews) if (meta.pending.views?.[shell]) meta.pending.views[shell].at = stamp();
-      unbasedViews.clear();
-      for (const id of unbasedDefaults) if (meta.pending.defaults?.[id]) meta.pending.defaults[id].at = stamp();
-      unbasedDefaults.clear();
-    }
-    function renewPending(d) {
-      observe(d);
-      if (meta.pending.skin && (d?.skin?.at || 0) >= meta.pending.skin.at) meta.pending.skin.at = stamp();
-      for (const [id, t] of Object.entries(meta.pending.tweaks)) if ((d?.tweaks[id]?.at || 0) >= t.at) t.at = stamp();
+      for (const t of choices(meta.pending)) if (unbased.has(t)) t.at = stamp();
+      unbased = new WeakSet();
     }
     const dirty = () => !!meta.pending.skin || Object.keys(meta.pending.tweaks).length > 0 || Object.keys(meta.pending.views || {}).length > 0 || Object.keys(meta.pending.defaults || {}).length > 0;
     // Experience modules from before per-shell views have no `views`: they keep the old one-view-everywhere meaning.
@@ -172,7 +167,7 @@
         if (!known) try { known = new Set(await exp.tweakIds()); } catch (_) { /* catalog unreadable now: count every id */ }
         let { doc, version } = await get();
         for (let tries = 0; tries < 4; tries++) {
-          if (!meta.synced) renewPending(doc); else observe(doc);
+          observe(doc);
           baseChoices(); // also covers a synced device choosing while GET/PUT was in flight
           const pending = JSON.parse(JSON.stringify(meta.pending));
           let want = null;
@@ -191,8 +186,8 @@
             doc = want; version = w.version; sent(pending);
           } else if (doc) sent(pending);
           // A PUT acknowledgement is only its captured choice. Keep a later
-          // local view visible while that newer pending revision waits to save.
-          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(merge(doc, { views: meta.pending.views, defaults: meta.pending.defaults })); }
+          // local choice visible while that newer pending revision waits to save.
+          if (doc) { meta.version = version; meta.synced = true; boxDoc = doc; adopt(merge(doc, meta.pending)); }
           save(); last = 'ok'; break;
         }
         if (last !== 'ok') throw new Error('look busy'); // four other saves in a row: try again later
@@ -210,26 +205,26 @@
       if (applying || !ID.test(String(id))) return;
       const group = views();
       if (group.includes(id)) {
-        if (value) { const at = stamp(); for (const key of group) meta.pending.tweaks[key] = { on: key === id, at }; }
+        if (value) { const at = stamp(); for (const key of group) meta.pending.tweaks[key] = intent({ on: key === id, at }); }
         else {
           const selected = group.find(key => key !== id && meta.pending.tweaks[key]?.on);
-          meta.pending.tweaks[id] = { on: false, at: selected ? meta.pending.tweaks[selected].at : stamp() };
+          meta.pending.tweaks[id] = intent({ on: false, at: selected ? meta.pending.tweaks[selected].at : stamp() });
         }
-      } else meta.pending.tweaks[id] = { on: !!value, at: stamp() };
+      } else meta.pending.tweaks[id] = intent({ on: !!value, at: stamp() });
       save(); schedule();
     }
     // The owner chose a view for this type of shell (experience.js raises wos:view-choice): every shell of that type follows.
     function viewChoice(shell, id) {
       if (applying || !SHELLS.includes(shell) || typeof id !== 'string' || !(id === '' || ID.test(id))) return;
-      (meta.pending.views ||= {})[shell] = { id, at: stamp() }; unbasedViews.add(shell); save(); schedule();
+      (meta.pending.views ||= {})[shell] = intent({ id, at: stamp() }); save(); schedule();
     }
     function defaultChoice(id, value) {
       if (applying || !ID.test(String(id)) || typeof value !== 'boolean' || !Object.hasOwn(defaultChoices(), id)) return;
-      (meta.pending.defaults ||= {})[id] = { on: value, at: stamp() }; unbasedDefaults.add(id); save(); schedule();
+      (meta.pending.defaults ||= {})[id] = intent({ on: value, at: stamp() }); save(); schedule();
     }
     function skinChoice(id) {
       if (applying || typeof id !== 'string' || !SKIN.test(id)) return;
-      meta.pending.skin = { id, at: stamp() }; save(); schedule();
+      meta.pending.skin = intent({ id, at: stamp() }); save(); schedule();
     }
     // Views are known once the tweaks have loaded. A box copy with two views on (an older client, the agent) is fixed
     // on the box too (the newest one stays), so a stale view never comes back; a device-only both-on is fixed here.
