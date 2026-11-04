@@ -54,3 +54,128 @@ for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Mig
   // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
   assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
   for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">${shell === 'desktop' ? 'Desktop' : 'Phone'} view · by (Miguel|miguel)<`), id + ' labelled by Miguel, for this device type');
+  assert.deepEqual(b.views(), [], 'a fresh device wears no view (Desks)');
+});
+
+test('turning one on turns the other off; off again = Desks; one tweak reload per tap; survives a reload', async () => {
+  const storage = new Map();
+  const b = box({ storage }); await b.E.refresh();
+  b.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(b.views(), ['miguel/orb-shell']);
+  assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [true, false]);
+  const n = b.loads.length; b.tap('miguel/apps-home'); await tick();
+  assert.deepEqual(b.views(), ['miguel/apps-home'], 'Apps on turns Orb off');
+  assert.equal(b.loads.length, n + 1, 'one reload of the tweaks per tap');
+  assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [false, true]);
+  b.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(b.views(), ['miguel/orb-shell'], 'and Orb on turns Apps off');
+  b.tap('miguel/apps-home'); await tick(); b.tap('miguel/apps-home'); await tick();
+  assert.deepEqual(b.views(), [], 'switching the worn one off = Desks (the other does not come back)');
+  b.tap('miguel/apps-home'); await tick();
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/apps-home' }, 'one view stored for this device type');
+  const again = box({ storage }); await again.E.refresh();
+  assert.deepEqual(again.views(), ['miguel/apps-home'], 'a reload keeps Apps');
+  // api.settings.toggleTweak (WosExperience.toggle) takes the same path
+  await again.E.toggle('miguel/orb-shell'); assert.deepEqual(again.views(), ['miguel/orb-shell']);
+});
+
+test('AI apps is a third shell view: on turns Orb and Apps off, Orb or Apps on turns it off, off again = Desks', async () => {
+  const b = box(); await b.E.refresh();
+  const worn = () => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
+  b.tap('miguel/orb-shell'); await tick();
+  b.tap('miguel/ai-apps'); await tick(); assert.deepEqual(worn(), ['miguel/ai-apps'], 'AI apps on turns Orb off');
+  b.tap('miguel/apps-home'); await tick(); assert.deepEqual(worn(), ['miguel/apps-home'], 'Apps on turns AI apps off');
+  b.tap('miguel/ai-apps'); await tick(); b.tap('miguel/ai-apps'); await tick(); assert.deepEqual(worn(), [], 'the worn one off = Desks');
+});
+
+test('a device that stores both on wears only the first in catalog order (Orb), and the switches agree', async () => {
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  assert.ok(cat.tweaks.indexOf('miguel/orb-shell') < cat.tweaks.indexOf('miguel/apps-home'));
+  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/orb-shell': true, 'miguel/apps-home': true, 'miguel/snooze-someday': true } })]]);
+  const b = box({ storage }); await b.E.refresh();
+  assert.deepEqual(b.views(), ['miguel/orb-shell']);
+  assert.ok(b.active().includes('miguel/snooze-someday'), 'the rest of the mix is untouched');
+  assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [true, false]);
+  b.tap('miguel/apps-home'); await tick(); assert.deepEqual(b.views(), ['miguel/apps-home']);
+  b.tap('miguel/apps-home'); await tick(); assert.deepEqual(b.views(), [], 'off = Desks, the stale Orb on is cleared too');
+  // his phone today (Apps on, Orb off as the old row stored it) keeps Apps
+  const phone = box({ shell: 'phone', storage: new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/orb-shell': false, 'miguel/apps-home': true } })]]) });
+  await phone.E.refresh(); assert.deepEqual(phone.views(), ['miguel/apps-home']);
+});
+
+for (const shell of ['desktop', 'phone']) test(`${shell}: each switch wears its layout; both off is exactly the stock shell`, async () => {
+  for (const [id, layout] of [['', 'classic'], ['miguel/orb-shell', 'orb'], ['miguel/apps-home', 'apps']]) {
+    const b = box({ shell }); await b.E.refresh(); if (id) { b.tap(id); await tick(); }
+    const f = fixture({ shell });
+    await f.host.loadTweaks(b.views(), f.slots, { teamAuthors: ['miguel'] });
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(f.host.layout, layout, `${shell} ${id || 'Desks'}`);
+    if (!id) {
+      assert.deepEqual([...f.host.tweakState], [], 'Desks: no view tweak runs');
+      assert.equal(f.doc.documentElement.dataset.layout, undefined, 'no layout hook on <html>');
+      assert.equal(f.doc.documentElement.dataset.viewChrome, undefined);
+      assert.equal(f.host.orbSwipes(), null, 'stock orb swipes');
+      assert.ok(!f.doc.head.children.some(l => /layouts\/|tweaks\/miguel\/(orb-shell|apps-home)/.test(l.href || '')), 'no view CSS loaded');
+    }
+    await f.clear();
+  }
+});
+
+test('core keeps only the exclusivity: no Shell view row, no chooseView, no Miguel ids; the old switch tweak stays retired', () => {
+  const settings = read('web/core/settings.js'), exp = read('web/core/experience.js'), css = read('web/core/settings.css');
+  assert.doesNotMatch(settings, /shellView|data-shellview|Shell view/);
+  assert.doesNotMatch(css, /\.sv-(group|seg)/);
+  assert.doesNotMatch(exp, /chooseView/);
+  assert.match(settings, /const exp = s\.tweaks\.filter\(t => !t\.builtin\);/, 'views are listed like any tweak');
+  for (const f of ['web/core/settings.js', 'web/core/experience.js']) assert.doesNotMatch(read(f), /orb-shell|apps-home/, f);
+  for (const [id, name, label] of [['orb-shell', 'Different shell view - Orb', 'Orb'], ['apps-home', 'Different shell view - Apps', 'Apps']]) {
+    const m = JSON.parse(read(`web/tweaks/miguel/${id}/manifest.json`));
+    assert.equal(m.name, name); assert.equal(m.view, label, 'manifest `view` marks it one of the exclusive views');
+    assert.doesNotMatch(m.description, /Shell view/);
+  }
+  const cat = JSON.parse(read('web/tweaks/catalog.json'));
+  for (const id of VIEWS) assert.ok(cat.tweaks.includes(id) && !cat.defaults.includes(id), `${id}: listed, never a default`);
+  assert.ok(!existsSync(new URL('../web/tweaks/miguel/orb-switch', import.meta.url)) && !cat.tweaks.includes('miguel/orb-switch'));
+  for (const f of ['web/layouts/orb/layout.js', 'web/layouts/orb/phone.js', 'web/layouts/apps/layout.js', 'web/layouts/apps/desktop.js', 'web/layouts/orb/layout.css', 'web/layouts/apps/layout.css', 'web/layouts/apps/chrome.css'])
+    assert.doesNotMatch(read(f), /os-switch|os-side/, f);
+  assert.match(read('web/desktop/desktop.css'), /\.bar-center:not\(:empty\) ~ #clock/);
+  // Settings stays reachable in every view: neither view hides the gear
+  for (const f of ['web/layouts/orb/layout.css', 'web/layouts/apps/layout.css', 'web/layouts/apps/chrome.css', 'web/layouts/orb/phone.css', 'web/tweaks/miguel/orb-shell/tweak.css', 'web/tweaks/miguel/apps-home/tweak.css'])
+    assert.doesNotMatch(read(f).replace(/\/\*[\s\S]*?\*\//g, ''), /#settingsBtn[^{]*\{[^}]*display:\s*none|\.gear[^{]*\{[^}]*display:\s*none/, f);
+});
+
+// Per device type (Miguel, 4 Nov 2026): the desktop and the phone each wear their own view (or Desks). The same browser
+// storage serves both shells here, as it does for desktop.html and index.html on one origin.
+test('per shell type: the desktop wears AI apps while the phone wears Orb; each switch acts on its own type only', async () => {
+  const storage = new Map();
+  const worn = b => b.active().filter(id => [...VIEWS, 'miguel/ai-apps'].includes(id));
+  const desk = box({ storage }); await desk.E.refresh();
+  desk.tap('miguel/ai-apps'); await tick();
+  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
+  assert.deepEqual(worn(phone), [], 'the desktop choice leaves the phone on Desks');
+  phone.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(worn(phone), ['miguel/orb-shell']);
+  const again = box({ storage }); await again.E.refresh();
+  assert.deepEqual(worn(again), ['miguel/ai-apps'], 'the phone choice leaves the desktop on AI apps');
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/ai-apps', phone: 'miguel/orb-shell' });
+  const html = await look(phone);
+  assert.doesNotMatch(html, /data-tweak-toggle="miguel\/ai-apps"/, 'a desktop-only view is not offered on the phone');
+  assert.deepEqual(viewSwitches(html).map(v => v[2]), [true, false]);
+  await phone.E.toggle('miguel/ai-apps'); assert.deepEqual(worn(phone), ['miguel/orb-shell'], 'and cannot be switched on there');
+  phone.tap('miguel/orb-shell'); await tick();
+  assert.deepEqual(worn(phone), [], 'off on the phone = Desks on the phone');
+  const last = box({ storage }); await last.E.refresh(); assert.deepEqual(worn(last), ['miguel/ai-apps'], 'the desktop keeps its view');
+});
+
+test('the phone ignores a desktop-only view: an old mix with AI apps on, or a stray phone choice of it, is Desks there', async () => {
+  const legacy = () => new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/ai-apps': true, 'miguel/snooze-someday': true } })]]);
+  const desk = box({ storage: legacy() }); await desk.E.refresh();
+  assert.ok(desk.active().includes('miguel/ai-apps'), 'desktop: the old single view keeps its meaning');
+  const phone = box({ shell: 'phone', storage: legacy() }); await phone.E.refresh();
+  assert.ok(!phone.active().includes('miguel/ai-apps') && phone.active().includes('miguel/snooze-someday'), 'phone: stock view, other tweaks kept');
+  const stray = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: {}, views: { phone: 'miguel/ai-apps' } })]]);
+  const p2 = box({ shell: 'phone', storage: stray }); await p2.E.refresh();
+  assert.deepEqual(p2.views(), []); assert.ok(!p2.active().includes('miguel/ai-apps'));
+  assert.deepEqual(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).shells, ['desktop']);
+  for (const id of VIEWS) assert.deepEqual(JSON.parse(read(`web/tweaks/${id}/manifest.json`)).shells, ['desktop', 'phone'], id);
+});
