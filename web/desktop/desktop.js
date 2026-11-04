@@ -100,6 +100,8 @@
     const panelAppW = () => panelApp && W[panelApp.id] ? W[panelApp.id] : null;   // the app panel's window
     const panelListW = () => panelList && W[panelList.id] ? W[panelList.id] : null;
     const panelWins = () => [panelListW(), panelChat(), panelAppW()].filter(Boolean);
+    // Windows on desks other than the current one that a layout shows on screen anyway (WosSkinHost.routeShows).
+    const shownBeside = () => { const H0 = globalThis.WosSkinHost; if (!H0?.routeShows) return []; const out = []; ws.forEach((d, i) => { if (i !== cur && d.wins.length && H0.routeShows(i)) out.push(...d.wins); }); return out; };
     const panelHas = id => !!id && (panel?.id === id || panelApp?.id === id || panelList?.id === id);
     const panelSlot = id => !id ? null : panel?.id === id ? panel : panelApp?.id === id ? panelApp : null;
     // One app per desk: the desk's focused app, else its first app (the window the panel shows for that desk).
@@ -129,7 +131,9 @@
     toast: (...a) => toast(...a),
     title: w => winTitle(w),
     viewContext: (id, how) => viewContext(id, how),
-    visible: () => [...(homeOpen ? [] : ws[cur].wins), ...(hud?.open ? [hud.id] : []), ...(globalThis.WosSkinHost?.panelMode ? panelWins().map(w => w.id) : [])],
+    // (plus the windows of any other desk a layout shows on screen beside the current one, e.g. the AI apps view's chat
+    // docked beside an app panel: on screen = Chats places, saves and restores its reading spot there too)
+    visible: () => [...(homeOpen ? [] : ws[cur].wins), ...(hud?.open ? [hud.id] : []), ...(globalThis.WosSkinHost?.panelMode ? panelWins().map(w => w.id) : []), ...(homeOpen ? [] : shownBeside())],
     front: () => homeOpen ? (globalThis.WosSkinHost?.panelMode && panelWin()?.id) || null : ws[cur].focus,
     // Docked in the panel (the Orb desktop's right column): a send goes back to the list, like the phone.
     leaveOnSend: id => !!(globalThis.WosSkinHost?.panelMode && panelDocked && panel?.id === id), // and its panel closes (panelThreadLeft)

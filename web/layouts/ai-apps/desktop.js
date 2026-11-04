@@ -972,7 +972,12 @@ export default function desktop(api) {
    * column; hiding the panel leaves its app running on its desk. */
   const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
-  let pane = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
+  /** the main Chats desk's element (its desk number is the shell's data-ws; an agent's Chats desk also holds .dchats),
+   * else the first desk holding Chats */
+  const chatsEl = () => { const m = mainChats(), all = wsps().filter(w => w.querySelector('.dchats')); return (m && all.find(w => Number(w.dataset.ws) === m.desk)) || all[0] || null; };
+  /** the real thread the main Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
+  const behindThread = () => { const t = chatsEl()?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
+  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
    * other open desks (Home's own Chats desk aside), badged first, then desk order */
   function vtTabs() {
@@ -1179,7 +1184,7 @@ export default function desktop(api) {
     if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
-    const chat = pane || chatOn ? wsps().find(w => w.querySelector('.dchats')) : null;
+    const chat = pane || chatOn ? chatsEl() : null; dockEl = chat;
     // (the app's desk or the Chats desk not on the stage yet, the shell draws a desk on its first visit: look again
     // shortly, a few times; no route event follows that drawing)
     if (((h.app && !pane) || ((pane || chatOn) && !chat)) && splitTries < 20) { splitTries++; api.after(150, () => paintTop()); } else splitTries = 0;
@@ -1264,7 +1269,7 @@ export default function desktop(api) {
   let animOff = null, animOn = [];
   function anim(kind) {
     animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
-    const chatDesk = wsps().find(w => w.querySelector('.dchats'));
+    const chatDesk = chatsEl();
     animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
     for (const n of animOn) n.dataset.aadAnim = kind;
     animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
@@ -1572,6 +1577,9 @@ export default function desktop(api) {
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
     if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
+    // an app in front and no chat known yet (the page (re)loaded on that app, an update's reload): the thread the Chats
+    // desk still holds docks beside it as before, never laid out as Home under the panel (cut off, at its top)
+    else if (!chatThread) chatThread = behindThread();
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
@@ -1607,7 +1615,8 @@ export default function desktop(api) {
       }
       return false;
     },
-    shows: desk => !!pane && Number(pane.desk) === desk,
+    // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
+    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });

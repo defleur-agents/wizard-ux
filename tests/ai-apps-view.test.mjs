@@ -1945,6 +1945,44 @@ test('round 21 desktop: one left/right model: apps and their links on the right 
   assert.equal(R.open('draft', { from: 'money' }, () => { throw new Error('Main Chats unavailable'); }), true); assert.equal(w.html.dataset.aadChat, undefined);
 });
 
+/* Miguel, 4 Nov 2026 ("sometimes the chat gets put in this weird view when it's out of focus"): the page (re)loaded with
+ * an app in front while the Chats desk still held a thread (an update's reload). The view knew no chat, so that thread was
+ * laid out as Home under the panel: as wide as the whole main area (cut off by the panel), no title, and never placed at
+ * its latest message, because Chats only places threads it is told are on screen. */
+test('a reload with an app in front: the thread the Chats desk holds docks beside it (title, ✕), and counts as on screen', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  // an agent's own Chats desk sits first on the stage (desks reordered); the main Chats desk (1) holds the thread
+  const agentDesk = new El('div'); agentDesk.className = 'wsp'; agentDesk.dataset.ws = '7'; const adc = new El('div'); adc.className = 'dchats'; adc.dataset.thread = 'x9'; agentDesk.append(adc);
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(agentDesk, chatDesk, appDesk); w.html.children[0].append(stage);
+  let R = null; Object.assign(w.api.apps, { routeOpens: h => { R = h; return () => { R = null; }; } });
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 };   // Money in front from the first paint
+  (await layout()).default(w.api);
+  w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app', 'Money is the panel');
+  assert.equal(w.html.dataset.aadChat, 'on', 'the restored thread is the docked column, not Home under the panel');
+  assert.equal(chatDesk.dataset.aadRole, 'chat', 'the main Chats desk'); assert.equal(agentDesk.dataset.aadRole, undefined, 'never an agent\'s Chats desk'); assert.equal(w.html.dataset.aadSplit, 'on');
+  assert.equal(w.q('.aad-tt').textContent, 'Ready one', 'its title over it (the main desk\'s thread, not the agent\'s)'); assert.equal(w.q('.aad-cx').hidden, false, 'and its ✕');
+  assert.equal(R.shows(1), true, 'the docked chat\'s desk is on screen (Chats places its reading spot there)'); assert.equal(R.shows(4), true);
+  assert.equal(R.shows(2), false, 'a desk out of sight is not'); assert.equal(R.shows(7), false, 'nor the agent\'s Chats desk');
+  w.emit('render'); assert.equal(w.html.dataset.aadChat, 'on', 'repaints keep it docked');
+  // its ✕: Home's new chat behind the panel; nothing to adopt any more, nothing shown beside the app
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); dchats.dataset.thread = '__new__'; w.emit('route', w.st.route);
+  assert.equal(w.html.dataset.aadChat, undefined, 'closed stays closed'); assert.equal(R.shows(1), false);
+  // a new chat restored behind the app is Home, as before (no column)
+  const fresh = deskWorld().w, st2 = new El('div'); st2.id = 'stage';
+  const cd2 = new El('div'); cd2.className = 'wsp'; const dc2 = new El('div'); dc2.className = 'dchats'; dc2.dataset.thread = '__new__'; cd2.append(dc2);
+  const ad2 = new El('div'); ad2.className = 'wsp'; st2.append(cd2, ad2); fresh.html.children[0].append(st2);
+  fresh.st.route = { home: false, view: 'desk', thread: null, desk: 4 };
+  (await layout()).default(fresh.api); fresh.emit('route', fresh.st.route); fresh.run();
+  assert.equal(fresh.html.dataset.aadChat, undefined); assert.equal(fresh.html.dataset.aadSplit, 'on');
+  // the desktop counts the windows of a desk a layout shows beside the current one as visible (Chats' one on-screen check)
+  const dj = noComments(read('web/desktop/desktop.js'));
+  assert.match(dj, /const shownBeside = \(\) => \{[^\n]*H0\.routeShows\(i\)[^\n]*\};/);
+  assert.match(dj, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\),[^\n]*\.\.\.\(homeOpen \? \[\] : shownBeside\(\)\)\],/);
+});
+
 test('round 21 phone: an app (or its link) opens full screen on its own desk, taken to the page; an app\'s Reply opens the chat and Back returns to the app; other links stay stock', async () => {
   const p = world();
   let R = null; const paths = [];
