@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { createHash } from 'node:crypto';
 import { read } from './fixtures/tweaks.mjs';
+import lookFixture from '../tools/qa-look-file-fixture.cjs';
 
 const PATH = '/wizard/v1/pages/wizard-look/look.json';
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -382,4 +383,35 @@ test('cached per-device choices seed an absent file even with no skin or legacy 
   await d.sync.sync();
   assert.deepEqual(box.doc().views, { desktop: { id: 'miguel/ai-apps', at: 0 }, phone: { id: '', at: 0 } });
   assert.deepEqual(d.views, { desktop: 'miguel/ai-apps', phone: '' });
+});
+
+test('browser gate look adapter uses the real Pages path, persists both devices and rejects stale versions', async () => {
+  const { LOOK_PATH, lookFileReply } = lookFixture;
+  assert.equal(LOOK_PATH, PATH);
+  const shared = { version: 1, doc: { version: 1, skin: { id: 'nebula', at: 1 }, tweaks: {}, views: {
+    desktop: { id: 'miguel/ai-apps', at: 2 }, phone: { id: 'miguel/orb-shell', at: 3 }
+  } } };
+  assert.equal(lookFileReply(shared, '/apps/pages/api/file', 'GET'), null, 'old fictional endpoint is not a look API');
+  const box = { req: async (url, init = {}) => {
+    const reply = lookFileReply(shared, url, init.method || 'GET', init.body ? JSON.parse(init.body) : null);
+    assert.ok(reply, 'every production sync request hits the adapter');
+    return { ok: reply.status < 300, status: reply.status, json: async () => clone(reply.body) };
+  } };
+  const opts = { shells: true, views: ['miguel/ai-apps', 'miguel/apps-home', 'miguel/orb-shell'] };
+  const desktop = device(box, opts), phone = device(box, opts);
+  await desktop.sync.sync(); await phone.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/ai-apps', phone: 'miguel/orb-shell' });
+  assert.deepEqual(phone.views, desktop.views);
+  const stale = lookFileReply(shared, PATH).body;
+  desktop.pickView('desktop', 'miguel/apps-home'); await desktop.flush(); await phone.sync.sync();
+  phone.pickView('phone', ''); await phone.flush(); await desktop.sync.sync();
+  assert.deepEqual(desktop.views, { desktop: 'miguel/apps-home', phone: '' });
+  assert.deepEqual(phone.views, desktop.views);
+  assert.equal(shared.acceptedWrites.length, 2);
+  assert.ok(shared.doc.views.desktop.at > 3); assert.ok(shared.doc.views.phone.at > shared.doc.views.desktop.at);
+  const final = clone(shared.doc);
+  const collision = lookFileReply(shared, PATH, 'PUT', { version: stale.version, text: stale.text });
+  assert.equal(collision.status, 409); assert.deepEqual(JSON.parse(collision.body.current.text), final);
+  assert.deepEqual(shared.doc, final, 'a stale writer cannot replace another device choice');
+  assert.equal(lookFileReply(shared, PATH, 'DELETE').status, 405);
 });
