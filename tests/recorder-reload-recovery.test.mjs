@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
-import {readFileSync} from 'node:fs';
-import {randomUUID} from 'node:crypto';
+import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
+import stopEvidence from '../tools/qa-recorder-stop-evidence.cjs';
+import {randomUUID,createHash} from 'node:crypto';
+import path from 'node:path';
 const read = name => readFileSync(process.env.QA_REVIEW_CORE ? process.env.QA_REVIEW_CORE+'/'+name+'.js' : new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
 const source = read('app-capture');
 function extract(from,to,ctx) {
@@ -18,11 +20,86 @@ function capture(overrides={}) {
 function service(cap,appId='mizel') {
   const sourceWindow={location:new URL('https://fixture.invalid/'+appId+'/'),document:{},addEventListener(){},postMessage(){}};
   const frame={tagName:'IFRAME',src:sourceWindow.location.href,isConnected:true,contentWindow:sourceWindow,hasAttribute:()=>false,addEventListener(){},removeEventListener(){}};
-  const window={WizCore:{apps:()=>({APPS:[{id:appId,name:'Synthetic Recorder',kind:'wizard',url:'/'+appId+'/'}]})},WizAppCapture:{reloadCheck:()=>cap},dispatchEvent(){}};
+  const window={WizCore:{apps:()=>({APPS:[{id:appId,name:'Synthetic Recorder',kind:'wizard',url:'/'+appId+'/'}]})},WizAppCapture:{reloadCheck:()=>typeof cap==='function'?cap():cap},dispatchEvent(){}};
   vm.runInNewContext(read('app-services'),{window,location:new URL('https://fixture.invalid/wizard-os-home/'),URL,crypto:{randomUUID},addEventListener(){},setInterval(){},setTimeout,clearTimeout,document:{readyState:'loading',addEventListener(){}},CustomEvent:class{},navigator:{}});
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
   return {host,window,frame,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
+for(const status of ['null','invalid','missing','throw']) test(`native ${status} check cannot arm a later fresh recording or reload`,async()=>{
+  const f=updater();let quiet=false;
+  const c=capture({ready:Promise.resolve(),ownershipLoaded:false,
+    rows:async()=>[],changed:()=>f.emit('wizard-app-capture-state'),
+    meetingBridge:()=>({status:async()=>{if(quiet)return {recording:false};if(status==='throw')throw Error('offline');return status==='null'?null:status==='invalid'?{recording:'no'}:{};}}),
+    fail:(code,message)=>Object.assign(Error(message),{code}),crypto:{randomUUID},Date});
+  extract('  async function recoverLocked(', '  async function recover()',c);
+  c.recover=async()=>{c.recoveryError=null;await c.recoverLocked({})};
+  const s=service(()=>c.reloadCheck());
+  f.window.WizAppServices.update.reloadPlan=s.plan;
+  f.window.WizAppCapture.reconcileReload=c.reconcileReload;
+  f.web.reload('tap');for(let i=0;i<8;i++)await tick();
+  assert.equal(c.recoveryError.code,'native_owner_uncertain');
+  const failedCheck={armed:f.web.armed,recording:s.plan().recording,toast:f.toasts.at(-1)[1],reloads:f.reloads};
+  quiet=true;await c.reconcileReload();
+  c.active={row:{id:'fresh',appId:'mizel'},phase:'recording',engine:{}};
+  f.emit('wizard-app-capture-state');
+  for(const [fn,ms] of f.intervals)if(ms===1000)fn();
+  await tick();
+  assert.equal(f.reloads,0,'quiet native recovery followed by fresh Start must not consume a failed Reload tap');
+  assert.equal(failedCheck.armed,false,'failed check must not silently arm');
+  assert.equal(failedCheck.recording,false,'unknown custody is not a recording-end promise');
+  assert.match(failedCheck.toast,/Try Reload again/);assert.equal(failedCheck.reloads,0);
+  assert.equal(f.web.armed,false);
+  assert.equal(s.plan().recording,true);
+  // A NEW explicit tap during the proven recording still intentionally waits for Stop/save.
+  f.web.reload('tap');assert.equal(f.web.armed,true);assert.equal(f.reloads,0);
+  c.active=null;f.emit('wizard-app-capture-state');await tick();
+  assert.equal(f.web.armed,false);assert.equal(f.reloads,1);
+  f.emit('wizard-app-capture-state');await tick();assert.equal(f.reloads,1,'exactly one intended reload');
+});
+test('intentional recording arm waits through the real app-owned Stop/save holds without releasing them',async()=>{
+  const c=capture({active:{row:{id:'live',appId:'mizel'},phase:'recording',engine:{}}}),s=service(()=>c.reloadCheck()),f=updater();
+  const rec=s.facade.update.hold('Mizel recording'),save=s.facade.update.hold('Mizel capture or durable task save');
+  f.window.WizAppServices.update.reloadPlan=s.plan;
+  f.web.reload('tap');assert.equal(f.web.armed,true);
+  c.active=null;f.emit('wizard-app-capture-state');await tick();
+  assert.equal(f.web.armed,true,'positive stopped custody waits for app save, not disarm');assert.equal(f.reloads,0);
+  assert.equal(s.plan().blocking.length,2,'neither app-owned hold was bypassed');
+  rec.release();f.emit('wizard:app-holds');await tick();assert.equal(f.web.armed,true);assert.equal(f.reloads,0);
+  save.release();f.emit('wizard:app-holds');await tick();assert.equal(f.web.armed,false);assert.equal(f.reloads,1);
+});
+test('unknown custody, unloaded/unresolved capture and microphone loans never promise recording-end reload',async()=>{
+  const blockers=[{ownershipLoaded:false},{recoveryError:{code:'storage_failed'}},{unknownMeetingActive:true},
+    {ownedRows:new Map([['x',{status:'recoverable'}]])},{preparations:new Map([['warm',{}]])},
+    {active:{row:{id:'live'},phase:'recording',engine:{},borrow:{}}},
+    {active:{row:{id:'live'},phase:'recording',engine:{},error:{code:'storage_failed'}}},
+    {active:{row:{id:'live'},phase:'starting'}}];
+  for(const state of blockers){
+    const c=capture(state),s=service(()=>c.reloadCheck()),f=updater();
+    f.window.WizAppServices.update.reloadPlan=s.plan;
+    f.window.WizAppCapture.reconcileReload=async()=>c.reloadCheck();
+    f.web.reload('tap');await tick();
+    assert.equal(f.web.armed,false,JSON.stringify(state));assert.equal(s.plan().recording,false);
+    assert.equal(f.reloads,0);
+  }
+});
+test('unsafe, absent and throwing reconciliation results preserve retry rather than arming',async()=>{
+  for(const outcome of [{safe:false,reason:'native_owner_uncertain'},undefined,'throw']){
+    const f=updater();f.plan={ok:false,recording:true,blocking:[{kind:'capture'}],capture:{recheck:true,safe:false}};
+    f.window.WizAppCapture.reconcileReload=async()=>{if(outcome==='throw')throw Error('offline');return outcome};
+    f.web.reload('tap');await tick();assert.equal(f.web.armed,false);assert.equal(f.reloads,0);
+    assert.match(f.toasts.at(-1)[1],/Try Reload again/);
+  }
+});
+test('an armed recording is cancelled if custody becomes unknown or the mic is lent',async()=>{
+  for(const patch of [{recoveryError:{code:'storage_failed'}},{borrow:{}}]){
+    const c=capture({active:{row:{id:'fresh',appId:'mizel'},phase:'recording',engine:{}}}),s=service(()=>c.reloadCheck()),f=updater();
+    f.window.WizAppServices.update.reloadPlan=s.plan;f.web.reload('tap');assert.equal(f.web.armed,true);
+    if(patch.recoveryError)c.recoveryError=patch.recoveryError;else c.active.borrow=patch.borrow;
+    f.emit('wizard-app-capture-state');assert.equal(f.web.armed,false);
+    c.recoveryError=null;c.active=null;f.emit('wizard-app-capture-state');await tick();assert.equal(f.reloads,0);
+  }
+});
+
 test('shared durable custody never overrides app-owned capture or dirty-work holds',()=>{
   const cap=capture().reloadCheck(); assert.equal(cap.durable,true);
   for(const appId of ['mizel','other']) for(const reason of ['Mizel recording','Mizel capture or durable task save','Mizel unsaved notes','Recording','Some capture work','Mizel recording notes']) {
@@ -76,22 +153,22 @@ test('stale native ID-less reservation becomes pending without deleting metadata
   }
 });
 function updater(host={}) {
-  const timers=[],toasts=[],events=[],els=new Map();let revision='a'.repeat(40),reloads=0,p={ok:true,blocking:[],recording:false,capture:{recheck:true}};
+  const timers=[],intervals=[],listeners=new Map(),toasts=[],events=[],els=new Map();let revision='a'.repeat(40),reloads=0,p={ok:true,blocking:[],recording:false,capture:{recheck:true}};
   function element(){return {classList:{toggle(){}},setAttribute(){},dataset:{},addEventListener(){},innerHTML:'',remove(){els.delete('burst')}};}
   const body={appendChild(el){if(el.id)els.set(el.id,el);else if(el.className==='wos-burst')els.set('burst',el)}};
   const document={currentScript:{src:'https://fixture.invalid/wizard-os-home/core/web-update.js'},body,hidden:false,
     querySelector:s=>s==='.wos-burst'?els.get('burst'):null,getElementById:id=>els.get(id),createElement:element,addEventListener(){},querySelectorAll:()=>[]};
-  const window={WizAppServices:{update:{announce(){},reloadPlan:()=>p,prepareReload:async()=>{}}},WizAppCapture:{reconcileReload:async()=>{}},WizAppReadingPosition:{flush(){}}};
-  const ctx={window,document,URL,location:{href:'https://fixture.invalid/wizard-os-home/',reload(){reloads++}},navigator:{onLine:true},fetch:async u=>({ok:true,text:async()=>revision,json:async()=>({updates:[]})}),setTimeout:(f,ms)=>{timers.push([f,ms]);return timers.length},clearTimeout(){},setInterval:()=>1,clearInterval(){},addEventListener(){}};
+  const window={WizAppServices:{update:{announce(){},reloadPlan:()=>p,prepareReload:async()=>{}}},WizAppCapture:{reconcileReload:async()=>({safe:true})},WizAppReadingPosition:{flush(){}}};
+  const ctx={window,document,URL,location:{href:'https://fixture.invalid/wizard-os-home/',reload(){reloads++}},navigator:{onLine:true},fetch:async u=>({ok:true,text:async()=>revision,json:async()=>({updates:[]})}),setTimeout:(f,ms)=>{timers.push([f,ms]);return timers.length},clearTimeout(){},setInterval:(f,ms)=>{intervals.push([f,ms]);return intervals.length},clearInterval(){},addEventListener:(name,f)=>listeners.set(name,f)};
   vm.runInNewContext(read('web-update'),ctx);const web=window.WizWebUpdate;web.init({shell:'phone',mount:()=>body,busy:()=>false,toast:(...a)=>toasts.push(a),log:(...a)=>events.push(a),...host});
-  return {web,window,timers,toasts,els,events,get reloads(){return reloads},set plan(v){p=v},get plan(){return p},set revision(v){revision=v}};
+  return {web,window,timers,intervals,toasts,els,events,emit:name=>listeners.get(name)?.(),get reloads(){return reloads},set plan(v){p=v},get plan(){return p},set revision(v){revision=v}};
 }
 const tick=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
 test('Reload paints checking before I/O, retries once, and reloads only under the current predicate',async()=>{
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
   let release;f.window.WizAppCapture.reconcileReload=()=>new Promise(r=>release=r);
   f.web.reload('tap');assert.match(f.els.get('dvWeb').innerHTML,/disabled aria-busy="true">Checking recorder/);assert.equal(release,undefined);await tick();assert.ok(release);assert.equal(f.reloads,0);
-  release();await tick();const animation=f.timers.find(([,ms])=>ms===900);assert.ok(animation);
+  release({safe:true});await tick();const animation=f.timers.find(([,ms])=>ms===900);assert.ok(animation);
   f.plan={ok:false,blocking:[{kind:'capture'}],recording:true};animation[0]();await tick();assert.equal(f.reloads,0);assert.equal(f.els.has('burst'),false);assert.match(f.toasts.at(-1)[1],/Reload paused/);
   f.plan={ok:true,blocking:[],recording:false};f.web.reload('tap');f.timers.filter(([,ms])=>ms===900).at(-1)[0]();await tick();assert.equal(f.reloads,1);
 });
@@ -198,6 +275,49 @@ test('unknown native status cannot become an empty app-custody proof, but repair
   await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
   data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
 });
+const runner=readFileSync(new URL('../qa-recorder-reload-recovery.cjs',import.meta.url),'utf8');
+test('browser Stop evidence callback sends the genuine blob without awaiting a dying page hash',async()=>{
+  const start=runner.indexOf('  await page.evaluate(()=>{void syntheticSession.stop()');
+  const end=runner.indexOf('\n  const kept=await stopped()',start);assert(start>=0&&end>start);
+  let stop,returned,sent,opened,stored;
+  const blob=new Blob([Uint8Array.of(0,255,1,128,10,13)]),pending=new Promise(r=>{stop=r});
+  const ctx={page:{evaluate:fn=>{returned=fn()}},syntheticSession:{stop:()=>pending},
+    sessionStorage:{setItem:(key,value)=>{stored=[key,value]}},encodeURIComponent,
+    XMLHttpRequest:class{status=204;open(...args){opened=args}setRequestHeader(){}send(body){sent=body}}};
+  await vm.runInNewContext('(async()=>{'+runner.slice(start,end)+'})()',ctx);
+  assert.equal(returned,undefined);assert.equal(sent,undefined,'dispatch completes before Stop resolves');
+  stop({id:'aabb-0011',blob});await tick();
+  assert.equal(sent,blob,'same exact Stop blob, not reconstructed or post-reload bytes');
+  assert.deepEqual(opened,['POST','/fixture-capture-evidence?id=aabb-0011',false]);
+  assert.deepEqual(stored,['syntheticCapture','aabb-0011']);
+});
+test('closed Stop evidence route forwards the genuine wire body only to its disposable loopback sink',async()=>{
+  const start=runner.indexOf('   await c.route(/^http:');
+  const end=runner.indexOf('\n   });',start)+7;assert(start>=0&&end>start);
+  let route,pattern,forwarded;const report={requests:[]};
+  const ctx={c:{route:async(p,fn)=>{pattern=p;route=fn}},fixture:{report},assert,URL,sink:{url:'http://127.0.0.1:43210'}};
+  await vm.runInNewContext('(async()=>{'+runner.slice(start,end)+'})()',ctx);
+  assert(pattern.test('http://wizard-qa.invalid/fixture-capture-evidence?id=aabb-0011'));
+  assert(!pattern.test('https://owner.invalid/fixture-capture-evidence?id=aabb-0011'));
+  await route({request:()=>({method:()=> 'POST',url:()=> 'http://wizard-qa.invalid/fixture-capture-evidence?id=aabb-0011'}),continue:async v=>{forwarded=v}});
+  assert.equal(forwarded.url,'http://127.0.0.1:43210/fixture-capture-evidence?id=aabb-0011');
+  assert.deepEqual(Object.keys(forwarded),['url'],'no body reconstruction or postDataBuffer dependency');
+});
+test('wire evidence sink retains exact binary Blob bytes and rejects malformed requests without hanging',async()=>{
+  const out=mkdtempSync(path.join(process.env.TMPDIR||process.cwd(),'.qa-stop-')),report={errors:[]};
+  const sink=await stopEvidence.start({out,mode:'phone',report});
+  try{
+    const preflight=await fetch(sink.url+'/fixture-capture-evidence?id=preflight',{method:'POST',body:new Blob([Uint8Array.of(0,255,128)])});assert.equal(preflight.status,204);
+    const bytes=Buffer.from([0,255,1,128,10,13]);
+    const response=await fetch(sink.url+'/fixture-capture-evidence?id=aabb-0011',{method:'POST',body:new Blob([bytes])});assert.equal(response.status,204);
+    const kept=await sink.received();assert.equal(kept.id,'aabb-0011');assert.equal(kept.bytes,bytes.length);
+    assert.equal(kept.hash,createHash('sha256').update(bytes).digest('hex'));
+    assert.deepEqual(readFileSync(path.join(out,'phone-stop.bin')),bytes);
+    assert.deepEqual(JSON.parse(readFileSync(path.join(out,'phone-stop.json'),'utf8')),kept);
+    const invalid=await fetch(sink.url+'/unexpected');assert.equal(invalid.status,500);assert.equal(report.errors.length,1);
+  }finally{await sink.close();rmSync(out,{recursive:true,force:true})}
+});
+
 test('a different native take appearing during flush cannot inherit the prior take preparation',async()=>{
   const f=updater();let finish,commits=0;
   f.plan={ok:true,keeps:{appId:'fixture',id:'original',meetingId:'original'}};

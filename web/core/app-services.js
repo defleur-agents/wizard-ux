@@ -677,7 +677,8 @@
       if (capture && keeps && st.appId === keeps.appId) continue;
       blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
     }
-    return { ok: !blocking.length, keeps, capture: cap, blocking, recording: blocking.some(b => b.kind === 'capture') };
+    // A blocker says reload is unsafe, not that a known recording will eventually end.
+    return { ok: !blocking.length, keeps, capture: cap, blocking, recording: cap.waitForEnd === true };
   }
   // Preparation is non-destructive: an async flush may reveal new work and abort the reload.
   async function prepareReload(plan) {

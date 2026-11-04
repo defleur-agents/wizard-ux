@@ -1088,8 +1088,14 @@
       const s = active;
       const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&
         !s.finishPromise && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
-      if (!steady) return no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
-      if (live.some(r => r.id !== s.row.id)) return no('capture');
+      if (live.some(r => r.id !== s.row.id)) return no('capture_custody_uncertain');
+      if (!steady) {
+        const blocked = no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
+        // Waiting for an end is a positive live-engine contract, not a synonym for unsafe custody.
+        blocked.waitForEnd = !!s.engine && ['recording', 'paused', 'stopping'].includes(s.phase) &&
+          !s.borrow && !s.borrowWork && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
+        return blocked;
+      }
       return { safe: true, reason: null, keeps: keep(s.row) };
     }
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');

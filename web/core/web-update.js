@@ -107,7 +107,7 @@
   function plan() {
     const svc = window.WizAppServices?.update;
     let p = null;
-    try { p = svc?.reloadPlan?.() || null; } catch (_) { p = { ok: false, keeps: null, blocking: [{ kind: 'capture' }], recording: true }; }
+    try { p = svc?.reloadPlan?.() || null; } catch (_) { p = { ok: false, keeps: null, blocking: [{ kind: 'capture', reason: 'capture_custody_uncertain' }], recording: false }; }
     if (!p) { const b = !!svc?.busy?.(); p = { ok: !b, keeps: null, blocking: b ? [{ kind: 'work' }] : [], recording: false }; }
     return { ...p, host: hostBusy() };
   }
@@ -119,7 +119,9 @@
   const loan = p => (p.blocking || []).some(b => b.reason === 'microphone_loan');
   // Otherwise arm only for a recording, or for the kept meeting app's own quick save (its notes); another app's
   // unsaved work is never a reason to reload on its own later.
-  const armable = p => !p.host && !loan(p) && (p.recording || (!!p.keeps && (p.blocking || []).every(b => b.appId === p.keeps.appId)));
+  const waitForEnd = p => !loan(p) && (p.capture?.waitForEnd === true ||
+    (p.capture?.safe === true && !!p.keeps && (p.blocking || []).every(b => b.appId === p.keeps.appId)));
+  const armable = p => !p.host && waitForEnd(p);
   function arm(p) {
     armed = { at: Date.now(), recording: p.recording };
     log('web:reload-armed', p.recording ? 'recording' : 'saving');
@@ -131,6 +133,7 @@
   function maybeFire() {
     if (!armed || going) return;
     const p = plan();
+    if (loan(p) || (p.capture?.safe !== true && p.capture?.waitForEnd !== true)) { disarm('custody changed'); return; }
     if (p.host || !p.ok) { if (!!p.recording !== armed.recording) { armed.recording = !!p.recording; render(); } return; }
     disarm('ready'); void go('deferred', p);
   }
@@ -179,12 +182,16 @@
     if (!checked && why === 'tap' && !p.host && p.capture?.recheck && window.WizAppCapture?.reconcileReload) {
       checking = true; render();
       let timer;
+      const failed = () => { clearTimeout(timer); checking = false; render(); H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000); };
       Promise.race([
         Promise.resolve().then(() => window.WizAppCapture.reconcileReload()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Recorder check timed out')), 15000); })
-      ]).then(() => {
+      ]).then(check => {
+        // Recovery can resolve with unknown custody instead of rejecting. That is not consent to wait
+        // for some future recording to end, nor may a later native state event consume this failed tap.
+        if (check?.safe !== true && check?.waitForEnd !== true) { failed(); return; }
         clearTimeout(timer); checking = false; render(); reload(why, true);
-      }, () => { clearTimeout(timer); checking = false; render(); H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000); });
+      }, failed);
       return false;
     }
     if (!p.host && p.ok) { void go(why, p); return true; }
