@@ -6,15 +6,17 @@ import { readFileSync, existsSync } from 'node:fs';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const skins = read('web/core/skins.js'), settings = read('web/core/settings.js');
 
-test('the backgrounds use the supplied designer hat, never a redraw', () => {
-  assert.match(skins, /SRC: '\/wizard-os-home\/brand\/wizard-mark-purple\.png'/);
-  assert.ok(existsSync(new URL('../web/brand/wizard-mark-purple.png', import.meta.url)));
+test('every scene ships baked for night and day, desktop and phone', () => {
+  assert.match(skins, /\/wizard-os-home\/core\/skins\/wizard\/\$\{file\}\.webp/);
+  for (const id of ['lake', 'glass']) for (const tone of ['', '-light']) for (const shape of ['wide', 'tall'])
+    assert.ok(existsSync(new URL(`../web/core/skins/wizard/${id}${tone}-${shape}.webp`, import.meta.url)), `${id}${tone}-${shape}`);
+  assert.ok(existsSync(new URL('../tools/brand/wallpapers.html', import.meta.url)), 'generator kept for provenance');
 });
 
 test('Landscapes stays the default and every Wizard OS option is listed', () => {
-  for (const id of ['landscapes', 'wizard', 'wizard-rise', 'wizard-pattern']) assert.match(skins, new RegExp(`id: '${id}'`));
+  for (const id of ['landscapes', 'lake', 'glass']) assert.match(skins, new RegExp(`id: '${id}'`));
   assert.match(skins, /: 'landscapes'; \} catch \(_\) \{ return 'landscapes'; \}/);
-  assert.match(skins, /if \(wall !== 'landscapes'\) \{ c\.drawImage\(WIZ\.get\(wall, this\.LIGHT, W, H\)/);
+  assert.match(skins, /if \(wall !== 'landscapes'\) \{ const w = WIZ\.get\(wall, this\.LIGHT, W, H\)/);
   assert.match(skins, /setWallpaper\(id\) \{/);
 });
 

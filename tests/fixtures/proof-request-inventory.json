@@ -919,6 +919,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/core/skins/wizard/{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
+    },
     "/wizard-os-home/core/skins/macos/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
