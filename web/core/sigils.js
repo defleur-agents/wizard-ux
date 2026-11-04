@@ -41,7 +41,7 @@
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
     // Canonical identities win; safe package pictures remain the fallback before a guessed house mark.
     const s = sigilOf(a), logo = (!s.guessed && s.glyph) || s.img || brand(a) ? '' : logoOf(a);
-    return logo ? { ...s, logo } : s;
+    return logo ? { ...s, glyph: '', logo } : s;
   }
   function sigilOf(a) {
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
