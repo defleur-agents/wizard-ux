@@ -127,11 +127,9 @@ a.st-row { color: inherit; text-decoration: none; }
 .st-title:focus, .st-page-head h3:focus { outline: none; }
 
 
-/* Tweaks, separate from skin: one section per author, an "All of theirs" switch, then each tweak. */
+/* Tweaks, separate from skin: one flat list, a switch per tweak, each with a small "by <author>" line. */
 .tw-group { margin-top: 20px; }
-.tw-author { margin-top: 14px; }
-.tw-author > h5 { margin: 0 0 6px; font-size: var(--wz-text-sm); font-weight: 600; color: var(--wz-text-2, var(--wz-text)); }
-.tw-author > .tw-row:not(.tw-all) { padding-left: 18px; }
+.tw-row .tw-by { font-weight: 600; }
 .skp-own { margin-top: 20px; }
 /* About & updates: flat on the page. One update card when there is something to do, then two segmented choices.
  * Nothing boxed inside a box; type large enough to read at arm's length; every target ≥ 48px. */
