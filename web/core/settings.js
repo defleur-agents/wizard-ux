@@ -38,7 +38,7 @@
     { id: 'schedules', title: 'Schedules', available: () => !!window.WosSchedules?.available },
     { id: 'about', title: 'About & updates' },
   ];
-  const featurePages = { look: 'appearance', 'window-glass': 'appearance', wallpaper: 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
+  const featurePages = { look: 'appearance', 'window-glass': 'appearance', 'skin-frame': 'appearance', 'chats-default': 'chats', 'own-views': 'chats', voice: 'voice', microphone: 'voice', selection: 'voice', assistant: 'phone', unsent: 'recovery', cancelled: 'recovery', usage: 'usage' };
   const pageOf = f => f?.page != null ? PAGES.some(p => p.id === f.page) ? f.page : 'about' : featurePages[f?.id] || 'about';
   /* Connections is served by the App Manager behind its owner channel, on this origin; the page hosts it as is, so
    * its owner-only actions (Disconnect, Reconnect, agent access, Restore defaults) stay the App Manager's own. The tab
@@ -335,7 +335,19 @@
     const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
-    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+    return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${wallpaperHtml(S)}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
+  }
+  // Background: Landscapes can show its pictures or a Wizard OS scene (Miguel, 4 Nov 2026). Per device. Sits between
+  // the skin colours and the tweaks, since it belongs to the skin.
+  function wallpaperHtml(S) {
+    if (typeof S.setWallpaper !== 'function') return '';
+    if (!S.wallpaperable) return '';
+    const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
+    return `<div class="wp-section"><h4>Background</h4><div class="wp-grid" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" class="wp-tile" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}"><i style="background-image:url('${S.wallpaperThumb(w.id)}')" aria-hidden="true"></i><span>${w.name}</span></button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
+  }
+  function wallpaperAct(ctx, el) {
+    const b = el.closest('[data-wallpaper]'); if (!b) return false;
+    window.WosSkin.setWallpaper(b.dataset.wallpaper); ctx.render(); ctx.root.querySelector(`[data-wallpaper="${b.dataset.wallpaper}"]`)?.focus({ preventScroll: true }); ctx.haptic?.(8); return true;
   }
   register({ id: 'look', aliases: ['skin'], html(ctx) {
     const S = window.WosSkin; if (!S) return '';
@@ -358,6 +370,7 @@
     }
   }, act(ctx, el, event) {
     const M = window.WosMySkin, S = window.WosSkin;
+    if (wallpaperAct(ctx, el)) return true;
     if (el.closest('[data-skin-remove-cancel]')) { ctx.skinRemove = null; ctx.render(); return true; }
     if (el.closest('[data-skin-remove-confirm]')) {
       if (ctx.skinSaving) return true; ctx.skinSaving = true;
@@ -426,15 +439,6 @@
   }, act(ctx, el) {
     if (!el.closest('[data-wg-reset]')) return false;
     window.WosSkin.setGlass(null); ctx.render(); ctx.root.querySelector('[data-wg-range]')?.focus(); return true;
-  } });
-  // Background: Landscapes can show its pictures or a Wizard OS hat background (Miguel, 4 Nov 2026). Per device.
-  register({ id: 'wallpaper', aliases: ['background', 'wallpaper'], available: () => typeof window.WosSkin?.setWallpaper === 'function', html() {
-    const S = window.WosSkin; if (!S.wallpaperable) return '';
-    const cur = S.wallpapers.find(w => w.id === S.wallpaper) || S.wallpapers[0];
-    return `<div class="st-group wp-section"><h4>Background</h4><div class="wp-grid" role="radiogroup" aria-label="Background">${S.wallpapers.map(w => `<button type="button" class="wp-tile" role="radio" aria-checked="${w.id === S.wallpaper}" data-wallpaper="${w.id}"><i style="background-image:url('${S.wallpaperThumb(w.id)}')" aria-hidden="true"></i><span>${w.name}</span></button>`).join('')}</div><p class="st-hint" data-wp-note>${cur.who}</p></div>`;
-  }, act(ctx, el) {
-    const b = el.closest('[data-wallpaper]'); if (!b) return false;
-    window.WosSkin.setWallpaper(b.dataset.wallpaper); ctx.render(); ctx.root.querySelector(`[data-wallpaper="${b.dataset.wallpaper}"]`)?.focus({ preventScroll: true }); ctx.haptic?.(8); return true;
   } });
   /* Features on for everyone (catalog `defaults`) are plain settings where they act: one switch each, no author. */
   const settingRow = id => { const t = window.WosExperience?.state.tweaks.find(x => x.id === id && x.builtin); return t ? tweakSwitches([t], 'data-tweak-toggle', window.WosExperience.state.busy) : ''; };
