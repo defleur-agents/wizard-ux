@@ -4,6 +4,8 @@
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const TREE = path.resolve(process.env.QA_TREE || __dirname), OUT = path.resolve(process.env.QA_OUT);
+const TREE_ID = process.env.QA_TREE_ID;
+assert.match(TREE_ID,/^[0-9a-f]{40}$/,'exact source web tree required');
 const SUB = 'claude-subscription-directsdk-experimental';
 const catalogue = {model:'gpt-6.1-sol',provider:'openai-codex',providers:[
   {slug:'openai-codex',authenticated:true,models:['gpt-6.1-sol','gpt-6.1-astra']},
@@ -20,12 +22,15 @@ async function opaque(page, tag) {
     const loud=document.createElement('div'); loud.dataset.qaLoud='';
     loud.style.cssText='position:absolute;inset:0;overflow:hidden;background:repeating-linear-gradient(90deg,#f0f 0 8px,#0f0 8px 16px);color:red;font-size:24px;pointer-events:none';
     loud.textContent='LOUD TEXT BEHIND THE PICKER '.repeat(500);card.parentElement.prepend(loud);
-    const r=card.getBoundingClientRect();return {x:Math.ceil(r.x+18),y:Math.ceil(r.y+18),width:Math.floor(r.width-36),height:Math.floor(r.height-36)};
+    const r=card.getBoundingClientRect(),p=card.parentElement.getBoundingClientRect();return {inside:{x:Math.ceil(r.x+18),y:Math.ceil(r.y+18),width:Math.floor(r.width-36),height:Math.floor(r.height-36)},outside:{x:Math.ceil(p.x+3),y:Math.ceil(p.y+3),width:8,height:8}};
   });
-  assert(clip.width>0&&clip.height>0,'usable opacity region');
-  const a=await page.screenshot({clip,animations:'disabled',path:path.join(OUT,tag+'-opaque-loud.png')});
+  assert(clip.inside.width>0&&clip.inside.height>0,'usable opacity region');
+  const control=await page.screenshot({clip:clip.outside,animations:'disabled'});
+  const a=await page.screenshot({clip:clip.inside,animations:'disabled',path:path.join(OUT,tag+'-opaque-loud.png')});
   await page.locator('[data-qa-loud]').evaluate(e=>e.style.visibility='hidden');
-  const b=await page.screenshot({clip,animations:'disabled',path:path.join(OUT,tag+'-opaque-blank.png')});
+  const b=await page.screenshot({clip:clip.inside,animations:'disabled',path:path.join(OUT,tag+'-opaque-blank.png')});
+  const blank=await page.screenshot({clip:clip.outside,animations:'disabled'});
+  check(!control.equals(blank),'opacity-outside-control-changes');
   check(a.equals(b),'opaque-panel-pixels');await page.locator('[data-qa-loud]').evaluate(e=>e.remove());
 }
 (async()=>{
@@ -50,8 +55,8 @@ async function opaque(page, tag) {
       if(p==='/wizard/hermes/api/sessions')return json({data:[],has_more:false,list_version:1});
       if(p==='/wizard/thread-seen')return json({state:{initializedAt:1,threads:{}}});
       if(p.includes('ui-preferences'))return json({migrations:{'launcher-seed-v1':'fixture'},launcher:{}});
-      if(p==='/wizard-os-home/ux-version.txt'){event.kind='synthetic-metadata';return r.fulfill({status:200,body:'synthetic-version'});}
-      if(p==='/wizard-os-home/ux-changes.json')return json([]);
+      if(p==='/wizard-os-home/ux-version.txt'){event.kind='synthetic-metadata';return r.fulfill({status:200,body:TREE_ID+'\n'});}
+      if(p==='/wizard-os-home/ux-changes.json')return json({v:1,head:TREE_ID,updates:[]});
       if(p==='/wizard-os-home/data.js'||p==='/wizard-os-home/summaries.js'){event.kind='synthetic-content';return r.fulfill({status:200,contentType:'application/javascript',body:''});}
       // Same bounded empty dynamic contracts used by the original picker harness.
       // No fallthrough reaches a real Service, owner catalogue, history or inference.
@@ -66,7 +71,7 @@ async function opaque(page, tag) {
     });
     await ctx.addInitScript(()=>{try{
       localStorage.setItem('wos.skin','nebula');localStorage.setItem('wos.skin.composition.v1',JSON.stringify({version:1,extends:'nebula'}));
-      localStorage.setItem('wux.shell',/Android/.test(navigator.userAgent)?'phone':'desktop');
+      // No sticky shell override: phone must really be selected from Android UA/touch.
       for(const k of ['wos.coached','wos.tour.v1','wos.tour.done'])localStorage.setItem(k,'true');
       localStorage.setItem('wos.welcome.v1','done');
     }catch{}});
