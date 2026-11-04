@@ -1582,7 +1582,7 @@
   // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
-    $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el));
+    $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el, W[el.closest('.win')?.dataset.win]?.url));
     $$('iframe.appframe', root).forEach(f => {
       if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
@@ -1617,7 +1617,7 @@
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
     try { if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(win, (W[id] && (APP[W[id].appId]?.url || W[id].url)) || win.location.pathname, LINKS); } catch (e) {}
-    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+    try { if (W[id]) { const here = win.location.pathname + win.location.search + (W[id].appId === 'troubleshooter' ? win.location.hash : ''); const want = APP[W[id].appId]?.url || '';
       // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
       // painted before its app was known would stick on the wrong page for good.
       const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');

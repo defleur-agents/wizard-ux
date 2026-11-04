@@ -627,7 +627,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]')); watchFrame(el.querySelector('iframe'), el); }
+    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   function watchFrame(f, el) {
