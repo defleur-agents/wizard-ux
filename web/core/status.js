@@ -256,7 +256,7 @@
   async function runChecks() {
     if (offBusy || !offOpen || !window.WizReach?.checks) return;
     offBusy = true; clearTimeout(offT); renderOffline();
-    try { offChecks = await window.WizReach.checks(); log('off:checked'); } catch (_) {}
+    try { const c = await window.WizReach.checks(); if (!c.stale) offChecks = c; log('off:checked'); } catch (_) {}
     offBusy = false;
     if (!offOpen) return;
     const ok = offChecks && ['internet', 'tailscale', 'wizard'].every(k => ['ok', 'slow', 'skip'].includes(offChecks[k]?.state));

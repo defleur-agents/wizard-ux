@@ -127,6 +127,7 @@
       out.help = connectionHelp(net.ok, ts);
       publish(result(ts ? 'tailscale' : 'unreachable', out.help, 'Can’t reach Wizard · retrying'), generation);
     }
+    out.stale = generation !== epoch;
     return out;
   }
   const esc = s => String(s || '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -158,6 +159,7 @@
       const id = ++serial; clearTimeout(timer); button.disabled = true; button.textContent = 'Checking…';
       const c = await checks();
       if (!connected() || id !== serial) return;
+      if (c.stale) { timer = setTimeout(run, 0); return; }
       last = c; button.disabled = false; button.textContent = 'Check again';
       root.querySelector('[data-recovery-message]').textContent = c.help;
       root.querySelector('[data-recovery-rows]').innerHTML = [['internet', 'Internet'], ['tailscale', c.tailnet ? 'Tailscale / private connection' : 'Your Wizard’s connection'], ['wizard', 'Wizard']].map(([key, title]) => `<li class="wz-row" data-recovery-row="${key}"><span class="wz-main"><b>${esc(title)}</b><small>${esc(c[key].detail)}</small></span></li>`).join('');
