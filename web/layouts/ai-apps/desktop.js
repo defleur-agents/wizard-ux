@@ -1435,7 +1435,8 @@ export default function desktop(api) {
       // folded: on the rail word whose group holds it (its status, else Ready)
       const s = sessions || readSessions(), rk = id => { const a = id && railActive(s, id, null, readyOrder()); return a && rList.querySelector(`.aad-rk[data-k="${a.key}"]`); };
       const n1 = nx && nx.id !== cur ? rk(nx.id) : null, p1 = pv && pv.id !== cur ? rk(pv.id) : null;
-      if (n1) put(n1, '↓', 'right'); if (p1) put(p1, '↑', p1 !== n1 ? 'right' : 'right-2');   // (beside the rail word: never over its count)
+      // (beside the rail word, never over its count; both on one word: ↑ over ↓)
+      if (n1) put(n1, '↓', p1 === n1 ? 'right-dn' : 'right'); if (p1) put(p1, '↑', p1 === n1 ? 'right-up' : 'right');
     }
     put(vtTog, 'R');
     const rows = vtRows(), i = rows.findIndex(b => b.classList.contains('is-on')), tile = b => b.querySelector('.aad-tile') || b;
