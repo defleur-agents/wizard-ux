@@ -120,9 +120,12 @@ test('actual phone and desktop adapters retain every nonhidden chat across all d
   h.L.sessions = [row('qa-main-sync', DAY + 1000), row('qa-meeting', 3 * DAY), row('qa-error', 1000, { status: 'failed' }),
     row('qa-ready', 1000), row('qa-working', 1000, { status: 'running' }), row('qa-archive', 1000, { archived: true }), row('qa-hidden', 1000, { hidden: true })];
   h.L.ok = true;
+  const unifiedRows = [...h.L.sessions, row('qa-unified-notification', 1000)];
+  h.L.unified = () => unifiedRows;
+  assert.ok(h.L.workGroups(undefined, now).ready.some(s => s.id === 'qa-unified-notification'), 'preserve unified notification inventory and legacy time argument');
   const day = h.L.workGroups(); assert.ok(day.yesterday.length + day.pastWeek.length > 0, 'real day groups exercised');
   assert.equal(day.errors.length, 1, 'real error group exercised'); assert.equal(day.working.length, 1, 'real working group exercised');
-  const expected = h.L.sessions.filter(s => !s.hidden).map(s => s.id).sort();
+  const expected = unifiedRows.filter(s => !s.hidden).map(s => s.id).sort();
   for (const file of ['web/app.js', 'web/desktop/desktop.js']) {
     const src = read(file), start = src.indexOf('    sessionList: () => {'), end = src.indexOf('    sessionAct:', start);
     const c = { LIVE: h.L, window: {}, CHATS: { stiKind: () => '', threadActions: () => [] }, Date, Number };

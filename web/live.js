@@ -764,8 +764,10 @@
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
-    workGroups(sessions, { flatReady = false } = {}) {
-      const g = groupWork(sessions || this.sessions);
+    workGroups(sessions, nowOrOptions, options = {}) {
+      const { flatReady = false } = typeof nowOrOptions === 'object' && nowOrOptions !== null ? nowOrOptions : options;
+      const now = typeof nowOrOptions === 'number' ? nowOrOptions : undefined;
+      const g = groupWork(sessions || this.unified(), now);
       // Status-only shell views have no Yesterday / Past week / Errors slots.
       // Keep their inventory complete without changing stock Chats' day grouping or dispositions.
       if (flatReady) {
