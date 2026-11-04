@@ -275,3 +275,18 @@ test('calm offline opt-in stays off in author presets and its text panel is full
   assert.match(panel, /backdrop-filter: none/);
   assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
 });
+
+test('calm card keeps keyboard focus when its asynchronous check repaints it', async () => {
+ const h=setup();h.ctx.clearInterval=()=>{};h.ctx.getComputedStyle=()=>({getPropertyValue:k=>k==='--wos-calm-offline'?'on':''});
+ let finish;h.ctx.WizReach.checks=()=>new Promise(resolve=>{finish=resolve});
+ h.success();h.L.error='offline';h.L.emit();h.grace();h.openPill();
+ const pop=h.pop();let html=pop.innerHTML,focused=0;
+ const card={attributes:[],classList:{contains:n=>n==='wx-calm'},focus(){focused++;h.ctx.document.activeElement=card}};
+ pop.contains=n=>n===card;pop.querySelector=sel=>sel==='.wx-calm'?card:null;
+ Object.defineProperty(pop,'innerHTML',{get:()=>html,set(v){html=v;h.ctx.document.activeElement=h.ctx.document.body}});
+ h.ctx.document.activeElement=card;
+ finish({internet:{state:'ok'},tailscale:{state:'bad'},wizard:{state:'wait'}});
+ await turn();await turn();
+ assert.ok(focused>0,'the replacement production card receives focus');
+ assert.equal(h.ctx.document.activeElement,card,'focus never falls back to the document');
+});

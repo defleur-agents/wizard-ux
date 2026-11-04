@@ -273,9 +273,11 @@
   function renderOffline() {
     const el = offEl(); if (!offOpen) { el.hidden = true; return; }
     if (calmOn()) {
-      const had = el.contains?.(document.activeElement) ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
+      const inside = el.contains?.(document.activeElement);
+      const cardFocused = inside && document.activeElement?.classList?.contains?.('wx-calm');
+      const had = inside ? [...(document.activeElement?.attributes || [])].map(a => a.name).find(n => n.startsWith('data-wxoff')) : '';
       el.innerHTML = calmCard(offChecks, !!offHappy); el.hidden = false;
-      if (had) (el.querySelector?.(`[${had}]:not([disabled])`) || el.querySelector?.('.wx-calm'))?.focus?.();
+      if (cardFocused || had) ((had && el.querySelector?.(`[${had}]:not([disabled])`)) || el.querySelector?.('.wx-calm'))?.focus?.();
       tickNext(); return;
     }
     const c = offChecks, happy = !!offHappy;
