@@ -112,6 +112,13 @@
       ],
       "note": "Generic registry-granted background audio; native port optional."
     },
+    "core/media-watch.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Now playing: same-origin app media seen and paused for api.media; inert until watched."
+    },
     "core/bound-view.js": {
       "loadedBy": [
         "phone",
@@ -398,7 +405,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Microphone shows only where WizardOSDevice.micPolicy exists"
+      "note": "Direct entrypoint import; Settings → Microphone shows only where WizardOSDevice.micPolicy exists"
     },
     "core/my-skin.js": {
       "loadedBy": [
@@ -445,7 +452,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 About: base main commit and how far ahead/behind main"
+      "note": "Direct entrypoint import; Settings → About: base main commit and how far ahead/behind main"
     },
     "core/orb-switcher.js": {
       "loadedBy": [],
@@ -456,7 +463,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Direct entrypoint import; Settings \u2192 Updates shows only where the App Manager answers store-install/_updates"
+      "note": "Direct entrypoint import; Settings → Updates shows only where the App Manager answers store-install/_updates"
     },
     "core/own-views.js": {
       "loadedBy": [
@@ -519,7 +526,7 @@
         "phone",
         "desktop"
       ],
-      "note": "Shared Settings \u2192 Schedules; hidden when Agent Service schedules returns 404"
+      "note": "Shared Settings → Schedules; hidden when Agent Service schedules returns 404"
     },
     "core/screen-capture.js": {
       "loadedBy": [
@@ -890,6 +897,7 @@
     "core/launcher.js",
     "core/links.css",
     "core/links.js",
+    "core/media-watch.js",
     "core/mic.js",
     "core/my-skin.js",
     "core/notif-bell.js",

@@ -1,0 +1,12 @@
+{
+  "id": "miguel/now-playing",
+  "name": "Now playing",
+  "version": "1.0.0",
+  "author": "miguel",
+  "apiVersion": 1,
+  "capabilities": [
+    "layout",
+    "media"
+  ],
+  "description": "While an app plays audio or video, a small pill with its title and pause sits at the top of the apps column (or in the desktop top bar; desktop only for now); click it for everything playing and Pause all. Nothing shows while nothing plays"
+}
