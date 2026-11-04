@@ -2395,7 +2395,9 @@ window.WizCore.chats = function createChats(H) {
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
     const read = { sid, nav }, readCk = LIVE.contentKey ? LIVE.contentKey(s) : ''; c.loading = read;
-    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
+    // A host can dispose Chats before dropping its window record. A pending
+    // transcript read must not paint (or retry) after forget(), even in that gap.
+    const current = () => CH[w.id] === c && W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
       const rows = await LIVE.messages(sid);
       if (!current()) return;

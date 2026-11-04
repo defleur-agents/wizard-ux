@@ -51,8 +51,10 @@ async function snapshot(p, label) {
   report.journal.push({ label, ...state }); fs.writeFileSync(path.join(OUT, 'journal.json'), JSON.stringify(report.journal, null, 2)); return state;
 }
 async function context(phone = false, instrument = true) {
-  const c = await browser.newContext({ ...(phone ? devices['Pixel 7'] : { viewport: { width: 1440, height: 900 } }), serviceWorkers: 'block', colorScheme: 'dark' });
+  const c = await browser.newContext({ ...(phone ? devices['Pixel 7'] : { viewport: { width: 1440, height: 900 } }), serviceWorkers: 'allow', colorScheme: 'dark' });
+  await c.addInitScript(require('./tools/qa-no-service-workers.cjs').blockServiceWorkerRegistration);
   await c.route('**/*', r => route(r, instrument));
+  await c.routeWebSocket('**/*', ws => ws.close());
   await c.addInitScript(seedOwner, { phone });
   return c;
 }
