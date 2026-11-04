@@ -24,7 +24,7 @@ test('holding left ⌥ alone shows key hints; any other key or release hides the
   assert.match(js, /if \(pinned \|\| e\.repeat \|\| e\.code !== 'AltLeft'/);
   assert.match(js, /keyHints\.down\(e\)/);
   assert.match(js, /addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
-  assert.match(js, /doc\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
+  assert.match(js, /frameWindow\.addEventListener\('keyup', e => keyHints\.up\(e\), true\)/);
 });
 
 test('⌥S only sends its own kind of take', () => {
@@ -54,7 +54,7 @@ test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidd
 test('after a text or voice reply is sent, the window goes back to a focused New chat', () => {
   assert.match(js, /stage\.addEventListener\('submit', e => \{[\s\S]*?toNewChat\(wid, 'text'\)/);
   assert.match(js, /function toNewChat\(wid, why\) \{[\s\S]*?CHATS\.openNewDraft\(wid, ''\)[\s\S]*?focusInside\(wid\)/);
-  assert.match(js, /Voice reply · waiting to send', 1400\); setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
+  assert.match(js, /Voice reply · waiting to send', 1400\); if \(stayOnList\) syncChatsPane\(rp\.wid\); else setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
 });
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');

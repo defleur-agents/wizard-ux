@@ -20,6 +20,8 @@
     "wizard/app-borders",
     "miguel/refresh-button",
     "wizard/unified-inbox",
+    "wizard/orb-radial",
+    "wizard/new-send-list",
     "miguel/group-by-day"
   ],
   "defaults": [
