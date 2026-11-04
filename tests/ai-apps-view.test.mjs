@@ -1757,7 +1757,7 @@ test('round 21: no legend card anywhere: the shell draws only the view\'s keycap
   assert.doesNotMatch(host, /legend\(fn\)|keyLegend/, 'no api.keys.legend');
   assert.doesNotMatch(read('web/desktop/desktop.css'), /\.kh-keys/); assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-keys/);
   assert.match(host, /guide\(fn, \{ only = false \} = \{\}\) \{/); assert.match(host, /get keysOnly\(\) \{ return \[\.\.\.keyGuides\]\.some\(g => g\.only\); \}/);
-  assert.match(desk, /if \(window\.WosSkinHost\?\.keysOnly\) \{\n\s+for \(const h of window\.WosSkinHost\.keyChips\(\)\) if \(vis\(h\.el\)\) chip\(h\.el, h\.key, h\.at \|\| 'tl', h\.word \|\| ''\);\n\s+document\.documentElement\.classList\.add\('key-hints-on'\); return;/, 'only the view\'s chips, then nothing else');
+  assert.match(desk, /if \(window\.WosSkinHost\?\.keysOnly\) \{\n\s+for \(const h of window\.WosSkinHost\.keyChips\(\)\) if \(vis\(h\.el\)\) chip\(h\.el, h\.key, h\.at \|\| 'tl', h\.word \|\| '', h\);\n\s+document\.documentElement\.classList\.add\('key-hints-on'\); return;/, 'only the view\'s chips, then nothing else');
   for (const at of ['tl', 'tr', 'bl', 'right', 'right-up', 'right-dn', 'mid']) assert.match(desk, new RegExp(`if \\(at === '${at}'\\) \\{`), `the keycap spot '${at}'`);
 });
 
@@ -1784,11 +1784,13 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   keys[2].down({ altKey: true, code: 'KeyL' });
   const rail = chips();
   for (const want of ['L@aad-rtog', 'K@aad-rfind', 'N@aad-rnew', 'S@aad-rset']) assert.ok(rail.includes(want), `rail: ${want}`);
-  assert.ok(!rail.some(c => /^(H|O)@/.test(c)));
+  assert.ok(!rail.some(c => /^(H@aad-wsn|O)@?/.test(c)), 'no H on the (gone) name, no O');
+  assert.ok(rail.includes('H@aad-hmid'), 'app keys round: ⌥H in the empty middle of Home, folded or not');
   keys[2].down({ altKey: true, code: 'KeyL' });
   // ⌥H Home: the orb (Space) and ◫ back (H) only
   assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true);
-  assert.deepEqual(chips(), ['Space@aad-orbbtn', 'H@aad-hback']);
+  assert.deepEqual(chips(), ['Space@aad-orbbtn', 'H@aad-hback', 'H@aad-hmid'], 'focus: ◫ and the middle wear H');
+  assert.ok(raw().find(c => c.el.className === 'aad-hmid').free === true && raw().find(c => c.el.className === 'aad-hmid').at === 'mid', 'the middle spot is known empty (no hit test), centred');
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.key-hints-on :is\(\.aad-vtb, \.aad-rk-n\.is-badge\) \{ opacity: \.35; \}/, 'count badges step back while ⌥ is held');
   assert.match(css, /\.key-hints-on \.aad-rw\[data-aad-kh\] \.aad-chat \{ padding-left: 34px; \}/, 'the ↓ / ↑ row makes room: the keycap never touches its title');
@@ -1993,4 +1995,50 @@ test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rin
   assert.deepEqual(wk, ['is-spin'], 'round 23b: Working is one spinner'); assert.equal(w.q('.aad-rk[data-k="working"] .aad-rk-wn').textContent, '15', 'and its number');
   assert.match(w.q('.aad-rk[data-k="working"]').getAttribute('aria-label'), /^Working, 15\./, 'the count stays in its label');
   assert.deepEqual(w.qa('.aad-rk[data-k="snoozed"] .aad-d').map(d => d.className), ['aad-d is-ring'], 'snoozed: a ring');
+});
+
+test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes the keyboard; while ⌥ is held its own data-wz-key controls wear outlined keycaps inside its frame; ⌥H on the panel and in the empty middle only at Home', async () => {
+  const { w, keys } = deskWorld();
+  const guides = [];
+  w.api.keys = { on: h => { keys.push(h); return () => {}; }, guide: g => { guides.push(g); return () => {}; } };
+  const stage = new El('div'); stage.id = 'stage';
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; const win = new El('div'); win.className = 'win'; const frame = new El('iframe'); win.append(frame); appDesk.append(win);
+  stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  // the app's page: a Play button (Space), a hidden one (j), a disabled one (k) as WizardApp.keys.list() reports the live ones
+  const play = new El('button'); play.setAttribute('data-wz-key', 'Space'); play.setAttribute('data-wz-key-label', 'Play / pause');
+  const next = new El('button'); next.setAttribute('data-wz-key', 'ArrowRight');
+  let listed = 0, focused = 0;
+  frame.contentWindow = { focus() { focused++; }, WizardApp: { keys: { list: () => { listed++; return [{ el: play, key: 'Space', label: 'Play / pause' }, { el: next, key: 'ArrowRight', label: '' }]; } } } };
+  frame.contentDocument = { readyState: 'complete', URL: 'https://box.example/music/' };
+  frame.focus = () => { focused++; w.doc.activeElement = frame; };
+  (await layout()).default(w.api);
+  const chips = () => guides[0]().map(c => `${c.key}@${String(c.el.className || c.el.tagName).split(' ').filter(x => x !== 'aad-ib' && x !== 'aad-ico')[0]}`);
+  assert.ok(chips().includes('H@aad-hmid'), 'Home: ⌥H in the empty middle');
+  assert.equal(listed, 0, 'no app in front: no app keys asked for');
+  // ⌥ + Music's row digit: Music becomes the panel and its frame takes the keyboard
+  const rows = w.qa('.aad-vtab'), i = rows.findIndex(r => r.dataset.app === 'music');
+  assert.ok(i >= 0 && i < 10, 'Music has a digit');
+  keys[2].down({ altKey: true, code: 'Digit' + ((i + 1) % 10) });
+  assert.deepEqual(w.st.gone.at(-1), 3, 'its desk');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 3 }; w.emit('route', w.st.route);
+  assert.equal(appDesk.dataset.aadRole, 'app', 'Music is the panel');
+  for (let k = 0; k < 4 && !focused; k++) w.run();
+  assert.ok(focused >= 1 && w.doc.activeElement === frame, 'the frame has the keyboard: plain keys reach the app');
+  const n0 = focused; for (let k = 0; k < 4; k++) w.run(); assert.equal(focused, n0, 'once: no focus loop after it holds');
+  // hold ⌥: the app's own keys, outlined (app: true), in its frame, beside the view's
+  const raw = guides[0](), app = raw.filter(c => c.app);
+  assert.deepEqual(app.map(c => [c.key, c.el, c.frame, c.at, c.name]), [['Space', play, frame, 'tl', 'Play / pause'], ['→', next, frame, 'tl', '']], 'Space and → on Play and Next, the frame named so the shell offsets them');
+  assert.ok(raw.some(c => c.key === 'W' && !c.app), 'the view\'s own ⌥ keycaps stay');
+  assert.ok(chips().includes('H@aad-pti'), '⌥H with an app in front: on the panel\'s app icon');
+  assert.ok(!chips().includes('H@aad-hmid'), 'the middle is the app\'s now: no middle H');
+  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
+  keys[2].down({ altKey: true, code: 'KeyH' });
+  // plain keys are never the view's (they go on to the app frame)
+  for (const k of [{ key: ' ', code: 'Space' }, { key: 'j', code: 'KeyJ' }, { key: 'ArrowRight', code: 'ArrowRight' }, { key: 'Enter', code: 'Enter' }]) for (const h of keys) assert.notEqual(h.down({ ...k, altKey: false }), true, `${k.code} passes through`);
+  // a click on the row picks it the same way
+  const js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  assert.match(js, /const goApp = \(id, desk = null, then = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
+  assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
+  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{[^}]*background: color-mix[^}]*border: 1\.5px solid var\(--wz-accent/, 'outlined app keycaps');
 });

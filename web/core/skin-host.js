@@ -773,7 +773,9 @@
       }),
       /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
        * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
-       * chips stay off; ⌥/ still pins the guide). guide(fn, { only }): fn() → [{ el, key, word, at }] chips the hold-⌥ guide adds. */
+       * chips stay off; ⌥/ still pins the guide). guide(fn, { only }): fn() → [{ el, key, word, at, frame?, app?, name?, free? }] chips the hold-⌥ guide adds (frame: el
+       * sits in that same-origin app frame; app: the app's own plain key, drawn outlined; free: a spot the layout knows is
+       * empty, drawn without the hit test). */
       keys: Object.freeze({
         on({ down, up, hold = false } = {}) {
           if (!live()) return () => {};
@@ -1615,7 +1617,8 @@
     key(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.down && h.down(e) === true) return true; return false; },
     keyUp(e) { for (const h of [...keyHandlers]) if (!h.a.dead && h.up) h.up(e); },
     get holdKeys() { return [...keyHandlers].some(h => h.hold && !h.a.dead); },
-    keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 40)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at }); } return out; },
+    // (app: a plain-key keycap on an app's own control inside the same-origin app frame `frame`, outlined; name = its label)
+    keyChips() { const out = []; for (const fn of [...keyGuides]) { const l = fn(); if (Array.isArray(l)) for (const c of l.slice(0, 64)) if (c && c.el && typeof c.key === 'string') out.push({ el: c.el, key: c.key.slice(0, 6), word: typeof c.word === 'string' ? c.word.slice(0, 24) : '', at: c.at, ...(c.frame?.tagName === 'IFRAME' ? { frame: c.frame } : {}), ...(c.app === true ? { app: true, name: typeof c.name === 'string' ? c.name.slice(0, 64) : '' } : {}), ...(c.free === true ? { free: true } : {}) }); } return out; },
     get keysOnly() { return [...keyGuides].some(g => g.only); },
     /* app.js: the dock orb's swipes a worn layout asked for ({ up, side, down }: null = nothing, 'home'), or null = stock. */
     orbSwipes() { for (const [l, m] of orbSwipeHolders) if (!l.dead) return m; return null; },

@@ -153,6 +153,52 @@
     let did = false; try { did = back(); } catch (_) {}
     if (did) e.preventDefault();
   });
+  /* App keys (docs/ai-apps-view.md › App keys): an app marks a control with data-wz-key="<key>" (optional
+   * data-wz-key-label); a plain key press clicks the first live match. Keys: Space, Enter, ArrowUp/Down/Left/Right or
+   * one printable character in lower case; never Escape (Back is the shell's). Not with ⌥ / Ctrl / ⌘ (those are the
+   * shell's), not while typing, not when the app already handled the key; an open modal limits it to its own controls.
+   * WizardApp.keys.list() = the live targets ({ el, key, label }), which the shell marks while left ⌥ is held. */
+  const keyOk = k => typeof k === 'string' && (/^(Space|Enter|Arrow(Up|Down|Left|Right))$/.test(k) || ([...k].length === 1 && /\S/u.test(k) && k === k.toLowerCase()));
+  function keyName(e) {
+    const k = e && typeof e.key === 'string' ? e.key : '';
+    if (k === ' ' || k === 'Spacebar') return 'Space';
+    if (k === 'Enter' || /^Arrow(Up|Down|Left|Right)$/.test(k)) return k;
+    return [...k].length === 1 ? k.toLowerCase() : '';
+  }
+  const keyBox = n => typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
+  const keyLive = n => keyBox(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true';
+  function keyScope(doc) {
+    const open = [...doc.querySelectorAll('[aria-modal="true"], [role="dialog"]:not([hidden]), dialog[open]')].filter(m => keyBox(m) && !m.closest('[hidden], [inert]'));
+    return open.length ? open[open.length - 1] : doc;   // the topmost (the last one opened sits last in the page)
+  }
+  function keyList(doc = document) {
+    const scope = keyScope(doc), out = [];
+    for (const el of scope.querySelectorAll('[data-wz-key]')) {
+      const key = el.getAttribute('data-wz-key');
+      if (keyOk(key) && keyLive(el)) out.push(Object.freeze({ el, key, label: String(el.getAttribute('data-wz-key-label') || el.getAttribute('aria-label') || el.title || '').slice(0, 64) }));
+    }
+    return out;
+  }
+  function keyMatch(e, doc = document) {
+    if (!e || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return null;
+    const name = keyName(e); if (!name || name === 'Escape') return null;
+    // ⇧ only where the character needs it ('?'), never as a variant of a plain key (J, ⇧Space, ⇧↓)
+    if (e.shiftKey && (name.length > 1 || e.key !== e.key.toLowerCase())) return null;
+    const t = e.target && e.target.nodeType === 1 ? e.target : doc.activeElement;
+    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || t.isContentEditable || t.closest?.('[contenteditable]:not([contenteditable="false"])'))) return null;
+    return keyList(doc).find(k => k.key === name) || null;
+  }
+  let keyDone = '';
+  function onAppKey(e) {
+    const hit = keyMatch(e); if (!hit) return;
+    e.preventDefault();
+    if (e.repeat && !/^Arrow/.test(hit.key)) return;   // held down: only the arrows repeat
+    keyDone = hit.key; hit.el.click();
+  }
+  addEventListener('keydown', onAppKey);
+  // (Space activates a focused button on keyup: the key already clicked its own target)
+  addEventListener('keyup', e => { if (keyDone && keyName(e) === keyDone) { if (keyDone === 'Space') e.preventDefault(); keyDone = ''; } });
+  const keys = Object.freeze({ list: () => keyList(document), match: e => keyMatch(e)?.el || null });
   function ready(meta = {}) {
     if (framed) {
       try { service = parent.WizAppServices?.connect(window, conversationClient) || null; } catch (_) { service = null; }
@@ -473,6 +519,7 @@
         forget: () => call('vault.forget'),
       };
     })()),
+    keys, // app keys: data-wz-key controls; list() = the live targets the shell marks while ⌥ is held
     badge: Object.freeze({ set: (n, o) => { const more = !!(o && o.more === true); return service ? service.badge.set(n, { more }) : transportReady ? request('badge.set', { n, more }).then(() => true, () => false) : Promise.resolve(false); } }),
     attachChip: Object.freeze({ node: chipNode, paint: (el, c) => window.WizAttachChip?.paint(el, c), ready: () => chipModule().then(m => !!m) }),
     composer: Object.freeze({ bind: composerBind, insertText: (field, text) => window.WizComposerInput ? window.WizComposerInput.insertText(field, text) : (composerModule(), false) }),

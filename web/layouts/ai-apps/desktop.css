@@ -750,6 +750,14 @@ html[data-shell="desktop"][data-layout="ai-apps"] .kh-chip {
 html[data-shell="desktop"][data-layout="ai-apps"].key-hints-on :is(.aad-vtb, .aad-rk-n.is-badge) { opacity: .35; }
 /* the Ready row ⌥↓ / ⌥↑ open makes room at its start for its keycap, so the keycap never touches the title */
 html[data-shell="desktop"][data-layout="ai-apps"].key-hints-on .aad-rw[data-aad-kh] .aad-chat { padding-left: 34px; }
+/* app keys (Miguel, 4 Nov 2026): the app in front's own plain keys (data-wz-key) wear an OUTLINED keycap (accent
+ * outline, no ⌥ meaning), unlike the view's filled ⌥ keycaps; ⌥H also sits in the empty middle of Home (.aad-hmid is an
+ * invisible, unclickable spot there) */
+html[data-shell="desktop"][data-layout="ai-apps"] .kh-chip.kh-app {
+  color: var(--aad-ink); background: color-mix(in srgb, var(--aad-canvas) 82%, transparent);
+  border: 1.5px solid var(--wz-accent, var(--aad-ink)); border-bottom-width: 1.5px; border-radius: 9px; box-shadow: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-hmid { position: absolute; left: calc(var(--aad-side) + (100vw - var(--aad-side) - var(--aad-rs)) / 2 - 12px); top: 40vh; width: 24px; height: 24px; pointer-events: none; }
 /* item 6: a notification row: a small amber bell, its title in normal text, its unread dot amber */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-bell { color: var(--amber, var(--wz-warning)); opacity: 1; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-note] .aad-st.is-new { background: var(--amber, var(--wz-warning)); }

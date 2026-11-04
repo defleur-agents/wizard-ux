@@ -2283,20 +2283,31 @@
     const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Archive / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
-    const vis = n => n && !n.hidden && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
+    // (a node inside an app frame reads its own window's styles)
+    const vis = n => n && !n.hidden && n.getClientRects().length && (n.ownerDocument?.defaultView || window).getComputedStyle(n).visibility !== 'hidden';
     // Every key is a small chip on the thing it acts on (Miguel, 27 Oct 2026: no boxes to read). Only the four
     // Speak keys carry a word, since their buttons don't say what they do. The lists above name each chip for
     // screen readers.
     const NAMES = Object.fromEntries([...SPEAK, ...TYPE, ...READY, ...GO, ...WIN].map(([k, n]) => [k, n]));
-    function chip(n, label, at = 'below', word = '') {
-      const r = n.getBoundingClientRect();
+    // opt.frame: n sits inside that same-origin app frame (its box is moved by the frame's offset and hit-tested in the
+    // frame's own page); opt.app: an app's own plain key (outlined, no ⌥ meaning); opt.free: a spot the layout knows is
+    // empty (no hit test).
+    function chip(n, label, at = 'below', word = '', opt = null) {
+      const f = opt?.frame || null, fr = f ? f.getBoundingClientRect() : null, r0 = n.getBoundingClientRect();
+      const ox = fr ? fr.left + (f.clientLeft || 0) : 0, oy = fr ? fr.top + (f.clientTop || 0) : 0;
+      const r = fr ? { left: r0.left + ox, right: r0.right + ox, top: r0.top + oy, bottom: r0.bottom + oy, width: r0.width, height: r0.height } : r0;
       // Only on things you can see right now: not scrolled away, not under another window.
       if (r.bottom <= 0 || r.top >= innerHeight || r.right <= 0 || r.left >= innerWidth) return null;
-      const hitEl = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)));
-      if (!hitEl || (hitEl !== n && !n.contains(hitEl) && !hitEl.contains(n) && !el.contains(hitEl))) return null;
+      if (fr && (r.bottom <= fr.top || r.top >= fr.bottom || r.right <= fr.left || r.left >= fr.right)) return null; // scrolled out of its app
+      const hx = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), hy = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+      if (!opt?.free) {
+        const top = f || n, hitEl = document.elementFromPoint(hx, hy);
+        if (!hitEl || (hitEl !== top && !top.contains(hitEl) && !hitEl.contains(top) && !el.contains(hitEl))) return null;
+        if (f) { const inner = n.ownerDocument.elementFromPoint(hx - ox, hy - oy); if (!inner || (inner !== n && !n.contains(inner) && !inner.contains(n))) return null; }
+      }
       const c = document.createElement('b');
-      c.className = 'kh-chip' + (word ? ' kh-lab' : ''); c.innerHTML = word ? `<kbd>${esc(label)}</kbd>${esc(word)}` : esc(label);
-      c.setAttribute('aria-label', `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
+      c.className = 'kh-chip' + (word ? ' kh-lab' : '') + (opt?.app ? ' kh-app' : ''); c.innerHTML = word ? `<kbd>${esc(label)}</kbd>${esc(word)}` : esc(label);
+      c.setAttribute('aria-label', opt?.app ? `${label}: ${opt.name || label}` : `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
       const w = c.offsetWidth, h = c.offsetHeight;
       let x = r.left + r.width / 2 - w / 2, y = r.bottom + 24 > innerHeight ? r.top - h - 3 : r.bottom + 3; // near the bottom: above it
       if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }
@@ -2326,7 +2337,7 @@
       el.innerHTML = ''; el.hidden = false; el.classList.toggle('pinned', pinned); // visible first, so chips can be measured
       // A layout that marks its own keys (the AI apps view): only its chips, each on the thing it acts on; nothing else.
       if (window.WosSkinHost?.keysOnly) {
-        for (const h of window.WosSkinHost.keyChips()) if (vis(h.el)) chip(h.el, h.key, h.at || 'tl', h.word || '');
+        for (const h of window.WosSkinHost.keyChips()) if (vis(h.el)) chip(h.el, h.key, h.at || 'tl', h.word || '', h);
         document.documentElement.classList.add('key-hints-on'); return;
       }
       // Top bar: Home, desktops, new desktop, and the Speak buttons with their one-word meaning.
