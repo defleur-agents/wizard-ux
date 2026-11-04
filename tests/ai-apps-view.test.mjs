@@ -379,6 +379,42 @@ test('search covers chats (archive too) and apps; a chat row opens its thread; a
   assert.deepEqual(w.qa('.aa-pop-i').map(b => b.dataset.act), ['pin', 'rename']);
 });
 
+test('phone: deferred Chats preparation never opens the drawer over a shell sheet', async () => {
+  for (const which of ['settings', 'launcher']) {
+    const w = world();
+    (await layout()).default(w.api);
+    w.emit('route', w.st.route); // initial empty thread is also a thread
+    w.device.classList.add('sheet-open'); w.device.dataset.sheet = which;
+    w.st.route = { ...w.st.route, view: 'list', thread: null };
+    w.emit('route', w.st.route); w.run();
+    assert.equal(w.st.newChats, 1, 'Chats still prepares behind the sheet');
+    assert.equal(w.q('.aa-layer').hidden, true, which + ' keeps the drawer hidden');
+    assert.equal(w.html.dataset.aaDrawer, undefined);
+    assert.equal(w.st.backs.length, 0, 'no drawer Back handler steals the sheet dismissal');
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.q('.aa-layer').hidden, true, 'explicit drawer opens also yield to a shell sheet');
+    w.fire('touchstart', w.device, { touches: [{ clientX: 2, clientY: 400 }] });
+    w.fire('touchmove', w.device, { touches: [{ clientX: 180, clientY: 400 }] });
+    assert.equal(w.q('.aa-layer').hidden, true, 'edge gestures cannot cover the sheet');
+    w.device.classList.remove('sheet-open'); delete w.device.dataset.sheet;
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.html.dataset.aaDrawer, 'open', 'menu works after the sheet closes');
+    w.st.backs.at(-1)(); w.run();
+    assert.equal(w.q('.aa-layer').hidden, true, 'Back closes the drawer, never exits');
+  }
+});
+
+test('phone: a sheet opened between route and deferred drawer work still wins', async () => {
+  const w = world(); (await layout()).default(w.api);
+  w.emit('route', w.st.route);
+  w.st.route = { ...w.st.route, view: 'list', thread: null };
+  w.emit('route', w.st.route);
+  w.device.classList.add('sheet-open');
+  w.run();
+  assert.equal(w.q('.aa-layer').hidden, true);
+  assert.equal(w.st.newChats, 1);
+});
+
 test('main screen: Home and the bare list become the chat; a thread left for the list opens the drawer; an app is "app"', async () => {
   const w = world({ route: { home: true, view: 'desk', thread: null, desk: 0, app: null } });
   (await layout()).default(w.api);
