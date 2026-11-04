@@ -161,7 +161,7 @@
    * grid of the app icon. Per device, like Window opacity; drawn once per size into an offscreen canvas. */
   const WALL_KEY = 'wos.skin.wallpaper';
   const WALLS = [
-    { id: 'landscapes', name: 'Landscapes', who: 'Landscape photos that change every minute.' },
+    { id: 'landscapes', name: 'Photos', who: 'Landscape photos that change every minute.' },
     { id: 'wizard', name: 'Wizard', who: 'The Wizard OS hat in the middle, glowing.' },
     { id: 'wizard-rise', name: 'Rise', who: 'A giant Wizard OS hat rising from the corner.' },
     { id: 'wizard-pattern', name: 'Pattern', who: 'Small Wizard OS hats, quietly repeated.' },
