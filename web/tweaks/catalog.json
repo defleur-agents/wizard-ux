@@ -19,6 +19,10 @@
     "wizard/new-send-list",
     "miguel/no-desk-close",
     "miguel/archive-top",
+    "miguel/group-by-day",
+    "miguel/reply-summary",
+    "miguel/now-playing",
+    "miguel/calm-offline",
     "miguel/notification-levels"
   ],
   "defaults": [

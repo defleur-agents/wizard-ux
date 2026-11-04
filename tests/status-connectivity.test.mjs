@@ -251,3 +251,42 @@ test('tapping the pill opens the checks; an outside tap, X and capture tuck them
   assert.equal(h.pop().hidden, true);
   h.openPill(); assert.equal(h.pop().hidden, true, 'no checks while capturing');
 });
+test('calm offline card (miguel/calm-offline): one dotted path, one short next step, quiet retry; stock card unchanged', async () => {
+  const stock = setup(); stock.success(); stock.L.error = 'offline'; stock.L.emit(); stock.grace(); stock.openPill(); await turn(); await turn();
+  assert.match(stock.pop().innerHTML, /wz-list/); assert.doesNotMatch(stock.pop().innerHTML, /wx-calm/, 'off by default: the stock rows and pills');
+  const h = setup(); h.ctx.clearInterval = () => {}; h.ctx.getComputedStyle = () => ({ getPropertyValue: k => k === '--wos-calm-offline' ? ' on' : '' });
+  h.success(); h.L.error = 'offline'; h.L.emit(); h.grace(); h.openPill(); await turn(); await turn();
+  const html = h.pop().innerHTML;
+  assert.match(html, /class="wz-card wx-off-card wx-calm"/);
+  assert.equal((html.match(/class="wx-step /g) || []).length, 3, 'Internet · Tailscale · Wizard as three steps');
+  assert.match(html, /wx-step ok" data-wxck="internet"/); assert.match(html, /wx-step bad" data-wxck="tailscale"/); assert.match(html, /wx-step wait" data-wxck="wizard"/);
+  assert.doesNotMatch(html, /wz-pill|wz-list|>[^<]*\d+ ms/, "no pills, rows or visible timings (timing stays in the hover title)");
+  assert.match(html, /Turn on Tailscale on this device\.<small>/, 'one short step, detail muted');
+  assert.match(html, /data-wxoffcheck/); assert.match(html, /data-wxoffnext/);
+  h.clickPop('[data-wxoffcheck]'); assert.equal(h.ctx.WosOutbox.retries, 1, 'Check again still retries saved messages');
+});
+
+test('calm offline opt-in stays off in author presets and its text panel is fully opaque', () => {
+  const profile = JSON.parse(readFileSync(new URL('../web/tweaks/miguel/profile.json', import.meta.url), 'utf8'));
+  assert.ok(profile.off.includes('miguel/calm-offline'));
+  const css = readFileSync(new URL('../web/tweaks/miguel/calm-offline/tweak.css', import.meta.url), 'utf8');
+  const panel = css.match(/\.wz-card\.wx-calm\s*\{([^}]+)\}/)[1];
+  assert.match(panel, /background: var\(--wz-base\)/);
+  assert.match(panel, /backdrop-filter: none/);
+  assert.doesNotMatch(panel.match(/background: ([^;]+)/)[1], /--sk-win|transparent|blur\(/);
+});
+
+test('calm card keeps keyboard focus when its asynchronous check repaints it', async () => {
+ const h=setup();h.ctx.clearInterval=()=>{};h.ctx.getComputedStyle=()=>({getPropertyValue:k=>k==='--wos-calm-offline'?'on':''});
+ let finish;h.ctx.WizReach.checks=()=>new Promise(resolve=>{finish=resolve});
+ h.success();h.L.error='offline';h.L.emit();h.grace();h.openPill();
+ const pop=h.pop();let html=pop.innerHTML,focused=0;
+ const card={attributes:[],classList:{contains:n=>n==='wx-calm'},focus(){focused++;h.ctx.document.activeElement=card}};
+ pop.contains=n=>n===card;pop.querySelector=sel=>sel==='.wx-calm'?card:null;
+ Object.defineProperty(pop,'innerHTML',{get:()=>html,set(v){html=v;h.ctx.document.activeElement=h.ctx.document.body}});
+ h.ctx.document.activeElement=card;
+ finish({internet:{state:'ok'},tailscale:{state:'bad'},wizard:{state:'wait'}});
+ await turn();await turn();
+ assert.ok(focused>0,'the replacement production card receives focus');
+ assert.equal(h.ctx.document.activeElement,card,'focus never falls back to the document');
+});
