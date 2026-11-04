@@ -74,16 +74,7 @@ window.WizCore.chats = function createChats(H) {
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
     if (!w || !window.WizLauncher?.hasHostedThread(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
-    // A newly-created agent thread may not be in the next session-list refresh yet.
-    if (opts?.agent != null) {
-      const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
-      if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
-      LIVE.pinAgent(sid, opts.agent);
-    }
-    // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
-    // It never replaces one already waiting there, and the composer stays the owner's own words.
-    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
-    if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
+    if (!prepThread(sid, opts)) return false;
     if (hosted.has(wid)) closeHosted(wid);
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
     layer.style.cssText = 'position:absolute;inset:0;z-index:5;background:var(--wz-base,var(--base,#15151d));display:flex;flex-direction:column;min-height:0';
@@ -96,6 +87,21 @@ window.WizCore.chats = function createChats(H) {
     hosted.set(wid, entry);
     frame.inert = true; frame.style.visibility = 'hidden'; container.append(layer);
     openChat(wid, sid); return true;
+  }
+  // What an app's thread brings along, wherever it opens (over the app, or the main Chats for a layout that keeps
+  // chats apart from apps): its agent, and its item as the reply beside the thread's draft. False = not allowed.
+  function prepThread(sid, opts = {}) {
+    // A newly-created agent thread may not be in the next session-list refresh yet.
+    if (opts?.agent != null) {
+      const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
+      if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      LIVE.pinAgent(sid, opts.agent);
+    }
+    // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
+    // It never replaces one already waiting there, and the composer stays the owner's own words.
+    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
+    if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
+    return true;
   }
   function closeHosted(wid) {
     const entry = hosted.get(wid); if (!entry) return false;
@@ -2998,7 +3004,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };
