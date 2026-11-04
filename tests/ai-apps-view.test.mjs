@@ -850,9 +850,9 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
     ['Working 1', '  Needs you 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
-  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
+  w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
-  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
+  w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1\. Click opens the first; hover lists them$/);
@@ -1675,7 +1675,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   const needs = w.q('.aad-rk[data-k="needs"]');
   assert.ok(needs.classList.contains('is-on') && needs.getAttribute('aria-current') === 'true', 'the current group marked');
   assert.equal(needs.querySelector('.aad-rk-p').textContent, '1/3', 'its place, under the word');
-  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));   // One list
+  w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));   // One list
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
   assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), false);
   assert.equal(click('ready'), 'n3', 'another item: its first chat (Ready = the whole grouped list)');
@@ -1685,7 +1685,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
   go('n3'); alt('ArrowDown'); assert.equal(w.st.opened.at(-1), 'thread:n2');
   // hover: a flyout after 300 ms listing the group's chats (title, time); a pick opens one, rail still folded
-  w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));   // By status again
+  w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));   // By status again
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   w.st.timers.length = 0;
   w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('pointerenter'));
@@ -1719,13 +1719,13 @@ test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) 
   const b = w.q('.aad-sech .aad-sortb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
   b.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort', 'Group']);
-  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'By status:false', 'One list:true']);
+  assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false', 'By status:false', 'By subject:false', 'One list:true']);
   w.q('.aad-sortmenu [data-order="oldest"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(sets, ['oldest']); assert.equal(w.q('.aad-sortmenu'), null);
   assert.equal(w.q('.aad-sortb-w').textContent, 'Oldest'); assert.equal(node.querySelector('[data-aad-order="oldest"]').getAttribute('aria-checked'), 'true', 'Settings follows');
   w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(store.groupReady, true, 'grouping from the sidebar'); assert.equal(node.querySelector('[data-aad-groupready]').getAttribute('aria-checked'), 'true', 'Settings follows');
+  assert.equal(store.groupReady, true, 'grouping from the sidebar'); assert.equal(node.querySelector('[data-aad-group="status"]').getAttribute('aria-checked'), 'true', 'Settings follows');
   node.querySelector('[data-aad-order="newest"]').dispatchEvent(new FakePointerEvent('click')); assert.deepEqual(sets, ['oldest', 'newest']);
   const css = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aad-sortb \{[^}]*font: 400 0\.6875rem \/ 1 var\(--wz-font-ui\)/, 'the control in the shell\'s font token');
@@ -1848,7 +1848,7 @@ test('round 20 item 9 / round 22: Ready is one flat list in priority order by de
   const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 2, 'round 22: each Ready row shows how long ago');
   assert.deepEqual(times.map(t => t.textContent), ['3h', '5m'], 'its time since the last message (Needs you first)');
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
-  const sw = w.q('[data-aad-groupready]'); assert.ok(sw, 'the Settings switch'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first');
+  const sw = w.q('[data-aad-group="status"]'); assert.ok(sw, 'the Settings choice'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first'); assert.equal(w.q('[data-aad-group="none"]').getAttribute('aria-checked'), 'true', 'One list at first');
   sw.dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true);
   assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi'], 'grouped: the sub-headers');
@@ -2127,4 +2127,31 @@ test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music
   for (let k = 0; k < 4 && !focused; k++) w.run();
   assert.ok(focused >= 1 && w.doc.activeElement === frame, 'the app has the keyboard again');
   assert.ok(bar);
+});
+
+test('round 24 (Miguel, 4 Nov 2026): Group By subject: one sub-header per subject (Wizard OS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the rail folds to Ready alone', async () => {
+  const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+  const at = m => new Date(Date.now() - m * 60e3).toISOString();
+  const rows = [
+    { id: 'a', subject: 'Messenger', state: 'fyi', at: at(5) }, { id: 'b', subject: 'Wizard OS', state: 'done', at: at(1) },
+    { id: 'c', subject: 'Wizard OS', state: 'fyi', at: at(9) }, { id: 'd', subject: '', state: 'fyi', at: at(2) },
+    { id: 'e', subject: 'AI Wizards', state: 'needs', at: at(30) }, { id: 'n', note: true, unread: true, at: at(3) }];
+  const g = P.subjectGroups(rows, 'newest');
+  assert.deepEqual(g.map(x => x.word + ':' + x.rows.map(r => r.id).join('')), ['AI Wizards:e', 'Wizard OS:bc', 'Messenger:a', 'Notifications:n', 'Other:d']);
+  assert.deepEqual(P.subjectGroups(rows, 'oldest').find(x => x.word === 'Wizard OS').rows.map(r => r.id), ['c', 'b'], 'the chosen order inside each');
+  assert.deepEqual(P.readyFlat(rows, 'newest', 'subject').map(r => r.id), ['e', 'b', 'c', 'a', 'n', 'd'], 'the walk follows what is drawn');
+  assert.deepEqual(P.GROUP_MODES.map(m => m[1]), ['By status', 'By subject', 'One list']);
+  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /subject: String\(s\.attention\?\.subject \|\| ''\)\.trim\(\)/, f + ': rows carry the subject');
+
+  const { w, store } = deskWorld();
+  w.st.sessions.ready[0].subject = 'Messenger'; w.st.sessions.ready[1].subject = 'Wizard OS';
+  (await layout()).default(w.api);
+  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-sortmenu [data-group="subject"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(store.groupBy, 'subject'); assert.equal(store.groupReady, false);
+  assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['subject:Messenger', 'subject:Wizard OS']);
+  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.q('.aad-sortmenu [data-group="subject"]').getAttribute('aria-checked'), 'true');
+  w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(store.groupReady, true); assert.ok(w.qa('.aad-grp').every(x => x.dataset.state !== 'subject'), 'back to status headers');
 });
