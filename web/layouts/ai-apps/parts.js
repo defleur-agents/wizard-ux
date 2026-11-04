@@ -345,33 +345,5 @@ export function appLayers(desks, pins, { main = null, lit = () => false, manual 
 /** Layer 3's exclusions: what the picker never repeats (pinned or open). */
 export const shownIds = (layers, chats = 'wizard') => new Set([chats, ...layers.pinned.map(p => p.id), ...layers.open.map(d => d.id)]);
 
-/* Round 20 (Miguel, 3 Nov 2026: hold-⌥ hints that read at a glance): the legend card of the desktop view's keys that
- * have no single target, only those that do something in this state, in plain words, grouped. st = { side: 'open' |
- * 'rail', tabs: 'open' | 'rail', pane, wide, pinnedPane, docked, item: 'chat' | 'note' | '', ready: n, rows: n,
- * home, sheet, focus: '' | 'on' | 'stash', pinned }. → [{ name, keys: [[key, word], …] }] */
-export function keyLegend(st = {}) {
-  const nav = [], pan = [], act = [], doo = [], voice = [];
-  // a modal in front (the app picker, Settings): only its own keys and voice; the view's other ⌥ keys do nothing there
-  if (st.sheet || st.settings) {
-    const own = st.sheet ? ['App picker', [['T', 'Close the app picker']]] : ['Settings', [[',', 'Close Settings']]];
-    return [own, ['Voice', [['S', 'Talk'], ['V', 'New voice chat'], ['C', 'Command'], ['D', 'Dictate']]]].map(([name, keys]) => ({ name, keys }));
-  }
-  if (st.rows > 0) nav.push(['[ ]', 'Previous / next app'], ['1–9', 'App by its place on the right']);
-  if (st.ready > 0) nav.push(['↑ ↓', 'Previous / next Ready chat']);
-  if (!st.home) nav.push(['`', 'Home']);
-  pan.push(['.', st.focus ? 'Back from focus' : 'Focus: hide everything']);
-  if (st.focus !== 'on') {
-    pan.push(['\\', st.side === 'open' ? 'Fold the sidebar' : 'Open the sidebar']);
-    pan.push(['⇧ \\', st.tabs === 'open' ? 'Fold the apps column' : 'Show the apps\' names']);
-  }
-  if (st.pane) pan.push(['F', st.wide ? 'App back to the side' : 'App wide']);
-  if (st.pane && !st.wide) pan.push(['− =', 'App narrower / wider']);
-  if (st.pane) pan.push(['W', st.pinnedPane ? 'Hide the app' : 'Close the app']); else if (st.docked) pan.push(['W', st.item === 'note' ? 'Close the notification' : 'Close the chat']);
-  if (st.item === 'note') act.push(['X', 'Resolve, then the next'], ['←', 'Snooze'], ['→', 'Archive, then the next'], ['B', 'Where these go']);
-  else if (st.item === 'chat') act.push(['←', 'Snooze'], ['→', 'Archive, then the next']);
-  doo.push(['N', 'New chat'], ['T', 'Add an app'], ['I', 'Search'], [',', 'Settings'], ['G', 'Letters on everything'], st.pinned ? ['Esc', 'Close this'] : ['/', 'Keep this open']);
-  voice.push(['S', 'Talk'], ['V', 'New voice chat'], ['C', 'Command'], ['D', 'Dictate']);
-  return [['Navigate', nav], ['Panels', pan], [st.item === 'note' ? 'This notification' : 'This chat', act], ['Do', doo], ['Voice', voice]].filter(([, k]) => k.length).map(([name, keys]) => ({ name, keys }));
-}
 /** Round 20 item 9: the flat Ready's tiny muted tag, only on the rows that wait on him (FYI, Done, plain: none). */
 export const STATE_TAG = Object.freeze({ approval: 'Approve', needs: 'Needs you', check: 'Your call', failed: 'Error' });
