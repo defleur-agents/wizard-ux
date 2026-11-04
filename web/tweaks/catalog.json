@@ -18,6 +18,7 @@
     "wizard/orb-radial",
     "wizard/new-send-list",
     "miguel/no-desk-close",
+    "miguel/archive-top",
     "miguel/notification-levels"
   ],
   "defaults": [

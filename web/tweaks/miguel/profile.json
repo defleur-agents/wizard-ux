@@ -8,7 +8,11 @@
     "miguel/snooze-someday",
     "miguel/machines-home",
     "miguel/no-desk-close",
+    "miguel/archive-top",
     "miguel/notification-levels"
   ],
-  "flags": {}
+  "flags": {},
+  "off": [
+    "miguel/archive-top"
+  ]
 }
