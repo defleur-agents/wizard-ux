@@ -10,7 +10,7 @@ const OUT = process.env.QA_OUT;
 if (!OUT || !process.env.TMPDIR || !path.resolve(process.env.TMPDIR).startsWith('/srv/work/')) throw Error('Owned forum QA_OUT and regular-disk TMPDIR required');
 fs.mkdirSync(OUT, { recursive: true });
 const ORIGIN = 'http://wizard-qa.invalid';
-const failures = [], refused = [], requests = [], assertions = [], screenshots = [];
+const failures = [], refused = [], requests = [], assertions = [], screenshots = [], inventories = [];
 let heldWrite = null, holdNext = false, version = 1;
 let look = { version: 1, skin: { id: 'obsidian', at: 5 }, tweaks: { 'miguel/ai-apps': { on: true, at: 5 } }, defaults: { 'wizard/unified-inbox': { on: true, at: 5 } } };
 const main = 'qa-operator', DAY = 864e5, now = Date.now();
@@ -83,7 +83,7 @@ async function route(r) {
   if (p === '/wizard/files') return json(r, { files: [] });
   if (p === '/notifications/api/count') return json(r, { unread: 1, needs: 0 });
   if (p === '/notifications/api/items') return json(r, { items: notes });
-  if (p === '/notifications/api/routes') return json(r, { routes: { notifications: 'chats' }, initialized: true });
+  if (p === '/notifications/api/routes') return json(r, { routes: { notifications: 'chats' }, saved: true });
   if (p === '/notifications/api/marks') return json(r, { marks: {} });
   if (p === '/qa-form/') return r.fulfill({ contentType: 'text/html', body: '<!doctype html><html><body style="background:#17151d;color:#eee"><label>Synthetic retained form<textarea id="qa-form"></textarea></label><a href="#local">Local navigation</a></body></html>' });
   if (optional404.has(p)) return json(r, { error: 'not_found' }, 404);
@@ -93,11 +93,35 @@ const check = (condition, name) => { assert.ok(condition, name); assertions.push
 const shell = p => p.evaluate(() => window.__wux ? 'desktop' : 'phone');
 async function settingsLook(p) { await p.evaluate(() => (window.__wux || window.__wos).openSettings('look')); await p.locator('[data-skinfamily]').first().waitFor(); }
 async function closeSettings(p) { await p.evaluate(() => window.__wux ? __wux.closeSettings() : __wos.closeSheets(true)); }
+function forbidAPIRequests(context) {
+  // Preserve Playwright's owned _dispose lifecycle on the real object. API requests
+  // bypass browser routing, so every public transport verb (including fetch) stays blocked.
+  const deny = () => { throw Error('APIRequestContext forbidden in offline acceptance'); };
+  for (const method of ['fetch', 'get', 'head', 'post', 'put', 'patch', 'delete'])
+    Object.defineProperty(context.request, method, { value: deny, configurable: false, writable: false });
+}
 async function inventory(p) {
   const kind = await shell(p);
   if (kind === 'phone') { const b = p.locator('button[aria-label^="Open menu"]'); if (await b.isVisible()) await b.click(); }
+  // Session polling and notification loading are independent asynchronous seams.
+  // Require the fixture item to have loaded, not merely a session's first paint.
+  await p.waitForFunction(() => WosBell.items().some(i => i.id === 'qa-granola-summary'), null, { timeout: 10000 });
   await p.waitForFunction(() => [...document.querySelectorAll('[data-sid]')].some(e => e.dataset.sid === 'qa-main-sync'));
   return p.locator('[data-sid]').evaluateAll(es => [...new Set(es.map(e => e.dataset.sid))].sort());
+}
+async function diagnoseInventory(p, expected) {
+  const diagnostic = await p.evaluate(() => {
+    const L = (window.__wux || window.__wos).live;
+    const ids = rows => (rows || []).map(s => s.id).sort();
+    const groups = L.workGroups(undefined, { flatReady: true });
+    return { dom: ids([...document.querySelectorAll('[data-sid]')].map(e => ({ id: e.dataset.sid }))),
+      sessions: ids(L.sessions), unified: ids(L.unified()), groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, ids(v)])),
+      inbox: WosSkinHost.inboxList, notificationItems: ids(WosBell.items()), notificationRoutes: WosBell.routes(),
+      layout: WosSkinHost.layout, experience: { busy: WosExperience.state.busy, error: WosExperience.state.error },
+      sections: [...document.querySelectorAll('[data-sec]')].map(e => ({ section: e.dataset.sec, expanded: e.getAttribute('aria-expanded') })) };
+  });
+  const row = { shell: await shell(p), expected, ...diagnostic };
+  inventories.push(row); console.log('INVENTORY', JSON.stringify(row));
 }
 async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); await p.screenshot({ path: f, fullPage: true }); screenshots.push(f); }
 (async () => {
@@ -109,7 +133,7 @@ async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); aw
         isMobile: kind === 'phone', hasTouch: kind === 'phone', serviceWorkers: 'block',
         ...(kind === 'phone' ? { userAgent: 'Mozilla/5.0 (Linux; Android 16; SM-S938B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Mobile Safari/537.36' } : {}) });
       contexts.push(context);
-      Object.defineProperty(context, 'request', { value: new Proxy({}, { get() { throw Error('APIRequestContext forbidden in offline acceptance'); } }) });
+      forbidAPIRequests(context);
       await context.route('**/*', route); await context.routeWebSocket('**/*', ws => ws.close());
       await context.addInitScript(({ kind }) => {
         localStorage.setItem('wux.shell', kind);
@@ -129,7 +153,12 @@ async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); aw
     const phone = contexts[0]._qaPage, desktop = contexts[1]._qaPage;
     for (const p of [phone, desktop]) await p.evaluate(() => localStorage.setItem('wos.myskin.js.ok', 'qa-approval-' + (window.__wux ? 'desktop' : 'phone')));
     const want = sessions.map(s => s.id).concat(['notif:qa-granola-summary']).sort();
-    for (const p of [phone, desktop]) check(JSON.stringify(await inventory(p)) === JSON.stringify(want), (await shell(p)) + ': exact inventory includes Main sync, old meetings, failed chat and Granola summary');
+    for (const p of [phone, desktop]) {
+      let actual;
+      try { actual = await inventory(p); } finally { await diagnoseInventory(p, want); }
+      assert.deepEqual(actual, want, (await shell(p)) + ': exact inventory (actual vs expected)');
+      check(true, (await shell(p)) + ': exact inventory includes Main sync, old meetings, failed chat and Granola summary');
+    }
     await screenshot(phone, 'phone-obsidian-inventory'); await screenshot(desktop, 'desktop-obsidian-inventory');
     // Open a real thread and retain its unsent draft while the OTHER device changes Look.
     await desktop.evaluate(() => __wux.openThread('qa-main-sync'));
@@ -171,9 +200,18 @@ async function screenshot(p, name) { const f = path.join(OUT, name + '.png'); aw
     check(failures.length === 0, 'no page exceptions');
   } catch (error) { failures.push(error.stack); console.error(error.stack); process.exitCode = 1; }
   finally {
+    const save = () => fs.writeFileSync(path.join(OUT, 'browser-evidence.json'), JSON.stringify({ synthetic: true, physicalPhoneVerified: false, assertions, failures, refused, requests, screenshots, inventories }, null, 2));
+    // Persist the original failure before teardown; cleanup must never erase its ledger.
+    save();
     if (heldWrite) heldWrite();
-    for (const context of contexts) { try { await context.close(); } catch (_) {} }
-    if (browser) await browser.close();
-    fs.writeFileSync(path.join(OUT, 'browser-evidence.json'), JSON.stringify({ synthetic: true, physicalPhoneVerified: false, assertions, failures, refused, requests, screenshots }, null, 2));
+    for (const [i, context] of contexts.entries()) {
+      if (failures.length && context._qaPage) {
+        try { await screenshot(context._qaPage, 'failure-' + (i ? 'desktop' : 'phone')); } catch (e) { failures.push('failure capture: ' + e.message); }
+      }
+      try { await context.close(); } catch (e) { failures.push('context cleanup: ' + e.stack); process.exitCode = 1; }
+      save();
+    }
+    if (browser) { try { await browser.close(); } catch (e) { failures.push('browser cleanup: ' + e.stack); process.exitCode = 1; } }
+    save();
   }
 })();

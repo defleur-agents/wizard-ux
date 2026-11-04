@@ -114,6 +114,9 @@ test('real experience emits built-in choice and adopts it without echoing or cha
 
 test('actual phone and desktop adapters retain every nonhidden chat across all day/error groups, without writes', () => {
   const h = helperWorkingHarness({ source: read('web/live.js'), row: { id: 'qa-placeholder' }, detail: {} });
+  // live.js boot reads preferences before any projection: do not count that as projection I/O.
+  const initialCalls = clone(h.calls);
+  assert.deepEqual(initialCalls, [{ url: '/wizard/v1/ui-preferences', method: 'GET' }], 'only the known boot read precedes projection');
   const now = Date.now(), DAY = 864e5;
   const row = (id, age, extras = {}) => h.api.normalize({ id, title: id === 'qa-main-sync' ? 'Main sync' : id === 'qa-meeting' ? 'Meeting summaries' : id,
     agent: 'qa-arbitrary-main', updated_at: new Date(now - age).toISOString(), message_count: 2, ...extras });
@@ -134,5 +137,5 @@ test('actual phone and desktop adapters retain every nonhidden chat across all d
     assert.deepEqual(clone(ids), expected, `${file}: exact inventory, no duplicate rows`);
     assert.ok(groups.ready.some(r => r.id === 'qa-main-sync')); assert.ok(groups.ready.some(r => r.id === 'qa-meeting'));
   }
-  assert.equal(h.calls.length, 0, 'inventory projection never calls agent/backend');
+  assert.deepEqual(clone(h.calls), initialCalls, 'inventory projection adds zero agent/backend calls');
 });
