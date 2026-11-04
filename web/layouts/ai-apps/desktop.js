@@ -598,22 +598,23 @@ export default function desktop(api) {
     if (!menu) return;
     menu.card.remove(); menu.wrap.classList.remove('is-held'); menu = null; offMenuBack?.(); offMenuBack = null;
   }
-  /** round 19 item 2 / round 22 (Miguel, 4 Nov 2026: sort and group right in the sidebar, no Settings dive): Ready's
-   * header menu: Sort (Newest / Oldest first) and Group (By status / One list), the current ones checked */
-  function openSortMenu(btn) {
+  /** round 19 item 2 / round 22 / round 25 (Miguel, 4 Nov 2026: sort and group right in the sidebar, as two separate
+   * drop-downs, since they are two different choices): kind 'sort' lists Newest / Oldest first, kind 'group' lists
+   * By status / By project / One list, the current one checked */
+  function openSortMenu(btn, kind = 'sort') {
     if (menu?.wrap === btn) { closeMenu(); return; }
     closeMenu();
-    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': 'Sort and group Ready' });
+    const isSort = kind === 'sort';
+    const card = el('div', 'aad-pop aad-sortmenu', { role: 'menu', 'aria-label': isSort ? 'Sort Ready' : 'Group Ready', 'data-menu': kind });
     const item = (on, w0, attrs, fn) => {
       const it = el('button', 'aad-pop-i' + (on ? ' is-on' : ''), { type: 'button', role: 'menuitemradio', 'aria-checked': String(on), ...attrs });
       it.append(on ? icon('check') : el('span', 'aad-ico', { 'aria-hidden': 'true' }), el('span', '', { text: w0 }));
       api.listen(it, 'click', () => { closeMenu(); fn(); });
       return it;
     };
-    card.append(el('h3', 'aad-pop-h', { text: 'Sort' }));
-    for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
-    card.append(el('h3', 'aad-pop-h aad-pop-h2', { text: 'Group' }));
-    for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
+    card.append(el('h3', 'aad-pop-h', { text: isSort ? 'Sort' : 'Group' }));
+    if (isSort) for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
+    else for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
     const r = btn.getBoundingClientRect();
     card.style.left = Math.round(Math.max(8, Math.min(r.right - 200, (globalThis.innerWidth || 1440) - 216))) + 'px';
@@ -707,15 +708,20 @@ export default function desktop(api) {
           else body.append(el('p', 'aad-empty', { text: !sessions ? 'Loading your chats…' : EMPTY[k] }));
         }
         if (k === 'ready') {
-          // round 22 (Miguel, 4 Nov 2026: "sort and group concisely inside the expanded view"): always on Ready's header,
-          // a quiet word for the order (Newest / Oldest) whose menu also holds the grouping; never a native select
+          // round 22 / round 25 (Miguel, 4 Nov 2026): always on Ready's header, two quiet drop-downs: the grouping
+          // (By status / By project / One list) and the order (Newest / Oldest); never a native select
           const row = el('div', 'aad-sech');
           const word0 = (GROUP_ORDERS.find(([v]) => v === readyOrder()) || GROUP_ORDERS[0])[1];
-          const gw0 = (GROUP_MODES.find(([v]) => v === groupBy()) || GROUP_MODES[2])[1].toLowerCase();
-          const sort = el('button', 'aad-sortb', { type: 'button', 'aria-haspopup': 'menu', 'aria-label': `Sort and group: ${word0}, ${gw0}. Change`, title: 'Sort and group Ready' });
-          sort.append(el('span', 'aad-sortb-w', { text: word0.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
-          api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort); });
-          row.append(hd, sort);
+          const gw0 = (GROUP_MODES.find(([v]) => v === groupBy()) || GROUP_MODES[2])[1];
+          const dd = (cls, kind, text, aria, title) => {
+            const b = el('button', 'aad-sortb ' + cls, { type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-label': aria, title });
+            b.append(el('span', 'aad-sortb-w', { text }), icon('down', 'aad-ico aad-sortb-c'));
+            api.listen(b, 'click', e => { e.stopPropagation?.(); openSortMenu(b, kind); });
+            return b;
+          };
+          const group = dd('aad-groupb', 'group', gw0, `Group: ${gw0}. Change`, 'Group Ready');
+          const sort = dd('aad-orderb', 'sort', word0.replace(' first', ''), `Sort: ${word0}. Change`, 'Sort Ready');
+          row.append(hd, group, sort);
           out.push(row, body);
         } else out.push(hd, body);
       }
