@@ -34,6 +34,26 @@ test('generic recovery stays generic and foreign targets never become frame URLs
     assert.equal(h.frame.src, '/troubleshoot/');
   }
 });
+test('phone persists the sign-in anchor through a successful frame load and remount', async () => {
+  const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  const begin = phone.indexOf('    try { if (W[id]) { const here =', phone.indexOf('function bridgeFrame(f)'));
+  const end = phone.indexOf('    try { win.document.addEventListener', begin);
+  assert.ok(begin >= 0 && end > begin);
+  const persist = phone.slice(begin, end);
+  for (const appId of ['troubleshooter', 'other']) {
+    const url = '/troubleshoot/?provider=claude&run_id=run%2Fone#signin';
+    const W = { win: { appId, url } }; let saves = 0;
+    vm.runInNewContext(persist, { id: 'win', W, APP: { [appId]: { url: '/troubleshoot/' } }, win: { location: { pathname: '/troubleshoot/', search: '?provider=claude&run_id=run%2Fone', hash: '#signin' } }, save() { saves++; } });
+    assert.equal(saves, 1);
+    assert.equal(W.win.url, appId === 'troubleshooter' ? url : url.split('#')[0], 'only recovery changes its saved anchor behavior');
+    if (appId === 'troubleshooter') {
+      const h = mount(W.win.url); [...h.timers.values()].find(t => t.ms === 0).fn();
+      for (let i = 0; i < 80; i++) await Promise.resolve();
+      assert.equal(h.frame.src, url, 'restored window keeps the exact workflow');
+    }
+  }
+});
+
 test('phone and desktop give recovery the actual window URL', () => {
   const phone = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
   const desktop = readFileSync(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');

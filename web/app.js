@@ -1642,7 +1642,7 @@
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
     try { if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(win, (W[id] && (APP[W[id].appId]?.url || W[id].url)) || win.location.pathname, LINKS); } catch (e) {}
-    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+    try { if (W[id]) { const here = win.location.pathname + win.location.search + (W[id].appId === 'troubleshooter' ? win.location.hash : ''); const want = APP[W[id].appId]?.url || '';
       // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
       // painted before its app was known would stick on the wrong page for good.
       const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
