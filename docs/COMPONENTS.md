@@ -30,7 +30,7 @@ Reuse:
 | Back/dismiss | `WizardApp.back.register/push`, `nav.back()`; `WizOpenApp(id,path)` validates URL/origin | guards, 2nd tap | nested Back; repair returns |
 | Skin, tokens, light/dark | `WizardApp.theme.get / onChange`, `--wz-*` roles | theme storage, own dark mode, literal colours | two skins + live change keep state |
 | Android skin | `WizardLook` (`android/app/src/main/java/ai/wizards/os/WizardLook.java`): saved roles/Nebula | literal colours |
-| Offline/connect | Native `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach.recoveryHtml/mountRecovery/checks` | duplicate UI |
+| Offline/connect | `ReachScreen/ReachPolicy/TailscaleGuide`, `ConnectActivity/ServerSettings`; web `WizReach.recoveryHtml/mountRecovery/checks` | duplicate UI |
 | Transcribe | `WizardApp.voice.transcribe(blob, {language})` → `{text}` / `{unavailable:true}`; verified frame, 25 MB; `WizConfig.transcribe` recheck | app transcriber | stale/foreign denied |
 | Share out (agents → apps → Other) | `WizardApp.share.text / file` | own picker | cancel ≠ shared |
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) | own route | pending → accepted, ack once |
