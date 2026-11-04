@@ -1937,6 +1937,8 @@ test('round 21 phone: an app (or its link) opens full screen on its own desk, ta
   p.st.route = { home: false, view: 'desk', thread: null, desk: 4, app: 'money' }; p.emit('route', p.st.route);
   assert.equal(R.open('draft', { from: 'money' }, () => { p.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' }; p.emit('route', p.st.route); return { kind: 'unsent-draft' }; }), true);
   assert.equal(p.st.backs.length, 1, 'Back is armed'); const n = p.st.gone.length;
+  assert.equal(p.html.dataset.aiNew, undefined, 'the Reply is a chat, never the see-through Home (no grid over its bubble)'); assert.equal(p.q('.ah').hidden, true);
+  p.emit('render'); assert.equal(p.html.dataset.aiNew, undefined, 'repaints keep it a chat');
   p.st.backs.pop()(); assert.equal(p.st.gone.length, n + 1); assert.equal(p.st.gone.at(-1), 4, 'Back lands on Money');
   // leaving that chat another way gives Back back to the stock order
   R.open('thread', { sid: 'r1', from: 'money' }, () => { p.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1, app: 'chats' }; p.emit('route', p.st.route); return true; });
