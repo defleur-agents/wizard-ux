@@ -29,6 +29,7 @@ async function snap(name, phone) {
     badges: [...document.querySelectorAll('#orbBadge, .dbg, .dw-badge, [data-badge="wizard"]')].map(n => ({ text: n.textContent, hidden: n.hidden, box: n.getBoundingClientRect().toJSON() })),
     width: innerWidth, height: innerHeight, touch: navigator.maxTouchPoints, ua: navigator.userAgent }));
   assert.equal(state.shell, phone ? 'phone' : 'desktop'); if (phone) assert(state.touch > 0 && /Android/.test(state.ua));
+  if (state.count > 0) assert(state.badges.some(b => !b.hidden && b.box.width > 0 && b.box.height > 0 && b.text.trim() === String(state.count)), 'positive app count must reach a rendered shell badge');
   await page.screenshot({ path: file });
   const b = fs.readFileSync(file); assert.equal(b.readUInt32BE(16), state.width); assert.equal(b.readUInt32BE(20), state.height);
   report.captures.push({ file, ...state }); fs.writeFileSync(path.join(OUT, 'captures.json'), JSON.stringify(report.captures, null, 2));
@@ -50,6 +51,15 @@ async function boot(phone) {
     // Only synthetic read receipts are accepted, in memory. All other writes (including sends) are refused.
     if (method === 'PUT' && p === '/wizard/thread-seen') { const next = q.postDataJSON(); s.seen = { ...s.seen, threads: { ...s.seen.threads, ...(next.threads || {}) } }; return json(r, { state: s.seen }); }
     if (!['GET', 'HEAD'].includes(method)) { report.refusedWrites.push({ method, path: p }); return json(r, { error: 'fixture refuses owner writes' }, 403); }
+    if (p === '/wizard/v1/pages/wizard-look/look.json') return json(r, { error: 'no synthetic synced Look yet' }, 404);
+    if (p === '/troubleshoot/api/ping') return json(r, { ok: true });
+    if (p === '/troubleshoot/api/status') return json(r, { checks: [{ id: 'agent-service', ok: true }], ok: true });
+    if (p === '/wizard-tinfoil/api/status') return json(r, { ready: false, configured: false });
+    if (p === '/wizard-claude/api/accounts') return json(r, { accounts: [] });
+    if (p === '/notifications/api/routes') return json(r, { routes: {} });
+    if (p === '/notifications/api/marks') return json(r, { marks: {} });
+    if (p === '/notifications/api/items') return json(r, { items: [] });
+    if (p === '/notifications/api/count') return json(r, { unread: 0, needs: 0 });
     if (p === '/wizard/v1/bootstrap') return json(r, { bootstrap: 1, settings: { owner: { name: 'Synthetic QA' }, agent: { name: 'Synthetic Wizard' }, clock: { timezone: 'UTC' } }, endpoints: { apps: '/wizard/v1/apps' }, capabilities: {} });
     if (p === '/wizard/v1/apps') return json(r, { apps: [] });
     if (p === '/wizard/hermes/api/sessions') return json(r, { object: 'list', data: s.rows, has_more: false, limit: 100, offset: 0 });
