@@ -56,7 +56,7 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
   await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
   await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
-  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/pin-buttons', 'wizard/two-orbs'], 'tapped again: his are off, James\'s stay');
+  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), cat.tweaks.filter(id => id.startsWith('wizard/') && !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)).sort(), 'tapped again: his are off, James\'s stay');
   const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
   assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
   assert.equal(E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').builtin, true);
@@ -340,4 +340,39 @@ test('Settings › Look: tweaks grouped by author, each with an "All of theirs" 
   assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
   assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
   assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
+});
+
+
+test('Orb radial is default-off on fresh, legacy saved mixes and inherited My skin recipes; later opt-in persists', async () => {
+  const mixes = [
+    new Map(),
+    new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{wizard:[]} })], ['wos.app-borders.migrated.v1','true']]),
+    new Map([['wos.skin-tweaks.v1', JSON.stringify({ version:1, off:{}, preset:'none', mix:{'wizard/two-orbs':true} })]]),
+  ];
+  for (const storage of mixes) {
+    let f=wizardExperience(storage); await f.E.refresh();
+    assert.equal(f.E.state.tweaks.find(t=>t.id==='wizard/orb-radial').on,false);
+    assert.ok(!f.all().includes('wizard/orb-radial'));
+    assert.equal((await f.E.defaults('nebula'))['wizard/orb-radial'],false);
+    const skin={tweaks:{}}; f.window.WosMySkin={active:skin, update(v){Object.assign(skin.tweaks,v.tweaks);}};
+    await f.E.refresh(); assert.ok(!f.all().includes('wizard/orb-radial'),'missing old recipe key inherits OFF');
+    skin.tweaks['wizard/orb-radial']=true; await f.E.refresh();
+    assert.ok(f.all().includes('wizard/orb-radial'),'explicit recipe opt-in is preserved');
+    f.window.WosMySkin.active=null; await f.E.refresh();
+    await f.E.toggle('wizard/orb-radial'); assert.ok(f.all().includes('wizard/orb-radial'));
+    f=wizardExperience(storage); await f.E.refresh(); assert.equal(f.E.state.tweaks.find(t=>t.id==='wizard/orb-radial').on,true);
+    await f.E.toggle('wizard/orb-radial'); assert.ok(!f.all().includes('wizard/orb-radial'));
+  }
+});
+test('Orb radial is trusted layout+nav only; late lazy import and stale handles cannot reactivate it', async () => {
+  const f=fixture(); let api, resolveModule, starts=0, disposed=0;
+  f.host._test.setImporter(async url => url.includes('/core/') ? new Promise(resolve=>{resolveModule=resolve;}) : {default:a=>{api=a;return()=>{};}});
+  await f.host.loadTweaks(['wizard/orb-radial'],f.slots); assert.equal(api.orb,undefined);
+  await f.mount('wizard/orb-radial'); const stale=api.orb;
+  const off=stale.switcher(); await f.clear();
+  resolveModule({default:()=>{starts++;return{dispose(){disposed++;}};}}); await Promise.resolve(); await Promise.resolve();
+  assert.equal(starts,0); off(); stale.switcher()(); assert.equal(starts,0);
+  f.host._test.setImporter(async url=>url.includes('/core/')?{default:()=>{starts++;return{dispose(){disposed++;}};}}:{default:a=>{api=a;return()=>{};}});
+  await f.mount('wizard/orb-radial'); const release=api.orb.switcher(); await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(starts,1); release(); release(); await f.clear(); assert.equal(disposed,1);
 });
