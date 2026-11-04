@@ -144,6 +144,16 @@ const bootstrap = {
         contentType: 'application/json',
         body: JSON.stringify(bootstrap),
       });
+      if (override && pathname === '/wizard-os-home/core/welcome.js') return route.fulfill({
+        status: 200,
+        contentType: 'application/javascript',
+        body: override.js,
+      });
+      if (override && pathname === '/wizard-os-home/core/welcome.css') return route.fulfill({
+        status: 200,
+        contentType: 'text/css',
+        body: override.css,
+      });
       return route.continue();
     });
     const page = await context.newPage();
