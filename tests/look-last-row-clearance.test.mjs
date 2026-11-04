@@ -22,8 +22,8 @@ test('phone Settings ends above the actual dock plus browser/native safe inset',
   }
 });
 
-test('padding belongs to the phone scroll owner and clears nav/safe area', () => {
-  assert.equal(decl(shared, '.settings-body.st-root', 'padding-bottom'), 'calc(var(--wz-space-5) + var(--wz-settings-nav-clearance))');
+test('phone scroll owner has edge padding without counting dock/safe area twice', () => {
+  assert.equal(decl(shared, '.settings-body.st-root', 'padding-bottom'), 'var(--wz-space-5)');
   assert.equal(decl(shared, '.st-phone', 'padding-bottom'), undefined, 'no fixed spacer on the non-scrolling inner wrapper');
   assert.match(rule(phone, '.settings-body'), /overflow-y:\s*auto/);
 });
