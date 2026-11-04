@@ -158,6 +158,7 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     dictationField: () => FIELDS && V.kind === 'dictation' && V.state !== 'idle' ? V.field?.el : null,
+    captureBusy: () => V.state !== 'idle' || !!V.admitting || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
@@ -371,6 +372,7 @@
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
+    if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
     if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
@@ -736,6 +738,7 @@
     if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
+    if (n !== SC.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
@@ -777,8 +780,9 @@
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (!CHATS.beforeLeave(id)) return;
     if (!preservePlayback) closeAppPlayback(w);
-    CHATS.closeHosted(id);
+    CHATS.closeHosted(id); CHATS.forget(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -886,6 +890,27 @@
       }
     } catch (e) {}
     we.classList.toggle('edge-own', own);
+    // The heading shows `top`, else `bg`: say when that colour is light so its title takes a dark ink (skin-frame.css).
+    let light = false;
+    if (top || bg) try {
+      // Computed colours can use sRGB, display-p3 or oklch coordinates, not just legacy RGB notation.
+      // Reuse the browser's canvas conversion to sRGB instead of parsing coordinates.
+      const cv = document.createElement('canvas'); cv.width = cv.height = 1;
+      const x = cv.getContext('2d', { willReadFrequently: true });
+      x.fillStyle = top || bg; x.fillRect(0, 0, 1, 1);
+      let rgb = x.getImageData(0, 0, 1, 1).data;
+      if (rgb[3] < 255) {
+        // Text-bearing headings must be opaque. Flatten translucent app paint over
+        // the phone frame's existing dark fallback, then paint exactly what we measured.
+        const alpha = rgb[3] / 255;
+        rgb = [15, 16, 20].map((base, i) => Math.round(rgb[i] * alpha + base * (1 - alpha)));
+        const opaque = '#' + rgb.map(c => c.toString(16).padStart(2, '0')).join('');
+        if (top) top = opaque; else bg = opaque;
+      }
+      const lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+      light = .2126 * lin(rgb[0]) + .7152 * lin(rgb[1]) + .0722 * lin(rgb[2]) > .18;
+    } catch (e) {} // Inaccessible or unmeasurable apps retain light ink on the dark fallback.
+    we.classList.toggle('edge-light', light);
     if (bg) we.style.setProperty('--frame-bg', bg); else we.style.removeProperty('--frame-bg');
     if (top) we.style.setProperty('--frame-top', top); else we.style.removeProperty('--frame-top');
   }
@@ -1903,7 +1928,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => backStep());
+  $('#scrim').addEventListener('click', () => backStep(undefined, { outside: true }));
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -1929,9 +1954,11 @@
     };
     if (!q && oursSkin()) { paint(kindGroups(['apps', 'wiz', 'agents', 'conns'])); if (!live) body.scrollTop = 0; return; } // same order as New desk, read from the top
     if (!q) {
-      const recentIds = store.get('recent', window.WizLauncher?.get('recents') || []).filter(id => APP[id] && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
+      // Recent is a placement, not a second copy of the Apps catalogue. Resolve aliases before deduping.
+      const recentIds = [...new Set(store.get('recent', window.WizLauncher?.get('recents') || []).map(id => APP[id]?.id))].filter(id => APP[id] && !['app-store', 'agents'].includes(id) && APP[id].kind !== 'native' && !window.WizCore.isMaintenanceApp(APP[id])).slice(0, 4);
+      const remainingApps = APPS.filter(a => !recentIds.includes(a.id) && !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals'));
       paint(`<div class="lgroup"><h4>Recent</h4><div class="lgrid">${recentIds.map(id => appTile(APP[id])).join('')}</div></div>
-        <div class="lgroup"><h4>Apps <span>${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).length}</span></h4><div class="lgrid">${APPS.filter(a => !['app-store', 'agents'].includes(a.id) && !window.WizCore.isMaintenanceApp(a) && (a.kind === 'wizard' || a.kind === 'chats' || a.kind === 'usuals')).map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
+        <div class="lgroup"><h4>Apps <span>${remainingApps.length}</span></h4><div class="lgrid">${remainingApps.map(appTile).join('')}<button class="lapp" data-app="app-store"><span class="ic">+</span><span class="nm">Get apps</span></button></div></div>`); // preserve current tiles/order; Get apps opens a normal app frame
       return;
     }
     const n = norm(q);
@@ -2531,6 +2558,7 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -3785,7 +3813,7 @@
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }
-  function backStep(skipHosted) {
+  function backStep(skipHosted, { outside = false } = {}) {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
     { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
@@ -3810,7 +3838,7 @@
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
-    if (sheet === 'settings' && settingsView?.back()) return 'settings-page';
+    if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page';
     if (sheet) { closeSheets(); return 'sheet'; }
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];
@@ -3922,7 +3950,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
-      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
       syncDesks(); desks.forEach((_, i) => renderDesk(i));
       idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));

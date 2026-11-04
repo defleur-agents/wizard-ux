@@ -26,13 +26,12 @@ test('row, thread header and swipe use Archive with the archive-box icon, not Do
   assert.match(src, /Archived · still watching/); assert.match(src, /Couldn’t archive/);
   assert.doesNotMatch(src, /Marked done|Couldn’t mark done|['"]Done for now/);
 });
-test('agent status and Morning completion badges still say Done', () => {
+test('agent completion status still says Done', () => {
   for (const name of ['ATT', 'STI_LAB', 'STI_TIP', 'PRI_LABEL']) {
     const statement = src.match(new RegExp('  const ' + name + ' = [^\\n]+'))?.[0]; assert.ok(statement, name);
     const ctx = vm.createContext({}); vm.runInContext(statement + '; this.value = ' + name, ctx);
     assert.equal(name === 'ATT' ? ctx.value.done.label : name === 'PRI_LABEL' ? ctx.value[4] : ctx.value.done, 'Done', name);
   }
-  assert.match(src, /all \? 'Done' : 'Pinned'/);
 });
 test('keyboard guide, hints and shortcut fallback name the Archive action', () => {
   const desktop = read('web/desktop/desktop.js');

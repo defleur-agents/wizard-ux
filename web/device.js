@@ -229,12 +229,33 @@
     const d = DEV(), m = J(d?.shareMeta(id));
     if (!m) { toast('!', 'That share expired · share it again', 2400); return; }
     closeSheet();
-    // durable: resolves 'sent' only after the message has a receipt, so the staged copy survives a mid-upload kill.
-    const result = await window.WizShareWizard.open({durable: true,
-      text: [m.subject, m.text].filter(Boolean).join('\n').trim(), skipped: m.skipped || 0,
-      items: (m.items || []).map(f => ({...f, read: () => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
+    const port = window.WosDevicePort;
+    const [cap] = await Promise.all([port?.capability('device.shares'), window.WizConfig?.ready]);
+    if (!J(d?.shareMeta(id))) return; // Back during cold-start discovery already cancelled this import
+    let queued = false;
+    const finishNative = async () => {
+      if (cap) await port.call('device.shares.finish', {shareId:id});
+      else d.shareDone(id);
+    };
+    const resumable = cap && window.WizConfig?.has('resumable_uploads') && m.items?.length && m.items.every(f => /^[a-f0-9]{64}$/.test(f.sha256 || ''));
+    // Wait for either the web receipt or native queue acknowledgement before releasing custody.
+    // This also covers a resumable import whose owner removes every file and sends only a comment.
+    const result = await window.WizShareWizard.open({durable:true,
+      android:true, text:m.text || '', subject:m.subject || '', from:m.from || '', skipped:m.skipped || 0,
+      onPresented:cap ? () => port.call('device.shares.present', {shareId:id}).catch(() => {}) : null,
+      onCancelled:cap ? () => finishNative().catch(() => {}) : null,
+      nativeQueue:resumable ? async job => {
+        queued = true;
+        const receipt = await port.call('device.shares.queue', {shareId:id, agent:job.agent, agentLabel:job.agentLabel,
+          thread:job.target === '__new__' ? '' : job.target, note:job.note, keptItemIndexes:job.keptItemIndexes});
+        if (!receipt?.queued) throw new Error('Share was not queued');
+        await finishNative().catch(() => {}); // durable queue custody must not become a duplicate retry if closing loses its reply
+      } : null,
+      items:(m.items || []).map(f => ({...f, read:() => readBlob(off => d.shareRead(id, f.n, off), f.mime)}))
     });
-    if (result === 'sent' || result === 'cancelled') { try { d.shareDone(id); } catch (_) {} }
+    if ((result === 'sent' && !queued) || (!cap && result === 'cancelled')) {
+      try { await finishNative(); } catch (_) {}
+    }
     log('share:result', id, result);
   }
 
@@ -393,15 +414,14 @@
       if (type === 'update' && ev) onUpdate(ev);
       return true;
     },
-    settingsHtml() {
-      const d = DEV(); if (!d) return '';
+    // Native data only; the shared Settings registry owns all About markup.
+    settingsState() {
+      const d = DEV(); if (!d) return null;
       const n = J(d.notifications()) || {};
       const u = upd || J(d.updateState()) || {};
       const ver = u.installed || (J(d.updateState()) || {}).installed || '';
       const sub = u.state === 'ready' ? `${u.version} is ready · tap to restart` : u.state === 'available' ? `${u.version} is available · tap to update` : u.state === 'error' ? `${u.message || 'Update failed'} · tap to retry` : u.state === 'deferred' ? `${UPD_TEXT.deferred(u)[0]} · Install now` : u.state === 'current' ? 'Up to date' : u.state === 'offline' ? 'Couldn’t check · tap to try again' : 'Tap to check for updates';
-      return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
-        <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${n.allowed ? `On · when ${window.WizConfig.agent()} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
-        <button class="st-row" data-dvupd><span class="st-tx"><b>Wizard OS ${esc(ver)}</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button>`;
+      return { notificationsAllowed: !!n.allowed, installed: ver, updateDescription: sub };
     },
     readRecording,
     recoverRecorder: () => syncRecorder('control'),
