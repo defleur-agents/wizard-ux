@@ -99,13 +99,17 @@ test('real experience emits built-in choice and adopts it without echoing or cha
     WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, loadTweaks: async ids => { active = ids; } },
     addEventListener() {}, dispatchEvent: e => { if (e.type === 'wos:tweak-choice') events.push(e.detail); } };
   vm.runInNewContext(read('web/core/experience.js'), { window: W, document: { baseURI: 'https://wizard-qa.invalid/wizard-os-home/', addEventListener() {} },
-    Event, CustomEvent, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v) },
+    Event, CustomEvent: class { constructor(type, { detail } = {}) { this.type = type; this.detail = detail; } }, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v) },
     fetch: async u => ({ ok: true, json: async () => JSON.parse(read('web/' + u.pathname.split('/wizard-os-home/')[1])) }) });
   const E = W.WosExperience; await E.refresh(); await E.toggle('wizard/unified-inbox');
   assert.deepEqual(clone(events), [{ id: 'wizard/unified-inbox', on: false, scope: 'default' }]);
   await E.adopt({}, { 'wizard/unified-inbox': true, 'evil/script': true });
   assert.ok(active.includes('wizard/unified-inbox')); assert.ok(!active.includes('evil/script'));
   assert.equal(events.length, 1); assert.equal(W.WosSkin.current, 'nebula'); assert.equal(storage.get('wos.myskin.js.ok'), 'qa-local-approval');
+  W.WosMySkin = { active: { id: 'qa-owned', base: 'nebula', tweaks: { 'wizard/unified-inbox': false } } };
+  assert.deepEqual(clone(E.defaultChoices), {}, 'owned recipe preferences remain with their existing owner');
+  await E.adopt({}, { 'wizard/unified-inbox': true });
+  assert.equal(W.WosMySkin.active.tweaks['wizard/unified-inbox'], false, 'no own-skin customization or write');
 });
 
 test('actual phone and desktop adapters retain every nonhidden chat across all day/error groups, without writes', () => {

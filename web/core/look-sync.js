@@ -5,7 +5,7 @@
  * carrying the newer text, every save kept in Pages history). It has no page.json, so it is never listed as a page.
  * Each device still paints its last copy (wos.skin, wos.skin-tweaks.v1) at first frame; the box copy then wins.
  *
- *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, updated }
+ *   { version: 1, skin: { id, at }, tweaks: { '<author>/<id>': { on, at } }, defaults: { '<author>/<id>': { on, at } }, updated }
  *
  * `at` = an observed logical revision (not a device clock). 0 = an old local seed: never newer than a
  * real change. Merging is per choice, newest wins, so two devices switching different tweaks keep both. A device with
@@ -13,8 +13,8 @@
  * syncing for the first time with more tweaks on than the box's seeds replaces those seeds (the set in daily use beats
  * one just being set up) and keeps every real change made since. Shell views
  * (manifest `view`) stay exclusive: the newest one switched on is kept. Offline or failing box: the device keeps its
- * own copy, retries with backoff, and sends its changes when the box answers. Other devices pick a change up on their
- * next load or when they come back to the foreground.
+ * own copy, retries with backoff, and sends its changes when the box answers. Active foreground shells refresh every
+ * 30 seconds and on load/foreground events. Shared built-in switches do not change owned recipes or script approval.
  *
  *   WosLookSync.create({ req, store, exp, skin }) → { sync, schedule, stop, state }   (started below for the shell) */
 (() => {

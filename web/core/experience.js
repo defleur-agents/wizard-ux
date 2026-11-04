@@ -206,7 +206,7 @@
     get installedReady() { return !!installedP?.settled; },
     // Look sync (core/look-sync.js): the tweaks switched on here, and wearing the owner's shared set instead.
     get mix() { return copy(state.mix || {}); },
-    get defaultChoices() { return Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
+    get defaultChoices() { return recipe() ? {} : Object.fromEntries(globalIds().map(id => [id, !globalOff(id)])); },
     // Tweaks this release offers as switches (retired ids in an old device mix are not counted as choices).
     async tweakIds() { catalog ||= await read('tweaks/catalog.json'); return catalog.tweaks.filter(id => !globalIds().includes(id)); },
     // The shared set is complete: every tweak here is on or off, so this device's one-time migrations never add to it.
@@ -217,8 +217,9 @@
       for (const [id, on] of Object.entries(mix || {})) if (on === true && ID.test(id)) next[canonical(id)] = true;
       // Older look documents have no defaults: retain local choices until the upgrade seeds them.
       const off = new Set(state.defaultsOff || []);
-      for (const id of globalIds()) if (typeof defaults[id] === 'boolean') defaults[id] ? off.delete(id) : off.add(id);
-      state.defaultsOff = [...off]; state.defaultsMigrated = true;
+      const shared = recipe() ? [] : globalIds().filter(id => typeof defaults[id] === 'boolean');
+      for (const id of shared) defaults[id] ? off.delete(id) : off.add(id);
+      state.defaultsOff = [...off]; if (shared.length) state.defaultsMigrated = true;
       state.mix = next; state.preset = 'none'; delete state.carry; Store.write(state);
       return apply();
     },
