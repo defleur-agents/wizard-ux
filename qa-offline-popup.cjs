@@ -82,6 +82,7 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         assert.equal(await page.locator('[data-wxoffopen]').count(), 1);
       }
       for (const skin of ['nebula', 'signal']) {
+        const checks = [], notRun = [];
         await recover();
         await page.evaluate(skin => WosSkin.set(skin), skin); // same live skin switch the existing status QA uses
         await page.waitForFunction(skin => document.documentElement.dataset.skin === skin, skin);
@@ -90,11 +91,14 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         await fail();
         const start = Date.now(); await page.waitForTimeout(20000); await pillOnly();
         assert.ok(Date.now() - start >= 20000);
+        checks.push('idle-20s-pill-only');
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-idle-20s.png`) });
         await navigate(); await page.waitForTimeout(800); await pillOnly(); // navigating during an outage must not open anything
+        checks.push('navigation-never-opens');
         const pillBox = await page.locator('[data-wxoffopen]').first().boundingBox();
         await openPill(); await modal();
         await page.locator('[data-wxoffcheck]:not([disabled])').waitFor();
+        checks.push('pill-tap-opens');
         if (phone) await page.waitForTimeout(700); // desk transition
         const geometry = await page.evaluate(phone => {
           const orb = document.querySelector(phone ? '#orb' : '#micBtn');
@@ -104,7 +108,9 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         }, phone);
         assert.ok(geometry.orbHit, `${shell} ${skin} orb/mic remains the hit target: ${JSON.stringify(geometry)}`);
         assert.equal(geometry.dialogModal, 'false');
-        if (phone) { assert.ok(geometry.card.y >= pillBox.y + pillBox.height - 2, `card sits under the pill, clear of the status bar: ${JSON.stringify([geometry.card, pillBox])}`); assert.ok(geometry.card.bottom < geometry.orb.top); }
+        checks.push('orb-elementFromPoint');
+        if (phone) { assert.ok(geometry.card.y >= pillBox.y + pillBox.height - 2, `card sits under the pill, clear of the status bar: ${JSON.stringify([geometry.card, pillBox])}`); assert.ok(geometry.card.bottom < geometry.orb.top); checks.push('pill-tap-opens-under-status-bar'); }
+        else notRun.push({ check: 'pill-tap-opens-under-status-bar', reason: 'Phone-only geometry: desktop has no phone status bar' });
         assert.ok(/^(rgb\([^/]*\)|color\(srgb [^/]*\))$/.test(geometry.bg), `opaque kit panel (no alpha channel): ${geometry.bg}`);
         // Pixel opacity proof: the same interior panel pixels over a loud backdrop and a blank one.
         const clip = { x: geometry.card.x + 20, y: geometry.card.y + 20, width: 8, height: 8 };
@@ -117,23 +123,32 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
         // Actual pointer delivery to the exposed orb/mic starts capture and tucks away the open checks.
         { const b = await page.locator(phone ? '#orb' : '#micBtn').boundingBox(); await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2); } // real pointer at the orb centre: #orbWrap legitimately owns the hit
         const captured = await page.waitForFunction(() => (window.__wos || window.__wux).voice !== 'idle', null, { timeout: phone ? 30000 : 6000 }).then(() => true, e => { if (phone) throw e; return false; }); // desktop mic needs an open chat target; the fake-mic proof is the phone run, unit tests cover both shells
-        await pillOnly();
         if (captured) {
+          checks.push('orb-tap-starts-real-fake-mic');
+          await pillOnly();
+          checks.push('capture-hides-checks');
           await page.evaluate(phone => document.querySelector(phone ? '#dock [data-goto]' : '#logo').click(), phone); await page.waitForTimeout(400); await pillOnly(); // the capture overlay covers the dock, so dispatch the navigation click directly: it must never reopen
+          checks.push('capture-navigation-suppressed');
           await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-capture-pill.png`) });
           if (phone) await page.evaluate(() => __wos.cancelVoice());
           else await page.locator('#voiceCancel').click();
           await page.waitForFunction(() => (window.__wos || window.__wux).voice === 'idle');
+        } else {
+          for (const check of ['orb-tap-starts-real-fake-mic', 'capture-hides-checks', 'capture-navigation-suppressed'])
+            notRun.push({ check, reason: 'Desktop mic needs an open chat target; capture did not start' });
         }
         await navigate(); await pillOnly();
         await recover(); await fail(); await openPill(); await modal();
+        checks.push('recovery');
         await page.locator('[data-wxoffx]').click(); await navigate(); await pillOnly();
+        checks.push('dismissal-stays-pill');
         // Exercise the real request deadline: ping succeeds, only the health body is delayed beyond 4 seconds.
         await recover(); slowStatus = true; await fail(); await openPill(); await modal();
         await page.waitForFunction(() => document.querySelector('#wxOffline')?.textContent.includes('Busy · answering slowly'), null, { timeout: 15000 });
         assert.ok(await page.locator('#wxOffline').textContent().then(s => s.includes('busy and answering slowly')));
         await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-busy.png`) });
-        results.push({ shell, skin, geometry, idleOutageMs: Date.now() - start, liveReads, blockedWrites, assets, checks: ['idle-20s-pill-only', 'navigation-never-opens','pill-tap-opens-under-status-bar', 'orb-elementFromPoint', 'orb-tap-starts-real-fake-mic', 'capture-hides-checks', 'capture-navigation-suppressed', 'dismissal-stays-pill', 'recovery', 'status-deadline-busy-slow-row'] });
+        checks.push('status-deadline-busy-slow-row');
+        results.push({ shell, skin, captured, geometry, idleOutageMs: Date.now() - start, liveReads, blockedWrites, assets, checks, notRun });
       }
       assert.deepEqual(errors, []);
       await recover(); await ctx.close();
