@@ -972,10 +972,13 @@ export default function desktop(api) {
    * data-aad-role on their desks), the chat between the sidebar and the panel, the app docked left of the open-apps
    * column; hiding the panel leaves its app running on its desk. */
   const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
-  /** the real thread the Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
-  const behindThread = () => { const t = wsps().find(w => w.querySelector('.dchats'))?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
-  let pane = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
+  /** the main Chats desk's element (its desk number is the shell's data-ws; an agent's Chats desk also holds .dchats),
+   * else the first desk holding Chats */
+  const chatsEl = () => { const m = mainChats(), all = wsps().filter(w => w.querySelector('.dchats')); return (m && all.find(w => Number(w.dataset.ws) === m.desk)) || all[0] || null; };
+  /** the real thread the main Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
+  const behindThread = () => { const t = chatsEl()?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
+  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
    * other open desks (Home's own Chats desk aside), badged first, then desk order */
   function vtTabs() {
@@ -1182,7 +1185,7 @@ export default function desktop(api) {
     if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
-    const chat = pane || chatOn ? wsps().find(w => w.querySelector('.dchats')) : null;
+    const chat = pane || chatOn ? chatsEl() : null; dockEl = chat;
     // (the app's desk or the Chats desk not on the stage yet, the shell draws a desk on its first visit: look again
     // shortly, a few times; no route event follows that drawing)
     if (((h.app && !pane) || ((pane || chatOn) && !chat)) && splitTries < 20) { splitTries++; api.after(150, () => paintTop()); } else splitTries = 0;
@@ -1267,7 +1270,7 @@ export default function desktop(api) {
   let animOff = null, animOn = [];
   function anim(kind) {
     animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
-    const chatDesk = wsps().find(w => w.querySelector('.dchats'));
+    const chatDesk = chatsEl();
     animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
     for (const n of animOn) n.dataset.aadAnim = kind;
     animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
@@ -1616,7 +1619,7 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && mainChats()?.desk === desk),
+    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });

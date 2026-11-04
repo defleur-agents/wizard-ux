@@ -1961,18 +1961,20 @@ test('round 21 desktop: one left/right model: apps and their links on the right 
 test('a reload with an app in front: the thread the Chats desk holds docks beside it (title, ✕), and counts as on screen', async () => {
   const { w } = deskWorld();
   const stage = new El('div'); stage.id = 'stage';
-  const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
-  const appDesk = new El('div'); appDesk.className = 'wsp'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  // an agent's own Chats desk sits first on the stage (desks reordered); the main Chats desk (1) holds the thread
+  const agentDesk = new El('div'); agentDesk.className = 'wsp'; agentDesk.dataset.ws = '7'; const adc = new El('div'); adc.className = 'dchats'; adc.dataset.thread = 'x9'; agentDesk.append(adc);
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(agentDesk, chatDesk, appDesk); w.html.children[0].append(stage);
   let R = null; Object.assign(w.api.apps, { routeOpens: h => { R = h; return () => { R = null; }; } });
   w.st.route = { home: false, view: 'desk', thread: null, desk: 4 };   // Money in front from the first paint
   (await layout()).default(w.api);
   w.emit('route', w.st.route); w.run();
   assert.equal(appDesk.dataset.aadRole, 'app', 'Money is the panel');
   assert.equal(w.html.dataset.aadChat, 'on', 'the restored thread is the docked column, not Home under the panel');
-  assert.equal(chatDesk.dataset.aadRole, 'chat'); assert.equal(w.html.dataset.aadSplit, 'on');
-  assert.equal(w.q('.aad-tt').textContent, 'Ready one', 'its title over it'); assert.equal(w.q('.aad-cx').hidden, false, 'and its ✕');
+  assert.equal(chatDesk.dataset.aadRole, 'chat', 'the main Chats desk'); assert.equal(agentDesk.dataset.aadRole, undefined, 'never an agent\'s Chats desk'); assert.equal(w.html.dataset.aadSplit, 'on');
+  assert.equal(w.q('.aad-tt').textContent, 'Ready one', 'its title over it (the main desk\'s thread, not the agent\'s)'); assert.equal(w.q('.aad-cx').hidden, false, 'and its ✕');
   assert.equal(R.shows(1), true, 'the docked chat\'s desk is on screen (Chats places its reading spot there)'); assert.equal(R.shows(4), true);
-  assert.equal(R.shows(2), false, 'a desk out of sight is not');
+  assert.equal(R.shows(2), false, 'a desk out of sight is not'); assert.equal(R.shows(7), false, 'nor the agent\'s Chats desk');
   w.emit('render'); assert.equal(w.html.dataset.aadChat, 'on', 'repaints keep it docked');
   // its ✕: Home's new chat behind the panel; nothing to adopt any more, nothing shown beside the app
   w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); dchats.dataset.thread = '__new__'; w.emit('route', w.st.route);
