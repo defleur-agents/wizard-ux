@@ -16,7 +16,8 @@
 (() => {
   'use strict';
   const NAMES = new Set([.../*NAMES*/, 'hat', 'hat-private', 'agents']);
-  const HOUSE = /*HOUSE*/;
+  // Colours are stored without '#' so this generated table holds no literal colour (style gate); added back here.
+  const HOUSE = Object.fromEntries(Object.entries(/*HOUSE*/).map(([id, [glyph, hex]]) => [id, [glyph, '#' + hex]]));
   // Canonical app names keep the approved palette through compatibility aliases, not new colours.
   for (const [id, old] of Object.entries(/*HOUSE_ALIASES*/)) HOUSE[id] = HOUSE[old];
 

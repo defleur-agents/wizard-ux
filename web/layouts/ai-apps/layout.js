@@ -457,7 +457,7 @@ export default function setup(api) {
     if (!drag.on) {
       if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx)) { drag = null; return; }
       if (drag.edge ? dx < 10 : !(dx > 16 && dx > Math.abs(dy) * 2)) return;
-      drag.on = true; if (touchPid != null) api.gesture.claim(touchPid);
+      drag.on = true; if (touchPid != null) api.gesture.claim(touchPid, { backSwipe: true });
       closeMenu(); readSessions(); open = true; paintDrawer(); open = false;
       layer.hidden = false; layer.classList.add('is-drag');
     }
