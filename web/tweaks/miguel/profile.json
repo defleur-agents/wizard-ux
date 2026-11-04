@@ -8,7 +8,8 @@
     "miguel/snooze-someday",
     "miguel/machines-home",
     "miguel/no-desk-close",
-    "miguel/archive-top"
+    "miguel/archive-top",
+    "miguel/group-by-day"
   ],
   "flags": {},
   "off": [
