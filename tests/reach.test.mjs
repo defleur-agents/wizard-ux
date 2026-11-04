@@ -136,6 +136,23 @@ test('James: internet working + Tailscale disconnected + navigator.onLine=false 
   assert.match(c.help, /Internet works/); assert.match(c.help, /Tailscale app/);
   assert.doesNotMatch(c.help + JSON.stringify(c) + (await h.api.diagnose()).message, /device.{0,10}offline|no internet|Tailscale is disconnected/i);
 });
+test('public no-cors probe uses follow: browsers reject error/manual before the network, even for a 204', async () => {
+  // Fetch Standard main-fetch: cross-origin no-cors requires redirect=follow.
+  // Node/VM fetch doubles otherwise accept combinations that Chromium rejects.
+  for (const detailed of [false, true]) {
+    const h = setup({ online: false, fetch: async (url, options) => {
+      if (url.startsWith('/')) throw Error('Private route down');
+      if (options.mode === 'no-cors' && options.redirect !== 'follow') throw TypeError('Fetch rejects no-cors redirect mode');
+      return { ok: false, status: 0, type: 'opaque' };
+    } });
+    const c = detailed ? await h.api.checks() : await h.api.diagnose();
+    assert.match(detailed ? c.help : c.message, /Internet works/);
+    if (detailed) assert.equal(c.internet.state, 'ok');
+    const [, options] = h.calls.find(([url]) => url.startsWith('https:'));
+    assert.equal(options.mode, 'no-cors'); assert.equal(options.credentials, 'omit');
+    assert.equal(options.redirect, 'follow');
+  }
+});
 test('checks: no internet, then Tailscale, then Wizard; each names its state and only the first failure is red', async () => {
   const run = async (opts) => { const h = setup(opts); return { c: await h.api.checks(), urls: h.calls.map(c => c[0]), h }; };
   // The device itself is offline: nothing crosses the network for the internet row.

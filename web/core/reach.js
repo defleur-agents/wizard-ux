@@ -100,7 +100,9 @@
     + 'Messages stay saved on this device and send when the connection returns.';
   async function internetProbe() {
     return timed(async () => {
-      const r = await request(INTERNET, { mode: 'no-cors', credentials: 'omit', redirect: 'error' });
+      // Cross-origin no-cors + redirect=error/manual is a Fetch network error even
+      // for a nonredirecting 204. CSP still confines this credential-free request.
+      const r = await request(INTERNET, { mode: 'no-cors', credentials: 'omit', redirect: 'follow' });
       if (!r.ok && r.type !== 'opaque') throw Error('Public check not confirmed');
       return r;
     });
