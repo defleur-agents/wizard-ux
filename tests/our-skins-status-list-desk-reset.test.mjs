@@ -36,7 +36,7 @@ test('the Filter sheet always offers the Layout picker and the Yesterday filter'
 
 test('leaving a desk keeps its Chats window on the open thread', () => {
   const src = read('../web/app.js');
-  const go = src.slice(src.indexOf('  function goDesk(n, silent) {'), src.indexOf('  function announce(html) {'));
+  const go = src.slice(src.indexOf('  function goDesk('), src.indexOf('  function announce(html) {'));
   assert.ok(go.length > 100, 'goDesk found');
   assert.doesNotMatch(go, /chatsBack\(/);
 });

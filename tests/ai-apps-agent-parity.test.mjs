@@ -17,7 +17,7 @@ function world(file) {
   const W = {}; kinds.forEach((k, i) => { W['w-' + k] = { id: 'w-' + k, app: 'chats', thread: `t-${k}`, agent: k === 'main' ? '' : `qa-${k}`, runtimeKind: k, desk: i }; });
   const sess = k => ({ id: `s-${k}`, title: `${k} chat`, agent: k === 'main' ? '' : `qa-${k}`, runtimeKind: k, status: 'idle' });
   const ctx = {
-    W, calls, idx: 3, APP: { wizard: { id: 'wizard' } },
+    W, calls, idx: 3, sheet: null, APP: { wizard: { id: 'wizard' } },
     CHATS: { views: { providerFor: () => 'wizard-chats', defaultId: () => 'wizard-chats' },
       threadAct: (wid, sid, act) => calls.push(['act', wid, sid, act]), openRenameSheet: (wid, sid) => calls.push(['rename', wid, sid]),
       openChat: (wid, t) => calls.push(['open', wid, t]), threadActions: () => ['snooze', 'done'], stiKind: () => '' },

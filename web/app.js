@@ -366,14 +366,14 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
   addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
-  function goDesk(n, silent) {
+  function goDesk(n, silent, keepSettings = false) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
     if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
-    if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
+    if (moved && sheet === 'settings' && !keepSettings) liftSettings(from && from.id); // explicit navigation parks Settings on the desk you leave
     idx = n;
     if (moved) lastMove = null; // a tap, link or app open is a choice; swipeDesk re-marks swipes
     if (moved) window.WosResources?.back();
@@ -1275,11 +1275,15 @@
   }
   // The Chats window in front as it is (its thread kept; opened if there is none): the AI apps view's main screen.
   function showChats() {
-    closeSheets(true);
+    // A layout's deferred Home -> Chats preparation is not an owner navigation.
+    // Keep the same Settings sheet/page over the new view, without closing,
+    // reopening, or parking it back on the Home desk we are preparing behind it.
+    const keepSettings = sheet === 'settings';
+    if (!keepSettings) closeSheets(true);
     let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
-    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) { openApp(APP.wizard, {}, { stay: keepSettings }); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
     if (!here) return null;
-    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    const t = deskOf(here); if (t !== idx) goDesk(t, true, keepSettings);
     focusWin(here); return W[here];
   }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
