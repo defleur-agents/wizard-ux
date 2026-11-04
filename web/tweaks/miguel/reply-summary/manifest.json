@@ -1,11 +1,12 @@
 {
   "id": "miguel/reply-summary",
   "name": "Short answer first",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "miguel",
   "apiVersion": 1,
   "capabilities": [
-    "layout"
+    "layout",
+    "settings"
   ],
-  "description": "A long agent reply opens with its one-line plain answer; the full reply sits under Details"
+  "description": "A long agent reply shows only its one-line plain answer; tap it for the full reply, Show less folds it back"
 }
