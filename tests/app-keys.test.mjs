@@ -125,7 +125,7 @@ test('the shell: keycaps on a frame\'s targets are offset by the frame and hit-t
   assert.match(desk, /c\.className = 'kh-chip' \+ \(word \? ' kh-lab' : ''\) \+ \(opt\?\.app \? ' kh-app' : ''\);/);
   assert.match(desk, /opt\?\.app \? `\$\{label\}: \$\{opt\.name \|\| label\}` : `\$\{ALT\} /, 'an app key reads without ⌥');
   // ⌥ inside an app frame still reaches the shell (keys + the hold-⌥ release)
-  assert.match(desk, /doc\.addEventListener\('keydown', e => onKey\(e, true\), true\); doc\.addEventListener\('keyup', e => \{ keyHints\.up\(e\);/);
+  assert.match(desk, /(doc|frameWindow)\.addEventListener\('keydown', e => onKey\(e, true\), true\);\s*(doc|frameWindow)\.addEventListener\('keyup', e => \{ keyHints\.up\(e\);/);
   // past the layout's keys, a plain key from a frame stops at the ⌥ gate (Escape excepted: Back)
   assert.match(desk, /if \(f\?\.app === 'chats' && !keyHints\.pinned\(\) && plain && !fromFrame\)/);
   assert.match(desk, /if \(!e\.altKey \|\| e\.metaKey \|\| e\.ctrlKey\) \{\n\s+return;\n\s+\}/);
