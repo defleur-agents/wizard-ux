@@ -831,6 +831,19 @@ window.WizCore.chats = function createChats(H) {
   }
   const NOTE_OPEN = '<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>';
   const noteActBtn = (NV, a) => a === 'app' ? { label: 'Open', icon: NOTE_OPEN, hint: `Open in ${NV.item?.appName || 'the app'}` } : NACT[a] || ACT[a];
+  /* The quiet thread says what each button does (Miguel, 4 Nov 2026: "Open" and "Resolve" weren't intuitive): the app's
+   * name on Open, the agent's name on the ask; doing-buttons first, then Snooze / Archive pushed to the far side. */
+  const NOTE_ASK = '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>';
+  function noteQuietBtn(NV, a) {
+    const A = noteActBtn(NV, a), who = window.WizConfig?.agent?.() || 'Wizard', app = NV.item?.appName || NV.item?.app || 'the app';
+    if (a === 'resolve') return { label: `Have ${who} handle it`, icon: NOTE_ASK, hint: `${who} does what this asks (or fixes what caused it) and tells you` };
+    if (a === 'app') return { label: `Open ${app}`, icon: NOTE_OPEN, hint: `Open it in ${app}` };
+    return A;
+  }
+  function noteTactsHtml(NV, quiet) {
+    // (quiet: a spacer between the doing buttons and Snooze / Archive, so those two wrap together, never Archive alone)
+    return `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = quiet ? noteQuietBtn(NV, a) : noteActBtn(NV, a); return `${quiet && ['snooze', 'done', 'restore'].includes(a) && !['snooze', 'done', 'restore'].includes(NV.acts[NV.acts.indexOf(a) - 1]) ? '<i class="ch-tacts-gap" aria-hidden="true"></i>' : ''}<button type="button" data-chact="${a}" aria-label="${esc(A.hint)}" title="${esc(A.hint)}">${A.icon}<span>${esc(A.label)}</span></button>`; }).join('')}</div>`;
+  }
   function notifAct(wid, a) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || !n.acts.includes(a)) return false;
     vib(8);
@@ -857,9 +870,26 @@ window.WizCore.chats = function createChats(H) {
   }
   // "More from Money · 47": each a one-line button that opens it here; Done all clears this one and every one listed.
   function noteMoreHtml(NV) {
+    if (noteQuiet()) return '';   // the quiet thread lists them in its own stack (noteStackHtml)
     const sib = noteSiblings(NV.item); if (!sib.length) return '';
     const from = noteSrcName(NV.item), shown = sib.slice(0, 5);   // short: the thread's actions stay clear of it
     return `<section class="ch-notif-more" aria-label="More from ${esc(from)}"><div class="ch-notif-more-h"><span>More from ${esc(from)} · ${sib.length}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${sib.length + 1}</span></button></div>${shown.map(i => `<button type="button" class="ch-notif-more-i${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${esc(ago(new Date(noteAt(i)).toISOString()))}</time></button>`).join('')}${sib.length > shown.length ? `<p class="ch-notif-more-x">and ${sib.length - shown.length} more · the next ones move up as you finish these</p>` : ''}</section>`;
+  }
+  /* Quiet thread stack (Miguel, 4 Nov 2026: "as I click through each one it's unclear which one is expanded"): every
+   * item waiting from this source in ONE stable newest-first list, like a Gmail conversation: the open one is expanded
+   * in place (its words and its own buttons inside it, amber edge), the rest are one-line cards that open in place.
+   * Clicking through never reorders the list; Archive all sits on its header, where-these-go at its foot. */
+  function noteStackHtml(NV, body, acts) {
+    const cur = NV.item, sib = cur ? noteSiblings(cur) : [];
+    const lone = `<div class="msg a ch-notif is-quiet" data-morph-key="notif:${esc(NV.id)}">${body}${acts}</div>`;
+    if (!sib.length) return lone + noteRouteQuiet(NV);
+    const all = [cur, ...sib].sort((a, b) => noteAt(b) - noteAt(a)), at = all.findIndex(i => i.id === cur.id);
+    const MAX = 6, from = Math.max(0, Math.min(at - 2, all.length - MAX)), shown = all.slice(from, from + MAX), rest = all.length - from - shown.length;
+    const src = noteSrcName(cur), stamp = i => esc(ago(new Date(noteAt(i)).toISOString()));
+    const card = i => i.id === cur.id
+      ? `<div class="msg a ch-notif is-quiet is-open" data-morph-key="notif:${esc(NV.id)}" aria-current="true"><div class="ch-ncard-h"><b>${esc(clip(noteTitle(i), 160))}</b><time>${stamp(i)}</time></div>${body}${acts}</div>`
+      : `<button type="button" class="ch-notif-more-i ch-ncard${i.read ? ' later' : ''}" data-chnotif-go="${esc(i.id)}" title="Open this one"><b>${esc(clip(noteTitle(i), 120))}</b><span>${esc(clip(notePlain(i.message), 120))}</span><time>${stamp(i)}</time></button>`;
+    return `<section class="ch-notif-more ch-nstack" aria-label="${all.length} from ${esc(src)}"><div class="ch-notif-more-h"><span>${all.length} from ${esc(src)}</span><button type="button" data-chnotif-doneall="${esc(NV.id)}">${ACT.done.icon}<span>${esc(ACT.done.label)} all ${all.length}</span></button></div>${from ? `<p class="ch-notif-more-x">${from} newer above</p>` : ''}${shown.map(card).join('')}${rest > 0 ? `<p class="ch-notif-more-x">and ${rest} older · they move up as you finish these</p>` : ''}</section>${noteRouteQuiet(NV)}`;
   }
   // Done all: the open item and the rest from its app leave Chats together; one undo-free archive, like Done.
   async function notifDoneAll(wid, nid) {
@@ -877,7 +907,8 @@ window.WizCore.chats = function createChats(H) {
   // Quiet thread (--wos-note-quiet): one muted line under the note, "From X · shows in Chats ▾", opening the same picker.
   function noteRouteQuiet(NV) {
     const B = window.WosBell; if (!B?.picker || !B.chatsAvailable) return '';
-    const id = noteRoute(NV), name = B.nameOf?.(id) || id, to = B.route?.(id), lab = B.routeLabel?.(id) || '';
+    // Wizard's own alerts (scheduled jobs) read as the agent's, the same name their row and stack carry.
+    const id = noteRoute(NV), name = id === 'notifications' ? window.WizConfig?.agent?.() || B.nameOf?.(id) || id : B.nameOf?.(id) || id, to = B.route?.(id), lab = B.routeLabel?.(id) || '';
     const where = to === 'chats' ? 'shows in Chats' : to === 'badge' ? 'shows as a badge' : lab ? `goes to ${lab}` : '';
     return `<div class="ch-notif-route is-quiet" data-part="notify-route"><button type="button" class="ch-nr-b" data-notify-menu aria-haspopup="menu" aria-expanded="false" title="Where ${esc(name)} notifications go (⌥B)">From <b>${esc(name)}</b>${where ? ` · ${esc(where)}` : ''}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="ch-nr-menu" role="menu" hidden>${B.picker(id, { name })}</div></div>`;
   }
@@ -2039,7 +2070,7 @@ window.WizCore.chats = function createChats(H) {
     const notificationScroll = noteBox ? scrollBox(noteBox).scrollTop : 0;
     const NQ = !!NV && noteQuiet();
     if (NV) msgs = `<div class="msg a ch-notif" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}<div class="mmeta">${NV.item?.time ? timeTag(NV.item.time * 1000) : ''}<span class="ch-notif-src">${NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.app ? esc(NV.item.appName || NV.item.app) : 'Notification'}</span></div></div>`;
-    if (NQ) msgs = `<div class="msg a ch-notif is-quiet" data-morph-key="notif:${esc(NV.id)}"><div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}${noteRouteQuiet(NV)}</div>`;
+    if (NQ) msgs = noteStackHtml(NV, `<div class="bub">${md(NV.item?.message ?? NV.reply.message)}</div>${NV.item?.details && NV.item.details !== NV.item.message ? `<section class="ch-notif-details" aria-label="Original alert"><h2>Original alert</h2><div class="ch-notif-original">${esc(NV.item.details)}</div></section>` : ''}`, noteTactsHtml(NV, true));
     // The rest waiting from the same app, under it (its row in the list was one fold), with Done all.
     if (NV) msgs += noteMoreHtml(NV);
     // The same Badge | Chats picker as Settings › Notifications, above the notification.
@@ -2105,7 +2136,7 @@ window.WizCore.chats = function createChats(H) {
     const mlabel = PW?.modelLabel && !msw ? PW.modelLabel(w, s) : '';
     const chip = PW && !PW.modelLabel ? PW.modelChip(w, s) : '';
     const fail = PW && !isNew && turns ? PW.failureHtml(w, s) : '';
-    const tacts = NV ? `<div class="ch-tacts" data-part="thread-actions">${NV.acts.map(a => { const A = noteActBtn(NV, a); return `<button type="button" data-chact="${a}" aria-label="${esc(A.hint)}" title="${esc(A.hint)}">${A.icon}<span>${esc(NQ && a === 'resolve' ? 'Resolve' : A.label)}</span></button>`; }).join('')}</div>`
+    const tacts = NV ? (NQ ? '' : noteTactsHtml(NV, false))
       : acts.length && turns && !pend.length ? `<div class="ch-tacts" data-part="thread-actions">${acts.map(a => `<button type="button" data-chact="${a}" aria-label="${ACT[a].hint}" title="${ACT[a].hint}">${ACT[a].icon}<span>${actionLabel(s, a, true)}</span></button>`).join('')}</div>` : '';
     clearReading(w.id);
     // Live repaints rebuild the thread. Keep each already-loaded photo node so it doesn't blank and reload (flicker).

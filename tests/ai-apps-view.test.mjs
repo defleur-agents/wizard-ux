@@ -1837,6 +1837,14 @@ test('round 20 item 9: Ready is one flat list in priority order by default (tags
   assert.equal(STATE_TAG.fyi, undefined); assert.equal(STATE_TAG.done, undefined); assert.equal(STATE_TAG.check, 'Your call');
 });
 
+test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
+  const c = read('web/core/chats.js');
+  assert.match(c, /const all = \[cur, \.\.\.sib\]\.sort\(\(a, b\) => noteAt\(b\) - noteAt\(a\)\)/, 'stable order: clicking through never reshuffles');
+  assert.match(c, /class="msg a ch-notif is-quiet is-open"[^`]*aria-current="true"/, 'the open one is marked');
+  assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
+  for (const f of ['desktop.css', 'layout.css']) assert.match(read('web/layouts/ai-apps/' + f), /\.ch-tacts > \.ch-tacts-gap \{ flex: 1 0 0; height: 0; \}/, f + ': Snooze / Archive on the far side, wrapping together');
+});
+
 test('round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\'s keys', () => {
   const c = read('web/core/chats.js'), b = read('web/core/notif-bell.js');
   assert.match(c, /const noteQuiet = \(\) => \{ try \{ return getComputedStyle\(document\.documentElement\)\.getPropertyValue\('--wos-note-quiet'\)\.trim\(\) === 'on';/, 'off unless a view asks');
@@ -1844,7 +1852,9 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   assert.match(c, /From <b>\$\{esc\(name\)\}<\/b>\$\{where \? ` · \$\{esc\(where\)\}` : ''\}/, "'From Messenger · shows in Chats ▾'");
   assert.match(c, /<div class="ch-nr-menu" role="menu" hidden>\$\{B\.picker\(id, \{ name \}\)\}<\/div>/, 'the choices are the one shared picker (Badge, Chats, … whatever the part offers)');
   assert.match(c, /class="ch-notif-hsrc"/, 'the source\'s icon, name and time under the title');
-  assert.match(c, /NQ && a === 'resolve' \? 'Resolve' : A\.label/);
+  assert.match(c, /if \(a === 'resolve'\) return \{ label: `Have \$\{who\} handle it`/, 'the ask names the agent (was the unclear "Resolve")');
+  assert.match(c, /if \(a === 'app'\) return \{ label: `Open \$\{app\}`/, 'Open names the app');
+  assert.match(c, /const tacts = NV \? \(NQ \? '' : noteTactsHtml\(NV, false\)\)/, 'quiet: the buttons sit inside the open card, not under the list');
   assert.doesNotMatch(c.split('\n').find(l => l.trim().startsWith('if (NQ) msgs =')), /ch-notif-src|mmeta/, 'no second Notification label');
   assert.match(b, /ask: \(id, name\) => id === 'notifications'[^?]*\? `\$\{name\} go to` : `\$\{name\} notifications go to`/, 'the doubled word fixed');
   assert.match(b, /function routeLabel\(id\)/);
