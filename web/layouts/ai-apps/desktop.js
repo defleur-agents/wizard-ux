@@ -736,12 +736,21 @@ export default function desktop(api) {
     railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
     paintRail(true);
   }
+  const DOTS_MAX = 12;
   function railRow(k, n, word0, state = '', act = null) {
     const key = state || k, sub = !!state, on = !!act && act.key === key;
     const label = `${word0}, ${n}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
     const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero') + (on ? ' is-on' : ''), { type: 'button', role: 'listitem', 'data-k': key, 'aria-label': label, ...(on ? { 'aria-current': 'true' } : {}) });
-    const num = el('span', 'aad-rk-n', { text: n > 99 ? '99+' : String(n) });
-    b.append(key === 'working' ? (() => { const w = el('span', 'aad-rk-wk'); w.append(el('i', 'aad-rk-spin', { 'aria-hidden': 'true' }), num); return w; })() : num, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
+    // round 23 (Miguel, 4 Nov 2026: a tally, not numbers): one mark per chat, a spinner while it works, a solid dot once
+    // ready (amber in Ready, the ink in a status), a ring when snoozed; up to 12 in rows of 4, then a faint + in the 12th
+    // place; the count stays in the label and data-n
+    const dots = el('span', 'aad-rk-n aad-dots', { 'data-n': String(n), 'aria-hidden': 'true' });
+    const kind = key === 'working' ? 'spin' : key === 'snoozed' ? 'ring' : 'dot';
+    const shown = n > DOTS_MAX ? DOTS_MAX - 1 : n;
+    for (let i = 0; i < shown; i++) dots.append(el('i', 'aad-d is-' + kind));
+    if (n > DOTS_MAX) dots.append(el('i', 'aad-d is-more', { text: '+' }));
+    if (!n) dots.append(el('i', 'aad-d is-none'));
+    b.append(dots, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
     if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
     api.listen(b, 'click', () => railGo(key));
     api.listen(b, 'pointerenter', () => flyWant(b, key, word0));

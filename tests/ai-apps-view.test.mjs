@@ -203,9 +203,11 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(store.folded, true);
   assert.equal(w.q('.aad-rail .aad-rapps'), null, 'the rail: no apps either');
   // round 12: the rail is words with counts (plain Ready chats count in Ready only, no status rows for them); no icons
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
-  assert.ok(w.q('.aad-rk[data-k="working"] .aad-rk-wk .aad-rk-spin'), 'round 22: Working carries the expanded list\'s tiny spinner beside its count');
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rk-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'ready:2Ready'], 'round 22: Working (while chats work), Snoozed and Ready (no Archive), a count over its word');
+  assert.deepEqual(w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className), ['aad-d is-spin'], 'round 23: one spinner per working chat, no number');
+  assert.deepEqual(w.qa('.aad-rk[data-k="ready"] .aad-d').map(d => d.className), ['aad-d is-dot', 'aad-d is-dot'], 'round 23: one solid dot per ready chat');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-n').textContent, '', 'no digits on the rail');
+  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
   assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel / chat column (round 7), the view\'s ⌥ keys');
@@ -842,10 +844,10 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 3, 'and its ✕');
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent),
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
     ['Working 1', '  Needs 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
   w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').textContent), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
   w.st.setting[1].querySelector('[data-aad-groupready]').dispatchEvent(new FakePointerEvent('click'));
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
@@ -1332,7 +1334,7 @@ test('round 13: Snoozed from the stock snooze state, with and without the snooze
   w.q('.aad-sec[data-sec="snoozed"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-rw[data-kind="snoozed"]').map(r => r.dataset.sid), ['z1', 'z2']); assert.equal(store.sections.snoozed, true);
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
-  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.textContent), ['working:1Working', 'snoozed:2Snoozed', 'ready:2Ready'], 'the rail (round 22): Working, Snoozed, then Ready');
+  assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k + ':' + n.querySelector('.aad-rk-n').dataset.n + n.querySelector('.aad-rk-w').textContent), ['working:1Working', 'snoozed:2Snoozed', 'ready:2Ready'], 'the rail (round 22): Working, Snoozed, then Ready');
   // the phone's drawer: the same sections
   const p = world(); p.st.sessions.snoozed = w.st.sessions.snoozed;
   (await layout()).default(p.api); p.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
@@ -1976,4 +1978,16 @@ test('round 21: the views keep the open model to themselves: Desks, Orb and Apps
   for (const f of ['web/layouts/orb/layout.js', 'web/layouts/orb/phone.js', 'web/layouts/apps/layout.js', 'web/layouts/apps/desktop.js', 'web/layouts/apps/chrome.js'])
     assert.ok(!read(f).includes('routeOpens'), `${f} leaves every open stock`);
   for (const f of ['web/layouts/ai-apps/desktop.js', 'web/layouts/ai-apps/layout.js']) assert.match(read(f), /api\.apps\.routeOpens\?\.\(\{/);
+});
+
+test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rings), up to 12 then a faint +; counts only in labels', async () => {
+  const { w } = deskWorld();
+  w.st.sessions.working = Array.from({ length: 15 }, (_, i) => ({ id: 'w' + i, title: 'W' + i, kind: 'working', actions: [] }));
+  w.st.sessions.snoozed = [{ id: 's1', title: 'Later', kind: 'snoozed', actions: [] }];
+  (await layout()).default(w.api);
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
+  const wk = w.qa('.aad-rk[data-k="working"] .aad-d').map(d => d.className.replace('aad-d ', ''));
+  assert.equal(wk.length, 12, 'never more than 12 marks'); assert.equal(wk.filter(k => k === 'is-spin').length, 11); assert.equal(wk.at(-1), 'is-more');
+  assert.match(w.q('.aad-rk[data-k="working"]').getAttribute('aria-label'), /^Working, 15\./, 'the count stays in its label');
+  assert.deepEqual(w.qa('.aad-rk[data-k="snoozed"] .aad-d').map(d => d.className), ['aad-d is-ring'], 'snoozed: a ring');
 });
