@@ -29,13 +29,13 @@
     Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
-    // Miguel's miguel/ai-apps tweak wears it (phone only for now): the ChatGPT / Claude / Perplexity phone layout, a top
-    // bar, a left drawer (apps, then the chats) and the chat with its composer as the main screen.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Like the AI chat apps: a top bar, a left drawer with your apps and chats, the chat in the middle (phone)', css: true, js: true }),
+    // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
+    // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
-  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic') || null;
+  const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -47,6 +47,9 @@
   const disabled = new Set();       // skin ids whose script failed this page
   const claims = new Set();         // pointer ids a skin gesture has claimed
   const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const backClaims = new Set();
+  window.addEventListener?.('keydown', () => { claimAt = -Infinity; backClaims.clear(); }, true);
+  window.addEventListener?.('pointerdown', () => { claimAt = -Infinity; backClaims.clear(); }, true);
   let claimAt = -Infinity;          // when a claimed finger last went down or lifted (a back swipe that follows is the gesture's)
   const requested = [];             // asset URLs requested (diagnostics + tests)
   let importer = url => import(url), orbRetry = 0;
@@ -164,7 +167,7 @@
       },
       gesture: Object.freeze({
         // Claim a pointer before the shell's dock swipe locks direction. False once the shell owns it.
-        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); claimAt = clock(); return true; },
+        claim: (pointerId, { backSwipe = false } = {}) => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); if (backSwipe) { backClaims.add(pointerId); claimAt = clock(); } return true; },
         // The shell's one swipe threshold (core/swipe-intent.js): true for an intentional sideways swipe either way.
         intent: (dx, dy, ms) => { const w = typeof window !== 'undefined' && window.WosSwipeIntent; return !!(w && w.intentional(+dx || 0, +dy || 0, +ms || 0)); },
       }),
@@ -279,7 +282,7 @@
     for (const o of a.orbs) { try { o.sleep(true); } catch (_) {} } a.orbs.clear();
     if (layoutRec === a) layoutRec = null;
     a.offs.clear(); a.frames.clear(); a.mounts.clear(); a.taps.clear(); a.on.route.clear(); a.on.render.clear(); a.on.voice.clear(); a.on.sent.clear(); a.on.beside.clear(); a.on.home.clear();
-    for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) claims.delete(id); }
+    for (const id of a.claims) { if (!layers().some(l => l !== a && l.claims.has(id))) { claims.delete(id); backClaims.delete(id); if (!backClaims.size) claimAt = -Infinity; } }
     a.claims.clear();
   }
 
@@ -922,7 +925,7 @@
         // The app's own logo (the Store's read-only logo route), as a local URL; null when it has none.
         logo: id => live() ? appLogo(id) : Promise.resolve(null),
         /* The apps' count badges: the same counts the shell puts on desk marks and the dock (WizCore.workspaceNav:
-         * Chats' Ready, Notifications, and what each running app reports through WizardApp badge). Read-only
+         * Chats' unread threads, Notifications, and what each running app reports through WizardApp badge). Read-only
          * { id: n } (n > 0 only); watch(fn) is called again whenever one changes and is released on teardown. */
         // The badge text as the shell shows it ('50+' for an app that lists only its newest items); '' when none.
         badgeText: id => live() && isDoc ? String(window.WizCore?.workspaceNav?.label?.(String(id)) || '') : '',
@@ -1147,7 +1150,7 @@
     lastRoute = ''; emitRoute();
     return personal === a;
   }
-  function release(id) { if (claims.has(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
+  function release(id) { if (backClaims.delete(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
   function startBuiltin(name) {
     const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
     if (d.when === 'touch' && !env().touch) return false;
@@ -1525,8 +1528,9 @@
         if (a.dead) return false;
         const it = window.WosBell?.item?.(id); if (!it || typeof shell?.contextDraft !== 'function') return false;
         // An app's item rides with its app name, so the agent knows where it came from (and which app tools to use).
-        const title = it.app ? `${it.appName || it.app}: ${it.title || 'Item'}` : it.title;
-        const message = it.app ? `${it.message}\n\n(From the ${it.appName || it.app} app, ${it.app}; item ${it.key})` : it.message;
+        const app = it.app || it.from, name = it.appName || it.fromName || app;
+        const title = app ? `${name}: ${it.title || 'Item'}` : it.title;
+        const message = app ? `${it.message}\n\n(From the ${name} app, ${app}; item ${it.key || it.id})` : it.message;
         return !!shell.contextDraft('notifications:' + it.id, { title, message }, String(words || ''));
       },
       // An app's item (an app set to Chats in Settings › Notifications): open that app, at the item when it says where.
@@ -1711,7 +1715,7 @@
     claimed: pointerId => claims.has(pointerId),
     /* app.js Back: true while a skin gesture owns a finger or lifted it within `ms`. The browser's / OS's own back swipe
      * (iOS Safari's left edge, Chrome's overscroll, Android's edge) under that finger is the gesture's, not a Back. */
-    claimedLately: (ms = 800) => { const t = clock() - claimAt; return t < ms || (claims.size > 0 && t < 10000); },
+    claimedLately: (ms = 800) => { const t = clock() - claimAt; return t < ms || (backClaims.size > 0 && t < 10000); },
     release,
     get state() { return { active: active ? active.id : null, listeners: active ? active.offs.size : 0, frames: active ? active.frames.size : 0, handlers: active ? active.on.route.size + active.on.render.size : 0, disabled: [...disabled], requested: [...requested], css: [...cssLinks.keys()] }; },
     _test: { setImporter(fn) { importer = fn; }, env, load, unload, loadLayout },
@@ -1725,12 +1729,19 @@
     try { const last = JSON.parse(localStorage.getItem(EXPECT_KEY) || '[]'); if (isDoc && Array.isArray(last)) { for (const t of last.filter(x => typeof x === 'string' && safeTweakId(x)).slice(0, 40)) { expected.add(t); tweakCss(t); } if (expected.size) paintTweaks(); } } catch (_) {}
     // If the catalog or profile never loads, drop the guessed packages (and their styles) instead of hiding Home for good.
     if (expected.size) setTimeout(() => { if (tweaksAsked) return; for (const t of [...expected]) { expected.delete(t); const l = preCss.get(t); if (l) { l.remove(); preCss.delete(t); } } paintTweaks(); }, BOOT_GUESS_MS);
-    // ?layout=<id> in a link turns that layout on (and remembers it); ?layout=classic turns it off. Lets people share a try-it link.
+    // ?layout=<id> only tries layouts supported by this shell. An unsupported link is ignored,
+    // so it cannot overwrite another valid local choice. This runs before paint/CSS and attach/import.
     try {
       const q = new URLSearchParams(location.search).get('layout');
       if (q === 'classic') localStorage.removeItem(LAYOUT_KEY); else if (layoutOf(q)) localStorage.setItem(LAYOUT_KEY, q);
     } catch (_) {}
-    try { const l = localStorage.getItem(LAYOUT_KEY); if (layoutOf(l)) { layoutId = l; paintLayout(l); } } catch (_) {}
+    try {
+      const l = localStorage.getItem(LAYOUT_KEY), known = LAYOUTS.find(x => x.id === l);
+      // wos.layout is a device-local materialized hint, not the per-shell shared choice.
+      // Drop only a known unsupported hint; never touch experience/views, skin, mix or unknown keys.
+      if (known?.shells && !known.shells.includes(env().shell)) localStorage.removeItem(LAYOUT_KEY);
+      else if (layoutOf(l)) { layoutId = l; paintLayout(l); }
+    } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = host;

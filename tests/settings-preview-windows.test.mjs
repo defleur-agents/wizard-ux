@@ -18,12 +18,13 @@ test('desktop Settings opens as a window and every way of closing the window hid
   // From Home (any skin) it is a centred panel over Home; Esc, ✕ or a click outside closes it (James, 31 Oct 2026).
   assert.match(open, /if \(homeOpen(?: \|\| settingsOver\(\))?\) \{  \/\/ from Home/);
   assert.match(desk, /scrim\.addEventListener\('click', \(\) => closeSettings\(\)\);/);
-  assert.match(desk, /if \(settingsModal\) closeSettings\(\);\n    homeOpen = false;/, 'leaving Home closes the panel');
+  assert.match(desk, /if \(settingsModal && !settingsOver\(\)\) closeSettings\(\);\n    homeOpen = false;/, 'only an everywhere-modal view keeps Settings while preparing its page');
   // ✕ in the title bar, ⌥W and a synced desk all go through closeWin → render → hostSettings.
   assert.match(desk, /queueMicrotask\(\(\) => window\.WosResources\?\.sync\(\)\);\n    afterRender\?\.\(\);/);
   assert.match(desk, /afterRender = hostSettings;/);
   const host = slice(desk, '  function hostSettings() {', '  afterRender = hostSettings;');
-  assert.match(host, /if \(host\) \{ if \(setEl\.parentNode !== host\) host\.appendChild\(setEl\); setEl\.hidden = false; return; \}/);
+  assert.match(host, /if \(host\) \{ moveSettingsTo\(host\); setEl\.hidden = false; return; \}/);
+  assert.match(desk, /host\.appendChild\(setEl\);\n    if \(keep && document\.activeElement !== active\) active\.focus\(\{ preventScroll: true \}\);/, 'rehosting preserves the focused descendant');
   assert.match(host, /setEl\.hidden = true;/);
   assert.match(desk, /if \(w\.app === 'settings'\) return '<div class="settings-host"><\/div>';/);
   assert.match(desk, /if \(w\.app === 'settings'\) return \{ id: 'settings', name: 'Settings'/, 'title bar names it Settings');

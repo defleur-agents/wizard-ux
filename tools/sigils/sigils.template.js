@@ -8,9 +8,8 @@
  * Existing designed identities beat package pictures, including cached logos and refreshed metadata.
  * Which sigil an app gets: launcher.json `icon` naming a glyph (with `colors[0]` as its colour) wins,
  * then the house set for the Wizard OS apps, then the app's own same-origin icon file (`icon: "/path.svg"`) as a
- * silhouette, then a safe package logo (only for an app with no designed identity), then the house glyph that
- * matches what its id and name say (Mail → mail, Home Assistant → home), else the plain app mark, on a colour
- * picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
+ * silhouette, then the house glyph that matches what its id and name say (Mail → mail, Home Assistant → home), else
+ * the plain app mark, on a colour picked from its id. Never a bare letter. Every mark is a mask in the same box, so a
  * fallback is never bigger, squarer or more opaque than a designed sigil.
  * Every app in the Wizard App Store gets a HOUSE entry: see tools/sigils/README.md.
  * Shapes and the tile style live in core/sigils.css.
@@ -40,18 +39,16 @@
   function of(a) {
     a = a || {};
     a = { ...window.WizCore?.appMetadata?.(a.id), ...a };
-    // James: restore already-built icons, not one-off exceptions or new artwork.
-    // A package picture is a fallback only; it cannot erase a designed glyph, house/alias,
-    // custom mask or product brand, nor bypass the skin's shared hover treatment. A guessed glyph is not designed.
-    const s = sigilOf(a), logo = (s.glyph && !s.guessed) || s.img || brand(a) ? '' : logoOf(a);
-    return logo ? { ...s, logo } : s;
+    // Canonical identities win; safe package pictures remain the fallback before a guessed house mark.
+    const s = sigilOf(a), logo = (!s.guessed && s.glyph) || s.img || brand(a) ? '' : logoOf(a);
+    return logo ? { ...s, glyph: '', logo } : s;
   }
   function sigilOf(a) {
     const own = typeof a.icon === 'string' && NAMES.has(a.icon) ? a.icon : '';
     const col = Array.isArray(a.colors) && HEX.test(a.colors[0] || '') ? a.colors[0] : '';
     if (own) return { glyph: own, color: col || (HOUSE[a.id] || [])[1] || pick(a.id) };
     const img = typeof a.icon === 'string' && ICON.test(a.icon) ? a.icon : '';
-    // Package file metadata must not replace the canonical house identity either.
+    // Legacy emoji/no icon is not a registered mask: only those apps use HOUSE.
     if (Object.prototype.hasOwnProperty.call(HOUSE, a.id)) return { glyph: HOUSE[a.id][0], color: HOUSE[a.id][1] };
     const letter = String(a.name || a.id || '?').trim().charAt(0).toUpperCase() || '?';
     if (img) return { glyph: '', color: col || pick(a.id || a.name), letter, img };

@@ -234,3 +234,14 @@ test('a feed that goes away or stays offline gets its own badge back; answering 
   assert.equal(B.inChats('messenger'), false);
   assert.equal(N.counts.messenger, 4, 'feed removed: badge at once');
 });
+
+test('a minimal replacement router owns absent optional hooks: no stock IO, grouping or attention', async () => {
+  const w = boot(), B = w.WosBell;
+  const off = B.routing.replace({ route: (id, own) => own || 'chats', accepts: () => true,
+    choices: () => [], quiet: () => false, carried: () => false, sourceOf: () => 'notifications' }, { owner: 'fixture', version: 1 });
+  assert.equal(typeof off, 'function'); w.calls.length = 0;
+  B.entered(); B.setRoute('notifications', 'badge'); await B.refresh(true); await settle();
+  assert.deepEqual([...B.groups()], []); assert.equal(B.attention(), null);
+  assert.ok(!w.calls.some(([, u]) => u.includes('/notifications/api/routes') || u.includes('/notifications/api/mark')), 'missing hooks never run stock route sync or read marks');
+  off(); assert.equal(B.routing.owner, null);
+});

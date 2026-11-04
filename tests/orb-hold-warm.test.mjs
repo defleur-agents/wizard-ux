@@ -9,12 +9,12 @@ import vm from 'node:vm';
 const app = readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
 const between = (a, b) => { const i = app.indexOf(a), j = app.indexOf(b, i + 1); assert.ok(i >= 0 && j > i, a); return app.slice(i, j); };
 
-function world({ granted = true, native = false, state = 'idle' } = {}) {
+function world({ granted = true, native = false, state = 'idle', capture = null } = {}) {
   const log = [];
   const track = n => ({ stop() { log.push('stop:' + n); } });
   let n = 0, pending = [];
   const ctx = vm.createContext({
-    V: { state }, DEV: () => (native ? {} : null), window: { MediaRecorder: function () {} }, log,
+    V: { state }, DEV: () => (native ? {} : null), window: { MediaRecorder: function () {}, WizAppCapture: { getState: () => capture } }, log,
     navigator: { mediaDevices: { getUserMedia: () => { const id = ++n; log.push('gum:' + id); return new Promise(r => pending.push(() => r({ id, getTracks: () => [track(id)] }))); } } },
     browserMicIsExternal: async () => false, Promise, Error,
   });
@@ -47,7 +47,7 @@ test('never a permission prompt, never with the native recorder, never during a 
 
 test('wired into the dock orb: warm after a still moment, dropped when the press ends, taken by openRec; tap/hold unchanged', () => {
   assert.match(app, /const MIC_WARM_MS = 90;/);
-  assert.match(app, /if \(V\.state === 'idle'\) G\.warm = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) warmMic\(\); \}, MIC_WARM_MS\);\n(?:    \/\/[^\n]*\n)*(?:    if \(window\.WosOrbSwitcher[^\n]*\n    else )?(?:    )?if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(/); // main's default-off Orb radial hold may sit between them
+  assert.match(app, /if \(V\.state === 'idle'\) G\.warm = setTimeout\(\(\) => \{ if \(G && G\.mode === 'pending'\) warmMic\(\); \}, MIC_WARM_MS\);\n(?:.*\n)*?    (?:else )?if \(mayHoldCommand\(\)\) G\.hold = setTimeout\(/);
   assert.match(app, /clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\);/);
   // the press really ends: the orb's pressed look and drag classes are code on that line, never swallowed by a comment
   assert.match(app, /\n    clearTimeout\(g\.hold\); clearTimeout\(g\.warm\); queueMicrotask\(dropWarm\); Orb\.press\(false\); orbWrap\.classList\.remove\('dragging'\);/);
@@ -58,4 +58,12 @@ test('wired into the dock orb: warm after a still moment, dropped when the press
   // the take takes the warm stream synchronously (openRec's first await), before the press's microtask drops it
   const open = between('  async function openRec(', '  function onRecInterrupted(');
   assert.equal(open.indexOf('await'), open.indexOf('await (takeWarm() || openMic())'), 'nothing is awaited before the take claims the warm stream');
+});
+
+test('never while an app or meeting holds the mic (startVoice hands it over first): no second stream', () => {
+  for (const capture of [{ active: true }, { recording: true }, { hold: true }]) {
+    const w = world({ capture }); w.api.warmMic();
+    assert.deepEqual(w.log, [], JSON.stringify(capture)); assert.equal(w.api.takeWarm(), null);
+  }
+  const free = world({ capture: { active: false } }); free.api.warmMic(); assert.deepEqual(free.log, ['gum:1'], 'an idle capture state still warms');
 });

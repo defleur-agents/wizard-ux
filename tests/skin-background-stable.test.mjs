@@ -17,7 +17,7 @@ test('skins.js: a resize that leaves the page its size touches nothing (no canva
   assert.match(size, /if \(R && R\.resize\) R\.resize\.call\(R, BGL\.st\[id\], BGL\.W, BGL\.H\); else delete BGL\.st\[id\];/, 'a real resize keeps a scene that can crop again');
   assert.match(src, /addEventListener\('resize', \(\) => \{ if \(size\(\)\) wake\(\); \}\);/, 'repaints only when it did change');
   // run size() for real against a fake canvas pair: a same-size resize leaves the canvases and states alone
-  const fn = size.replace('function size()', 'function size()');
+  const fn = size;
   const cv = [{ width: 0, height: 0, parentElement: { getBoundingClientRect: () => ({ width: 1440, height: 900 }) } }, { width: 0, height: 0 }];
   cv[1].parentElement = cv[0].parentElement;
   const ctx = { BGL: { cv, st: {}, W: 0, H: 0, dpr: 1 }, BG: { landscapes: { resize(s) { s.cropped = (s.cropped || 0) + 1; } }, grove: {} }, devicePixelRatio: 1, out: [] };

@@ -12,8 +12,8 @@ every view), or the scene's **Look** button › **Back to the Desks view** (`api
 replaced the `miguel/orb-switch` bar / phone-Home switch): each view is a normal switch in Miguel's Tweaks list. A tweak
 whose manifest names a `view` (`"view": "Orb"` on `miguel/orb-shell`, `"view": "Apps"` on `miguel/apps-home`) is one of
 the exclusive views; core names no view. `WosExperience.toggle` of a view switches it on and every other view off in one
-pass (one apply), or every view off (Desks); per device, survives a reload (`wos.skin-tweaks.v1`). The per-author quick
-button leaves views alone, and a device that stores two on wears only the first in catalog order. The desktop bar
+pass (one apply), or every view off (Desks); per device, survives a reload (`wos.skin-tweaks.v1`). A device that stores
+two on wears only the first in catalog order. The desktop bar
 centre is the clock (`bar-center` stays a core slot).
 
 With both tweaks off the desktop is the stock Desks view: every core hook added for this layout (`panelMode`,

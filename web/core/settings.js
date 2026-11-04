@@ -129,7 +129,7 @@
     if (action === 'troubleshoot') { window.WizReach?.open(); return; }
     if (origin === 'everywhere') {
       if (action === 'retry') native()?.retryUnsent?.(id);
-      if (action === 'delete') native()?.deleteUnsent?.(id);
+      if (action === 'delete') { for (const row of ctx.root?.querySelectorAll('[data-ubid]') || []) if (row.dataset.ubid === id) { const b = row.querySelector('[data-ub="delete"]'); if (b) { b.disabled = true; b.textContent = 'Deleting…'; } } native()?.deleteUnsent?.(id); }
       setTimeout(() => ctx.changed?.(), 300); return;
     }
     const it = ctx.outbox?.get(id); if (!it) return;
@@ -149,7 +149,12 @@
       const ext = /aac/.test(it.audioType) ? 'aac' : /mp4|m4a/.test(it.audioType) ? 'm4a' : /wav/.test(it.audioType) ? 'wav' : /ogg/.test(it.audioType) ? 'ogg' : 'webm';
       a.href = url; a.download = `wizard-recording-${id}.${ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); return;
     }
-    if (action === 'delete') Promise.resolve(ctx.outbox.remove(id)).then(ok => ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400));
+    if (action === 'delete') {
+      // Custody deletes must be durable before losing the original; acknowledge the tap now.
+      const buttons = [...(ctx.root?.querySelectorAll('[data-ubid]') || [])].filter(row => row.dataset.ubid === id).map(row => row.querySelector('[data-ub="delete"]')).filter(Boolean);
+      for (const b of buttons) { if (b.disabled) return; b.disabled = true; b.textContent = 'Deleting…'; }
+      Promise.resolve(ctx.outbox.remove(id)).then(ok => { ctx.render?.(); ctx.toast?.(ok === false ? '!' : '✕', ok === false ? 'Could not save deletion · keep Wizard open' : 'Deleted', 2400); }, () => { for (const b of buttons) { b.disabled = false; b.textContent = 'Delete'; } ctx.toast?.('!', 'Could not save deletion · original kept', 2400); });
+    }
     if (action === 'open') ctx.openThread(it.sessionId);
     // Moving an audio-bearing/in-flight record to a text composer would lose custody. Never do it.
     if (action === 'edit') {
@@ -254,6 +259,9 @@
   /* Tweaks are separate from color: a row of published sets to start from (Standard, Miguel's, …), then one
    * disclosure with every installed tweak as a switch. Picking a set clears the per-tweak choices. */
   const tweakSwitches = (items, attr, busy = false, by = null) => items.map(t => `<button type="button" class="st-row tw-row" ${attr}="${esc(t.id)}" role="switch" aria-checked="${!!t.on}"${busy ? ' disabled' : ''}><span class="st-tx"><b>${esc(t.name)}</b>${by ? `<small class="tw-by">${t.where ? esc(t.where) + ' · ' : ''}by ${esc(by(t.author))}</small>` : ''}${t.description ? `<small>${esc(t.description)}</small>` : ''}</span><span class="sw ${t.on ? 'on' : ''}" aria-hidden="true"><i></i></span></button>`).join('');
+  // One support predicate for both Look and New skin. Filter rows only: the
+  // draft map must retain hidden other-shell defaults when it is saved.
+  const shellTweaks = (items, shell) => items.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(shell));
   function tweakRows(S) {
     const E = window.WosExperience; if (!E) return '';
     const s = E.state, own = window.WosMySkin?.active;
@@ -264,13 +272,12 @@
     const exp = s.tweaks.filter(t => !t.builtin);
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
     const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
-    const shown = exp.filter(t => !t.view || !Array.isArray(t.shells) || t.shells.includes(s.shell)).map(t => t.view && s.shell ? { ...t, where } : t);
+    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
     // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
     // quick buttons. Same list whatever skin is worn; skins are looks only.
     const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
-    // A live tweak's own options (api.settings.section(id, 'look', node)) sit right under its switch.
-    const rows = tweakOpts.size ? list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('') : tweakSwitches(list, 'data-tweak-toggle', s.busy, name);
+    const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
     return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
   }
   let authorList = null;
@@ -315,7 +322,7 @@
   }
   function newSkinHtml(S, draft) {
     const family = S.families.find(f => f.id === S.familyOf(draft.base));
-    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches((draft.items || []).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
+    return `<div class="st-group sc-sheet skin-create" data-newskin-sheet><h4>New skin</h4><label>Name<input data-skin-name maxlength="60" autocomplete="off" value="${esc(draft.name)}" placeholder="Give your skin a name"></label><label>Base skin<select data-skin-base>${S.families.map(f => `<option value="${esc(f.id)}"${f.id === family?.id ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label><h4>Color</h4><div class="skp" role="group" aria-label="New skin colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, draft.base)).join('')}</div><h4>Tweaks</h4><p class="st-hint">Starts with the ones on now.</p>${draft.loading ? '<p role="status">Loading tweaks…</p>' : tweakSwitches(shellTweaks(draft.items || [], window.WosExperience?.state.shell).map(t => ({ ...t, on: draft.tweaks[t.id] })), 'data-draft-tweak')}${draft.validation ? `<p role="alert">${esc(draft.validation)}</p>` : ''}${draft.error ? `<p role="alert">${esc(draft.error)}</p><button data-skinretry>Try again</button>` : ''}<div class="st-actions"><button data-skin-create${draft.loading || draft.error || draft.saving ? ' disabled' : ''}>Create skin</button></div></div>`;
   }
   function deviceSkinRecovery() {
     const previews = window.WosMySkin?.previews || [];
@@ -335,21 +342,22 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
+    // Miguel's Look (4 Nov 2026): a twinned skin shows Mode + Background instead of a colour per mode.
     const colours = !own && twinned(S, family) ? backgroundHtml(S, family, cur) : `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>`;
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
   }
   // Background + Mode (Miguel, 4 Nov 2026): a skin whose colours come in dark/light twins shows ONE row of
-  // backgrounds (Plain, the landscape pictures, the Wizard OS scenes) and a separate Dark | Light switch, instead of a colour per
-  // mode. Same cards as Colors. Picking a background keeps the mode; the mode keeps the background.
+  // backgrounds (Plain, landscape pictures, Wizard OS scenes) and a separate Dark | Light switch, instead of a colour per
+  // mode (Miguel's release). Same cards as Colors. Picking a background keeps the mode; the mode keeps the background.
   const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
   const isLight = id => /-light$/.test(id);
   function backgroundHtml(S, family, cur) {
     const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
     const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
     const onScene = /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
-    const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, rgba(11,10,16,.35), transparent 34%, transparent 66%, rgba(11,10,16,.45)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
+    const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 35%, transparent), transparent 34%, transparent 66%, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 45%, transparent)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
     const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === scenic);
     const cards = [pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, w.id === 'landscapes' ? '' : S.wallpaperThumb(w.id))) : [])].join('');
     const note = onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
@@ -576,10 +584,19 @@
     html: ctx => { const on = !!ctx.barMics().get(), k = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '') ? '⌥' : 'Alt+';
       return `<div class="st-group" data-bar-mics><h4>Top bar</h4><button class="st-row" data-bar-mics-set role="switch" aria-checked="${on}"><span class="st-tx"><b>Show every voice button</b><small>${esc(`New voice chat, Dictate and Tell the computer beside the mic. Off, they are in the mic’s menu (right-click or hold) and on ${k}V, ${k}D and ${k}C.`)}</small></span><span class="sw ${on ? 'on' : ''}"><i></i></span></button></div>`; },
     act: (ctx, el) => { const m = ctx.barMics?.(); if (!m || !el.closest('[data-bar-mics-set]')) return false; m.set(!m.get()); ctx.render?.(); return true; } });
+  // Moved from the phone adapter: one About renderer, native data/actions only in WosDevice.
+  function deviceAboutHtml() {
+    const d = window.WosDevice?.settingsState?.(); if (!d) return '';
+    return `<div class="st-row static"><span class="st-tx"><b>Recording</b><small>Keeps going with the screen off or in another app · Stop and Send in the notification</small></span></div>
+      <div class="st-row static"><span class="st-tx"><b>Reply notifications</b><small>${d.notificationsAllowed ? `On · when ${esc(window.WizConfig.agent())} answers a chat you sent from here · clear once you read the thread` : 'Off · allow notifications for Wizard OS in Android settings'}</small></span></div>
+      <button class="st-row" data-dvupd data-settings-version="phone"><span class="st-tx"><b>Phone app (Android) ${esc(d.installed || '· version unavailable')}</b><small>${esc(d.updateDescription)}</small></span><span class="st-go">›</span></button>`;
+  }
   register({ id: 'wizard', html(ctx) {
     const status = ctx.live?.ok ? 'Connected' : ctx.live?.error === 'access' ? 'Sign-in needed' : 'Connecting…';
     // No separate "Check for updates": the shell checks every minute and the update card offers Reload.
-    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div>${window.WosDevice?.settingsHtml?.() || ''}${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
+    const observed = window.WizWebUpdate?.firstObservedVersion || '';
+    const device = deviceAboutHtml();
+    return `<div class="st-group"><h4>Wizard</h4><div class="st-row static"><span class="st-tx"><b>${esc(status)}</b><small>${esc(native()?.platform?.() || 'Web')} · ${esc(location.host)}</small></span></div><p class="st-hint">The interface and your Wizard’s server update separately.${device ? ' The Android phone app updates separately too. Their version numbers are not comparable.' : ''}</p>${device}<details data-settings-technical><summary>Technical details</summary><div class="st-row static" data-settings-version="interface"><span class="st-tx"><b>Interface revision at first check</b><small title="${esc(observed)}">${esc(observed ? observed.slice(0, 8) : 'Not available yet')}</small></span></div><p class="st-hint" data-settings-observed-full style="overflow-wrap:anywhere">${esc(observed || 'Not available yet')}</p><p class="st-hint">The first successful version-file check, not a stamp of the code loaded in this page.</p></details>${row('help', 'Gestures & help', ctx.helpSub)}</div>`;
   }, act(ctx, el) { const st = el.closest('[data-st]')?.dataset.st; if (!['files', 'help'].includes(st)) return false; ctx.openSub(st); return true; } });
   // Settings › Resources shows the Home bars themselves (core/resources.js draws them into this host and keeps them
   // live); tapping a bar opens the same detail sheet as on Home (devices, health, AI accounts with reset times).

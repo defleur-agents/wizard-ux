@@ -47,7 +47,11 @@ test('the host knows a claimed finger lately: while held and for a moment after 
   let api = null;
   f.host.builtin('test-claim', a => { api = a; return () => {}; }, { when: 'any' });
   assert.ok(api, 'a built-in gesture gets the skin API');
-  assert.equal(api.gesture.claim(5), true);
+  assert.equal(api.gesture.claim(4), true);
+  assert.equal(f.host.claimedLately(), false, 'an ordinary claim never suppresses Back');
+  f.host.release(4);
+  assert.equal(f.host.claimedLately(), false, 'nor after an ordinary claimed gesture');
+  assert.equal(api.gesture.claim(5, { backSwipe: true }), true);
   assert.equal(f.host.claimedLately(), true, 'held');
   f.host.release(5);
   assert.equal(f.host.claimedLately(), true, 'just lifted (the browser\'s back swipe ends after the finger)');

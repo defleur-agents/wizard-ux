@@ -42,8 +42,8 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
 }
 // the switches as rendered: [id, name, on]
 const switches = html => [...html.matchAll(/data-tweak-toggle="([^"]+)" role="switch" aria-checked="(true|false)"[^>]*><span class="st-tx"><b>([^<]+)<\/b>/g)].map(m => [m[1], m[3], m[2] === 'true']);
-// the list is A to Z by name (Apps before Orb); compare in VIEWS order
-const viewSwitches = html => switches(html).filter(([id]) => VIEWS.includes(id)).sort((a, b) => VIEWS.indexOf(a[0]) - VIEWS.indexOf(b[0]));
+// in VIEWS order (Orb, Apps) whatever the list's order (one flat A-to-Z list since main's #820)
+const viewSwitches = html => VIEWS.map(v => switches(html).find(([id]) => id === v)).filter(Boolean);
 const look = async b => { b.view.focus('look'); await tick(); return b.root.innerHTML; };
 
 for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Miguel's Tweaks list has both shell views as plain switches, off`, async () => {
@@ -77,19 +77,6 @@ test('turning one on turns the other off; off again = Desks; one tweak reload pe
   assert.deepEqual(again.views(), ['miguel/apps-home'], 'a reload keeps Apps');
   // api.settings.toggleTweak (WosExperience.toggle) takes the same path
   await again.E.toggle('miguel/orb-shell'); assert.deepEqual(again.views(), ['miguel/orb-shell']);
-});
-
-test('no author quick button: every tweak is its own switch and other switches leave the worn view alone', async () => {
-  const b = box(); await b.E.refresh();
-  assert.equal(b.E.chooseAuthor, undefined, 'the author mix is gone');
-  const others = JSON.parse(read('web/tweaks/catalog.json')).tweaks.filter(id => id.startsWith('miguel/') && !VIEWS.includes(id) && !JSON.parse(read(`web/tweaks/${id}/manifest.json`)).view).slice(0, 3);
-  b.tap('miguel/apps-home'); await tick();
-  for (const id of others) { b.tap(id); await tick(); }
-  assert.deepEqual(b.views(), ['miguel/apps-home'], 'Apps kept, Orb not added');
-  assert.ok(others.every(id => b.active().includes(id)), 'each switch turned on just itself');
-  for (const id of others) { b.tap(id); await tick(); }
-  assert.deepEqual(b.views(), ['miguel/apps-home'], 'off again: the view is left alone too');
-  assert.deepEqual(viewSwitches(await look(b)).map(v => v[2]), [false, true]);
 });
 
 test('AI apps is a third shell view: on turns Orb and Apps off, Orb or Apps on turns it off, off again = Desks', async () => {
@@ -191,4 +178,20 @@ test('the phone ignores a desktop-only view: an old mix with AI apps on, or a st
   assert.deepEqual(p2.views(), []); assert.ok(!p2.active().includes('miguel/ai-apps'));
   assert.deepEqual(JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json')).shells, ['desktop']);
   for (const id of VIEWS) assert.deepEqual(JSON.parse(read(`web/tweaks/${id}/manifest.json`)).shells, ['desktop', 'phone'], id);
+});
+
+
+test('legacy single Apps choice maps to both supported shells until each explicitly chooses otherwise', async () => {
+  const storage = new Map([[KEY, JSON.stringify({ version: 1, off: {}, preset: 'none', machinesHomeMoved: true, mix: { 'miguel/apps-home': true } })]]);
+  const desk = box({ storage }); await desk.E.refresh();
+  assert.deepEqual(desk.views(), ['miguel/apps-home']);
+  const phone = box({ shell: 'phone', storage }); await phone.E.refresh();
+  assert.deepEqual(phone.views(), ['miguel/apps-home']);
+  await desk.E.toggle('miguel/orb-shell');
+  const phoneAgain = box({ shell: 'phone', storage }); await phoneAgain.E.refresh();
+  assert.deepEqual(phoneAgain.views(), ['miguel/apps-home'], 'choosing desktop never drops legacy phone choice');
+  await phoneAgain.E.toggle('miguel/apps-home');
+  const deskAgain = box({ storage }); await deskAgain.E.refresh();
+  assert.deepEqual(deskAgain.views(), ['miguel/orb-shell']);
+  assert.deepEqual(JSON.parse(storage.get(KEY)).views, { desktop: 'miguel/orb-shell', phone: '' });
 });

@@ -47,8 +47,7 @@ test('brand-only Hermes aliases with cached logos pin existing brand, not logo o
   for (const id of ['hermes-agent', 'hermes-frontend-3']) {
     const a = { id, name: 'Hermes' }, f = fixture(a);
     assert.equal(f.window.WizSigil.of(a).logo, undefined);
-    // Stock draws the letter disc under the brand; Miguel's release never shows a bare letter (a guessed house glyph).
-    assert.match(f.html, /sgi sgb sgb-hermes (?:sgl|sg-[a-z-]+)/);
+    assert.ok(f.html.includes('sgi sgb sgb-hermes ' + (id === 'hermes-agent' ? 'sg-spark' : 'sg-apps')));
     await f.run();
     assert.deepEqual(f.properties, ['--sgb']);
     assert.deepEqual(f.requests, [brandURL]);

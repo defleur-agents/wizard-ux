@@ -304,7 +304,7 @@ test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past 
   }
 });
 
-test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
+test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home only); the drawer: open apps, All apps, Archive / Working / Ready, Settings, New chat', async () => {
   const w = world();
   const off = (await layout()).default(w.api);
   assert.equal(w.html.dataset.aiApps, 'on'); assert.equal(w.html.dataset.viewChrome, 'phone', 'the shared view chrome (dock without its switcher)');
@@ -316,8 +316,8 @@ test('top bar: ☰ (the Ready count) · Home · the workspace switcher (Home onl
   assert.equal(w.q('.aa-home').getAttribute('aria-label'), 'Home'); assert.equal(w.q('.aa-home').tagName, 'BUTTON');
   assert.equal(w.q('.aa-ws-i').textContent, 'M'); assert.match(w.q('.aa-dws').getAttribute('aria-label'), /Workspace: Miguel/);
   assert.equal(w.q('.aa-dws .aa-word').textContent, 'Miguel', 'the drawer header names this Wizard');
-  assert.match(w.q('.aa-menu').getAttribute('aria-label'), /2 ready/);
-  assert.equal(w.q('.aa-menu .aa-count').textContent, '2', 'the Ready count on ☰, a number (no bare dot)'); assert.equal(w.q('.aa-dot'), null);
+  assert.match(w.q('.aa-menu').getAttribute('aria-label'), /2 unread/);
+  assert.equal(w.q('.aa-menu .aa-count').textContent, '2', 'the shared unread badge on ☰, a number (no bare dot)'); assert.equal(w.q('.aa-dot'), null);
   // open the drawer
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
@@ -393,6 +393,74 @@ test('search covers chats (archive too) and apps; a chat row opens its thread; a
   w.q('.aa-sec[data-sec="working"]').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aa-chat[data-sid="w1"]').dispatchEvent(new FakePointerEvent('pointerdown', { pointerId: 5, button: 0 })); w.st.timers.filter(t => t.ms === 450).at(-1).fn();
   assert.deepEqual(w.qa('.aa-pop-i').map(b => b.dataset.act), ['pin', 'rename']);
+});
+
+test('desktop: covered AI apps panel apps never receive front-only service admission (04bd2899 C6)', () => {
+  const js = read('web/desktop/desktop.js');
+  const expression = js.match(/isFront: (\(\) => .*?), back: \(\) => closeWorkflow/)[1];
+  for (const hidden of [false, true]) for (const hosted of [false, true]) {
+    const value = vm.runInNewContext('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
+    assert.equal(value, hidden && !hosted, 'palette=' + !hidden + ', hosted=' + hosted);
+  }
+});
+
+test('phone: deferred Chats preparation never opens the drawer over a shell sheet', async () => {
+  for (const which of ['settings', 'launcher']) {
+    const w = world();
+    (await layout()).default(w.api);
+    w.emit('route', w.st.route); // initial empty thread is also a thread
+    w.device.classList.add('sheet-open'); w.device.dataset.sheet = which;
+    w.st.route = { ...w.st.route, view: 'list', thread: null };
+    w.emit('route', w.st.route); w.run();
+    assert.equal(w.st.newChats, 1, 'Chats still prepares behind the sheet');
+    assert.equal(w.q('.aa-layer').hidden, true, which + ' keeps the drawer hidden');
+    assert.equal(w.html.dataset.aaDrawer, undefined);
+    assert.equal(w.st.backs.length, 0, 'no drawer Back handler steals the sheet dismissal');
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.q('.aa-layer').hidden, true, 'explicit drawer opens also yield to a shell sheet');
+    w.fire('touchstart', w.device, { touches: [{ clientX: 2, clientY: 400 }] });
+    w.fire('touchmove', w.device, { touches: [{ clientX: 180, clientY: 400 }] });
+    assert.equal(w.q('.aa-layer').hidden, true, 'edge gestures cannot cover the sheet');
+    w.device.classList.remove('sheet-open'); delete w.device.dataset.sheet;
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.html.dataset.aaDrawer, 'open', 'menu works after the sheet closes');
+    w.st.backs.at(-1)(); w.run();
+    assert.equal(w.q('.aa-layer').hidden, true, 'Back closes the drawer, never exits');
+  }
+});
+
+test('phone: a sheet opened between route and deferred drawer work still wins', async () => {
+  const w = world(); (await layout()).default(w.api);
+  w.emit('route', w.st.route);
+  w.st.route = { ...w.st.route, view: 'list', thread: null };
+  w.emit('route', w.st.route);
+  w.device.classList.add('sheet-open');
+  w.run();
+  assert.equal(w.q('.aa-layer').hidden, true);
+  assert.equal(w.st.newChats, 1);
+});
+
+test('phone: a shell sheet cancels a drawer drag before move or release without a stranded layer', async () => {
+  for (const phase of ['before-move', 'before-release']) {
+    const w = world(); (await layout()).default(w.api);
+    w.fire('touchstart', w.device, { touches: [{ clientX: 2, clientY: 400 }] });
+    if (phase === 'before-move') w.device.classList.add('sheet-open');
+    w.fire('touchmove', w.device, { touches: [{ clientX: 240, clientY: 400 }] });
+    if (phase === 'before-release') {
+      assert.equal(w.q('.aa-layer').hidden, false, 'drag layer was visible before the sheet opened');
+      w.device.classList.add('sheet-open');
+    }
+    w.fire('touchend', w.device, { changedTouches: [{ clientX: 240, clientY: 400 }] }); // go:true must clean up instead of stranding open:false
+    assert.equal(w.q('.aa-layer').hidden, true, 'sheet wins on the same frame at ' + phase);
+    assert.equal(w.q('.aa-layer').classList.contains('is-drag'), false);
+    w.run();
+    assert.equal(w.q('.aa-layer').classList.contains('is-open'), false);
+    assert.equal(w.html.dataset.aaDrawer, undefined);
+    assert.equal(w.st.backs.length, 0);
+    w.device.classList.remove('sheet-open');
+    w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+    assert.equal(w.html.dataset.aaDrawer, 'open', 'a cancelled drag does not break the next open');
+  }
 });
 
 test('main screen: Home and the bare list become the chat; a thread left for the list opens the drawer; an app is "app"', async () => {
@@ -1508,6 +1576,15 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
 });
 
 
+// Codex review (PR #888/#889): api.after caps every timer at 10 s, so an hourly tidy must count to its deadline.
+test('auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)', () => {
+  for (const f of ['desktop.js', 'layout.js']) {
+    const js = readFileSync(new URL(`../web/layouts/ai-apps/${f}`, import.meta.url), 'utf8');
+    assert.doesNotMatch(js, /api\.after\((TIDY_EVERY|3600e3),/, f + ': no hour-long api.after (it would fire after 10 s)');
+    assert.match(js, /const tidyLoop = \(\) => \{ tidyOff = api\.after\(10e3, \(\) => \{ if \(Date\.now\(\) >= tidyAt\) \{ tidyAt = Date\.now\(\) \+ (TIDY_EVERY|3600e3); tidy\(\); \} tidyLoop\(\); \}\); \};/, f);
+  }
+});
+
 /* ---------- round 18 (Miguel, 3 Nov 2026) ---------- */
 test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped like the rail, the ⌥↓ step; tidy words and sentence', async () => {
   const P = await import('../web/layouts/ai-apps/parts.js');
@@ -1657,15 +1734,6 @@ test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥
   const c0 = JSON.stringify(w.st.gone); assert.ok(alt('KeyW'), '⌥W on Home is taken'); assert.equal(JSON.stringify(w.st.gone), c0, 'and does nothing (it closed the Chats window behind Home)');
   assert.ok(alt('Minus') && alt('Equal'), '⌥− / ⌥= taken (the app panel\'s width when one shows)');
   assert.ok(g0 >= 0 && o0 >= 0);
-});
-
-// Codex review (PR #888/#889): api.after caps every timer at 10 s, so an hourly tidy must count to its deadline.
-test('auto-tidy runs hourly, not on every 10 s timer beat (api.after is capped)', () => {
-  for (const f of ['desktop.js', 'layout.js']) {
-    const js = readFileSync(new URL(`../web/layouts/ai-apps/${f}`, import.meta.url), 'utf8');
-    assert.doesNotMatch(js, /api\.after\((TIDY_EVERY|3600e3),/, f + ': no hour-long api.after (it would fire after 10 s)');
-    assert.match(js, /const tidyLoop = \(\) => \{ tidyOff = api\.after\(10e3, \(\) => \{ if \(Date\.now\(\) >= tidyAt\) \{ tidyAt = Date\.now\(\) \+ (TIDY_EVERY|3600e3); tidy\(\); \} tidyLoop\(\); \}\); \};/, f);
-  }
 });
 
 /* ---------- round 19 (Miguel, 3 Nov 2026) ---------- */
@@ -1917,8 +1985,12 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   assert.match(c, /if \(a === 'app'\) return \{ label: `Open \$\{app\}`/, 'Open names the app');
   assert.match(c, /const tacts = NV \? \(NQ \? '' : noteTactsHtml\(NV, false\)\)/, 'quiet: the buttons sit inside the open card, not under the list');
   assert.doesNotMatch(c.split('\n').find(l => l.trim().startsWith('if (NQ) msgs =')), /ch-notif-src|mmeta/, 'no second Notification label');
-  assert.match(b, /ask: \(id, name\) => id === 'notifications'[^?]*\? `\$\{name\} go to` : `\$\{name\} notifications go to`/, 'the doubled word fixed');
   assert.match(b, /function routeLabel\(id\)/);
+  // Shared main's unified inbox owns the notification thread; the layout must reuse its picker.
+  assert.match(c, /function noteRouteHtml\(NV\)/);
+  assert.match(c, /class="ch-notif-route" data-part="notify-route"/);
+  assert.ok(c.includes('B.picker(id, { name })'), 'one shared notification routing picker');
+  assert.match(b, /ask: \(id, name\) =>/, 'routing wording comes from the shared core');
   for (const f of ['desktop.css', 'layout.css']) {
     const css = read('web/layouts/ai-apps/' + f);
     assert.match(css, /\] \{ --wos-note-quiet: on; \}/, f + ': the view asks for the quiet thread');
@@ -2076,6 +2148,19 @@ test('round 23 desktop: the folded rail is a tally of marks (spinners, dots, rin
   assert.deepEqual(w.qa('.aad-rk[data-k="snoozed"] .aad-d').map(d => d.className), ['aad-d is-ring'], 'snoozed: a ring');
 });
 
+test('AI apps view: Now playing is only small bars on the playing app\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon', () => {
+  const js = read('web/layouts/ai-apps/desktop.js');
+  assert.doesNotMatch(js, /apps-top|aad-vtnow|vtNow/, 'the pill row at the top of the column is gone');
+  assert.match(js, /vt\.append\(vtHead, vtList, vtFoot\)/, 'the column is exactly as before Now playing');
+  assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
+  assert.match(js, /np = el\('button', 'aad-np', \{ type: 'button', tabindex: '-1' \}\);/, 'the bars are a button on the icon');
+  assert.match(js, /api\.listen\(np, 'click', e => \{ e\.stopPropagation\?\.\(\);[^\n]*api\.media\.pause\(x\.key\) : api\.media\.play\(x\.key\)/, 'a click pauses / plays that app and never reaches the row (which opens it)');
+  assert.match(js, /closest\?\.\('\.aad-vtx, \.aad-np'\)\) return;/, 'pressing the bars never starts a row drag');
+  assert.match(js, /if \(!np && !m\.playing\) \{/, 'a fresh row draws no bars for something already paused');
+  assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
+  assert.match(js, /put\(np\.playing && bars \? bars : tile\(npRow\), 'P'/, 'the ⌥P keycap sits on that app\'s icon');
+});
+
 test('AI apps view phone: Now playing = the same small bars on the playing app\'s icon in the dock / grid; a tap on them pauses without opening the app, a press there never lifts the icon; passive and phone Home only', async () => {
   const w = world();
   const media = { list: [], fns: [], calls: [] };
@@ -2178,19 +2263,6 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   assert.ok(js.indexOf('appFront()) { const t = appTarget') > js.indexOf("if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;"));
 });
 
-test('AI apps view: Now playing is only small bars on the playing app\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon', () => {
-  const js = read('web/layouts/ai-apps/desktop.js');
-  assert.doesNotMatch(js, /apps-top|aad-vtnow|vtNow/, 'the pill row at the top of the column is gone');
-  assert.match(js, /vt\.append\(vtHead, vtList, vtFoot\)/, 'the column is exactly as before Now playing');
-  assert.match(js, /api\.media\?\.watch\?\.\(list => \{[\s\S]*?\}, \{ passive: true \}\);/, 'passive: the view alone never starts watching');
-  assert.match(js, /np = el\('button', 'aad-np', \{ type: 'button', tabindex: '-1' \}\);/, 'the bars are a button on the icon');
-  assert.match(js, /api\.listen\(np, 'click', e => \{ e\.stopPropagation\?\.\(\);[^\n]*api\.media\.pause\(x\.key\) : api\.media\.play\(x\.key\)/, 'a click pauses / plays that app and never reaches the row (which opens it)');
-  assert.match(js, /closest\?\.\('\.aad-vtx, \.aad-np'\)\) return;/, 'pressing the bars never starts a row drag');
-  assert.match(js, /if \(!np && !m\.playing\) \{/, 'a fresh row draws no bars for something already paused');
-  assert.match(js, /if \(code === 'KeyP' && !sh\) return once\(\(\) => api\.media\?\.toggle\?\.\(\)\);/);
-  assert.match(js, /put\(np\.playing && bars \? bars : tile\(npRow\), 'P'/, 'the ⌥P keycap sits on that app\'s icon');
-});
-
 test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music started a voice take): the mouse never parks the keyboard on the orb, a focused orb talks on Enter and on Space only when Tab put it there; a click on the app bar gives the keyboard back to the app', async () => {
   const { w } = deskWorld();
   const talks = []; w.api.voice.talk = () => talks.push('talk');
@@ -2266,4 +2338,3 @@ test('a remembered rail key cannot hide the current chat marker after switching 
  assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
 });
-

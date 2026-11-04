@@ -74,6 +74,8 @@ window.WizCore.chats = function createChats(H) {
   function openHosted(wid, frame, sid, opts = {}) {
     const w = W[wid];
     if (!w || !window.WizLauncher?.hasHostedThread(w.appId) || !frame?.isConnected || frame.closest('[data-win]')?.dataset.win !== wid) return false;
+    // Refuse replacement while any hosted thread is open; the app is not front.
+    if (opts.draft && hosted.has(wid)) return false;
     if (!prepThread(sid, opts)) return false;
     if (hosted.has(wid)) closeHosted(wid);
     const layer = document.createElement('div'); layer.className = 'chats hosted-thread'; layer.dataset.chats = wid;
@@ -86,20 +88,24 @@ window.WizCore.chats = function createChats(H) {
     const entry = { frame, layer, container, oldPosition, previous, w };
     hosted.set(wid, entry);
     frame.inert = true; frame.style.visibility = 'hidden'; container.append(layer);
-    openChat(wid, sid); return true;
+    openChat(wid, sid);
+    if (opts.draft) requestAnimationFrame(() => { if (hosted.get(wid) === entry) layer.querySelector('.ch-compose textarea')?.focus({preventScroll:true}); });
+    return true;
   }
   // What an app's thread brings along, wherever it opens (over the app, or the main Chats for a layout that keeps
   // chats apart from apps): its agent, and its item as the reply beside the thread's draft. False = not allowed.
   function prepThread(sid, opts = {}) {
+    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
     // A newly-created agent thread may not be in the next session-list refresh yet.
     if (opts?.agent != null) {
       const a = typeof opts.agent === 'string' ? window.WosAgents?.get(opts.agent) : null;
       if (!a || a.status !== 'running' || !window.WosAgents.isOther(opts.agent) || typeof LIVE.pinAgent !== 'function') return false;
+      if (opts.draft && !KIT.drafts.admit('direct:' + sid, opts.draft.text, rp)) return false;
       LIVE.pinAgent(sid, opts.agent);
     }
+    else if (opts.draft && !KIT.drafts.admit('direct:' + sid, opts.draft.text, rp)) return false;
     // An app item (Wisdom passage) rides beside this thread's draft as its reply, framed only into the next message.
     // It never replaces one already waiting there, and the composer stays the owner's own words.
-    const rp = opts?.reply ? KIT.reply.clean(opts.reply) : null;
     if (rp && sid !== '__new__' && !KIT.drafts.get('direct:' + sid).reply) KIT.drafts.setReply('direct:' + sid, rp);
     return true;
   }
@@ -214,6 +220,7 @@ window.WizCore.chats = function createChats(H) {
   }
   // Parsing, Markdown, Bangkok time, drafts, copy/share and the media viewer live in chat-kit.js.
   const KIT = window.WosChat;
+  const INC = window.WizCore.incognitoChats?.({ win: id => W[id], elOf: id => elOf(id), paint: id => { const w = W[id]; if (w) renderChats(w); }, grow: growTa, toast, kit: KIT });
   // Pins (core/chat-pins.js, synced per owner) and Boomerang (core/scheduled-reminders.js, loads after this file).
   const PIN0 = window.WosChatPins || { has: () => false, toggle: () => false, partition: rows => ({ pinned: [], rest: rows }) };
   // Pins can be turned off in the Filter sheet (View › Pins): no Pinned section, no Pin in the menu, no row pin. Saved
@@ -221,7 +228,17 @@ window.WizCore.chats = function createChats(H) {
   const PINS_KEY = 'wos.chats.pins.v1';
   const pinsOn = () => { try { return localStorage.getItem(PINS_KEY) !== '0'; } catch (e) { return true; } };
   // The retired miguel/hidden-pin tweak becomes this setting once: a device that wore it starts with Pins off.
-  try { if (localStorage.getItem(PINS_KEY) == null && JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}')?.mix?.['miguel/hidden-pin'] === true) localStorage.setItem(PINS_KEY, '0'); } catch (e) {}
+  try {
+    if (localStorage.getItem(PINS_KEY) == null) {
+      const v = JSON.parse(localStorage.getItem('wos.skin-tweaks.v1') || '{}'), id = 'miguel/hidden-pin';
+      const chosen = localStorage.getItem('wos.skin'), S = window.WosSkin;
+      const family = chosen && (S?.families || []).find(f => f.id === S.familyOf?.(chosen));
+      const owner = typeof v.preset === 'string' ? v.preset : family?.tweaks;
+      const offs = Array.isArray(v.carry) ? v.carry : Array.isArray(v.off?.miguel) ? v.off.miguel : [];
+      const hidden = v.mix?.[id] === true || (owner === 'miguel' && v.mix?.[id] !== false && !offs.includes(id));
+      if (hidden) localStorage.setItem(PINS_KEY, '0');
+    }
+  } catch (e) {}
   const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
   paintPins();
   const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
@@ -376,48 +393,6 @@ window.WizCore.chats = function createChats(H) {
   const SEC_DEFAULT = { errors: true, working: true, ready: true, yesterday: true, pastWeek: false, deferred: false, archive: false };
   let secOpen = (() => { try { return { ...SEC_DEFAULT, ...JSON.parse(localStorage.getItem(SEC_OPEN_KEY) || '{}') }; } catch (e) { return { ...SEC_DEFAULT }; } })();
   const SEC_PAGE = 40;
-  /* ---- Morning: the owner's daily check-in (Morning app, /morning/), pinned at the top of Ready ----
-   * Status is the Morning app's /morning/api/status; the app also posts {type:'wizard:morning'} when a step is
-   * ticked so the card updates at once. No Morning app on this Wizard (not in Apps, or unreachable) = no card;
-   * all steps done = no card until Morning's day rolls over.
-   * Read at most once a minute, from list paints only; the HTML is built from that state alone, so an unchanged
-   * state never rebuilds the list (the 15 s sessions poll keeps the same nodes). */
-  const MORNING = { data: null, at: 0, busy: false };
-  const morningInstalled = () => typeof window.WizCanOpen === 'function' ? window.WizCanOpen('morning') : false;
-  function morningSet(d) {
-    const ok = d && typeof d.done === 'number' && typeof d.total === 'number' && typeof d.day === 'string';
-    const next = ok ? { day: d.day, done: d.done, total: d.total, next_label: String(d.next_label || ''), hidden: !!d.hidden } : null;
-    if (JSON.stringify(next) === JSON.stringify(MORNING.data)) return;
-    MORNING.data = next;
-    for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && el.querySelector('.ch-list') && !holdList(id)) renderChatList(w, el); }
-  }
-  function morningPoll() {
-    if (MORNING.busy || Date.now() - MORNING.at < 60000 || !morningInstalled()) return;
-    MORNING.busy = true; MORNING.at = Date.now();
-    fetch('/morning/api/status', { cache: 'no-store', credentials: 'same-origin' }).then(r => r.ok ? r.json() : null)
-      .then(morningSet, () => {}).finally(() => { MORNING.busy = false; });
-  }
-  addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'wizard:morning') { MORNING.at = Date.now(); morningSet(e.data.status); } });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) { MORNING.at = 0; morningPoll(); } });
-  // × on the card: hide it for the rest of Morning's day without ticking any step (James, 25 Oct 2026: missed the
-  // routine, it's evening, stop showing it). Morning owns the flag so every device agrees; undo lives in Morning.
-  function morningHide() {
-    if (!MORNING.data) return;
-    const prev = MORNING.data; morningSet({ ...prev, hidden: true });
-    fetch('/morning/api/hide', { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"hidden":true}' })
-      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(st => { MORNING.at = Date.now(); morningSet(st); toast('☀', 'Morning hidden until tomorrow', 2200); },
-        () => { morningSet(prev); toast('!', 'Couldn’t hide Morning · try again', 2400); });
-  }
-  function morningCard() {
-    // Done for today = gone until the next morning (the day rolls at the owner's day start, on Morning's side).
-    // Hidden for today (the owner tapped × or Morning's "Skip today") = gone too, steps untouched; back at rollover.
-    const d = MORNING.data; if (!d || !morningInstalled() || d.done >= d.total || d.hidden) return '';
-    const all = false;
-    const sub = all ? 'Done for today' : d.done ? `${d.done} of ${d.total} done · next: ${d.next_label}` : 'Workout · Meditate · Read';
-    const dots = Array.from({ length: d.total }, (_, i) => `<i${i < d.done ? ' class="on"' : ''}></i>`).join('');
-    return `<div class="ch-morning-w"><button type="button" class="ch-morning${all ? ' done' : ''}" data-chmorning aria-label="Open Morning · ${esc(sub)}"><span class="sun" aria-hidden="true"></span><span class="tx"><span class="hd"><b>Morning</b><i>${all ? 'Done' : 'Pinned'}</i></span><small>${esc(sub)}</small>${all ? '' : `<span class="dots" aria-hidden="true">${dots}</span>`}</span></button><button type="button" class="ch-morning-x" data-chmorninghide aria-label="Hide Morning until tomorrow" title="Hide until tomorrow">×</button></div>`;
-  }
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
@@ -472,7 +447,7 @@ window.WizCore.chats = function createChats(H) {
   // of the screen text sent as context with a message to another agent (core/screen-text.js).
   let rowListAgent = '';
   const privRow = s => !rowListAgent && !!LIVE.isPrivate?.(s.id);
-  function chatRow(s, snip) {
+  function chatRow(s, snip, searchStatus = '') {
     const working = isWorking(s), unread = !working && LIVE.isNew(s), needs = ['waiting_for_approval', 'unknown'].includes(s.status) || s.status === 'failed' || s.status === 'interrupted';
     // Deferred (bottom of Ready): the status reads Deferred in place of Needs you / Your call, then its one line.
     const def = deferredOf(s) && !working && (snoozeLast() || !needs);
@@ -495,7 +470,7 @@ window.WizCore.chats = function createChats(H) {
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
       <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
-      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
+      ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
    * (needs you, then test this, then the rest) and By subject (the roundup, kept live). */
@@ -764,14 +739,21 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-pill${cls}" data-sendpill="${items.length}" role="status"><span class="pl"${open}>${spin}<span>${label}</span></span>${btns}</div>`;
   }
   // Rotate one storage write: the live new-chat slot → a saved slot, the chosen saved slot → the live one.
+  function untouchedNotif(d) { return !!d && !(d.text || '').trim() && !(d.files || []).length && /^notifications:/.test(d.reply?.key || ''); }
   function rotateNew(resume) {
     const all = KIT.drafts.all(), cur = all.new;
     if (resume === 'new') return true;
     const resumed = resume ? all[resume] : null;
     if (resume && !resumed) return false;
-    if (cur && ((cur.text || '').trim() || (cur.files || []).length || cur.reply)) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
+    if (cur && ((cur.text || '').trim() || (cur.files || []).length || (cur.reply && !untouchedNotif(cur)))) all['new:' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)] = cur;
     if (resumed) { all.new = { ...resumed, at: Date.now() }; delete all[resume]; } else delete all.new;
     try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); return true; } catch (e) { return false; }
+  }
+  // Remove legacy saved slots created just by opening a notification; preserve the live composer.
+  function dropOpenedNotifications() {
+    const all = KIT.drafts.all(); let n = 0;
+    for (const k of Object.keys(all)) if (k !== 'new' && SAVED_NEW.test(k) && untouchedNotif(KIT.drafts.get(k))) { delete all[k]; n++; }
+    if (n) try { localStorage.setItem('wos.chat.drafts.v1', JSON.stringify(all)); } catch (e) {}
   }
   function openNewDraft(wid, resume) {
     const w = W[wid]; if (!w) return;
@@ -824,6 +806,7 @@ window.WizCore.chats = function createChats(H) {
     return n;
   }
   migrateOldReplies();
+  dropOpenedNotifications();
   // The reply bubble above the composer: who it answers, one or two lines of it, and × to drop it.
   /* Notifications as threads (a live package holds WosSkinHost.inboxThreads): a New chat whose draft carries a
    * Notifications item is shown as that notification's one-message thread. Its title, one yellow message, Done /
@@ -1238,7 +1221,7 @@ window.WizCore.chats = function createChats(H) {
     const c = ch(w.id), n = norm(c.q);
     const AGID = winAgent(w), LST = LIVE.statusFor ? LIVE.statusFor(AGID) : { ok: LIVE.ok, error: LIVE.error };
     rowListAgent = AGID;
-    if (!AGID) morningPoll();
+    if (!AGID) window.WizAppExtensions?.poll();
     const F = c.filter && STATUS[c.filter] ? STATUS[c.filter] : null, focus = focusOf(w);
     const fids = F?.ids ? F.ids(AGID) : null;
     const space = focus?.kind === 'space' ? spaces().find(s => s.id === focus.key) : null;
@@ -1249,9 +1232,9 @@ window.WizCore.chats = function createChats(H) {
     // Subscribe before the empty-list branch: notifications can be the only Ready rows.
     const listNotes = !n && !F && !AGID && focus?.kind !== 'space' ? notes() : null;
     const listNotesN = listNotes ? listNotes.awake.length + listNotes.later.length : 0;
-    const titleHit = n ? all.filter(s => norm(s.title).includes(n) || norm(s.preview).includes(n)) : all;
+    const titleHit = n ? all.filter(s => window.WizCore.chatSearch.relevance(s, n).coverage) : all;
     // Message bodies: searched lazily in the background (core/chat-search.js); hits stream in with a snippet.
-    // Body search reads the main agent's threads only; an agent's Chats search titles and previews.
+    // Search is scoped to this window's agent, including routed agents and indexed body-only rows.
     const BS = window.WizCore.chatSearch, queryAt = c.q, searchNav = c.readNav;
     const bs = n && BS ? BS.query(w.id, queryAt, () => {
       const current = W[w.id], e2 = elOf(w.id); if (current && !current.thread && winAgent(current) === AGID && c.readNav === searchNav && e2 && ch(w.id).q === queryAt && e2.querySelector('.ch-list') && !holdList(w.id)) renderChatList(w, e2);
@@ -1264,8 +1247,13 @@ window.WizCore.chats = function createChats(H) {
     for (const s of bs?.rows?.values() || []) if (!hitIds.has(s.id) && !s.hidden && (!F || (fids ? fids.has(s.id) : F.test(s))) && focusMatches(w, s)) { hit.push(s); hitIds.add(s.id); }
     // Pinned live chats get one fixed section at the top (archived pins stay in Archive); search and filters still
     // decide which rows are eligible first.
-    const split = PIN.partition(hit, s => !s.archived && !(snoozeLast() && deferredOf(s))), pinnedRows = split.pinned;
+    const split = n ? { pinned: [], rest: hit } : PIN.partition(hit, s => !s.archived && !(snoozeLast() && deferredOf(s))), pinnedRows = split.pinned;
     const groups = LIVE.workGroups(split.rest);
+    // SEARCH_RELEVANCE (chat-search.js): coverage → relevance × bounded recency; Archive/pins are neutral.
+    const ranked = n ? BS.rank(hit, n, LIVE.cardAt, snips) : [];
+    // Reuse groupWork's classification (including automatic Archive and snooze), not a second status policy.
+    const searchLabels = { errors: 'Error', working: 'Working', ready: 'Ready', yesterday: 'Ready', pastWeek: 'Ready', deferred: 'Snoozed', archive: 'Archive' };
+    const searchStatus = new Map(n ? Object.entries(groups).flatMap(([k, rows]) => rows.map(s => [s.id, k !== 'archive' && deferredOf(s) && !isWorking(s) ? 'Snoozed' : searchLabels[k]])) : []);
     const hitCount = () => hit.length;
     const coachLine = () => c.coach ? '<span class="ch-coach">Filtered. Tap ✕ to see all chats.</span>' : '';
     const ownerId = owner(w.id), curThread = W[ownerId]?.thread;
@@ -1301,6 +1289,10 @@ window.WizCore.chats = function createChats(H) {
     else if (AGID && !all.length && !n && !F) body = `<div class="ch-empty"><b>No chats with ${esc(agentName(AGID))} yet</b><br><button type="button" class="ch-fclear" data-chnew data-chemptynew>Start a new chat</button><br> ${agentRec(AGID).privacy === 'private' ? 'They stay with this agent: the main agent can’t search or read them.' : 'They stay in this agent’s chats.'}</div>`;
     else if (filtered && !hit.length && !listNotesN) body = `<div class="ch-empty">${n ? 'No chats match' : F ? F.empty : `No chats in ${esc(focusLabel(w))}`}<br><button type="button" class="ch-fclear" ${n || F ? 'data-chfclear' : 'data-chfbtn'}>${n || F ? 'Clear filter' : 'Change focus'}</button></div>`;
     else if (!hit.length && !drafts.length && !listNotesN) body = `<div class="ch-empty">${bs && (bs.busy || bs.scanned < Math.min(bs.want, bs.total || 0)) ? `No titles match “${esc(c.q)}” · searching messages…` : `No threads match “${esc(c.q)}”.`}</div>`;
+    else if (n) {
+      const shown = c.more.search ? ranked : ranked.slice(0, SEC_PAGE);
+      body = `<div class="ch-search-results" data-search-results="flat">${filtered ? '' : drafts.map(d => draftRow(d, d.key === 'new' && curThread === '__new__')).join('')}${shown.map(s => chatRow(s, snips.get(s.id), searchStatus.get(s.id))).join('')}${ranked.length > shown.length ? `<button class="ch-more" data-secmore="search">Show all ${ranked.length}</button>` : ''}</div>`;
+    }
     else body = (filtered ? '' : draftSec)
       + (pinnedRows.length ? `<section class="ch-sec ch-pinned open" data-sec="pinned"><div class="ch-sec-h static"><span>Pinned</span><small>${pinnedRows.length}</small></div><div class="ch-sec-b">${pinnedRows.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')}</div></section>` : '')
       + (byStatus() ? SECTIONS_STATUS : SECTIONS_DAY).map(([k, label]) => {
@@ -1320,7 +1312,7 @@ window.WizCore.chats = function createChats(H) {
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n + notesN}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + morningCard() : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
+        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + (window.WizAppExtensions?.html() || '') : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
@@ -1416,6 +1408,7 @@ window.WizCore.chats = function createChats(H) {
   }
 
   async function addFiles(wid, list) {
+    if (INC?.active(wid)) { toast('!', 'Attachments aren’t available in Incognito', 2200); return; }
     const c = ch(wid); c.files = c.files || [];
     const picked = [...list], room = Math.max(0, MAX_FILES - c.files.length);
     if (picked.length > room) toast('!', `Up to ${MAX_FILES} files per message`, 2400);
@@ -1463,6 +1456,7 @@ window.WizCore.chats = function createChats(H) {
     if (r) form.insertAdjacentHTML('afterbegin', replyBubble(r));
   }
   function refreshCompose(wid) {
+    if (INC?.active(wid)) return;
     const el = track.querySelector(`[data-chats="${wid}"]`); const form = el?.querySelector('[data-chform]'); if (!form) return;
     const c = ch(wid), old = form.querySelector('.ch-tray');
     const html = attachTray(c);
@@ -1493,6 +1487,7 @@ window.WizCore.chats = function createChats(H) {
   }
   let player = null; // { id, audio }
   function toggleVoice(id) {
+    if (INC?.active(id)) { toast('!', 'Incognito is text only', 2200); return; }
     if (player && player.id === id) { if (player.audio.paused) player.audio.play().catch(() => {}); else player.audio.pause(); return; }
     if (player) { player.audio.pause(); paintVoice(player.id, false, 0); }
     const audio = new Audio(fileUrl(id)); player = { id, audio };
@@ -2029,10 +2024,23 @@ window.WizCore.chats = function createChats(H) {
   // words (its interim notes). A new run that merely ends like an old short answer ("Yes.") never matches.
   // Pictures are compared as absent on both sides: the stream has MEDIA lines, the transcript has thumbnails.
   const bare = v => streamAnswer(v).replace(SHOWN_MEDIA, '').replace(/\s+/g, '');
+  const streamEnded = st => {
+    if (st.terminal) return true;
+    // The complete done trailer is the older service's final-answer receipt,
+    // emitted before its SSE terminal frame; partial markers are not receipts.
+    const marker = String(st.text || '').match(/\[WIZARD_STATUS_V1\]\s*(\{[\s\S]*\})\s*\[\/WIZARD_STATUS_V1\]\s*$/);
+    try { return !!marker && JSON.parse(marker[1]).state === 'done'; } catch (_) { return false; }
+  };
   const streamShown = (st, turns) => {
-    const t = turns.findLast(x => x.a && x.a.final !== false), ans = bare(t?.a?.text), got = bare(st.text);
-    if (!ans || !got.endsWith(ans)) return false;
-    return got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    const got = bare(st.text);
+    // A stale Working row or recent outbox receipt can reopen an earlier run AFTER the latest answer landed.
+    // Its replay then shares that latest baseline: match any displayed final turn (James, 1 Nov 2026), but
+    // keep the bound local to that turn so a new answer merely ending like an old "Yes." cannot disappear.
+    return turns.some(t => {
+      if (!t.a || t.a.final === false) return false;
+      const ans = bare(t.a.text);
+      return !!ans && got.endsWith(ans) && got.length <= [...(t.notes || []), t.a.text].map(bare).join('').length;
+    });
   };
   // Mid-run the transcript already shows the run's interim words (a message the agent wrote before a tool call, and
   // earlier notes), while the stream replays them from its first event. Draw only what the transcript lacks, or the
@@ -2078,7 +2086,11 @@ window.WizCore.chats = function createChats(H) {
     // Or the transcript already shows these words: reopening a thread while the outbox still names its run (or the list
     // still says working) starts a new subscriber whose baseline already includes the answer, and the run replays from
     // its first event. Without this the whole reply showed twice under "Finishing…" (Miguel, 27 Oct 2026).
-    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || streamShown(st, turns))) {
+    // A textual match is not run identity while tokens are still arriving. In
+    // particular a new "Yes." prefix must not close its subscriber just because
+    // an older turn said the same thing. Only a terminal replay can be deduped
+    // without a changed transcript; completed streams have no later deltas.
+    if (st && !st.landed && turns && (assistantStamp(turns) !== st.baseline || (streamEnded(st) && streamShown(st, turns)))) {
       st.landed = true; st.handle?.close(); clearTimeout(st.retry);
     }
     const visible = st && !st.landed ? streamUnshown(streamAnswer(st.text), turns) : '';
@@ -2092,13 +2104,15 @@ window.WizCore.chats = function createChats(H) {
     return { working, sub };
   }
   function renderThread(w, el, keep) {
+    if (INC?.render(w.id, el)) return;
     if (H.renderView?.(w, el, () => renderThread(w, el, keep), 'thread')) return;
     ch(w.id).held = false; // explicit actions/navigation may repaint immediately
     const c = ch(w.id), isNew = w.thread === '__new__', s = isNew ? null : rowOf(w.id, w.thread);
     // The thread's own agent (pinned at creation); a new chat belongs to the window's agent.
     const TAG = isNew ? (winAgent(w) || (AGS()?.isOther(c.newModel?.agent) ? c.newModel.agent : '')) : (LIVE.agentOf ? LIVE.agentOf(w.thread) : '');
     // Unified Chats: a private agent's thread opened from the owner's main list says so in its header.
-    const privTag = TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
+    const incognitoAction = isNew && INC && window.WizCore.incognitoOptIn?.enabled(agentRec(TAG)) ? '<button type="button" class="pbtn ch-incog-toggle" role="switch" aria-checked="false" data-incog-start aria-label="Incognito"><span>Incognito</span><span class="sw" aria-hidden="true"><i></i></span></button>' : '';
+    const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
     const turns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
@@ -2188,7 +2202,7 @@ window.WizCore.chats = function createChats(H) {
     const keepSheet = keptSheet(el);
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
-      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}<span data-slot="thread-header-actions"></span></div>
+      <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
       ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
@@ -2240,7 +2254,7 @@ window.WizCore.chats = function createChats(H) {
     c.files = d.files.map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     return d.text;
   }
-  function saveDraft(wid) { const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
+  function saveDraft(wid) { if (INC?.active(wid)) return; const w = W[wid], c = ch(wid); if (!w || !w.thread) return; KIT.drafts.set(draftKey(w), c.draft || '', c.files || []); }
   function openMedia(wid, k) {
     const c = ch(wid), list = c.media || [], m = list[k]; if (!m) return;
     // Photos swipe as one gallery (this thread, oldest first); a file or video opens on its own.
@@ -2461,6 +2475,12 @@ window.WizCore.chats = function createChats(H) {
     const recent = turns.slice(-6), us = recent.filter(t => t.u).map(t => t.u).concat(recent.flatMap(t => t.steers || []));
     const files = (p.files || []).filter(f => f && f.id);
     const sameFiles = u => files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
+    // A steer the agent took in mid-run is not always a user row in the transcript: a context compaction during the
+    // run folds it into its summary (James, 1 Nov 2026: the voice note sat below the reply that answered it). Once a
+    // final answer newer than the send is on screen, an accepted steer has been read; queued steers still wait for
+    // their own run and keep matching by words.
+    if (p.state === 'sent' && p.steered && !p.steerQueued && isFinite(p.sentAt)
+        && turns.some(t => t.a && t.a.final && !t.a.failed && isFinite(t.a.at) && t.a.at > p.sentAt + 10e3)) return true;
     if (p.state === 'sent') return us.some(u => (files.length && files.some(f => (u.files || []).some(x => x.id === f.id))) || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
     if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
     const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
@@ -2505,7 +2525,7 @@ window.WizCore.chats = function createChats(H) {
   // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
   function retryRead(w, sid, nav, n) {
     const c = ch(w.id); clearTimeout(c.retryT);
-    c.retryT = setTimeout(() => { if (W[w.id] === w && w.thread === sid && c.readNav === nav && c.loadedFor !== sid && !c.loading) loadThread(w, true); }, Math.min(15000, 1000 * 2 ** (n - 1)));
+    c.retryT = setTimeout(() => { if (CH[w.id] === c && W[w.id] === w && w.thread === sid && c.readNav === nav && c.loadedFor !== sid && !c.loading) loadThread(w, true); }, Math.min(15000, 1000 * 2 ** (n - 1)));
   }
   function threadErrHtml(c) {
     if (c.err !== 'Couldn’t load this thread') return `<div class="ch-empty">${esc(c.err)}</div>`;
@@ -2514,6 +2534,7 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-empty ch-readerr" role="status"><b>Couldn’t load this thread</b><br>${esc(why)} Retrying automatically.<br><button type="button" class="pbtn" data-chretry>Retry now</button>${r && !['checking', 'send'].includes(r.layer) ? ' ' + troubleshoot : ''}</div>`;
   }
   function renderChats(w) {
+    if (INC?.render(w.id, elOf(w.id))) return;
     syncListTitle(w);
     const el = track.querySelector(`[data-chats="${w.id}"]`); if (!el) return;
 
@@ -2527,6 +2548,7 @@ window.WizCore.chats = function createChats(H) {
     return !!LIVE.listTrusted?.() && c.readCk === LIVE.contentKey(s);
   }
   async function loadThread(w, force) {
+    if (INC?.active(w.id)) return;
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
     if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
@@ -2579,7 +2601,9 @@ window.WizCore.chats = function createChats(H) {
     // Every read owns a captured thread AND navigation generation. A -> B -> A is a new read;
     // an old completion must neither publish into it nor release its loading lock.
     const read = { sid, nav }, readCk = LIVE.contentKey ? LIVE.contentKey(s) : ''; c.loading = read;
-    const current = () => W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
+    // A host can dispose Chats before dropping its window record. A pending
+    // transcript read must not paint (or retry) after forget(), even in that gap.
+    const current = () => CH[w.id] === c && W[w.id] === w && w.thread === sid && c.readNav === nav && c.loading === read;
     try {
       const rows = await LIVE.messages(sid);
       if (!current()) return;
@@ -2588,11 +2612,18 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, detailNav: nav, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
+      Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
       if (retireLanded(w.thread, turns)) changed = true;
+      // Current answers paint before optional detail and approval metadata.
+      if (changed) { const el = elOf(w.id); if (el && current()) renderLive(w, el); }
+      changed = false;
+      const detail = LIVE.session(sid)?.detailNeeded ? LIVE.sessionInfo(sid).then(() => {
+        if (current()) { c.detailNav = nav; changed = true; }
+      }).catch(() => {}) : Promise.resolve();
       if (await loadApproval(w, LIVE.session(sid))) changed = true;
+      await detail;
       if (!current()) return;
       const s2 = LIVE.session(w.thread), hk2 = s2 ? [s2.status, !!s2.archived, !!s2.deferred, s2.runId].join('|') : '';
       if (hk2 !== c.hk) { c.hk = hk2; changed = true; }
@@ -2616,7 +2647,7 @@ window.WizCore.chats = function createChats(H) {
           const saved = LIVE.savedMessages?.(sid);
           if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedNav: nav, savedAt: saved.at }); } catch (_) {}
         }
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : pendingFor(w).length ? '' : 'Couldn’t load this thread'; c.at = Date.now();
+        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
         if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
         renderThreadLive(w);
       }
@@ -2629,6 +2660,7 @@ window.WizCore.chats = function createChats(H) {
   function openChat(wid, sid, opts = {}) {
     window.WizCore.chatSearch?.park(wid); // Back returns to these results, not a fresh search
     const w = W[wid]; if (!w) return;
+    if (INC?.active(wid) && !INC.close(wid)) return;
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
     if (w.thread) saveDraft(wid);
     closeRowSheet();
@@ -2672,7 +2704,7 @@ window.WizCore.chats = function createChats(H) {
     if (W[wid]) renderThreadNow(W[wid]);
     toast('◇', `New private chat on ${o.name}`, 1600);
   }
-  function chatsBack(w) { if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
+  function chatsBack(w) { if (INC?.active(w.id)) { if (INC.close(w.id)) { const c = ch(w.id); c.readNav = (c.readNav || 0) + 1; c.trail = []; c.files = []; c.draft = ''; c.draftFor = ''; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); } return; } if (closeHosted(w.id)) return; if (w.thread) saveDraft(w.id); const c = ch(w.id); if (c.carry) { c.carry = null; c.newModel = null; } c.readNav = (c.readNav || 0) + 1; c.files = []; c.draft = ''; c.draftFor = ''; c.trail = []; w.thread = null; save(); renderChats(w); applyLayout(deskOf(w.id)); }
   /* One step back from a thread: to the thread it was opened from (trail), else to the list. */
   function threadBack(w) {
     const c = ch(w.id), prev = (c.trail || []).pop();
@@ -2736,6 +2768,7 @@ window.WizCore.chats = function createChats(H) {
   const fileRef = f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes });
   // What a thread's composer holds right now (the window's textarea while it shows that thread, else the draft).
   function peekComposer(wid, sid) {
+    if (INC?.active(wid)) return { text: '', files: [] };
     const w = W[wid], here = !!w && !!sid && w.thread === sid, c = w ? ch(wid) : null;
     const ta = here ? elOf(wid)?.querySelector('.ch-compose textarea') : null;
     const saved = sid ? KIT.drafts.get(composerKey(sid)) : { text: '', files: [] };
@@ -2761,6 +2794,7 @@ window.WizCore.chats = function createChats(H) {
   }
   const NO_SEAL = { text: '', files: [], done() {}, putBack() {} };
   function takeComposer(wid, sid) {
+    if (INC?.active(wid)) return NO_SEAL;
     if (!sid) return NO_SEAL;
     const P = peekComposer(wid, sid), dkey = composerKey(sid);
     // A file still uploading is taken too (a pending placeholder): the message never waits for it.
@@ -2802,6 +2836,7 @@ window.WizCore.chats = function createChats(H) {
    * opts.seal (voice sends): the thread's composer taken at the send tap (takeComposer), sent with it; true
    * takes it now; false sends nothing from the composer (the later parts of an interrupted take). */
   async function sendChat(wid, text, how = 'typing in the Chats window', audio = null, opts = {}) {
+    if (INC?.active(wid)) { if (audio || opts.files?.length || opts.seal) { toast('!', 'Incognito is text only', 2200); return null; } return INC.send(wid, text); }
     const w = W[wid]; text = String(text || '').trim();
     if (!w) { if (opts.seal && opts.seal !== true) opts.seal.putBack(); return; }
     const c = ch(wid);
@@ -2945,6 +2980,11 @@ window.WizCore.chats = function createChats(H) {
   const idOf = t => t.closest('[data-chats]')?.dataset.chats || '';
   /* Clicks inside a Chats window. Returns true when it handled the click. */
   function click(e, id) {
+    if (INC?.click(id, e)) return true;
+    if (e.target.closest('.ch-back[data-incog-close]')) { chatsBack(W[id]); return true; }
+    if (e.target.closest('[data-incog-close]')) { if (INC?.close(id)) renderChats(W[id]); return true; }
+    if (e.target.closest('[data-incog-off]')) { INC?.close(id); renderChats(W[id]); return true; }
+    if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (window.WizCore.incognitoOptIn?.enabled(a)) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     const hc = e.target.closest('[data-helper-continue]');
@@ -2990,8 +3030,7 @@ window.WizCore.chats = function createChats(H) {
     const recovery = e.target.closest('[data-obrecover]'); if (recovery) { H.recoverUnsent?.(recovery.dataset.obrecover); return true; }
     const rb = e.target.closest('[data-obretry]'); if (rb) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retry(rb.dataset.obretry)), 2400); return true; }
     if (e.target.closest('[data-chunsent]')) { H.openUnsent?.(); return true; }
-    if (e.target.closest('[data-chmorninghide]')) { morningHide(); return true; }
-    if (e.target.closest('[data-chmorning]')) { MORNING.at = 0; if (!(H.openApp?.('morning', e.target) || window.WizOpenApp?.('morning'))) H.openLink?.('/morning/', 'Morning'); return true; }
+    if (window.WizAppExtensions?.handle(e)) return true;
     if (e.target.closest('[data-obretryall]')) { H.toast('↻', OUTBOX.retryFeedback(OUTBOX.retryAll(winAgent(w))), 2400); return true; }
     const eb = e.target.closest('[data-obedit]'); if (eb) { const it = OUTBOX.get(eb.dataset.obedit); if (it) H.editUnsent(it); return true; }
     if (PW && PW.click(e, id)) return true;
@@ -3122,6 +3161,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('pointerdown', e => { if (rowSheet) rowSheet.outsidePress = e.isTrusted && e.target.classList?.contains('ch-sheet'); }, true);
     root.addEventListener('pointercancel', () => { if (rowSheet) rowSheet.outsidePress = false; }, true);
     root.addEventListener('submit', e => {
+      if (e.target.matches('[data-incog-form]')) { e.preventDefault(); const id = idOf(e.target), field = e.target.querySelector('textarea'), text = field.value; field.value = ''; void INC?.send(id, text); return; }
       const rn = e.target.closest('[data-rnform]'); if (rn) { e.preventDefault(); submitRename(rn); return; }
       const f = e.target.closest('[data-chform]'); if (!f) return;
       e.preventDefault(); const id = idOf(f); const ta = f.querySelector('textarea');
@@ -3143,6 +3183,7 @@ window.WizCore.chats = function createChats(H) {
       setTimeout(() => { const el = elOf(id), inp = el?.querySelector('[data-chsearch]'); if (!c.focus || (inp && document.activeElement === inp)) return; c.focus = false; if (!c.q && el?.querySelector('.ch-sug')) renderChatList(H.win(id), el); }, 260);
     });
     root.addEventListener('input', e => {
+      if (e.target.matches('[data-incog-field]')) { INC?.input(idOf(e.target), e.target); return; }
       if (e.target.matches('[data-chemosearch]')) renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), e.target.value);
       if (e.target.matches('[data-chsearch]')) {
         const id = idOf(e.target); ch(id).q = e.target.value; ch(id).coach = false; const el = elOf(id);
@@ -3169,12 +3210,13 @@ window.WizCore.chats = function createChats(H) {
   /* Words from outside (dictation, a native shell) go in at the composer's cursor. */
   function insertText(id, text) {
     const ta = elOf(id)?.querySelector('.ch-compose textarea'); if (!ta || !text) return false;
+    if (INC?.active(id)) { window.WizComposerInput.insertText(ta, text); INC.input(id, ta); return true; }
     const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
     ta.value = ta.value.slice(0, a) + text + ta.value.slice(b); ta.focus();
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
+  const forget = id => { INC?.close(id, true); const c = CH[id]; if (c) { closeStream(c); for (const t of [c.retryT, c.sentTimer, c.ptrT, listSaveT[id]]) clearTimeout(t); delete listSaveT[id]; } closeHosted(id); clearReading(id); delete CH[id]; };
   function justPressed() { return lpHeld !== null || Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
@@ -3187,6 +3229,7 @@ window.WizCore.chats = function createChats(H) {
   const closeOverlay = () => (closeSwipe() ? 'row-swipe' : null) || (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
+    if (INC?.active(wid)) { toast('!', 'Close Incognito before opening a saved draft', 2200); return; }
     const w = W[wid], c = ch(wid); if (!w) return;
     c.draft = text || ''; c.files = (files || []).map(f => ({ ...f, key: Math.random().toString(36).slice(2), preview: /^image\//.test(f.mime || '') && f.id ? (PREVIEW[f.id] || fileUrl(f.id)) : '' }));
     c.draftFor = draftKey(w); saveDraft(wid);
@@ -3208,7 +3251,7 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const w = H.win(id), el = elOf(id); if (w && w.app === 'chats' && !w.thread && el && !holdList(id)) renderChatList(w, el); }
   });
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
-  return { tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => PW?.sendVoiceTo(...a), insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
+  return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
     KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

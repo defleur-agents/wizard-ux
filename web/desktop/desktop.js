@@ -147,6 +147,7 @@
     owner: id => String(id).replace(/::list$/, ''),
     // The composer's mic (#13): the same recorder as Right ⌘, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
+    captureBusy: () => VOICE.state !== 'idle' || dictationFinishing || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (vReply && ['listen','paused'].includes(VOICE.state) ? vReply.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (['listen','paused'].includes(VOICE.state) && vMode === 'talk' ? (vReply?.sid || (vTarget && W[vTarget]?.thread) || '') : ''),
@@ -187,7 +188,7 @@
   function threadShown(wid,el) {
     if (wid.endsWith('::list')) return;
     boundManager ||= window.WosBoundView.create({ windows:()=>Object.values(W),win:id=>W[id],findApp,appAt,APP,linkTitle:u=>u.pathname.split('/').filter(Boolean).pop()||'Page',title:winTitle,
-      visible:id=>!homeOpen&&wsOf(id)===cur, close:id=>closeWin(id,true),
+      visible:id=>(globalThis.WosSkinHost?.panelMode&&panelHas(id))||(!homeOpen&&wsOf(id)===cur), close:id=>closeWin(id,true),   // the Orb's chat panel is in view too
       open:(obj,origin)=>{const focus=ws[cur].focus;newWin(obj,{ws:wsOf(origin)});if(W[focus])focusWin(focus,{scroll:false});},
       reload:id=>{save();const f=winEl(id)?.querySelector('iframe');if(f)f.src=f.src;}
     }); boundManager.shown(wid,el);
@@ -253,9 +254,9 @@
     return W[id];
   }
   // A window may refuse to close (an in-progress recording or temporary chat asks first).
-  function canLeave(id) {
+  function canLeave(id, checkOnly = false) {
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return false;
-    return CHATS.beforeLeave?.(id) ?? true;
+    return CHATS.beforeLeave ? CHATS.beforeLeave(id, checkOnly) : true;
   }
   // One cleanup path for a window close and a whole-desktop close. The caller owns
   // leave checks, pruning and the final render (which detaches closed app frames).
@@ -482,7 +483,7 @@
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
     if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;
-    if (a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -575,6 +576,7 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
@@ -708,7 +710,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else watchFrame(el.querySelector('iframe'), el);
+    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   function watchFrame(f, el) {
@@ -726,7 +728,14 @@
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         fields().bind(doc);
         doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
-        doc.addEventListener('keydown', e => onKey(e, true), true); doc.addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);
+        // Keyboard events never bubble out of an iframe. Use its window's capture phase,
+        // just like the shell: an app's window-level stopPropagation (e.g. an editor/modal)
+        // otherwise prevents the document hook from ever seeing desktop chords. Forward
+        // the original event, once; onKey still decides which keys belong to the app.
+        const frameWindow = doc.defaultView;
+        frameWindow.addEventListener('keydown', e => onKey(e, true), true);
+        frameWindow.addEventListener('keyup', e => { keyHints.up(e); window.WosSkinHost?.keyUp?.(e); }, true);
+        frameWindow.addEventListener('blur', () => keyHints.hide());
         try { const w0 = W[el.dataset.win]; if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(f.contentWindow, (w0 && ((APP[w0.appId] || {}).url || w0.url)) || f.contentWindow.location.pathname, LINKS); } catch (e) {}
       } catch (e) {}
     });
@@ -1199,6 +1208,7 @@
     if (globalThis.WosSkinHost?.panelMode) return; // no desks while a layout holds the panel
     window.WosResources?.back();
     if (!Number.isInteger(i) || i < 0 || i >= ws.length) return;
+    if (i !== cur && !CHATS.beforeNavigate(ws[i].wins)) return;
     if (i === cur) { if (homeOpen) { leaveHome(); if (focused()) focusInside(focused().id); CHATS.markVisibleThreadsSeen(); } return; }
     homeOpen = false; store.set('homeOpen', false);
     // Preserve the later-approved empty-desktop pruning contract.
@@ -1234,7 +1244,7 @@
     if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
     const d = ws[i]; if (!d) return false;
     // Check every window before destroying any: a recording can refuse the close.
-    if (!d.wins.every(canLeave)) return false;
+    if (!d.wins.every(id => canLeave(id, true))) return false;
     const names = [...new Set(d.wins.map(id => appOf(W[id])?.name).filter(Boolean))].join(', ');
     [...d.wins].forEach(id => removeWin(id));
     if (!removeDesktop(d)) { save(); render(); goHome(); }
@@ -1246,6 +1256,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;
@@ -1277,7 +1288,7 @@
   function paintBar() {
     window.WosBell?.paint?.();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
-    C.workspaceNav.setCount(APP.wizard?.id || 'wizard', (LIVE?.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
+    C.workspaceNav.refreshChats(LIVE, APP.wizard?.id || 'wizard');
     $('#logo').setAttribute('aria-current', homeOpen ? 'page' : 'false');
     $('#logo').innerHTML = C.workspaceNav.icon({ home: true }, W, appOf);
     if (!$('#wsList').classList.contains('arranging')) $('#wsList').innerHTML = ws.map((d, i) => {
@@ -1367,10 +1378,13 @@
   function leaveHome() {
     window.WosResources?.back();
     if (!homeOpen || globalThis.WosSkinHost?.panelMode) return;
-    if (settingsModal) closeSettings();
+    // A view with Settings over every page may prepare Chats behind the picker when it mounts.
+    // Keep that modal (and its Look page) open; ordinary Home navigation still closes it.
+    if (settingsModal && !settingsOver()) closeSettings();
     homeOpen = false; store.set('homeOpen', false); render();
   }
   function goHome() {
+    if (!CHATS.beforeNavigate([])) return;
     window.WosResources?.back();
     for (const id of Object.keys(W)) if (W[id].app === 'chats') CHATS.saveDraft(id);
     closePalette(); toggleKeys(false); closeSettings(); closeUsage();
@@ -1421,7 +1435,7 @@
     if (act === 'hud') return hudOn(id);
     if (act === 'hud-home') return hudDock({ to: 0 });
     if (act === 'panel-back') return panelBack(id);
-    if (act === 'close' && hud?.id === id) return hudClose();
+    if (act === 'close' && hud?.id === id) return canLeave(id) && hudClose();
     if (act === 'close') return closeWin(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
@@ -1750,14 +1764,43 @@
    * the window goes (however it goes) the panel is hidden and parked on <body>. */
   const settingsWin = () => Object.values(W).find(w => w?.app === 'settings') || null;
   // From Home, Settings opens as a centred panel over Home instead of a window on a desk (Home is not a desk).
-  let settingsModal = false;
+  let settingsModal = false, settingsPromoted = false;
   const scrim = document.createElement('div'); scrim.className = 'dsettings-scrim'; scrim.hidden = true; document.body.appendChild(scrim);
   scrim.addEventListener('click', () => closeSettings());
   const settingsFocused = () => settingsModal ? !setEl.hidden : !homeOpen && focused()?.app === 'settings';
+  function showSettingsModal(rehost = false) {
+    if (!settingsModal) settingsFocus = document.activeElement;
+    // A visible window changing hosts is not a new open: st-pop starts at
+    // opacity zero. Mark before reparenting so no frame can replay it.
+    if (rehost) setEl.classList.add('is-rehosted'); else setEl.classList.remove('is-rehosted');
+    settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
+    moveSettingsTo(document.body);
+    scrim.hidden = false;
+  }
+  function moveSettingsTo(host) {
+    if (setEl.parentNode === host) return;
+    // appendChild can blur a focused descendant. Restore that same control in
+    // the same task, for promotion and demotion alike; never steal outside focus.
+    const active = document.activeElement, keep = active && setEl.contains(active);
+    host.appendChild(setEl);
+    if (keep && document.activeElement !== active) active.focus({ preventScroll: true });
+  }
   function hostSettings() {
-    if (settingsModal) { if (setEl.parentNode !== document.body) document.body.appendChild(setEl); return; }
+    // A view can mount while Look is already open in a desk window. Adopt its
+    // centred-panel contract without closing, remounting or resetting Look.
+    // Only undo a promoted desk window; Settings opened over Home remains a
+    // Home modal. Rehost synchronously without hiding or resetting its page.
+    if (settingsPromoted && !settingsOver() && !homeOpen && settingsWin()) {
+      settingsPromoted = false; settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted');
+      setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region'); scrim.hidden = true;
+    }
+    // Orb's panel claim also takes Home to the front and hides the desk host.
+    // Match openSettings' Home contract on every takeover, including a second
+    // enable after teardown; the live root/page must not stay on that hidden desk.
+    if (!settingsModal && !setEl.hidden && (homeOpen || settingsOver())) { settingsPromoted = true; showSettingsModal(true); }
+    if (settingsModal) { moveSettingsTo(document.body); return; }
     const w = settingsWin(), host = w && winEl(w.id)?.querySelector('.settings-host');
-    if (host) { if (setEl.parentNode !== host) host.appendChild(setEl); setEl.hidden = false; return; }  // a Settings window always shows its panel
+    if (host) { moveSettingsTo(host); setEl.hidden = false; return; }  // a Settings window always shows its panel
     if (w) return;
     if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
     if (setEl.hidden) return;
@@ -1770,6 +1813,10 @@
   let voiceMenuBack = () => false;  // set once the one-mic menu exists
   // A layout that has no Home to show Settings over (html[data-settings-over]) keeps it the centred panel everywhere.
   const settingsOver = () => document.documentElement.hasAttribute('data-settings-over');
+  // Only this view contract can move an already-open Settings host. Observe it
+  // directly: an otherwise idle view need not cause a shell render after mount.
+  const settingsHostObserver = new MutationObserver(() => hostSettings());
+  settingsHostObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-settings-over'] });
   function openSettings(focus) {
     window.WosResources?.back(); closePalette(); toggleKeys(false);
     const w = settingsWin();
@@ -1777,10 +1824,7 @@
     // beside Chats (James, 31 Oct 2026: "I just want settings to open on the home screen").
     // A layout may ask for it over the page everywhere (settingsOver: the AI apps view, like Claude's settings modal).
     if (homeOpen || settingsOver()) {  // from Home it is always the centred panel, even when a Settings window exists on a desk (it gets the panel back on close)
-      if (!settingsModal) settingsFocus = document.activeElement;
-      settingsModal = true; setEl.classList.add('is-modal'); setEl.setAttribute('aria-modal', 'true'); setEl.setAttribute('role', 'dialog');
-      if (setEl.parentNode !== document.body) document.body.appendChild(setEl);
-      scrim.hidden = false;
+      showSettingsModal();
     } else if (w) focusWin(w.id); else { settingsFocus = document.activeElement; newWin({ app: 'settings' }); }
     setEl.hidden = false; settingsReturn = '';
     renderSettings(); settingsView.focus(focus); window.WosScenery?.update();
@@ -1796,8 +1840,11 @@
   }, true);
   function closeSettings() {
     if (settingsModal) {
-      settingsModal = false; setEl.classList.remove('is-modal'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
+      settingsModal = false; setEl.classList.remove('is-modal', 'is-rehosted'); setEl.removeAttribute('aria-modal'); setEl.setAttribute('role', 'region');
       scrim.hidden = true; setEl.hidden = true;
+      // Promotion replaces that window's presentation, not an extra modal over
+      // it. Dismiss once; do not resurrect the old narrow Settings underneath.
+      if (settingsPromoted) { settingsPromoted = false; const w = settingsWin(); if (w) closeWin(w.id); }
       if (settingsWin()) hostSettings();  // back into its desk window (shown there again)
       if (settingsFocus?.isConnected && settingsFocus.getClientRects().length) settingsFocus.focus({ preventScroll: true });
       window.WosScenery?.update(); return;
@@ -1949,6 +1996,7 @@
     finally { clearTimeout(timer); }
   }
   async function talk(action = 'toggle', forceNew = false, newKey = `${MOD}V`) {
+    if (VOICE.state === 'idle' && CHATS.incognitoActive(focused()?.id)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (action === 'cancel') { commandTake = false; if (VOICE.state !== 'idle') { vFiles?.close();vReply = null; const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }
     if (VOICE.state !== 'idle' && vMode === 'dictate') return 'busy';
@@ -2051,6 +2099,7 @@
   // Composer mic: tap to record a reply to this thread, tap again (or Right ⌘) to send it there. The thread is
   // fixed when recording starts, so switching threads mid-take can't send it somewhere else.
   async function recordReply(wid, sid) {
+    if (CHATS.incognitoActive(wid)) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (['listen','paused'].includes(VOICE.state)) { if (vReply) return talk('send'); return 'busy'; } // sends to the thread it was started in
     if (!sid) return 'busy';
@@ -2095,6 +2144,7 @@
   let discardArm = { id: '', at: 0 };
   const discardArmed = id => discardArm.id === id && Date.now() - discardArm.at < 4000;
   function paintRecordings() {
+    const focusedDiscard = document.activeElement?.dataset?.recordDiscard;
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
     recovery.innerHTML = takes.map(it => {
@@ -2110,6 +2160,7 @@
       <div class="recording-acts">${empty ? discard : retry}${it.recoveryText || it.text ? `<button class="wz-button quiet" data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}<button class="wz-button quiet" data-record-download="${esc(it.id)}">Download audio</button>${empty ? retry : discard}</div>
     </article>`;
     }).join('');
+    if (focusedDiscard) [...(recovery.querySelectorAll?.('[data-record-discard]') || [])].find(b => b.dataset.recordDiscard === focusedDiscard)?.focus({ preventScroll: true });
   }
   recovery.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -2149,6 +2200,7 @@
   window.WosOutbox?.load().then(paintRecordings);
   let dictationFinishing = false;
   async function dictate(action = 'toggle') {
+    if (VOICE.state === 'idle' && (CHATS.incognitoActive(focused()?.id) || document.activeElement?.closest?.('[data-incog-thread]'))) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     if (dictationFinishing || VOICE.state === 'think') return 'busy';
     if (VOICE.state !== 'idle' && vMode === 'talk') return 'busy';
     if (action === 'cancel') { if (VOICE.state !== 'idle') { dictTarget?.release();dictTarget=null;const kept = VOICE.cancel(); toast('✕', kept ? 'Cancelled · kept in Settings → Cancelled recordings' : 'Cancelled', kept ? 2600 : 1000); } return 'none'; }

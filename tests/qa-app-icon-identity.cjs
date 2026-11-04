@@ -51,7 +51,11 @@ async function rowFor(page,shell,id){
   return a?{id:a.id,name:a.name}:null;
  },{shell,id});
  assert.ok(resolved,'requested app must resolve through actual shell registry: '+shell+'/'+id);
- if(shell==='phone')return '#launcher.open [data-app="'+resolved.id+'"]';
+ if(shell==='phone'){
+  const ids=await page.locator('#launcher.open [data-app]').evaluateAll(rows=>rows.map(r=>r.dataset.app));
+  assert.equal(new Set(ids).size,ids.length,'launcher must show every app id at most once');
+  return '#launcher.open [data-app="'+resolved.id+'"]';
+ }
  const name=resolved.name;
  const target=page.locator('#palette:not([hidden]) .pal-app').filter({has:page.locator('.nm',{hasText:new RegExp('^'+name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'$')})});
  await target.waitFor({state:'visible'});return '#palette:not([hidden]) #'+await target.getAttribute('id');
@@ -64,8 +68,11 @@ async function foodDesktopAdmission(page){
  return page.evaluate(()=>{
   const C=window.WizCore,desktop=C.apps('desktop'),food=desktop.APP.food;
   if(!food||food.id!=='food'||food.phoneOnly!==false||food.url!=='/fixture-app/food/')throw Error('live Food web admission changed');
-  const rule=window.WizDeviceLegacy.find(d=>d.probe==='usuals');
-  if(rule?.appId!=='usuals'||rule.phoneOnly!==true||desktop.APP.usuals)throw Error('live native usuals platform contract changed');
+  const rules=window.WizDeviceLegacy.filter(d=>d.probe==='usuals');
+  if(!rules.length||rules.some(d=>d.phoneOnly!==true||!d.path))throw Error('native surface platform contract changed');
+  // Aliases are lookups, not additional native picker rows.
+  if(desktop.APPS.some(a=>rules.some(d=>a.id===d.appId&&a.url===d.path)))throw Error('native surface leaked into desktop picker');
+  const rule=rules;
   return {id:food.id,url:food.url,phoneOnly:food.phoneOnly,nativeRule:rule,desktopPickerPresent:true,surface:'picker'};
  });
 }
@@ -76,6 +83,8 @@ async function switchSkin(page,shell,skin){
  const root=shell==='phone'?'#settings':'#dsettings';
  const look=page.locator(root+' [data-st-page="appearance"]');
  if(await look.isVisible())await look.click();
+ const family=await page.evaluate(s=>window.WosSkin.familyOf?.(s),skin);
+ if(family&&await page.locator(root+' [data-skinfamily="'+family+'"]:visible').count())await page.locator(root+' [data-skinfamily="'+family+'"]:visible').click();
  await page.evaluate(()=>{window.__qaSkinClick=null;document.addEventListener('click',e=>{const b=e.target.closest('[data-skinpick]');if(b)window.__qaSkinClick={id:b.dataset.skinpick,trusted:e.isTrusted};},{capture:true,once:true});});
  await page.locator(root+' [data-skinpick="'+skin+'"]').click();
  await page.waitForFunction(s=>document.documentElement.dataset.skin===s&&window.WosSkin.current===s,skin);

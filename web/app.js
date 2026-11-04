@@ -158,6 +158,7 @@
     // The composer's mic (#13): the orb's own recorder, pinned to this thread.
     recordReply: (wid, sid) => recordReply(wid, sid),
     dictationField: () => FIELDS && V.kind === 'dictation' && V.state !== 'idle' ? V.field?.el : null,
+    captureBusy: () => V.state !== 'idle' || !!V.admitting || !!window.WizAppCapture?.getState?.()?.active,
     recordingFor: () => (V.replyTo && (V.state === 'listen' || V.state === 'paused') ? V.replyTo.sid : ''),
     // The thread a recording take will go into (its composer rides along); Send in that composer finishes the take.
     voiceInto: () => (V.state === 'listen' || V.state === 'paused' ? sealTarget()?.sid || '' : ''),
@@ -365,13 +366,14 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) undoLastMove(); });
   addEventListener('pagehide', undoLastMove);
   function atPickerEnd() { const d = desks[idx]; return idx === desks.length - 1 && !d.home && !d.wins.length; }
-  function goDesk(n, silent) {
+  function goDesk(n, silent, keepSettings = false) {
     n = Math.max(0, Math.min(desks.length - 1, n));
     // An empty desk (one the ＋ made, left without picking an app) goes away as soon as you leave it.
     const from = desks[idx], to = desks[n];
+    if (from !== to && !CHATS.beforeNavigate(to?.wins || [])) { placeTrack(0, true); return; }
     if (from && to && from !== to && !from.home && !from.wins.length) { desks = desks.filter(d => d !== from); syncDesks(); n = desks.indexOf(to); }
     const moved = from !== to;
-    if (moved && sheet === 'settings') liftSettings(from && from.id); // Settings stays open on the desk you leave
+    if (moved && sheet === 'settings' && !keepSettings) liftSettings(from && from.id); // explicit navigation parks Settings on the desk you leave
     idx = n;
     if (moved) lastMove = null; // a tap, link or app open is a choice; swipeDesk re-marks swipes
     if (moved) window.WosResources?.back();
@@ -715,6 +717,7 @@
     if (!SC.live && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) { clearTimeout(SC.t); SC.live = true; scrub.classList.add('on'); }
     if (!SC.live) return;
     const n = Math.max(0, Math.min(desks.length - 1, SC.start + Math.round(dx / SC_STEP)));
+    if (n !== SC.at && !CHATS.beforeNavigate(desks[n]?.wins || [])) return;
     if (n !== SC.at) { SC.at = n; vib(6); idx = n; placeTrack(0, true); renderDots(); scLabel(); }
   });
   function scLabel() { scrub.querySelector('.sc-label').textContent = deskName(SC.at); }
@@ -737,7 +740,7 @@
   // With workspace sync on, desk order is shared by every device, so a phone-only placement reshuffles the owner's
   // other devices too (Miguel, 1 Nov 2026: Backup and Calendar kept jumping to desktops 1 and 2). Then a new app
   // opens on a new desk at the end, and an app already open opens on its desk where it is (bringBeside).
-  const sharedDeskOrder = () => { const s = window.WosWorkspaceSync?.current; return !!s && s.on && s.ok !== null; };
+  const sharedDeskOrder = () => { const s = window.WosWorkspaceSync?.current; return !!s && s.on && !s.absent; };
   function insertPos() { return sharedDeskOrder() ? desks.length : idx + 1; }
   function openWin(obj, opts = {}) {
     if (obj.app === 'chats' && !obj.agent && !obj.chatsProvider) obj = { ...obj, chatsProvider: CHATS.views.defaultId() };
@@ -760,8 +763,9 @@
     if (W[id]?.app === 'pages' && !window.WosPages.canClose(winEl(id)?.querySelector('.pg-host'))) return;
     const i = deskOf(id); if (i < 0) return;
     const w = W[id], d = desks[i], name = winTitle(w);
+    if (!CHATS.beforeLeave(id)) return;
     if (!preservePlayback) closeAppPlayback(w);
-    CHATS.closeHosted(id);
+    CHATS.closeHosted(id); CHATS.forget(id);
     if (quiet) { d.wins = d.wins.filter(x => x !== id); delete W[id]; delete CH[id]; if (d.focus === id) d.focus = d.wins[d.wins.length - 1] || null; if (!d.wins.length) d.full = false; renderDesk(i); pruneDesks(); return; }
     // ✕ on a bound view: it stays closed for this reply (opening the thread again, or a new reply, binds again).
     if (w.bound) { boundOff[w.bound] = w.bsid + '|' + w.bkey; boundManager?.dismiss(w); }
@@ -1222,7 +1226,7 @@
     // A launcher link to one of the agent's Pages opens in the Pages window (pages are sandboxed, opaque-origin documents).
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { closeSheets(true); placeApp(w => w.app === 'pages' && w.pageSlug === pageSlug, {app:'pages', appId:'pages', pageSlug}, opts); return true; }
-    if (a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.kind === 'wizard' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, extra, { ...opts, setupChecked: true }), { settled: () => openingEnd(a.id) });
     if (a.id === 'side-button') { closeSheets(true); if (idx !== HOME) goDesk(HOME); sideButtonTap(true); return true; }
     if (a.kind === 'chats') {
@@ -1271,11 +1275,15 @@
   }
   // The Chats window in front as it is (its thread kept; opened if there is none): the AI apps view's main screen.
   function showChats() {
-    closeSheets(true);
+    // A layout's deferred Home -> Chats preparation is not an owner navigation.
+    // Keep the same Settings sheet/page over the new view, without closing,
+    // reopening, or parking it back on the Home desk we are preparing behind it.
+    const keepSettings = sheet === 'settings';
+    if (!keepSettings) closeSheets(true);
     let here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0);
-    if (!here) { openApp(APP.wizard); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
+    if (!here) { openApp(APP.wizard, {}, { stay: keepSettings }); here = Object.keys(W).find(id => mainChats(W[id]) && deskOf(id) >= 0); }
     if (!here) return null;
-    const t = deskOf(here); if (t !== idx) goDesk(t, true);
+    const t = deskOf(here); if (t !== idx) goDesk(t, true, keepSettings);
     focusWin(here); return W[here];
   }
   /* Home's Unread and Working cards: the Chats window, filtered to just those threads. Back clears the filter
@@ -1536,6 +1544,7 @@
     return renderFrameCore(w, a);
   }
   function renderFrameCore(w, a) {
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const frameUrl = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `<div class="frame-wrap loading">${window.WosOwnViews?.noteHtml(a) || ''}<div class="frame-loading" role="status" aria-label="Loading ${esc(a.name || 'app')}">${ico('span', 'glyph', a)}<i class="wos-spin" aria-hidden="true"></i></div><div class="frame-coming">${ico('span', 'glyph', a)}<h3>${esc(a.name)} is on its way</h3><p>${esc(a.desc || '')}. It’s being built in another thread and appears here on its own once it’s published.</p></div><iframe class="appframe" ${a.probe ? `data-probe="${esc(w.url || a.url)}"` : ''} data-own-app="${esc(a.id || '')}" src="${esc(frameUrl)}" title="${esc(a.name || 'App')}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen" referrerpolicy="same-origin"></iframe>
       <div class="frame-fallback">${ico('span', 'glyph', a)}<h3>${esc(a.name)} can’t run in a window yet</h3><p>It opens in its own tab instead.</p><a class="cta" href="${esc(a.url || '/')}" target="_blank" rel="noopener">Open ${esc(a.name)}</a></div></div>`;
@@ -1596,7 +1605,9 @@
   // Closed means closed: an app with no window left on any desk stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => desks.flatMap(d => d.wins).map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   function watchFrames(root) {
+    $$('[data-recovery]', root).forEach(el => window.WizReach.mountRecovery(el, W[el.closest('.win')?.dataset.win]?.url));
     $$('iframe.appframe', root).forEach(f => {
+      if (f.closest('[data-recovery]')) { if (!f._watched) { f._watched = true; f.addEventListener('load', () => { if (!f.hidden) bridgeFrame(f); }); } return; }
       if (f._watched) return; f._watched = true;
       // servicesAs: a companion view gets its owning installed app's Back/services.
       const w = W[f.closest('.win')?.dataset.win], a = w && APP[w.servicesAs || w.appId];
@@ -1629,7 +1640,7 @@
     const id = f.closest('.win')?.dataset.win; if (!id) return;
     let win; try { win = f.contentWindow; } catch (e) { return; }
     try { if (LINKS && window.WizLinks?.guardFrame) window.WizLinks.guardFrame(win, (W[id] && (APP[W[id].appId]?.url || W[id].url)) || win.location.pathname, LINKS); } catch (e) {}
-    try { if (W[id]) { const here = win.location.pathname + win.location.search; const want = APP[W[id].appId]?.url || '';
+    try { if (W[id]) { const here = win.location.pathname + win.location.search + (W[id].appId === 'troubleshooter' ? win.location.hash : ''); const want = APP[W[id].appId]?.url || '';
       // Remember only pages inside this app (never the placeholder "/" or where it redirects), or a frame
       // painted before its app was known would stick on the wrong page for good.
       const home = (want.split(/[?#]/)[0] || '').replace(/[^/]*$/, '');
@@ -1898,7 +1909,7 @@
   }
   settingsEl.setAttribute('role', 'dialog'); settingsEl.setAttribute('aria-modal', 'true');
   settingsEl.addEventListener('keydown', e => window.WosSettings.trap(e, settingsEl));
-  $('#scrim').addEventListener('click', () => backStep());
+  $('#scrim').addEventListener('click', () => backStep(undefined, { outside: true }));
   /* Swipe the grip down to close Settings, like every sheet (wizard-os#265 rule 7). Only the grip drags; the body scrolls. */
   { const grip = settingsEl.querySelector('.sheet-grip'); let y0 = null, dy = 0, t0 = 0;
     grip?.addEventListener('pointerdown', e => { if (sheet !== 'settings') return; y0 = e.clientY; dy = 0; t0 = performance.now(); settingsEl.style.transition = 'none'; try { grip.setPointerCapture(e.pointerId); } catch (_) {} });
@@ -2049,8 +2060,8 @@
     const m = [...L.needs.map(() => 'var(--amber)'), ...L.working.map(() => 'var(--violet-2)'), ...L.ready.map(() => 'var(--green)')].slice(0, 8);
     $('#moons').innerHTML = m.map((c, k) => { const a = (k / Math.max(m.length, 1)) * Math.PI * 2 - Math.PI / 2, r = Math.round(($('#orbWrap').offsetWidth || 44) / 2 + 8);
       return `<i style="--c:${c};transform:translate(${(Math.cos(a) * r).toFixed(1)}px,${(Math.sin(a) * r).toFixed(1)}px)"></i>`; }).join('');
-    // Opinionated: Ready count, not unread. It belongs to Chats; the orb shows the count of the desk in view.
-    window.WizCore.workspaceNav.setCount(CHATS_APP.id, (LIVE && LIVE.ok ? (LIVE.workGroups().ready || []).length : 0) + (window.WosBell?.readyCount?.() || 0), !!window.WosBell?.readyMore?.());
+    // Notification badges reflect unread, independently of the Ready workflow. The orb shows the current desk.
+    window.WizCore.workspaceNav.refreshChats(LIVE, CHATS_APP.id);
     paintOrbBadge();
   }
   function paintOrbBadge() {
@@ -2081,6 +2092,7 @@
    * list and open thread, app frames reload where they are, built-in views remount. Nothing closes or moves. */
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!w || !el) return;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       window.WizCore.refreshApps?.();
       Promise.resolve(LIVE?.refresh?.()).catch(() => {}).then(() => {
@@ -2527,6 +2539,7 @@
     return 'recording';
   }
   async function startVoice(kind, opt = {}) {
+    if (CHATS.incognitoActive(opt.replyTo?.wid || focusedWin()?.id) || document.activeElement?.closest?.('[data-incog-thread]')) { toast('!', 'Incognito is text only · finish it before recording', 2600); return 'busy'; }
     V.onAt = performance.now();
     if(V.admitting||parking)return 'busy';
     if(V.state==='paused' && V.replyTo && ['dictation','command'].includes(kind)) {
@@ -2687,6 +2700,8 @@
   try { navigator.permissions?.query?.({ name: 'microphone' })?.then(p => { micGranted = micGranted || p.state === 'granted'; p.onchange = () => { micGranted = p.state === 'granted'; }; }, () => {}); } catch (_) {}
   function warmMic() {
     if (MW || V.state !== 'idle' || !micGranted || DEV() || !navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return;
+    // an app or meeting holding the mic is handed over by startVoice (WosOrbHandoff) first: never open a second stream
+    const shared = window.WizAppCapture?.getState?.(); if (V.admitting || shared?.active || shared?.recording || shared?.hold) return;
     const w = MW = { p: openMic() };
     w.p.catch(() => { if (MW === w) MW = null; });
   }
@@ -3779,7 +3794,7 @@
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }
-  function backStep(skipHosted) {
+  function backStep(skipHosted, { outside = false } = {}) {
     { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
     { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
@@ -3804,7 +3819,7 @@
     if (closeOverview()) return 'overview';
     if (closeReviewCoach()) return 'review-coach';
     if (menuFor) { closeMenu(); return 'menu'; }
-    if (sheet === 'settings' && settingsView?.back()) return 'settings-page';
+    if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page';
     if (sheet) { closeSheets(); return 'sheet'; }
     if (window.WosSkinFrame?.back()) return 'skin-controls';
     const d = desks[idx], f = W[d.focus];
@@ -3922,7 +3937,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
-      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); delete W[id]; delete CH[id]; });
+      r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
       syncDesks(); desks.forEach((_, i) => renderDesk(i));
       idx = posOf(here); if (idx < 0) idx = Math.max(0, Math.min(at, desks.length - 1));
