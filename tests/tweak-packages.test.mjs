@@ -56,11 +56,12 @@ test('colors and tweaks are separate: a color pick never changes tweaks; a prese
   await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active), ['wizard/two-orbs']);
   profiles.miguel = { ...profiles.miguel, version: 2, tweaks: ['miguel/snooze-someday', 'miguel/send-and-go'] }; await E.refresh();
   assert.deepEqual(Array.from(active), ['wizard/two-orbs'], 'new features start off for everyone');
-  // shell views (manifest `view`) are one at a time: the quick button leaves them as they are
-  const mig = cat.tweaks.filter(id => id.startsWith('miguel/') && !cat.defaults.includes(id) && !JSON.parse(read(`web/tweaks/${id}/manifest.json`)).view);
-  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), [...mig, 'wizard/two-orbs'].sort(), 'Miguel\'s button turns all of his on, adding to the rest');
-  await E.chooseAuthor('wizard'); assert.ok(active.includes('wizard/app-borders') && active.includes('wizard/two-orbs'));
-  await E.chooseAuthor('miguel'); assert.deepEqual(Array.from(active).sort(), cat.tweaks.filter(id => id.startsWith('wizard/') && !['wizard/unified-inbox', 'wizard/machines-home'].includes(id)).sort(), 'tapped again: his are off, James\'s stay');
+  const mig = cat.tweaks.filter(id => id.startsWith('miguel/'));
+  assert.equal(E.chooseAuthor, undefined, 'no per-author quick button: one switch per tweak (Miguel, 1 Nov 2026)');
+  await E.toggle('miguel/send-and-go'); await E.toggle('wizard/app-borders');
+  assert.deepEqual(Array.from(active).sort(), ['miguel/send-and-go', 'wizard/app-borders', 'wizard/two-orbs'], 'each switch adds just itself, any author');
+  await E.toggle('miguel/send-and-go'); assert.deepEqual(Array.from(active).sort(), ['wizard/app-borders', 'wizard/two-orbs'], 'and takes just itself off');
+  assert.ok(mig.length > 1, 'Miguel has several tweaks, none switched on by another');
   const authors = await E.authors(); assert.deepEqual(Array.from(authors, a => a.name), ['Miguel', 'James']);
   assert.ok(!authors.some(a => a.ids.some(id => cat.defaults.includes(id))), 'built-in features have no quick button');
   assert.equal(E.state.tweaks.find(t => t.id === 'wizard/unified-inbox').builtin, true);
@@ -166,8 +167,8 @@ test('own recipes expose all installed tweaks, use published defaults and isolat
   await f.E.refresh(); const defaults = await f.E.defaults();
   assert.equal(defaults['wizard/app-borders'], false); assert.equal(defaults['wizard/two-orbs'], false);
   assert.equal(defaults['miguel/snooze-someday'], false, 'a new skin starts from what runs now');
-  await f.E.chooseAuthor('miguel'); assert.equal((await f.E.defaults())['miguel/snooze-someday'], true);
-  await f.E.chooseAuthor('miguel');
+  await f.E.toggle('miguel/snooze-someday'); assert.equal((await f.E.defaults())['miguel/snooze-someday'], true);
+  await f.E.toggle('miguel/snooze-someday');
   const skin = {id:'quiet',tweaks:{...defaults,'miguel/snooze-someday':true}};
   f.window.WosMySkin = {active:skin,update(v){ Object.assign(skin.tweaks,v.tweaks); }};
   await f.E.refresh(); const cat = JSON.parse(read('web/tweaks/catalog.json')); assert.equal(f.E.state.tweaks.length, cat.tweaks.length - (cat.oneOf || []).reduce((n, g) => n + g.length - 1, 0), 'one switch per oneOf group');
@@ -182,7 +183,7 @@ test('installed list warms base profiles so picking Mizel does not wait for anot
   await f.E.installed();
   const count = () => f.requests.filter(p => p.endsWith('/miguel/profile.json')).length;
   assert.equal(count(), 1);
-  await f.E.refresh(); await f.E.chooseAuthor('miguel'); assert.equal((await f.E.defaults())['miguel/snooze-someday'], true);
+  await f.E.refresh(); await f.E.toggle('miguel/snooze-someday'); assert.equal((await f.E.defaults())['miguel/snooze-someday'], true);
   await f.E.defaults(); assert.equal(count(), 1);
 });
 
@@ -330,14 +331,29 @@ test('notifications preserve existing Miguel off choices and old custom-skin ids
 });
 
 
-test('Settings › Look: tweaks grouped by author, each with an "All of theirs" switch, in every skin (Miguel, 31 Oct 2026)', () => {
+test('Settings › Look: one flat Tweaks list, a switch per tweak labelled by author, no "All of" buttons, in every skin (Miguel, 1 Nov 2026)', () => {
   const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
-  assert.match(rows, /class="tw-author"/, 'one section per author');
-  assert.match(rows, /data-tweakauthor="\$\{esc\(who\)\}" role="switch"/, 'an all-on switch per author');
+  assert.doesNotMatch(rows, /tw-author|data-tweakauthor|All of/, 'no author sections or quick buttons');
+  assert.match(rows, /\.sort\(\(a, b\) => String\(a\.name \|\| a\.id\)\.localeCompare/, 'A to Z by name');
+  assert.match(rows, /tweakSwitches\(list, 'data-tweak-toggle', s\.busy, name\)/, 'one switch per tweak, with its author');
+  assert.doesNotMatch(read('web/core/experience.js'), /chooseAuthor/, 'the author mix is gone');
   assert.doesNotMatch(rows, /if \(own\) return/, 'own skins get the same grouped list');
   assert.doesNotMatch(rows, /<details/, 'nothing hidden behind a disclosure');
 });
 
+test('flat Tweaks list keeps a device mix exactly: whatever is on stays on, rendered as one switch each (Miguel, 1 Nov 2026)', async () => {
+  const mix = { 'miguel/send-and-go': true, 'wizard/app-borders': true, 'miguel/snooze-someday': false };
+  const storage = new Map([['wos.skin', 'obsidian'], ['wos.skin-tweaks.v1', JSON.stringify({ version: 1, off: {}, preset: 'none', mix, machinesHomeMoved: true, miguelLayoutMoved: true })]]); let active = [];
+  const window = { WosSkin: { current: 'obsidian', families: [], familyOf: () => 'mizel' }, WosSkinHost: { personalState: { ready: false }, get tweakState() { return active; }, loadTweaks: async ids => { active = ids; } }, addEventListener() {}, dispatchEvent() {} };
+  vm.runInNewContext(read('web/core/experience.js'), { window, setTimeout, document: { baseURI: 'https://wizard.test/wizard-os-home/', addEventListener() {} }, Event, URL, AbortSignal, localStorage: { getItem: k => storage.get(k), setItem: (k, v) => storage.set(k, v) }, fetch: async url => ({ ok: true, json: async () => JSON.parse(read('web/' + url.pathname.split('/wizard-os-home/')[1])) }) });
+  const E = window.WosExperience; await E.refresh(); const defs = JSON.parse(read('web/tweaks/catalog.json')).defaults || [];
+  assert.deepEqual(Array.from(active).filter(id => !defs.includes(id)).sort(), ['miguel/send-and-go', 'wizard/app-borders'], 'the stored mix loads as it was');
+  const saved = JSON.parse(storage.get('wos.skin-tweaks.v1')).mix;
+  for (const [id, on] of Object.entries(mix)) assert.equal(saved[id], on, id + ' kept');
+  const on = Array.from(E.state.tweaks.filter(t => t.on && !t.builtin), t => t.id).sort();
+  assert.deepEqual(on, ['miguel/send-and-go', 'wizard/app-borders'], 'the switches agree');
+  assert.equal(E.chooseAuthor, undefined);
+});
 
 test('Orb radial is default-off on fresh, legacy saved mixes and inherited My skin recipes; later opt-in persists', async () => {
   const mixes = [
