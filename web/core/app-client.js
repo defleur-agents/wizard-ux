@@ -153,18 +153,17 @@
     let did = false; try { did = back(); } catch (_) {}
     if (did) e.preventDefault();
   });
-  /* App keys (docs/ai-apps-view.md › App keys): an app marks a control with data-wz-key="<key>" (optional
-   * data-wz-key-label); a plain key press clicks the first live match. Keys: Space, Enter, ArrowUp/Down/Left/Right or
-   * one printable character in lower case; never Escape (Back is the shell's). Not with ⌥ / Ctrl / ⌘ (those are the
-   * shell's), not while typing, not when the app already handled the key; an open modal limits it to its own controls.
-   * WizardApp.keys.list() = the live targets ({ el, key, label }), which the shell marks while left ⌥ is held. */
-  const keyOk = k => typeof k === 'string' && (/^(Space|Enter|Arrow(Up|Down|Left|Right))$/.test(k) || ([...k].length === 1 && /\S/u.test(k) && k === k.toLowerCase()));
-  function keyName(e) {
-    const k = e && typeof e.key === 'string' ? e.key : '';
-    if (k === ' ' || k === 'Spacebar') return 'Space';
-    if (k === 'Enter' || /^Arrow(Up|Down|Left|Right)$/.test(k)) return k;
-    return [...k].length === 1 ? k.toLowerCase() : '';
-  }
+  /* App keys (docs/ai-apps-view.md › App keys; one anchor, Miguel 4 Nov 2026): an app marks a control with
+   * data-wz-key="<key>" (optional data-wz-key-label) and ⌥ + that key clicks the first live match (a field is focused as
+   * well). Keys: one lower-case letter a–z or / , . ; — never Wizard's own: ⌥H ⌥W ⌥S and the voice keys ⌥D ⌥V ⌥C (the
+   * digits, [ ], arrows, ` and Space are not app keys at all). Plain keys are the app's own business again. Read from
+   * e.code (macOS ⌥ turns e.key letters into symbols). Framed in Wizard the shell presses them (it knows what is in
+   * front and what is Wizard's), so a framed SDK never acts itself; opened on its own (a browser tab) the SDK does.
+   * WizardApp.keys.list() = the live targets ({ el, key, label }), which the shell marks and presses. */
+  const RESERVED_LETTERS = 'hwsdvc';
+  const keyOk = k => typeof k === 'string' && /^[a-z/,.;]$/.test(k) && !RESERVED_LETTERS.includes(k);
+  const KEY_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
+  const keyOfCode = code => { const m = /^Key([A-Z])$/.exec(String(code || '')); const k = m ? m[1].toLowerCase() : KEY_PUNCT[code] || ''; return keyOk(k) ? k : ''; };
   const keyBox = n => typeof n.getClientRects === 'function' && n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
   const keyLive = n => keyBox(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true';
   function keyScope(doc) {
@@ -179,28 +178,24 @@
     }
     return out;
   }
+  // ⌥ + key, nothing else held (⇧ / Ctrl / ⌘ are other keys); typing in a field is fine (⌥ types nothing we keep)
   function keyMatch(e, doc = document) {
-    if (!e || e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return null;
-    const name = keyName(e); if (!name || name === 'Escape') return null;
-    // ⇧ only where the character needs it ('?'), never as a variant of a plain key (J, ⇧Space, ⇧↓)
-    if (e.shiftKey && (name.length > 1 || e.key !== e.key.toLowerCase())) return null;
-    const t = e.target && e.target.nodeType === 1 ? e.target : doc.activeElement;
-    if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName || '') || t.isContentEditable || t.closest?.('[contenteditable]:not([contenteditable="false"])'))) return null;
+    if (!e || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.defaultPrevented || e.isComposing) return null;
+    const name = keyOfCode(e.code); if (!name) return null;
     return keyList(doc).find(k => k.key === name) || null;
   }
-  let keyDone = '';
-  function onAppKey(e) {
-    const hit = keyMatch(e); if (!hit) return;
-    e.preventDefault();
-    if (e.repeat && !/^Arrow/.test(hit.key)) return;   // held down: only the arrows repeat
-    keyDone = hit.key;
+  function keyPress(key) {
+    const hit = keyOk(key) ? keyList(document).find(k => k.key === key) : null; if (!hit) return false;
     // a field as the target ('/' to search): it takes the typing too (a click alone never focuses a field)
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(hit.el.tagName || '') || hit.el.isContentEditable) hit.el.focus?.({ preventScroll: true });
     hit.el.click();
+    return true;
   }
-  addEventListener('keydown', onAppKey);
-  // (Space activates a focused button on keyup: the key already clicked its own target)
-  addEventListener('keyup', e => { if (keyDone && keyName(e) === keyDone) { if (keyDone === 'Space') e.preventDefault(); keyDone = ''; } });
+  if (!framed) addEventListener('keydown', e => {
+    const hit = keyMatch(e); if (!hit) return;
+    e.preventDefault();
+    if (!e.repeat) keyPress(hit.key);   // held down: once
+  });
   const keys = Object.freeze({ list: () => keyList(document), match: e => keyMatch(e)?.el || null });
   function ready(meta = {}) {
     if (framed) {

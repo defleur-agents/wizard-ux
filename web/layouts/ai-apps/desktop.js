@@ -83,6 +83,16 @@ export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400
 export const COLS = { tabs: 200, tabsRail: 52 };
 export const TIDY_EVERY = 3600e3;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
+/** One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of the app in front included
+ * (docs/ai-apps-view.md › App keys). These ⌥ keys are Wizard's and never go to an app (⇧ variants too): ⌥1–⌥0, ⌥[ ⌥],
+ * the ⌥ arrows, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. */
+export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
+  'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
+/** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
+ * never e.key (macOS ⌥ turns letters into symbols): KeyJ → 'j', Slash → '/'; '' for anything else. */
+const APP_PUNCT = { Slash: '/', Comma: ',', Period: '.', Semicolon: ';' };
+export const appKeyOf = code => { const c = String(code || ''); if (RESERVED_KEYS.includes(c)) return ''; const m = /^Key([A-Z])$/.exec(c); return m ? m[1].toLowerCase() : APP_PUNCT[c] || ''; };
+export const isAppKey = k => typeof k === 'string' && /^[a-z/,.;]$/.test(k) && !(/^[a-z]$/.test(k) && RESERVED_KEYS.includes('Key' + k.toUpperCase()));
 export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && (e.code === 'KeyS' || String(e.key).toLowerCase() === 's');
 
 export default function desktop(api) {
@@ -456,7 +466,8 @@ export default function desktop(api) {
   };
   let chatsFresh = false;
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
-   * takes the keyboard once it is the panel, so its plain keys (data-wz-key, core/app-client.js) reach it at once. */
+   * takes the keyboard once it is the panel (its own typing, its own plain keys); its ⌥ keys (data-wz-key) the view
+   * presses for it (App keys, at the key handler). */
   let focusWant = '', focusing = false;
   const paneFrame = () => [...(pane?.el?.querySelectorAll?.('.win iframe') || [])].find(f => !f.closest('.win.gone')) || null;
   function focusFrame(tries = 0) {
@@ -1437,6 +1448,10 @@ export default function desktop(api) {
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
     if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;
+    // the app in front: ⌥ + a key it marks (data-wz-key) presses that control, also from inside its frame and while
+    // typing there; a letter it claims beats the view's own meaning for it while it is in front (⌥K = its key, not
+    // search); Wizard's keys (RESERVED_KEYS) never reach it; nothing marked: the view's meaning below
+    if (!sh && appFront()) { const t = appTarget(appKeyOf(code)); if (t) { if (!e.repeat) pressApp(t); return true; } }
     if (code === 'Space' && !sh) return once(() => api.voice.talk());
     if ((code === 'ArrowDown' || code === 'ArrowUp') && !sh) { if (!e.repeat || here().thread) stepReady(code === 'ArrowDown' ? 1 : -1); return true; }
     // ⌥H Home: everything away (both sides, the chat, the app); ⌥H again: back exactly as it was (⌥` the same, quietly)
@@ -1554,24 +1569,35 @@ export default function desktop(api) {
       for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
-    // the app in front: its own plain keys (data-wz-key) on its own controls, outlined keycaps (no ⌥)
-    if (pane) { const f = paneFrame(); if (f) for (const t of frameKeys(f).slice(0, 24)) out.push({ el: t.el, key: keyCap(t.key), at: 'tl', frame: f, app: true, name: t.label || '' }); }
+    // the app in front: its own ⌥ keys (data-wz-key) on its own controls, the same keycaps as Wizard's (one anchor); a
+    // letter it claims takes the view's keycap for that letter away (the app wins it while in front)
+    if (appFront()) {
+      const f = paneFrame(), ks = f ? frameKeys(f).slice(0, 24) : [], caps = new Set(ks.map(t => keyCap(t.key)));
+      if (ks.length) { for (let i = out.length - 1; i >= 0; i--) if (caps.has(out[i].key)) out.splice(i, 1); for (const t of ks) out.push({ el: t.el, key: keyCap(t.key), at: 'tl', frame: f, app: true, name: t.label || '' }); }
+    }
     return out;
   }, { only: true });
   /* App keys: what the app in front marks with data-wz-key (core/app-client.js WizardApp.keys.list(); an app on an older
-   * SDK copy: the same rules read here); its keycap reads the letter, an arrow, ↵ or Space. */
+   * SDK copy: the same rules read here), only the keys an app may have (isAppKey: a letter or / , . ; not Wizard's);
+   * its keycap reads the letter in capitals. */
+  const appFront = () => !!pane && !focusOn();
+  const appTarget = k => { const f = k ? paneFrame() : null; return f ? frameKeys(f).find(t => t.key === k) || null : null; };
+  function pressApp(t) {
+    const n = t.el;
+    // a field as the target ('/' to search) takes the typing too (a click alone never focuses a field)
+    try { if (/^(INPUT|TEXTAREA|SELECT)$/.test(n.tagName || '') || n.isContentEditable) n.focus?.({ preventScroll: true }); n.click?.(); } catch (_) {}
+  }
   function frameKeys(f) {
     let w = null, d = null; try { w = f.contentWindow; d = f.contentDocument; } catch (_) { return []; }
     if (!d || !w) return [];
-    try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return l; } catch (_) {}
+    try { const l = w.WizardApp?.keys?.list?.(); if (Array.isArray(l)) return [...l].filter(t => t && t.el && isAppKey(t.key)); } catch (_) {}
     const box = n => n.getClientRects().length > 0 && n.getBoundingClientRect().width > 0;
     const modal = [...d.querySelectorAll('[aria-modal="true"], [role="dialog"]:not([hidden]), dialog[open]')].filter(box).pop() || d;
     return [...modal.querySelectorAll('[data-wz-key]')].filter(n => box(n) && !n.closest('[hidden], [inert], [aria-hidden="true"]') && !n.disabled && n.getAttribute('aria-disabled') !== 'true')
       .map(n => ({ el: n, key: n.getAttribute('data-wz-key') || '', label: n.getAttribute('data-wz-key-label') || n.getAttribute('aria-label') || '' }))
-      .filter(t => /^(Space|Enter|Arrow(Up|Down|Left|Right))$/.test(t.key) || ([...t.key].length === 1 && t.key.trim() && t.key === t.key.toLowerCase()));
+      .filter(t => isAppKey(t.key));
   }
-  const ARROW_CAPS = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Enter: '↵', Space: 'Space' };
-  const keyCap = k => ARROW_CAPS[k] || String(k).toUpperCase();
+  const keyCap = k => String(k).toUpperCase();
   function midFree() {
     const r = hMid.getBoundingClientRect?.(); if (!r || typeof doc.elementFromPoint !== 'function') return true;
     const hit = doc.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
