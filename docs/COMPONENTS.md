@@ -2,11 +2,11 @@
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One owner per capability. [Gate](app-reuse-gate.md).
+One owner per capability: [gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits | duplicate ranking |
 
-| Offline QA | `tools/qa-synthetic-fence.cjs` | offline |
+| Offline QA | `tools/qa-synthetic-fence.cjs` +collect | offline |
 
 | Temporary chat | `WizCore.incognitoChats` / `incognitoOptIn`; strict capability + opt-in (off) | durable transcript/outbox |
 

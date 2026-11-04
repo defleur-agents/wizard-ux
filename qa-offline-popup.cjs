@@ -4,6 +4,7 @@ const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 if(process.argv[2]||process.env.QA_URL)throw Error('Owner/network origins refused');
 const fx=require('./tools/qa-proof-fixture.cjs');
+fx.failAtExit(() => OUT); // collect-all: one run reports every uncatalogued request, then exits non-zero
 const BASE=fx.ORIGIN+'/wizard-os-home/';
 const OUT = process.env.QA_OUT || path.join(__dirname, 'qa-offline-results');
 const delay = ms => new Promise(r => setTimeout(r, ms));

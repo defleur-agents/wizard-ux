@@ -3,6 +3,7 @@
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
 const fx=require('./tools/qa-proof-fixture.cjs'),crypto=require('node:crypto');
+fx.failAtExit(() => out); // collect-all: one run reports every uncatalogued request, then exits non-zero
 if(process.argv[2])throw Error('Network origins refused: synthetic fixture only');
 const morning=process.env.QA_MORNING_DIR;if(!morning)throw Error('Pinned QA_MORNING_DIR required');
 const web = path.resolve(process.env.QA_WEB_DIR || path.join(__dirname, 'web'));
@@ -53,8 +54,8 @@ async function scenario(browser, origin, desktop, thread, status, skin = 'obsidi
     if (u.pathname === '/wizard/thread-seen') return json({state:{initializedAt:1,threads:{}}});
     if (u.pathname === '/wizard/v1/ui-preferences') return json({spaces:[],pinnedChats:[],readyOrder:'newest',migrations:{'launcher.v1':true}});
     if (u.pathname.startsWith('/wizard/')) return r.fulfill(fx.response(u.pathname+(u.pathname==='/wizard/v1/my-skin'?u.search:''),q.method()));
-    if(!['GET','HEAD'].includes(q.method()))return json({error:'Synthetic refusal'},403);
-    if (!u.pathname.startsWith('/wizard-os-home/')) return json({});
+    if(!['GET','HEAD'].includes(q.method()))return r.fulfill(fx.response(u.pathname,q.method())); // unlisted write: refused (451) and collected
+    if (!u.pathname.startsWith('/wizard-os-home/')) return r.fulfill(fx.response(u.pathname,q.method())); // unknown non-shell path: refused and collected, never an empty success
     return r.continue();
   });
   await ctx.addInitScript(({desktop,skin}) => {
