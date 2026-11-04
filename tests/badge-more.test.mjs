@@ -34,5 +34,7 @@ test('apps pass { more } through the badge API; Chats reads it from routed feeds
   const bell = read('web/core/notif-bell.js');
   assert.match(bell, /FD\.more\[id\] = d\.more === true \|\| d\.items\.length > 50/);
   assert.match(bell, /const readyMore = \(\) => .*inChats\(id\)/);
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /!!window\.WosBell\?\.readyMore\?\.\(\)\);/, f);
+  const projection = read('web/core/workspace-navigation.js');
+  assert.match(projection, /setCount\(id, threads \+ inbox, inbox > 0 && !!window\.WosBell\?\.readyMore\?\.\(\)\);/);
+  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /workspaceNav\.refreshChats\(LIVE,/, f);
 });
