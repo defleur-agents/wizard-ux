@@ -790,11 +790,18 @@ html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact]:not([data-chact="resolve"]) { color: var(--aad-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aad-ink) 18%, transparent) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i[data-note] .aad-bell { flex: none; margin-right: 6px; color: var(--amber, var(--wz-warning)); }
 
-/* round 22 (Miguel, 4 Nov 2026): Working back on the folded rail, the expanded list's tiny spinner beside its count */
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wk { display: inline-flex; align-items: center; gap: 0.3125rem; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-spin { width: 0.5625rem; height: 0.5625rem; box-sizing: border-box; border-radius: 50%; border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
+/* round 23 (Miguel, 4 Nov 2026): the rail is a tally of marks, no numbers: a spinner per working chat (the expanded
+ * list's tiny spinner), a solid dot per ready chat (amber in Ready, the ink in a status), a ring per snoozed one; rows of 4 */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-n.aad-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.25rem; width: 2.75rem; min-width: 0; height: auto; padding: 0.125rem 0; border-radius: 0; color: var(--aad-ink); background: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d { width: 0.5rem; height: 0.5rem; box-sizing: border-box; border-radius: 50%; font-style: normal; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-dot { background: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="ready"] .aad-d.is-dot { background: var(--amber, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-ring { border: 0.09375rem solid var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-none { border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 22%, transparent); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-more { display: grid; place-items: center; color: var(--aad-ink-2); font: 600 0.625rem / 1 var(--wz-font-ui); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="working"] { margin-bottom: 0.25rem; }
-@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-spin { animation-duration: 3s; } }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-d.is-spin { animation-duration: 3s; } }
 /* round 22: the Sort / Group menu's second heading sits a step below the first group */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortmenu .aad-pop-h2 { margin-top: 0.625rem; }
 /* round 22: a row's time since its last message, muted at its end (the ⋯ takes its place on hover) */
