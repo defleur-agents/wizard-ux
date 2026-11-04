@@ -789,3 +789,11 @@ html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > b
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact="resolve"] { color: var(--wz-base, var(--bg)) !important; background: var(--aad-ink) !important; border-color: var(--aad-ink) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .ch-notif-thread .ch-tacts > [data-chact]:not([data-chact="resolve"]) { color: var(--aad-ink) !important; background: none !important; border: 1px solid color-mix(in srgb, var(--aad-ink) 18%, transparent) !important; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-fly-i[data-note] .aad-bell { flex: none; margin-right: 6px; color: var(--amber, var(--wz-warning)); }
+
+/* round 22 (Miguel, 4 Nov 2026): Working back on the folded rail, the expanded list's tiny spinner beside its count */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-wk { display: inline-flex; align-items: center; gap: 0.3125rem; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-spin { width: 0.5625rem; height: 0.5625rem; box-sizing: border-box; border-radius: 50%; border: 0.09375rem solid color-mix(in srgb, var(--aad-ink) 25%, transparent); border-top-color: var(--aad-ink); animation: aad-spin 900ms linear infinite; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k="working"] { margin-bottom: 0.25rem; }
+@media (prefers-reduced-motion: reduce) { html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk-spin { animation-duration: 3s; } }
+/* round 22: the Sort / Group menu's second heading sits a step below the first group */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sortmenu .aad-pop-h2 { margin-top: 0.625rem; }
