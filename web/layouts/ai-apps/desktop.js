@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, subjectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -281,13 +281,14 @@ export default function desktop(api) {
    * Chats & app screens and kept where stock Chats keeps its order (api.sessions.order; its Priority or By subject
    * reads as Newest here). The sidebar's own sort control shows only when 'Show sort control in sidebar' is on. */
   const readyOrder = () => groupOrder(api.sessions.order?.());
-  const groupReady = () => api.storage.get('groupReady') === true;   // (round 20 item 9: off = one flat Ready)
+  // (round 20 item 9: off = one flat Ready; round 24: 'status' / 'subject' / 'none', the old on/off switch read as status / none)
+  const groupBy = () => api.storage.get('groupReady') === true ? 'status' : api.storage.get('groupBy') === 'subject' ? 'subject' : 'none';
+  const groupReady = () => groupBy() === 'status';
   // round 22: the rows' times stay true ("5m" becomes "6m") without a repaint: one cheap text pass every 10 s
   const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
   api.after(10e3, tickTimes);
   const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
-  const setGroup = on => { api.storage.set('groupReady', !!on); paintSetting(); paintList(true); paintRail(true); };
-  const GROUPINGS = [[true, 'By status'], [false, 'One list']];
+  const setGroup = m => { m = groupMode(m); api.storage.set('groupBy', m); api.storage.set('groupReady', m === 'status'); paintSetting(); paintList(true); paintRail(true); };
   api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
@@ -611,7 +612,7 @@ export default function desktop(api) {
     card.append(el('h3', 'aad-pop-h', { text: 'Sort' }));
     for (const [v, w0] of GROUP_ORDERS) card.append(item(v === readyOrder(), w0, { 'data-order': v }, () => setOrder(v)));
     card.append(el('h3', 'aad-pop-h aad-pop-h2', { text: 'Group' }));
-    for (const [v, w0] of GROUPINGS) card.append(item(v === groupReady(), w0, { 'data-group': v ? 'status' : 'none' }, () => setGroup(v)));
+    for (const [v, w0] of GROUP_MODES) card.append(item(v === groupBy(), w0, { 'data-group': v }, () => setGroup(v)));
     scene.append(card);
     const r = btn.getBoundingClientRect();
     card.style.left = Math.round(Math.max(8, Math.min(r.right - 200, (globalThis.innerWidth || 1440) - 216))) + 'px';
@@ -633,12 +634,15 @@ export default function desktop(api) {
       api.listen(b, 'click', () => setOrder(v));
       radios.append(b);
     }
-    const gOn = groupReady(), gw = el('button', 'st-row wz-row', { type: 'button', role: 'switch', 'aria-checked': String(gOn), 'data-aad-groupready': '' });
-    const gTx = el('span', 'st-tx'); gTx.append(el('b', '', { text: 'Group Ready by status' }), el('small', '', { text: 'Needs you, Your call, FYI … each under its own header. Off: one list in priority order.' }));
-    const gK = el('span', 'sw' + (gOn ? ' on' : ''), { 'aria-hidden': 'true' }); gK.append(el('i'));
-    gw.append(gTx, gK);
-    api.listen(gw, 'click', () => setGroup(!groupReady()));
-    setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), gw,
+    const gm = groupBy(), gw = el('div', 'st-chats-options', { role: 'radiogroup', 'aria-label': 'Group Ready', 'data-aad-groupready': '' });
+    for (const [v, w0] of GROUP_MODES) {
+      const b = el('button', 'st-row wz-row', { type: 'button', role: 'radio', 'aria-checked': String(v === gm), 'data-aad-group': v });
+      const tx = el('span', 'st-tx'); tx.append(el('b', '', { text: w0 }));
+      b.append(el('span', '', { 'aria-hidden': 'true', text: v === gm ? '◉' : '○' }), tx);
+      api.listen(b, 'click', () => setGroup(v));
+      gw.append(b);
+    }
+    setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Group Ready' }), gw,
       el('p', 'aad-stg-l', { text: 'Order chats within each status' }), radios,
       el('p', 'aad-stg-n', { text: 'Ready is in priority order (Needs you, Your call, FYI, …), this order within each. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
   }
@@ -654,7 +658,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupReady(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.subject || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -681,18 +685,19 @@ export default function desktop(api) {
         if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
-        if (on && k === 'ready' && rows.length && !groupReady()) {
+        if (on && k === 'ready' && rows.length && groupBy() === 'none') {
           // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready in priority order by default (the order ⌥↓ walks), a tiny
           // muted tag on Needs you / Your call rows; 'Group Ready by status' in Settings brings the sub-headers back
           body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread)));
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
           // the chosen order (item 3: group first, then the order inside each)
-          const groups = readyGroups(rows, readyOrder());
+          // (round 24: or one per subject, Wizard OS, Messenger, … under their own headers)
+          const groups = groupBy() === 'subject' ? subjectGroups(rows, readyOrder()) : readyGroups(rows, readyOrder());
           for (const g of groups) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
-            const gh = el('div', 'aad-grp', { 'data-state': g.state, role: 'heading', 'aria-level': '4' });
+            const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('subj:') ? 'subject' : g.state, role: 'heading', 'aria-level': '4' });
             gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
             body.append(gh, ...g.rows.map(r => chatRow(r, h.thread)));
           }
@@ -705,7 +710,7 @@ export default function desktop(api) {
           // a quiet word for the order (Newest / Oldest) whose menu also holds the grouping; never a native select
           const row = el('div', 'aad-sech');
           const word0 = (GROUP_ORDERS.find(([v]) => v === readyOrder()) || GROUP_ORDERS[0])[1];
-          const gw0 = groupReady() ? 'by status' : 'one list';
+          const gw0 = (GROUP_MODES.find(([v]) => v === groupBy()) || GROUP_MODES[2])[1].toLowerCase();
           const sort = el('button', 'aad-sortb', { type: 'button', 'aria-haspopup': 'menu', 'aria-label': `Sort and group: ${word0}, ${gw0}. Change`, title: 'Sort and group Ready' });
           sort.append(el('span', 'aad-sortb-w', { text: word0.replace(' first', '') }), icon('down', 'aad-ico aad-sortb-c'));
           api.listen(sort, 'click', e => { e.stopPropagation?.(); openSortMenu(sort); });
@@ -738,11 +743,11 @@ export default function desktop(api) {
   let railLast = '';
   // (an app in front with a chat docked beside it: that chat is the current one, so ⌥↓ / ⌥↑ step from it)
   const curChat = () => { const h = here(); return h.thread || (h.note && stepAt) || (h.app && chatThread ? (chatThread === NOTE ? stepAt : chatThread) : null) || null; };
-  const railMode = () => groupReady() ? 'groups' : 'list';
+  const railMode = () => groupReady() ? 'groups' : 'list';   // (round 24: By subject folds to Ready alone, like One list)
   const railNow = () => railActive(sessions || readSessions(), curChat(), railLast, readyOrder(), railMode());
   function railGo(key) {
     closeFly();
-    const s = readSessions(), ids = railRows(s, key, readyOrder()).map(r => r.id); if (!ids.length) return;
+    const s = readSessions(), ids = railRows(s, key, readyOrder(), groupBy()).map(r => r.id); if (!ids.length) return;
     const a = railNow(), nx = railNext(ids, a && a.key === key ? curChat() : null); if (!nx) return;
     openChat(nx.id, key);
   }
@@ -825,7 +830,7 @@ export default function desktop(api) {
   }
   function paintFly() {
     if (!fly) return;
-    const { card, key, word } = fly, rows = railRows(sessions || readSessions(), key, readyOrder()), cur = curChat(), now = Date.now();
+    const { card, key, word } = fly, rows = railRows(sessions || readSessions(), key, readyOrder(), groupBy()), cur = curChat(), now = Date.now();
     card.setAttribute('aria-label', `${word}: ${rows.length}`);
     const items = rows.map(r => {
       const it = el('button', 'aad-pop-i aad-fly-i' + (r.id === cur ? ' is-cur' : ''), { type: 'button', role: 'menuitem', 'data-sid': r.id, ...(r.id === cur ? { 'aria-current': 'true' } : {}) });
@@ -1388,7 +1393,7 @@ export default function desktop(api) {
   }
   api.listen(doc, 'click', e => { const b = e.target?.closest?.('.win .dchats .pane-main [data-chact="done"], .win .dchats .pane-main [data-chact="resolve"]'); if (b && docked) nextAfterAct(); }, true);
   let stepAt = null;
-  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder()).map(r => r.id);
+  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
     const ids = readyIds();

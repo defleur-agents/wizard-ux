@@ -239,8 +239,25 @@ export function readySort(rows, order) {
 export function readyGroups(rows, order) {
   return stateGroups(rows).map(g => ({ ...g, word: g.state === 'none' ? 'No status' : g.word, rows: readySort(g.rows, order) }));
 }
+/** Round 24 (Miguel, 4 Nov 2026: "add by subject so these are grouped Wizard OS, Messenger, etc."): Ready grouped by
+ * each chat's subject (the reply's status line, stock Chats' By subject), a sub-header per subject, its rows in the
+ * chosen order. Subjects with something waiting on him first, then the bigger ones, then A–Z; notifications under
+ * 'Notifications' and chats with no subject under 'Other', both last. [{ state: 'subj:<name>', word, rows }]. Pure. */
+export const NOTES_SUBJECT = 'Notifications', NO_SUBJECT = 'Other';
+export const subjectOf = r => r?.note ? NOTES_SUBJECT : String(r?.subject || '').replace(/\s+/g, ' ').trim() || NO_SUBJECT;
+export function subjectGroups(rows, order) {
+  const by = new Map();
+  for (const r of rows || []) { const k = subjectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
+  const tail = k => k === NO_SUBJECT ? 2 : k === NOTES_SUBJECT ? 1 : 0, waits = k => by.get(k).filter(r => rankOf(r) <= 1).length;
+  return [...by.keys()].sort((a, b) => tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
+    .map(k => ({ state: 'subj:' + k, word: k, rows: readySort(by.get(k), order) }));
+}
+/** Ready's grouping: 'status' (sub-headers per status), 'subject' (per subject) or 'none' (one list, still in the
+ * status order). Any other value reads as 'none'. */
+export const GROUP_MODES = Object.freeze([['status', 'By status'], ['subject', 'By subject'], ['none', 'One list']]);
+export const groupMode = m => m === 'status' || m === 'subject' ? m : 'none';
 /** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
-export const readyFlat = (rows, order) => readyGroups(rows, order).flatMap(g => g.rows);
+export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'subject' ? subjectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
 /** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
  * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
 export function readyStep(ids, cur, dir) {
@@ -259,10 +276,10 @@ export const GROUP_ORDERS = Object.freeze([['newest', 'Newest first'], ['oldest'
 export const groupOrder = o => o === 'oldest' ? 'oldest' : 'newest';
 /** The chats behind one rail item, in the order the open sidebar draws them: 'snoozed' (as listed), 'ready' (all of
  * Ready, grouped: what ⌥↓ walks), or one of Ready's statuses (that group only). */
-export function railRows(s, key, order) {
+export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
-  if (key === 'ready') return readyFlat(s?.ready || [], order);
+  if (key === 'ready') return readyFlat(s?.ready || [], order, mode);
   return (readyGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
 }
 /** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
