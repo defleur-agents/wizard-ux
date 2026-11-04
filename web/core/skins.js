@@ -162,8 +162,12 @@
   const WALL_KEY = 'wos.skin.wallpaper';
   const WALLS = [
     { id: 'landscapes', name: 'Photos', who: 'Landscape photos that change every minute.' },
-    { id: 'lake', name: 'Lake', who: 'The Wizard hat as a mountain on a still lake: aurora and a lit door by night, sunrise by day.' },
-    { id: 'glass', name: 'Glass', who: 'The Wizard hat in frosted glass over soft colour.' },
+    { id: 'lake', name: 'Lake', who: 'The hat as a mountain on a still lake: aurora and a lit door by night, sunrise by day.' },
+    { id: 'valley', name: 'Valley', who: 'The hat as the far peak over layered hills and pines, at dusk or in the morning.' },
+    { id: 'moonrise', name: 'Moonrise', who: 'The hat on a hill in front of a huge moon, fireflies in the grass; a setting sun by day.' },
+    { id: 'sea', name: 'Sea', who: 'The hat as an island: the Milky Way and a lit door on the water by night, open sea by day.' },
+    { id: 'clouds', name: 'Clouds', who: 'The hat rising above a sea of clouds.' },
+    { id: 'glass', name: 'Glass', who: 'The hat in frosted glass over soft colour.' },
   ];
   let wall = (() => { try { const v = localStorage.getItem(WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'landscapes'; } catch (_) { return 'landscapes'; } })();
   const WIZ = {
@@ -444,6 +448,8 @@
     },
     // Background (Landscapes palettes only): 'landscapes' (the photos) or a Wizard OS hat background. Per device.
     wallpapers: Object.freeze(WALLS.map(w => Object.freeze({ ...w }))),
+    // a small preview of a background in the current palette (night or day)
+    wallpaperThumb(id) { const light = /-light$/.test(SKINS[Math.round(pos)].id); return id === 'landscapes' ? `/wizard-os-home/skins/landscapes/preview${light ? '' : '-dark'}.webp` : `/wizard-os-home/core/skins/wizard/${id}${light ? '-light' : ''}-thumb.webp`; },
     get wallpaper() { return wall; },
     get wallpaperable() { return /^landscapes/.test(SKINS[Math.round(pos)].id); },
     setWallpaper(id) {
