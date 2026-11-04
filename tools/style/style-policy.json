@@ -49,7 +49,7 @@
   "exceptions": [
     {
       "path": "web/core/skins.css",
-      "sha256": "afcd346fba636be9e25c50cd4f1ba60e66eb0fdcb49854bb18ed9ec93039b6ac",
+      "sha256": "a7a09e969a6d55b6d879fda794d8a913370f0b40eeb01f9f584d4d5eead0e899",
       "reason": "Robert/James: approved shell skin definitions (not app chrome); appearance transport remains independent."
     },
     {
