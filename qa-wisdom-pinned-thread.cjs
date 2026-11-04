@@ -14,6 +14,7 @@ const delay=ms=>new Promise(r=>setTimeout(r,ms)),DID='f'.repeat(32),SID='wizard_
 const words='  Synthetic question — kept exactly\nwith a second line  ';
 const json=(r,x,status=200)=>r.fulfill({status,contentType:'application/json',body:JSON.stringify(x)}).catch(e=>{if(/Target.*closed|context.*closed|Invalid InterceptionId|Invalid interception/.test(e.message))return;throw e;});
 const mime=f=>({'.js':'application/javascript','.json':'application/json','.css':'text/css','.html':'text/html','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2','.webmanifest':'application/manifest+json'}[path.extname(f)]||'application/octet-stream');
+fs.mkdirSync(OUT,{recursive:true});
 const result={status:'running',scope:LIVE?'INSTALLED live unmodified shell/app assets; synthetic private APIs; no provider calls':'CANDIDATE exact shell source + pinned Wisdom bytes; synthetic registry; synthetic private APIs; no provider calls',revision:manifest.revision,shellRevision:manifest.shell_revision,cases:[]};
 function save(){fs.writeFileSync(path.join(OUT,'hosted-route.json'),JSON.stringify(result,null,2)+'\n')}
 function sourceError(e){return {name:e.name,sourceStack:[...String(e.stack||'').matchAll(/https?:\/\/[^\s)]+:\d+:\d+/g)].map(x=>x[0].replace(BASE.origin,''))};}
