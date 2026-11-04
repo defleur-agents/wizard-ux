@@ -347,6 +347,12 @@ def g_scope():
     ticks = U(rrect(242, 92, 28, 110, 14), rrect(242, 310, 28, 110, 14), rrect(92, 242, 110, 28, 14), rrect(310, 242, 110, 28, 14))
     return U(ring, ticks, circle(256, 256, 30))
 
+@glyph('heart', 'A heart with a pulse line cut through it: your health, read from your devices.')
+def g_heart():
+    heart = P("M256 412 C200 368 92 300 92 196 C92 140 134 100 186 100 C218 100 242 116 256 142 C270 116 294 100 326 100 C378 100 420 140 420 196 C420 300 312 368 256 412 Z")
+    pulse = stroke("M70 246 H178 L212 196 L252 300 L290 222 L310 246 H442", 28)
+    return D(heart, pulse)
+
 @glyph('card', 'A payment card with its stripe and chip cut out: the benefits each card still owes you.')
 def g_card():
     card = rrect(114, 164, 284, 184, 34)
@@ -360,6 +366,15 @@ def g_dollar():
     s_curve = stroke("M318 196 C306 168 282 158 256 158 C222 158 196 176 196 206 C196 238 226 248 256 256 C288 264 318 274 318 306 C318 336 290 354 256 354 C226 354 200 342 192 314", 36)
     bar = U(rrect(238, 118, 36, 46, 12), rrect(238, 348, 36, 46, 12))
     return D(coin, U(s_curve, bar))
+
+@glyph('podcast', 'A broadcast disc with a microphone cut out of it: shows that talk to you.')
+def g_podcast():
+    disc = circle(256, 256, 160)
+    capsule = rrect(212, 128, 88, 150, 44)
+    yoke = stroke("M170 232 A86 86 0 0 0 342 232", 28)
+    stem = rrect(242, 316, 28, 50, 0)
+    base = rrect(196, 356, 120, 28, 14)
+    return D(disc, U(capsule, yoke, stem, base))
 
 @glyph('clip', 'A film frame with play cut out: a video to edit.')
 def g_clip():

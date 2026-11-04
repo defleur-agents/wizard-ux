@@ -410,7 +410,7 @@
     // document, so a plain app frame can't read it and wrongly shows "can't show in a window".
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
-    if (a.url && !opts.setupChecked && window.WosAppSetup)
+    if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
       if (a.agent) return openAgentChats(a.agent);
@@ -498,6 +498,7 @@
     if (w.app === 'chats') return `<div class="dchats" data-thread="${esc(w.thread || '')}" style="--list-w:${listW()}px"><div class="pane-list"><div class="chats" data-chats="${w.id}::list"></div></div>
       <div class="pane-split" data-split role="separator" aria-orientation="vertical" aria-label="Resize the thread list" tabindex="0" title="Drag to resize · double-click to reset"></div>
       <div class="pane-main"><div class="chats" data-chats="${w.id}"></div><div class="pane-empty"><div><b>Your conversations, side by side.</b><br>Choose a chat on the left, or start one.<br><button type="button" class="pane-newchat" data-panenew>Start a new chat</button><br><kbd>${MOD}↓</kbd> top ready chat · <kbd>${MOD}N</kbd> new chat · <kbd>${MOD}V</kbd> new voice chat · hold <kbd>${IS_MAC ? '⌥' : 'Alt'}</kbd> for every key</div></div></div></div>`;
+    if (w.appId === 'troubleshooter') return window.WizReach.recoveryHtml();
     const a = appOf(w), url = window.WosOwnViews?.frameUrl(a, w.url) || w.url || a.url || '/';
     return `${window.WosOwnViews?.noteHtml(a) || ''}<iframe data-own-app="${esc(a.id || '')}" src="${esc(url)}" title="${esc(a.name)}" allow="microphone; clipboard-read; clipboard-write; autoplay; fullscreen"></iframe>
       <div class="frame-fallback"><div><b>${esc(a.name)} can’t show in a window</b><a href="${esc(url)}" target="_blank" rel="noopener">Open it in a tab ↗</a></div></div>`;
@@ -626,7 +627,7 @@
     } else if (w.app === 'pages') window.WosPages.mount(el.querySelector('.pg-host'),{slug:w.pageSlug || '',close:() => closeWin(w.id)});
     else if (w.app === 'feature') window.WosFeatures.mount(w.featureId,el.querySelector('.shared-feature'),w.featureOptions);
     else if (w.app === 'settings') afterRender?.();
-    else watchFrame(el.querySelector('iframe'), el);
+    else { window.WizReach?.mountRecovery(el.querySelector('[data-recovery]'), w.url); watchFrame(el.querySelector('iframe'), el); }
     return el;
   }
   function watchFrame(f, el) {
@@ -978,6 +979,7 @@
   function refreshData() { window.WizCore.refreshApps?.(); return Promise.resolve(LIVE?.refresh?.()).catch(() => {}); }
   function reloadWin(id) {
     const w = W[id], el = winEl(id); if (!reloadable(w) || !el) return false;
+    if (w.appId === 'troubleshooter') { el.querySelector('[data-recovery-check]')?.click(); const repair = el.querySelector('iframe'); if (repair && !repair.hidden) repair.contentWindow?.location.reload(); return true; }
     if (w.app === 'chats' || CHATS.isHosted(id)) {
       refreshData().then(() => {
         if (!W[id]) return;
@@ -1114,31 +1116,9 @@
   }
 
   /* ---------------- home (root / empty workspace) ---------------- */
-  /* Miguel's skins: the desktop Home is the phone Home at desktop size (Miguel, 24 Oct 2026): resource dials on top, Ready
-   * and Working as the same dot counters. Settings stays in the top bar (one gear). No clock, thread lists, app chips or key hints. */
-  function mineHomeDots(kind, n) {
-    const icon = kind === 'ready' ? '<path d="M5 12.5l4.5 4.5L19 7"/>' : '<path d="M12 3a9 9 0 1 0 9 9"/>';
-    const shown = Math.min(n, 12), dots = Array.from({ length: shown }, (_, k) => `<i style="--n:${k}"></i>`).join('');
-    return `<span class="nc-vis${n ? '' : ' nc-zero'}" aria-hidden="true"><svg class="nc-ic" viewBox="0 0 24 24">${icon}</svg>${dots}${n > shown ? '<em>+</em>' : ''}</span>`;
-  }
-  function mineHomeHtml() {
-    const G = LIVE?.ok ? LIVE.workGroups() : {}, ready = (G.ready || []).length + (window.WosBell?.readyCount?.() || 0), working = (G.working || []).length;
-    const pending = OUTBOX?.unsent() || [];
-    return `<div class="home-in mine-home"><div data-slot="home-main" hidden></div>
-      <div class="mh-res">${window.WosResources?.home() || ''}</div>
-      <div class="mh-gap"></div>
-      ${LIVE?.ok ? '' : '<div class="home-line">Connecting to Wizard…</div>'}
-      <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:var(--green)" data-home-act="ready" aria-label="Ready ${ready}"><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span>${mineHomeDots('ready', ready)}</button>
-        <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-home-act="working" aria-label="Working ${working}"><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span>${mineHomeDots('working', working)}</button>
-      </div>
-      ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
-    </div>`;
-  }
   // Home repaints go through the skin host so a tweak's home-main mount survives (plain innerHTML without one).
   function paintHome(el, html) { if (window.WosSkinHost?.paintHome) window.WosSkinHost.paintHome(el, html); else el.innerHTML = html; }
   function homeHtml(i) {
-    if (mine()) return mineHomeHtml();
     const L = LIVE?.ok ? LIVE.groups() : { needs: [], ready: [], working: [] };
     const pending = OUTBOX?.unsent() || [];
     const working = LIVE?.ok ? LIVE.workGroups().working || [] : [];
@@ -1320,47 +1300,8 @@
     const list = norm(q) ? searchApps(q) : APPS.slice().sort((a, b) => pickRank(a) - pickRank(b) || SYS_APPS.indexOf(a.id) - SYS_APPS.indexOf(b.id));
     return list.filter(a => a.kind !== 'native' && a.id !== 'agents' && !C.isMaintenanceApp(a)).map(a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, run: o => openApp(a, o) }));
   }
-  /* Miguel's skins (Dark, Light, Landscapes): the selector is the phone launcher at desktop size (core/app-kinds.js): Apps with
-   * system apps first and ringed, "+ Get apps", then one folded "For agents" row holding Agent apps, Agents (with
-   * "+ Build agents") and Connectors, each ending in its own "+ Get ..." tile. Search stays one flat list. */
-  const mine = () => ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'].includes(document.documentElement.dataset.skin || ''); // Miguel's skins
-  let palFold = false;
-  function openStoreKind(kind) {
-    const url = window.WosAppKinds.storeUrl(kind);
-    const ex = findWin(w => w.app === 'frame' && w.appId === 'app-store');
-    if (ex) { ex.url = url; const f = winEl(ex.id)?.querySelector('iframe'); if (f) f.src = url; focusWin(ex.id); save(); return; }
-    newWin({ app: 'frame', appId: 'app-store', url });
-  }
-  function pickKinds() {
-    const AK = window.WosAppKinds, K = AK.kinds(APPS, APP), out = [];
-    const app = a => ({ kind: 'app', app: a, name: a.name, sub: a.desc, sys: AK.isSystem(a), run: o => a.url || a.kind !== 'wizard' ? openApp(a, o) : window.WosAppRoute?.open(a.id, { name: a.name }) });
-    const get = k => ({ kind: 'app', get: true, name: AK.GET[k][1], run: () => openStoreKind(AK.GET[k][0]) });
-    const group = (k, list, extra = []) => out.push({ head: AK.LABELS[k], items: [...AK.sysFirst(list).map(app), ...extra, get(k)] });
-    group('apps', K.apps);
-    const n = K.wiz.length + K.agents.length + K.conns.length;
-    out.push({ fold: true, n });
-    if (palFold) {
-      group('wiz', K.wiz);
-      group('agents', K.agents, K.builder ? [{ kind: 'app', get: true, name: 'Build agents', run: o => openApp(K.builder, o) }] : []);
-      group('conns', K.conns);
-    }
-    return out;
-  }
   function pickRender() {
     palItems = pickBuild(palIn.value); palSel = Math.min(palSel, Math.max(0, palItems.length - 1));
-    if (mine() && !norm(palIn.value) && window.WosAppKinds) {
-      const blocks = pickKinds(); palItems = []; const html = [];
-      const tile = it => { const i = palItems.push(it) - 1;
-        const ic = it.get ? '<span class="ic pal-plus">+</span>' : ico('span', 'ic', it.app);
-        return `<button type="button" class="pal-app${it.sys ? ' pal-sys' : ''}${it.get ? ' pal-get' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="false" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ic}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`; };
-      for (const b of blocks) {
-        if (b.fold) { const i = palItems.push({ kind: 'fold', name: 'For agents', run: () => { palFold = !palFold; pickRender(); palIn.focus(); } }) - 1;
-          html.push(`<button type="button" class="pal-fold${palFold ? ' open' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-expanded="${palFold}"><span>For agents</span><small>${b.n}</small><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>`); continue; }
-        html.push(`<div class="pal-grp pal-kind" role="presentation">${esc(b.head)}</div>` + b.items.map(tile).join(''));
-      }
-      palList.innerHTML = html.join(''); palSel = Math.min(palSel, palItems.length - 1);
-      return palMark(palSel);
-    }
     palList.innerHTML = palItems.map((it, i) => `<button type="button" class="pal-app${i === palSel ? ' sel' : ''}" id="pal-o${i}" data-i="${i}" role="option" tabindex="-1" aria-selected="${i === palSel}" title="${esc(it.sub ? `${it.name} · ${it.sub}` : it.name)}">${ico('span', 'ic', it.app)}<span class="nm${/\S{13,}/.test(it.name) ? ' long' : ''}">${esc(it.name)}</span></button>`).join('')
       || `<div class="pal-empty">No app called “${esc(clip(palIn.value.trim(), 40))}”.<br><kbd>↵</kbd> searches threads and commands too</div>`;
     palMark(palSel);
@@ -1867,19 +1808,29 @@
     const size = bytes ? `${Math.max(1, Math.ceil(bytes / 1024))} KB` : '';
     return [thread, stamp, size].filter(Boolean).join(' · ');
   }
+  /* The card is the shell's own (Settings' kit: wz-card, wz-button). Discard asks again IN the card, never with the
+   * browser's confirm dialog: Wizard for Mac's WKWebView has no confirm panel, so it answered 'no' and Discard did
+   * nothing (Miguel, 4 Nov 2026: a no-speech take stuck on screen). A take with no speech offers Discard first. */
+  let discardArm = { id: '', at: 0 };
+  const discardArmed = id => discardArm.id === id && Date.now() - discardArm.at < 4000;
   function paintRecordings() {
+    const focusedDiscard = document.activeElement?.dataset?.recordDiscard;
     const takes = window.WosOutbox?.recordings() || [];
     recovery.hidden = !takes.length;
-    recovery.innerHTML = takes.map(it => `<article>
+    recovery.innerHTML = takes.map(it => {
+      const empty = it.state === 'empty' && !(it.recoveryText || it.text), armed = discardArmed(it.id);
+      const retry = `<button class="wz-button ${empty ? 'quiet' : ''}" data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>`;
+      const discard = `<button class="wz-button ${empty || armed ? 'destructive' : 'quiet'}" data-record-discard="${esc(it.id)}"${armed ? ' data-armed' : ''} ${it.state === 'transcribing' ? 'disabled' : ''}>${armed ? 'Confirm discard' : 'Discard'}</button>`;
+      return `<article class="wz-card">
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
       <p class="recording-meta">${esc(recordingMeta(it))}</p>
-      <p role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
-      <p>${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
-      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea><button data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}
-      <button data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>
-      <button data-record-download="${esc(it.id)}">Download audio</button>
-      <button data-record-discard="${esc(it.id)}" ${it.state === 'transcribing' ? 'disabled' : ''}>Discard</button>
-    </article>`).join('');
+      <p class="recording-why">${esc(it.state === 'transcribing' ? 'Transcribing…' : it.error || ((it.recoveryText || it.text) ? 'Transcript ready · copy it below.' : 'Ready to retry transcription.'))}</p>
+      <p class="recording-store" role="status">${esc(it.storageError ? (it.durable ? 'Device save failed · complete backup kept; retrying.' : 'Device save failed · not saved. Keep this tab open; download before reload.') : (it.durable ? 'Saved on this device · available after reload.' : 'Saving recording…'))}</p>
+      ${it.recoveryText || it.text ? `<textarea readonly aria-label="Recovered transcript">${esc(it.recoveryText || it.text)}</textarea>` : ''}
+      <div class="recording-acts">${empty ? discard : retry}${it.recoveryText || it.text ? `<button class="wz-button quiet" data-record-copy="${esc(it.id)}">Copy transcript</button>` : ''}<button class="wz-button quiet" data-record-download="${esc(it.id)}">Download audio</button>${empty ? retry : discard}</div>
+    </article>`;
+    }).join('');
+    if (focusedDiscard) [...(recovery.querySelectorAll?.('[data-record-discard]') || [])].find(b => b.dataset.recordDiscard === focusedDiscard)?.focus({ preventScroll: true });
   }
   recovery.addEventListener('click', async e => {
     const b = e.target.closest('button'); if (!b) return;
@@ -1907,7 +1858,13 @@
     } else if (b.dataset.recordCopy) {
       try { await navigator.clipboard.writeText(it.recoveryText || it.text); toast('📋', 'Transcript copied · recording kept until you discard it', 2600); }
       catch (e) { toast('!', 'Select and copy the transcript above', 2600); }
-    } else if (confirm('Discard this retained recording and transcript?')) O.remove(id);
+    } else if (b.dataset.recordDiscard) {
+      if (!discardArmed(id)) { discardArm = { id, at: Date.now() }; paintRecordings(); setTimeout(() => { if (discardArm.id === id && !discardArmed(id)) { discardArm = { id: '', at: 0 }; paintRecordings(); } }, 4100); return; }
+      discardArm = { id: '', at: 0 }; b.disabled = true; b.textContent = 'Discarding…';
+      let ok = false; try { ok = await O.remove(id); } catch (_) {}
+      paintRecordings();
+      toast(ok ? '✕' : '!', ok ? 'Recording discarded' : `Not discarded · ${O.removeError?.(id) || 'try again'}`, ok ? 1800 : 3200);
+    }
   });
   window.WosOutbox?.onChange(paintRecordings);
   window.WosOutbox?.load().then(paintRecordings);
