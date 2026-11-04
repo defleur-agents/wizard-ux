@@ -38,9 +38,12 @@
   const disabled = new Set();       // skin ids whose script failed this page
   const claims = new Set();         // pointer ids a skin gesture has claimed
   const clock = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
+  const backClaims = new Set();
+  window.addEventListener?.('keydown', () => { claimAt = -Infinity; backClaims.clear(); }, true);
+  window.addEventListener?.('pointerdown', () => { claimAt = -Infinity; backClaims.clear(); }, true);
   let claimAt = -Infinity;          // when a claimed finger last went down or lifted (a back swipe that follows is the gesture's)
   const requested = [];             // asset URLs requested (diagnostics + tests)
-  let importer = url => import(url);
+  let importer = url => import(url), orbRetry = 0;
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
@@ -135,7 +138,7 @@
       },
       gesture: Object.freeze({
         // Claim a pointer before the shell's dock swipe locks direction. False once the shell owns it.
-        claim: pointerId => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); claimAt = clock(); return true; },
+        claim: (pointerId, { backSwipe = false } = {}) => { if (shell && shell.locked && shell.locked(pointerId)) return false; claims.add(pointerId); a.claims.add(pointerId); if (backSwipe) { backClaims.add(pointerId); claimAt = clock(); } return true; },
         // The shell's one swipe threshold (core/swipe-intent.js): true for an intentional sideways swipe either way.
         intent: (dx, dy, ms) => { const w = typeof window !== 'undefined' && window.WosSwipeIntent; return !!(w && w.intentional(+dx || 0, +dy || 0, +ms || 0)); },
       }),
@@ -332,7 +335,7 @@
     lastRoute = ''; emitRoute();
     return personal === a;
   }
-  function release(id) { if (claims.has(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
+  function release(id) { if (backClaims.delete(id)) claimAt = clock(); claims.delete(id); for (const l of layers()) l.claims.delete(id); }
   function startBuiltin(name) {
     const d = builtinDefs.get(name); if (!d || !shell || builtins.has('core:' + name) || disabled.has('core:' + name)) return false;
     if (d.when === 'touch' && !env().touch) return false;
@@ -504,6 +507,30 @@
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
     } });
+    // The orb hold is shell-owned (pointer capture + voice custody); raw gesture.claim cannot
+    // replace it safely. A trusted layout+nav tweak borrows this lazy, reversible adapter.
+    if (trusted && caps.has('layout') && caps.has('nav')) api.orb = Object.freeze({ switcher() {
+      if (a.dead || base.env.shell !== 'phone' || !shell?.orbSwitcher) return () => {};
+      let stopped = false, instance = null;
+      const off = () => { if (stopped) return; stopped = true; instance?.dispose(); a.offs.delete(off); };
+      a.offs.add(off);
+      const href = stamp(new URL('core/orb-switcher.js', document.baseURI).href); requested.push(href);
+      // A saved ON choice is not a ready handler. Include this lazy dependency in
+      // package readiness; one failed import otherwise leaves an inert "active" tweak.
+      a.ready = bounded(importer(href), 8000).catch(e => {
+        if (stopped || a.dead) return null;
+        // Browsers cache rejected ES modules by URL. Keep the release stamp but
+        // use one fresh key; an explicit later refresh gets a fresh retry too.
+        const retry = href + (href.includes('?') ? '&' : '?') + 'orb-retry=' + (++orbRetry);
+        requested.push(retry); return bounded(importer(retry), 30000);
+      }).then(mod => {
+        if (stopped || a.dead) return;
+        instance = mod.default(shell.orbSwitcher);
+        window.WosSettings?.refresh?.();
+      }).catch(e => { off(); throw e; });
+      a.ready.catch(() => {}); // teardown API is synchronous; loadTweaks owns failure reporting
+      return off;
+    } });
     if (caps.has('models')) {
       api.models = Object.freeze({ list: async () => {
         const options = await shell?.models?.() || [];
@@ -632,6 +659,8 @@
         try {
           a.teardown = mod.default(tweakApi(a, m, teamAuthors.includes(m.author) || trustedAuthors.includes(m.author)));
           if (a.teardown && typeof a.teardown !== 'function') throw new Error('Setup must return teardown');
+          if (a.ready) await a.ready;
+          if (seq !== tweakSeq) return false;
         } catch (e) { dispose(a, 'error'); throw e; }
       } catch (e) {
         if (seq !== tweakSeq) return false;
@@ -717,7 +746,7 @@
     claimed: pointerId => claims.has(pointerId),
     /* app.js Back: true while a skin gesture owns a finger or lifted it within `ms`. The browser's / OS's own back swipe
      * (iOS Safari's left edge, Chrome's overscroll, Android's edge) under that finger is the gesture's, not a Back. */
-    claimedLately: (ms = 800) => { const t = clock() - claimAt; return t < ms || (claims.size > 0 && t < 10000); },
+    claimedLately: (ms = 800) => { const t = clock() - claimAt; return t < ms || (backClaims.size > 0 && t < 10000); },
     release,
     get state() { return { active: active ? active.id : null, listeners: active ? active.offs.size : 0, frames: active ? active.frames.size : 0, handlers: active ? active.on.route.size + active.on.render.size : 0, disabled: [...disabled], requested: [...requested], css: [...cssLinks.keys()] }; },
     _test: { setImporter(fn) { importer = fn; }, env, load, unload, loadLayout },
