@@ -2129,7 +2129,7 @@ test('plain keys belong to the app in front (Miguel, 4 Nov 2026: Space for Music
   assert.ok(bar);
 });
 
-test('round 24 (Miguel, 4 Nov 2026): Group By subject: one sub-header per subject (Wizard OS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the rail folds to Ready alone', async () => {
+test('round 24 (Miguel, 4 Nov 2026): Group By subject: one sub-header per subject (Wizard OS, Messenger, …), waiting ones first, Other last; ⌥↓ walks it; the folded rail shows each subject', async () => {
   const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
   const at = m => new Date(Date.now() - m * 60e3).toISOString();
   const rows = [
@@ -2149,9 +2149,16 @@ test('round 24 (Miguel, 4 Nov 2026): Group By subject: one sub-header per subjec
   w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
   w.q('.aad-sortmenu [data-group="subject"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupBy, 'subject'); assert.equal(store.groupReady, false);
+  // round 24b: the folded rail shows each subject alone, its chats in the flyout / click
+  assert.deepEqual(P.railRows({ ready: rows }, 'subj:Wizard OS', 'newest').map(r => r.id), ['b', 'c']);
+  assert.deepEqual(P.railActive({ ready: rows }, 'c', null, 'newest', 'subjects'), { key: 'subj:Wizard OS', i: 1, n: 2 });
   assert.deepEqual(w.qa('.aad-grp').map(x => x.dataset.state + ':' + x.querySelector('.aad-grp-w').textContent).sort(), ['subject:Messenger', 'subject:Wizard OS']);
   w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.q('.aad-sortmenu [data-group="subject"]').getAttribute('aria-checked'), 'true');
   w.q('.aad-sortmenu [data-group="status"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true); assert.ok(w.qa('.aad-grp').every(x => x.dataset.state !== 'subject'), 'back to status headers');
+  w.q('.aad-sortb').dispatchEvent(new FakePointerEvent('click')); w.q('.aad-sortmenu [data-group="subject"]').dispatchEvent(new FakePointerEvent('click'));
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(w.qa('.aad-rk').map(n => n.dataset.k).filter(k => k.startsWith('subj:')).sort(), ['subj:Messenger', 'subj:Wizard OS'], 'folded: one rail row per subject');
+  assert.ok(!w.qa('.aad-rk').some(n => n.dataset.k === 'ready'), 'no Ready total over them');
 });
