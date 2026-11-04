@@ -2116,7 +2116,7 @@ test('AI apps view phone: Now playing = the same small bars on the playing app\'
   assert.doesNotMatch(read('web/layouts/ai-apps/layout.js'), /api\.media|ah-np/, 'inside an app: no new chrome');
 });
 
-test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes the keyboard; while ⌥ is held its own data-wz-key controls wear outlined keycaps inside its frame; ⌥H on the panel and in the empty middle only at Home', async () => {
+test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit or click takes the keyboard; ⌥ + a key it marks presses it (beating the view\'s letter), Wizard\'s keys never reach it, plain keys do nothing; while ⌥ is held its keys wear Wizard\'s keycap inside its frame and a claimed view keycap steps aside', async () => {
   const { w, keys } = deskWorld();
   const guides = [];
   w.api.keys = { on: h => { keys.push(h); return () => {}; }, guide: g => { guides.push(g); return () => {}; } };
@@ -2124,11 +2124,11 @@ test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes 
   const chatDesk = new El('div'); chatDesk.className = 'wsp'; const dchats = new El('div'); dchats.className = 'dchats'; chatDesk.append(dchats);
   const appDesk = new El('div'); appDesk.className = 'wsp'; const win = new El('div'); win.className = 'win'; const frame = new El('iframe'); win.append(frame); appDesk.append(win);
   stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
-  // the app's page: a Play button (Space), a hidden one (j), a disabled one (k) as WizardApp.keys.list() reports the live ones
-  const play = new El('button'); play.setAttribute('data-wz-key', 'Space'); play.setAttribute('data-wz-key-label', 'Play / pause');
-  const next = new El('button'); next.setAttribute('data-wz-key', 'ArrowRight');
-  let listed = 0, focused = 0;
-  frame.contentWindow = { focus() { focused++; }, WizardApp: { keys: { list: () => { listed++; return [{ el: play, key: 'Space', label: 'Play / pause' }, { el: next, key: 'ArrowRight', label: '' }]; } } } };
+  // the app's page: Next (j) and Search (k), as WizardApp.keys.list() reports the live ones (an older app's Space / h marks are dropped)
+  const clicks = []; const btn = (k, tag = 'button') => { const b = new El(tag); b.setAttribute('data-wz-key', k); b.click = () => clicks.push(k); return b; };
+  const next = btn('j'), find = btn('k', 'input'), old = btn('Space'), mine = btn('h'); let fieldFocus = 0; find.focus = () => { fieldFocus++; };
+  let claimK = true, listed = 0, focused = 0;
+  frame.contentWindow = { focus() { focused++; }, WizardApp: { keys: { list: () => { listed++; return [{ el: next, key: 'j', label: 'Next' }, ...(claimK ? [{ el: find, key: 'k', label: 'Search' }] : []), { el: old, key: 'Space', label: '' }, { el: mine, key: 'h', label: '' }]; } } } };
   frame.contentDocument = { readyState: 'complete', URL: 'https://box.example/music/' };
   frame.focus = () => { focused++; w.doc.activeElement = frame; };
   (await layout()).default(w.api);
@@ -2145,21 +2145,37 @@ test('app keys (Miguel, 4 Nov 2026): the app picked by ⌥ digit or click takes 
   for (let k = 0; k < 4 && !focused; k++) w.run();
   assert.ok(focused >= 1 && w.doc.activeElement === frame, 'the frame has the keyboard: plain keys reach the app');
   const n0 = focused; for (let k = 0; k < 4; k++) w.run(); assert.equal(focused, n0, 'once: no focus loop after it holds');
-  // hold ⌥: the app's own keys, outlined (app: true), in its frame, beside the view's
-  const raw = guides[0](), app = raw.filter(c => c.app);
-  assert.deepEqual(app.map(c => [c.key, c.el, c.frame, c.at, c.name]), [['Space', play, frame, 'tl', 'Play / pause'], ['→', next, frame, 'tl', '']], 'Space and → on Play and Next, the frame named so the shell offsets them');
+  // hold ⌥: the app's own keys (app: true marks them for the shell; same keycap), in its frame, beside the view's
+  let raw = guides[0](), app = raw.filter(c => c.app);
+  assert.deepEqual(app.map(c => [c.key, c.el, c.frame, c.at, c.name]), [['J', next, frame, 'tl', 'Next'], ['K', find, frame, 'tl', 'Search']], 'J and K on Next and Search, the frame named so the shell offsets them; Space / h are not app keys');
   assert.ok(raw.some(c => c.key === 'W' && !c.app), 'the view\'s own ⌥ keycaps stay');
+  assert.ok(!raw.some(c => c.key === 'K' && !c.app), 'the app claims k: the view\'s ⌥K keycap (search) steps aside');
+  // ⌥J / ⌥K press the app's controls (from the shell or from inside its frame, e.key a Mac symbol), once per press
+  const alt = (code, o = {}) => keys.some(h => h.down({ altKey: true, code, key: '∆', ...o }) === true);
+  assert.ok(alt('KeyJ')); assert.deepEqual(clicks, ['j'], '⌥J clicks the app\'s j');
+  assert.ok(alt('KeyJ', { repeat: true })); assert.deepEqual(clicks, ['j'], 'held: once');
+  assert.ok(alt('KeyK', { target: next })); assert.deepEqual([clicks, fieldFocus, w.q('.aad-search').hidden], [['j', 'k'], 1, true], '⌥K with the app claiming k: the app\'s field (focused), not search');
+  assert.ok(alt('KeyH')); assert.equal(w.html.dataset.aadFocus, '', 'reserved ⌥H: Wizard\'s Home, never the app\'s h'); alt('KeyH');
+  assert.ok(!clicks.includes('h') && !clicks.includes('Space'));
+  alt('KeyJ', { shiftKey: true }); assert.equal(clicks.length, 2, '⌥⇧J is not the app\'s j');
+  claimK = false;
+  assert.ok(alt('KeyK')); assert.equal(w.q('.aad-search').hidden, false, '⌥K with no claim: the view\'s search'); assert.equal(clicks.length, 2);
+  raw = guides[0](); assert.ok(raw.some(c => c.key === 'K' && !c.app), 'and its keycap is back');
+  claimK = true;
   assert.ok(chips().includes('H@aad-pti'), '⌥H with an app in front: on the panel\'s app icon');
   assert.ok(!chips().includes('H@aad-hmid'), 'the middle is the app\'s now: no middle H');
   assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
   keys[2].down({ altKey: true, code: 'KeyH' });
-  // plain keys are never the view's (they go on to the app frame)
+  // plain keys are never the view's and press nothing (they go on to the app as its own typing)
   for (const k of [{ key: ' ', code: 'Space' }, { key: 'j', code: 'KeyJ' }, { key: 'ArrowRight', code: 'ArrowRight' }, { key: 'Enter', code: 'Enter' }]) for (const h of keys) assert.notEqual(h.down({ ...k, altKey: false }), true, `${k.code} passes through`);
+  assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /const goApp = \(id, desk = null, then = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
-  assert.match(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{[^}]*background: color-mix[^}]*border: 1\.5px solid var\(--wz-accent/, 'outlined app keycaps');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
+  assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
+  assert.ok(js.indexOf('appFront()) { const t = appTarget') > js.indexOf("if (typing() && /^(KeyE|KeyU|KeyI|ArrowLeft|ArrowRight)$/.test(code)) return false;"));
 });
 
 test('AI apps view: Now playing is only small bars on the playing app\'s own icon (no pill, no list, no slot); hover = pause, a click pauses without opening the app; ⌥P on that icon', () => {

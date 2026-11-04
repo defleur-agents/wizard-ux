@@ -2308,7 +2308,7 @@
     // screen readers.
     const NAMES = Object.fromEntries([...SPEAK, ...TYPE, ...READY, ...GO, ...WIN].map(([k, n]) => [k, n]));
     // opt.frame: n sits inside that same-origin app frame (its box is moved by the frame's offset and hit-tested in the
-    // frame's own page); opt.app: an app's own plain key (outlined, no ⌥ meaning); opt.free: a spot the layout knows is
+    // frame's own page); opt.app: an app's own ⌥ key (data-wz-key, named by the app); opt.free: a spot the layout knows is
     // empty (no hit test).
     function chip(n, label, at = 'below', word = '', opt = null) {
       const f = opt?.frame || null, fr = f ? f.getBoundingClientRect() : null, r0 = n.getBoundingClientRect();
@@ -2325,7 +2325,7 @@
       }
       const c = document.createElement('b');
       c.className = 'kh-chip' + (word ? ' kh-lab' : '') + (opt?.app ? ' kh-app' : ''); c.innerHTML = word ? `<kbd>${esc(label)}</kbd>${esc(word)}` : esc(label);
-      c.setAttribute('aria-label', opt?.app ? `${label}: ${opt.name || label}` : `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
+      c.setAttribute('aria-label', opt?.app ? `${ALT} ${label}: ${opt.name || label}` : `${ALT} ${label}: ${NAMES[label] || word || label}`); el.appendChild(c);
       const w = c.offsetWidth, h = c.offsetHeight;
       let x = r.left + r.width / 2 - w / 2, y = r.bottom + 24 > innerHeight ? r.top - h - 3 : r.bottom + 3; // near the bottom: above it
       if (at === 'inside') { x = r.right - w - 8; y = r.top + r.height / 2 - h / 2; }

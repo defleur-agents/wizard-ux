@@ -803,7 +803,7 @@
       /* Keys: down(e) sees every key the desktop gets (app frames included) before its own bindings and returns true
        * when it used it; up(e) sees releases. hold: true = the layout draws its own hold-⌥ overlay (the shell's hold
        * chips stay off; ⌥/ still pins the guide). guide(fn, { only }): fn() → [{ el, key, word, at, frame?, app?, name?, free? }] chips the hold-⌥ guide adds (frame: el
-       * sits in that same-origin app frame; app: the app's own plain key, drawn outlined; free: a spot the layout knows is
+       * sits in that same-origin app frame; app: the app's own ⌥ key (data-wz-key), named by the app; free: a spot the layout knows is
        * empty, drawn without the hit test). */
       keys: Object.freeze({
         on({ down, up, hold = false } = {}) {
