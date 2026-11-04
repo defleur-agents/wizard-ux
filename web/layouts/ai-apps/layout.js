@@ -285,6 +285,30 @@ export default function setup(api) {
   const grid = (label, cells) => { const g = el('div', 'aa-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
   // round 12: a Home icon is a desk: that desk (a second Chats desk too); a search hit: its app's first desk
   const goApp = (id, desk = null) => { const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id); if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
+  /* round 21 (Miguel, 4 Nov 2026): every open the shell starts by itself follows the view. An app (a notification's
+   * Open, a chat's app button) or a link an app owns = that app full screen, its one window reused and taken to the page;
+   * no view opens beside a thread by itself. A Reply / a chat an app starts opens the chat, and Back returns to the app
+   * (while that chat is in front). Links no app owns keep the stock page with its own Back. */
+  let backOff = null, backDesk = -1;
+  const dropBack = () => { backOff?.(); backOff = null; backDesk = -1; };
+  api.apps.routeOpens?.({
+    open(kind, d, go) {
+      if (kind === 'beside') return true;
+      if (kind === 'app' || (kind === 'link' && d.app)) {
+        const id = kind === 'app' ? d.id : d.app, path = kind === 'app' ? d.path : d.url;
+        if (!id || id === CHATS) return false;
+        closeMenu(); closeSheet(); closeDrawer(); dropBack();
+        goApp(id); if (path) api.apps.path(id, path); return true;
+      }
+      if (kind === 'draft' || kind === 'thread') {
+        closeMenu(); closeSheet(); closeDrawer(); dropBack();
+        let ok = false; try { ok = !!go(); } catch (_) { ok = false; }
+        if (ok && d.from) { const from = d.from; backDesk = api.route().desk; backOff = api.back.push(() => { backOff = null; backDesk = -1; goApp(from); }); }
+        return true;
+      }
+      return false;
+    },
+  });
   function chatRow(s, here) {
     const b = el('button', 'aa-row aa-chat', { type: 'button', 'data-sid': s.id, 'data-kind': s.kind, ...(s.id === here ? { 'aria-current': 'page' } : {}) });
     // plain titles like theirs; a pin, then the state at the end only when there is one (Working turns, Ready new = a dot);
@@ -542,6 +566,7 @@ export default function setup(api) {
   let last = { view: '', thread: null, desk: -1 }, pending = false;
   const soon = fn => { if (pending) return; pending = true; api.after(0, () => { pending = false; fn(); }); };
   function onRoute(r) {
+    if (backOff && r.desk !== backDesk) dropBack();   // left the app's chat: Back is the stock one again
     if (r.home) { soon(() => { if (api.route().home) api.sessions.newChat(); }); return paintTop(r); }
     if (r.view === 'list') {
       // the list lives in the drawer here: a thread left for the list (Back) opens the drawer over a new chat

@@ -90,6 +90,7 @@ export default function desktop(api) {
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
+  let draftWant = false;   // round 21: the new chat in front holds an app's Reply: it docks as a chat (left), the app stays right
   /* Round 11 (Miguel: opening and closing panels must be smooth): a change of layout snaps at once and its pieces glide
    * from where they were with a short transform (FLIP: translate only, never width / left), 220 ms. */
   const FLIP_MS = 220, EASE = 'cubic-bezier(.2, .8, .2, 1)';
@@ -403,7 +404,7 @@ export default function desktop(api) {
   api.listen(field, 'keydown', e => { if (e.key === 'Enter') { e.preventDefault(); scroll.querySelector('button')?.click(); } });
   // Home (Miguel, 2 Nov 2026) = the empty new chat: the skin's background, the composer and the orb, no greeting. + goes
   // there from anywhere (and ⌥`, the desktop's own Home key).
-  const newChat = () => { unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
+  const newChat = () => { draftWant = false; unpeek(); if (q) setSearch(false); closeMenu(); closeWs(); closeAll(); noteWant = false; api.sessions.newChat(); };
   /* round 15 (Miguel): Home = nothing open in front: the app panel hides (its app keeps running), a docked chat goes, the
    * new chat's composer at the bottom centre (the sidebar's ⌂, ⌥`) */
   const goHome = () => { if (pane) hidePanel({ home: false }); chatThread = null; newChat(); };
@@ -434,12 +435,12 @@ export default function desktop(api) {
   }
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
-  const goApp = (id, desk = null) => {
+  const goApp = (id, desk = null, then = null) => {
     unpeek(); closeAll();
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
-    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); };
+    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); then?.(); };
     // the Chats desk stays behind the panel: Home's new chat there first (never its bare list's empty pane beside the app)
     if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); api.after(60, go); } else go();
   };
@@ -1109,7 +1110,7 @@ export default function desktop(api) {
   const srcTool = n => { const id = n?.dataset?.tool; return id && /^[a-z0-9-]{1,32}$/.test(id) ? srcTools()?.querySelector(`[data-tool="${id}"]`) || null : null; };
   api.listen(pTools, 'click', e => { const n = e.target?.closest?.('button[data-tool]'); if (n && !n.disabled) srcTool(n)?.click(); });
   api.listen(pTools, 'change', e => { const n = e.target?.closest?.('select[data-tool]'), o = srcTool(n); if (!o) return; o.value = n.value; o.dispatchEvent(new Event('change', { bubbles: true })); });
-  const NOTE = '__note__';
+  const NOTE = '__note__', DRAFT = '__draft__';
   const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
   const noteTitle = () => noteThread(doc, '.win .dchats .pane-main')?.querySelector('.ch-head .ti b')?.textContent || 'Notification';
   let dropped = null;   // the panel just hidden for Home / Focus while the route still names its app
@@ -1172,7 +1173,7 @@ export default function desktop(api) {
   // the chat column goes: Home (a new chat); the app panel (if any) stays
   function closeChat() {
     if (!docked) return false;
-    chatThread = null; noteWant = false; anim('undock');
+    chatThread = null; noteWant = false; draftWant = false; anim('undock');
     api.sessions.newChat(); return true;
   }
   function setWide(on) {
@@ -1430,7 +1431,9 @@ export default function desktop(api) {
     const d = desks().find(x => x.desk === r.desk), id = r.home ? '' : d?.id || '';
     const app = id && id !== CHATS && !(r.view === 'thread' || r.view === 'list') ? id : '';
     const note = !app && !r.home && r.view === 'thread' && r.thread === '__new__' && (noteWant || noteOn());
-    return { app, thread: r.thread && r.thread !== '__new__' ? r.thread : null, note, r };
+    // round 21: an app's Reply (a new chat holding its item) is a chat in the column, never Home's composer
+    const draft = !app && !note && !r.home && r.view === 'thread' && r.thread === '__new__' && draftWant && onMainChats(r);
+    return { app, thread: r.thread && r.thread !== '__new__' ? r.thread : null, note, draft, r };
   }
   let pending = false;
   const soon = fn => { if (pending) return; pending = true; api.after(0, () => { pending = false; fn(); }); };
@@ -1444,19 +1447,20 @@ export default function desktop(api) {
   let lastThread;
   function paintTop(r = api.route()) {
     if (noteOn() || r.view !== 'thread' || (r.thread && r.thread !== '__new__')) noteWant = false;
+    if (r.home || r.view !== 'thread' || r.thread !== '__new__' || !onMainChats(r)) draftWant = false;
     noteRouteIntoActions(doc, '.win .dchats .pane-main');
     const h = here(r);
     if (h.app) closeAll();
     if (focusOn() && (h.app || h.thread || h.note)) focusLeave();
     // the chat on screen: a thread, or a notification shown as one; with an app in front, the chat beside it stays
-    if (!h.app) chatThread = h.thread || (h.note ? NOTE : null);
+    if (!h.app) chatThread = h.thread || (h.note ? NOTE : h.draft ? DRAFT : null);
     const wasDocked = docked;
     paintSplit(!!chatThread);
     if (h.thread !== lastThread) { if (h.thread && lastThread !== undefined && wasDocked) anim('thread'); lastThread = h.thread; }
     root.dataset.aiFront = r.home ? 'chat' : h.app ? 'app' : r.view === 'list' ? 'list' : 'chat';
-    const fresh = !h.app && !h.note && (r.home || (r.view === 'thread' && r.thread === '__new__'));
+    const fresh = !h.app && !h.note && !h.draft && (r.home || (r.view === 'thread' && r.thread === '__new__'));
     root.dataset.aadNew = String(fresh && !r.home);
-    const t = chatThread === NOTE ? noteTitle() : chatThread ? titleOf(chatThread) : '';
+    const t = chatThread === NOTE ? noteTitle() : chatThread === DRAFT ? 'New chat' : chatThread ? titleOf(chatThread) : '';
     tt.textContent = docked ? t : ''; tt.title = t;
     cX.setAttribute('aria-label', chatThread === NOTE ? 'Close the notification (Esc)' : 'Close the chat (Esc)');
     paintWs(); paintVt();
@@ -1464,6 +1468,29 @@ export default function desktop(api) {
     paintHome();
     syncOrb();
   }
+  /* round 21 (Miguel, 4 Nov 2026): one left/right model for every open the shell starts by itself. An app (a
+   * notification's Open, the launcher, a command) or a link an app owns = that app in the right panel, its one window
+   * reused and taken to the page; a link no app owns = one link page in the same panel; no view opens beside a thread
+   * by itself (links open when tapped). A Reply / a chat an app starts = a chat in the left column, the app stays. */
+  api.apps.routeOpens?.({
+    open(kind, d, go) {
+      if (kind === 'beside') return true;
+      if (kind === 'app' || (kind === 'link' && d.app)) {
+        const id = kind === 'app' ? d.id : d.app, path = kind === 'app' ? d.path : d.url;
+        if (!id || id === CHATS) return false;
+        goApp(id, null, path ? () => api.apps.path(id, path) : null); return true;
+      }
+      if (kind === 'link') { unpeek(); closeAll(); return api.apps.openLink(d.url, d.title); }
+      if (kind === 'draft' || kind === 'thread') {
+        unpeek(); closeAll(); if (q) setSearch(false);
+        let ok = false; try { ok = !!go(); } catch (_) { ok = false; }
+        if (ok && kind === 'draft') { draftWant = true; paintTop(); }
+        return true;
+      }
+      return false;
+    },
+    shows: desk => !!pane && Number(pane.desk) === desk,
+  });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
   api.on('home', () => soon(() => { if (api.route().home) api.sessions.newChat(); }));
