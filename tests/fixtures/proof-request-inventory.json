@@ -960,6 +960,24 @@
         }
       ],
       "note": "v11 refusal: explicit synthetic unconfigured backup overview. No upstream or mutation."
+    },
+    "/notifications/api/routes": {
+      "status": "catalogued",
+      "source": "web/core/notif-bell.js",
+      "kind": "read",
+      "examples": [
+        {
+          "method": "GET",
+          "path": "/notifications/api/routes"
+        }
+      ],
+      "note": "Only GET is admitted by the proof fixture. Route writes remain refused."
+    },
+    "/notifications/api/marks": {
+      "status": "not-exercised",
+      "source": "web/core/notif-bell.js",
+      "kind": "write-or-stream",
+      "note": "These three proofs serve no notification items, so no mark operation is reached. POST is refused and collected, never forwarded."
     }
   }
 }
