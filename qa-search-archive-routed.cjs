@@ -3,6 +3,7 @@
 const fs = require('fs'), path = require('path');
 const { chromium } = require('./tools/qa-playwright.cjs');
 const fx=require('./tools/qa-proof-fixture.cjs');
+fx.failAtExit(); // collect-all: one run reports every uncatalogued request, then exits non-zero
 if(process.argv[2]||process.env.QA_URL)throw Error('Owner/network origins refused');
 const TREE = process.env.QA_TREE || __dirname;
 const OUT = process.env.QA_OUT || path.join(require('os').tmpdir(), 'wizard-search-archive-last');
@@ -36,11 +37,11 @@ const ROUTED = 'qa-host', ag = { id: ROUTED, label: 'Synthetic routed', privacy:
     const m = u.pathname.match(/^\/wizard-os-home\/(.*)$/);
     if (m) {
       const rel = (m[1] || 'index.html').split('?')[0], file = path.join(TREE, 'web', rel);
-      if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill({ status: 404, body: '' });
+      if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) return route.fulfill(fx.response('/wizard-os-home/' + rel, method));
       const ct = rel.endsWith('.css') ? 'text/css' : rel.endsWith('.html') ? 'text/html' : rel.endsWith('.json') ? 'application/json' : rel.endsWith('.png') ? 'image/png' : rel.endsWith('.svg') ? 'image/svg+xml' : 'application/javascript';
       return route.fulfill({ status: 200, contentType: ct, body: fs.readFileSync(file) });
     }
-    return route.fulfill({ status: 404, body: '' });
+    return route.fulfill(fx.response(u.pathname, method)); // unknown path: refused and collected
   };
   const settle = page => page.waitForFunction(() => window.WosExperience && !WosExperience.state.busy, null, { timeout: 15000 }).then(() => sleep(250));
   const setSkin = async (page, id) => {

@@ -86,7 +86,7 @@ test('startup discovery has explicit synthetic skins and My skin responses', () 
   assert.equal(fx.response('/wizard/v1/my-skin').body, '');
   assert.equal(fx.read('/wizard/v1/my-skin?format=json').script.exists, false);
   for (const p of ['/wizard/v1/pages', '/wizard/v1/agent-options', '/wizard/v1/app-bindings', '/wizard/v1/schedules', '/wizard/ai-usage', '/troubleshoot/api/status', '/wizard-tinfoil/api/status', '/wizard-claude/api/accounts', '/wizard-os-home/store-data/wizard/v1/app-logos', '/wizard-os-home/store-data/wizard/v1/installed-apps', '/wizard-os-home/store-install/_updates']) assert.doesNotThrow(() => fx.read(p), p);
-  for (const p of ['/wizard/v1/skins/owner', '/wizard/v1/my-skin?format=other']) assert.throws(() => fx.response(p), /Uncatalogued/);
+  for (const p of ['/wizard/v1/skins/owner', '/wizard/v1/my-skin?format=other']) { fx.resetRefusals(); assert.equal(fx.response(p).status, 451); assert.equal(fx.refused().length, 1); fx.resetRefusals(); }
 });
 
 test('Wisdom verifies every pinned static asset, never nonexistent legacy files', async () => {
