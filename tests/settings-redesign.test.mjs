@@ -122,6 +122,21 @@ test('no skin suggests a Chats app: Look and Chats show no pairing on any skin',
   assert.equal(h.posts.length, 0);
 });
 // #803 supersedes #755's flat all-colours grid; colour and family remain independent.
+test('twinned Look keeps independent Skin and Colors with Background and Mode in both shells', () => {
+  for (const shell of ['phone', 'desktop']) {
+    const h = harness({ shell }), S = h.s.WosSkin;
+    const ids = ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'];
+    S.current = 'obsidian-light'; S.families[1].palettes = ids;
+    S.list = [S.list[0], ...ids.map(id => ({ id, name: id }))];
+    S.twin = id => ({ id: id.endsWith('-light') ? id.replace('-light', '') : id + '-light' });
+    S.setWallpaper = () => {}; S.wallpaper = 'landscapes';
+    S.wallpapers = [{ id: 'landscapes', name: 'Landscapes' }]; S.wallpaperThumb = () => '';
+    h.view.focus('look');
+    assert.match(h.root.innerHTML, /<h4>Skin<\/h4>[^]*<h4>Colors<\/h4>[^]*data-skinpick="obsidian-light" aria-pressed="true"[^]*<h4>Mode<\/h4>[^]*data-skinmode="light"[^]*<h4>Background<\/h4>[^]*data-bgpick="plain"/);
+    assert.doesNotMatch(h.root.innerHTML, /data-skinpick="nebula"/, 'Colors remain scoped to the chosen family');
+  }
+});
+
 test('Look: separate family tiles and scoped Colors, with Layout gone', () => {
   const h = harness(); h.s.WosSkin.current = 'obsidian-light'; h.view.focus('look');
   const html = h.root.innerHTML;

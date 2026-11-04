@@ -291,6 +291,13 @@ export const projectOf = r => {
   const t = String(r?.title || '').replace(/\s+/g, ' ').trim(), i = t.indexOf('·');
   return (i > 0 ? t.slice(0, i).trim() : '') || NO_PROJECT;
 };
+/** round 26 (Miguel, 4 Nov 2026: the project shows once, on its group's header): a row's title under a By project
+ * header, without its 'Project ·' part ("Wizard OS · Hotkeys" → Hotkeys); titles with no project stay whole. Pure. */
+export const titleInProject = r => {
+  const t = String(r?.title || ''), i = t.indexOf('·');
+  if (r?.note || i <= 0 || !t.slice(0, i).trim()) return t;
+  return t.slice(i + 1).trim() || t;
+};
 export function projectGroups(rows, order) {
   const by = new Map();
   for (const r of rows || []) { const k = projectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
