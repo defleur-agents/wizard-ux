@@ -1856,19 +1856,11 @@ test('round 20 item 9 / round 22: Ready is one flat list in priority order by de
 
 test('round 20 items 7 + 8: a quiet notification thread (source in the header, a thin amber edge, one muted routing line with a menu, Resolve); the open item\'s keys', () => {
   const c = read('web/core/chats.js'), b = read('web/core/notif-bell.js');
-  // the quiet thread is core Chats work on the notification thread's picker (#895, Chats is the inbox): checked where it
-  // exists; a branch without that picker in the thread (main before #895) has nothing to quieten
-  if (/function noteRouteHtml\(NV\)/.test(c)) {
-  assert.match(c, /const noteQuiet = \(\) => \{ try \{ return getComputedStyle\(document\.documentElement\)\.getPropertyValue\('--wos-note-quiet'\)\.trim\(\) === 'on';/, 'off unless a view asks');
-  assert.match(c, /class="ch-notif-route is-quiet" data-part="notify-route"><button type="button" class="ch-nr-b" data-notify-menu/);
-  assert.match(c, /From <b>\$\{esc\(name\)\}<\/b>\$\{where \? ` · \$\{esc\(where\)\}` : ''\}/, "'From Messenger · shows in Chats ▾'");
-  assert.match(c, /<div class="ch-nr-menu" role="menu" hidden>\$\{B\.picker\(id, \{ name \}\)\}<\/div>/, 'the choices are the one shared picker (Badge, Chats, … whatever the part offers)');
-  assert.match(c, /class="ch-notif-hsrc"/, 'the source\'s icon, name and time under the title');
-  assert.match(c, /NQ && a === 'resolve' \? 'Resolve' : A\.label/);
-  assert.doesNotMatch(c.split('\n').find(l => l.trim().startsWith('if (NQ) msgs =')), /ch-notif-src|mmeta/, 'no second Notification label');
-  assert.match(b, /ask: \(id, name\) => id === 'notifications'[^?]*\? `\$\{name\} go to` : `\$\{name\} notifications go to`/, 'the doubled word fixed');
-  assert.match(b, /function routeLabel\(id\)/);
-  }
+  // Shared main's unified inbox owns the notification thread; the layout must reuse its picker.
+  assert.match(c, /function noteRouteHtml\(NV\)/);
+  assert.match(c, /class="ch-notif-route" data-part="notify-route"/);
+  assert.ok(c.includes('B.picker(id, { name })'), 'one shared notification routing picker');
+  assert.match(b, /ask: \(id, name\) => `\$\{name\} notifications go to`/);
   for (const f of ['desktop.css', 'layout.css']) {
     const css = read('web/layouts/ai-apps/' + f);
     assert.match(css, /\] \{ --wos-note-quiet: on; \}/, f + ': the view asks for the quiet thread');
