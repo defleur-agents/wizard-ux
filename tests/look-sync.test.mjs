@@ -481,3 +481,93 @@ test('a conflicting newer server choice beats an already-sent intent, not an end
   assert.deepEqual(box.doc(), remote); assert.equal(d.views.phone, '');
   assert.equal(box.puts, 0); assert.equal(Object.keys(d.sync.state.pending.views || {}).length, 0);
 });
+
+// Sibling fields share the same causal-intent rules as views and built-in defaults.
+const ordinary = 'miguel/swipe-strip';
+const siblingDoc = () => ({ version: 1, skin: { id: 'obsidian', at: 1000 }, tweaks: { [ordinary]: { on: true, at: 1000 } }, views: { desktop: { id: '', at: 900 } } });
+const siblingValue = (d, field) => field === 'skin' ? d.skin : !!d.mix[ordinary];
+const siblingRemote = (doc, field) => field === 'skin' ? doc.skin.id : doc.tweaks[ordinary].on;
+const chooseSibling = (d, field) => {
+  if (field === 'skin') { d.skin = 'obsidian-light'; d.sync.skinChoice(d.skin); }
+  else d.toggle(ordinary, false);
+};
+const siblingWant = field => field === 'skin' ? 'obsidian-light' : false;
+// Hold the response AFTER the server processed the request, not merely the request.
+function holdSiblingAck(box) {
+  const req = box.req; let release, began, once = true;
+  const started = new Promise(r => { began = r; }), held = new Promise(r => { release = r; });
+  box.req = async (url, init = {}) => {
+    const response = await req(url, init);
+    if (once && init.method === 'PUT') { once = false; began(); await held; }
+    return response;
+  };
+  return { started, release };
+}
+for (const field of ['skin', 'tweak']) {
+  for (const synced of [false, true]) test(`sibling ${field}: choice during first GET stays selected (synced=${synced})`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'GET');
+    const d = device(box, { skin: 'obsidian', mix: { [ordinary]: true }, shells: true, meta: { synced } });
+    const syncing = d.sync.sync(); await hold.started;
+    chooseSibling(d, field); assert.equal(siblingValue(d, field), siblingWant(field));
+    hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), siblingWant(field), 'GET adoption must not revert the local choice');
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+    const chosen = field === 'skin' ? box.doc().skin : box.doc().tweaks[ordinary];
+    assert.ok(chosen.at > 1000, 'intent is based above the complete observed document');
+    assert.deepEqual(box.doc().views, siblingDoc().views);
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes, 'settled choice is quiet');
+  });
+  test(`sibling ${field}: successful PUT ACK cannot undo a newer unsent choice`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdSiblingAck(box), d = device(box, { shells: true, meta: { synced: true } });
+    await d.sync.sync(); d.pickView('desktop', 'miguel/apps-home');
+    const syncing = d.sync.sync(); await hold.started;
+    assert.equal(box.puts, 1, 'server has already accepted the older view PUT');
+    chooseSibling(d, field); hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), siblingWant(field), 'older ACK must not paint over the choice');
+    assert.equal(field === 'skin' ? d.sync.state.pending.skin.id : d.sync.state.pending.tweaks[ordinary].on, siblingWant(field), 'newer intent remains pending');
+    await d.flush();
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+    assert.equal(box.doc().views.desktop.id, 'miguel/apps-home');
+    const follower = device(box, { shells: true }); await follower.sync.sync();
+    assert.equal(siblingValue(follower, field), siblingWant(field), 'another device reads the saved choice');
+  });
+  for (const newIntent of [false, true]) test(`sibling ${field}: 409 bases only a new intent during PUT (new=${newIntent})`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'PUT'), d = device(box, { shells: true, meta: { synced: true } });
+    await d.sync.sync(); chooseSibling(d, field);
+    const syncing = d.sync.sync(); await hold.started;
+    const remote = siblingDoc();
+    remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001;
+    remote.views.desktop = { id: 'miguel/ai-apps', at: 2002 }; box.text = JSON.stringify(remote);
+    if (newIntent) chooseSibling(d, field);
+    hold.release(); await syncing;
+    assert.equal(siblingValue(d, field), newIntent ? siblingWant(field) : siblingRemote(remote, field));
+    assert.equal(siblingRemote(box.doc(), field), newIntent ? siblingWant(field) : siblingRemote(remote, field));
+    const revision = field === 'skin' ? box.doc().skin.at : box.doc().tweaks[ordinary].at;
+    if (newIntent) assert.ok(revision > 2002, 'new unsent intent observes the 409 document once');
+    else assert.equal(revision, field === 'skin' ? 2000 : 2001, 'already-sent intent cannot defeat a genuinely newer writer');
+    assert.deepEqual(box.doc().views, remote.views, 'independent remote view survives');
+    const writes = box.puts; await d.sync.sync(); assert.equal(box.puts, writes);
+  });
+  test(`sibling ${field}: first-sync sent intent yields to a newer 409 writer`, async () => {
+    const box = pagesBox(siblingDoc()), hold = holdNext(box, 'PUT'), d = device(box);
+    chooseSibling(d, field);
+    const syncing = d.sync.sync(); await hold.started;
+    const remote = siblingDoc(); remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001; box.text = JSON.stringify(remote);
+    hold.release(); await syncing;
+    assert.deepEqual(box.doc(), remote, 'first-sync retries must not renew an already-sent intent');
+    assert.equal(siblingValue(d, field), siblingRemote(remote, field));
+  });
+  test(`sibling ${field}: restored pending choice is based once after reload`, async () => {
+    const pending = { skin: field === 'skin' ? { id: 'obsidian-light', at: 1 } : null, tweaks: field === 'tweak' ? { [ordinary]: { on: false, at: 1 } } : {} };
+    const box = pagesBox(siblingDoc()), d = device(box, { shells: true, meta: { synced: true, pending } });
+    await d.sync.sync(); assert.equal(siblingValue(d, field), siblingWant(field));
+    assert.equal(siblingRemote(box.doc(), field), siblingWant(field));
+  });
+  test(`sibling ${field}: an idle observed choice does not erase a newer remote edit`, async () => {
+    const box = pagesBox(siblingDoc()), d = device(box, { meta: { synced: true } }); await d.sync.sync();
+    chooseSibling(d, field);
+    const remote = siblingDoc(); remote.skin.at = 2000; remote.tweaks[ordinary].at = 2001; box.text = JSON.stringify(remote);
+    await d.sync.sync();
+    assert.equal(siblingValue(d, field), siblingRemote(remote, field)); assert.deepEqual(box.doc(), remote);
+  });
+}
