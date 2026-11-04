@@ -2319,7 +2319,7 @@ window.WizCore.chats = function createChats(H) {
   // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
   function retryRead(w, sid, nav, n) {
     const c = ch(w.id); clearTimeout(c.retryT);
-    c.retryT = setTimeout(() => { if (W[w.id] === w && w.thread === sid && c.readNav === nav && c.loadedFor !== sid && !c.loading) loadThread(w, true); }, Math.min(15000, 1000 * 2 ** (n - 1)));
+    c.retryT = setTimeout(() => { if (CH[w.id] === c && W[w.id] === w && w.thread === sid && c.readNav === nav && c.loadedFor !== sid && !c.loading) loadThread(w, true); }, Math.min(15000, 1000 * 2 ** (n - 1)));
   }
   function threadErrHtml(c) {
     if (c.err !== 'Couldn’t load this thread') return `<div class="ch-empty">${esc(c.err)}</div>`;
@@ -2996,7 +2996,7 @@ window.WizCore.chats = function createChats(H) {
     ta.setSelectionRange(a + text.length, a + text.length); ch(id).draft = ta.value; saveDraft(id); growTa(ta); syncSend(ta.form, ch(id));
     return true;
   }
-  const forget = id => { INC?.close(id, true); if (CH[id]) closeStream(CH[id]); closeHosted(id); clearReading(id); delete CH[id]; };
+  const forget = id => { INC?.close(id, true); const c = CH[id]; if (c) { closeStream(c); for (const t of [c.retryT, c.sentTimer, c.ptrT, listSaveT[id]]) clearTimeout(t); delete listSaveT[id]; } closeHosted(id); clearReading(id); delete CH[id]; };
   function justPressed() { return lpHeld !== null || Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {

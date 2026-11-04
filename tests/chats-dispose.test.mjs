@@ -15,3 +15,10 @@ test('pending transcript read cannot paint or retry after forget deletes its sta
  delete env.CH.w; resolve([{a:{text:'new answer'}}]);await read;
  assert.equal(paints,0);assert.equal(c.turns,undefined);assert.equal(c.loading,false);
 });
+test('forget cancels owned read, send, pointer and reading-place timers',()=>{
+ const c={retryT:1,sentTimer:2,ptrT:3},cleared=[];
+ const env={INC:null,CH:{w:c},listSaveT:{w:4},closeStream(){},closeHosted(){},clearReading(){},clearTimeout:t=>cleared.push(t)};
+ const start=source.indexOf('  const forget = id =>'),end=source.indexOf('\n',start);
+ const forget=vm.runInNewContext(source.slice(start,end)+';forget',env);forget('w');
+ assert.deepEqual(cleared,[1,2,3,4]);assert.equal(env.CH.w,undefined);assert.equal(env.listSaveT.w,undefined);
+});
