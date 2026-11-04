@@ -9,7 +9,6 @@
   ],
   "tweaks": [
     "miguel/send-and-go",
-    "miguel/hidden-pin",
     "wizard/pin-buttons",
     "miguel/snooze-someday",
     "wizard/two-orbs",
@@ -25,6 +24,7 @@
   ],
   "aliases": {
     "miguel/unified-inbox": "wizard/unified-inbox",
-    "wizard/machines-home": "miguel/machines-home"
+    "wizard/machines-home": "miguel/machines-home",
+    "miguel/switch-row-actions": "miguel/model-pills"
   }
 }
