@@ -92,3 +92,14 @@ test('reload recovery errors do not unload, discard, or get stuck in checking',a
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);f.window.WizAppCapture.reconcileReload=async()=>{throw Error('synthetic offline')};
   f.web.reload('tap');await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
 });
+test('recording/work starting during asynchronous native backup flush prevents reload',async()=>{
+  const f=updater();let release;f.plan={ok:true,keeps:{appId:'mizel'},blocking:[],recording:false};
+  f.window.WizAppServices.update.prepareReload=()=>new Promise(r=>release=r);
+  f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();assert.ok(release);
+  f.plan={ok:false,blocking:[{kind:'work',reason:'unsaved notes'}],recording:false};release();await tick();assert.equal(f.reloads,0);assert.match(f.toasts.at(-1)[1],/Reload paused/);
+});
+test('hung recorder check has a bounded UI wait without cancelling the underlying take',async()=>{
+  const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
+  f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');await tick();
+  f.timers.find(([,ms])=>ms===15000)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
+});
