@@ -98,4 +98,17 @@ test('api.media: layouts and trusted tweaks that ask for it; both shells wire th
   assert.match(css, /\.aad-vtab\[data-media="paused"\] \.aad-np \{ animation: np-gone 250ms ease 4s both; \}/, 'paused: gone after a short grace');
   assert.doesNotMatch(css.replace(/\/\*[\s\S]*?\*\//g, ''), /(^|\})\s*html\[data-tweaks~="miguel\/now-playing"\]\s*\{/, 'nothing styled at the root: idle is exactly tweak-off');
   for (const f of ['web/core/media-watch.js', 'web/core/skin-host.js', 'web/app.js', 'web/desktop/desktop.js']) assert.doesNotMatch(read(f), /now-playing/, f + ': core never names the package');
+  // the phone (4 Nov 2026): the same bars on the AI apps Home icons; no hover, a 44 px invisible hit area, paused = a play mark that fades
+  assert.doesNotMatch(tw, /env\.shell/, 'the phone watches too');
+  const P = 'html[data-tweaks~="miguel/now-playing"][data-shell="phone"]';
+  assert.ok(css.includes(P + ' .ah-np {'), 'phone badge rule');
+  assert.match(css, /\.ah-np \{[^}]*width: 20px; height: 20px;/, 'a small drawn badge');
+  const hit = css.match(/\.ah-np::before \{ content: ""; position: absolute; inset: (-?\d+)px (-?\d+)px (-?\d+)px (-?\d+)px;/);
+  assert.ok(hit, 'an invisible padded hit area'); const [t, r, b, l] = hit.slice(1).map(Number);
+  assert.ok(20 - t - b >= 44 && 20 - l - r >= 44, 'at least 44 px each way');
+  assert.doesNotMatch(css.match(/\.ah-np::before \{[^}]*\}/)[0], /background|border:|box-shadow/, 'the hit area is never drawn');
+  assert.doesNotMatch(css, /\[data-shell="phone"\][^{]*\.ah-np[^{]*:hover/, 'no hover on a phone');
+  assert.doesNotMatch(css.split('\n').filter(l => l.includes('[data-shell="phone"]') && /\.ah-np-[bg]/.test(l)).join('\n'), /visibility: visible/, 'no child turned visible: it would take taps after the badge fades');
+  assert.ok(css.includes(P + ' .ah-app[data-media="paused"] .ah-np { animation: np-gone 250ms ease 4s both; }'), 'paused: gone after the same grace');
+  assert.ok(css.includes(P + ' .ah-app:has(.ah-np:active) .ah-tile { transform: none; filter: none; }'), 'pressing the bars does not press the icon');
 });
