@@ -322,13 +322,13 @@
   // Maintenance and a superseded provider stay addressable by deep link/voice, but are not ordinary Apps entries.
   // Wizard Files remains the active files backend; when an owner-facing Files screen or native Files shortcut exists,
   // showing both is a duplicate. If Files is ever removed, Wizard Files automatically returns to the launcher.
-  const ownerFacingFiles = () => {
+  const ownerFacingFiles = shell => {
     const native = window.WizLauncher?.get?.('nativeLinks');
     return REMOTE.some(x => x.id === 'files' && x.url) ||
-      (Array.isArray(native) && native.some(x => x?.id === 'files' && x.href));
+      (shell !== 'desktop' && Array.isArray(native) && native.some(x => x?.id === 'files' && x.href));
   };
-  const internalFilesProvider = a => a?.id === 'wizard-files' && ownerFacingFiles();
-  window.WizCore.isMaintenanceApp = a => a?.id === 'wizard-supervisor' || internalFilesProvider(a);
+  const internalFilesProvider = (a, shell) => a?.id === 'wizard-files' && ownerFacingFiles(shell);
+  window.WizCore.isMaintenanceApp = (a, shell) => a?.id === 'wizard-supervisor' || internalFilesProvider(a, shell);
   window.WizCore.isInDevelopment = a => !!a && DEV.has(String(a.id));
   // One registry per shell, built once and shared. Building one dispatches 'wizard:apps' and subscribes it
   // forever, so a fresh registry per call looped (home-screen icon refresh → registry → event → refresh)

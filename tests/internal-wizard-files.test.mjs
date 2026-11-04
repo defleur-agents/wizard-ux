@@ -37,8 +37,13 @@ async function shell(installed, nativeLinks = []) {
   vm.runInNewContext(apps, ctx);
   vm.runInNewContext(kindsJs, ctx);
   await window.WizCore.appsLoaded();
-  const { APPS, APP } = window.WizCore.apps('mobile');
-  return { window, APP, groups: window.WosAppKinds.kinds(APPS, APP) };
+  const mobile = window.WizCore.apps('mobile');
+  const desktop = window.WizCore.apps('desktop');
+  return {
+    window,
+    mobile: { APP: mobile.APP, groups: window.WosAppKinds.kinds(mobile.APPS, mobile.APP, 'mobile') },
+    desktop: { APP: desktop.APP, groups: window.WosAppKinds.kinds(desktop.APPS, desktop.APP, 'desktop') },
+  };
 }
 
 const files = {
@@ -54,23 +59,26 @@ const nativeFiles = {
 };
 
 test('owner-facing Files hides Wizard Files from launchers without disabling it', async () => {
-  const { window, APP, groups } = await shell([files, provider]);
+  const { window, mobile: { APP, groups } } = await shell([files, provider]);
   assert.equal(APP['wizard-files'].url, '/wizard-files/');
-  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), true);
+  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files'], 'mobile'), true);
   assert.ok(groups.apps.some(a => a.id === 'files'));
   assert.ok(!groups.apps.some(a => a.id === 'wizard-files'));
 });
 
 test('Wizard Files returns to launchers when no separate Files screen is installed', async () => {
-  const { window, APP, groups } = await shell([provider]);
-  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), false);
+  const { window, mobile: { APP, groups } } = await shell([provider]);
+  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files'], 'mobile'), false);
   assert.ok(groups.apps.some(a => a.id === 'wizard-files'));
 });
 
-test('native Files hides Wizard Files while keeping both app records addressable', async () => {
-  const { window, APP, groups } = await shell([provider], [nativeFiles]);
-  assert.equal(APP.files.href, 'intent://files');
-  assert.equal(APP['wizard-files'].url, '/wizard-files/');
-  assert.equal(window.WizCore.isMaintenanceApp(APP['wizard-files']), true);
-  assert.ok(!groups.apps.some(a => a.id === 'wizard-files'));
+test('native Files supersedes Wizard Files only on the shell where it is available', async () => {
+  const { window, mobile, desktop } = await shell([provider], [nativeFiles]);
+  assert.equal(mobile.APP.files.href, 'intent://files');
+  assert.equal(mobile.APP['wizard-files'].url, '/wizard-files/');
+  assert.equal(window.WizCore.isMaintenanceApp(mobile.APP['wizard-files'], 'mobile'), true);
+  assert.ok(!mobile.groups.apps.some(a => a.id === 'wizard-files'));
+  assert.equal(desktop.APP.files, undefined);
+  assert.equal(window.WizCore.isMaintenanceApp(desktop.APP['wizard-files'], 'desktop'), false);
+  assert.ok(desktop.groups.apps.some(a => a.id === 'wizard-files'));
 });

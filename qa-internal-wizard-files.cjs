@@ -85,21 +85,22 @@ const nativeFiles = { id: 'files', name: 'Files', href: 'intent://files' };
 
         const classified = await page.evaluate(shellName => {
           const { APPS, APP } = window.WizCore.apps(shellName);
-          const rows = window.WosAppKinds.rows(APPS, APP, app => app.id);
+          const rows = window.WosAppKinds.rows(APPS, APP, app => app.id, shellName);
           const ids = Object.values(rows).flat().map(row => row.id);
           return {
             hasFilesRecord: !!APP.files,
             hasProviderRecord: !!APP['wizard-files'],
-            providerInternal: window.WizCore.isMaintenanceApp(APP['wizard-files']),
+            providerInternal: window.WizCore.isMaintenanceApp(APP['wizard-files'], shellName),
             filesRows: ids.filter(id => id === 'files').length,
             providerRows: ids.filter(id => id === 'wizard-files').length,
           };
         }, shell);
         assert.equal(classified.hasProviderRecord, true, `${shell}: provider remains addressable`);
-        assert.equal(classified.providerInternal, mode !== 'fallback', `${shell}: provider internal only when an owner Files surface exists`);
+        const providerInternal = mode === 'owner' || (mode === 'native' && phone);
+        assert.equal(classified.providerInternal, providerInternal, `${shell}: provider internal only when an owner Files surface exists on this shell`);
         assert.equal(classified.hasFilesRecord, mode === 'owner' || (mode === 'native' && phone), `${shell}: owner Files record follows fixture`);
         assert.equal(classified.filesRows, mode === 'owner' ? 1 : 0, `${shell}: one owner-facing Files row`);
-        assert.equal(classified.providerRows, mode === 'fallback' ? 1 : 0, `${shell}: provider fallback row`);
+        assert.equal(classified.providerRows, providerInternal ? 0 : 1, `${shell}: provider fallback row`);
 
         let rendered = null;
         if (phone) {
@@ -120,6 +121,21 @@ const nativeFiles = { id: 'files', name: 'Files', href: 'intent://files' };
           });
           assert.deepEqual(rendered, { files: mode === 'owner' ? 1 : 0, provider: mode === 'fallback' ? 1 : 0 }, 'phone New desk matches shared rows');
           await page.screenshot({ path: path.join(out, `${mode}-phone.png`), animations: 'disabled' });
+        } else {
+          await page.evaluate(() => window.__wux.openPicker());
+          await page.waitForFunction(() => !document.querySelector('#palette')?.hidden && document.querySelectorAll('#palList .pal-app').length > 0);
+          rendered = await page.evaluate(() => {
+            const labels = [...document.querySelectorAll('#palList .pal-app .nm')].map(node => node.textContent.trim());
+            return {
+              files: labels.filter(label => label === 'Files').length,
+              provider: labels.filter(label => label === 'Wizard Files').length,
+            };
+          });
+          assert.deepEqual(rendered, {
+            files: mode === 'owner' ? 1 : 0,
+            provider: mode === 'owner' ? 0 : 1,
+          }, 'desktop picker keeps a Files entry when a native-only link is unavailable');
+          await page.screenshot({ path: path.join(out, `${mode}-desktop.png`), animations: 'disabled' });
         }
         assert.deepEqual(errors, [], `${shell}: no page errors`);
         report.push({ mode, shell, classified, rendered });
