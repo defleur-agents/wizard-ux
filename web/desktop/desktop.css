@@ -56,7 +56,7 @@ html.voice-on .bar-center { visibility: hidden; }
 #micBtn[hidden], .recording-recovery[hidden] { display: none; }
 /* Kept recordings (desktop.js paintRecordings): a stack of shell cards (kit wz-card / wz-button), skin tokens only, so
  * every skin, light ones too, paints it like Settings. Primary first; Discard turns red and asks again in place. */
-.recording-recovery { position: fixed; right: var(--wz-space-4); bottom: var(--wz-space-4); z-index: 120; width: min(400px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: var(--wz-space-2); font-size: var(--wz-text-sm); color: var(--wz-text); }
+.recording-recovery { position: fixed; right: var(--wz-space-4); bottom: var(--wz-space-4); z-index: 120; width: min(420px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: var(--wz-space-2); font-size: var(--wz-text-sm); color: var(--wz-text); }
 .recording-recovery .wz-card { display: flex; flex-direction: column; gap: var(--wz-space-1); padding: var(--wz-space-3) var(--wz-space-4); background: var(--wz-panel); border: 1px solid var(--line-2); box-shadow: 0 12px 32px color-mix(in srgb, black 35%, transparent); }
 .recording-recovery strong { font-size: var(--wz-text-md); font-weight: 650; }
 .recording-recovery p { margin: 0; }

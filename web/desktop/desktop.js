@@ -2100,7 +2100,7 @@
     recovery.innerHTML = takes.map(it => {
       const empty = it.state === 'empty' && !(it.recoveryText || it.text), armed = discardArmed(it.id);
       const retry = `<button class="wz-button ${empty ? 'quiet' : ''}" data-record-retry="${esc(it.id)}" ${['transcribing', 'sending'].includes(it.state) ? 'disabled' : ''}>${it.kind === 'conversation' ? 'Retry original to app' : OUTBOX.canRetry(it) ? 'Retry send' : 'Transcribe only'}</button>`;
-      const discard = `<button class="wz-button ${empty || armed ? 'destructive' : 'quiet'}" data-record-discard="${esc(it.id)}"${armed ? ' data-armed' : ''} ${it.state === 'transcribing' ? 'disabled' : ''}>${armed ? 'Click again to discard' : 'Discard'}</button>`;
+      const discard = `<button class="wz-button ${empty || armed ? 'destructive' : 'quiet'}" data-record-discard="${esc(it.id)}"${armed ? ' data-armed' : ''} ${it.state === 'transcribing' ? 'disabled' : ''}>${armed ? 'Confirm discard' : 'Discard'}</button>`;
       return `<article class="wz-card">
       <strong>${it.kind === 'dictation' ? 'Dictation' : 'Voice recording'} kept</strong>
       <p class="recording-meta">${esc(recordingMeta(it))}</p>
