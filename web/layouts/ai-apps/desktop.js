@@ -1241,21 +1241,22 @@ export default function desktop(api) {
     if (loadId && pane?.id === loadId) waitLoaded(pane.el); else if (loadId && !want) doneLoading();
   }
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
-  let closing = null;
+  let closing = null, exitMotion = null;
   function hidePanel({ home: goBack = true } = {}) {
     if (!pane || closing) return !!pane;
     const was = pane, el0 = was.el, w0 = el0.getBoundingClientRect?.().width || 480;
     const finish = () => {
-      closing = null; if (pane !== was) return;
+      closing = null; if (pane !== was) { out?.cancel?.(); exitMotion = null; return; }
       pane = null; setWide(false); doneLoading(); anim('close');
       // (Home / Focus: the route still names the app until the new chat lands; don't take it back as the panel meanwhile)
       if (!goBack) dropped = { id: was.id, desk: Number(was.desk) };
       const m = mainChats();
       if (goBack && here().app === was.id) { if (m) api.nav.goDesk(m.desk); else api.sessions.newChat(); }
       paintSplit(!!chatThread); paintTop();
-      api.frame(() => { out?.cancel?.(); });
+      api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
     const out = goBack && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;
   }
@@ -1707,7 +1708,7 @@ export default function desktop(api) {
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
-    closing?.(); closing = null;
+    closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();

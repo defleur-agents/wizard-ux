@@ -23,4 +23,5 @@ test('AI apps pane: only the common desk slides; its title/window/body/frame nev
  assert.doesNotMatch(js, /flip\(\[pane\?\.el, pTop\]/, 'no nested FLIP double translation');
  assert.match(js, /goBack && !reduced\(\).*el0\.animate/s);
  assert.match(js, /top\.append\(pTop\);.*release layout-owned chrome/, 'teardown restores Classic ownership');
+ assert.match(js, /closing\?\.\(\); closing = null; exitMotion\?\.cancel\?\.\(\)/, 'teardown cancels the parent exit animation as well as its timer');
 });
