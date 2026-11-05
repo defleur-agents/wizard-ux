@@ -99,7 +99,10 @@
     const r = await timed(fetch(ROUTES_URL, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ routes }) }));
     return !!r.ok;
   }
-  const keepable = (k, v) => validId(k) && TO.includes(v) && (v !== 'daily' || dailyOk(k));
+  /* The agent's own notes (about no app) only ever wait in Chats (Miguel, 5 Nov 2026): no Badge, Daily or Off, so the
+   * owner resolves what causes them or gives the noise an app of its own, instead of hiding it. */
+  const chatsOnly = k => k === 'notifications';
+  const keepable = (k, v) => validId(k) && TO.includes(v) && (v !== 'daily' || dailyOk(k)) && (!chatsOnly(k) || v === 'chats');
   async function syncRoutes(force) {
     const Y = LV.sync;
     if (!installed() || Y.busy || (!force && Date.now() - Y.at < 30e3)) return;
@@ -123,17 +126,19 @@
     // A source with no saved choice: apps and Notifications' own alerts start in Chats (Chats is the inbox), System in
     // the Morning report. An unknown or no-longer-allowed value reads as Badge, the quietest place that still shows it.
     route: (id, stored) => {
+      if (chatsOnly(id)) return 'chats';
       const r = stored !== undefined ? stored : sysOf(id) ? 'daily' : 'chats';
       return TO.includes(r) && (r !== 'daily' || dailyOk(id)) ? r : 'badge';
     },
     accepts: (id, to) => keepable(id, to),
-    choices: (id, name) => TO.map(to => ({ to, label: LABEL[to], ...(ICON[to] ? { icon: ICON[to] } : {}),
+    choices: (id, name) => TO.filter(to => !chatsOnly(id) || to === 'chats').map(to => ({ to, label: LABEL[to], ...(ICON[to] ? { icon: ICON[to] } : {}),
       ...(to === 'daily' ? { disabled: !dailyOk(id), title: dailyOk(id) ? 'One line in tomorrow’s Morning Report' : `${name} would lose its point waiting for the Morning Report` } : {}) })),
     quiet: (id, r) => r === 'off' || r === 'daily',   // true = no badge and nothing in Chats (kept in Notifications' history)
     carried: id => !!sysOf(id),                       // a source Notifications carries besides its own alerts
     sourceOf: it => sourceOfNote(it),                 // which source a Notifications item routes as
     name: id => sysOf(id)?.name || '',
     describe(r, off) {
+      if (chatsOnly(r.id) && !off) return 'Always in Chats · resolve them to clear';
       if (sysOf(r.id)) return r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · listed below' : r.route === 'chats' && !off ? 'In Chats' : 'Badge on the Settings cog';
       return r.route === 'daily' ? 'In the Morning Report · once a day' : r.route === 'off' ? 'Off · kept in its own history' : r.route === 'chats' && !off ? 'In Chats · no badge on its icon' : 'Badge on its icon · not in Chats';
     },

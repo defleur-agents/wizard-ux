@@ -42,8 +42,9 @@ const ids = B => [...B.items()].map(i => i.id);
 const choices = h => [...h.matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]);
 
 test('the picker has four choices, Chats · Badge · Morning report · Off, everywhere it is drawn', () => {
-  const w = boot(), h = w.WosBell.picker('notifications');
+  const w = boot(), h = w.WosBell.picker('system:app-updates');
   assert.deepEqual(choices(h), ['chats', 'badge', 'daily', 'off'], 'loudest to quietest');
+  assert.deepEqual(choices(w.WosBell.picker('notifications')), ['chats'], 'the agent\'s own notes: Chats only (Miguel, 5 Nov 2026)');
   assert.match(w.WosBell.picker('system:app-updates'), /data-notify-route="system:app-updates" data-notify-to="daily" aria-checked="true"/, 'System rows default to the Morning report');
   assert.match(h, /data-notify-to="off"[^>]*><svg class="wos-route-ic" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5\.5"\/><path d="M4\.2 11\.8l7\.6-7\.6"\/><\/svg><span>Off/, 'Off wears its own icon');
 });
@@ -62,19 +63,24 @@ test('default: routine System notices leave Chats and the Notifications badge; t
   B.watch(() => {}); await B.refresh(true); await settle();
   assert.deepEqual(ids(B), ['u2', 'n1']);
   assert.equal(B.attention(), null, 'Morning report: nothing on the Settings cog');
-  B.setRoute('notifications', 'badge'); await settle();
-  assert.equal(w.WizCore.workspaceNav.counts.notifications, 2, 'Notifications badge counts only its own (4 unread − 2 System)');
+  assert.equal(B.setRoute('notifications', 'badge'), false, 'the agent\'s own notes never leave Chats for a badge');
+  await settle();
+  assert.deepEqual(ids(B), ['u2', 'n1'], 'they still wait in Chats');
 });
 
-test('Off for an app or Notifications: no badge and nothing in Chats', async () => {
-  const w = boot(), B = w.WosBell, N = w.WizCore.workspaceNav;
+test('Off for a System row: no badge and nothing in Chats; the agent\'s own notes cannot be turned off', async () => {
+  const w = boot(), B = w.WosBell;
   B.watch(() => {}); await B.refresh(true); await settle();
-  assert.equal(B.setRoute('notifications', 'off'), true); await settle();
-  assert.equal(B.route('notifications'), 'off');
-  assert.deepEqual(ids(B), [], 'gone from Chats');
-  assert.equal(N.counts.notifications || 0, 0, 'no badge');
-  assert.match(B.html(), /data-chbell hidden/, 'no bell');
-  assert.equal(B.isOff('notifications'), true);
+  B.setRoute('system:app-updates', 'chats'); await settle();
+  assert.ok(ids(B).includes('u1'));
+  assert.equal(B.setRoute('system:app-updates', 'off'), true); await settle();
+  assert.equal(B.route('system:app-updates'), 'off');
+  assert.ok(!ids(B).includes('u1'), 'gone from Chats');
+  assert.equal(B.isOff('system:app-updates'), true);
+  assert.equal(B.setRoute('notifications', 'off'), false, 'refused');
+  assert.equal(B.route('notifications'), 'chats');
+  assert.equal(B.isOff('notifications'), false);
+  assert.deepEqual(ids(B), ['u2', 'n1'], 'still in Chats');
 });
 
 test('System row on Badge counts on the Settings cog; seeing it in Settings marks it read', async () => {
@@ -121,13 +127,15 @@ test('unknown routes and ids are refused', () => {
 
 /* ---- Built in: no tweak, no Badge | Chats-only core left ---- */
 test('core is the levels: four choices with no tweak worn, stored Morning report / Off values hold as saved', async () => {
-  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ notifications: 'daily', messenger: 'off' })]]);
+  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ notifications: 'daily', 'system:app-updates': 'daily', messenger: 'off' })]]);
   const w = boot({ storage }), B = w.WosBell;
   assert.equal(B.routing.owner, null, 'the stock part, nobody replaced it');
   assert.deepEqual(choices(B.picker('messenger')), ['chats', 'badge', 'daily', 'off']);
-  assert.equal(B.route('notifications'), 'daily'); assert.equal(B.isOff('notifications'), true);
+  assert.equal(B.route('system:app-updates'), 'daily'); assert.equal(B.isOff('system:app-updates'), true);
   assert.equal(B.route('messenger'), 'off'); assert.equal(B.isOff('messenger'), true);
-  assert.equal(B.routeLabel('notifications'), 'Morning report');
+  assert.equal(B.routeLabel('system:app-updates'), 'Morning report');
+  assert.equal(B.route('notifications'), 'chats', 'an old Morning report for the agent\'s notes reads as Chats');
+  assert.equal(B.isOff('notifications'), false);
   assert.equal(B.routeLabel('mail'), 'Chats', 'an app with no saved choice starts in Chats (#895)');
 });
 

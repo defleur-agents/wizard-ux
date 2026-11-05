@@ -1,8 +1,9 @@
 // Notes for an app, read inside its own window (Miguel, 5 Nov 2026: "On my Second Hand app I see two notifications in
 // the badge, but it's not clear to me how to read whatever it's trying to notify me of or mark it as done").
 // Notifications items tagged `app:<id>` are carried to that app's badge (app set to Badge). core/app-notes.js shows
-// them over that app's window: "2 notes · Show", a list with Mark read / Mark all read, through WosBell.mark (the one
-// write path), and the badge drops at once. Back / Esc closes the list first. Core never names an app.
+// them over that app's window the moment it opens: one small banner each (title, one line, time, ✓ Mark read), up to 3,
+// then "+N more"; Mark all read only with 2+; all through WosBell.mark (the one write path), and the badge drops at
+// once. Back / Esc folds an opened "+N more" list first. Core never names an app.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -33,14 +34,17 @@ function tap(notice, attr, value) {
   notice.handlers.click({ target: { closest: s => s === 'button' ? b : null }, preventDefault() {}, stopPropagation() {} });
 }
 
-function boot({ routes: saved = { notifications: 'chats', 'second-hand': 'badge' }, visible = true } = {}) {
+const MORE = [3, 4, 5].map(k => ({ id: 'x' + k, time: 40 - k, title: 'Watched item ' + k, message: 'Line ' + k + '\nsecond line', priority: 3, tags: ['app:second-hand'] }));
+
+function boot({ routes: saved = { notifications: 'chats', 'second-hand': 'badge' }, visible = true, extra = [] } = {}) {
   let routes = { ...saved };
+  const NOTES_ = [...NOTES, ...extra];
   const readIds = new Set(), storage = new Map(), calls = [], keys = {};
   const json = (body, status = 200) => ({ ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => body });
   const fetch = async (url, opts = {}) => {
     calls.push([opts.method || 'GET', url, opts.body || '']);
-    if (url.startsWith('/notifications/api/count')) return json({ unread: NOTES.filter(i => !readIds.has(i.id)).length, needs: 1 });
-    if (url.startsWith('/notifications/api/items')) return json({ items: NOTES.map(i => ({ ...i, read: readIds.has(i.id) })) });
+    if (url.startsWith('/notifications/api/count')) return json({ unread: NOTES_.filter(i => !readIds.has(i.id)).length, needs: 1 });
+    if (url.startsWith('/notifications/api/items')) return json({ items: NOTES_.map(i => ({ ...i, read: readIds.has(i.id) })) });
     if (url.startsWith('/notifications/api/mark')) { for (const id of JSON.parse(opts.body).ids) readIds.add(id); return json({ ok: true }); }
     if (url.startsWith('/notifications/api/routes')) return json({ routes, saved: true });
     if (url.startsWith('/notifications/api/marks')) return json({ marks: {} });
@@ -65,32 +69,30 @@ function boot({ routes: saved = { notifications: 'chats', 'second-hand': 'badge'
 async function ready(b) { await b.w.WosBell.refresh(true); await settle(); await b.w.WosBell.refresh(true); await settle(); b.w.WosAppNotes.scan(); return b; }
 const notice = host => host.children.find(c => c.className === 'app-notes');
 
-test('an app on Badge with carried unread items shows "2 notes · Show" over its window', async () => {
+const banners = n => (n.innerHTML.match(/class="app-notes-row"/g) || []).length;
+
+test('an app on Badge shows its unread notes as banners at once: title, one line, time, ✓ each', async () => {
   const b = await ready(boot()), n = notice(b.host);
   assert.equal(b.w.WizCore.workspaceNav.counts['second-hand'], 2, 'the badge counts the two carried items');
-  assert.ok(n, 'the shell draws the notice inside the app window');
-  assert.match(n.innerHTML, />2 notes</); assert.match(n.innerHTML, />Show</);
-  assert.doesNotMatch(n.innerHTML, /Aree replied/, 'the list stays closed until Show');
-  assert.ok(b.host.cls.has('app-upd-host'), 'a static host gets positioned for the notice');
-});
-
-test('Show lists title, message and time with Mark read each and Mark all read; needs-you is not carried', async () => {
-  const b = await ready(boot()), n = notice(b.host);
-  tap(n, 'data-notes-toggle');
-  assert.match(n.innerHTML, /Aree replied/); assert.match(n.innerHTML, /Is the chair still available\?/);
-  assert.match(n.innerHTML, /Price drop watched/); assert.match(n.innerHTML, /<time>/);
-  assert.equal((n.innerHTML.match(/data-notes-read=/g) || []).length, 2);
-  assert.match(n.innerHTML, /Mark all read/); assert.match(n.innerHTML, />Hide</);
+  assert.ok(n, 'the shell draws the banners inside the app window');
+  assert.equal(banners(n), 2, 'no Show tap: every note is visible');
+  assert.match(n.innerHTML, /<b>Aree replied<\/b><time>/); assert.match(n.innerHTML, /<p>Is the chair still available\?<\/p>/);
+  assert.match(n.innerHTML, /Price drop watched/);
+  assert.equal((n.innerHTML.match(/data-notes-read=/g) || []).length, 2, 'its own Mark read each');
+  assert.match(n.innerHTML, /aria-label="Mark read: Aree replied"/);
+  assert.match(n.innerHTML, /data-notes-all>Mark all read</, 'two or more: Mark all read');
+  assert.doesNotMatch(n.innerHTML, /data-notes-more|data-notes-toggle|>Show</);
   assert.doesNotMatch(n.innerHTML, /Sale needs your OK/, 'needs-you keeps following Notifications\' own route');
   assert.doesNotMatch(n.innerHTML, /Release review/, 'the agent\'s own item is not this app\'s');
+  assert.ok(b.host.cls.has('app-upd-host'), 'a static host gets positioned for the banners');
 });
 
-test('Mark read goes through Notifications /api/mark and drops the badge at once', async () => {
+test('Mark read goes through Notifications /api/mark and drops the badge at once; one left has no Mark all read', async () => {
   const b = await ready(boot()), n = notice(b.host), N = b.w.WizCore.workspaceNav;
-  tap(n, 'data-notes-toggle');
   tap(n, 'data-notes-read', 'h1');
   assert.equal(N.counts['second-hand'], 1, 'badge drops before the server answers');
-  assert.match(n.innerHTML, />1 note</); assert.doesNotMatch(n.innerHTML, /Aree replied/);
+  assert.equal(banners(n), 1); assert.doesNotMatch(n.innerHTML, /Aree replied/);
+  assert.doesNotMatch(n.innerHTML, /Mark all read/, 'one note: just its ✓');
   const posts = b.calls.filter(c => c[0] === 'POST');
   assert.deepEqual(posts.map(c => c[1]), ['/notifications/api/mark']);
   assert.deepEqual(JSON.parse(posts[0][2]), { ids: ['h1'], read: true });
@@ -98,26 +100,43 @@ test('Mark read goes through Notifications /api/mark and drops the badge at once
   assert.equal(N.counts['second-hand'], 1, 'stays down after the reload');
 });
 
-test('Mark all read clears the badge and the notice', async () => {
+test('Mark all read clears the badge and the banners', async () => {
   const b = await ready(boot()), N = b.w.WizCore.workspaceNav;
-  tap(notice(b.host), 'data-notes-toggle'); tap(notice(b.host), 'data-notes-all');
+  tap(notice(b.host), 'data-notes-all');
   assert.equal(N.counts['second-hand'] || 0, 0);
-  assert.equal(notice(b.host), undefined, 'nothing left: the notice goes');
+  assert.equal(notice(b.host), undefined, 'nothing left: the banners go');
   assert.deepEqual(JSON.parse(b.calls.find(c => c[0] === 'POST')[2]).ids.sort(), ['h1', 'h2']);
 });
 
-test('Back closes the open list first, then does nothing', async () => {
-  const b = await ready(boot()), n = notice(b.host);
-  assert.equal(b.w.WosAppNotes.back(), false, 'closed list: Back is not taken');
-  tap(n, 'data-notes-toggle'); assert.match(n.innerHTML, /Aree replied/);
+test('more than 3: three banners and "+N more", which opens the rest; messages stay one line', async () => {
+  const b = await ready(boot({ extra: MORE })), n = notice(b.host);
+  assert.equal(banners(n), 3);
+  assert.match(n.innerHTML, /data-notes-more aria-expanded="false">\+2 more</);
+  assert.match(n.innerHTML, /Mark all read/);
+  tap(n, 'data-notes-more');
+  assert.equal(banners(n), 5); assert.match(n.innerHTML, /aria-expanded="true">Show fewer</);
+  assert.match(n.innerHTML, /<p>Line 3 second line<\/p>/, 'line breaks fold into one line');
+  tap(n, 'data-notes-all');
+  assert.equal(notice(b.host), undefined);
+  assert.equal(JSON.parse(b.calls.find(c => c[0] === 'POST')[2]).ids.length, 5, 'all of them, the hidden ones too');
+});
+
+test('Back folds the opened "+N more" list first, then does nothing', async () => {
+  const b = await ready(boot({ extra: MORE })), n = notice(b.host);
+  assert.equal(b.w.WosAppNotes.back(), false, 'folded: Back is not taken (the banners stay until marked)');
+  tap(n, 'data-notes-more'); assert.equal(banners(n), 5);
   assert.equal(b.w.WosAppNotes.back(), true);
-  assert.doesNotMatch(n.innerHTML, /Aree replied/); assert.match(n.innerHTML, />Show</);
+  assert.equal(banners(n), 3); assert.match(n.innerHTML, />\+2 more</);
   assert.equal(b.w.WosAppNotes.back(), false);
   // Esc on the keyboard: taken before the shell's (and a layout's) own Esc while the list is open, left alone otherwise.
   const esc = () => { const e = { key: 'Escape', defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } }; for (const fn of b.keys.keydown || []) fn(e); return e; };
-  assert.equal(esc().stopped, false, 'closed list: Esc passes through');
-  tap(n, 'data-notes-toggle');
-  assert.equal(esc().stopped, true); assert.match(n.innerHTML, />Show</);
+  assert.equal(esc().stopped, false, 'folded: Esc passes through');
+  tap(n, 'data-notes-more');
+  assert.equal(esc().stopped, true); assert.match(n.innerHTML, />\+2 more</);
+  // Marked down to 3 or fewer while open: nothing left to fold, Back passes through again.
+  tap(n, 'data-notes-more'); tap(n, 'data-notes-read', 'x3'); tap(n, 'data-notes-read', 'x4');
+  assert.equal(banners(n), 3); assert.doesNotMatch(n.innerHTML, /data-notes-more/);
+  assert.equal(b.w.WosAppNotes.back(), false);
 });
 
 test('no notice when the app is in Chats, or its window is not on screen', async () => {
