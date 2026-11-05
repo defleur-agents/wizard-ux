@@ -1214,10 +1214,13 @@
     const all = new Map(ownedRows);
     for (const [id, t] of memoryTakes) all.set(id, t.session.row);
     return [...all.values()].filter(r => r.id !== active?.row.id && !preparations.size &&
-      (memoryTakes.has(r.id) ? Date.now() - r.startedAt > 10 * 60e3 : true) &&
+      // Only takes from an earlier page session that are over 10 minutes old: a take this page started (an
+      // upload or acknowledgement the app is still running) is never offered for Save/Discard.
+      Number(r.startedAt) < PAGE_BOOT_AT && Date.now() - Number(r.startedAt) > 10 * 60e3 &&
       (!r.native || (r.status === 'pending' && r.rescueComplete === true)) && !recoveryLive.has(r.id)).map(r =>
       ({ id: r.id, appId: r.appId, startedAt: r.startedAt, memory: memoryTakes.has(r.id) }));
   }
+  const PAGE_BOOT_AT = Date.now(); // takes started before this page loaded are the only rescue candidates
   let rescueWork = null;
   function rescueTake(id, action, confirmed = false) {
     if (!['save', 'discard'].includes(action)) return Promise.reject(fail('invalid_action', 'Choose Save to Files or Discard.'));
