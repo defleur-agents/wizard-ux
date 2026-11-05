@@ -33,7 +33,9 @@ test('draft hold requires an explicit kept confirmation and becomes busy again a
   const f=service({safe:true},'wisdom');let value='synthetic draft',stored='';
   let h=f.facade.update.hold('Wisdom unsent request',{keep:()=>{stored=value;return 'kept'}});
   assert.equal(f.plan().ok,false);assert.equal(f.host.update.busy(),true);
-  await f.host.update.keepDrafts();assert.equal(stored,value);assert.equal(f.plan().ok,true);assert.equal(f.host.update.busy(),false);
+  assert.equal(f.host.update.frames()[0].keepable,true);
+  await f.host.update.keepDrafts(f.frame);assert.equal(stored,value);assert.equal(f.plan().ok,true);assert.equal(f.host.update.busy(),false);
+  assert.equal(f.host.update.frames()[0].holds.length,0);assert.equal(f.host.update.frames()[0].keepable,false);
   value+=' changed';h.release();h=f.facade.update.hold('Wisdom unsent request',{keep:()=>false});
   assert.equal(f.plan().ok,false);await f.host.update.keepDrafts();assert.equal(f.plan().ok,false);h.release();
 });
