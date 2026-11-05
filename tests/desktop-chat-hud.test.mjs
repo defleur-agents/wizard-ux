@@ -91,6 +91,7 @@ test('Back / Esc in the floating chat leaves its thread even with Home or a full
   assert.ok(esc.indexOf('const hb = hudBack(); if (hb) return hb;') > 0);
   assert.ok(esc.indexOf('hudBack()') < esc.indexOf("if (homeOpen) return '';"));
   assert.ok(esc.indexOf('hudBack()') < esc.indexOf('if (ws[cur].mono)'));
+  assert.ok(esc.indexOf('hudBack()') < esc.indexOf('WizAppServices?.back'), 'floating chat focus wins over the app behind it');
   const src = js.slice(js.indexOf('function hudBack('), js.indexOf('function hudClose('));
   for (const kind of ['main', 'host-profile', 'container', 'restricted']) {
     const w = { id: 'h', app: 'chats', thread: 't-' + kind, ...(kind === 'main' ? {} : { agent: kind }) }, other = { id: 'd', app: 'chats', thread: 'desk' }, calls = [];

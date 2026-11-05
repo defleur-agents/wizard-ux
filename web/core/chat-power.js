@@ -742,5 +742,5 @@ window.WosChatPower = function chatPower(A) {
     return sameTarget() ? tweakModel(wid) : null;
   }
   return { tweakModels, tweakModel, position, capture, resume, reflow, follow, restore, anchorOf, latestBtn, filesBtn, workHtml, modelChip, modelLabel, modelSwitch: (w, s) => M?.ours?.() ? modelSwitch(w, s) : '', ensureModels, failureHtml, errorsFilter, errorRow, errorsExtra, micBtn, sendVoiceTo, paintMic,
-    paint, closeSheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
+    paint, closeSheet, sheetOpen: () => !!sheet, click, bind, opened, holds, openFiles, openModels, retryThread, FOLDER_SVG, RP, newModel: c => c.newModel || null };
 };

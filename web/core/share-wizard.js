@@ -237,5 +237,5 @@
       else if (!e.shiftKey && (document.activeElement === last || !xs.includes(document.activeElement))) {e.preventDefault();first?.focus();}
     }
   }, true);
-  window.WizShareWizard = Object.freeze({open,wizard,valid,sharedText,back,get busy() {return !!active || jobs > 0;}});
+  window.WizShareWizard = Object.freeze({open,wizard,valid,sharedText,back,get isOpen() {return !!active;},get busy() {return !!active || jobs > 0;}});
 })();
