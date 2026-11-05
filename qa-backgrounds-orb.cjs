@@ -64,6 +64,8 @@ async function main(){
   await p.waitForFunction(()=>WosExperience.desktopView==='ai-apps'&&!WosExperience.state.busy);
   await p.evaluate(()=>__wux.closeSettings());await p.waitForTimeout(500);
   record('default desktop AI apps view retains chosen Wizard background',await p.evaluate(()=>WosSkin.wallpaper==='lake'&&document.documentElement.hasAttribute('data-image-background')));
+  const sidePanels=await surfaces(p,'.aad-side:visible, .aad-vt:visible');
+  record('AI apps text sidebars are fully opaque',sidePanels.length===2&&sidePanels.every(c=>c.alpha===255));
   await shot(p,'desktop-grove-lake-ai-apps');
   const phone=await browser.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,deviceScaleFactor:2,reducedMotion:'reduce',serviceWorkers:'block',ignoreHTTPSErrors:true,userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'});
   const q=await phone.newPage();q.on('pageerror',e=>errors.push(String(e)));
@@ -71,7 +73,7 @@ async function main(){
   record('phone starts with core radial and no activation tweak',await q.evaluate(()=>!WosExperience.state.tweaks.some(t=>t.id==='wizard/orb-radial')));
   await q.evaluate(()=>__wos.openSheet('settings'));await q.locator('[data-st-page="appearance"]').click();
   record('phone Wizard background behaviour is unchanged',await q.locator('[data-bgpick]').count()===0);
-  await q.evaluate(()=>WosSettings.focus('orb-switcher'));await q.locator('[data-orbsw-open]').click();
+  await q.evaluate(()=>__wos.openSettings('orb-switcher'));await q.locator('[data-orbsw-open]').click();
   await q.locator('[data-app="preview-notes"] [data-pin]').click();
   await q.locator('[data-app="preview-calendar"] [data-pin]').click();
   await q.locator('.wor-sheet [data-close]').click();await q.evaluate(()=>__wos.closeSheets());

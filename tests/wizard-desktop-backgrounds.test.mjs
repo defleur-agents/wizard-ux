@@ -51,4 +51,5 @@ test('invalid saved desktop images fall back without changing Mizel; renderer an
   const css=read('web/core/skins.css');
   assert.match(css,/html\[data-shell="desktop"\]\[data-image-background\] :is\(\.win/);
   assert.match(css,/background: var\(--wz-panel, var\(--wz-base, var\(--bg/);
+  assert.match(read('web/layouts/ai-apps/desktop.css'),/\[data-image-background\] \{\s*--aad-main: var\(--wz-panel, var\(--aad-canvas\)\)/);
 });
