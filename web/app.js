@@ -3792,39 +3792,28 @@
    *   2. a history guard entry pushed during a user gesture; popstate → one step. */
   let guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
+  const phoneBack = window.WizEscapeBack.create();
+  window.WizEscapeBack.installOwners(phoneBack, { chats: () => CHATS, links: () => LINKS,
+    afterTour: () => { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } },
+    afterChat: () => { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } },
+  });
+  phoneBack.watch(() => document.querySelector('#txChips [data-handoff], #txChips [data-hold]'), () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); }, 'draft');
+  phoneBack.watch(() => ovEl?.classList.contains('open'), closeOverview, 'overview');
+  phoneBack.watch(() => rvCoach, closeReviewCoach, 'review-coach');
+  phoneBack.watch(() => menuFor, closeMenu, 'menu');
+  phoneBack.watch(() => sheet, ({ outside }) => { if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page'; closeSheets(); return 'sheet'; }, 'sheet');
+  window.WosBack = Object.freeze({ names: phoneBack.names, escape(e) { e.preventDefault?.(); e.stopImmediatePropagation?.(); if (!e.repeat && !e.isComposing) return onBack(); } });
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }
   function backStep(skipHosted, { outside = false } = {}) {
-    { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
-    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
-    if (window.WizShareWizard?.back()) return 'share-wizard';
-    if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
-    { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
-    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
-    { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
-    if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
-    if (window.WosAppSetup?.back()) return 'app-setup';
-    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
+    const transient = phoneBack.run({ outside }); if (transient) return transient;
     // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
     if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
-    if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
-    if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
-    if (window.WizLinks?.backMenu()) return 'link-menu';
-    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
-    const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
-    if (window.WosSkinHost?.back?.()) return 'tweak-overlay'; // a package's own sheet (api.back.push)
-    if (window.WosResources?.back()) return 'resources';
-    if (closeOverview()) return 'overview';
-    if (closeReviewCoach()) return 'review-coach';
-    if (menuFor) { closeMenu(); return 'menu'; }
-    if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page';
-    if (sheet) { closeSheets(); return 'sheet'; }
-    if (window.WosSkinFrame?.back()) return 'skin-controls';
+
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
@@ -4191,7 +4180,7 @@
     overview: overviewAdapter,
     windowRefresh: windowRefreshAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0, home: idx === HOME }; },
-    back: () => backStep(),
+    back: () => backStep(), escapeOverlay: close => phoneBack.push(close),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),

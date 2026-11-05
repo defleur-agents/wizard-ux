@@ -21,6 +21,9 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
    if (u.pathname.includes('/v1/runs')) { runs.push(u.pathname); return r.abort(); }
    if (!['GET','HEAD'].includes(q.method())) { writes.push(q.method()+' '+u.pathname); return r.fulfill({status:403,json:{error:'No writes in QA'}}); }
    if (u.pathname===prefix+'store/index.html') return r.fulfill({contentType:'text/html',body:`<!doctype html><style>body{background:var(--wz-base,#14141c);color:var(--wz-ink,#eee);padding:40px}</style><input id="field" value="unsent"><script>window.depth=1;window.backs=0;window.__wizardCloseOverlay=()=>{backs++;if(depth){depth--;return true;}return false;};document.addEventListener('keydown',e=>{if(e.key==='Escape')e.stopImmediatePropagation();},true);<\/script>`});
+   if (u.pathname===prefix+'qa-image.png') return r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jv1kAAAAASUVORK5CYII=','base64')});
+   if (u.pathname==='/wizard/hermes/api/sessions') return r.fulfill({json:{data:[{id:'qa-thread',title:'Synthetic chat',status:'completed',updatedAt:'2026-11-05T00:00:00Z'}],has_more:false}});
+   if (u.pathname==='/wizard/hermes/api/sessions/qa-thread/messages') return r.fulfill({json:{data:[{id:'qa-image',role:'assistant',content:'![QA image](/wizard-os-home/qa-image.png)',timestamp:'2026-11-05T00:00:00Z'}],has_more:false}});
    if (u.pathname.startsWith('/wizard/')) return r.fulfill({json:ownerRead(u.pathname)});
    if (u.pathname.startsWith(prefix)) {
     const root=path.resolve(__dirname,'../web'),file=path.resolve(root,u.pathname.slice(prefix.length)||'index.html');
@@ -44,7 +47,7 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
   // A real focused chat and an open app coexist on the AI apps view.
   await p.evaluate(()=>__wux.openThread('qa-thread'));
   await p.waitForFunction(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread'));
-  await p.evaluate(()=>__wux.openApp(WizCore.apps().find(a=>a.id==='app-store')));
+  await p.evaluate(()=>__wux.openApp(WizCore.apps('desktop').APP['app-store']));
   const field=p.frameLocator('iframe[src*="/store/index.html"]').locator('#field'); await field.waitFor(); await field.focus();
   await p.keyboard.press('Escape');
   assert.equal(await field.evaluate(()=>window.backs),1,'iframe swallowed key still routes one app back');
@@ -53,13 +56,24 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
   await p.keyboard.press('Escape'); assert.equal(await field.evaluate(()=>window.backs),2,'app root consumes back without closing');
   assert.equal(await field.inputValue(),'unsent');
   // Recording beats both app focus and a newer menu, with no sending.
-  await p.evaluate(()=>__wux.talk('start')); await p.waitForFunction(()=>__wux.voice==='listen');
+  await p.evaluate(()=>__wux.talk('start')); await p.waitForFunction(()=>__wux.voiceState==='listen');
   await p.evaluate(()=>WosContextMenu.open({anchor:document.body,label:'QA menu',items:[{label:'Keep',action(){}}]}));
-  await p.keyboard.press('Escape'); await p.waitForFunction(()=>__wux.voice==='idle');
+  await p.keyboard.press('Escape'); await p.waitForFunction(()=>__wux.voiceState==='idle');
   assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),true,'voice cancellation leaves menu and surfaces open');
   assert.equal(await field.evaluate(()=>window.backs),2);
   await p.keyboard.press('Escape'); assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),false,'next Escape dismisses menu only');
   assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),true);
+  // Real chat thumbnail opens the shared image viewer; Back peels its menu then image.
+  await p.locator('.win .ch-compose textarea').first().click();
+  await p.locator('[data-mi]').first().click();
+  await p.waitForFunction(()=>__wux.chats.KIT.viewer.isOpen());
+  await p.evaluate(()=>__wux.chats.KIT.viewer.menu());
+  await p.keyboard.press('Escape');
+  assert.equal(await p.evaluate(()=>__wux.chats.KIT.viewer.state.menu),false);
+  assert.equal(await p.evaluate(()=>__wux.chats.KIT.viewer.isOpen()),true,'menu closes, image stays');
+  await p.keyboard.press('Escape');
+  assert.equal(await p.evaluate(()=>__wux.chats.KIT.viewer.isOpen()),false,'Escape closes clicked image');
+  assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),true,'image Back leaves chat open');
   // Focus the chat, not the app. Its next Back returns to the list.
   await p.locator('.win .ch-compose textarea').first().click(); await p.keyboard.press('Escape');
   assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),false,'focused chat closes');
