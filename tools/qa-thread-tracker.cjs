@@ -207,12 +207,12 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
         if (!d || !t || !title) return null;
         const dr = d.getBoundingClientRect(), tr = t.getBoundingClientRect(), rr = row.getBoundingClientRect(), br = badge?.getBoundingClientRect();
         return { shell: document.documentElement.dataset.shell, skin: document.documentElement.dataset.skin,
-          gap: tr.left - dr.right, right: rr.right - tr.right, truncated: title.scrollWidth > title.clientWidth,
+          gap: tr.left - dr.right, right: rr.right - tr.right, endSpace: parseFloat(getComputedStyle(row).paddingRight) + [...row.children].slice([...row.children].indexOf(t) + 1).reduce((n, el) => { const c = getComputedStyle(el); return n + el.getBoundingClientRect().width + parseFloat(c.marginLeft || 0) + parseFloat(c.marginRight || 0) + parseFloat(getComputedStyle(row).columnGap || 0); }, 0), truncated: title.scrollWidth > title.clientWidth,
           visible: dr.left >= 0 && tr.right <= innerWidth && dr.top >= 0 && dr.bottom <= innerHeight && row.contains(document.elementFromPoint(dr.left + 2, dr.top + 2)),
           badge: badge?.textContent, badgeBefore: !br || br.right <= dr.left,
           ordered: !!(d.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) };
       });
-      check(`${tag}: dots immediately left of time with an 8px gap and the group right aligned`, geometry?.ordered && Math.abs(geometry.gap - 8) < 1 && geometry.right >= 0 && geometry.right <= 11, geometry);
+      check(`${tag}: dots immediately left of time with an 8px gap and the group right aligned`, geometry?.ordered && Math.abs(geometry.gap - 8) < 1 && Math.abs(geometry.right - geometry.endSpace) < 1, geometry);
       check(`${tag}: long title truncates while dots and timestamp remain visible`, geometry?.visible && geometry.truncated && geometry.shell === shell && geometry.skin === skin, geometry);
       if (shell === 'phone') check(`${tag}: Helper still working badge precedes dots and time`, geometry?.badge === 'Helper still working' && geometry.badgeBefore, geometry);
       await page.screenshot({ path: path.join(OUT, `dots-left-${shell}-${skin}.png`) });
