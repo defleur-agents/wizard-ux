@@ -658,8 +658,8 @@ export default function desktop(api) {
       gw.append(b);
     }
     setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Group Ready' }), gw,
-      el('p', 'aad-stg-l', { text: 'Order chats within each status' }), radios,
-      el('p', 'aad-stg-n', { text: 'Ready is in priority order (Needs you, Your call, FYI, …), this order within each. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
+      el('p', 'aad-stg-l', { text: 'Order Ready chats' }), radios,
+      el('p', 'aad-stg-n', { text: 'One list follows this order across chats. By status or project keeps the group order, with this order inside each group. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
   }
   paintSetting();
   api.desk.setting?.('ai-apps-order', setNode);
@@ -701,8 +701,9 @@ export default function desktop(api) {
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on && k === 'ready' && rows.length && groupBy() === 'none') {
-          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready in priority order by default (the order ⌥↓ walks), a tiny
-          // muted tag on Needs you / Your call rows; 'Group Ready by status' in Settings brings the sub-headers back
+          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready (the order ⌥↓ walks), a tiny muted tag on Needs you /
+          // Your call rows; 'Group Ready by status' in Settings brings the sub-headers back. In the chosen Sort (James,
+          // 4 Nov 2026: Newest means newest first here, not Needs you on top)
           body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread)));
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
