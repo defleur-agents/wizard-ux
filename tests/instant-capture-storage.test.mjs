@@ -9,7 +9,7 @@ function load(from,to,c){const a=source.indexOf(from),b=source.indexOf(to,a);ass
 function fixture({instant=true, storage='ok', stop, cancel, read='ok', memoryBlob=Blob}={}) {
   const saved=[],sessions=new Map();let mic=true,lock=true,stops=0;
   const c=vm.createContext({Blob:memoryBlob,Date,Math,Promise,Map,Set,structuredClone,setTimeout,clearTimeout,clearInterval,
-    fail:(code,message,extra)=>Object.assign(Error(message),{code},extra),MAX_CHUNK:1024,ownedRows:new Map(),recoveryLive:new Set(),active:null,
+    fail:(code,message,extra)=>Object.assign(Error(message),{code},extra),MAX_CHUNK:1024,ownedRows:new Map(),recoveryLive:new Set(),memoryTakes:new Map(),active:null,
     changed(){},safeCall:fn=>fn?.(),emit(){},channel:null,
     transaction:async(stores,mode,work)=>{
       if(mode==='readwrite'&&storage==='hang')return new Promise(()=>{});
@@ -31,6 +31,9 @@ for(const name of ['QuotaExceededError','InvalidStateError','UnknownError'])test
   const f=fixture({storage:name});await f.enqueue('A');await f.enqueue('B');const out=await f.c.finish(f.s);
   assert.equal(await out.blob.text(),'ABC');assert.equal(out.mime,'audio/webm;codecs=opus');assert.equal(out.durationMs,2345);assert.equal(out.durable,false);assert.equal(out.storageError,name);assert.equal(f.mic,false);assert.equal(f.lock,false);assert.equal(f.c.active,null);
 });
+test('memory-only result can be recovered and acknowledged without any IDB row, scoped to its app',async()=>{const f=fixture({storage:'QuotaExceededError'});await f.enqueue('AB');const out=await f.c.finish(f.s);Object.assign(f.c,{validate(){},ready:new Promise(()=>{})});load('  async function pending(', '  const channel =',f.c);assert.equal((await f.c.pending('messenger'))[0],out);await assert.rejects(f.c.ack('other',out.id),e=>e.code==='forbidden');await f.c.ack('messenger',out.id);assert.equal(f.c.memoryTakes.size,0);assert.equal(f.s.memoryParts.length,0);assert.equal(f.s.queue.length,0);});
+test('memory-only ack is bounded even when removal hangs',async()=>{const f=fixture({storage:'hang'});await f.enqueue('AB');const out=await f.c.finish(f.s);Object.assign(f.c,{validate(){},ready:new Promise(()=>{})});load('  async function pending(', '  const channel =',f.c);await f.c.ack('messenger',out.id);assert.equal(f.c.memoryTakes.size,0);});
+test('successful durable handoff drops fallback Blob references',async()=>{const f=fixture();await f.enqueue('AB');await f.c.finish(f.s);assert.equal(f.s.memoryParts.length,0);assert.equal(f.s.final,null);assert.equal(f.c.memoryTakes.size,0);});
 test('committed prefix plus failed queued tail and final blob are preserved once, in order',async()=>{const f=fixture();await f.enqueue('A');assert.equal(f.saved.length,1);f.setStorage('QuotaExceededError');await f.enqueue('B');const out=await f.c.finish(f.s);assert.equal(await out.blob.text(),'ABC');assert.equal(out.durable,false);});
 test('facade forwards explicit Discard separately while Stop is in flight',async()=>{
   const service=readFileSync(new URL('../web/core/app-services.js',import.meta.url),'utf8');

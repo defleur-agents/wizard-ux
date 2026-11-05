@@ -26,6 +26,7 @@
   const safeCall = (fn, ...args) => { try { fn?.(...args); } catch (_) { /* observer cannot break capture */ } };
   let ownershipLoaded = false;
   const ownedRows = new Map(), recoveryLive = new Set(), preparations = new Map();
+  const memoryTakes = new Map(); // stopped instant results awaiting the app's handoff acknowledgement
   function state() {
     const deviceRows = [...ownedRows.values()].filter(r => r.native === 'wizard-device');
     const nativeDeviceTakeIds = [...new Set(deviceRows.map(r => r.nativeId).filter(Boolean))];
@@ -310,6 +311,8 @@
         catch (_) { throw fail('memory_result_failed', 'Audio could not be prepared. The take is kept in memory; keep Wizard open and retry Send or Discard.', { detail: storageFailure(e).detail }); }
       }
       if (s.discard) throw fail('cancelled', 'Capture was cancelled.');
+      if (out.durable === false) memoryTakes.set(s.row.id, { session: s, result: out });
+      else { s.memoryParts = []; s.final = null; }
       s.phase = 'stopped'; release(s); return out;
     })();
     s.finishPromise.catch(e => { cleanup(s); s.error = e; s.phase = 'error'; s.finishPromise = null; changed(); });
@@ -323,7 +326,8 @@
       s.phase = 'cancelling'; s.discard = true; changed();
       try { await bounded(Promise.resolve().then(() => s.engine.cancel()), 1500, 'stop_timeout').catch(() => {}); }
       finally {
-        s.inputStopped = true; cleanup(s); s.queue.length = 0; s.memoryParts = []; s.queuedBytes = 0;
+        s.inputStopped = true; cleanup(s); s.queue.length = 0; s.memoryParts = []; s.final = null; s.uploads = {}; s.queuedBytes = 0;
+        memoryTakes.delete(s.row.id);
         // Never let a broken disk hold the mic or its Web Lock after the owner discarded.
         await bounded(remove(s.row.id)).catch(() => {});
         ownedRows.delete(s.row.id); recoveryLive.delete(s.row.id); s.phase = 'cancelled'; release(s);
@@ -1065,11 +1069,26 @@
     return Promise.all((await rows()).filter(r => r.appId === appId && r.status === 'pending').map(result));
   }
   async function pending(appId) {
-    validate(appId, {}); await ready; await recover();
+    validate(appId, {});
+    const memory = [...memoryTakes.values()].filter(t => t.session.row.appId === appId).map(t => t.result);
+    if (memory.length) return memory; // keep a retry usable even while the store is unavailable
+    await ready; await recover();
     return Promise.all((await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status)).map(result));
   }
   async function ack(appId, id) {
-    validate(appId, {}); await ready;
+    validate(appId, {});
+    const memory = memoryTakes.get(id);
+    if (memory) {
+      const s = memory.session;
+      if (s.row.appId !== appId) throw fail('forbidden', 'Capture belongs to another app.');
+      // The app has confirmed its own durable backend/outbox handoff. No IDB row is required.
+      if (s.row.nativeId && s.row.native !== 'wizard-meetings')
+        await bounded(Promise.resolve().then(() => adapter({ kind: s.row.kind }, s.row).ack?.(s.row))).catch(() => {});
+      await bounded(remove(id)).catch(() => {});
+      memoryTakes.delete(id); ownedRows.delete(id); s.memoryParts = []; s.queue.length = 0; s.final = null; s.uploads = {};
+      changed(); return;
+    }
+    await ready;
     if (typeof id !== 'string' || id.length > 128) throw fail('invalid_id', 'Invalid capture id.');
     if (active?.row.id === id) throw fail('capture_active', 'Stop capture before acknowledging it.');
     // A pending upload may finish while a NEW take owns the mic. Serialize only
@@ -1113,6 +1132,7 @@
     const pageHoldsNoAudio = !active && preparations.size === 0 && !recoveryLease &&
       !attachedMeetingBridge && !W.wizardNative?.meetings && !configuredNative;
     if (preparations.size) return no('capture_starting');
+    if (memoryTakes.size) return no('capture'); // this page still owns audio until the app acknowledges handoff
     let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
     if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
     if (uncertain && !pageHoldsNoAudio) return no(uncertain);
