@@ -67,6 +67,6 @@ WIZARD_ORIGIN=http://127.0.0.1:9371 node qa-brand.cjs
 
 ## How a change reaches users
 
-1. A PR merges to `main`. **Publish public image** (`publish-image.yml`) then builds `ghcr.io/humanitylabs-org/wizard-ux` by digest, attests provenance and writes write-once SHA tags; `verify-public-image.yml` re-pulls it. PRs only validate and build. See `scripts/ci/ghcr_image.py`. Confirm the run on `main` succeeded.
+1. A PR merges to `main`. **Publish public image** (`publish-image.yml`) then builds `ghcr.io/humanitylabs-org/wizard-ux` by digest, attests provenance and writes write-once SHA tags; the `anonymous-pull` job inside `publish-image.yml` re-pulls it after publication. The separate `verify-public-image.yml` checks an existing immutable image on matching PRs or manual dispatch. Publication PRs only validate and build. See `scripts/ci/ghcr_image.py`. Confirm the run on `main` succeeded.
 2. Web-only changes need no APK. Native changes need a version bump above the published update feed and a signed build ([android/README.md](../android/README.md)); signing keys never enter the repo.
 3. Boxes run plain `main` (Latest); users get Stable after a soak, and `hotfix` skips it (see Team workflow in AGENTS.md). Today's executable OS channel gate (72 h soak, promotion record, `fast_track`) lives in `wizard-app-manager` (`releases/README.md`, `wam/updates.py`); the new policy does not change it until that code does. The GHCR `latest` image tag is not the OS Latest channel.
