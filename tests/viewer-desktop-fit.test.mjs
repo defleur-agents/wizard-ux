@@ -28,4 +28,16 @@ test('gallery arrows consume browser/default/shell propagation but leave Escape 
   for(const [k,d] of [['ArrowRight',1],['ArrowLeft',-1]]) { let prevented=0,stopped=0; key({key:k,preventDefault(){prevented++},stopImmediatePropagation(){stopped++}});assert.equal(prevented,1);assert.equal(stopped,1);assert.equal(calls.at(-1),d); }
   const n=calls.length; for(const e of [{key:'Escape'},{key:'ArrowRight',altKey:true},{key:'ArrowRight',isComposing:true}])key(e);assert.equal(calls.length,n);
   V.el.classList.contains=()=>true; key({key:'ArrowRight',preventDefault(){},stopImmediatePropagation(){}});assert.equal(calls.length,n,'menu blocks underlying gallery movement');
+  V.el.classList.contains=()=>false;
+  for(const kind of ['video','audio']) for(const count of [1,3]) for(const composed of [false,true]) {
+    V.items=Array.from({length:count},()=>({kind}));V.i=0;
+    const media={matches:selector=>selector==='video, audio'};
+    const target=composed?{matches:()=>false}:media;
+    for(const k of ['ArrowRight','ArrowLeft']) {
+      let prevented=0,stopped=0;
+      key({key:k,target,...(composed?{composedPath:()=>[target,media]}:{}),preventDefault(){prevented++},stopImmediatePropagation(){stopped++}});
+      assert.equal(prevented,0,`${kind}/${count}/${composed}: native seek default`);
+      assert.equal(stopped,1,'block underlying shell propagation; native browser default is not cancelled');assert.equal(calls.length,n,'no gallery navigation');
+    }
+  }
 });
