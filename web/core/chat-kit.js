@@ -885,6 +885,8 @@
     const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
     const vertical = V.long && /^(ArrowDown|ArrowUp|PageDown|PageUp| )$/.test(e.key);
     if (!horizontal && !vertical) return; // Escape/Back keeps the shell overlay stack.
+    // Native controls retarget keys to their media host; leave seeking to the browser.
+    if ((e.composedPath?.() || [e.target]).some(node => node?.matches?.('video, audio'))) return;
     e.preventDefault(); e.stopImmediatePropagation();
     if (V.el.classList.contains('menu-open')) return;
     if (horizontal) go(e.key === 'ArrowLeft' ? -1 : 1);
