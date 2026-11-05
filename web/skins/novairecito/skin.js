@@ -30,12 +30,12 @@ function playBoot(api) {
   document.querySelectorAll('.nv-boot').forEach(n => n.remove());
 
   const shape = window.innerHeight >= window.innerWidth ? 'portrait' : 'landscape';
-  const root = el('div', 'nv-boot'); root.setAttribute('role', 'img'); root.setAttribute('aria-label', 'Novairecito is waking up');
+  const root = el('div', 'nv-boot'); root.setAttribute('role', 'img'); root.setAttribute('aria-label', 'Wizard OS is waking up');
   const video = el('video');
   video.muted = true; video.defaultMuted = true; video.playsInline = true; video.autoplay = true; video.preload = 'auto';
   video.setAttribute('muted', ''); video.setAttribute('playsinline', ''); video.setAttribute('aria-hidden', 'true');
   video.poster = POSTER[shape]; video.src = VIDEO[shape];
-  const mark = el('div', 'nv-boot-mark'); mark.append('NOVAIRECITO ', el('b', '', 'OS'));
+  const mark = el('div', 'nv-boot-mark'); mark.append('WIZARD ', el('b', '', 'OS'));
   root.append(video, mark);
   document.body.appendChild(root);
 
