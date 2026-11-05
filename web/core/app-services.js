@@ -260,11 +260,13 @@
         const safe = {}; for (const key of ['kind','mime','audio','pcm','chunkMs','maxMs','maxBytes','systemAudio','meta','seqBase','offsetMs','preparedId','resumeId']) if(opts?.[key] !== undefined) safe[key]=opts[key];
         session = await (attaching ? resource.attach(st.appId) : safe.resumeId && resource.resume ? resource.resume(st.appId, safe.resumeId, safe) : resource.start(st.appId, safe));
         if (!session) { release(); check(); return null; }
-        let finished;
+        const finished = {};
         const finish = method => {
           check();
-          if (!finished) finished = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { finished = null; throw e; });
-          return finished;
+          // Stop and explicit Discard are distinct intents. The resource arbitrates their race;
+          // sharing one promise here used to turn a Discard into another Stop.
+          if (!finished[method]) finished[method] = Promise.resolve().then(() => session[method]()).then(r => { release(); return r; }, e => { delete finished[method]; throw e; });
+          return finished[method];
         };
         check();
         const observe = (method, fn) => {
