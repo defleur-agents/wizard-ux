@@ -66,7 +66,9 @@ test('real Settings renderers ignore contributor metadata on both shells, retain
       window: { WosExperience: E }, tweakOpts: new Map(), esc: s => String(s),
     });
     // IDs are legitimate attributes, not rendered text. Inspect visible text independently.
-    clean(html.replace(/<[^>]*>/g, ''), `${shell} visible Settings copy`);
+    const textNodes = Array.from(html.matchAll(/>([^<>]*)</g), match => match[1]);
+    assert.ok(textNodes.length > 0, 'visible text was inspected');
+    for (const text of textNodes) clean(text, `${shell} visible Settings copy`);
     assert.match(html, /data-tweak-toggle="miguel\/example"/);
     assert.match(html, /A functional description/);
     assert.match(html, new RegExp(`<small>${shell === 'phone' ? 'Phone' : 'Desktop'} view</small>`));
