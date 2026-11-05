@@ -2514,8 +2514,9 @@ window.WizCore.chats = function createChats(H) {
         if (target >= 0) { out[target] = { ...out[target], steers: [...(out[target].steers || []), u] }; continue; }
       }
       const i = out.findIndex(t => !t.u && !t.note && !t.later?.context && isFinite(start(t))
-        && start(t) >= (p.createdAt || at) - 10e3 && start(t) <= at + 120e3);
-      if (i >= 0) { const { later, ...turn } = out[i]; out[i] = { ...turn, u }; }
+        && ((start(t) >= (p.createdAt || at) - 10e3 && start(t) <= at + 120e3)
+          || (isFinite(t.later?.after) && t.later.after < (p.createdAt || at) && start(t) >= at - 10e3)));
+      if (i >= 0) { const { later, ...turn } = out[i]; out[i] = { ...turn, u, at }; }
       else {
         const index = out.findIndex(t => isFinite(start(t)) && start(t) > at);
         const turn = { u, a: null, notes: [], steps: 0, media: [], work: [], steers: [], at };

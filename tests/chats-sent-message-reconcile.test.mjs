@@ -48,8 +48,8 @@ test('accepted mid-run voice steering renders between the original request and a
 test('known local voice replaces the missing-start card after an earlier final answer', () => {
   const turns = parseRows([{ ...user, id: 90, timestamp: (at - 60000) / 1000, content: 'Earlier request' }, { ...reply, timestamp: (at - 30000) / 1000 }, { role: 'assistant', timestamp: at / 1000, content: '', tool_calls: [{ function: { name: 'read_file' } }] }, reply]);
   assert.ok(turns[1].later);
-  const { html } = paint(turns, [p]);
-  assert.ok(!/Sent|Dismiss|Started without|isn’t available/.test(html));
+  const { html, visible } = paint(turns, [p]);
+  assert.ok(!/Sent|Dismiss|Started without|isn’t available/.test(html), JSON.stringify({html,visible}));
   assert.ok(html.indexOf(text) < html.lastIndexOf(reply.content));
 });
 test('stable client identity survives text changes; server message identity wins over clock differences', () => {
