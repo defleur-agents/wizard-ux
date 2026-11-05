@@ -869,3 +869,49 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-spac
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; font-size: 0.5625rem; letter-spacing: -.03em; max-width: none; margin-inline: -3px; }
 /* (a word wider than the rail ends in a fade, never broken mid-word) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] { overflow: hidden; }
+
+/* Placement comes from WizCore.panes, not the renderer's left/right assumptions.
+ * The legacy null-ratio policy intentionally retains its Home overlay behaviour. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-side {
+  left: var(--aad-pane-side-x); top: var(--aad-pane-side-y); bottom: var(--aad-pane-side-bottom);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-vt {
+  left: var(--aad-pane-dock-x); right: auto; top: var(--aad-pane-dock-y); bottom: var(--aad-pane-dock-bottom); width: var(--aad-pane-dock-width);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] :is(#bar, .aad-top) {
+  left: var(--aad-pane-main-x); right: var(--aad-pane-main-right); top: var(--aad-pane-main-y);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]) {
+  left: var(--aad-pane-main-x); right: var(--aad-pane-main-right);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
+  left: calc(var(--aad-pane-main-x) - 8px); right: calc(var(--aad-pane-main-right) - 8px);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] {
+  inset: var(--aad-pane-main-y) var(--aad-pane-main-right) var(--aad-pane-main-bottom) var(--aad-pane-main-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app"] {
+  inset: var(--aad-pane-app-y) var(--aad-pane-app-right) var(--aad-pane-app-bottom) var(--aad-pane-app-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-chat] #stage > .wsp[data-aad-role="chat"] {
+  inset: var(--aad-pane-chat-y) var(--aad-pane-chat-right) var(--aad-pane-chat-bottom) var(--aad-pane-chat-x) !important; width: auto !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-ctop {
+  position: fixed; left: var(--aad-pane-chat-x); width: var(--aad-pane-chat-width); top: var(--aad-pane-chat-y); height: 44px;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-pload {
+  left: var(--aad-pane-app-x); right: auto; width: var(--aad-pane-app-width);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="side"] { left: calc(var(--aad-pane-side-x) + var(--aad-pane-side-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-grip[data-grip="side"] { left: var(--aad-pane-side-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="tabs"] { left: var(--aad-pane-dock-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-dock-edge="start"] .aad-grip[data-grip="tabs"] { left: calc(var(--aad-pane-dock-x) + var(--aad-pane-dock-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="app"] { left: var(--aad-pane-app-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-grip[data-grip="app"] { left: calc(var(--aad-pane-app-x) + var(--aad-pane-app-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app2"] {
+  z-index: 3; inset: var(--aad-pane-app2-y) var(--aad-pane-app2-right) var(--aad-pane-app2-bottom) var(--aad-pane-app2-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app2"] > .win > .wbar {
+  position: relative; visibility: visible; width: auto; height: auto; pointer-events: auto;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-tiled="true"] .aad-grip[data-grip="app"] { display: none; }

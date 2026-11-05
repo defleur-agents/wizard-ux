@@ -2,11 +2,11 @@
 
 Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native Back and desktop Escape share owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists, and `WosSkinHost` decides the desktop view synchronously at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), so Classic's list never mounts or paints first on a refresh; `WizAppServices.back` keeps root apps mounted.
 
-[Full contracts, prohibited duplicates and proof pointers](component-contract-details.md).
+[Contracts](component-contract-details.md).
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One owner per capability: [gate](app-reuse-gate.md).
+[Reuse gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits |
 
@@ -53,7 +53,8 @@ One owner per capability: [gate](app-reuse-gate.md).
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): pure rows, Sort/Group, notes, visible-ID walk; all shells/layouts |
-| Chats time labels | `WizCore.ago` (`core.js`): phone, classic desktop, shared thread headers and AI apps `shortTime`; elapsed hours <24h, then owner-calendar day |
+| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns, AI apps geometry; slots, ratios, side, dock, device-local state |
+| Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; badge `WizCore.workspaceNav.refreshChats` = `WizLive.visibleUnread(unified())` (Ready separate) |

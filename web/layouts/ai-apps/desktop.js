@@ -98,6 +98,26 @@ export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !
 
 export default function desktop(api) {
   const doc = document, root = doc.documentElement;
+  const panes = globalThis.WizCore.panes;
+  let paneGeometry = null, secondEl = null;
+  const paneVars = new Set();
+  function placePanes(s) {
+    const m = panes.get(), focus = root.hasAttribute('data-aad-focus');
+    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end.
+    const edge = ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
+    const sideWidth = focus ? 0 : root.dataset.aadSide === 'open' ? s.side[0] : RAIL;
+    const dockWidth = focus ? 0 : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
+    paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+      sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
+    });
+    root.dataset.aadPaneSide = m.side; root.dataset.aadDockEdge = edge;
+    root.dataset.aadPaneTiled = String(paneGeometry.tiled);
+    const put = (k, v) => { const key = '--aad-pane-' + k; paneVars.add(key); if (root.style.getPropertyValue(key) !== v + 'px') root.style.setProperty(key, v + 'px'); };
+    for (const [id, b] of Object.entries({ side: paneGeometry.sidebar, dock: paneGeometry.dock, main: paneGeometry.content, chat: paneGeometry.panes.chats, app: paneGeometry.panes.app, app2: paneGeometry.panes.app2 || { x: 0, y: 0, width: 0, height: 0 } })) {
+      for (const [k, v] of Object.entries(b)) put(id + '-' + k, v);
+      put(id + '-right', vw() - b.x - b.width); put(id + '-bottom', (globalThis.innerHeight || 900) - b.y - b.height);
+    }
+  }
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
@@ -336,6 +356,7 @@ export default function desktop(api) {
   const shownVars = {}, shownAria = {};
   function applySizes() {
     const s = sizes();
+    placePanes(s);
     for (const id of Object.keys(SIZE_VARS)) {
       const px = s[id][0] + 'px';
       if (shownVars[id] !== px) { shownVars[id] = px; root.style.setProperty(SIZE_VARS[id], px); }
@@ -379,12 +400,12 @@ export default function desktop(api) {
     const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
     grips.append(g); grip[id] = g;
     // the sidebar grows to the right, the open-apps column and the app panel to the left
-    const sign = id === 'side' ? 1 : -1;
+    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' ? -1 : 1);
     let drag = null, cancelFrame = null;
     // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
     const step = t => {
       cancelFrame = null; if (!drag || drag.at === drag.done) return;
-      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign, false);
+      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign(), false);
       if (t && t - drag.fit > FRAME_FIT_MS) { drag.fit = t; fitFrames(drag.frames); }
     };
     api.listen(g, 'pointerdown', e => {
@@ -407,7 +428,7 @@ export default function desktop(api) {
     api.listen(g, 'keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); resetSize(id); return; }
       const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!dir) return;
-      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign * (e.shiftKey ? 64 : 16), true); sizing = '';
+      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign() * (e.shiftKey ? 64 : 16), true); sizing = '';
     });
   }
   api.listen(globalThis, 'resize', () => applySizes());
@@ -1224,7 +1245,10 @@ export default function desktop(api) {
       fixingBehind = true; const d0 = pane.desk, id0 = pane.id;
       api.sessions.newChat(); api.after(80, () => { want = id0; api.nav.goDesk(d0); api.after(600, () => { fixingBehind = false; }); });
     }
-    for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
+    const model = panes.get();
+    const second = model.slots.includes('app2') && model.app2 && desks().find(d => d.id === model.app2 && d.id !== pane?.id && d.id !== CHATS);
+    secondEl = second ? wsps().find(w => Number(w.dataset.ws) === second.desk && w !== chat) || null : null;
+    for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
     docked = !!(chatOn && chat);
     const setState = () => {
@@ -1700,7 +1724,7 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
+    shows: desk => (!!secondEl && Number(secondEl.dataset.ws) === desk) || (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
@@ -1709,11 +1733,14 @@ export default function desktop(api) {
   root.dataset.settingsOver = '';
   { const r = api.route(); chatsFresh = !!r.home || (r.desk === mainChats()?.desk && r.view === 'thread' && r.thread === '__new__'); }
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
+  const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); });
   globalThis.dispatchEvent?.(new Event('resize'));
   if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
+    offPanes(); for (const v of paneVars) root.style.removeProperty(v);
+    for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();

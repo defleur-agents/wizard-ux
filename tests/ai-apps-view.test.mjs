@@ -69,6 +69,8 @@ class El {
 class FakePointerEvent { constructor(type, init = {}) { Object.assign(this, init, { type }); } preventDefault() { this.defaultPrevented = true; } stopPropagation() {} }
 
 function world({ shell = 'phone', route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' } } = {}) {
+  const paneContext = {}; vm.runInNewContext(read('web/core/pane-layout.js'), paneContext);
+  globalThis.WizCore = { ...globalThis.WizCore, panes: paneContext.WizCore.panes };
   const html = new El('html'), body = new El('body'), device = new El('div'), dock = new El('div'), orbWrap = new El('div');
   html.append(body); body.append(device); device.append(dock); dock.append(orbWrap);
   const docListeners = {};
