@@ -691,13 +691,16 @@
   // All frames share one 1.5s budget. Late callbacks, edits and document changes cannot admit reload.
   async function keepDrafts(frame = null) {
     reconcile();
+    const now = typeof performance === 'undefined' ? () => Date.now() : () => performance.now();
+    const deadline = now() + 1500;
     await Promise.all([...frames.values()].filter(st => !frame || st.frame === frame).flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
       if (draft.kept || !valid(st, draft.doc)) return;
       const generation = draft.generation;
       let timer;
       try {
-        const result = await Promise.race([Promise.resolve().then(() => draft.keep()), new Promise(resolve => { timer = setTimeout(() => resolve(false), 1500); })]);
-        if (result === 'kept' && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
+        // Timers cannot run during synchronous persistence; check the clock at both boundaries.
+        const result = await Promise.race([Promise.resolve().then(() => now() < deadline ? draft.keep() : false), new Promise(resolve => { timer = setTimeout(() => resolve(false), Math.max(0, deadline - now())); })]);
+        if (result === 'kept' && now() < deadline && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
       } catch (_) { /* No confirmation means the original hold stays. */ }
       finally { clearTimeout(timer); }
     })));
