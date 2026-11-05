@@ -1,6 +1,15 @@
 'use strict';
 // Real shell + shared viewer + real app-media bridge. Entirely synthetic; forum queue only.
-// QA_TREE=<export> QA_OUT=<fresh-dir> [QA_RED=1] node qa-viewer-desktop-fit.cjs
+// Runner contract (on the admitted QA worker; ffmpeg + ffprobe required):
+// export QA_MEDIA_DIR="$PWD/qa-native-media"; mkdir -p "$QA_MEDIA_DIR"
+// ffmpeg -v error -f lavfi -i color=c=blue:s=160x90:r=1:d=30 -c:v libvpx -threads 1 -b:v 20k -an "$QA_MEDIA_DIR/native-video.webm"
+// ffmpeg -v error -f lavfi -i anullsrc=r=8000:cl=mono -t 30 -c:a pcm_s16le "$QA_MEDIA_DIR/native-audio.wav"
+// for file in "$QA_MEDIA_DIR/native-video.webm" "$QA_MEDIA_DIR/native-audio.wav"; do ffprobe -v error -show_entries format=duration:stream=codec_name,codec_type -of json "$file"; done
+// Both fixtures must decode and report 30 seconds (VP8 video / PCM audio).
+// QA_TREE=<export> QA_OUT=<fresh-dir> QA_MEDIA_DIR="$QA_MEDIA_DIR" node qa-viewer-desktop-fit.cjs
+// Focused native acceptance (same mandatory provisioned QA_MEDIA_DIR):
+// QA_TREE=<export> QA_OUT=<fresh-dir> QA_MEDIA_DIR="$QA_MEDIA_DIR" QA_ONLY='iframe gallery arrows focus/order/count/propagation|native media controls seek without gallery navigation' node qa-viewer-desktop-fit.cjs
+// Optional QA_RED=1 retains the baseline runner mode; never omit QA_MEDIA_DIR.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),crypto=require('node:crypto');
 const {chromium}=require('./tools/qa-playwright.cjs');
 const F=require('./tools/qa-closed-shell.cjs'),OUT=process.env.QA_OUT,RED=process.env.QA_RED==='1';
