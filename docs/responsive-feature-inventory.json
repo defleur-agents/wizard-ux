@@ -1,5 +1,9 @@
 {
   "coreModules": {
+    "core/pane-layout.js": {
+      "loadedBy": ["phone", "desktop"],
+      "note": "Pure pane placement and device-local API; Classic columns and AI apps geometry. Phone has no visual pane consumer yet."
+    },
     "core/agents.js": {
       "loadedBy": [
         "phone",
@@ -923,6 +927,7 @@
     "core/own-views.js",
     "core/pages.css",
     "core/pages.js",
+    "core/pane-layout.js",
     "core/phone-connect.css",
     "core/phone-connect.js",
     "core/photos-relay.js",
