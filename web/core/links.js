@@ -306,9 +306,9 @@
       const doc = a.ownerDocument;
       menu = doc.createElement('div'); menu.className = 'wiz-linkmenu'; menu.setAttribute('role', 'menu');
       menu.innerHTML = `<div class="wl-host">${esc(inApp(u) ? decodeURIComponent(u.pathname.split('/').filter(Boolean).pop() || u.hostname) : u.hostname)}</div>${items}`;
-      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:var(--wz-base);color:var(--wz-text);border:1px solid var(--wz-border);border-radius:var(--wz-radius);box-shadow:0 14px 40px color-mix(in srgb,var(--wz-base) 65%,transparent);padding:6px;font:15px/1.3 var(--wz-font-ui)';
+      menu.style.cssText = 'position:fixed;z-index:2147483000;min-width:220px;max-width:min(300px,calc(100vw - 16px));background:var(--wz-base);color:var(--wz-text);border:1px solid var(--wz-border);border-radius:var(--wz-radius);box-shadow:0 14px 40px color-mix(in srgb,var(--wz-base) 65%,transparent);padding:6px;font:var(--wz-font-size)/1.3 var(--wz-font-ui)';
       for (const b of menu.querySelectorAll('button')) b.style.cssText = 'display:block;width:100%;text-align:left;border:0;background:none;padding:12px 10px;font:inherit;color:inherit;border-radius:8px;cursor:pointer';
-      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:12px;color:var(--wz-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      menu.querySelector('.wl-host').style.cssText = 'padding:6px 10px 4px;font-size:var(--wz-text-sm);color:var(--wz-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
       doc.body.appendChild(menu); linkMenus.add(shut);
       doc.defaultView.addEventListener('pagehide', shut, { once: true });
       let freshPress = false;
