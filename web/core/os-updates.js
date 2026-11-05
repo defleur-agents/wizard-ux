@@ -78,7 +78,7 @@
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
     // The interface: already on the box, a Reload away. Never called Wizard OS.
-    if (window.WizWebUpdate?.pending) return { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
+    if (window.WizWebUpdate?.pending) { const s = window.WizWebUpdate.reloadStatus?.() || {}; return { state: 'reload', title: 'Interface updated', line: s.reason || 'Reload to see the changes', action: 'reload', label: s.rescuing ? 'Saving…' : s.checking ? 'Checking recorder…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : 'Reload', disabled: !!(s.rescuing || s.checking || s.going) }; }
     if (!st || issue) return null;
     const auto = st.mode === 'auto';
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
@@ -91,7 +91,7 @@
   }
   function cardHtml() {
     const c = card(); if (!c) return '';
-    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button></div>`;
+    return `<div class="osu-card" data-osu-card="${c.state}" role="status"><div class="osu-tx"><b data-osu-title>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}</div>`;
   }
   const seg = (name, items) => `<div class="st-seg" role="radiogroup" aria-label="${esc(name)}">${items.map(([key, text, on]) => `<button type="button" data-osu="${key}" role="radio" aria-checked="${on}" ${busy ? 'disabled' : ''}>${esc(text)}</button>`).join('')}</div>`;
   // Always retain the installed server version, including when an update card is present.
@@ -133,6 +133,7 @@
   function act(el, ctx) {
     const b = el.closest('[data-osu]'); if (!b) return false;
     const what = b.dataset.osu;
+    if (what === 'rescue-save' || what === 'rescue-discard') { void window.WizWebUpdate?.rescue?.(what.slice(7)); return true; }
     if (what === 'reload') { ctx?.haptic?.(8); reload(); return true; }
     if (what === 'retry') { if (!inflight) { off = false; void load(true); ctx?.render?.(); } return true; }
     if (busy || !st || issue) return true;
@@ -200,7 +201,7 @@
         document.body.appendChild(popEl);
       }
       const armed = c.state === 'reload' && window.WizWebUpdate?.armed;
-      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(armed ? 'Waiting…' : c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>`;
+      const html = `<div class="osu-pop-tx"><b>${esc(c.title)}</b><span>${esc(c.line)}</span></div><button type="button" class="osu-pop-go" data-osu="${c.action}" ${c.disabled ? 'disabled' : ''}>${esc(c.label)}</button><button type="button" class="osu-pop-x" data-osu-dismiss aria-label="Dismiss">×</button>${c.state === 'reload' ? window.WizWebUpdate?.rescueHtml?.('osu') || '' : ''}`;
       if (popEl.dataset.key !== k || popEl.dataset.html !== html) { popEl.innerHTML = html; popEl.dataset.key = k; popEl.dataset.html = html; popEl.dataset.state = c.state; }
       place();
     }
