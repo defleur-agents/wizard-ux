@@ -47,7 +47,9 @@ function service() {
   return s;
 }
 let WORKING = false; // true: the main thread has a live run, so a reply is steered into it
-const session = (id, title, n) => ({ ...fx.row, id, title, message_count: n, last_active: NOW, wizard_last_assistant_at: NOW, wizard_last_user_at: NOW - 30, ...(WORKING && id === 'tt-main' ? { status: 'running', wizard_run_id: 'run-live-1', wizard_status: 'running' } : {}) });
+const session = (id, title, n) => ({ ...fx.row, id, title: id === 'tt-main' ? 'Wizard polish round — a deliberately long thread title that must truncate before the status dots and timestamp' : title, message_count: n, last_active: NOW, wizard_last_assistant_at: NOW, wizard_last_user_at: NOW - 30,
+  ...(!WORKING && id === 'tt-main' ? { wizard_attention: { state: 'needs_you', ask: 'Review this polish round' }, wizard_background: 'helper' } : {}),
+  ...(WORKING && id === 'tt-main' ? { status: 'running', wizard_run_id: 'run-live-1', wizard_status: 'running' } : {}) });
 
 async function mount(browser, svc, { shell, skin, tweaks, storage }) {
   const phone = shell === 'phone';
@@ -197,6 +199,23 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
         await page.waitForTimeout(300);
         check(`${tag}: the dots are visible on the phone Chats list row`, await page.evaluate(() => { const d = document.querySelector('[data-tt-dots]'); if (!d) return false; const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom <= innerHeight; }));
       }
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
+      const geometry = await page.evaluate(() => {
+        const d = document.querySelector('[data-tt-dots="hermes/tt-main"]'), row = d?.closest('.tp, .aad-row');
+        const t = row?.querySelector('time, .aad-time'), title = row?.querySelector('b, .aad-row-t'), badge = row?.querySelector('.ch-background');
+        if (!d || !t || !title) return null;
+        const dr = d.getBoundingClientRect(), tr = t.getBoundingClientRect(), rr = row.getBoundingClientRect(), br = badge?.getBoundingClientRect();
+        return { shell: document.documentElement.dataset.shell, skin: document.documentElement.dataset.skin,
+          gap: tr.left - dr.right, right: rr.right - tr.right, truncated: title.scrollWidth > title.clientWidth,
+          visible: dr.left >= 0 && tr.right <= innerWidth && dr.top >= 0 && dr.bottom <= innerHeight && row.contains(document.elementFromPoint(dr.left + 2, dr.top + 2)),
+          badge: badge?.textContent, badgeBefore: !br || br.right <= dr.left,
+          ordered: !!(d.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_FOLLOWING) };
+      });
+      check(`${tag}: dots immediately left of time with an 8px gap and the group right aligned`, geometry?.ordered && Math.abs(geometry.gap - 8) < 1 && geometry.right >= 0 && geometry.right <= 11, geometry);
+      check(`${tag}: long title truncates while dots and timestamp remain visible`, geometry?.visible && geometry.truncated && geometry.shell === shell && geometry.skin === skin, geometry);
+      if (shell === 'phone') check(`${tag}: Helper still working badge precedes dots and time`, geometry?.badge === 'Helper still working' && geometry.badgeBefore, geometry);
+      await page.screenshot({ path: path.join(OUT, `dots-left-${shell}-${skin}.png`) });
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-list.png`) });
       if (shell === 'phone') await page.evaluate(() => (window.__wux || window.__wos)?.goHome?.()).catch(() => {});
       await openThread(page, 'tt-main');
