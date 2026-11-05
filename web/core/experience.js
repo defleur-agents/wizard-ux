@@ -202,6 +202,8 @@
       if (seq !== generation) return;
       if (desktop && !desktopView) migrateDesktopView(desktopMigration);
       const worn = wornView(own);
+      // Keep the last canonical desktop choice if an older sync writer later omits views.
+      if (desktop && chosenView('desktop') !== undefined && desktopView !== effectiveDesktopView()) rememberDesktopView(effectiveDesktopView());
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
       await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());

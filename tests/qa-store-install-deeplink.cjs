@@ -68,6 +68,13 @@ try {for(const variant of [{shell:'phone',view:'classic'},{shell:'desktop',view:
   await p.mouse.click(5,840);assert.equal(await p.locator('#keyHints').isVisible(),false);
   await p.locator('.aad-ws').click();assert.ok(await p.locator('.aad-wspop').isVisible());
   await p.mouse.click(5,840);assert.equal(await p.locator('.aad-wspop').isVisible(),false);
+  // Built-in alternate views retain their authored CSS, with no personal scripts enabled.
+  for(const [layout,token] of [['orb','--ob-sky'],['apps','--ap-label']]){
+   await p.evaluate(async layout=>{WosSkinHost.setStandardLayout(layout);await WosSkinHost.whenLayoutReady();},layout);
+   await p.waitForFunction(token=>getComputedStyle(document.documentElement).getPropertyValue(token).trim().length>0,token);
+   assert.equal(await p.evaluate(()=>WosExperience.state.active.some(t=>['miguel/orb-shell','miguel/apps-home'].includes(t.id))),false);
+   if(layout==='apps')assert.ok(await p.locator('#desktopHome').evaluate(n=>[...n.children].every(c=>getComputedStyle(c).display==='none')),'Apps hides the stock Home');
+  }
  }else{
   for(const [button,layer] of [['#searchBtn','#palette'],['#keysBtn','#keyHints']]){
    await p.locator(button).click();assert.ok(await p.locator(layer).isVisible());

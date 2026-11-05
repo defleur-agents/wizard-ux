@@ -71,6 +71,20 @@ for (const [id,layout] of [['','classic'],['miguel/orb-shell','orb'],['miguel/ap
  assert.equal(f.H.layout,layout);assert.equal(f.E.views.phone,'miguel/orb-shell');
  assert.ok(!f.active().some(id=>['miguel/ai-apps','miguel/apps-home','miguel/orb-shell'].includes(id)));
 });
+for (const [id,layout] of [['','classic'],['miguel/orb-shell','orb'],['miguel/apps-home','apps'],['miguel/ai-apps','ai-apps']]) test(`last synced ${layout} survives an older document without views`,async()=>{
+ const f=boot();await f.E.refresh();await f.E.adopt({}, {desktop:id});
+ assert.equal(f.store.get('wos.desktop-view.v1'),layout,'canonical choice refreshes local fallback');
+ await f.E.adopt({}, {});assert.equal(f.H.layout,layout,'old writer cannot restore a stale local view');
+ const g=boot({storage:f.store});await g.E.refresh();assert.equal(g.H.layout,layout,'same after reload');
+});
+test('built-in Apps and Orb own their colour CSS without activating personal scripts',()=>{
+ for(const [layout,tweak] of [['apps','apps-home'],['orb','orb-shell']]){
+  const css=read(`web/layouts/${layout}/layout.css`);
+  assert.ok(css.includes(`@import url("../../tweaks/miguel/${tweak}/tweak.css");`));
+  assert.ok(read(`web/tweaks/miguel/${tweak}/tweak.css`).includes(layout==='apps'?'--ap-label:':'--ob-sky:'));
+ }
+});
+
 test('explicit desktop choice publishes only canonical view intent, preserving phone and shared defaults',async()=>{
  const f=boot();await f.E.refresh();await f.E.adopt({}, {desktop:'',phone:'miguel/orb-shell'}, {'wizard/unified-inbox':false});
  const before=f.E.defaultChoices;await f.E.chooseDesktopView('ai-apps');

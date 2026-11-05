@@ -214,7 +214,7 @@ test('phone, Apps and Orb: no stock desk switcher on any screen, the dock orb st
 });
 
 test('Desks unchanged: the desktop and phone stock paths never meet Apps CSS unless worn; Apps wears on the desktop too', async () => {
-  const css = read('web/layouts/apps/layout.css').replace(/\/\*[\s\S]*?\*\//g, '');
+  const css = read('web/layouts/apps/layout.css').replace(/@import[^;]+;/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
   for (const sel of [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(x => !/^(from|to)$/.test(x))) for (const part of sel.split(/,(?![^(]*\))/))
     assert.ok(/^html\[data-shell="(phone|desktop)"\]\[data-layout="apps"\]/.test(part.trim()), `unscoped: ${part.trim()}`);
   assert.ok(!/#[0-9a-f]{3,8}\b|rgba?\(/i.test(css + read('web/layouts/apps/chrome.css')), 'colours are tokens');
