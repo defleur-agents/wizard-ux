@@ -239,7 +239,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
   // round 15: the top row holds a docked chat's title + ✕ and the app panel's header (no tab strip)
-  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']);
+  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']); // parked until an app owns it
   assert.equal(w.q('.aad-top .aad-ws'), null, 'the switcher lives in the sidebar header');
   assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
   w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
@@ -2107,6 +2107,10 @@ test('desktop cold Store opens synchronously in the app pane and deferred Home c
   assert.equal(placed, 8, 'the already-checked open is placed on the app desk, never re-gated');
   assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
   assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
+  const header = w.q('.aad-ptop');
+  assert.equal(header.parentNode, app, 'the header and window share the animated desk on the opening frame');
+  assert.equal(app.dataset.aadAnim, 'app');
+  assert.equal(header.dataset.aadAnim, undefined, 'no independent header entrance');
   const drafts = w.st.newChats;
   w.run();
   assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');

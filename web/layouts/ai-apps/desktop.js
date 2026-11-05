@@ -1231,6 +1231,10 @@ export default function desktop(api) {
     if (docked && !wasDocked) anim('dock');
     applySizes();
     if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
+    // One physical pane owns both the layout header and the app window. Moving
+    // the header (not cloning it) preserves its tools/listeners and iframe state.
+    const headerHost = pane?.el || top;
+    if (pTop.parentNode !== headerHost) headerHost.append(pTop);
     pTop.hidden = !pane; cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
@@ -1263,7 +1267,7 @@ export default function desktop(api) {
   }
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) { paintWide(); return; } wide = w;
-    flip([pane?.el, pTop], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
+    flip([pane?.el], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
     paintWide(); retileSoon();
   }
   function paintWide() {
@@ -1299,7 +1303,7 @@ export default function desktop(api) {
   function anim(kind) {
     animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
     const chatDesk = chatsEl();
-    animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
+    animOn = (kind === 'app' ? [pane?.el] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
     for (const n of animOn) n.dataset.aadAnim = kind;
     animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
   }
@@ -1703,6 +1707,8 @@ export default function desktop(api) {
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
+    closing?.(); closing = null;
+    top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
     toolsMo?.disconnect();
