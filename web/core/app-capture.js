@@ -54,17 +54,40 @@
       error: active?.error?.code || recoveryError?.code || null };
   }
   function changed() { W.dispatchEvent(new CustomEvent('wizard-app-capture-state', { detail: state() })); }
+  // Diagnostics are codes only: never include a browser's arbitrary error message/content.
+  function storageFailure(e) {
+    const detail = /^(timeout|blocked|unavailable|QuotaExceededError|InvalidStateError|UnknownError|AbortError|NotFoundError|VersionError|SecurityError)$/.test(e?.detail) ? e.detail : (/^(QuotaExceededError|InvalidStateError|UnknownError|AbortError|NotFoundError|VersionError|SecurityError)$/.test(e?.name) ? e.name : 'UnknownError');
+    return fail('storage_failed', 'On-device audio storage failed (' + detail + ').', { detail });
+  }
+  function bounded(work, ms = 1500, code = 'storage_failed') {
+    let timer;
+    return Promise.race([work, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(fail(code, code === 'storage_failed' ? 'On-device audio storage timed out (timeout).' : 'Audio stop timed out; the take is kept. Retry Send or Discard.', { detail: 'timeout' })), ms);
+    })]).finally(() => clearTimeout(timer));
+  }
   function openDB() {
     if (!dbPromise) dbPromise = new Promise((resolve, reject) => {
-      if (!W.indexedDB) return reject(fail('storage_unavailable', 'Durable capture storage is unavailable.'));
-      const req = indexedDB.open(DB_NAME, 1);
+      if (!W.indexedDB) return reject(fail('storage_unavailable', 'Durable capture storage is unavailable.', { detail: 'unavailable' }));
+      let settled = false, req;
+      const finish = (error, db) => {
+        if (settled) { db?.close(); return; }
+        settled = true; clearTimeout(timer);
+        if (error) reject(storageFailure(error)); else resolve(db);
+      };
+      const timer = setTimeout(() => finish({ detail: 'timeout' }), 1500);
+      try { req = indexedDB.open(DB_NAME, 1); } catch (e) { finish(e); return; }
       req.onupgradeneeded = () => {
+        if (settled) { req.transaction?.abort(); return; }
         req.result.createObjectStore('sessions', { keyPath: 'id' });
         req.result.createObjectStore('chunks', { keyPath: ['id', 'seq'] }).createIndex('id', 'id');
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
-      req.onblocked = () => reject(fail('storage_blocked', 'Close the old capture storage connection.'));
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => { db.close(); dbPromise = null; };
+        finish(null, db);
+      };
+      req.onerror = () => finish(req.error);
+      req.onblocked = () => finish({ detail: 'blocked' });
     });
     const opening = dbPromise;
     opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
@@ -162,7 +185,13 @@
   // failed writes for an explicit stop retry; never acknowledge/delete on a failed save.
   function enqueue(s, blob, source = 'me', startMs) {
     if (!blob?.size || s.discard || s.inputStopped) return;
-    for (let off = 0; off < blob.size; off += MAX_CHUNK) s.queue.push({ blob: blob.slice(off, off + MAX_CHUNK), source, startMs: startMs == null ? undefined : startMs + off / 32 });
+    for (let off = 0; off < blob.size; off += MAX_CHUNK) {
+      const part = { blob: blob.slice(off, off + MAX_CHUNK), source, startMs: startMs == null ? undefined : startMs + off / 32 };
+      s.queue.push(part);
+      // Instant takes retain references to ALL pieces (committed and queued) until handoff.
+      // Reading IDB back cannot recover committed bytes when the store itself is broken.
+      if (s.instant) (s.memoryParts ||= []).push(part);
+    }
     s.queuedBytes = (s.queuedBytes || 0) + blob.size;
     if (s.instant && s.row.bytes + (s.queuedBytes || 0) >= s.limit) {
       emit(s, 'warn', 'Recording reached its size limit; keeping the take for you.');
@@ -190,7 +219,7 @@
     return s.drainPromise;
   }
   async function drainQueue(s) {
-    if (s.persistencePending) return;
+    if (s.persistencePending || s.memoryOnly) return;
     while (s.queue.length && !s.discard) {
       const { blob, source, startMs } = s.queue[0];
       const track = s.row.tracks?.[source] || { seq: 0, bytes: 0, startMs: startMs || 0 };
@@ -203,14 +232,14 @@
           tx.objectStore('chunks').put({ id: row.id, seq: s.row.seq, blob, source, startMs: startMs ?? (track.startMs + track.bytes / 32) });
           tx.objectStore('sessions').put(row);
         });
+        if (s.discard || s.memoryOnly) return; // a timed-out write must not mutate a handed-off take
         s.row = row; ownedRows.set(row.id, structuredClone(row)); s.queue.shift(); s.queuedBytes = Math.max(0, (s.queuedBytes || 0) - blob.size); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
-        s.error = fail('storage_failed', 'Capture storage failed; stop and retry saving before leaving.', { cause: e });
+        s.error = storageFailure(e);
         s.partial = true; changed();
-        // Fresh voice/song takes keep recording in memory on storage failure. Stop still requires a
-        // durable save (or an explicit retry), so neither this queue nor an unacknowledged take is lost.
-        if (s.instant) { emit(s, 'warn', 'Recording is kept in memory. Saving on this device failed; keep Wizard open and retry Stop.'); return; }
+        // Only instant takes may hand off an in-memory result. Durable recorders stay strict.
+        if (s.instant) { emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); return; }
         void finish(s, true).catch(() => {}); return;
       }
       if (s.row.bytes >= s.limit && !s.finishPromise) { s.partial = true; void finish(s, true).catch(() => {}); }
@@ -231,31 +260,76 @@
     cleanup(s); s.unlock?.(); s.unlock = null;
     if(s.inputStopped || s.discard)recoveryLive.delete(s.row.id); if (active === s) active = null; changed();
   }
+  function memoryResult(s, error) {
+    const chunks = (s.memoryParts || []).filter(p => p.source === 'me').map(p => p.blob);
+    const bytes = chunks.reduce((n, b) => n + b.size, 0);
+    if (!bytes) throw fail('memory_result_failed', 'Audio could not be prepared. The take is kept; retry Send or Discard.', { detail: 'empty' });
+    const blob = s.row.pcm ? wav(chunks, bytes) : new Blob(chunks, { type: s.row.mime });
+    return { id: s.row.id, blob, mime: s.row.mime, startedAt: s.row.startedAt,
+      durationMs: s.final?.durationMs ?? (s.row.pcm ? bytes / 32 : (s.pausedAt || s.stopAt) - s.row.startedAt - (s.pausedTotal || 0)),
+      meta: { ...s.row.meta }, streamChunks: [], durable: false, storageError: storageFailure(error).detail,
+      ...(s.final?.partial ? { partial: true } : {}) };
+  }
   function finish(s, partial = false) {
     if (s.discard || s.cancelPromise) return Promise.reject(fail('cancelled', 'Capture was cancelled.'));
     if (s.finishPromise) return s.finishPromise;
     s.finishPromise = (async () => {
       if (s.borrowWork) await s.borrowWork.catch(() => {});
-      s.error = null; s.phase = 'stopping'; s.partial = !!(s.partial || partial); changed();
+      s.error = null; s.phase = 'stopping'; s.stopAt ||= Date.now(); s.partial = !!(s.partial || partial); changed();
       if (!s.inputStopped) {
-        s.final = await s.engine.stop();
-        if (s.final?.blob) enqueue(s, s.final.blob);
-        s.inputStopped = true; cleanup(s);
+        try {
+          // Input is stopped BEFORE any storage await, even when its final flush fails.
+          const stopping = Promise.resolve().then(() => s.engine.stop());
+          s.final = await (s.instant ? bounded(stopping, 6000, 'stop_timeout') : stopping);
+          if (s.discard) throw fail('cancelled', 'Capture was cancelled.');
+          if (s.final?.blob) enqueue(s, s.final.blob);
+          s.inputStopped = true;
+        } finally { cleanup(s); }
       }
-      if (s.persistencePending) await Promise.race([s.persistence, new Promise((_, reject) => { const timer = setTimeout(() => reject(fail('storage_failed', 'Recording is kept in memory. Keep Wizard open and retry Stop.')), 1500); s.persistence.finally(() => clearTimeout(timer)); })]);
-      let writes;
-      do { writes = s.writes; await writes; await drain(s); if (s.error) throw s.error; } while (s.queue.length || writes !== s.writes);
-      if (s.queue.length || s.error) throw s.error || fail('storage_failed', 'Capture was not saved.');
-      for (const source of Object.keys(s.uploads || {})) uploadChunk(s, source, null, 0, true);
-      if (s.final?.meta) s.row.meta = { ...s.row.meta, native: s.final.meta };
-      if (s.final?.partial) s.partial = true;
-      const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm && !s.row.native ? 0 : (s.pausedAt || Date.now()) - s.row.startedAt - (s.pausedTotal || 0))) };
-      recoveryLive.delete(row.id);
-      await put(row); s.row = row;
-      const out = await result(row); release(s); return out;
+      const save = async () => {
+        if (s.persistencePending) await s.persistence;
+        let writes;
+        do { writes = s.writes; await writes; await drain(s); if (s.error) throw s.error; }
+        while (!s.discard && !s.memoryOnly && (s.queue.length || writes !== s.writes));
+        if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        if (s.queue.length || s.error) throw s.error || fail('storage_failed', 'Capture was not saved.');
+        for (const source of Object.keys(s.uploads || {})) uploadChunk(s, source, null, 0, true);
+        if (s.final?.meta) s.row.meta = { ...s.row.meta, native: s.final.meta };
+        if (s.final?.partial) s.partial = true;
+        const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm && !s.row.native ? 0 : (s.pausedAt || s.stopAt) - s.row.startedAt - (s.pausedTotal || 0))) };
+        recoveryLive.delete(row.id);
+        await put(row); if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        s.row = row; return result(row);
+      };
+      let out;
+      try { out = await (s.instant ? bounded(save()) : save()); }
+      catch (e) {
+        if (!s.instant || s.discard) throw e;
+        s.memoryOnly = true;
+        try { out = memoryResult(s, e); }
+        catch (_) { throw fail('memory_result_failed', 'Audio could not be prepared. The take is kept in memory; keep Wizard open and retry Send or Discard.', { detail: storageFailure(e).detail }); }
+      }
+      if (s.discard) throw fail('cancelled', 'Capture was cancelled.');
+      s.phase = 'stopped'; release(s); return out;
     })();
-    s.finishPromise.catch(e => { s.error = e; s.finishPromise = null; changed(); });
+    s.finishPromise.catch(e => { cleanup(s); s.error = e; s.phase = 'error'; s.finishPromise = null; changed(); });
     return s.finishPromise;
+  }
+  function cancelSession(s) {
+    if (s.cancelPromise) return s.cancelPromise;
+    s.cancelPromise = (async () => {
+      // Explicit Discard may follow a failed Stop, or wait for a genuinely in-flight one.
+      if (s.finishPromise) await bounded(s.finishPromise, 8000, 'stop_timeout').catch(() => {});
+      s.phase = 'cancelling'; s.discard = true; changed();
+      try { await bounded(Promise.resolve().then(() => s.engine.cancel()), 1500, 'stop_timeout').catch(() => {}); }
+      finally {
+        s.inputStopped = true; cleanup(s); s.queue.length = 0; s.memoryParts = []; s.queuedBytes = 0;
+        // Never let a broken disk hold the mic or its Web Lock after the owner discarded.
+        await bounded(remove(s.row.id)).catch(() => {});
+        ownedRows.delete(s.row.id); recoveryLive.delete(s.row.id); s.phase = 'cancelled'; release(s);
+      }
+    })();
+    return s.cancelPromise;
   }
   function emit(s, key, value) { for (const cb of [...(s.listeners?.[key] || [])]) safeCall(cb, value); }
   function observe(s, key, cb) {
@@ -348,19 +422,7 @@
         if (s.engineDetached) await reopenBorrowedEngine(s); else await s.engine.resume();
         s.pausedTotal = (s.pausedTotal || 0) + Date.now() - s.pausedAt; s.pausedAt = 0; s.phase = 'recording'; emit(s,'state',{paused:false,recording:true}); changed();
       },
-      cancel() {
-        if (s.cancelPromise) return s.cancelPromise;
-        // Once Stop has begun it owns the terminal boundary; Cancel must not race
-        // a native stop/read/delete or erase the promised Result underneath it.
-        if (s.finishPromise || s.inputStopped) return Promise.reject(fail('already_stopping', 'Capture is already being saved.'));
-        s.cancelPromise = (async () => {
-          s.phase = 'cancelling'; changed();
-          await s.engine.cancel(); s.discard = true; cleanup(s); if (s.persistencePending) await s.persistence; await s.writes;
-          await remove(s.row.id); release(s);
-        })();
-        s.cancelPromise.catch(e => { s.error = e; s.cancelPromise = null; changed(); });
-        return s.cancelPromise;
-      }
+      cancel() { return cancelSession(s); }
     });
   }
   // PCM algorithm above retains Mizel mono16k box-filter downsampling and
@@ -920,8 +982,8 @@
         // The session is already recording. Buffer chunks until its first row can commit. Recovery
         // runs at boot/pending(), never as an admission requirement for a fresh voice/song take.
         s.persistence = (async () => {
-          try { await openDB(); if (!s.discard) await put(s.row); }
-          catch (e) { s.error = fail('storage_failed', 'Recording is kept in memory; keep Wizard open and retry Stop.', { cause: e }); emit(s, 'warn', s.error.message); changed(); }
+          try { await openDB(); if (!s.discard && !s.memoryOnly) await put(s.row); }
+          catch (e) { s.error = storageFailure(e); emit(s, 'warn', 'On-device saving failed (' + s.error.detail + '). Keep Wizard open; Send or Discard still works.'); changed(); }
           finally { clearTimeout(notice); s.persistencePending = false; }
           if (!s.discard) s.writes = s.writes.then(() => drain(s));
         })();
