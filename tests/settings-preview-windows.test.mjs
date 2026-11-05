@@ -34,7 +34,7 @@ test('desktop Settings opens as a window and every way of closing the window hid
 test('desktop Settings keys: ⌥, toggles, Esc closes only the focused Settings window, ⌥ window keys are not swallowed', () => {
   assert.equal((desk.match(/return hit\(toggleSettings\)/g) || []).length, 2);
   assert.match(desk, /function toggleSettings\(\) \{ if \(settingsFocused\(\)\) closeSettings\(\); else openSettings\(\); \}/);
-  assert.match(desk, /if \(settingsFocused\(\)\) \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
+  assert.match(desk, /watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView\.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
   assert.match(desk, /if \(settingsFocused\(\) && !e\.altKey\) return;/);
   assert.doesNotMatch(desk, /setEl && !setEl\.hidden && !\(e\.altKey && code === 'Comma'\)/, 'the old modal swallow of every ⌥ key is gone');
   assert.equal((desk.match(/setEl\.setAttribute\('aria-modal'/g) || []).length, 1, 'only the Home panel is a dialog, never the window');

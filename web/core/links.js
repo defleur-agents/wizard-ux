@@ -189,7 +189,7 @@
       }, true);
       // Keyboard inside the page: Esc steps back / closes; ⌘/Ctrl+Enter keeps; ⌘/Ctrl+⇧+Enter opens in the browser.
       doc.addEventListener('keydown', e => {
-        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); const V = window.WosChat && window.WosChat.viewer; if (V && V.isOpen()) V.close(); else back(); return; }
+        if (e.key === 'Escape') { if (window.WosBack?.escape) return window.WosBack.escape(e); e.preventDefault(); e.stopPropagation(); const V = window.WosChat && window.WosChat.viewer; if (V && V.isOpen()) V.close(); else back(); return; }
         if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); el.querySelector(e.shiftKey ? '[data-ls="out"]' : '[data-ls="keep"]')?.click(); }
       }, true);
       doc.addEventListener('submit', e => {
@@ -379,5 +379,5 @@
     } catch (e) {}
   }
 
-  window.WizLinks = { mount, intercept, guardFrame, backMenu, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
+  window.WizLinks = { mount, intercept, guardFrame, backMenu, isMenuOpen: () => linkMenus.size > 0, viewImage: href => viewImage(abs(href)), inApp: href => inApp(abs(href)) };
 })();
