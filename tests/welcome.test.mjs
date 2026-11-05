@@ -110,7 +110,11 @@ test('Welcome: a stale install completion never takes over a reopened Welcome', 
 });
 
 test('Welcome: Escape inside the embedded sign-in page steps back', () => {
-  assert.match(read('web/core/welcome.js'), /fr\.contentDocument\.addEventListener\('keydown', e => \{ if \(e\.key === 'Escape'\) \{ e\.preventDefault\(\); back\(\); \} \}, true\)/);
+  const handler=read('web/core/welcome.js').match(/fr\.contentDocument\.addEventListener\('keydown', (e => \{[^\n]+?\}), true\)/);
+  assert.ok(handler);const calls=[],window={WosBack:{escape:()=>calls.push('shared')}};
+  const cb=vm.runInNewContext('('+handler[1]+')',{window,back:()=>calls.push('local')});
+  cb({key:'Escape',preventDefault(){}});assert.deepEqual(calls,['shared']);
+  delete window.WosBack;cb({key:'Escape',preventDefault(){}});assert.deepEqual(calls,['shared','local']);
 });
 
 test('Welcome: a readiness reply for an earlier provider choice is ignored', () => {
