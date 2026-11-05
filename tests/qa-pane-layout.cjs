@@ -32,7 +32,7 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
      if (u.origin !== origin) return r.abort();
      if (u.pathname.includes('/v1/runs')) { runs.push(u.pathname); return r.abort(); }
      if (!['GET','HEAD'].includes(q.method())) { writes.push(q.method()+' '+u.pathname); return r.fulfill({status:403,json:{error:'QA refuses all writes'}}); }
-     if (u.pathname === prefix+'store/index.html') return r.fulfill({contentType:'text/html',body:'<!doctype html><h1>Synthetic app</h1><input value="unsent">'});
+     if ([prefix+'store/index.html',prefix+'agents/index.html'].includes(u.pathname)) return r.fulfill({contentType:'text/html',body:'<!doctype html><h1>Synthetic app</h1><input value="unsent">'});
      if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({json:{migrations:{'launcher-seed-v1':true}}});
      if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({json:{ data:[{id:'qa-thread',title:'Synthetic chat',status:'completed',updatedAt:'2026-11-05T00:00:00Z'}],has_more:false }});
      if (u.pathname.startsWith('/wizard/')) return r.fulfill({json:ownerRead(u.pathname)});
@@ -60,6 +60,7 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
     await settle(); snapshots.both = await boxes();
     if (tree==='baseline') before=snapshots;
     else {
+     report.cases.push({skin,tree,snapshots});
      assert.deepEqual(snapshots,before,'default pane boxes exactly equal before on '+skin);
      for (const patch of [{ratio:'1/3'}, {ratio:'2/3'}, {ratio:'1/2',side:'end'}, {side:'start',dock:{edge:'start'}}]) {
       await page.evaluate(p=>WizCore.panes.set(p),patch); await settle();
@@ -79,8 +80,21 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
      await page.evaluate(()=>WosSkin.set(WosSkin.current==='nebula'?'sepia':'nebula')); await settle();
      assert.equal(await page.frameLocator('iframe[src*="/store/index.html"]').locator('input').inputValue(),'unsent','skin switch retains app');
      await page.evaluate(()=>WizCore.panes.set({ratio:null,side:'start',dock:{edge:'end'}})); await settle();
+     await page.evaluate(skin=>WosSkin.set(skin),skin); await settle();
     }
     await page.screenshot({path:path.join(out,skin+'-'+tree+'-default.png')});
+    if (tree==='candidate') {
+     await page.evaluate(()=>{ __wux.openApp(WizCore.apps('desktop').APP.agents); WizCore.panes.set({slots:['chats','app','app2'],app2:'app-store',ratio:'1/2'}); });
+     await page.waitForFunction(()=>document.querySelector('#stage > .wsp[data-aad-role="app2"]'));
+     await settle();
+     assert.equal(await page.frameLocator('iframe[src*="/store/index.html"]').locator('input').inputValue(),'unsent');
+     const second=await page.locator('#stage > .wsp[data-aad-role="app2"]').boundingBox(), actual=await boxes();
+     assert.equal(second.width,238); assert.equal(actual.chat.width,476); assert.equal(actual.app.width,238);
+     assert.equal(actual.chat.x+actual.chat.width,actual.app.x); assert.equal(actual.app.x+actual.app.width,second.x);
+     assert.equal(await page.locator('#stage > .wsp[data-aad-role="app2"]').isVisible(),true);
+     report.cases.push({skin,secondApp:second,actual});
+     await page.screenshot({path:path.join(out,skin+'-second-app.png')});
+    }
     assert.deepEqual(errors,[]); assert.deepEqual(runs,[]);
     assert.ok(writes.every(w=>w==='PUT /wizard/thread-seen'),'only explicitly refused read receipts: '+JSON.stringify(writes));
     report.cases.push({skin,tree,snapshots,writes,runs,errors});

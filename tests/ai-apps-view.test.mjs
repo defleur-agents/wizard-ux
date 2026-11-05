@@ -1428,7 +1428,7 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
   assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
-  assert.ok(css.includes(`${P}[data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }`), 'a docked chat and the panel never overlap');
+  assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
   assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
   const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);

@@ -1250,7 +1250,7 @@ export default function desktop(api) {
     secondEl = second ? wsps().find(w => Number(w.dataset.ws) === second.desk && w !== chat) || null : null;
     for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
-    docked = !!(chatOn && chat);
+    docked = !!(model.slots.includes('chats') && chatOn && chat);
     const setState = () => {
       if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
       if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
