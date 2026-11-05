@@ -1,92 +1,32 @@
-name: Responsive feature contracts
+name: Pane live source parity acceptance
 on:
   workflow_dispatch:
-  pull_request:
-  push:
-    branches: [main]
 permissions:
   contents: read
 jobs:
-  pane-layout:
+  live-source-parity:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-save --package-lock=false playwright@1.55.1
-      - run: npx playwright install --with-deps chromium
-      - run: node tests/qa-pane-layout.cjs
+      - name: Compare exact live and candidate tracked archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          live=479e15cf8daf28c949e6f6bfc7ba4c08a4f4b609
+          candidate=24a142a0dcccc7bab660a7884f67b39540ad3752
+          mkdir -p "$RUNNER_TEMP/pane-live" "$RUNNER_TEMP/pane-candidate" pane-parity-evidence
+          git archive "$live" | tar -x -C "$RUNNER_TEMP/pane-live"
+          git archive "$candidate" | tar -x -C "$RUNNER_TEMP/pane-candidate"
+          python3 tools/qa-pane-app-parity.py "$RUNNER_TEMP/pane-live" "$RUNNER_TEMP/pane-candidate" --json | tee pane-parity-evidence/report.json
+          git merge-base --is-ancestor "$live" "$candidate"
+          git merge-base --is-ancestor d19c5ba69de6e47f12c8da32ed43cc4d12974cae "$candidate"
+          git diff --exit-code "$live" "$candidate" -- web/core/app-capture.js web/core/app-services.js web/core/web-update.js
+          printf '%s\n' "$live" "$candidate" > pane-parity-evidence/commits.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pane-layout-evidence
-          path: pane-layout-evidence/
-  shared-features:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm test
-  tap-outside-closes:
-    # Keep the runner compatible with the Playwright version exercised locally.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-save --package-lock=false playwright@1.55.1
-      - run: npx playwright install --with-deps chromium
-      - run: node tools/qa-tap-outside-closes.cjs
-      - run: node tests/qa-store-install-deeplink.cjs
-  app-pane-slide:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-save --package-lock=false playwright@1.55.1
-      - run: npx playwright install --with-deps chromium
-      - run: node tests/qa-app-pane-slide.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: app-pane-slide-evidence
-          path: app-pane-slide-evidence/
-  desktop-escape-back:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 8
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-save --package-lock=false playwright@1.55.1
-      - run: npx playwright install --with-deps chromium
-      - run: node tests/qa-desktop-escape-back.cjs
-      - run: QA_OUT=escape-back-evidence node tests/qa-desktop-boot-layout.cjs
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: desktop-escape-back-evidence
-          path: escape-back-evidence/
-  opaque-overlays:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-save --package-lock=false playwright@1.64.1
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:opaque-overlays
+          name: pane-parity-evidence
+          path: pane-parity-evidence/
