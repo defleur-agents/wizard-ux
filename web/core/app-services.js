@@ -93,7 +93,7 @@
   }
   function from(source) { return [...frames.values()].find(st => st.frame.contentWindow === source); }
   const changed = () => window.dispatchEvent(new CustomEvent('wizard:app-holds'));
-  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
+  function reset(st) { window.WizBackgroundAudio?.duck?.(st, false); window.WizCompanionPane?.detach(st.frame); if (st.tools) setTools(st, null); if (st.orb) setOrb(st, null); for (const [token, pin] of conversationPins) if (pin.st === st) conversationPins.delete(token); for (const off of st.captureOffs || []) { try { off(); } catch (_) {} } st.captureOffs?.clear(); st.holds.clear(); st.drafts?.clear(); st.messageHolds?.clear(); st.requests?.clear(); st.client = null; st.doc = null; st.pendingBack = null; changed(); }
   function reconcile() {
     for (const st of frames.values()) {
       if (st.tools && st.frame.isConnected && !barOf(st)?.querySelector(':scope > .wtools')) paintTools(st);
@@ -238,11 +238,15 @@
     if (st.doc && st.doc !== doc) reset(st);
     st.doc = doc; if (client !== undefined) st.client = client; st.lastAlive = Date.now();
     const check = () => { if (!valid(st, doc)) throw fault('App frame is no longer authorized'); st.lastAlive = Date.now(); };
-    const hold = reason => {
+    const hold = (reason, options = {}) => {
       check(); if (st.holds.size >= 64) throw fault('Too many update holds');
       const id = uid(); st.holds.set(id, String(reason || 'Unsaved work').slice(0, 160)); changed();
+      // A draft is skippable only after its owner confirms durable readback.
+      // Capture holds never opt into this contract, even with a keep callback.
+      const draft = typeof options.keep === 'function' && !/record|captur|voice|audio/i.test(reason) ? {keep: options.keep, doc, generation: 0, kept: false} : null;
+      if (draft) { st.drafts ||= new Map(); st.drafts.set(id, draft); }
       let released = false;
-      return { release() { if (released) return; released = true; st.holds.delete(id); changed(); } };
+      return { release() { if (released) return; released = true; st.holds.delete(id); st.drafts?.delete(id); changed(); } };
     };
     // Capture holds start before permission, end only after stop/cancel settles. Lifecycle never cancels capture.
     const start = async (opts, attaching = false) => {
@@ -481,7 +485,7 @@
   }
   function busy() {
     reconcile();
-    if ([...frames.values()].some(st => st.holds.size)) return true;
+    if ([...frames.values()].some(st => [...st.holds.keys()].some(id => !st.drafts?.get(id)?.kept))) return true;
     try {
       const s = window.WizAppCapture?.getState?.();
       if (s && (s.hold || s.active || s.recording || s.session || s.appId || /record|start|stop|permission/.test(s.state || s.status || ''))) return true;
@@ -533,7 +537,7 @@
       if (d.op === 'share.ack') value = svc.share.ack(d.args?.id);
       if (d.op === 'capture.pending') value = await svc.capture.pending();
       if (d.op === 'capture.ack') value = await svc.capture.ack(d.args?.id);
-      if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
+      if (d.op === 'update.hold') { const h = svc.update.hold(d.args?.reason, typeof d.args?.keepId === 'string' ? {keep: () => keepMessage(st, d.args.keepId)} : {}), id = uid(); st.messageHolds ||= new Map(); st.messageHolds.set(id, h); value = id; }
       if (d.op === 'badge.set') value = svc.badge.set(d.args?.n, { more: d.args?.more === true });
       if (d.op === 'audio.duck') value = await svc.audio.duck(d.args?.on === true);
       if (d.op.startsWith('vault.')) { try { value = await svc.vault[d.op.slice(6)](d.op === 'vault.seal' ? d.args?.secret : d.args?.title, d.args?.title); } catch (err) { reply(null, 'vault:' + (err.code || 'failed')); return; } }
@@ -672,17 +676,47 @@
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
     const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
     if (!cap.safe) blocking.push({ source: 'capture', appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
-    for (const st of frames.values()) for (const reason of st.holds.values()) {
+    for (const st of frames.values()) for (const [id, reason] of st.holds) {
+      if (st.drafts?.get(id)?.kept) continue;
       const capture = CAPTURE_HOLD.test(reason);
       // App-owned holds are released only by their owner. Durable shared storage cannot prove an
       // app has no private in-memory work. Only the existing native-survival contract passes here.
       if (capture && keeps && st.appId === keeps.appId) continue;
-      blocking.push({ source: 'frame', appId: st.appId, kind: capture ? 'capture' : 'work', reason });
+      blocking.push({ source: 'frame', appId: st.appId, kind: capture ? 'capture' : 'work', reason, keepable: !!st.drafts?.has(id) });
     }
     // A blocker says reload is unsafe, not that a known recording will eventually end.
     return { ok: !blocking.length, keeps, capture: cap, blocking, recording: cap.waitForEnd === true };
   }
   // Preparation is non-destructive: an async flush may reveal new work and abort the reload.
+  // All frames share one 1.5s budget. Late callbacks, edits and document changes cannot admit reload.
+  async function keepDrafts(frame = null) {
+    reconcile();
+    await Promise.all([...frames.values()].filter(st => !frame || st.frame === frame).flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
+      if (draft.kept || !valid(st, draft.doc)) return;
+      const generation = draft.generation;
+      let timer;
+      try {
+        const result = await Promise.race([Promise.resolve().then(() => draft.keep()), new Promise(resolve => { timer = setTimeout(() => resolve(false), 1500); })]);
+        if (result === 'kept' && valid(st, draft.doc) && st.drafts?.get(id) === draft && generation === draft.generation) draft.kept = true;
+      } catch (_) { /* No confirmation means the original hold stays. */ }
+      finally { clearTimeout(timer); }
+    })));
+    changed();
+    return reloadPlan();
+  }
+  function keepMessage(st, keepId) {
+    return new Promise(resolve => {
+      const id = uid(), doc = st.doc;
+      const done = e => {
+        if (e.source !== st.frame.contentWindow || e.origin !== ORIGIN || !valid(st, doc) || e.data?.type !== 'wizard:app:kept' || e.data.version !== VERSION || e.data.id !== id) return;
+        finish(e.data.result === 'kept' ? 'kept' : false);
+      };
+      const finish = result => { clearTimeout(timer); removeEventListener('message', done); resolve(result); };
+      const timer = setTimeout(() => finish(false), 1500);
+      addEventListener('message', done);
+      try { st.frame.contentWindow.postMessage({type: 'wizard:app:keep', version: VERSION, id, keepId}, ORIGIN); } catch (_) { finish(false); }
+    });
+  }
   async function prepareReload(plan) {
     if (plan?.keeps) await window.WizAppCapture?.prepareReload?.();
   }
@@ -702,7 +736,7 @@
     reconcile();
     return [...frames.values()].filter(st => valid(st)).map(st => {
       let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
-      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds].filter(([id]) => !st.drafts?.get(id)?.kept).map(([,reason]) => reason), keepable: [...(st.drafts?.values() || [])].some(d => !d.kept), suspect: !!st.suspect });
     });
   }
   // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
@@ -795,7 +829,7 @@
     orb: Object.freeze({ of: orbOf, tap: orbTap, presenter(fn) { orbShown = typeof fn === 'function' ? fn : () => false; } }),
     voiceInput: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
     conversation: Object.freeze({ pin: pinConversation, deliver: deliverConversation }),
-    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, prepareReload, commitReload, frames: updateFrames }),
+    update: Object.freeze({ busy, announce, available: () => available, reloadPlan, keepDrafts, prepareReload, commitReload, frames: updateFrames }),
     inspect: () => { reconcile(); return [...frames.values()].map(st => ({ appId: st.appId, path: st.url.pathname, ready: !!st.doc, holds: [...st.holds.values()], suspect: !!st.suspect })); },
   });
 })();
