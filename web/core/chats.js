@@ -241,6 +241,7 @@ window.WizCore.chats = function createChats(H) {
   } catch (e) {}
   const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
   paintPins();
+  // Thread tracker (tweak, off by default): strip, row dots, Reply. Read from globalThis, only when something asks.
   const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
   const BOOM = () => window.WosBoomerang || null;
   const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
@@ -469,7 +470,7 @@ window.WizCore.chats = function createChats(H) {
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
-      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time>${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}</span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -645,7 +646,7 @@ window.WizCore.chats = function createChats(H) {
   function newDrafts() {
     const all = KIT.drafts.all();
     return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
-      .filter(d => d.text.trim() || d.files.length || (d.reply && !(window.WosSkinHost?.inboxThreads && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
+      .filter(d => d.text.trim() || d.files.length || (d.reply && !d.reply.quote && !(globalThis.WosSkinHost?.inboxThreads && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
   }
   function draftRow(d, cur) {
     const t = d.text.trim().replace(/\s+/g, ' ');
@@ -909,18 +910,81 @@ window.WizCore.chats = function createChats(H) {
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     return true;
   }
+  /* Thread tracker: Reply on a message, and going to a message (a tracker row, or the header of a quote). */
+  function quoteMessage(w, node) {
+    if (!w || !node) return;
+    const mine = node.classList.contains('u'), mid = node.dataset.mid || '', at = +node.dataset.mat || 0;
+    const clone = node.querySelector('.bub')?.cloneNode(true); if (clone) clone.querySelectorAll('.ch-rq, .rsum, .rtools, button, details').forEach(n => n.remove());
+    const excerpt = clip(((clone?.textContent) || '').replace(/\s+/g, ' ').trim(), 200) || 'Photo or file';
+    const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : '';
+    const item = !mine ? globalThis.WosThreadTracker?.itemFor(w.thread, agent, { message_id: mid, at })?.id || null : null;
+    const safe = (mid || String(at)).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100) || String(at);
+    const r = KIT.reply.clean({ key: `quote:${mid ? 'm' : 't'}${safe}`, title: mine ? 'You' : agentName(agent), message: excerpt, quote: { message_id: mid || null, at, item, role: mine ? 'user' : 'assistant' } });
+    if (!r) return;
+    saveDraft(w.id); KIT.drafts.setReply(draftKey(w), r); refreshReply(w.id);
+    elOf(w.id)?.querySelector('.ch-compose textarea')?.focus({ preventScroll: true });
+  }
+  async function jumpToMessage(wid, a) {
+    const w = W[wid]; if (!w || !w.thread || !a) return false;
+    const c = ch(wid);
+    const exact = t => [t.u, t.a].some(m => m && ((a.message_id && m.id != null && String(m.id) === String(a.message_id)) || (!a.message_id && a.at && Math.abs((m.at || 0) - a.at) < 1500)));
+    const find = turns => {
+      let i = turns.findIndex(exact);
+      if (i < 0 && a.at) { // the nearest reply at or after that moment (an older row id, or a reply that was merged)
+        const after = turns.map((t, k) => ({ k, at: t.a?.at })).filter(x => x.at != null && x.at >= a.at - 1500).sort((x, y) => x.at - y.at)[0];
+        i = after ? after.k : -1;
+      }
+      return i;
+    };
+    let turns = c.turns || [], idx = find(turns);
+    if (idx < 0) { // not loaded yet (a long thread, or opened from a link): read the history up to it first
+      try { const next = toTurns(await LIVE.messages(w.thread)); const j = find(next); if (j >= 0) { c.turns = turns = next; idx = j; } } catch (_) { /* offline */ }
+    }
+    if (idx < 0) { toast('!', 'That message is no longer in this thread', 2200); return false; }
+    c.showFor = w.thread;
+    if ((c.show || PAGE) < turns.length - idx) { c.show = turns.length - idx; const el0 = elOf(wid); if (el0) renderThread(w, el0, true); }
+    const t = turns[idx], m = (exact(t) ? [t.u, t.a].find(x => x && ((a.message_id && x.id != null && String(x.id) === String(a.message_id)) || (!a.message_id && a.at && Math.abs((x.at || 0) - a.at) < 1500))) : t.a) || t.u || t.a;
+    const q = m?.id != null && a.message_id ? `.msg[data-mid="${CSS.escape(String(m.id))}"]` : `.msg[data-mat="${m?.at}"]`;
+    const go = tries => {
+      const node = elOf(wid)?.querySelector(q) || (m?.at != null && elOf(wid)?.querySelector(`.msg[data-mat="${m.at}"]`));
+      if (!node) { if (tries > 0) requestAnimationFrame(() => go(tries - 1)); return; }
+      // Far away: land there at once (a long smooth scroll hides the highlight); near: glide. Highlight once it has settled.
+      const far = Math.abs(node.getBoundingClientRect().top - innerHeight / 2) > innerHeight * 1.5;
+      const calm = far || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      node.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+      let last = NaN, still = 0, frames = 0;
+      const settle = () => { const t = node.getBoundingClientRect().top; still = Math.abs(t - last) < 1 ? still + 1 : 0; last = t; if (still >= 3 || ++frames > 90 || !node.isConnected) globalThis.WosThreadTracker?.flash(elOf(wid)?.querySelector(q) || node); else requestAnimationFrame(settle); };
+      requestAnimationFrame(settle);
+    };
+    requestAnimationFrame(() => go(8));
+    return true;
+  }
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
+    if (r.quote) return `<div class="ch-reply ch-reply-q" data-chreply role="group" aria-label="Replying to a message"><span class="ch-reply-t"><b>${esc(clip(r.title || 'Message', 60))}</b>${pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove quoted message from this reply" title="Remove">×</button></div>`;
     return `<div class="ch-reply" data-chreply role="group" aria-label="Replying to a quoted item"><span class="ch-reply-t"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</span><button type="button" class="ch-reply-x" data-chreplyx aria-label="Remove quoted item from this reply" title="Remove">×</button></div>`;
   }
   // The same item, read back from a sent message: a quiet card above his own words.
   function replyCard(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
+    if (r.quote) return `<div class="ch-rq ch-rq-q" role="button" tabindex="0" data-ttjump="${esc(r.quote.message_id || '')}" data-ttjump-at="${r.quote.at || ''}" aria-label="Go to the quoted message"><b>${esc(clip(r.title || 'Message', 60))}</b>${pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
     return `<div class="ch-rq" role="note" aria-label="Reply to a quoted item"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
+  // The tracker (or a poll) changed: add or drop the strip and the row dots where they now belong.
+  window.addEventListener('wos:thread-tracker', e => {
+    const toggled = typeof e?.detail?.enabled === 'boolean';
+    for (const wid of Object.keys(CH)) {
+      const w = W[wid], el = w && elOf(wid); if (!el) continue;
+      if (w.thread) {
+        const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : '';
+        if (toggled && e.detail.enabled) globalThis.WosThreadTracker.load(w.thread, agent);
+        if (toggled || (!!el.querySelector('[data-tt-strip]') !== !!globalThis.WosThreadTracker.stripHtml(w.thread, agent))) renderThreadLive(w);
+      } else if (!holdList(wid)) renderChatList(w, el);
+    }
+  });
   // Changed elsewhere (Settings, another tab): an open notification's picker shows the new choice.
   window.addEventListener('wizard:notify-route', () => { for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === '__new__' && notifOf(x)) renderThreadNow(x); } });
 
@@ -1186,6 +1250,7 @@ window.WizCore.chats = function createChats(H) {
   window.addEventListener('pagehide', flushListPlaces);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
   function renderChatList(w, el) {
+    if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
     // A layout which owns the list supplies its own sidebar. Do not paint a
     // second, CSS-covered list underneath it (including a thread returning Back).
     if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
@@ -1535,11 +1600,14 @@ window.WizCore.chats = function createChats(H) {
       : '<p class="rc-unavailable">The message that started this run isn’t available in this history.</p>';
     return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
   }
+  // Thread tracker: every message carries its row id and time so a tracker row or a quote can find it again.
+  const msgIds = (m, at) => (globalThis.WosThreadTracker?.on() && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
+  const quoteBtn = () => (globalThis.WosThreadTracker?.on() ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
   function turnHtml(c, tn, last, working, helperStatus, reconnect) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
     if (last && reconnect && tn.a?.failed) tn = { ...tn, a: null };
-    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}</div></div>`;
+    if (tn.u) h += `<div class="msg u${tn.u.reply ? ' has-rq' : ''}"${isFinite(tn.u.at) ? ` data-morph-key="u${tn.u.at}"` : ''}${msgIds(tn.u)}><div class="bub">${replyCard(tn.u.reply)}${userMedia(c, tn.u.files, tn.u.images)}${tn.u.text ? md(tn.u.text) : ''}</div><div class="mmeta">${timeTag(tn.u.at)}${quoteBtn()}</div></div>`;
     else if (tn.note) h += noteHtml(tn.note);
     else if (tn.later) h += runContextHtml(tn.later);
     const live = last && working;
@@ -1568,8 +1636,8 @@ window.WizCore.chats = function createChats(H) {
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
-      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
-        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>${last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}` : ''}</div></div>`;
+      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt)}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+        + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn()}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
   }
@@ -2181,7 +2249,7 @@ window.WizCore.chats = function createChats(H) {
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
-      ${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
@@ -2485,7 +2553,9 @@ window.WizCore.chats = function createChats(H) {
       if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false })) continue;
       const at = p.sentAt || p.createdAt;
       if (!isFinite(at) || (!p.text && !p.files?.length)) continue;
-      const u = { text: p.text || '', files: p.files || [], images: [], at, localId: p.id };
+      // A Thread tracker quote rides with the local copy so its header shows at once (canonical history carries it as the marker).
+      const quote = p.reply?.quote ? KIT.reply.clean(p.reply) : null;
+      const u = { text: p.text || '', files: p.files || [], images: [], at, localId: p.id, ...(quote ? { reply: quote } : {}) };
       if (p.steered) {
         const target = out.findLastIndex(t => start(t) <= at + 10e3 && (!t.a || t.a.at >= at - 10e3));
         if (target >= 0) { out[target] = { ...out[target], steers: [...(out[target].steers || []), u] }; continue; }
@@ -2628,6 +2698,7 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
+      if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); // the asks of this thread (read right after the history that carries them)
       Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
@@ -3003,6 +3074,12 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (window.WizCore.incognitoOptIn?.enabled(a)) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
+    // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
+    if (globalThis.WosThreadTracker?.on()) {
+      if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a) })) return true;
+      const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; }
+    }
+    const qj = e.target.closest('[data-ttjump]'); if (qj) { jumpToMessage(id, { message_id: qj.dataset.ttjump || null, at: +qj.dataset.ttjumpAt || 0 }); return true; }
     const hc = e.target.closest('[data-helper-continue]');
     if (hc) {
       if (hc.disabled) return true; hc.disabled=true; hc.textContent='Resuming…';
@@ -3214,6 +3291,8 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('keydown', e => {
       if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
       if (rowSheet && e.key === 'Escape') { e.preventDefault(); closeRowSheet(); return; }
+      if (e.key === 'Escape' && globalThis.WosThreadTracker?.isOpen()) { e.preventDefault(); globalThis.WosThreadTracker.close(); return; }
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-tt-row], [data-ttjump]') && !e.target.closest('button')) { e.preventDefault(); e.target.click(); return; }
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const row = e.target.closest(ROW_MENU);
         if (row) { e.preventDefault(); openRowSheet(idOf(row), row.dataset.chopen, row.dataset.chnotif); return; }
