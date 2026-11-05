@@ -731,7 +731,36 @@
   /* ================= media viewer: images (pinch, pan, swipe), video, audio, files ================= */
   const TEXTY = /^(text\/|application\/(json|xml|x-yaml|yaml|javascript|x-sh))/;
   const TEXT_EXT = /\.(md|markdown|txt|log|json|csv|tsv|ya?ml|xml|py|js|ts|tsx|jsx|sh|css|html?|toml|ini|cfg)$/i;
-  const V = { el: null, items: [], i: 0, s: 1, x: 0, y: 0, ptr: new Map(), g: null, lastTap: 0, long: false, fl: 0 };
+  const V = { el: null, items: [], i: 0, s: 1, x: 0, y: 0, ptr: new Map(), g: null, lastTap: 0, eatClick: null, long: false, fl: 0 };
+  // Capture belongs to the stable stage, not the image replaced by gallery navigation.
+  // A captured click can target the stage even when the press hit photo ink.
+  function photoContains(x, y) {
+    const photo = V.el?.querySelector('.mv-stage img');
+    if (!photo?.naturalWidth) return true; // loading is not an outside click
+    const r = photo.getBoundingClientRect(), fit = Math.min(r.width / photo.naturalWidth, r.height / photo.naturalHeight);
+    const w = photo.naturalWidth * fit, h = photo.naturalHeight * fit;
+    return x >= r.left + (r.width - w) / 2 && x <= r.right - (r.width - w) / 2 && y >= r.top + (r.height - h) / 2 && y <= r.bottom - (r.height - h) / 2;
+  }
+  function clearGesture() {
+    clearTimeout(V.lp); V.lp = 0; V.g = null; V.lastTap = 0; V.eatClick = null;
+    const ids = [...V.ptr.keys()]; V.ptr.clear();
+    const stage = V.el?.querySelector('.mv-stage');
+    for (const id of ids) if (stage?.hasPointerCapture?.(id)) stage.releasePointerCapture(id);
+    V.el?.style.removeProperty('--fade');
+  }
+  function eatGestureClick(e) { V.eatClick = { id: e.pointerId, t: e.timeStamp }; }
+  function gestureClick(e) {
+    const token = V.eatClick; V.eatClick = null;
+    const age = token ? e.timeStamp - token.t : -1;
+    return !!token && e.detail !== 0 && e.pointerId === token.id && age >= 0 && age < 500;
+  }
+  function panGesture(p, t) {
+    return { pinch: false, sx: p.x, sy: p.y, x0: V.x, y0: V.y, t, moved: true, multi: true, pan: V.long, ly: p.y, lt: performance.now(), vy: 0 };
+  }
+  function remainingGesture(t) {
+    const [a, b] = [...V.ptr.values()];
+    return b ? { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: V.s, x0: V.x, y0: V.y } : a ? panGesture(a, t) : null;
+  }
   function build() {
     if (V.el) return V.el;
     const el = document.createElement('div');
@@ -751,13 +780,12 @@
         if (it && k === 'save') save(it); else if (it && k === 'share') share(it);
         return;
       }
-      // object-fit:contain keeps an <img> hit box across the entire stage, even
-      // in its letterbox bars. Those bars are outside the actual photo too.
-      const photo = e.target.closest('.mv-stage img');
-      if (photo?.naturalWidth && V.s <= 1.02) {
-        const r = photo.getBoundingClientRect(), fit = Math.min(r.width / photo.naturalWidth, r.height / photo.naturalHeight);
-        const w = photo.naturalWidth * fit, h = photo.naturalHeight * fit;
-        if (e.clientX < r.left + (r.width - w) / 2 || e.clientX > r.right - (r.width - w) / 2 || e.clientY < r.top + (r.height - h) / 2 || e.clientY > r.bottom - (r.height - h) / 2) return viewer.close();
+      // Only image/backdrop dismissal consumes gesture clicks. Never swallow
+      // menu actions, keyboard activation or non-image player/file controls.
+      if (V.items[V.i]?.kind === 'image' && (e.target === el || e.target.closest('.mv-stage'))) {
+        if (gestureClick(e)) return;
+        if (e.target === el || !photoContains(e.clientX, e.clientY)) return viewer.close();
+        return;
       }
       // Bare canvas around the media is the viewer's backdrop, not a dead end.
       if (e.target === el || e.target.classList.contains('mv-stage')) return viewer.close();
@@ -774,13 +802,14 @@
     el.addEventListener('contextmenu', e => { if (e.target.closest('.mv-stage') && V.items[V.i]?.kind === 'image') { e.preventDefault(); menu(true); } });
     el.querySelector('.mv-menu').addEventListener('pointerdown', () => { V.menuArmed = true; });
     const stage = el.querySelector('.mv-stage');
+    el.addEventListener('pointerdown', () => { V.eatClick = null; });
     stage.addEventListener('pointerdown', e => {
-      if (!V.items[V.i] || V.items[V.i].kind !== 'image') return;
+      if (!V.items[V.i] || V.items[V.i].kind !== 'image' || e.button !== 0) return;
       stopFling();
       stage.setPointerCapture?.(e.pointerId);
       V.ptr.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (V.ptr.size === 2) { const [a, b] = [...V.ptr.values()]; V.g = { pinch: true, d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: V.s, x0: V.x, y0: V.y }; }
-      else if (V.ptr.size === 1) V.g = { pinch: false, sx: e.clientX, sy: e.clientY, x0: V.x, y0: V.y, t: Date.now(), moved: false, ly: e.clientY, lt: performance.now(), vy: 0 };
+      else if (V.ptr.size === 1) V.g = { pinch: false, sx: e.clientX, sy: e.clientY, x0: V.x, y0: V.y, t: e.timeStamp, moved: false, ink: photoContains(e.clientX, e.clientY), ly: e.clientY, lt: performance.now(), vy: 0 };
       clearTimeout(V.lp); V.lp = 0;
       if (V.ptr.size === 1) V.lp = setTimeout(() => { V.lp = 0; const g = V.g; if (g && !g.pinch && !g.moved && V.ptr.size === 1) { g.held = true; menu(true); } }, 500);
     });
@@ -804,23 +833,36 @@
       else { V.g.dx = dx; V.g.dy = dy; const img = stage.querySelector('img'); if (img) { img.style.transition = 'none'; img.style.transform = Math.abs(dx) > Math.abs(dy) ? `translate(${dx}px, ${V.y}px)` : `translateY(${V.y + Math.max(0, dy)}px)`; el.style.setProperty('--fade', String(Math.max(.35, 1 - Math.max(0, dy) / 400))); } }
     });
     const up = e => {
-      if (!V.ptr.has(e.pointerId)) return;
+      if (e.button !== 0 || !V.ptr.has(e.pointerId)) return;
       V.ptr.delete(e.pointerId); clearTimeout(V.lp); V.lp = 0;
       const g = V.g; if (!g) return;
+      if (g.moved || g.pinch || g.multi || g.held) { eatGestureClick(e); V.lastTap = 0; }
       if (g.held) { V.g = null; el.style.removeProperty('--fade'); paint(); return; } // a long-press is never also a tap/swipe
-      if (g.pinch) { if (V.ptr.size === 0) { V.g = null; if (V.s < 1.05) reset(); } else { const p = [...V.ptr.values()][0]; V.g = { pinch: false, sx: p.x, sy: p.y, x0: V.x, y0: V.y, t: Date.now(), moved: true }; } return; }
-      V.g = null; el.style.removeProperty('--fade');
-      if (!g.moved && Date.now() - g.t < 300) {
-        if (g.t - V.lastTap < 350) { V.lastTap = 0; if (V.s > 1.02) reset(); else zoomAt(g.sx, g.sy, 2.5); return; }
-        V.lastTap = Date.now(); return;
+      if (g.pinch) {
+        V.g = remainingGesture(e.timeStamp);
+        if (!V.g && V.s < 1.05) reset();
+        return;
       }
-      if (g.pan || V.s > 1.02) { if (V.long) fling(g.vy); return; }
+      V.g = null; el.style.removeProperty('--fade');
+      if (!g.moved && g.ink && e.timeStamp - g.t < 300) {
+        if (V.lastTap && g.t - V.lastTap >= 0 && g.t - V.lastTap < 350) { V.lastTap = 0; eatGestureClick(e); if (V.s > 1.02) reset(); else zoomAt(g.sx, g.sy, 2.5); return; }
+        V.lastTap = e.timeStamp; return;
+      }
+      V.lastTap = 0;
+      if (g.pan || V.s > 1.02 || g.multi) { if (V.long) fling(g.vy); paint(); return; }
       const dx = g.dx || 0, dy = g.dy || 0;
-      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) && V.items.length > 1) { go(dx < 0 ? 1 : -1); return; }
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) && V.items.length > 1) { go(dx < 0 ? 1 : -1); eatGestureClick(e); return; }
       if (dy > 110 && dy > Math.abs(dx)) { viewer.close(); return; }
       paint();
     };
-    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up);
+    const cancel = e => {
+      if (e.type === 'lostpointercapture' && e.target !== stage) return; // child implicit capture handed to stage
+      if (!V.ptr.has(e.pointerId)) return; // normal lostcapture after pointerup
+      V.ptr.delete(e.pointerId); clearTimeout(V.lp); V.lp = 0; V.lastTap = 0; eatGestureClick(e);
+      V.g = remainingGesture(e.timeStamp);
+      el.style.removeProperty('--fade'); paint(); // cancellation is never a tap, fling or swipe
+    };
+    stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', cancel); stage.addEventListener('lostpointercapture', cancel);
     // Wheel / trackpad scrolls a long screenshot (or pans a zoomed photo); arrows and Page keys too.
     stage.addEventListener('wheel', e => {
       if (V.items[V.i]?.kind !== 'image' || (!V.long && V.s <= 1.02)) return;
@@ -920,7 +962,7 @@
   const sizeLabel = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : b >= 1024 ? Math.round(b / 1024) + ' KB' : b ? b + ' B' : '';
   function show() {
     const el = build(), it = V.items[V.i]; if (!it) return;
-    V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
+    clearGesture(); V.s = 1; V.x = 0; V.y = 0; V.text = ''; V.long = false; stopFling(); el.classList.remove('long'); menu(false);
     dropPdf(); el.querySelector('.mv-bar [data-mv="save"]').textContent = it.kind === 'image' ? 'Save' : '⤓ Download';
     const stage = el.querySelector('.mv-stage');
     for (const m of stage.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
@@ -971,6 +1013,7 @@
     },
     close() {
       if (!V.el || V.el.hidden) return false;
+      clearGesture();
       if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
       stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; dropPdf(); V.items = []; V.ptr.clear(); V.g = null;

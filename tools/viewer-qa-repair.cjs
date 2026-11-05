@@ -3,6 +3,30 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
 const { decodePNG, compare, interiorROI, longMetrics } = require('./viewer-qa-oracles.cjs');
 const hash = b => require('node:crypto').createHash('sha256').update(b).digest('hex');
 const write = (out, name, data) => fs.writeFileSync(path.join(out, name + '.json'), JSON.stringify(data, null, 2) + '\n');
+// Serialize this exact function into the page. Let Chromium parse modern CSS
+// colours (including color(srgb ...)); a spelling regex is not an alpha oracle.
+function panelPaint(e) {
+  const background = getComputedStyle(e).backgroundColor, canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 1;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = 'transparent'; ctx.fillStyle = background; ctx.fillRect(0, 0, 1, 1);
+  const rgba = [...ctx.getImageData(0, 0, 1, 1).data];
+  let effectiveOpacity = 1;
+  for (let n = e; n; n = n.parentElement) effectiveOpacity *= Number(getComputedStyle(n).opacity);
+  return { background, rgba, effectiveOpacity };
+}
+async function paintCalibration({ p, out }) {
+  const receipts = [];
+  await p.evaluate(() => { const host = document.createElement('div'); host.id = 'viewer-paint-calibration'; host.style.cssText = 'position:fixed;left:-100px;top:-100px'; host.appendChild(document.createElement('div')); document.body.appendChild(host); });
+  try {
+    const panel = p.locator('#viewer-paint-calibration > div');
+    for (const [color, alpha, opacity] of [['color(srgb 0.112941 0.104314 0.142353)', 255, 1], ['color(srgb 0.2 0.3 0.4 / 0.5)', 128, 1], ['rgba(12, 23, 34, 0)', 0, 1], ['rgb(12, 23, 34)', 255, 0.5]]) {
+      await panel.evaluate((e, x) => { e.style.backgroundColor = x.color; e.parentElement.style.opacity = String(x.opacity); }, { color, opacity });
+      const paint = await panel.evaluate(panelPaint); receipts.push({ color, alpha, opacity, paint }); write(out, 'css-alpha-calibration', receipts);
+      assert.equal(paint.rgba[3], alpha, 'real Chromium parsed alpha'); assert.equal(paint.effectiveOpacity, opacity, 'real ancestor opacity');
+    }
+  } finally { await p.locator('#viewer-paint-calibration').evaluate(e => e.remove()); }
+}
 async function zoom({ p, out, settle, state, open, fits }) {
   await open();
   await p.evaluate(() => {
@@ -30,16 +54,76 @@ async function zoom({ p, out, settle, state, open, fits }) {
   await p.mouse.move(ink.x, ink.y);
   await p.mouse.click(ink.x, ink.y, { delay: 20 }); await snapshot('first trusted click');
   assert((await state()).open, 'ordinary media-ink click must not dismiss viewer; inspect captured pointer/click targets');
+  assert(await p.evaluate(() => __viewerInput.some(e => e.type === 'click' && e.trusted && e.target === 'mv-stage')), 'native captured click actually retargets to stage');
   await p.waitForTimeout(100);
   await p.mouse.click(ink.x, ink.y, { delay: 20 }); await settle(p); await snapshot('second trusted click');
   assert((await state()).open && (await state()).scale > 2, 'trusted double click zooms without dismissal');
+  await p.mouse.move(ink.x, ink.y); await p.mouse.down(); await p.mouse.move(ink.x + 45, ink.y - 80, { steps: 10 }); await p.mouse.up();
+  await settle(p); await snapshot('zoomed mouse pan');
+  assert((await state()).open && Math.abs((await state()).x) > 1 && Math.abs((await state()).y) > 1, 'mouse pan survives stable-stage capture');
   await p.waitForTimeout(400);
   await p.mouse.click(ink.x, ink.y, { delay: 20 }); await p.waitForTimeout(100); await p.mouse.click(ink.x, ink.y, { delay: 20 });
   await settle(p); await snapshot('reset'); assert((await state()).open); assert.equal((await state()).scale, 1);
   if (fits) await fits('reset');
+  await p.waitForTimeout(400);
+  // A handled drag finishes in the original letterbox after paint recentres it.
+  // The immediately following genuine outside press must NOT inherit suppression.
+  const start = { x: ink.left + 12, y: ink.y }, end = { x: ink.left - 24, y: ink.y };
+  await p.mouse.move(start.x, start.y); await p.mouse.down(); await p.mouse.move(end.x, end.y, { steps: 10 }); await p.mouse.up(); await settle(p);
+  await snapshot('drag ends over letterbox'); assert((await state()).open, 'drag click over letterbox does not dismiss');
+  await p.mouse.click(end.x, end.y); await snapshot('fresh letterbox click'); assert(!(await state()).open, 'fresh outside click closes, no stale suppression');
+}
+async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }) {
+  await p.evaluate(() => {
+    window.__viewerTouchInput = []; window.__viewerTouchActive = new Set();
+    for (const type of ['pointerdown','pointermove','pointerup','pointercancel','gotpointercapture','lostpointercapture','click']) document.addEventListener(type, e => {
+      if (!e.target.closest?.('.mviewer')) return;
+      if (type === 'pointerdown') __viewerTouchActive.add(e.pointerId);
+      if (type === 'pointerup' || type === 'pointercancel') __viewerTouchActive.delete(e.pointerId);
+      __viewerTouchInput.push({ type, trusted: e.isTrusted, id: e.pointerId, target: e.target.className || e.target.tagName, x: e.clientX, y: e.clientY, t: e.timeStamp, active: __viewerTouchActive.size });
+    }, true);
+  });
+  const ledger = [], record = async label => { const s = await state(), input = await p.evaluate(() => ({ active: __viewerTouchActive.size, events: __viewerTouchInput })); ledger.push({ label, state: s, input }); write(out, 'phone-gesture-input', ledger); assert(s.open && Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.scale), 'gesture remains open and finite: ' + label); return s; };
+  await open(2);
+  const cdp = await ctx.newCDPSession(p), b = await p.locator('.mv-stage').boundingBox(), x = b.x + b.width / 2, y = b.y + b.height / 2;
+  try {
+    await p.touchscreen.tap(x, y); await record('ordinary ink tap');
+    const left = { id: 1, x: x - 40, y }, right = { id: 2, x: x + 40, y };
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [left, right] });
+    for (let n = 1; n <= 10; n++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...left, x: x - 40 - n * 6 }, { ...right, x: x + 40 + n * 6 }] }); await p.waitForTimeout(20); }
+    assert((await record('pinch expanded')).scale > 1.8);
+    const remaining = { id: 1, x: x - 100, y };
+    // CDP touchEnd requires zero points. A touchMove with the surviving active
+    // ID releases the omitted finger; assert actual trusted pointerup delivery.
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [remaining] }); await record('one finger lifted');
+    assert(await p.evaluate(() => __viewerTouchActive.size === 1 && __viewerTouchInput.some(e => e.type === 'pointerup' && e.trusted && e.active === 1)), 'native partial lift retains exactly one active pointer');
+    for (let n = 1; n <= 10; n++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...remaining, x: remaining.x + n * 4.5, y: y - n * 8 }] }); await p.waitForTimeout(20); }
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    const pan = await record('remaining finger pan and lift'); assert(Math.abs(pan.x) > 1 || Math.abs(pan.y) > 1, 'partial-lift continuation really pans');
+    await p.waitForTimeout(400); await p.touchscreen.tap(x, y); await p.waitForTimeout(100); await p.touchscreen.tap(x, y); await settle(p);
+    assert.equal((await record('trusted double tap reset')).scale, 1);
+    await open(2); await drag(cdp, [{ x: x + 110, y }], [{ x: x - 110, y }]);
+    assert.equal((await record('gallery swipe')).i, 3);
+    await p.touchscreen.tap(x, y); const next = await record('fresh tap on next image'); assert.equal(next.i, 3); assert.equal(next.scale, 1, 'tap history never crosses gallery item');
+    await capture('phone-gallery');
+    // Native cancellation is not a swipe; a later tap belongs to a new sequence.
+    await open(2); await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 4, x, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 4, x: x - 100, y }] });
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] }); assert.equal((await record('cancelled swipe')).i, 2);
+    await p.touchscreen.tap(x, y); assert.equal((await record('fresh tap after cancel')).scale, 1);
+    await p.waitForTimeout(400);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 5, x, y }] }); await p.waitForTimeout(650);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); assert((await record('long press lift')).menu, 'held lift keeps menu open');
+    await p.touchscreen.tap(b.x + 4, b.y + 4); assert(!(await record('fresh menu outside tap')).menu, 'outside closes menu only');
+    await open(0); await drag(cdp, [{ x, y: b.y + b.height * .25 }], [{ x, y: b.y + b.height * .65 }]);
+    assert(!(await state()).open, 'downward swipe still dismisses');
+    await open(0); await p.touchscreen.tap(b.x + 4, b.y + 4); assert(!(await state()).open, 'new outside press after reopen dismisses');
+    await open(2); // leave the next original Back/menu case an open viewer
+  } finally { await cdp.detach(); }
 }
 async function opacity({ p, out, name, settle }) {
   await settle(p);
+  assert.equal(await p.evaluate(() => WosChat.viewer.state.scale), 1, 'opacity oracle owns unzoomed chrome only');
   for (const selector of ['.mv-top', '.mv-bar', '.mv-menu-b']) {
     const panel = p.locator(selector); if (!await panel.isVisible()) continue;
     const stem = name.replace(/\W/g, '-') + selector.replace(/\W/g, '-'), ledger = { selector, name, captures: [] };
@@ -57,7 +141,8 @@ async function opacity({ p, out, name, settle }) {
         const w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT); let n; while ((n = w.nextNode())) if (n.textContent.trim()) { const range = document.createRange(); range.selectNodeContents(n); for (const b of range.getClientRects()) add(b); }
         return { width: Math.floor(r.width), height: Math.floor(r.height), rect: r.toJSON(), background: s.backgroundColor, opacity: s.opacity, radii: ['borderTopLeftRadius','borderTopRightRadius','borderBottomLeftRadius','borderBottomRightRadius'].map(k => parseFloat(s[k]) || 0), borders: ['borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth'].map(k => parseFloat(s[k]) || 0), padding: ['paddingTop','paddingRight','paddingBottom','paddingLeft'].map(k => parseFloat(s[k]) || 0), exclusions, oldStyle: e.getAttribute('style') };
       });
-      assert(ledger.meta.opacity === '1' && /^rgb\(/.test(ledger.meta.background), 'opaque computed panel');
+      ledger.paint = await panel.evaluate(panelPaint);
+      assert(ledger.paint.rgba[3] === 255 && ledger.paint.effectiveOpacity === 1, 'opaque parsed panel and ancestor opacity');
       ledger.roi = interiorROI(ledger.meta);
       // No production style change. Only sibling stacking/fixture geometry is normalized.
       await panel.evaluate(e => { e.style.position = 'relative'; e.style.zIndex = '2'; });
@@ -121,4 +206,4 @@ async function phoneBottom({ p, ctx, out, drag, open, state, capture }) {
     await capture('phone-long-bottom');
   } finally { await cdp.detach(); }
 }
-module.exports = { zoom, opacity, phoneBottom };
+module.exports = { zoom, opacity, phoneBottom, panelPaint, paintCalibration, phoneGestures };

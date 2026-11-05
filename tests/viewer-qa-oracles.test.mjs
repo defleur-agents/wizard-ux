@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import vm from 'node:vm';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { compare, interiorROI, longMetrics, pageBudget, decodePNG } = require('../tools/viewer-qa-oracles.cjs');
@@ -30,4 +31,15 @@ test('PNG decoder consumes an actual retained synthetic Chromium capture when pr
   const file = fs.readFileSync(process.env.QA_PNG_PROOF), a = decodePNG(file);
   assert.equal(a.width, 1440); assert.equal(a.height, 900); assert.equal(compare(a, decodePNG(file)).changed, 0);
   const b = { ...a, rgba: Buffer.from(a.rgba) }; b.rgba[4] ^= 1; assert.equal(compare(a, b).changed, 1);
+});
+test('alpha reader delegates CSS parsing to cleared canvas and multiplies ancestors', () => {
+  const { panelPaint } = require('../tools/viewer-qa-repair.cjs');
+  for (const alpha of [255, 128, 0]) {
+    const panel = { parentElement: { parentElement: null, opacity: '.5' }, opacity: '1' }, operations = [];
+    const ctx = { clearRect: () => operations.push('clear'), fillRect: () => operations.push('fill'), getImageData: () => ({ data: [29, 27, 36, alpha] }) };
+    const sandbox = vm.createContext({ getComputedStyle: n => ({ opacity: n.opacity, backgroundColor: 'color(srgb 0.112941 0.104314 0.142353)' }), document: { createElement: () => ({ getContext: () => ctx }) }, panel });
+    const paint = vm.runInContext('(' + panelPaint.toString() + ')(panel)', sandbox);
+    assert.equal(paint.rgba[3], alpha); assert.equal(paint.effectiveOpacity, .5);
+    assert.equal(ctx.fillStyle, paint.background); assert.deepEqual(operations, ['clear', 'fill']);
+  }
 });
