@@ -107,19 +107,21 @@
   function plan() {
     const svc = window.WizAppServices?.update;
     let p = null;
-    try { p = svc?.reloadPlan?.() || null; } catch (_) { p = { ok: false, keeps: null, blocking: [{ kind: 'capture' }], recording: true }; }
+    try { p = svc?.reloadPlan?.() || null; } catch (_) { p = { ok: false, keeps: null, blocking: [{ kind: 'capture', reason: 'capture_custody_uncertain' }], recording: false }; }
     if (!p) { const b = !!svc?.busy?.(); p = { ok: !b, keeps: null, blocking: b ? [{ kind: 'work' }] : [], recording: false }; }
     return { ...p, host: hostBusy() };
   }
   function busy() { const p = plan(); return p.host || !p.ok; }
-  let armed = null, going = false, armTimer = 0;
+  let armed = null, going = false, checking = false, armTimer = 0;
   // A wait worth arming: a recording/save that will end on its own, or app work beside a meeting that survives.
   // Never armed while the meeting's microphone is lent to the orb: that voice message ends by itself, but its
   // send follows straight after, and a reload mid-send is exactly what this guard is for.
   const loan = p => (p.blocking || []).some(b => b.reason === 'microphone_loan');
   // Otherwise arm only for a recording, or for the kept meeting app's own quick save (its notes); another app's
   // unsaved work is never a reason to reload on its own later.
-  const armable = p => !p.host && !loan(p) && (p.recording || (!!p.keeps && (p.blocking || []).every(b => b.appId === p.keeps.appId)));
+  const waitForEnd = p => !loan(p) && (p.capture?.waitForEnd === true ||
+    (p.capture?.safe === true && !!p.keeps && (p.blocking || []).every(b => b.appId === p.keeps.appId)));
+  const armable = p => !p.host && waitForEnd(p);
   function arm(p) {
     armed = { at: Date.now(), recording: p.recording };
     log('web:reload-armed', p.recording ? 'recording' : 'saving');
@@ -131,6 +133,7 @@
   function maybeFire() {
     if (!armed || going) return;
     const p = plan();
+    if (loan(p) || (p.capture?.safe !== true && p.capture?.waitForEnd !== true)) { disarm('custody changed'); return; }
     if (p.host || !p.ok) { if (!!p.recording !== armed.recording) { armed.recording = !!p.recording; render(); } return; }
     disarm('ready'); void go('deferred', p);
   }
@@ -139,18 +142,58 @@
     // A tapped reload bursts across the screen and says "Reloading..." until the new build paints, so the
     // tap visibly worked instead of the banner looking frozen (every skin).
     if (why === 'tap') { burst(); await new Promise(r => setTimeout(r, 900)); }
+    const current = plan();
+    if (current.host || !current.ok) {
+      going = false; document.querySelector('.wos-burst')?.remove(); render();
+      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+    }
+    const sameKept = p => !!current.keeps === !!p.keeps && ['appId','id','meetingId'].every(k => current.keeps?.[k] === p.keeps?.[k]);
+    if (current.keeps) {
+      log('web:reload-keeps', current.keeps.appId);
+      try { await window.WizAppServices?.update.prepareReload?.(current); }
+      catch (_) {
+        going = false; document.querySelector('.wos-burst')?.remove(); render();
+        H?.toast?.('◌', 'Couldn’t prepare the recorder. Your audio is still kept. Try Reload again.', 3000); return false;
+      }
+    }
+    // Check after the animation AND asynchronous native backup flush, not merely at the original tap.
+    const final = plan();
+    if (final.host || !final.ok || !sameKept(final)) {
+      going = false; document.querySelector('.wos-burst')?.remove(); render();
+      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+    }
     try { H?.beforeReload?.(); } catch (_) {}
     window.WizAppReadingPosition?.flush();
-    if (p?.keeps) {
-      log('web:reload-keeps', p.keeps.appId);
-      try { await window.WizAppServices?.update.prepareReload?.(p); } catch (_) {}
+    // Host persistence hooks may synchronously expose work too. No frame was removed yet.
+    const committed = plan();
+    if (committed.host || !committed.ok || !sameKept(committed)) {
+      going = false; document.querySelector('.wos-burst')?.remove(); render();
+      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
     }
+    window.WizAppServices?.update.commitReload?.(committed);
     log('web:reload', why); window.__wosReloading = why; location.reload(); return true;
   }
-  function reload(why) {
-    if (going) return false;
+  function reload(why, checked = false) {
+    if (going || checking) return false;
     if (armed && why === 'tap') { disarm('tap'); H?.toast?.('◌', 'Reload cancelled', 1400); return false; }
     const p = plan();
+    // Only a user-requested reload refreshes abandoned ownership. Never stop a recorder or expire a hold.
+    // Paint in the click task, then re-use capture's lock/recovery path and judge the whole plan again.
+    if (!checked && why === 'tap' && !p.host && p.capture?.recheck && window.WizAppCapture?.reconcileReload) {
+      checking = true; render();
+      let timer;
+      const failed = () => { clearTimeout(timer); checking = false; render(); H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000); };
+      Promise.race([
+        Promise.resolve().then(() => window.WizAppCapture.reconcileReload()),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Recorder check timed out')), 15000); })
+      ]).then(check => {
+        // Recovery can resolve with unknown custody instead of rejecting. That is not consent to wait
+        // for some future recording to end, nor may a later native state event consume this failed tap.
+        if (check?.safe !== true && check?.waitForEnd !== true) { failed(); return; }
+        clearTimeout(timer); checking = false; render(); reload(why, true);
+      }, failed);
+      return false;
+    }
     if (!p.host && p.ok) { void go(why, p); return true; }
     if (armable(p)) { arm(p); return false; }
     H?.toast?.('◌', loan(p) ? 'Finish the voice message first' : 'Finish recording or save your work first', 2000); return false;
@@ -190,7 +233,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Checking recorder…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }
