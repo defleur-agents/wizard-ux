@@ -113,8 +113,15 @@
   }
   function busy() { const p = plan(); return p.host || !p.ok; }
   let armed = null, going = false, checking = false, armTimer = 0, notice = '', rescuing = false, discardId = '';
-  const appName = id => ({ mizel: 'Recorder', 'wizard-recorder': 'Recorder', messenger: 'Messenger', 'wizard-messenger': 'Messenger' }[id] ||
-    (id ? 'An app' : 'Recorder'));
+  let appCatalog = null;
+  function appName(id) {
+    // Cache before constructing registries: construction emits wizard:apps. Never recurse from a render.
+    if (!appCatalog && window.WizCore?.apps) {
+      appCatalog = [];
+      appCatalog = ['mobile', 'desktop'].flatMap(kind => window.WizCore.apps(kind).APPS || []);
+    }
+    return appCatalog?.find(a => a.id === id)?.name || (id ? 'An app' : 'Recorder');
+  }
   function reloadStatus() {
     const p = plan(), takes = window.WizAppCapture?.staleTakes?.() || [];
     const take = !p.ok ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;

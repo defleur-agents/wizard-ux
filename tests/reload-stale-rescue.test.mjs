@@ -84,7 +84,7 @@ function updater() {
   const body={appendChild(e){if(e.id)els.set(e.id,e)}};
   const document={currentScript:{src:'https://synthetic.invalid/wizard-os-home/core/web-update.js'},body,querySelector:()=>null,getElementById:id=>els.get(id),createElement:element,addEventListener(){},querySelectorAll:()=>[]};
   const f={timers,intervals,els,plan:{ok:true,blocking:[],capture:{safe:true}},revision:'a'.repeat(40),busy:false};
-  const window={WizAppServices:{update:{reloadPlan:()=>f.plan}},WizAppCapture:{staleTakes:()=>f.takes||[]},WizAppReadingPosition:{flush(){}}};f.window=window;
+  const window={WizCore:{apps:()=>({APPS:[{id:'messenger',name:'Messenger'},{id:'mizel',name:'Recorder'}]})},WizAppServices:{update:{reloadPlan:()=>f.plan}},WizAppCapture:{staleTakes:()=>f.takes||[]},WizAppReadingPosition:{flush(){}}};f.window=window;
   vm.runInNewContext(source('web-update'),{window,document,URL,Date:class extends Date{static now(){return clock}},location:{href:'https://synthetic.invalid/wizard-os-home/',reload(){reloads++}},navigator:{onLine:true},fetch:async()=>({ok:true,text:async()=>f.revision,json:async()=>({updates:[]})}),setTimeout:(fn,ms)=>{timers.push([fn,ms]);return timers.length},clearTimeout(){},setInterval:fn=>{intervals.push(fn);return intervals.length},clearInterval(){},addEventListener(){}});
   f.web=window.WizWebUpdate;f.web.init({mount:()=>body,busy:()=>f.busy,toast(){}});
   f.advance=ms=>{clock+=ms};Object.defineProperty(f,'reloads',{get:()=>reloads});return f;

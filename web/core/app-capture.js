@@ -1232,11 +1232,12 @@
       if (active || preparations.size || recoveryLease || unknownMeetingActive ||
           !staleTakes().some(t => t.id === id)) throw fail('capture_active', 'A recording is running or still being recovered. Nothing was cleared.');
       let device;
-      try { device = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null'); }
+      const deviceBridge = W.WizardOSDevice || W.WosDeviceRecording?.device();
+      try { device = JSON.parse(deviceBridge?.recActive?.() || 'null'); }
       catch (_) { throw fail('native_owner_uncertain', 'Could not check the phone recorder. Nothing was cleared.'); }
       if (device !== null) throw fail('capture_active', 'The phone recorder is running. Nothing was cleared.');
       const bridge = meetingBridge();
-      if (row.native && ((row.native === 'wizard-device' && typeof (W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive !== 'function') ||
+      if (row.native && ((row.native === 'wizard-device' && typeof deviceBridge?.recActive !== 'function') ||
           (row.native === 'wizard-meetings' && !bridge) || !['wizard-device', 'wizard-meetings'].includes(row.native)))
         throw fail('native_owner_uncertain', 'The native recorder cannot be checked. Nothing was cleared.');
       if (bridge) {

@@ -78,7 +78,11 @@
   // The one card. Same shape for every state; null when there is nothing to do.
   function card() {
     // The interface: already on the box, a Reload away. Never called Wizard OS.
-    if (window.WizWebUpdate?.pending) { const s = window.WizWebUpdate.reloadStatus?.() || {}; return { state: 'reload', title: 'Interface updated', line: s.reason || 'Reload to see the changes', action: 'reload', label: s.rescuing ? 'Saving…' : s.checking ? 'Checking recorder…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : 'Reload', disabled: !!(s.rescuing || s.checking || s.going) }; }
+    if (window.WizWebUpdate?.pending) {
+      const s = window.WizWebUpdate.reloadStatus?.() || {};
+      const c = { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
+      return { ...c, line: s.reason || c.line, label: s.rescuing ? 'Saving…' : s.checking ? 'Checking recorder…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : c.label, disabled: !!(s.rescuing || s.checking || s.going) };
+    }
     if (!st || issue) return null;
     const auto = st.mode === 'auto';
     const takes = st.quick === true ? 'Takes about 2 minutes' : 'Takes 10–20 minutes';
