@@ -21,7 +21,7 @@ const slice = (start, end) => { const a = chats.indexOf(start), b = chats.indexO
 function render(rows, { on, start = 'collapsed', chosen = null }) {
   const ctx = { getComputedStyle: () => ({ getPropertyValue: name => name === '--wos-reply-summary' && on ? ' on' : name === '--wos-reply-regenerate' ? '' : '' }),
     document: { documentElement: {} }, window: { WizConfig: { agent: () => 'Fixture' }, WosSkinHost: { replySummary: { get: () => ({ start }) } } }, KIT: { time: { full: String, stamp: String } }, esc: KIT.esc, md: KIT.md, PW: null,
-    replyCard: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
+    replyCard: () => '', msgIds: () => '', quoteBtn: () => '', userMedia: () => '', mediaBlock: () => '', clip: s => s, CHECK_SVG: '', COPY_SVG: '', SHARE_SVG: '', noteHtml: () => '', runContextHtml: () => '' };
   modelContext(ctx);
   vm.runInContext(`${['  const regenOn = ', '  const summaryOn = ', '  const SUMMARY_WORDS = ', '  const summaryOf = ', '  const summaryStartsOpen = ', '  const leadText = ', '  const COG_SVG = ', '  const CHEV_SVG = ', '  const timeTag = '].map(line).join('')}${slice('  function turnHtml(', '  const turnAt = ')}this.turnHtml = turnHtml;`, ctx);
   return KIT.parseRows(rows).map((tn, i, all) => ctx.turnHtml({ texts: [], ...(chosen ? { rsum: new Map(chosen) } : {}) }, tn, i === all.length - 1, false, null, null)).join('');

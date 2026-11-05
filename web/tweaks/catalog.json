@@ -24,7 +24,8 @@
     "miguel/calm-offline",
     "miguel/orb-shell",
     "miguel/apps-home",
-    "miguel/ai-apps"
+    "miguel/ai-apps",
+    "wizard/thread-tracker"
   ],
   "defaults": [
     "wizard/unified-inbox"
