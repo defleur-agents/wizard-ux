@@ -82,7 +82,7 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
     }
     await page.screenshot({path:path.join(out,skin+'-'+tree+'-default.png')});
     assert.deepEqual(errors,[]); assert.deepEqual(runs,[]);
-    assert.ok(writes.every(w=>w==='POST /wizard/thread-seen'),'only explicitly refused read receipts: '+JSON.stringify(writes));
+    assert.ok(writes.every(w=>w==='PUT /wizard/thread-seen'),'only explicitly refused read receipts: '+JSON.stringify(writes));
     report.cases.push({skin,tree,snapshots,writes,runs,errors});
     await context.close();
    }

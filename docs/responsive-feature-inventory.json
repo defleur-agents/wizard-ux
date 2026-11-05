@@ -927,6 +927,7 @@
     "core/own-views.js",
     "core/pages.css",
     "core/pages.js",
+    "core/pane-layout.js",
     "core/phone-connect.css",
     "core/phone-connect.js",
     "core/photos-relay.js",
