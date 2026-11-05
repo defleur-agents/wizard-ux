@@ -37,10 +37,9 @@ async function main(){
     await p.waitForFunction(([id,img])=>WosSkin.current===id&&WosSkin.wallpaper===img,[palette,image]);
     await p.waitForFunction(()=>{const c=document.getElementById('skinA');if(!c?.width||+c.style.opacity<.9)return false;const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let min=255,max=0;for(let i=0;i<d.length;i+=Math.max(4,Math.floor(d.length/400/4)*4)){min=Math.min(min,d[i]);max=Math.max(max,d[i]);}return max-min>20;});
     record(palette+': real Background card preserves color and paints an image');
-    const panels=await surfaces(p,'.win:visible, #settings:visible');console.log('PANELS',palette,JSON.stringify(panels));
+    const panels=await surfaces(p,'.win:visible, #dsettings:visible');console.log('PANELS',palette,JSON.stringify(panels));
     await shot(p,'desktop-'+palette+'-'+image+'-picker');
     record(palette+': text windows are fully opaque',panels.length>0&&panels.every(c=>c.alpha===255));
-    await shot(p,'desktop-'+palette+'-'+image+'-picker');
     await p.evaluate(()=>{__wux.closeSettings();__wux.goHome();});
     const homePanels=await surfaces(p,'.home-card:visible, .home .rs-widget:visible');console.log('HOME PANELS',palette,JSON.stringify(homePanels));
     record(palette+': Home text panels are fully opaque',homePanels.length>0&&homePanels.every(c=>c.alpha===255));
@@ -60,6 +59,12 @@ async function main(){
   await p.waitForFunction(()=>WosSkin.current==='landscapes-light'&&WosSkin.wallpaper==='sea');record('Mizel light mode preserves chosen image');
   await p.locator('[data-skinfamily="wizard"]').click();await p.waitForSelector('[data-bgpick="living"]');
   record('switching back to Wizard keeps living-canvas reset',await p.evaluate(()=>WosSkin.wallpaper==='living'));
+  await p.locator('[data-bgpick="lake"]').click();
+  await p.locator('[data-desktop-view="ai-apps"]').click();
+  await p.waitForFunction(()=>WosExperience.desktopView==='ai-apps'&&!WosExperience.state.busy);
+  await p.evaluate(()=>__wux.closeSettings());await p.waitForTimeout(500);
+  record('default desktop AI apps view retains chosen Wizard background',await p.evaluate(()=>WosSkin.wallpaper==='lake'&&document.documentElement.hasAttribute('data-image-background')));
+  await shot(p,'desktop-grove-lake-ai-apps');
   const phone=await browser.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,deviceScaleFactor:2,reducedMotion:'reduce',serviceWorkers:'block',ignoreHTTPSErrors:true,userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'});
   const q=await phone.newPage();q.on('pageerror',e=>errors.push(String(e)));
   await q.goto(origin+'/wizard-os-home/?shell=phone');await ready(q);await q.waitForFunction(()=>window.WosOrbSwitcher?.active());
