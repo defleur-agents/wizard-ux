@@ -8,7 +8,7 @@ import vm from 'node:vm';
 // supplies geometry/capture retargeting; trusted Chromium acceptance is separate.
 const source = fs.readFileSync(new URL('../web/core/chat-kit.js', import.meta.url), 'utf8');
 const media = source.slice(source.indexOf('  const TEXTY ='), source.indexOf('  /* ================= approvals'));
-function fixture() {
+function fixture({ phoneSquare = false } = {}) {
   let viewer, stage, image, clock = 1000, timerId = 0;
   const timers = new Map(), captures = new Set(), nodes = new Map();
   const style = () => ({ setProperty(k, v) { this[k] = v; }, removeProperty(k) { delete this[k]; } });
@@ -36,14 +36,14 @@ function fixture() {
     set innerHTML(value) {
       if (this !== stage) return;
       image = value.startsWith('<img') ? new Node('img') : null;
-      if (image) { image.complete = true; image.naturalWidth = 786; image.naturalHeight = 1704; }
+      if (image) { image.complete = true; image.naturalWidth = phoneSquare ? 800 : 786; image.naturalHeight = phoneSquare ? 800 : 1704; }
     }
     getBoundingClientRect() {
-      let left = 0, top = 0, width = 1200, height = 700;
+      let left = 0, top = phoneSquare ? 54 : 0, width = phoneSquare ? 412 : 1200, height = phoneSquare ? 721 : 700;
       if (this === image) {
         const s = Number(/scale\(([^)]+)/.exec(this.style.transform)?.[1] || 1);
         const t = /translate\(([-\d.]+)px, ([-\d.]+)px\)/.exec(this.style.transform);
-        left = width * (1 - s) / 2 + Number(t?.[1] || 0); top = height * (1 - s) / 2 + Number(t?.[2] || 0); width *= s; height *= s;
+        left += width * (1 - s) / 2 + Number(t?.[1] || 0); top += height * (1 - s) / 2 + Number(t?.[2] || 0); width *= s; height *= s;
       }
       return { left, top, right: left + width, bottom: top + height, width, height };
     }
@@ -128,4 +128,65 @@ test('bubbling child capture handoff does not cancel stable-stage ownership', ()
   assert.equal(f.debug.ptr.size, 1); assert(f.debug.g);
   f.event('pointermove', 550, 350); f.event('pointerup', 550, 350); f.event('click', 4, 350);
   assert(f.api.state.open); assert.equal(f.debug.ptr.size, 0);
+});
+
+test('R5 image-box letterbox pointerup dismisses synchronously without any click', () => {
+  const f = fixture({ phoneSquare: true }), img = f.stage.querySelector('img');
+  assert.equal(img.getBoundingClientRect().top, 54); // painted square starts at 208.5
+  f.event('pointerdown', 206, 131.25, 14, img, { pointerType: 'touch', isPrimary: true });
+  assert.equal(f.debug.g.ink, false); assert(f.api.state.open);
+  f.event('pointerup', 206, 131.25, 14, f.stage, { pointerType: 'touch', isPrimary: true });
+  assert(!f.api.state.open); assert.equal(f.debug.g, null); assert.equal(f.debug.ptr.size, 0);
+  assert.equal(f.debug.eatClick, null); assert.equal(f.debug.lastTap, 0);
+  f.event('click', 206, 131.25, 14); assert(!f.api.state.open); // duplicate harmless
+  f.open(); f.event('pointerdown', 206, 400); f.event('pointerup', 206, 400);
+  assert(f.api.state.open); assert.equal(f.api.state.scale, 1);
+  f.event('pointerdown', 206, 400); f.event('pointerup', 206, 400);
+  assert(f.api.state.open); assert.equal(f.api.state.scale, 2.5);
+});
+test('outside release requires outside start and end, no movement or zoom', () => {
+  for (const variant of ['inside-start', 'inside-end', 'out-and-back', 'release-jump', 'zoom']) {
+    const f = fixture({ phoneSquare: true });
+    if (variant === 'zoom') f.debug.s = 2.5;
+    f.event('pointerdown', 206, variant === 'inside-start' ? 210 : 131.25);
+    if (variant === 'out-and-back') { f.event('pointermove', 220, 131.25); f.event('pointermove', 206, 131.25); }
+    f.event('pointerup', 206, variant === 'inside-end' ? 210 : variant === 'release-jump' ? 150 : 131.25);
+    assert(f.api.state.open, variant);
+  }
+});
+test('outside cancel, held, long, secondary or unmatched release never dismisses', () => {
+  for (const variant of ['pointercancel', 'lostpointercapture', 'held', 'long', 'secondary', 'unmatched', 'nonzero-button']) {
+    const f = fixture({ phoneSquare: true }); f.event('pointerdown', 206, 131.25);
+    if (variant === 'held') for (const fn of [...f.timers.values()]) fn();
+    if (variant === 'long') f.wait(301);
+    if (variant === 'pointercancel' || variant === 'lostpointercapture') f.event(variant, 206, 131.25);
+    f.event('pointerup', 206, 131.25, variant === 'unmatched' ? 99 : 1, f.stage, { isPrimary: variant !== 'secondary', button: variant === 'nonzero-button' ? 2 : 0 });
+    assert(f.api.state.open, variant);
+  }
+});
+test('outside multi-touch partial release and unloaded photo never dismiss', () => {
+  const f = fixture({ phoneSquare: true });
+  f.event('pointerdown', 200, 131.25, 1); f.event('pointerdown', 212, 131.25, 2);
+  f.event('pointerup', 212, 131.25, 2); f.event('pointerup', 200, 131.25, 1);
+  assert(f.api.state.open); assert.equal(f.debug.ptr.size, 0);
+  f.stage.querySelector('img').naturalWidth = 0;
+  f.event('pointerdown', 206, 131.25); f.event('pointerup', 206, 131.25); assert(f.api.state.open);
+  f.open(); f.event('pointerdown', 206, 131.25);
+  f.stage.querySelector('img').naturalWidth = 0;
+  f.event('pointerup', 206, 131.25); assert(f.api.state.open);
+});
+test('final outside oracle requires genuine matching release and hidden viewer, not click', () => {
+  const helper = fs.readFileSync(new URL('../tools/viewer-qa-repair.cjs', import.meta.url), 'utf8');
+  const begin = helper.indexOf('await p.waitForFunction(({ start, x, y }) => {');
+  const callback = helper.slice(begin + 'await p.waitForFunction('.length, helper.indexOf('}, { start: finalTap.start', begin) + 1);
+  const down = { type: 'pointerdown', trusted: true, pointerType: 'touch', inViewer: true, x: 206, y: 131.25, id: 14 };
+  const up = { ...down, type: 'pointerup', active: 0 };
+  function accepts(events, open = false, hidden = true) {
+    return vm.runInNewContext('(' + callback + ')({start:0,x:206,y:131.25})', { __viewerTouchInput: events, WosChat: { viewer: { state: { open } } }, document: { querySelector: () => ({ hidden }) } });
+  }
+  assert(accepts([down, up])); assert(!accepts([down]));
+  assert(!accepts([down, { ...up, id: 15 }])); assert(!accepts([down, { ...up, trusted: false }]));
+  assert(!accepts([down, { ...up, y: 400 }])); assert(!accepts([down, { ...up, active: 1 }]));
+  assert(!accepts([down, { ...up, type: 'pointercancel' }, up]));
+  assert(!accepts([down, up], true)); assert(!accepts([down, up], false, false));
 });

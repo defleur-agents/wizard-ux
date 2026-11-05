@@ -141,21 +141,26 @@ async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }
     try {
       assert(outside.gap > 8 && outside.hit, 'outside tap is in a measured real letterbox, never image ink');
       await p.touchscreen.tap(outside.x, outside.y);
-      // Input ACK is not renderer delivery. Match this fresh pointer's trusted
-      // down/up/click, not an earlier menu tap or a synthetic DOM dispatch.
+      // Input ACK is not renderer delivery. Match this fresh trusted down/up
+      // at the measured outside point, then require visible dismissal. A
+      // compatibility click is diagnostic only: R5 delivered no such click.
       await p.waitForFunction(({ start, x, y }) => {
         const events = __viewerTouchInput.slice(start);
-        const downIndex = events.findIndex(e => e.type === 'pointerdown' && e.trusted && e.pointerType === 'touch' && Math.abs(e.x - x) < 2 && Math.abs(e.y - y) < 2);
+        const downIndex = events.findIndex(e => e.type === 'pointerdown' && e.trusted && e.pointerType === 'touch' && e.inViewer && Math.abs(e.x - x) < 2 && Math.abs(e.y - y) < 2);
         if (downIndex < 0) return false;
         const down = events[downIndex];
-        const upIndex = events.findIndex((e, i) => i > downIndex && e.type === 'pointerup' && e.trusted && e.id === down.id);
-        return upIndex >= 0 && events.some((e, i) => i > upIndex && e.type === 'click' && e.trusted && e.id === down.id && e.pointerType === 'touch');
+        const upIndex = events.findIndex((e, i) => i > downIndex && e.type === 'pointerup' && e.trusted && e.pointerType === 'touch' && e.id === down.id && e.inViewer && e.active === 0 && Math.abs(e.x - x) < 2 && Math.abs(e.y - y) < 2);
+        const viewer = document.querySelector('.mviewer');
+        return upIndex >= 0 && !events.slice(downIndex, upIndex).some(e => e.type === 'pointercancel') && !WosChat.viewer.state.open && !!viewer?.hidden;
       }, { start: finalTap.start, x: outside.x, y: outside.y }, { timeout: 3000 });
-      finalTap.trustedClickDelivered = true;
-      assert(!(await state()).open, 'new outside press after reopen dismisses after actual trusted click delivery');
+      finalTap.trustedPointerReleaseDelivered = true;
+      finalTap.visibleDismissal = await p.locator('.mviewer').isHidden();
+      assert(finalTap.visibleDismissal && !(await state()).open, 'new outside press after reopen dismisses after actual trusted pointer release');
     } catch (e) { finalTap.error = String(e.stack || e); throw e; }
     finally {
       finalTap.after = await p.evaluate(({ x, y }) => { const hit = document.elementFromPoint(x, y); return { state: WosChat.viewer.state, actualHit: { tag: hit?.tagName, className: hit?.className }, active: __viewerTouchActive.size, events: [...__viewerTouchInput] }; }, outside);
+      const fresh = finalTap.after.events.slice(finalTap.start), down = fresh.find(e => e.type === 'pointerdown' && e.trusted);
+      finalTap.trustedClickDelivered = !!down && fresh.some(e => e.type === 'click' && e.trusted && e.id === down.id && e.pointerType === 'touch');
       ledger.push(finalTap); write(out, 'phone-gesture-input', ledger); write(out, 'phone-final-outside-input', finalTap);
     }
     await open(2); // leave the next original Back/menu case an open viewer
