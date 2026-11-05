@@ -2612,7 +2612,7 @@
 
   watchEscape('voice-menu', () => !voiceMenu.hidden, () => closeVoiceMenu());
   watchEscape('usage', () => !usageEl.hidden, () => closeUsage());
-  watchEscape('settings', () => settingsFocused(), () => { if (!settingsView.back()) closeSettings(); });
+  watchEscape('settings', () => settingsFocused(), () => { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; });
   window.WosBack = Object.freeze({ escape: e => onKey(e, true), names: escapeBack.names });
   function onKey(e, fromFrame = false) {
     if (e.key === 'Escape') {

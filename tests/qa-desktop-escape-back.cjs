@@ -4,7 +4,8 @@ const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
 const origin = 'https://escape.test', prefix = '/wizard-os-home/';
-const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {recursive:true});
+const out=process.env.QA_OUT||'escape-back-evidence'; fs.mkdirSync(out,{recursive:true});
+let currentPage;
 (async () => {
  const browser = await chromium.launch({args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
  try { for (const view of ['ai-apps','classic']) for (const skin of ['nebula','sepia']) {
@@ -23,7 +24,7 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
    if (u.pathname===prefix+'store/index.html') return r.fulfill({contentType:'text/html',body:`<!doctype html><style>body{background:var(--wz-base,#14141c);color:var(--wz-ink,#eee);padding:40px}</style><input id="field" value="unsent"><script>window.depth=1;window.backs=0;window.__wizardCloseOverlay=()=>{backs++;if(depth){depth--;return true;}return false;};document.addEventListener('keydown',e=>{if(e.key==='Escape')e.stopImmediatePropagation();},true);<\/script>`});
    if (u.pathname===prefix+'qa-image.png') return r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jv1kAAAAASUVORK5CYII=','base64')});
    if (u.pathname==='/wizard/hermes/api/sessions') return r.fulfill({json:{data:[{id:'qa-thread',title:'Synthetic chat',status:'completed',updatedAt:'2026-11-05T00:00:00Z'}],has_more:false}});
-   if (u.pathname==='/wizard/hermes/api/sessions/qa-thread/messages') return r.fulfill({json:{data:[{id:'qa-image',role:'assistant',content:'![QA image](/wizard-os-home/qa-image.png)',timestamp:'2026-11-05T00:00:00Z'}],has_more:false}});
+   if (u.pathname==='/wizard/hermes/api/sessions/qa-thread/messages') return r.fulfill({json:{data:[{id:'qa-image',role:'user',content:[{type:'text',text:'QA image'},{type:'image_url',image_url:{url:'/wizard-os-home/qa-image.png'}}],timestamp:'2026-11-05T00:00:00Z'}],has_more:false}});
    if (u.pathname.startsWith('/wizard/')) return r.fulfill({json:ownerRead(u.pathname)});
    if (u.pathname.startsWith(prefix)) {
     const root=path.resolve(__dirname,'../web'),file=path.resolve(root,u.pathname.slice(prefix.length)||'index.html');
@@ -31,7 +32,7 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
    }
    return r.fulfill({json:{apps:[],agents:[],sessions:[],connected:false}});
   });
-  const p=await context.newPage(); p.on('pageerror', e=>errors.push(e.message));
+  const p=currentPage=await context.newPage(); p.on('pageerror',e=>errors.push(e.message));
   await p.goto(origin+prefix+'desktop.html');
   await p.waitForFunction(()=>window.__wux && !WosWelcome.active && !WosExperience.state.busy).catch(async e=>{console.error({view,skin,errors});throw e;});
   if(view==='ai-apps') await p.waitForFunction(()=>document.documentElement.dataset.aiApps==='desktop' && document.querySelector('.ch-compose'));
@@ -87,12 +88,12 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
   // Release the AI apps list owner: Classic renders the actual list again.
   await p.evaluate(()=>WosExperience.chooseDesktopView('classic'));
   await p.evaluate(()=>__wux.openChatsList());
-  await p.waitForFunction(()=>[...document.querySelectorAll('.pane-list [data-part="list"]')].some(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0;}));
+  await p.waitForFunction(()=>[...document.querySelectorAll('.pane-list [data-chats]')].some(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0;}));
   await p.keyboard.press('Escape');
-  assert.ok(await p.locator('.pane-list [data-part="list"]').first().isVisible(),'Classic list unaffected by Escape at root');
+  assert.ok(await p.locator('.pane-list [data-chats]').first().isVisible(),'Classic list unaffected by Escape at root');
   assert.deepEqual(runs,[]); assert.ok(writes.every(w=>/thread-seen|ui-preferences|appearance/.test(w)),JSON.stringify(writes)); assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(out,view+'-'+skin+'.json'),JSON.stringify({view,skin,writes,runs,errors,legacySamples:samples},null,2));
   console.log('PASS',view,skin,'root/no-flash, iframe app back/root, recording, menu, focused chat');
   await context.close();
- }} finally {await browser.close();}
-})().catch(e=>{console.error(e);process.exitCode=1;});
+ }} catch(e) { if(currentPage&&!currentPage.isClosed()){await currentPage.screenshot({path:path.join(out,'failure.png')}).catch(()=>{});fs.writeFileSync(path.join(out,'failure.html'),await currentPage.content().catch(()=>''));console.error(await currentPage.evaluate(()=>({back:window.__wuxLog,body:document.body.innerText.slice(-2000)})).catch(()=>null));} throw e; } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

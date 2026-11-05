@@ -1,6 +1,6 @@
 # Shared components
 
-Back: `WizEscapeBack` (`core/escape-back.js`) registers phone/native Back and desktop Escape owners once; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WizAppServices.back` keeps root apps mounted.
+Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native Back and desktop Escape share owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WizAppServices.back` keeps root apps mounted.
 
 [Full contracts, prohibited duplicates and proof pointers](component-contract-details.md).
 

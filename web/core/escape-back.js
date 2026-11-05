@@ -46,19 +46,20 @@
     add('share-wizard', () => W.WizShareWizard?.isOpen, () => W.WizShareWizard.back());
     add('pin-sheet', () => W.WizHomeScreenApps?.state?.open, () => W.WizHomeScreenApps.back());
     add('tour', () => W.WosTour?.helpOpen || W.WosTour?.desk?.active || (W.WosTour?.active && W.WosTour.step !== W.WosTour.REPLY), () => { const t=W.WosTour, r=t.desk?.active ? (t.desk.finish('skip'), 'tour') : t.back(); h.afterTour?.(); return r; });
-    add('share', () => W.WosShareSheet?.isOpen(), () => W.WosShareSheet.back());
+    add('share', () => W.WosShareSheet?.isOpen?.(), () => W.WosShareSheet.back());
     add('selection', () => W.WosSelMenu?.state?.open, () => W.WosSelMenu.back());
     add('context', () => W.WosContextMenu?.isOpen, () => W.WosContextMenu.back());
-    add('route', () => W.WosAppRoute?.isOpen(), () => W.WosAppRoute.back());
-    add('setup', () => W.WosAppSetup?.isOpen(), () => W.WosAppSetup.back());
-    add('reminder', () => W.WosBoomerang?.isOpen(), () => W.WosBoomerang.back());
+    add('route', () => W.WosAppRoute?.isOpen?.(), () => W.WosAppRoute.back());
+    add('setup', () => W.WosAppSetup?.isOpen?.(), () => W.WosAppSetup.back());
+    add('reminder', () => W.WosBoomerang?.isOpen?.(), () => W.WosBoomerang.back());
     add('viewer', () => h.chats().KIT?.viewer?.isOpen(), () => h.chats().KIT.viewer.close());
-    add('link-menu', () => W.WizLinks?.isMenuOpen(), () => W.WizLinks.backMenu());
+    add('viewer-menu', () => h.chats().KIT?.viewer?.state?.menu, () => h.chats().KIT.viewer.close());
+    add('link-menu', () => W.WizLinks?.isMenuOpen?.(), () => W.WizLinks.backMenu());
     add('links', () => h.links()?.isOpen(), () => h.links().back());
     h.chats().registerBack?.(stack, h.afterChat);
     add('status', () => W.WizCore?.status?.state?.fatal || W.WizCore?.status?.state?.offline === 'open', () => W.WizCore.status.back());
     add('device', () => W.WosDevice?.sheet, () => W.WosDevice.back());
-    add('update-list', () => W.WizWebUpdate?._state().listOpen, () => W.WizWebUpdate.back());
+    add('update-list', () => W.WizWebUpdate?._state?.()?.listOpen, () => W.WizWebUpdate.back());
     add('resources', () => W.WosResources?.state?.panel, () => W.WosResources.back());
     // Layout api.back.push is registered into this same stack by both shells.
     // One observer sees openings, never a polling timer or delayed click action.

@@ -10,7 +10,7 @@ test('holding ⌥ is the one keys guide: speak keys named and explained, no sepa
   assert.doesNotMatch(js, /const KEYS = \[/);
   for (const name of ['Talk about this', 'New voice chat', 'Tell the computer', 'Type with your voice']) assert.ok(js.includes(name), name);
   assert.match(js, /function toggleKeys\(on\) \{[^\n]*keyHints\.show\(true\)/);
-  assert.match(js, /if \(keyHints\.pinned\(\)\) \{ toggleKeys\(false\)/);
+  assert.match(js, /watchEscape\('keys', \(\) => keyHints\.pinned\(\), \(\) => \{ toggleKeys\(false\)/);
 });
 
 test('⌥S speaks about the screen, ⌥C speaks a command, ⌥D dictates', () => {
@@ -81,7 +81,7 @@ test('⌥G Pick anything: letter chips on every clickable, typed letters click i
   // Pick owns ordinary keys; Escape is dispatched once by core (repeat/IME inert).
   const start = js.indexOf('  function onKey(e, fromFrame = false)');
   const head = js.slice(start, js.indexOf('    keyHints.down(e);', start));
-  const context = { pick: { active: () => true, key: () => 'picked' }, window: {}, escapeBack:{run:()=>{context.escaped++;return 'pick';}}, escaped:0, log(){} };
+  const context = { pick: { active: () => true, key: () => 'picked' }, window: {}, desktopBack:()=>{context.escaped++;return 'pick';}, escaped:0, log(){} };
   vm.createContext(context); vm.runInContext(head + ' return "shell"; }', context);
   for (const flags of [{}, {repeat:true}, {isComposing:true}, {keyCode:229}]) {
     const n=context.escaped; context.onKey({key:'Escape',target:{matches:()=>false},...flags});

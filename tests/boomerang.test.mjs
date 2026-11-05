@@ -90,9 +90,8 @@ test('wall-clock time in the chosen zone becomes the right instant', () => {
 
 test('Back closes the picker before anything under it, on phone and desktop', () => {
   const phone = read('web/app.js'), desktop = read('web/desktop/desktop.js')
-  const order = (src, first, then) => { const a = src.indexOf(first); assert.ok(a > 0, first); assert.ok(src.indexOf(then, a) > a, then) }
-  order(phone, "if (window.WosBoomerang?.back()) return 'boomerang'", 'const ov = CHATS.closeOverlay()')
-  order(desktop, "if (window.WosBoomerang?.back()) return 'boomerang'", 'if (!pal.hidden)')
+  for (const src of [phone,desktop]) assert.match(src, /WizEscapeBack\.installOwners\(/)
+  assert.match(read('web/core/escape-back.js'), /add\('reminder',[^\n]+WosBoomerang.back\(\)/)
 })
 
 test('one Snooze action replaces Defer and Boomerang, with no second Snooze under each reply', () => {

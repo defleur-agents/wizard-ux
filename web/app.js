@@ -3810,9 +3810,11 @@
   }
   function backStep(skipHosted, { outside = false } = {}) {
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
-    const transient = phoneBack.run({ outside }); if (transient) return transient;
-    // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
-    if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
+    const transient = phoneBack.run({ outside, recording: () => {
+      // Retain/pause phone capture; only desktop Escape discards its voice note.
+      if (!V.snap?.general || !['listen', 'command'].includes(V.state)) return false;
+      V.stopAsked = true; pauseCommandCapture(); return 'recording';
+    } }); if (transient) return transient;
 
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
