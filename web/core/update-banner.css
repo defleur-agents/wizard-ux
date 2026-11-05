@@ -1,3 +1,5 @@
+/* Third harmless interface-update delivery test; no style or behavior changes. */
+/* Second harmless interface-update delivery test; retry Reload with no style or behavior changes. */
 /* Harmless interface-update delivery test; no style or behavior changes. */
 /* Update banners (.dv-update): the phone's APK updater (#dvUpdate) and the web "Update ready" banner (#dvWeb,
  * core/web-update.js). One look in both shells; each shell places it for its form factor:
