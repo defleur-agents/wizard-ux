@@ -61,9 +61,11 @@
       el.addEventListener('click', e => {
         const b = e.target.closest('button'); if (!b) return;
         e.preventDefault(); e.stopPropagation();
-        if (b.hasAttribute('data-notes-toggle')) { n.open = !n.open; render(n); return; }
-        if (b.hasAttribute('data-notes-all')) { mark(n, items(n.appId).map(i => i.id)); return; }
-        const id = b.getAttribute('data-notes-read'); if (id) mark(n, [id]);
+        if (b.hasAttribute('data-notes-toggle')) { n.open = !n.open; render(n); }
+        else if (b.hasAttribute('data-notes-all')) mark(n, items(n.appId).map(i => i.id));
+        else { const id = b.getAttribute('data-notes-read'); if (id) mark(n, [id]); }
+        // The tapped button was redrawn: keep the keyboard in the shell (Esc closes the list), never lost to the app.
+        try { n.el.querySelector?.('[data-notes-toggle]')?.focus({ preventScroll: true }); } catch (_) {}
       });
     }
     n.appId = appId;
