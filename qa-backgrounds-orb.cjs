@@ -9,6 +9,13 @@ let origin=process.env.QA_PREVIEW_URL, server, browser;
 const cases=[],errors=[];
 const record=(name,value=true)=>{assert.ok(value,name);cases.push({name,pass:true});console.log('PASS',name);};
 const shot=(p,name)=>p.screenshot({path:path.join(out,name+'.png')});
+// CSS Color 4 serializes color-mix differently by palette. Test rendered alpha, not a string format.
+async function surfaces(p, selector) {
+  return p.locator(selector).evaluateAll(ns => {
+    const c=document.createElement('canvas');c.width=c.height=1;const x=c.getContext('2d');
+    return ns.map(n=>{const bg=getComputedStyle(n).backgroundColor;x.clearRect(0,0,1,1);x.fillStyle=bg;x.fillRect(0,0,1,1);return {id:n.id,classes:n.className,bg,alpha:x.getImageData(0,0,1,1).data[3]};});
+  });
+}
 const ready=p=>p.waitForFunction(()=>window.WosSkin && window.WosExperience && !WosExperience.state.busy && (window.__wux || window.__wos),null,{timeout:30000});
 async function main(){
   if(!origin){
@@ -30,12 +37,13 @@ async function main(){
     await p.waitForFunction(([id,img])=>WosSkin.current===id&&WosSkin.wallpaper===img,[palette,image]);
     await p.waitForFunction(()=>{const c=document.getElementById('skinA');if(!c?.width||+c.style.opacity<.9)return false;const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let min=255,max=0;for(let i=0;i<d.length;i+=Math.max(4,Math.floor(d.length/400/4)*4)){min=Math.min(min,d[i]);max=Math.max(max,d[i]);}return max-min>20;});
     record(palette+': real Background card preserves color and paints an image');
-    const panels=await p.locator('.win:visible, #settings:visible').evaluateAll(ns=>ns.map(n=>getComputedStyle(n).backgroundColor));
-    record(palette+': text windows are fully opaque',panels.length>0&&panels.every(c=>!c.includes('rgba')&&!c.includes('/')));
+    const panels=await surfaces(p,'.win:visible, #settings:visible');console.log('PANELS',palette,JSON.stringify(panels));
+    await shot(p,'desktop-'+palette+'-'+image+'-picker');
+    record(palette+': text windows are fully opaque',panels.length>0&&panels.every(c=>c.alpha===255));
     await shot(p,'desktop-'+palette+'-'+image+'-picker');
     await p.evaluate(()=>{__wux.closeSettings();__wux.goHome();});
-    const homePanels=await p.locator('.home-card:visible, .home .rs-widget:visible').evaluateAll(ns=>ns.map(n=>getComputedStyle(n).backgroundColor));
-    record(palette+': Home text panels are fully opaque',homePanels.length>0&&homePanels.every(c=>!c.includes('rgba')&&c!=='transparent'));
+    const homePanels=await surfaces(p,'.home-card:visible, .home .rs-widget:visible');console.log('HOME PANELS',palette,JSON.stringify(homePanels));
+    record(palette+': Home text panels are fully opaque',homePanels.length>0&&homePanels.every(c=>c.alpha===255));
     await shot(p,'desktop-'+palette+'-'+image+'-home');
     await p.reload();await ready(p);
     record(palette+': selection survives reload',await p.evaluate(img=>WosSkin.wallpaper===img,image));

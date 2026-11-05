@@ -93,7 +93,7 @@ const st = p => p.evaluate(() => ({ idx: __wos.idx, n: __wos.desks.length, voice
 // The desk whose section sits nearest the viewport's left edge (the one actually in view), not the label.
 const visibleDesk = p => p.evaluate(() => { let best = null, bd = 1e9; for (const el of document.querySelectorAll('.track > .desk')) { const d = Math.abs(el.getBoundingClientRect().left); if (d < bd) { bd = d; best = el; } } return __wos.desks.findIndex(d => d.id === best?.dataset.did); });
 async function press(p, o, ms = 480) { await T(p, 'touchStart', o.x, o.y); await sleep(ms); }
-async function hold(p, o, ms = 480) { await press(p, o, ms); }
+async function hold(p, o, ms = 480) { await press(p, o, ms); await p.waitForFunction(() => window.WosOrbSwitcher?.isOpen); }
 const release = p => T(p, 'touchEnd');
 async function closeAnyRadial(p) { await release(p).catch(() => {}); await sleep(300); }
 async function openDeskFor(p, names) { for (const n of names) { await p.evaluate(n => window.__wos.handleText(n, 'command', false, 100, null), n).catch(() => {}); await sleep(700); } }
