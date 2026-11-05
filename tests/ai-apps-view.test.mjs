@@ -2476,7 +2476,7 @@ for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 
     w.q(`.aad-rk[data-k="${g.state}"]`).dispatchEvent(new FakePointerEvent('pointerenter'));
     w.st.timers.find(t => t.ms === 300 && !t.dead).fn();
     assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), P.railRows({ ready: rows }, g.state, order).map(r => r.id), 'flyout');
-    keys.some(h => h.down({ key: 'Escape' }) === true);
+    assert.equal(w.escape(), true, 'core Back dispatcher closes the flyout');
   }
   const phone = world(); phone.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] }; phone.api.sessions.order = () => order;
   (await layout()).default(phone.api);
