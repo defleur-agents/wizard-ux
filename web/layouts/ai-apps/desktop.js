@@ -129,6 +129,7 @@ export default function desktop(api) {
   const shownDesks = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden])')];
   const homeComposer = () => [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0) || null;
   root.dataset.aiApps = 'desktop';
+  api.sessions.ownList?.(); // core does not mount/paint the legacy list beneath this sidebar
   const css = el('link', '', { rel: 'stylesheet', href: api.asset('desktop.css') || '' });
   const unmountCss = api.mount(css);
   // the desks' windows are laid out in pixels from the page's sizes: again once this sheet (the sidebar, the widths) applies
@@ -823,7 +824,7 @@ export default function desktop(api) {
   }
   /* the hover flyout (round 19 item 1c): a small card beside the rail listing one item's chats */
   const FLY_MS = 300, FLY_OUT_MS = 220;
-  let fly = null, flyOn = null, flyOff = null;
+  let fly = null, flyOn = null, flyOff = null, flyBack = null;
   function flyWant(b, key, word0) {
     flyOff?.(); flyOff = null;
     if (fly) { if (fly.key !== key) showFly(b, key, word0); return; }
@@ -836,6 +837,7 @@ export default function desktop(api) {
       api.listen(card, 'pointerenter', () => { flyOff?.(); flyOff = null; });
       api.listen(card, 'pointerleave', flyLeave);
       scene.append(card);
+      flyBack = api.back.push(closeFly);
     }
     fly = { card, key, word: word0, at: b };
     paintFly();
@@ -857,7 +859,7 @@ export default function desktop(api) {
     card.style.left = Math.round(x) + 'px';
     card.style.top = Math.round(Math.max(8, Math.min((r?.top ?? 60) - 4, H - h - 8))) + 'px';
   }
-  function closeFly() { flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
+  function closeFly() { flyBack?.(); flyBack = null; flyOn?.(); flyOn = null; flyOff?.(); flyOff = null; if (!fly) return; fly.card.remove(); fly = null; }
   let fuelSig = '';
   // (4 Nov 2026) the gauge stays without the network Home: read the AI usage feed directly and keep it polling while the foot shows
   const ownFuel = () => fuelOf(api.aiUsage?.state?.(), api.aiUsage?.provider?.());
@@ -1075,6 +1077,7 @@ export default function desktop(api) {
   vtList.append?.(dropLine);
   function dragStart() {
     const g = drag; if (!g || g.on) return; g.on = true; g.hold?.(); g.hold = null;
+    g.offBack = api.back.push(() => dragEnd(false));
     try { vtList.setPointerCapture?.(g.pid); } catch (_) {}
     const rows = [...vtList.querySelectorAll('.aad-vtab')], i = rows.indexOf(g.b);
     g.rows = rows; g.oi = i; g.rects = rows.map(r => r.getBoundingClientRect());
@@ -1120,6 +1123,7 @@ export default function desktop(api) {
   }
   function dragEnd(commit) {
     const g = drag; drag = null; if (!g) return false;
+    g.offBack?.();
     g.hold?.();
     if (!g.on) return false;
     for (const r of g.rows) r.style.translate = ''; if (g.sep) g.sep.style.translate = '';
@@ -1360,16 +1364,23 @@ export default function desktop(api) {
 
   /* ---------- keys (round 21 below): Esc steps back one layer: the picker, then the wide panel, then the panel hides,
    * then the chat column ---------- */
-  const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
-  api.keys.on({ down: e => {
-    if (e.key === 'Escape' && drag?.on) { dragEnd(false); return true; }   // (round 16: Esc cancels a drag)
-    if (e.key === 'Escape' && fly) { closeFly(); return true; }   // (round 19: Esc closes the rail's flyout)
-    if (e.key !== 'Escape' || e.altKey || e.ctrlKey || e.metaKey || menu || wsPop || q || tidyPop) return false;
-    if (allOpenNow()) { closeAll(); return true; }
-    if (pane) { if (wide) setWide(false); else hidePanel(); return true; }
-    if (docked && !typing()) { closeChat(); return true; }
-    return false;
-  } });
+  // Escape navigation is a surface callback, not an early layout key. Recording
+  // and the shared recency stack must finish first. A root press is consumed
+  // without sending the hidden Classic Chats window through threadBack(__new__).
+  let lastSurface = 'chat';
+  const rememberSurface = e => {
+    if (pane?.el?.contains(e.target) || pTop.contains(e.target)) lastSurface = 'app';
+    else if (chatsEl()?.contains(e.target) || cTop.contains(e.target) || side.contains(e.target)) lastSurface = 'chat';
+  };
+  api.listen(doc, 'pointerdown', rememberSurface, true);
+  api.listen(doc, 'focusin', rememberSurface, true);
+  api.back.surface?.(() => {
+    const a = doc.activeElement;
+    const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
+    if (appFocused) api.apps.back?.(pane.id);
+    else if (docked) closeChat();
+    return true; // bare AI apps desktop: no DOM change, no legacy navigation
+  });
   /* round 18 item 3b (Miguel): ⌥↓ / ⌥↑ walk EXACTLY Ready as this sidebar draws it (grouped by status, the chosen order
    * inside; notifications in it), top to bottom, opening each one; from elsewhere the top; past the end back to the top
    * (stock stepReady's wrap and toast). Folded or not, it is the same list. */

@@ -37,6 +37,7 @@
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
+  const escapeSurfaces = new Set(), chatListOwners = new Set();
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -825,6 +826,12 @@
         },
       }),
       sessions: Object.freeze({
+        ownList() {
+          if (!live() || !shell.ownsChatList) return () => {};
+          chatListOwners.add(a); shell.ownsChatList(true);
+          const off = () => { chatListOwners.delete(a); a.offs.delete(off); shell.ownsChatList(chatListOwners.size > 0); };
+          a.offs.add(off); return off;
+        },
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
@@ -869,6 +876,7 @@
         live: el => { if (live() && el?.nodeType === 1) try { window.WosResources?.watch?.(el); } catch (_) {} },
       }),
       apps: Object.freeze({
+        back: id => live() && typeof id === 'string' ? !!shell.appBack?.(id) : false,
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
@@ -1034,10 +1042,17 @@
         move: (from, to) => live() && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 ? !!shell.moveDesk?.(from, to) : false,
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
-      back: Object.freeze({ push(close) {
+      back: Object.freeze({
+        surface(back) {
+          if (!live() || typeof back !== 'function') return () => {};
+          const h = { a, back: guard(a, 'escape.surface', back) }; escapeSurfaces.add(h);
+          const off = () => { escapeSurfaces.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
         const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
-        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        const offEscape = shell?.escapeOverlay?.(entry.close);
+        const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
       } }),
     };
@@ -1292,7 +1307,8 @@
       api.back = Object.freeze({ push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
         const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
-        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        const offEscape = shell?.escapeOverlay?.(entry.close);
+        const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
       } });
       const slot = name => {
@@ -1632,6 +1648,7 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
+    escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },
     async whenLayoutReady() { let p; do { p = layoutLoading; await p; } while (p !== layoutLoading); },
     setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },

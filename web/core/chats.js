@@ -1212,6 +1212,9 @@ window.WizCore.chats = function createChats(H) {
   window.addEventListener('pagehide', flushListPlaces);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
   function renderChatList(w, el) {
+    // A layout which owns the list supplies its own sidebar. Do not paint a
+    // second, CSS-covered list underneath it (including a thread returning Back).
+    if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
     syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
