@@ -53,6 +53,7 @@
       const tracks = columns(content.width, shares);
       ordered.forEach((s, j) => { panes[s] = box(content.x + tracks[j].x, content.y, tracks[j].width, content.height); });
     }
+    for (const s of ['chats', 'app', 'app2']) if (!m.slots.includes(s)) panes[s] = box(content.x, content.y, 0, 0);
     return { sidebar, dock, content, panes, tiled: m.ratio != null || !!Object.keys(m.weights).length || active.includes('app2') };
   }
   function create(storage, events) {

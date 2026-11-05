@@ -32,7 +32,7 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
      if (u.origin !== origin) return r.abort();
      if (u.pathname.includes('/v1/runs')) { runs.push(u.pathname); return r.abort(); }
      if (!['GET','HEAD'].includes(q.method())) { writes.push(q.method()+' '+u.pathname); return r.fulfill({status:403,json:{error:'QA refuses all writes'}}); }
-     if ([prefix+'store/index.html',prefix+'agents/index.html'].includes(u.pathname)) return r.fulfill({contentType:'text/html',body:'<!doctype html><h1>Synthetic app</h1><input value="unsent">'});
+     if ([prefix+'store/index.html',prefix+'agents/index.html'].includes(u.pathname)) return r.fulfill({contentType:'text/html',body:'<!doctype html><style>body{background:#fff;color:#111}</style><h1>Synthetic app</h1><input value="unsent">'});
      if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({json:{migrations:{'launcher-seed-v1':true}}});
      if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({json:{ data:[{id:'qa-thread',title:'Synthetic chat',status:'completed',updatedAt:'2026-11-05T00:00:00Z'}],has_more:false }});
      if (u.pathname.startsWith('/wizard/')) return r.fulfill({json:ownerRead(u.pathname)});
@@ -94,6 +94,17 @@ const selectors = { side: '.aad-side', dock: '.aad-vt', chat: '#stage > .wsp[dat
      assert.equal(await page.locator('#stage > .wsp[data-aad-role="app2"]').isVisible(),true);
      report.cases.push({skin,secondApp:second,actual});
      await page.screenshot({path:path.join(out,skin+'-second-app.png')});
+     await page.evaluate(()=>WizCore.panes.set({slots:['app','app2'],weights:{app:2,app2:1}})); await settle();
+     assert.equal(await page.locator(selectors.chat).isVisible(),false,'omitted Chats is not interactive behind apps');
+     const appOnly=await boxes(), secondOnly=await page.locator('#stage > .wsp[data-aad-role="app2"]').boundingBox();
+     assert.equal(appOnly.app.width,635); assert.equal(secondOnly.width,317);
+     assert.equal(appOnly.app.x+appOnly.app.width,secondOnly.x);
+     report.cases.push({skin,omittedChats:true,app:appOnly.app,second:secondOnly});
+     await page.screenshot({path:path.join(out,skin+'-two-apps-only.png')});
+     await page.evaluate(()=>WizCore.panes.set({slots:['chats'],weights:{}})); await settle();
+     assert.equal(await page.locator(selectors.app).isVisible(),false,'omitted app is hidden');
+     assert.equal(await page.locator(selectors.header).isVisible(),false,'omitted app header is hidden');
+     assert.equal((await boxes()).chat.width,952);
     }
     assert.deepEqual(errors,[]); assert.deepEqual(runs,[]);
     assert.ok(writes.every(w=>w==='PUT /wizard/thread-seen'),'only explicitly refused read receipts: '+JSON.stringify(writes));

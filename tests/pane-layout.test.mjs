@@ -33,6 +33,13 @@ test('ratio, side swap, slot order and three weighted panes do not overlap', () 
   assert.deepEqual(Object.values(plain(g.panes)).map(b=>b.width), [238,476,238]);
   assert.equal(g.panes.app2.x, 288); assert.equal(g.panes.app.x,526);
 });
+test('omitted slots have empty geometry, including the documented two-app arrangement', () => {
+  const g = p.geometry({ slots: ['app', 'app2'], weights: { app: 2, app2: 1 } }, viewport, { ...env, app2On: true });
+  assert.equal(g.panes.chats.width, 0); assert.equal(g.panes.chats.height, 0);
+  assert.equal(g.panes.app.x + g.panes.app.width, g.panes.app2.x);
+  const chatOnly = p.geometry({ slots: ['chats'], ratio: '1/2' }, viewport, env);
+  assert.equal(chatOnly.panes.app.width, 0); assert.equal(chatOnly.panes.chats.width, chatOnly.content.width);
+});
 test('all dock edges and insets shrink the available rectangle', () => {
   for (const edge of ['start','end','top','bottom']) {
     const g=p.geometry({ dock:{edge,insets:{start:10,end:20,top:30,bottom:40}} },viewport,env);

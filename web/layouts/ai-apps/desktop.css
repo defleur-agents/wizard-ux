@@ -871,6 +871,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] { ove
 
 /* Placement comes from WizCore.panes, not the renderer's left/right assumptions.
  * The legacy null-ratio policy intentionally retains its Home overlay behaviour. */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-omitted] { display: none !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-side {
   left: var(--aad-pane-side-x); top: var(--aad-pane-side-y); bottom: var(--aad-pane-side-bottom);
 }
