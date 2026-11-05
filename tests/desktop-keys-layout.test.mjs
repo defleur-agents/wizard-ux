@@ -40,14 +40,13 @@ test('⌥↓/⌥↑ walk Ready chats from anywhere into the message box; no ⌥�
   assert.ok(js.includes("'Next ready chat'"));
 });
 
-test('⌥→ Done and ⌥← Snooze act on the open chat (not mid-text); no hidden ⌥E/⌥Z; the guide shows chat keys', () => {
+test('plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no hidden ⌥E is added', () => {
   assert.doesNotMatch(js, /code === 'KeyE'/);
   assert.doesNotMatch(js, /code === 'KeyZ'\) return hit\(\(\) => \{[^\n]*chatAct/); // ⌥Z is Back to where you were, never Snooze
-  assert.match(js, /const midText = typing\(e\.target\) && String\(e\.target\.value \?\? e\.target\.textContent \?\? ''\)\.trim\(\) !== '';/);
   assert.match(js, /CHATS\.threadAct\(f\.id, f\.thread, act\)/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit/);
-  assert.match(js, /code === 'ArrowLeft' \|\| code === 'ArrowRight'\) && chatOpen\(\) && !midText\) return hit\(\(\) => \{ if \(!e\.repeat\) chatAct\(code === 'ArrowRight' \? 'done' : 'snooze'/);
-  assert.match(js, /\['\[data-chact="done"\]', '→', 'Archive'\], \['\[data-chact="snooze"\]', '←', 'Snooze'\]/);
+  assert.doesNotMatch(js, /chatAct\(code === 'ArrowRight'/);
+  assert.doesNotMatch(js, /\['\[data-chact="(?:done|snooze)"\]', '[←→]'/);
+  assert.match(js, /code === 'KeyZ'\) return hit\(\(\) => \{ if \(!e\.repeat\) jumpBack\(\)/);
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
@@ -100,7 +99,7 @@ test('the keys guide is chips in place, no boxes: ↓ on the next Ready chat, F 
   assert.match(js, /\['#micBtn', 'S', 'Talk about this'\]/);
 })
 
-test('guide: → ← sit above Done / Snooze; no "/" chip on chat search', () => {
+test('guide: Resolve stays above its button; no removed action arrows or "/" chip on chat search', () => {
   assert.match(js, /filter\(vis\)\.map\(n => chip\(n, l, 'above'\)\)/);
   assert.doesNotMatch(js, /chip\(srch, '\/'/);
 });
