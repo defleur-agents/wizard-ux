@@ -112,6 +112,15 @@
     return { ...p, host: hostBusy() };
   }
   function busy() { const p = plan(); return p.host || !p.ok; }
+  function audioFreeReload(p) {
+    // Never waive app-owned holds (including capture-labelled saves), native survival
+    // preparation, or positive live-capture truth. Only durable-recovery uncertainty.
+    if (p.host || p.keeps || !Array.isArray(p.blocking) || p.blocking.some(b =>
+      b.source !== 'capture' || b.kind !== 'capture' ||
+      !['capture_custody_uncertain', 'native_owner_uncertain'].includes(b.reason))) return false;
+    try { return window.WizAppCapture?.pageAudioFree?.() === true; } catch (_) { return false; }
+  }
+  const reloadAllowed = p => !p.host && (p.ok || audioFreeReload(p));
   let armed = null, going = false, checking = false, armTimer = 0, notice = '', rescuing = false, discardId = '';
   let appCatalog = null;
   function appName(id) {
@@ -198,7 +207,7 @@
     // tap visibly worked instead of the banner looking frozen (every skin).
     if (why === 'tap') { burst(); await new Promise(r => setTimeout(r, 900)); }
     const current = plan();
-    if (current.host || !current.ok) {
+    if (!reloadAllowed(current)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
       H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
     }
@@ -214,7 +223,7 @@
     }
     // Check after the animation AND asynchronous native backup flush, not merely at the original tap.
     const final = plan();
-    if (final.host || !final.ok || !sameKept(final)) {
+    if (!reloadAllowed(final) || !sameKept(final)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
       H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
     }
@@ -222,9 +231,13 @@
     window.WizAppReadingPosition?.flush();
     // Host persistence hooks may synchronously expose work too. No frame was removed yet.
     const committed = plan();
-    if (committed.host || !committed.ok || !sameKept(committed)) {
+    if (!reloadAllowed(committed) || !sameKept(committed)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
       H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+    }
+    if (audioFreeReload(committed) && window.WizAppCapture?.cancelReloadRecovery?.() !== true) {
+      going = false; document.querySelector('.wos-burst')?.remove();
+      blocked('Reload paused: a recorder started. Stop and save it first. Nothing was discarded.'); return false;
     }
     window.WizAppServices?.update.commitReload?.(committed);
     log('web:reload', why); window.__wosReloading = why; location.reload();
@@ -238,12 +251,22 @@
     notice = ''; discardId = '';
     if (armed && why === 'tap') { disarm('tap'); H?.toast?.('◌', 'Reload cancelled', 1400); return false; }
     const p = plan();
+    // A reload cannot lose rows already in IndexedDB. Do not wait on that same
+    // broken store when this page positively holds no audio and no app holds work.
+    if (audioFreeReload(p)) { void go(why, p); return true; }
     // Only a user-requested reload refreshes abandoned ownership. Never stop a recorder or expire a hold.
     // Paint in the click task, then re-use capture's lock/recovery path and judge the whole plan again.
     if (!checked && why === 'tap' && !p.host && p.capture?.recheck && window.WizAppCapture?.reconcileReload) {
       checking = true; repaint();
       let timer;
-      const failed = () => { clearTimeout(timer); checking = false; blocked('Could not finish checking the recorder. Your audio is kept. Try Reload again (RECOVERY_TIMEOUT).'); H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000); };
+      const failed = () => {
+        clearTimeout(timer); checking = false;
+        const current = plan();
+        if (audioFreeReload(current)) { void go(why, current); return; }
+        blocked(''); const reason = reloadStatus().reason;
+        blocked('Could not finish checking the recorder. Your audio is kept. ' + (reason || 'Stop and save any recording, then try Reload again.') + ' (RECOVERY_TIMEOUT).');
+        H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000);
+      };
       Promise.race([
         Promise.resolve().then(() => window.WizAppCapture.reconcileReload()),
         new Promise((_, reject) => { timer = setTimeout(() => reject(Error('Recorder check timed out')), 4500); })
