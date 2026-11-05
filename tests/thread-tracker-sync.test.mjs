@@ -47,6 +47,47 @@ const reply = body => ({ ok: true, status: 200, json: async () => body });
 const item = (id, state, extra = {}) => ({ id, title: id, state, updated_at: 10, seen: false, ...extra });
 const tick = () => new Promise(r => setTimeout(r, 15));
 
+const tap = (T, id, action = 'data-tt-seen', jump) => T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: '' } } : s.includes(action) ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: id } } : null } }, { jump });
+
+test('same reply is one synthesized row/count/dot, Seen includes every ask and a newer anchor splits the group', async () => {
+  let items = [item('a', 'needs_you', { try: true, message_id: 'm', title: 'Nightly helper' }), item('b', 'done', { message_id: 'm', title: 'Messenger sign-in' }), item('c', 'done', { message_id: 'm', seen: true })];
+  const writes = []; let release;
+  const { T } = boot((path, init) => {
+    // Intentionally old per-item counts: client must not repaint three dots over the loaded reply group.
+    if (path.endsWith('/counts')) return reply({ threads: { 'hermes/t': { total: 3, needs_you: 1, done_unseen: 1, acknowledged: 1 } } });
+    if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(r => { release = () => { items = items.map(i => ({ ...i, seen: true })); r(reply({ items })); }; }); }
+    return reply({ items });
+  });
+  await T.load('t'); await T.loadCounts(true); await tick();
+  let html = T.stripHtml('t');
+  assert.match(html, /1 ask</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
+  assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Ready to try/);
+  assert.match(T.dots('t'), /1 need you/); assert.doesNotMatch(T.dots('t'), /finished, not seen/);
+  assert.equal(T.itemFor('t', '', { message_id: 'm' }).id, 'a');
+  let target;
+  tap(T, 'a', 'data-tt-open', anchor => { target = anchor; }); assert.equal(target.message_id, 'm');
+  tap(T, 'a');
+  assert.deepEqual(writes[0].ids, ['a', 'b', 'c']); assert.equal(T.dots('t'), '', 'optimistic group Seen clears every dot before I/O settles');
+  assert.match(T.stripHtml('t'), /1 acknowledged/);
+  release(); await tick();
+  items = items.map(i => i.id === 'a' ? { ...i, state: 'blocked', seen: false, message_id: 'new', updated_at: 30 } : i);
+  await T.loadCounts(true); await tick();
+  html = T.stripHtml('t'); assert.match(html, /2 asks</); assert.match(T.dots('t'), /1 stuck/);
+  assert.equal(T.itemFor('t', '', { message_id: 'm', at: 10 }).id, 'b', 'a nearby timestamp cannot pull a member from a different known reply');
+});
+
+test('group urgency, partial Seen and malformed anchors match the service projection', () => {
+  const { T } = boot(() => reply({}));
+  const m = (state, extra = {}) => item(state, state, { message_id: 'm', ...extra });
+  for (const [states, kind] of [[['done', 'running', 'needs_you', 'blocked'], 'blocked'], [['done', 'running', 'needs_you'], 'needs_you'], [['done', 'running'], 'running'], [['done', 'done'], 'done_unseen']]) {
+    const c = T._tally(states.map(s => m(s))); assert.equal(c.total, 1); assert.equal(c[kind], 1);
+  }
+  assert.equal(T._tally([m('done', { seen: true }), m('done')]).done_unseen, 1);
+  assert.equal(T._tally([m('blocked', { seen: true }), m('needs_you', { seen: true })]).acknowledged, 1);
+  const bad = [null, undefined, '', ' ', {}, [], true];
+  assert.equal(T._tally(bad.map(message_id => m('done', { message_id }))).total, bad.length);
+});
+
 test('late Look activation hydrates every open thread and counts without reopening', async () => {
   const calls = [], renders = [];
   const windows = { a: { id: 'a', thread: 't' }, b: { id: 'b', thread: 'private-thread' }, list: { id: 'list' }, fresh: { id: 'fresh', thread: '__new__' } };
