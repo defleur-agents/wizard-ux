@@ -853,7 +853,7 @@
       // over the IMG's object-fit letterbox). Dismiss that ordinary outside tap
       // now; never turn a hold, pan, multi-touch or cancelled press into a tap.
       const elapsed = e.timeStamp - g.t;
-      if (!g.moved && !g.ink && !g.multi && !g.pan && !V.ptr.size && e.isPrimary !== false && V.s <= 1.02 && elapsed >= 0 && elapsed < 300 && Math.abs(e.clientX - g.sx) + Math.abs(e.clientY - g.sy) <= 8 && V.items[V.i]?.kind === 'image' && !photoContains(e.clientX, e.clientY)) return viewer.close();
+      if (!g.moved && !g.ink && !g.multi && !g.pan && !V.ptr.size && e.button === 0 && e.isPrimary !== false && V.s <= 1.02 && elapsed >= 0 && elapsed < 300 && Math.abs(e.clientX - g.sx) + Math.abs(e.clientY - g.sy) <= 8 && V.items[V.i]?.kind === 'image' && !photoContains(e.clientX, e.clientY)) return viewer.close();
       if (g.pan || V.s > 1.02 || g.multi) { if (V.long) fling(g.vy); paint(); return; }
       const dx = g.dx || 0, dy = g.dy || 0;
       if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) && V.items.length > 1) { go(dx < 0 ? 1 : -1); eatGestureClick(e); return; }
