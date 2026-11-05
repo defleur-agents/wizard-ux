@@ -2278,7 +2278,16 @@
     window.WosSettings?.cancelWait?.();
     return escapeBack.run({ event,
       recording: () => { if (VOICE.state === 'idle') return false; vMode === 'dictate' ? dictate('cancel') : talk('cancel'); return true; },
-      surface: () => window.WosSkinHost?.escapeSurface?.(), fallback: () => escStep(),
+      surface: () => {
+        // A mixed Chats/app desk may have no layout app-pane model. Real keyboard
+        // focus still belongs to its iframe; ask that registered app before the layout.
+        const frame = document.activeElement;
+        if (frame?.tagName === 'IFRAME') {
+          const result = window.WizAppServices?.back(frame);
+          if (['handled', 'pending', 'stay'].includes(result)) return true;
+        }
+        return window.WosSkinHost?.escapeSurface?.();
+      }, fallback: () => escStep(),
     });
   }
   // Navigation only. ALL transient owners live in the shared phone Back registry.

@@ -29,7 +29,7 @@ function fixture() {
  c.VOICE={get state(){return state.voice?'listen':'idle';}};c.vMode='talk';c.talk=()=>{state.voice=false;hits.push('voice-cancel');};c.dictate=c.talk;c.escStep=()=>{hits.push('surface');return '';};
  vm.runInContext(desktop.slice(desktop.indexOf('  function desktopBack('),desktop.indexOf('  // Navigation only.')),c);
  vm.runInContext(desktop.slice(desktop.indexOf('  function onKey('),desktop.indexOf("  addEventListener('keydown', e => onKey(e), true);")),c);
- return {state,hits,stack,press:()=>c.onKey({key:'Escape',preventDefault(){},stopPropagation(){},stopImmediatePropagation(){}})};
+ return {state,hits,stack,c,w,press:()=>c.onKey({key:'Escape',preventDefault(){},stopPropagation(){},stopImmediatePropagation(){}})};
 }
 test('phone history/native Back and desktop Escape install the identical shared owner catalog',()=>{
  assert.match(phone,/WizEscapeBack\.installOwners\(phoneBack/);
@@ -48,4 +48,30 @@ test('voice-note cancellation beats image viewer, menu, chat and app focus; neve
 });
 test('image viewer Back closes only the image, then focused navigation runs on the NEXT press',()=>{
  const f=fixture();f.state.open='viewer';f.press();assert.deepEqual(f.hits,['viewer']);f.press();assert.deepEqual(f.hits,['viewer','surface']);
+});
+test('Escape reaches the focused app on a mixed Chats/app desk before a layout with no app pane',()=>{
+ const f=fixture(),frame={tagName:'IFRAME'},menu={open:true};f.c.document.activeElement=frame;
+ // A mixed desk can be reported as a Chats list: the layout consumes Back but has no pane.
+ f.w.WosSkinHost={escapeSurface(){f.hits.push('layout-no-pane');return true;}};
+ f.w.WizAppServices={back(target){assert.equal(target,frame);f.hits.push('app-back');menu.open=false;return 'handled';}};
+ f.press();assert.equal(menu.open,false);assert.deepEqual(f.hits,['app-back']);
+});
+test('recording and shared overlays keep priority over the focused app',()=>{
+ const f=fixture();f.c.document.activeElement={tagName:'IFRAME'};
+ f.w.WizAppServices={back(){f.hits.push('app-back');return 'handled';}};
+ f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
+ assert.deepEqual(f.hits,['voice-cancel','viewer','app-back']);
+});
+test('a pending/stay app Back consumes one press; an app at root still uses existing layout/root policy',()=>{
+ for(const result of ['handled','pending','stay','atRoot','notReady']){
+  const f=fixture();f.c.document.activeElement={tagName:'IFRAME'};
+  f.w.WizAppServices={back(){f.hits.push('app:'+result);return result;}};
+  f.w.WosSkinHost={escapeSurface(){f.hits.push('layout-root');return true;}};
+  f.press();assert.deepEqual(f.hits,['handled','pending','stay'].includes(result)?['app:'+result]:['app:'+result,'layout-root']);
+ }
+});
+test('chat keyboard focus never probes a background app',()=>{
+ const f=fixture();f.c.document.activeElement={tagName:'TEXTAREA'};
+ f.w.WizAppServices={back(){assert.fail('must not navigate an unfocused app');}};
+ f.press();assert.deepEqual(f.hits,['surface']);
 });
