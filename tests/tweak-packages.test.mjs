@@ -276,7 +276,7 @@ test('chats.js shows a notification draft as its thread only while notification 
   assert.match(src, /function notifOf\(w\) \{\n    if \(!w \|\| w\.thread !== '__new__' \|\| winAgent\(w\) \|\| !window\.WosSkinHost\?\.inboxThreads\) return null;/);
   assert.match(src, /const NV = isNew && !pend\.length \? notifOf\(w\) : null;/);
   assert.match(src, /if \(sid === '__new__'\) \{ notifAct\(wid, a\); return; \}/);
-  assert.match(read('web/desktop/desktop.js'), /f\.thread !== '__new__' \|\| !!CHATS\.notifOpen\?\.\(f\.id\)/, 'Done / Snooze keys reach an open notification');
+  assert.match(read('web/desktop/desktop.js'), /f\.thread === '__new__' && !CHATS\.notifOpen\?\.\(f\.id\)/, 'remaining Resolve action rejects an empty new chat but reaches an open notification');
 });
 
 test('desktop keys: ⌥↓ walks notification rows with Ready, ⌥X resolves an open notification', () => {
