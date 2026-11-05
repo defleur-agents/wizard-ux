@@ -2090,13 +2090,14 @@ window.WizCore.chats = function createChats(H) {
     const privTag = !winAgent(w) && TAG && AGS()?.isPrivate(agentRec(TAG)) ? `<span class="ch-privtag" data-wiz-private="" title="Private agent: ${esc(agentName(TAG))}">${AGS().lock()}<span>Private</span></span>` : '';
     const state = threadState(s, TAG), working = state.working;
     const sub = isNew ? `Starts a new thread with ${agentName(TAG)}` : state.sub;
-    const turns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
+    const storedTurns = (c.loadedFor === w.thread || c.cachedFor === w.thread) && turnsCurrent(c, s) ? c.turns || [] : null;
+    const turns = storedTurns && reconcileSent(storedTurns, OUTBOX ? OUTBOX.forThread(w.thread) : [], s);
     c.media = []; c.texts = [];
     let msgs;
     // A message the transcript on screen already shows is never drawn again below it as pending: reopening a thread
     // painted the cached transcript (your message, then the reply) and the outbox copy still "Sending…" under both
     // until the server read retired it (James, 23 Oct 2026).
-    const pend = pendingFor(w).filter(p => !(turns && echoed(turns, p)));
+    const pend = pendingFor(w).filter(p => !(turns && (localSent(turns, p) || echoed(turns, p))));
     const carry = isNew && c.carry && TAG ? `<div class="ch-carry" role="note"><b>${AGS()?.lock?.() || ''}Continues “${esc(clip(c.carry.title, 60))}” privately</b><span>Your first message takes the last ${c.carry.n === 1 ? 'message' : `${c.carry.n} messages`} with it as quoted context. That thread stays as it is.</span><button type="button" data-chcarryx>Don’t include</button></div>` : '';
     const NV = isNew && !pend.length ? notifOf(w) : null;
     const noteBox = NV && el.dataset.notificationId === NV.id ? el.querySelector('.ch-msgs') : null;
@@ -2447,7 +2448,7 @@ window.WizCore.chats = function createChats(H) {
    * the same file IDs, or the exact same words in a user turn made after it was written. A queued one that never left
    * the phone never matches: sending the same words twice on purpose keeps both (Codex P2 on #418). */
   function echoed(turns, p) {
-    const recent = turns.slice(-6), us = recent.filter(t => t.u).map(t => t.u).concat(recent.flatMap(t => t.steers || []));
+    const us = turns.filter(t => t.u && !t.u.localId).map(t => t.u).concat(turns.flatMap(t => t.steers || []).filter(u => !u.localId));
     const files = (p.files || []).filter(f => f && f.id);
     const sameFiles = u => files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
     // A steer the agent took in mid-run is not always a user row in the transcript: a context compaction during the
@@ -2456,14 +2457,52 @@ window.WizCore.chats = function createChats(H) {
     // their own run and keep matching by words.
     if (p.state === 'sent' && p.steered && !p.steerQueued && isFinite(p.sentAt)
         && turns.some(t => t.a && t.a.final && !t.a.failed && isFinite(t.a.at) && t.a.at > p.sentAt + 10e3)) return true;
-    if (p.state === 'sent') return us.some(u => (files.length && files.some(f => (u.files || []).some(x => x.id === f.id))) || (!!p.text && (u.text || '').includes(p.text.slice(0, 40))));
+    if (p.state === 'sent') return us.some(u => sentMatch(u, p));
     if (!['queued', 'sending', 'waiting', 'unconfirmed'].includes(p.state) || !(p.attempts > 0) || p.steerRunId) return false;
     const t = String(p.text || '').trim(), after = u => isFinite(u.at) && u.at >= (p.createdAt || 0) - 10e3; // made after this message was written (10 s for clock skew)
     return us.some(u => after(u) && (files.length ? sameFiles(u) && (!t || String(u.text || '').trim().includes(t)) : !!t && String(u.text || '').trim() === t));
   }
+  // Match stable receipt identity first; legacy history gets bounded, exact content
+  // matching. A shared attachment or forty-character prefix is not message identity.
+  function sentMatch(u, p) {
+    if ((p.userMessageId && String(u.id || '') === String(p.userMessageId)) || (p.id && u.clientMessageId === p.id)) return true;
+    const at = p.sentAt || p.createdAt, began = p.createdAt || at;
+    if (!isFinite(u.at) || !isFinite(at) || u.at < began - 10e3 || u.at > at + 120e3) return false;
+    const norm = s => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
+    const text = norm(p.text), files = (p.files || []).filter(f => f?.id);
+    const sameFiles = files.length && files.every(f => (u.files || []).some(x => x.id === f.id));
+    return files.length ? !!sameFiles && (!text || norm(u.text) === text) : !!text && norm(u.text) === text;
+  }
+  // sent-message-reconcile: accepted local words belong on the timeline, never
+  // beneath the answer as a permanent Sent/Dismiss row. Keep original outbox custody
+  // until canonical history arrives; this display copy is never a delivery receipt.
+  function localSent(turns, p) { return turns.some(t => t.u?.localId === p.id || t.steers?.some(u => u.localId === p.id)); }
+  function reconcileSent(turns, pending, session) {
+    const out = turns.slice(), start = t => t.at ?? t.later?.at ?? t.work?.[0]?.at ?? t.a?.at;
+    for (const p of pending) {
+      if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false })) continue;
+      const at = p.sentAt || p.createdAt;
+      if (!isFinite(at) || (!p.text && !p.files?.length)) continue;
+      const u = { text: p.text || '', files: p.files || [], images: [], at, localId: p.id };
+      if (p.steered) {
+        const target = out.findLastIndex(t => start(t) <= at + 10e3 && (!t.a || t.a.at >= at - 10e3));
+        if (target >= 0) { out[target] = { ...out[target], steers: [...(out[target].steers || []), u] }; continue; }
+      }
+      const i = out.findIndex(t => !t.u && !t.note && !t.later?.context && isFinite(start(t))
+        && ((start(t) >= (p.createdAt || at) - 10e3 && start(t) <= at + 120e3)
+          || (isFinite(t.later?.after) && t.later.after < (p.createdAt || at) && start(t) >= at - 10e3)));
+      if (i >= 0) { const { later, ...turn } = out[i]; out[i] = { ...turn, u, at }; }
+      else {
+        const index = out.findIndex(t => isFinite(start(t)) && start(t) > at);
+        const turn = { u, a: null, notes: [], steps: 0, media: [], work: [], steers: [], at };
+        out.splice(index < 0 ? out.length : index, 0, turn);
+      }
+    }
+    return out;
+  }
   function retireLanded(sid, turns) {
     let gone = false;
-    if (OUTBOX && turns.length) for (const p of OUTBOX.forThread(sid)) if (p.state === 'sent' && echoed(turns, p)) { OUTBOX.landed(p.id); gone = true; }
+    if (OUTBOX && turns.length) for (const p of OUTBOX.forThread(sid)) if (p.state === 'sent' && echoed(turns, { ...p, steered: false })) { OUTBOX.landed(p.id); gone = true; }
     return gone;
   }
   function pendingState(p, s) {

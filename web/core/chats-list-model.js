@@ -32,7 +32,7 @@ function rankOf(r) {
 }
 /** Ready in the chosen order (pure). Newest / Oldest: approvals first and snoozed last (stock's pins), time in
  * between; Priority: by rank, newest first inside each. Read notifications last, newest first (Oldest: oldest). */
-const compareTime = (a, b, order) => (order === 'oldest' ? atOf(a) - atOf(b) : atOf(b) - atOf(a)) || String(a.title || '').localeCompare(String(b.title || ''));
+const compareTime = (a, b, order) => (order === 'oldest' ? atOf(a) - atOf(b) : atOf(b) - atOf(a)) || String(a.sortTitle ?? a.title ?? '').localeCompare(String(b.sortTitle ?? b.title ?? ''));
 function readySort(rows, order) {
   const o = sortOf(order), list = (rows || []).slice(), later = list.filter(r => r.note && r.snoozed), main = list.filter(r => !(r.note && r.snoozed));
   const t = (a, b) => compareTime(a, b, o);
@@ -94,10 +94,11 @@ function readyStep(ids, cur, dir) {
 }
 
 
+const sessionTitle = s => s.title || 'New chat';
 /** Project raw sessions once, with the shell's read/actions/attention facts. */
 function sessionRow(s, kind, { live, chats, pins } = {}) {
   const fresh = !!live.isNew?.(s), state = chats.stiKind?.(s) || '';
-  return { id: s.id, title: s.title || 'New chat', kind, at: live.cardAt?.(s) || '',
+  return { id: s.id, title: sessionTitle(s), kind, at: live.cardAt?.(s) || '',
     rank: state === 'failed' ? 1 : Number.isFinite(live.readyRank?.(s)) ? live.readyRank(s) : undefined,
     snoozed: !!s.deferred, unread: fresh, pinned: !!pins?.has(s.id),
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
@@ -119,16 +120,16 @@ function sessionRank(s, { approval = ['waiting_for_approval', 'unknown'].include
 }
 /** Keep raw payloads outside the row schema so renderers receive their original objects. */
 function orderSessions(list, order, { at, rank, state } = {}) {
-  return readySort((list || []).map(s => ({ id: s.id, title: s.title, at: at(s), rank: rank(s), state: state?.(s), value: s })), order).map(r => r.value);
+  return readySort((list || []).map(s => ({ id: s.id, title: sessionTitle(s), at: at(s), rank: rank(s), state: state?.(s), value: s })), order).map(r => r.value);
 }
 const sortNotes = (items, order) => readySort(items.map(notificationRow), order).map(r => r.value);
 function notificationRow(it) {
-  return { id: it.id, title: it.title || '', at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+  return { id: it.id, title: it.title || '', sortTitle: it.title || '', at: new Date((Number(it.time) || 0) * 1000).toISOString(),
     note: true, snoozed: !!it.read, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, value: it };
 }
 /** Combine sessions and notes before drawing; the same comparator owns both. */
 function mixedRows(list, notes, order, facts, { timeOnly = false } = {}) {
-  const rows = list.map(s => ({ id: s.id, title: s.title, at: facts.at(s), rank: timeOnly ? 9 : facts.rank(s), value: s }));
+  const rows = list.map(s => ({ id: s.id, title: sessionTitle(s), at: facts.at(s), rank: timeOnly ? 9 : facts.rank(s), value: s }));
   const ns = notes.map(notificationRow);
   if (timeOnly) for (const n of ns) { n.rank = 9; n.snoozed = false; }
   return readySort([...rows, ...ns], order);

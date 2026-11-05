@@ -1716,7 +1716,7 @@ test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, t
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
   assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
   assert.match(read('web/core/chats-list-model.js'), /rank: state === 'failed' \? 1 : Number\.isFinite\(live\.readyRank\?\.\(s\)\) \? live\.readyRank\(s\) : undefined/, 'the shared stock rank on each row (a failed chat with Needs you)');
-  assert.match(host, /note: true, rank: window\.WizChatsListModel\.notificationRow\(it\)\.rank/, 'notification rank comes from the shared model');
+  assert.match(host, /note: true, sortTitle: window\.WizChatsListModel\.notificationRow\(it\)\.sortTitle, rank: window\.WizChatsListModel\.notificationRow\(it\)\.rank/, 'notification rank comes from the shared model');
 });
 
 test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥O workspaces, ⌥1–9 + ⌥0 and ⌥[ ] the right column, ⌥⇧[ ] move a row, ⌥− / ⌥= the panel, ⌥W on Home and ⌥⇧digit inert', async () => {

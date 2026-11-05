@@ -78,7 +78,7 @@ test('core/classic desktop and stock phone use shared ordering/grouping while ke
   const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
   const c = modelContext({ window: {}, READY_ORDERS: [], readyOrder: 'newest', snoozeLast: () => false, deferredOf: s => s.deferred,
     attOf: s => s.attention, stiKind: () => 'none', waitsOn: s => s.attention?.state === 'needs_you', subjOrder: () => [], esc: String,
-    LIVE: { cardAt: s => s.at }, sesRank: s => M.sessionRank(s), noteByTime: () => {} });
+    LIVE: { cardAt: s => s.at }, sesRank: s => M.sessionRank(s) });
   vm.runInContext(block('  function readyBody(', '  /* Android Back') + '\nthis.render = readyBody;', c);
   const sessions = rows.filter(r => !r.note).map(r => ({ ...r, status: r.state === 'approval' ? 'waiting_for_approval' : 'completed', deferred: r.state === 'deferred', attention: { state: ({ needs: 'needs_you', failed: 'needs_you' }[r.state] || r.state), subject: r.title.split(' · ')[0] } }));
   const row = s => `<row id="${s.id}"></row>`;
@@ -92,7 +92,7 @@ test('core/classic desktop and stock phone use shared ordering/grouping while ke
   const html = c.render(sessions, row);
   assert.deepEqual(renderedIds(html), ['failed', 'tie-a', 'tie-b', 'new', 'approval', 'needs', 'sleep']);
   assert.equal((html.match(/class="ch-subj"/g) || []).length, 2);
-  for (const file of ['web/index.html', 'web/desktop.html']) assert.ok(read(file).indexOf('core/chats-list-model.js') < read(file).indexOf('src="live.js"'), file + ': boot dependency before live');
+  for (const file of ['web/index.html', 'web/desktop.html']) { const html = read(file), model = html.indexOf('core/chats-list-model.js'), live = html.indexOf('src="live.js"'); assert.ok(model >= 0 && live > model, file + ': boot dependency exists before live'); }
 });
 test('notifications share time/priority/ties, never mutate inputs, and read notes stay last', () => {
   const sessions = [{ id: 'chat', title: 'Chat', at: at(4) }];
