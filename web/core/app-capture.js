@@ -727,9 +727,17 @@
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
     let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
-    const meeting = meetingBridge();
+    const meeting = meetingBridge(); let meetingStatus = null;
+    const readMeetingStatus = async () => {
+      let st;
+      try { st = await meeting.status(); }
+      catch (_) { st = null; }
+      check();
+      if (typeof st?.recording !== 'boolean') recoveryError = fail('native_owner_uncertain', 'Native recorder status is unknown.');
+      return st;
+    };
     if (meeting?.status) {
-      const st = await meeting.status(); check();
+      const st = await readMeetingStatus(); meetingStatus = st;
       // A live status without an ID still owns the mic; never invent an ID to recover it.
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
@@ -742,7 +750,7 @@
     // Positive proof that no native recorder runs: the device reports no take and the meeting bridge (if any) is not recording.
     let nativeQuiet = false;
     try { nativeQuiet = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null') === null && !unknownMeetingActive &&
-      !(meeting?.status && (await meeting.status())?.recording); } catch (_) { nativeQuiet = false; }
+      (!meeting?.status || meetingStatus?.recording === false); } catch (_) { nativeQuiet = false; }
     check();
     for (const row of all) {
       check();
@@ -771,6 +779,16 @@
         check(); recoveryError = e;
         await put({ ...row, status: 'recoverable', partial: true, recoveryError: e.code || 'native_recovery_failed' });
       }
+    }
+    // Native notification controls can start while rows/chunks are read. Never call the old idle
+    // snapshot fresh truth. A newly seen owner is blocked until a later pass adopts its real ID.
+    if (meeting?.status) {
+      const st = await readMeetingStatus();
+      const knownLive = st?.recording === true && !!st.meetingId && [...recoveryLive].some(id => {
+        const r = ownedRows.get(id); return r?.native === 'wizard-meetings' && r.nativeId === st.meetingId;
+      });
+      const unknown = st?.recording === true && !knownLive;
+      if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
     }
   }
   async function recover() {
@@ -882,6 +900,7 @@
       s.stage = 'shared capture store'; live(await ready);
       s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
       s.stage = 'recovery check'; live(await recoverLocked());
+      if (recoveryError?.code === 'native_owner_uncertain') throw recoveryError;
       const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
@@ -1004,7 +1023,13 @@
   }
   async function pending(appId) {
     validate(appId, {}); await ready; await recover();
-    return Promise.all((await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status)).map(result));
+    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
+    // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
+    if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
+        [...ownedRows.values()].some(r => r.appId === appId && r.status !== 'pending')))
+      throw recoveryError || fail('capture_custody_uncertain', 'Capture ownership is still being recovered.');
+    return Promise.all(selected.map(result));
   }
   async function ack(appId, id) {
     validate(appId, {}); await ready;
@@ -1047,8 +1072,9 @@
    * microphone loan to the orb, start/stop/save in flight, an unknown native owner) would lose audio, so it
    * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
   function reloadCheck() {
-    const no = reason => ({ safe: false, reason, keeps: null });
+    const no = reason => ({ safe: false, reason, keeps: null, recheck: !active && preparations.size === 0 });
     if (preparations.size) return no('capture_starting');
+    if (!ownershipLoaded || recoveryError) return no('capture_custody_uncertain');
     if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
@@ -1057,16 +1083,36 @@
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
+    if ([...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) return no('capture_custody_uncertain');
     if (active) {
       const s = active;
       const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&
         !s.finishPromise && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
-      if (!steady) return no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
-      if (live.some(r => r.id !== s.row.id)) return no('capture');
+      if (live.some(r => r.id !== s.row.id)) return no('capture_custody_uncertain');
+      if (!steady) {
+        const blocked = no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
+        // Waiting for an end is a positive live-engine contract, not a synonym for unsafe custody.
+        blocked.waitForEnd = !!s.engine && ['recording', 'paused', 'stopping'].includes(s.phase) &&
+          !s.borrow && !s.borrowWork && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
+        return blocked;
+      }
       return { safe: true, reason: null, keeps: keep(s.row) };
     }
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
-    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null };
+    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
+      recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
+        [...ownedRows.values()].every(r => r.status === 'pending') };
+  }
+  // Reload may re-probe an abandoned owner, never Stop/Cancel a live session. Recovery holds the same
+  // microphone lock as Start and only commits pending custody; no ack/delete or app data is involved.
+  let reloadReconcile = null;
+  function reconcileReload() {
+    if (!reloadReconcile) reloadReconcile = (async () => {
+      await ready;
+      if (!active && !preparations.size) await recover();
+      return reloadCheck();
+    })().finally(() => { reloadReconcile = null; });
+    return reloadReconcile;
   }
   // Last moment before the shell reloads with a kept native meeting: let queued backup-PCM writes land (bounded).
   async function prepareReload() {
@@ -1076,7 +1122,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       const live = active?.row.id === r?.id;
       return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,
