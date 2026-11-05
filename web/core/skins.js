@@ -177,6 +177,9 @@
   const wizardBackgrounds = skin => root.dataset.shell === 'desktop' && skin.family === 'wizard';
   const wizardImage = skin => wizardBackgrounds(skin) && wizardWall !== 'living';
   function imageState(skin) {
+    // Material belongs to the Wizard palette, never to its selected backdrop.
+    if (wizardBackgrounds(skin)) root.dataset.wizardBackgrounds = '';
+    else delete root.dataset.wizardBackgrounds;
     if (wizardImage(skin) || /^landscapes/.test(skin.id)) root.dataset.imageBackground = '';
     else delete root.dataset.imageBackground;
   }

@@ -23,8 +23,12 @@ html[data-shell="desktop"][data-layout="ai-apps"] {
   --aad-lift: 0 0 0 1px var(--aad-line), 0 2px 10px color-mix(in srgb, black 12%, transparent);
   --aad-menu: 0 0 0 1px var(--aad-line), 0 12px 32px color-mix(in srgb, black 24%, transparent);
 }
-/* Image backdrops never show through the text-bearing sidebars or app window material. */
-html[data-shell="desktop"][data-layout="ai-apps"][data-image-background] {
+/* Wizard's window material stays the same opaque palette tint for every background. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-wizard-backgrounds] {
+  --aad-main: rgb(from var(--sk-win) r g b);
+}
+/* Other image skins retain their existing sidebar material. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-image-background]:not([data-wizard-backgrounds]) {
   --aad-main: var(--wz-panel, var(--aad-canvas));
 }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"],
