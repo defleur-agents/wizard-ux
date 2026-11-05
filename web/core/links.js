@@ -68,6 +68,8 @@
     // Browsers: an <a download> click.
     const d = doc || document, a = d.createElement('a');
     a.href = u.href; a.download = decodeURIComponent(u.pathname.split('/').pop() || ''); a.rel = 'noopener';
+    // Cross-origin inline responses may ignore download; never let them replace the shell or a hosted app.
+    if (!inApp(u)) a.target = '_blank';
     d.body.appendChild(a); a.click(); a.remove(); return true;
   }
   // Images never load as a raw page (Android shows them at full pixel size, wider than the screen, no zoom).
