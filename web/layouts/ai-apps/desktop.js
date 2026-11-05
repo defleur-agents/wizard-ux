@@ -680,7 +680,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -699,12 +699,14 @@ export default function desktop(api) {
         if (k === 'snoozed' && !rows.length) continue;
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', 'aad-sec-w', { text: word0 }));
-        // round 18 item 4a: Ready's count on its own header (the rail's amber disc, the Chats badge)
-        if (k === 'ready' && rows.length) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        // Ready keeps every row; its pill uses the same canonical unread feed as the phone menu.
+        const unread = k === 'ready' ? badgeText(CHATS) : '';
+        if (unread) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: unread }));
         hd.append(icon('down', 'aad-ico aad-sec-c'));
         // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
         if (!on && k !== 'archive' && k !== 'ready' && rows.length) hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' }));
-        if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
+        if (k === 'ready') hd.setAttribute('aria-label', `${word0}${unread ? `, ${unread} unread` : ''}${on ? '' : ', folded'}`);
+        else if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on && k === 'ready' && rows.length && groupBy() === 'none') {
@@ -721,7 +723,9 @@ export default function desktop(api) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
             const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
-            gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
+            gh.append(el('span', 'aad-grp-w', { text: g.word }));
+            const n = globalThis.WizChatsListModel.unreadCount(g.rows);
+            if (n) gh.append(el('span', 'aad-grp-n', { text: n > 99 ? '99+' : String(n) }));
             body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
           }
         } else if (on) {
@@ -786,16 +790,16 @@ export default function desktop(api) {
     railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
     paintRail(true);
   }
-  function railRow(k, n, word0, state = '', act = null) {
+  function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
     const key = state || k, sub = !!state, on = !!act && act.key === key;
-    const label = `${word0}, ${n}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
+    const label = `${word0}${n ? `, ${text}${k === 'ready' ? ' unread' : ''}` : ''}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
     const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero') + (on ? ' is-on' : ''), { type: 'button', role: 'listitem', 'data-k': key, 'aria-label': label, ...(on ? { 'aria-current': 'true' } : {}) });
     // round 23c (Miguel, 4 Nov 2026: a tally of dots looked weird past four): every row is Working's pattern, ONE mark
     // and its number: a spinner while chats work, a solid dot once ready (amber in Ready, the ink in a status), a ring
     // when snoozed; nothing waiting = the faint empty ring alone
     const kind = key === 'working' ? 'spin' : key === 'snoozed' ? 'ring' : 'dot';
     const wk = el('span', 'aad-rk-n aad-rk-wk', { 'data-n': String(n), 'aria-hidden': 'true' });
-    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text: n > 99 ? '99+' : String(n) }));
+    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text }));
     else wk.append(el('i', 'aad-d is-none'));
     b.append(wk, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
     if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
@@ -812,7 +816,8 @@ export default function desktop(api) {
     // status alone (plain chats as 'Other'), no Ready total over them
     const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
-    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
+    const unread = badgeMap[CHATS] || 0, text = badgeText(CHATS);
+    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, unread, text, gm, groups.map(g => [g.state, g.rows.length, globalThis.WizChatsListModel.unreadCount(g.rows)]), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (only when something is ready), then Ready's statuses
@@ -820,9 +825,9 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
-    else if (ready.length) out.push(railRow('ready', ready.length, 'Ready', '', act));
+    else if (ready.length || unread) out.push(railRow('ready', unread, 'Ready', '', act, text));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
