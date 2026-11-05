@@ -33,6 +33,21 @@ test('Classic Desks, when chosen, boots normally: no layout, no claim, nothing h
   assert.ok(!f.boot.css.some(h => h?.includes('/layouts/ai-apps/')));
 });
 
+for (const legacy of ['orb', 'apps', 'ai-apps']) for (const saved of ['classic', 'ai-apps']) {
+  test(`saved ${saved} beats stale legacy ${legacy} before any layout paint`, () => {
+    const f = fixture({ shell: 'desktop', initialStorage: { [VIEW]: saved, 'wos.layout': legacy } });
+    assert.equal(f.boot.layout, saved);
+    assert.equal(f.boot.dataset, saved === 'classic' ? undefined : saved);
+    assert.equal(f.host.chatsClaimed(), saved === 'ai-apps');
+    assert.equal(f.doc.documentElement.dataset.layoutBooting, saved === 'ai-apps' ? '' : undefined);
+    assert.equal(f.boot.css.some(h => h?.includes(`/layouts/${legacy}/`)), saved === legacy, 'stale layout was never requested');
+  });
+}
+for (const query of ['classic', 'ai-apps']) test(`explicit ${query} URL beats saved desktop choice at boot`, () => {
+  const f = fixture({ shell: 'desktop', query: '?layout=' + query, initialStorage: { [VIEW]: query === 'classic' ? 'ai-apps' : 'classic' } });
+  assert.equal(f.boot.layout, query);
+});
+
 test('the phone never adopts the desktop default', () => {
   const f = fixture({ shell: 'phone' });
   assert.equal(f.boot.layout, 'classic');

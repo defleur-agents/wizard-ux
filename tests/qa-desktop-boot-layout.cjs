@@ -12,7 +12,7 @@ let currentPage;
 (async () => {
  const browser = await chromium.launch();
  try {
-  for (const mode of ['default', 'reload', 'classic']) {
+  for (const mode of ['default', 'reload', 'classic', 'stale-ai-apps', 'stale-classic']) {
    const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
    await context.routeWebSocket('**/*', ws => ws.close());
    await context.addInitScript(({ mode }) => {
@@ -20,7 +20,9 @@ let currentPage;
      sessionStorage.setItem('qa.seeded', '1');
      localStorage.setItem('wos.shell', 'desktop');
      for (const [k, v] of Object.entries({ 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula' })) localStorage.setItem(k, v);
-     if (mode === 'classic') localStorage.setItem('wos.desktop-view.v1', 'classic');
+     if (mode === 'classic' || mode === 'stale-classic') localStorage.setItem('wos.desktop-view.v1', 'classic');
+     if (mode === 'stale-classic') localStorage.setItem('wos.layout', 'ai-apps');
+     if (mode === 'stale-ai-apps') { localStorage.setItem('wos.desktop-view.v1', 'ai-apps'); localStorage.setItem('wos.layout', 'orb'); }
     }
     // Sampler runs from document start: every DOM mutation, every frame. A legacy list counts if it is attached and
     // drawn: display, visibility, the opacity of it and all its ancestors, and a real box.
@@ -64,7 +66,7 @@ let currentPage;
     await p.waitForFunction(() => localStorage.getItem('wos.desktop-view.v1') === 'ai-apps' && document.documentElement.dataset.aiApps === 'desktop');
     await p.reload();
    }
-   if (mode === 'classic') {
+   if (mode === 'classic' || mode === 'stale-classic') {
     await p.waitForFunction(() => window.__wux && !WosExperience.state.busy);
     await p.waitForFunction(() => { const n = document.querySelector('.pane-list'); return n && getComputedStyle(n).display !== 'none' && n.getBoundingClientRect().width > 0; }, null, { timeout: 15000 });
     const root = await p.evaluate(() => ({ layout: document.documentElement.dataset.layout || null, owner: document.documentElement.dataset.chatsOwner || null, booting: document.documentElement.dataset.layoutBooting ?? null }));

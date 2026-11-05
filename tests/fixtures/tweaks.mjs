@@ -23,7 +23,7 @@ class Element {
 // desktopView: the last desktop view this device wore (wos.desktop-view.v1). Tests that predate the boot-time view keep Desks;
 // null = nothing saved, i.e. the shipped default (AI apps, decided synchronously at boot).
 export function fixture({ shell = 'phone', manifests = {}, initialStorage = {}, query = '', hostSource = null, desktopView = 'classic' } = {}) {
-  if (shell === 'desktop' && desktopView && !('wos.desktop-view.v1' in initialStorage)) initialStorage = { ...initialStorage, 'wos.desktop-view.v1': desktopView };
+  if (shell === 'desktop' && desktopView && !('wos.desktop-view.v1' in initialStorage) && !('wos.layout' in initialStorage)) initialStorage = { ...initialStorage, 'wos.desktop-view.v1': desktopView };
   const html = new Element('html'), body = new Element('body'), thread = new Element(), list = new Element(), head = new Element(); html.dataset.shell = shell; body.append(thread, list);
   thread.setAttribute('data-part', 'thread'); list.setAttribute('data-part', 'list');
   const slots = JSON.parse(read('web/core/slots.json'));

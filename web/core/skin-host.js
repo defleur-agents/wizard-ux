@@ -1759,19 +1759,19 @@
       // wos.layout is a device-local materialized hint, not the per-shell shared choice.
       // Drop only a known unsupported hint; never touch experience/views, skin, mix or unknown keys.
       if (known?.shells && !known.shells.includes(env().shell)) localStorage.removeItem(LAYOUT_KEY);
-      else if (layoutOf(l)) { layoutId = l; paintLayout(l); }
-    } catch (_) {}
-    /* Desktop view, decided before first paint. wos.desktop-view.v1 is the last view this device wore (written by
-     * core/experience.js, which loads later); nothing saved = the shipped default. Wearing it now means Classic's
-     * desks and chat list never paint first and get replaced a moment later. experience.js confirms (or corrects
-     * to the owner's shared choice) through setStandardLayout once it has read the catalog. */
-    try {
-      if (isDoc && layoutId === 'classic' && env().shell === 'desktop') {
-        const saved = localStorage.getItem('wos.desktop-view.v1'), v = saved || 'ai-apps';
-        if (v !== 'classic' && layoutOf(v)) {
-          standardLayout = v; layoutId = v; paintLayout(v);
-          if (layoutOf(v).ownsChats) { document.documentElement.dataset.layoutBooting = ''; setTimeout(endBoot, 5000); }
-        }
+      let chosen = layoutOf(l) ? l : 'classic';
+      if (isDoc && env().shell === 'desktop') {
+        const q = new URLSearchParams(location.search).get('layout'), explicit = q === 'classic' || !!layoutOf(q);
+        const saved = localStorage.getItem('wos.desktop-view.v1');
+        // A saved per-shell choice beats a stale legacy hint. Resolve before paintLayout, so even a saved Classic
+        // choice never requests/claims the old AI apps layout. An explicit supported preview URL still wins.
+        if (!explicit && (saved === 'classic' || layoutOf(saved))) chosen = saved;
+        else if (!explicit && chosen === 'classic') chosen = 'ai-apps';
+        standardLayout = chosen;
+      }
+      layoutId = chosen; paintLayout(chosen);
+      if (isDoc && env().shell === 'desktop' && layoutOf(chosen)?.ownsChats) {
+        document.documentElement.dataset.layoutBooting = ''; setTimeout(endBoot, 5000);
       }
     } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
