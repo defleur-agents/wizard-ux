@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // AI apps view (Miguel, 2 Nov 2026): the ChatGPT / Claude / Perplexity phone layout as a third shell view beside Orb
 // and Apps (miguel/ai-apps, off by default; the views are mutually exclusive; all off = Desks). Guards:
 //   - packaging: an ordinary Miguel tweak named 'Different shell view - AI apps', manifest view, never a default, off in
@@ -239,7 +240,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
   // round 15: the top row holds a docked chat's title + ✕ and the app panel's header (no tab strip)
-  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']);
+  assert.deepEqual(w.q('.aad-top').children.map(c => c.className), ['aad-ctop', 'aad-ptop']); // parked until an app owns it
   assert.equal(w.q('.aad-top .aad-ws'), null, 'the switcher lives in the sidebar header');
   assert.equal(w.q('.aad-wsn').textContent, 'Miguel'); assert.match(w.q('.aad-ws').getAttribute('aria-label'), /Workspace: Miguel/);
   w.q('.aad-ws').dispatchEvent(new FakePointerEvent('click'));
@@ -291,11 +292,11 @@ test('desktop scoped and quiet: every rule needs the worn layout on the desktop;
 
 test('desktop core hooks: the adapter lists chats with Chats\' own actions, shows the Chats desk, a New chat in it; Settings over the page', () => {
   const dj = read('web/desktop/desktop.js');
-  const fn = dj.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/)[1];
+  const fn = dj.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    \/\/ The thread's own actions/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
   const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
-  const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
+  const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
@@ -307,13 +308,13 @@ test('desktop core hooks: the adapter lists chats with Chats\' own actions, show
 test('nothing hidden: failed / interrupted chats and By day\'s Yesterday / Past week are in Ready (both adapters)', () => {
   // (Miguel, 4 Nov 2026: "the grouping and sorting doesn't always show everything"): this view has no Errors or day
   // sections, so stock's errors / yesterday / pastWeek groups must land in Ready, a failed one ranked with Needs you.
-  for (const [file, re] of [['web/desktop/desktop.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    \/\/ The thread's own actions/], ['web/app.js', /sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    sessionAct/]]) {
+  for (const [file, re] of [['web/desktop/desktop.js', /sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    \/\/ The thread's own actions/], ['web/app.js', /sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/]]) {
     const fn = read(file).match(re)[1];
     const s = (id, extra = {}) => ({ id, title: id, status: 'completed', ...extra });
     const LIVE = { ok: true, readyRank: () => 5, isNew: () => false, cardAt: () => '',
       workGroups: () => ({ errors: [s('e', { status: 'interrupted' })], working: [s('w', { status: 'running' })], ready: [s('r')], yesterday: [s('y')], pastWeek: [s('p')], deferred: [], archive: [s('a')] }) };
     const CHATS = { threadActions: () => [], stiKind: x => x.status === 'interrupted' ? 'failed' : 'none' };
-    const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: {} });
+    const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: {} });
     const all = ['working', 'ready', 'snoozed', 'archive'].flatMap(k => out[k].map(r => r.id)).sort();
     assert.deepEqual(all, ['a', 'e', 'p', 'r', 'w', 'y'], file + ': every chat is listed somewhere');
     assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.state, r.rank]))), [['e', 'failed', 1], ['r', 'none', 5], ['y', 'none', 5], ['p', 'none', 5]], file);
@@ -415,7 +416,7 @@ test('desktop: covered AI apps panel apps never receive front-only service admis
   const js = read('web/desktop/desktop.js');
   const expression = js.match(/isFront: (\(\) => .*?), back: \(\) => closeWorkflow/)[1];
   for (const hidden of [false, true]) for (const hosted of [false, true]) {
-    const value = vm.runInNewContext('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
+    const value = runWithChatsModel('(' + expression + ')()', { WosSkinHost: { panelMode: true }, panelHas: () => true, w: { id: 'qa-app' }, pal: { hidden }, CHATS: { isHosted: () => hosted }, homeOpen: true });
     assert.equal(value, hidden && !hosted, 'palette=' + !hidden + ', hosted=' + hosted);
   }
 });
@@ -550,18 +551,18 @@ test('round 4: the composer: no voice button of its own (the orb talks), the mic
 
 test('core hooks: the phone adapter lists chats with Chats\' own actions and acts through Chats; the layout API passes only known actions', () => {
   const app = read('web/app.js'), host = read('web/core/skin-host.js');
-  const fn = app.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n    sessionAct/)[1];
+  const fn = app.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n    sessionAct/)[1];
   const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
   const LIVE = { ok: true, workGroups: () => ({ working: [s('w')], ready: [s('r'), s('n')], archive: [s('a')] }), isNew: x => x.id === 'n', cardAt: () => '' };
   const CHATS = { threadActions: x => x.id === 'w' ? [] : x.id === 'a' ? ['restore', 'snooze'] : ['snooze', 'stop_watch', 'done'] };
-  const out = vm.runInNewContext(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
+  const out = runWithChatsModel(`(${fn})()`, { LIVE, CHATS, window: { WosChatPins: { has: id => id === 'r' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(out.working[0].actions)), ['pin', 'rename']);
   assert.deepEqual(JSON.parse(JSON.stringify(out.ready.map(r => [r.id, r.pinned, r.unread, r.actions]))), [['r', true, false, ['pin', 'rename', 'unread', 'snooze', 'done']], ['n', false, true, ['pin', 'rename', 'snooze', 'done']]]);
   assert.deepEqual(JSON.parse(JSON.stringify(out.archive[0].actions)), ['pin', 'rename', 'restore', 'snooze']);
   const act = app.match(/sessionAct: (\(sid, act\) => \{[\s\S]*?\n    \}),\n    showChats/)[1];
   const calls = [], ctx = { window: { WosChatPins: { toggle: () => true } }, toast: (...a) => calls.push(['toast', a[1]]), showChats: () => ({ id: 'c1' }),
     CHATS: { openRenameSheet: (w, id) => calls.push(['rename', w, id]), threadAct: (w, id, a) => calls.push(['act', w, id, a]) } };
-  const run = vm.runInNewContext(`(${act})`, ctx);
+  const run = runWithChatsModel(`(${act})`, ctx);
   run('s1', 'pin'); run('s1', 'rename'); run('s1', 'done'); run('s1', 'unread');
   assert.deepEqual(calls, [['toast', 'Pinned'], ['rename', 'c1', 's1'], ['act', 'c1', 's1', 'done'], ['act', 'c1', 's1', 'unread']]);
   assert.match(app, /showChats: \(\) => !!showChats\(\),\n    newChat: \(\) => \{ const w = showChats\(\); if \(!w\) return false; CHATS\.openChat\(w\.id, '__new__'\); return true; \},/);
@@ -571,7 +572,7 @@ test('core hooks: the phone adapter lists chats with Chats\' own actions and act
   assert.match(host, /settings: page => \{ if \(live\(\)\) shell\.openSettings\?\.\(typeof page === 'string' && \/\^\[a-z-\]\{1,24\}\$\/\.test\(page\) \? page : undefined\); \},/);
   // workspaces: this Wizard first, then the managed ones from the devices registry
   const ws = host.match(/list: \(\) => \{\n          if \(!live\(\) \|\| !isDoc\) return \[\];([\s\S]*?)\n        \},\n        refresh/)[1];
-  const list = vm.runInNewContext(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
+  const list = runWithChatsModel(`(() => {${ws}})()`, { window: { WosResources: { state: { devices: { this: { wizard: 'Miguel' }, managed: [{ id: 'g', name: 'Carlos', org: 'Acme' }, null] } } }, WizConfig: { agent: () => 'Oscar', owner: () => 'Miguel' } } });
   assert.deepEqual(JSON.parse(JSON.stringify(list)), [{ id: 'this', name: 'Miguel', org: '', current: true, owner: 'Miguel' }, { id: 'g', name: 'Carlos', org: 'Acme', current: false }]);
 });
 
@@ -696,7 +697,7 @@ test('round 5: home button in the middle, the switcher on Home only, the Ready c
   assert.match(host, /const ORB_SWIPE_ACTS = \{ up: \['home', 'new'\], side: \[\], down: \[\] \};/);
   const calls = []; const focused = []; const ta = { value: 'hi', focus: o => focused.push(o), setSelectionRange: (a, b) => calls.push([a, b]) };
   const w0 = { id: 'c1' }; const ctx = { sheet: null, closeSheets() {}, pillOvOpen: () => false, closeOverview() {}, showChats: () => w0, CHATS: { openChat: (id, t) => calls.push([id, t]) }, winEl: id => ({ querySelector: () => (id === 'c1' ? ta : null) }) };
-  vm.runInNewContext(fn + '; orbSwipeNew();', ctx);
+  runWithChatsModel(fn + '; orbSwipeNew();', ctx);
   assert.deepEqual(calls, [['c1', '__new__'], [2, 2]]); assert.equal(JSON.stringify(focused), '[{"preventScroll":true}]');
 });
 
@@ -739,7 +740,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
   const calls = [], items = [{ id: 'a', title: '**Pay** card', time: 300, read: false, app: 'money', priority: 4 }, { id: 'b', message: 'Backup done\nok', time: 100, read: true }, { id: 'c', title: 'old', time: 50, archived: true }];
   const ctx = { isDoc: true, window: { WosBell: { items: () => items } }, inboxThreads: new Map([['wizard/unified-inbox', { list: true, act: (a, i) => calls.push([a, i]) }]]) };
-  vm.runInNewContext(src + ';globalThis.withNoteRows = withNoteRows; globalThis.inboxAct = inboxAct;', ctx);
+  runWithChatsModel(src + ';globalThis.withNoteRows = withNoteRows; globalThis.inboxAct = inboxAct;', ctx);
   const rows = JSON.parse(JSON.stringify(ctx.withNoteRows([{ id: 'r9', at: new Date(200000).toISOString() }])));
   assert.deepEqual(rows.map(r => r.id), ['notif:a', 'r9', 'notif:b'], 'new ones among the chats by time, snoozed last, archived left out');
   assert.deepEqual([rows[0].title, rows[0].note, rows[0].unread, rows[0].actions, rows[2].title, rows[2].actions], ['money · Pay card', true, true, ['snooze', 'done'], 'Wizard · Backup done', ['restore', 'done']], 'each row names where it came from');
@@ -752,7 +753,7 @@ test('round 5: notifications in the list: Chats\' own items as plain rows with a
   const f = folded.find(r => r.count === 3);
   assert.ok(f && f.id === 'notif:m2' && f.title === 'Money (3) · Villa · Apple · Grab', 'Money is one row: name, count, newest titles');
   assert.ok(folded.some(r => r.id === 'notif:a' && r.count === 1), 'priority 4 keeps its own row');
-  vm.runInNewContext('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
+  runWithChatsModel('globalThis.noteAct = noteAct;', ctx); ctx.noteAct('notif:m2', 'done');
   assert.deepEqual(marks.at(-1), [['m2', 'm3', 'm1'], { read: true, archived: true }]);
   assert.match(host, /open: id => \{ if \(!live\(\) \|\| typeof id !== 'string' \|\| !id\) return; if \(id\.startsWith\(NOTE_ID\)\) inboxAct\(NOTE_ID_OPEN, id\.slice\(NOTE_ID\.length\)\); else shell\.openThread\(id\); \},/);
   assert.match(host, /: id\.startsWith\(NOTE_ID\) \? NOTE_ACTS\.includes\(action\) && noteAct\(id, action\)/);
@@ -1038,7 +1039,8 @@ test('round 7 phone: the drawer header is the switcher, cog · gauge · +, talli
     for (const f of ['web/layouts/ai-apps/layout.js', 'web/layouts/ai-apps/desktop.js']) assert.ok((read(f).match(/api\.aiUsage\?\.live\?\.\(foot\)/g) || []).length >= 2, f);
   }
   assert.match(read('web/core/chats.js'), /KIT, threadAct, threadActions, stiKind, notifOpen:/);
-  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state: CHATS\.stiKind\?\.\(s\) \|\| '',/);
+  for (const f of ['web/desktop/desktop.js', 'web/app.js']) assert.match(read(f), /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/);
+  assert.match(read('web/core/chats-list-model.js'), /needs: s\.status === 'waiting_for_approval' \|\| s\.attention\?\.state === 'needs_you', state,/);
 });
 test('round 7: a hold (phone) or a right click (desktop) on a Home app icon offers it for the home screen through the stock Desks sheet', async () => {
   {
@@ -1434,12 +1436,12 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
 test('round 13: Snoozed from the stock snooze state, with and without the snooze-someday tweak; order; the rail matches', async () => {
   for (const f of ['web/desktop/desktop.js', 'web/app.js']) {
     const src = read(f);
-    const fn = src.match(/sessionList: (\(\) => \{[\s\S]*?\n    \}),\n/)[1];
+    const fn = src.match(/sessionList: (\(\) => window\.WizChatsListModel\.sessionList\([^\n]+\)),\n/)[1];
     const s = (id, extra = {}) => ({ id, title: id.toUpperCase(), status: 'completed', ...extra });
     const z = s('z', { deferred: true, deferredAt: '2026-11-02T10:00:00Z', lastUserAt: '2026-11-02T09:00:00Z' });
     const za = s('za', { deferred: true, deferredAt: '2026-11-02T10:00:00Z', status: 'waiting_for_approval' });
     const woke = s('wk', { deferred: true, deferredAt: '2026-11-02T08:00:00Z', lastUserAt: '2026-11-02T09:00:00Z' });
-    const run = G => vm.runInNewContext(`(${fn})()`, { LIVE: { ok: true, workGroups: () => G, isNew: () => false, cardAt: () => '' }, CHATS: { threadActions: () => ['snooze', 'done'] }, window: { WosChatPins: { has: () => false } }, Date });
+    const run = G => runWithChatsModel(`(${fn})()`, { LIVE: { ok: true, workGroups: () => G, isNew: () => false, cardAt: () => '' }, CHATS: { threadActions: () => ['snooze', 'done'] }, window: { WosChatPins: { has: () => false } }, Date });
     // stock: the snoozed chats in their own group (G.deferred)
     const stock = run({ working: [s('w')], ready: [s('r'), za], deferred: [z], archive: [s('a')] });
     assert.equal(JSON.stringify(stock.snoozed.map(x => x.id + ':' + x.kind)), '["z:snoozed"]', `${f}: stock`); assert.equal(JSON.stringify(stock.ready.map(x => x.id)), '["r","za"]', `${f}: a snoozed chat that needs an approval stays in Ready`);
@@ -1716,8 +1718,8 @@ test('round 18 core: Ready\'s order is the stock Chats Filter choice (its key, t
   assert.match(host, /READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'the stock key (core/chats.js)');
   assert.match(host, /setOrder: o => \{[\s\S]*?localStorage\.setItem\(READY_ORDER_KEY, o\)[\s\S]*?WizLive\?\.putPrefs\?\.\(\{ readyOrder: o \}\)[\s\S]*?'wos:prefs'/, 'saved where Chats saves it, shared, and Chats repaints');
   assert.match(read('web/core/chats.js'), /const READY_ORDER_KEY = 'wos\.chats\.readyOrder\.v1'/, 'Chats reads the same key');
-  for (const f of ['web/app.js', 'web/desktop/desktop.js']) assert.match(read(f), /rank: CHATS\.stiKind\?\.\(s\) === 'failed' \? 1 : Number\.isFinite\(LIVE\.readyRank\?\.\(s\)\) \? LIVE\.readyRank\(s\) : undefined/, f + ': the stock rank on each row (a failed chat with Needs you)');
-  assert.match(host, /note: true, rank: Number\(it\.priority\) >= 4 \? 1 : Number\(it\.priority\) === 3 \? 2 : 3/, 'notifications rank like stock Priority (4–5 / 3 / the rest)');
+  assert.match(read('web/core/chats-list-model.js'), /rank: state === 'failed' \? 1 : Number\.isFinite\(live\.readyRank\?\.\(s\)\) \? live\.readyRank\(s\) : undefined/, 'the shared stock rank on each row (a failed chat with Needs you)');
+  assert.match(host, /note: true, sortTitle: row\.sortTitle, rank: row\.rank/, 'notification rank comes from the shared model');
 });
 
 test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥O workspaces, ⌥1–9 + ⌥0 and ⌥[ ] the right column, ⌥⇧[ ] move a row, ⌥− / ⌥= the panel, ⌥W on Home and ⌥⇧digit inert', async () => {
@@ -1757,7 +1759,9 @@ test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥
 });
 
 /* ---------- round 19 (Miguel, 3 Nov 2026) ---------- */
-test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async () => {
+test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async t => {
+  const tz = process.env.TZ; process.env.TZ = 'UTC';
+  t.after(() => { if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz; });
   const P = await import('../web/layouts/ai-apps/parts.js');
   assert.deepEqual(P.GROUP_ORDERS.map(o => o[1]), ['Newest first', 'Oldest first']);
   for (const [o, want] of [['newest', 'newest'], ['oldest', 'oldest'], ['priority', 'newest'], ['subject', 'newest'], [undefined, 'newest']]) assert.equal(P.groupOrder(o), want);
@@ -1777,9 +1781,11 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
   assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest', 'groups'), { key: 'needs', i: 1, n: 2 }, 'By status keeps the current status group and its position');
   assert.equal(P.railActive(s, null, 'needs', 'newest'), null, 'Home: nothing current');
   assert.deepEqual(P.railNext(['a', 'b', 'c'], null), { id: 'a', wrapped: false }); assert.deepEqual(P.railNext(['a', 'b', 'c'], 'c'), { id: 'a', wrapped: true });
-  const now = new Date(2026, 10, 3, 15, 0).getTime();
+  const now = Date.UTC(2026, 10, 3, 5); // fixed UTC clock: yesterday afternoon is still less than 24h ago
   assert.equal(P.shortTime(new Date(now - 5 * 60e3).toISOString(), now), '5m'); assert.equal(P.shortTime(new Date(now - 3 * 3600e3).toISOString(), now), '3h');
-  assert.equal(P.shortTime(new Date(2026, 10, 2, 9).toISOString(), now), 'Yesterday'); assert.equal(P.shortTime(new Date(2026, 9, 12, 9).toISOString(), now), '12 Oct');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 14)).toISOString(), now), '15h');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 1)).toISOString(), now), 'Mon 2');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 9, 12, 9)).toISOString(), now), 'Mon 12');
   assert.equal(P.shortTime('', now), '');
 });
 
@@ -2107,6 +2113,10 @@ test('desktop cold Store opens synchronously in the app pane and deferred Home c
   assert.equal(placed, 8, 'the already-checked open is placed on the app desk, never re-gated');
   assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
   assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
+  const header = w.q('.aad-ptop');
+  assert.equal(header.parentNode, app, 'the header and window share the animated desk on the opening frame');
+  assert.equal(app.dataset.aadAnim, 'app');
+  assert.equal(header.dataset.aadAnim, undefined, 'no independent header entrance');
   const drafts = w.st.newChats;
   w.run();
   assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');
@@ -2433,4 +2443,65 @@ test('a remembered rail key cannot hide the current chat marker after switching 
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','list').key,'ready');
  assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
+});
+
+
+for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 'project']) test(`shared model: ${order}/${mode} sidebar, rail flyouts and keyboard draw exactly its IDs; phone uses the same Sort`, async () => {
+  const P = await import('../web/layouts/ai-apps/parts.js');
+  const M = globalThis.WizChatsListModel;
+  const at = h => `2026-11-05T${String(h).padStart(2, '0')}:00:00Z`;
+  const rows = [
+    { id: 'needs', title: 'Alpha · Needs', state: 'needs', at: at(1) },
+    { id: 'new', title: 'Beta · New', state: 'done', at: at(9) },
+    { id: 'approval', title: 'Alpha · Approval', state: 'approval', at: at(2) },
+    { id: 'failed', title: 'Beta · Failed', state: 'failed', at: at(8) },
+    { id: 'notif:n', title: 'Mail · Note', note: true, rank: 2, at: at(7) },
+    { id: 'tie-b', title: 'Beta · B', state: 'fyi', at: at(6) },
+    { id: 'tie-a', title: 'Beta · A', state: 'fyi', at: at(6) },
+    { id: 'notif:read', title: 'Read', note: true, snoozed: true, at: at(11) },
+  ].map(r => ({ ...r, kind: 'ready', actions: [] }));
+  const { w, keys } = deskWorld();
+  w.api.sessions.order = () => order;
+  w.api.storage.set('groupBy', mode);
+  w.api.storage.set('groupReady', mode === 'status');
+  w.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] };
+  (await layout()).default(w.api);
+  const drawn = M.visibleIds(rows, order, mode);
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-rw').map(n => n.dataset.sid), drawn, 'sidebar');
+  // Walk via the real layout key handler; notifications route through the same row identity.
+  let cur = null;
+  for (const id of drawn) {
+    w.st.route = cur?.startsWith('notif:') ? { home: false, view: 'thread', thread: '__new__', notification: cur.slice(6), desk: 1 } : { home: false, view: 'thread', thread: cur, desk: 1 };
+    w.emit('route', w.st.route);
+    assert.ok(keys.some(h => h.down({ altKey: true, code: 'ArrowDown' }) === true));
+    assert.equal(w.st.opened.at(-1), 'thread:' + id, 'keyboard reaches drawn row');
+    cur = id;
+  }
+  w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
+  const groups = mode === 'none' ? [{ state: 'ready' }] : mode === 'project' ? P.projectGroups(rows, order) : P.readyGroups(rows, order);
+  for (const g of groups) {
+    w.st.timers.length = 0;
+    w.q(`.aad-rk[data-k="${g.state}"]`).dispatchEvent(new FakePointerEvent('pointerenter'));
+    w.st.timers.find(t => t.ms === 300 && !t.dead).fn();
+    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), P.railRows({ ready: rows }, g.state, order).map(r => r.id), 'flyout');
+    assert.equal(w.escape(), true, 'core Back dispatcher closes the flyout');
+  }
+  const phone = world(); phone.st.sessions = { ready: rows, working: [], snoozed: [], archive: [] }; phone.api.sessions.order = () => order;
+  (await layout()).default(phone.api);
+  phone.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
+  assert.deepEqual(phone.qa('.aa-chat').map(n => n.dataset.sid), M.visibleIds(rows, order, 'none'), 'phone drawer Sort');
+});
+
+test('desktop AI apps sidebar and rail flyout keep phone hours across midnight with a fixed clock', async t => {
+  const now = Date.UTC(2026, 10, 3, 5);
+  t.mock.method(Date, 'now', () => now);
+  const { w, keys } = deskWorld();
+  w.st.sessions.ready = [{ id: 'midnight', title: 'Yesterday afternoon', kind: 'ready', state: 'fyi', at: new Date(now - 15 * 3600e3).toISOString(), actions: [] }];
+  w.st.sessions.working = []; w.st.sessions.snoozed = []; w.st.sessions.archive = [];
+  (await layout()).default(w.api);
+  assert.equal(w.q('.aad-rw[data-sid="midnight"] .aad-time').textContent, '15h');
+  keys[1].down({ altKey: true, code: 'KeyL' });
+  w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+  w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
+  assert.equal(w.q('.aad-fly-i[data-sid="midnight"] .aad-fly-at').textContent, '15h');
 });

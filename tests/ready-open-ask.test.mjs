@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -6,7 +7,7 @@ const chats = fs.readFileSync(new URL('../web/core/chats.js', import.meta.url), 
 const css = fs.readFileSync(new URL('../web/core/chats.css', import.meta.url), 'utf8');
 const live = fs.readFileSync(new URL('../web/live.js', import.meta.url), 'utf8');
 function badge(s) {
-  const context = vm.createContext({ s, attOf: s => s.status === 'completed' ? s.attention : null });
+  const context = modelContext({ s, attOf: s => s.status === 'completed' ? s.attention : null });
   const line = chats.split('\n').find(l => l.includes('const backgroundBadge ='));
   return vm.runInContext(line + '\nbackgroundBadge(s)', context);
 }
@@ -44,7 +45,7 @@ function pipeline() {
   const lines = chats.split('\n');
   const pick = re => lines.find(l => re.test(l));
   assert.ok(a > 0 && b > a, 'live.js normalizer block found');
-  const context = vm.createContext({});
+  const context = modelContext({});
   vm.runInContext(`${live.slice(a, b)}\n${pick(/const WORKING_ST =/)}\n${pick(/const isWorking =/)}\n${pick(/const backgroundBadge =/)}\n${pick(/const attOf =/)}\nthis.normalize = normalize; this.badge = backgroundBadge;`, context);
   return context;
 }

@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -32,7 +33,7 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
   const window = { addEventListener, dispatchEvent, WosSkinHost: { inboxList: mode, changed() {} },
     WizConfig: { dayStart: n => n - n % 864e5 },
     WizCore: { backendApps: () => [{ id: 'notifications' }] } };
-  const context = vm.createContext({ window, addEventListener, dispatchEvent,
+  const context = modelContext({ window, addEventListener, dispatchEvent,
     document: { documentElement: { dataset: {} }, querySelectorAll: () => [], addEventListener() {} },
     navigator: {}, AbortSignal,
     localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) },

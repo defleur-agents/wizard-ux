@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './chats-list-model.mjs';
 // Lightweight synthetic execution of the real list renderer, not a DOM/browser substitute.
 // Peripheral services and row markup are stubbed; section selection, collapse and footer assembly are production code.
 import fs from 'node:fs';
@@ -23,7 +24,7 @@ export function listFixture({ status = false, query = '', busy = false, footer =
     secOpen: Object.fromEntries(Object.keys(groups).map(k => [k, k !== 'archive'])), SEC_OPEN_KEY: 'synthetic-sections',
     localStorage: { setItem: (...args) => writes.push(args) }, track: { querySelector: () => el }, Date,
   };
-  vm.createContext(ctx);
+  modelContext(ctx);
   vm.runInContext(fs.readFileSync(new URL('../../web/core/chat-search.js', import.meta.url), 'utf8'), ctx);
   Object.assign(ctx.window.WizCore.chatSearch, { query: () => footer ? bs : null, cancel: no, scanning: r => r.busy, footer: r => `<div class="ch-bodysearch${r.busy ? ' busy' : ''}" data-chbs="${r.busy ? 'busy' : 'done'}">Synthetic search status</div>` });
   const constants = source.slice(source.indexOf('  const SECTIONS_DAY ='), source.indexOf('\n', source.indexOf('  const SECTIONS_STATUS =')));
