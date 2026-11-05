@@ -35,7 +35,7 @@ function tap(notice, attr, value) {
 
 function boot({ routes: saved = { notifications: 'chats', 'second-hand': 'badge' }, visible = true } = {}) {
   let routes = { ...saved };
-  const readIds = new Set(), storage = new Map(), calls = [];
+  const readIds = new Set(), storage = new Map(), calls = [], keys = {};
   const json = (body, status = 200) => ({ ok: status < 400, status, headers: { get: () => 'application/json' }, json: async () => body });
   const fetch = async (url, opts = {}) => {
     calls.push([opts.method || 'GET', url, opts.body || '']);
@@ -56,11 +56,11 @@ function boot({ routes: saved = { notifications: 'chats', 'second-hand': 'badge'
     getComputedStyle: () => ({ position: 'static' }),
     document: { querySelectorAll: () => [], addEventListener() {}, hidden: false, createElement: el },
     location: { origin: 'https://wizard.test' },
-    addEventListener() {}, dispatchEvent: () => true, CustomEvent: class { constructor(type, o = {}) { this.type = type; this.detail = o.detail; } },
+    addEventListener: (t, fn, cap) => { (keys[t] ||= []).push(fn); }, dispatchEvent: () => true, CustomEvent: class { constructor(type, o = {}) { this.type = type; this.detail = o.detail; } },
     setTimeout: () => 0, setInterval: () => 0, fetch, calls,
   });
   vm.runInContext(read('web/core/app-notes.js'), w);
-  return { w, host, calls, readIds };
+  return { w, host, calls, readIds, keys };
 }
 async function ready(b) { await b.w.WosBell.refresh(true); await settle(); await b.w.WosBell.refresh(true); await settle(); b.w.WosAppNotes.scan(); return b; }
 const notice = host => host.children.find(c => c.className === 'app-notes');
@@ -113,6 +113,11 @@ test('Back closes the open list first, then does nothing', async () => {
   assert.equal(b.w.WosAppNotes.back(), true);
   assert.doesNotMatch(n.innerHTML, /Aree replied/); assert.match(n.innerHTML, />Show</);
   assert.equal(b.w.WosAppNotes.back(), false);
+  // Esc on the keyboard: taken before the shell's (and a layout's) own Esc while the list is open, left alone otherwise.
+  const esc = () => { const e = { key: 'Escape', defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopImmediatePropagation() { this.stopped = true; } }; for (const fn of b.keys.keydown || []) fn(e); return e; };
+  assert.equal(esc().stopped, false, 'closed list: Esc passes through');
+  tap(n, 'data-notes-toggle');
+  assert.equal(esc().stopped, true); assert.match(n.innerHTML, />Show</);
 });
 
 test('no notice when the app is in Chats, or its window is not on screen', async () => {

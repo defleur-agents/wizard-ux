@@ -82,10 +82,16 @@
     }
     for (const f of [...notes.keys()]) if (!keep.has(f)) drop(f);
   }
+  // Esc closes an open list before anything else sees the key (a layout's own Esc, e.g. hiding its app panel, comes
+  // after). Registered before the shells' own key handlers, which load later.
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || e.isComposing || e.defaultPrevented || ![...notes.values()].some(n => n.open)) return;
+    e.preventDefault(); e.stopImmediatePropagation(); api.back();
+  }, true);
   setInterval(() => { if (!document.hidden) scan(); }, TICK);
   addEventListener('wizard:app-counts', () => scan());
   addEventListener('wizard:notify-route', () => scan());
-  window.WosAppNotes = Object.freeze({
+  const api = window.WosAppNotes = Object.freeze({
     // Back / Esc: close an open list (one step), else nothing.
     back() { for (const n of notes.values()) if (n.open) { n.open = false; render(n); return true; } return false; },
     scan,
