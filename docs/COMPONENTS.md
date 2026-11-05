@@ -66,7 +66,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/de
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
-| Thread tracker (off-by-default tweak) | `WosThreadTracker` (`thread-tracker.js`): ask strip, Chats row dots before time, quote Reply; mounted on/off refreshes open chats; reads `/wizard/v1/thread-items` |
+| Thread tracker (off-by-default tweak) | `WosThreadTracker` (`thread-tracker.js`): reply-group strip/counts/dots; group Seen, quote Reply; mounted on/off refreshes open chats; reads `/wizard/v1/thread-items` |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
