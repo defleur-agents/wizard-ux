@@ -52,7 +52,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/de
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): pure rows, Sort/Group, notes, visible-ID walk; all shells/layouts |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns, AI apps geometry; slots, ratios, side, dock, device-local state |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
