@@ -122,7 +122,7 @@ function sessionRank(s, { approval = ['waiting_for_approval', 'unknown'].include
 function orderSessions(list, order, { at, rank, state } = {}) {
   return readySort((list || []).map(s => ({ id: s.id, title: sessionTitle(s), at: at(s), rank: rank(s), state: state?.(s), value: s })), order).map(r => r.value);
 }
-const sortNotes = (items, order) => readySort(items.map(notificationRow), order).map(r => r.value);
+const sortNotes = (items, order) => readySort(items.map(n => notificationRow(n)), order).map(r => r.value);
 function notificationRow(it, items = it.items || []) {
   const priority = items.length > 1 ? Math.max(...items.map(i => Number(i.priority) || 3)) : Number(it.priority);
   return { id: it.id, title: it.title || '', sortTitle: it.title || '', at: new Date((Number(it.time) || 0) * 1000).toISOString(),
@@ -131,7 +131,7 @@ function notificationRow(it, items = it.items || []) {
 /** Combine sessions and notes before drawing; the same comparator owns both. */
 function mixedRows(list, notes, order, facts, { timeOnly = false } = {}) {
   const rows = list.map(s => ({ id: s.id, title: sessionTitle(s), at: facts.at(s), rank: timeOnly ? 9 : facts.rank(s), value: s }));
-  const ns = notes.map(notificationRow);
+  const ns = notes.map(n => notificationRow(n));
   if (timeOnly) for (const n of ns) { n.rank = 9; n.snoozed = false; }
   return readySort([...rows, ...ns], order);
 }

@@ -131,14 +131,21 @@ test('raw and projected tie keys agree even when display titles add a source or 
   }
 });
 
-test('folded notifications have the same Priority in core and host, even with omitted/mixed item priorities', () => {
-  for (const items of [
+test('folded notifications have the same Priority in real core fold and host, even with omitted/mixed priorities', () => {
+  const src = read('web/core/chats.js'), c = modelContext({ window: {} });
+  vm.runInContext(src.slice(src.indexOf('  const noteSrc ='), src.indexOf('  const sesRank =')) + '\nthis.fold = fold;', c);
+  const cases = [
     [{ id: 'n', title: 'Newest' }, { id: 'o', priority: 3 }],
     [{ id: 'n', title: 'Newest', priority: 1 }, { id: 'o', priority: 3 }],
     [{ id: 'n', title: 'Newest', priority: 1 }, { id: 'o', priority: 2 }],
-  ]) {
-    const core = { ...items[0], items, priority: Math.max(...items.map(i => Number(i.priority) || 3)) };
+  ];
+  cases.forEach((items, index) => {
+    const core = c.fold(items)[0];
     assert.equal(M.notificationRow(items[0], items).rank, M.notificationRow(core).rank);
-  }
+    assert.equal(M.notificationRow(core).rank, [2, 2, 3][index]);
+  });
   assert.equal(M.notificationRow({}).rank, 3, 'single missing-priority note stays FYI');
+  const grouped = { id: 'fold', group: 'external', title: 'Fold', priority: 1, time: 1, items: [{ priority: 1 }, { priority: 3 }] };
+  const fyi = { id: 'fyi', priority: 2, time: 9 };
+  assert.deepEqual(ids(M.mixedRows([], [fyi, grouped], 'priority', {})), ['fold', 'fyi'], 'map callback must not pass index as the items parameter');
 });
