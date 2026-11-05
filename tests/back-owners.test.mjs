@@ -49,29 +49,31 @@ test('voice-note cancellation beats image viewer, menu, chat and app focus; neve
 test('image viewer Back closes only the image, then focused navigation runs on the NEXT press',()=>{
  const f=fixture();f.state.open='viewer';f.press();assert.deepEqual(f.hits,['viewer']);f.press();assert.deepEqual(f.hits,['viewer','surface']);
 });
-test('Escape reaches the focused app on a mixed Chats/app desk before a layout with no app pane',()=>{
- const f=fixture(),frame={tagName:'IFRAME'},menu={open:true};f.c.document.activeElement=frame;
- // A mixed desk can be reported as a Chats list: the layout consumes Back but has no pane.
- f.w.WosSkinHost={escapeSurface(){f.hits.push('layout-no-pane');return true;}};
- f.w.WizAppServices={back(target){assert.equal(target,frame);f.hits.push('app-back');menu.open=false;return 'handled';}};
- f.press();assert.equal(menu.open,false);assert.deepEqual(f.hits,['app-back']);
+function appFocusFixture({paneOn=false,appFocused=true,docked=false}={}) {
+ const f=fixture(),frame={tagName:'IFRAME'},field={tagName:'TEXTAREA'};
+ f.c.doc=f.c.document;f.c.document.activeElement=appFocused?frame:field;
+ f.c.pane=paneOn?{id:'browser',el:{contains:a=>a===frame}}:null;
+ f.c.pTop={contains:()=>false};f.c.lastSurface=appFocused?'app':'chat';f.c.chatsEl=()=>({contains:a=>a===field});
+ f.c.docked=docked;f.c.closeChat=()=>f.hits.push('close-chat');
+ f.c.api={back:{surface:fn=>{f.w.WosSkinHost={escapeSurface:fn};}},apps:{back:id=>f.hits.push('layout-app:'+id)}};
+ f.c.escStep=()=>{f.hits.push('focused-app-fallback');return 'hosted';};
+ const layout=read('layouts/ai-apps/desktop.js'),start=layout.indexOf('  api.back.surface?.(() => {');
+ vm.runInContext(layout.slice(start,layout.indexOf('  /* round 18 item 3b',start)),f.c);return f;
+}
+test('Escape reaches the focused app on a mixed Chats/app desk with no layout pane',()=>{
+ const f=appFocusFixture({docked:true});f.press();assert.deepEqual(f.hits,['focused-app-fallback']);
 });
-test('recording and shared overlays keep priority over the focused app',()=>{
- const f=fixture();f.c.document.activeElement={tagName:'IFRAME'};
- f.w.WizAppServices={back(){f.hits.push('app-back');return 'handled';}};
- f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
- assert.deepEqual(f.hits,['voice-cancel','viewer','app-back']);
+test('an iframe outside the remembered app pane also yields to its actual focused window',()=>{
+ const f=appFocusFixture({paneOn:true,docked:true});f.c.pane.el.contains=()=>false;
+ f.press();assert.deepEqual(f.hits,['focused-app-fallback']);
 });
-test('a pending/stay app Back consumes one press; an app at root still uses existing layout/root policy',()=>{
- for(const result of ['handled','pending','stay','atRoot','notReady']){
-  const f=fixture();f.c.document.activeElement={tagName:'IFRAME'};
-  f.w.WizAppServices={back(){f.hits.push('app:'+result);return result;}};
-  f.w.WosSkinHost={escapeSurface(){f.hits.push('layout-root');return true;}};
-  f.press();assert.deepEqual(f.hits,['handled','pending','stay'].includes(result)?['app:'+result]:['app:'+result,'layout-root']);
- }
+test('recording and shared overlays keep priority over the focused app fallback',()=>{
+ const f=appFocusFixture();f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
+ assert.deepEqual(f.hits,['voice-cancel','viewer','focused-app-fallback']);
 });
-test('chat keyboard focus never probes a background app',()=>{
- const f=fixture();f.c.document.activeElement={tagName:'TEXTAREA'};
- f.w.WizAppServices={back(){assert.fail('must not navigate an unfocused app');}};
- f.press();assert.deepEqual(f.hits,['surface']);
+test('a modeled app pane receives one Back per press, including root; chat focus does not navigate it',()=>{
+ const f=appFocusFixture({paneOn:true});f.press();f.press();
+ assert.deepEqual(f.hits,['layout-app:browser','layout-app:browser']);
+ const chat=appFocusFixture({paneOn:true,appFocused:false,docked:true});chat.press();assert.deepEqual(chat.hits,['close-chat']);
+ const root=appFocusFixture({appFocused:false});root.press();assert.deepEqual(root.hits,[]);
 });
