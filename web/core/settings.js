@@ -271,7 +271,7 @@
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
     const exp = s.tweaks.filter(t => !t.builtin && !(E.desktopViews?.length && t.layout));
     const views = E.desktopViews || [];
-    const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b>${v.credit ? `<small>${esc(v.credit)}</small>` : ''}</span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
+    const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b></span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
     const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
     const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);

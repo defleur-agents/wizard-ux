@@ -255,7 +255,7 @@
     // Initial shell routes must see the selected view, including overlapping refreshes.
     async whenReady() { let p; do { p = applying; await p; } while (p !== applying); },
     get desktopView() { return desktop ? effectiveDesktopView() : null; },
-    get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id, credit: l?.credit || '' }; }) : []; },
+    get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id }; }) : []; },
     chooseDesktopView(id) {
       if (!desktop || !desktopViews.includes(id)) return Promise.resolve();
       const pick = id === 'classic' ? '' : viewIds('desktop').find(v => layoutForView(v) === id);

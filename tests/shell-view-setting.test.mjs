@@ -49,7 +49,11 @@ const look = async b => { b.view.focus('look'); await tick(); return b.root.inne
 for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Miguel's Tweaks list has both shell views as plain switches, off`, async () => {
   const b = box({ shell }); await b.E.refresh();
   const html = await look(b);
-  if(shell==='phone') assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'phone unchanged'); else assert.match(html,/data-desktop-view="ai-apps"[^]*?designed by Miguel/);
+  if(shell==='phone') assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'phone unchanged'); else {
+    const picker = html.match(/<div role="radiogroup" aria-label="Shell view">([^]*?)<\/div>/)?.[1];
+    assert.match(picker, /data-desktop-view="ai-apps"/);
+    assert.doesNotMatch(picker, /designed by|credit|<small>/i, 'layout picker ignores even supplied credit metadata; skin and tweak names stay unchanged');
+  }
   assert.deepEqual(viewSwitches(html), [['miguel/orb-shell', 'Different shell view - Orb', false], ['miguel/apps-home', 'Different shell view - Apps', false]]);
   // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
   assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
