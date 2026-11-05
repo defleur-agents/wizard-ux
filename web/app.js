@@ -955,7 +955,9 @@
   function mountLinks() {
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
-      readerApp: () => APP.browser, readerOpen: href => openLinkDesk(href),
+      // An installed Reader preview paints its loading frame in this tap task, just like desktop asWindow.
+      // Do not send it through the launcher's asynchronous setup check; ordinary app links still use that gate.
+      readerApp: () => APP.browser, readerOpen: href => openLinkDesk(href, null, true),
       parent: device, mode: 'sheet',
       onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
@@ -3806,6 +3808,9 @@
   }
   function backStep(skipHosted, { outside = false } = {}) {
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
+    // The Review coach promises that Back closes the review, not just this first-use hint.
+    // Outside still dismisses only the hint; Back continues to the Reader's own history, then its chat.
+    if (rvCoach && !outside) closeReviewCoach();
     const transient = phoneBack.run({ outside, recording: () => {
       // Retain/pause phone capture; only desktop Escape discards its voice note.
       if (!V.snap?.general || !['listen', 'command'].includes(V.state)) return false;

@@ -15,7 +15,7 @@ function dispatch(overlay = '') {
   const s = { window, document: { documentElement:{}, querySelector: () => null }, MutationObserver:class {observe(){}},queueMicrotask(){}, V: { state: overlay === 'recording' ? 'listen' : 'idle', snap: { general: overlay === 'recording' } },
     pauseCommandCapture: () => state.paused++, CHATS: { KIT: { viewer: { isOpen: () => overlay === 'viewer', close: () => true } }, closeOverlay: () => false },
     LINKS: null, closeOverview: () => false, closeReviewCoach: () => false, menuFor: null,
-    sheet: 'settings', settingsReturn: '', settingsView: { back: () => { if (!state.page) return false; state.page = ''; return true; } },
+    sheet: 'settings', rvCoach: null, settingsReturn: '', settingsView: { back: () => { if (!state.page) return false; state.page = ''; return true; } },
     closeSheets: () => { s.sheet = null; state.closed++; }, toast: () => {} };
   vm.createContext(s);
   vm.runInContext(fs.readFileSync(new URL('../web/core/escape-back.js',import.meta.url),'utf8'),s);
