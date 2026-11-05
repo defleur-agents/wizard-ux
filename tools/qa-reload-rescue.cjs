@@ -84,6 +84,8 @@ async function opacityProof(p,popup){
    await assert.equal(await popup.getByText('Save to Files and clear',{exact:true}).count(),1);
    assert.match(await popup.innerText(),/Messenger.*(3 Nov|Nov 3)/);
    assert.match(await popup.innerText(),/Discard/);
+   // The test clock freezes the pop-up's 0.24 s fade-in at its first frame; finish it before measuring.
+   await popup.evaluate(el=>el.getAnimations().forEach(a=>a.finish()));
    const geometry=await popup.evaluate(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return{background:s.backgroundColor,image:s.backgroundImage,opacity:s.opacity,width:r.width,height:r.height,left:r.left,right:r.right,bottom:r.bottom,viewport:innerWidth}});
    assert.equal(geometry.opacity,'1');assert(geometry.left>=0&&geometry.right<=geometry.viewport);assert(geometry.height>100);
    const opacity=await opacityProof(p,popup);
