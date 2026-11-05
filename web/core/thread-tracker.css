@@ -60,3 +60,7 @@ html[data-tweaks~="wizard/thread-tracker"] .msg { scroll-margin-top: calc(var(--
 .ch-rq.ch-rq-q b { color: var(--wz-accent, #a78bfa); }
 .ch-reply.ch-reply-q { border-left-color: var(--wz-accent, #a78bfa); }
 .ch-reply.ch-reply-q b { color: var(--wz-accent, #a78bfa); }
+
+/* The "↓ Latest" button floats above the composer; a quoted-message chip makes the composer taller, so lift it clear of the chip's × */
+.ch-thread:has(.ch-reply.ch-reply-q) .ch-latest { bottom: 142px; }
+html.wos-doc-scroll .wos-doc-thread:has(.ch-reply.ch-reply-q) .ch-latest { bottom: calc(var(--wos-doc-compose, 84px) + var(--wos-doc-switch, 0px) + max(var(--safe-b, 0px), var(--wos-doc-bottom, 0px)) + 12px); }

@@ -2550,7 +2550,9 @@ window.WizCore.chats = function createChats(H) {
       if (p.state !== 'sent' || p.steerQueued || (p.runId && (session?.reconnect?.runId === p.runId || session?.lastRunKey === `wizard-saved-retry-${p.runId}`)) || echoed(turns, { ...p, steered: false })) continue;
       const at = p.sentAt || p.createdAt;
       if (!isFinite(at) || (!p.text && !p.files?.length)) continue;
-      const u = { text: p.text || '', files: p.files || [], images: [], at, localId: p.id };
+      // A Thread tracker quote rides with the local copy so its header shows at once (canonical history carries it as the marker).
+      const quote = p.reply?.quote ? KIT.reply.clean(p.reply) : null;
+      const u = { text: p.text || '', files: p.files || [], images: [], at, localId: p.id, ...(quote ? { reply: quote } : {}) };
       if (p.steered) {
         const target = out.findLastIndex(t => start(t) <= at + 10e3 && (!t.a || t.a.at >= at - 10e3));
         if (target >= 0) { out[target] = { ...out[target], steers: [...(out[target].steers || []), u] }; continue; }

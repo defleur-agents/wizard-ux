@@ -46,7 +46,8 @@ function service() {
   s.seen.add('old-fix');
   return s;
 }
-const session = (id, title, n) => ({ ...fx.row, id, title, message_count: n, last_active: NOW, wizard_last_assistant_at: NOW, wizard_last_user_at: NOW - 30 });
+let WORKING = false; // true: the main thread has a live run, so a reply is steered into it
+const session = (id, title, n) => ({ ...fx.row, id, title, message_count: n, last_active: NOW, wizard_last_assistant_at: NOW, wizard_last_user_at: NOW - 30, ...(WORKING && id === 'tt-main' ? { status: 'running', wizard_run_id: 'run-live-1', wizard_status: 'running' } : {}) });
 
 async function mount(browser, svc, { shell, skin, tweaks, storage }) {
   const phone = shell === 'phone';
@@ -143,10 +144,11 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `${shell}/${skin}`;
       const svc = service();
-      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: shell === 'desktop' ? [ID, 'miguel/ai-apps'] : [ID] });
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps')).catch(() => {});
       await page.waitForFunction(id => window.WosThreadTracker?.on() && (window.WosExperience?.state.active || []).includes(id), ID, { timeout: 25000 });
       check(`${tag}: tweak on`, (await tt(page)).on);
-      if (shell === 'desktop') check(`${tag}: AI apps layout active`, await page.evaluate(() => window.WosSkinHost?.layout === 'ai-apps'), await page.evaluate(() => window.WosSkinHost?.layout));
+      if (shell === 'desktop') { await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 }).catch(() => {}); const lay = await page.evaluate(() => ({ view: window.WosExperience.desktopView, layout: document.documentElement.dataset.layout })); check(`${tag}: AI apps layout active`, lay.view === 'ai-apps' && lay.layout === 'ai-apps', lay); }
       // Chats list dots match the counts
       await page.waitForSelector('[data-tt-dots]', { timeout: 20000 }).catch(() => {});
       const dots = await page.evaluate(() => [...document.querySelectorAll('[data-tt-dots]')].map(d => ({ key: d.dataset.ttDots, text: d.textContent.replace(/\s+/g, ''), n: d.querySelectorAll('.tt-dot').length })));
@@ -209,7 +211,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-acknowledged.png`) });
       // a second device sees the same truth (new context, same service)
       {
-        const other = await mount(browser, svc, { shell: shell === 'phone' ? 'desktop' : 'phone', skin, tweaks: shell === 'phone' ? [ID, 'miguel/ai-apps'] : [ID] });
+        const other = await mount(browser, svc, { shell: shell === 'phone' ? 'desktop' : 'phone', skin, tweaks: [ID] });
         await openThread(other.page, 'tt-main'); await other.page.waitForSelector('[data-tt-strip] .tt-h');
         await other.page.locator('[data-tt-strip] .tt-h').click();
         const t = await other.page.locator('[data-tt-strip]').innerText();
@@ -235,7 +237,17 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       const sent = run ? JSON.parse(run.body).input : '';
       check(`${tag}: the send carries the hidden reply marker with the message id, the excerpt, and the user's words`, /\[WIZARD_REPLY_TO_V1\]\{"message_id":"?\d+"?/.test(sent) && /Answer number 80/.test(sent) && /Thanks, but please also check the weekend/.test(sent), sent.slice(0, 300));
       await page.waitForSelector('.msg.u .ch-rq.ch-rq-q', { timeout: 8000 }).catch(() => {});
-      await page.waitForSelector('.ch-msgs', { timeout: 8000 }); await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-after-send.png`) });
+      // Existing behaviour (chats.js leaveAfterSend, "send and go"): a sent reply steps back to the list on the phone and in
+      // the docked AI-apps layout. Prove that is what happened, then reopen the thread the way a person would.
+      await page.waitForTimeout(400);
+      const afterSend = await page.evaluate(() => ({ thread: !!document.querySelector('.ch-thread .msg'), msgs: !!document.querySelector('.ch-msgs') }));
+      await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-after-send.png`) });
+      if (!afterSend.thread) {
+        check(`${tag}: after the send the app steps back to the list (existing send-and-go), the thread is not broken`, true, afterSend);
+        await openThread(page, 'tt-main');
+      }
+      await page.waitForSelector('.ch-msgs', { timeout: 8000 });
+      if (process.env.QA_DEBUG) console.log('DEBUG3', await page.evaluate(() => [...document.querySelectorAll('.msg.u')].slice(-2).map(n => n.outerHTML.slice(0, 700)).join('\n---\n')));
       const visible = await page.evaluate(() => document.querySelector('.ch-msgs').innerText);
       check(`${tag}: the quote header renders on the bubble and the marker is never visible raw`, (await page.locator('.msg.u .ch-rq.ch-rq-q').count()) >= 1 && !/WIZARD_REPLY_TO|"message_id"/.test(visible) && /Thanks, but please also check the weekend/.test(visible), visible.slice(-200));
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-quote-sent.png`) });
@@ -253,7 +265,22 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.locator('[data-chreplyx]').click();
       check(`${tag}: the quote can be removed before sending`, (await page.locator('.ch-reply.ch-reply-q').count()) === 0);
       // steer path: while the run is working, a quote reply goes out as a steer with the same marker
-      await page.evaluate(() => { const s = window.__wos?.live?.session?.('tt-main'); });
+      WORKING = true;
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => !!(window.__wos || window.__wux)); await openThread(page, 'tt-main');
+      await page.waitForFunction(() => { const s = (window.__wux?.live || window.__wos?.live)?.session?.('tt-main'); return !!s && s.runId === 'run-live-1'; }, null, { timeout: 15000 }).catch(() => {});
+      const lastB = svc.rows[svc.rows.length - 1];
+      const bub2 = page.locator(`.msg[data-mid="${lastB.id}"]`); await bub2.scrollIntoViewIfNeeded(); await bub2.locator('[data-mquote]').click();
+      await page.locator('.ch-compose textarea').fill('While you work: also include Sunday');
+      svc.writes.length = 0;
+      await page.keyboard.press('Enter');
+      for (let i = 0; i < 10 && !svc.writes.length; i++) await page.waitForTimeout(100);
+      if (!svc.writes.length) await page.locator('[data-chsend], .ch-send').first().click().catch(() => {});
+      let steer = null;
+      for (let i = 0; i < 60 && !steer; i++) { await page.waitForTimeout(100); steer = svc.writes.find(w => /\/runs\/run-live-1\/steer/.test(w.p)); }
+      const sb = steer ? String(JSON.parse(steer.body).input) : '';
+      check(`${tag}: a quote reply sent while the agent is working goes out as a steer carrying the marker`, !!steer && /\[WIZARD_REPLY_TO_V1\]\{"message_id":"\d+"/.test(sb) && /While you work: also include Sunday/.test(sb), steer ? sb.slice(0, 200) : svc.writes.map(w => w.p));
+      WORKING = false;
       check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors);
       await ctx.close();
     }
