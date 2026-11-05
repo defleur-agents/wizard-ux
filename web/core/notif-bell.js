@@ -197,11 +197,14 @@
     return it && !it.app && it.from && id === it.from ? route(id) === 'chats' && chatsReady() && installed() : inChats(id);
   }
   // Unread items Notifications carries for an app that are not in Chats (and not Off): they count on that app's badge.
+  const carriedHere = i => !!i.from && !i.read && !i.archived && routeIdOf(i) === i.from && !itemInChats(i) && !isOff(i.from);
   function carriedCounts() {
     const n = {};
-    for (const i of NOTES.all) if (i.from && !i.read && !i.archived && routeIdOf(i) === i.from && !itemInChats(i) && !isOff(i.from)) n[i.from] = (n[i.from] || 0) + 1;
+    for (const i of NOTES.all) if (carriedHere(i)) n[i.from] = (n[i.from] || 0) + 1;
     return n;
   }
+  // The items behind one app's carried count, newest first (core/app-notes.js shows them in that app's window).
+  const carriedFor = id => NOTES.all.filter(i => i.from === String(id || '') && carriedHere(i)).sort((a, b) => b.time - a.time);
   function setRoute(id, to) {
     id = String(id || ''); if (id === 'wizard' || P.accepts(id, to) !== true) return false;
     if (route(id) === to) return true;
@@ -428,6 +431,8 @@
     const at = {}; for (const id of appIds) { const it = IN.items.find(i => i.id === id); at[id] = it ? it.time : Date.now() / 1000; }
     const upd = l => Object.freeze(l.map(i => ids.includes(i.id) ? Object.freeze({ ...i, ...next }) : i));
     IN.all = upd(IN.all); IN.items = upd(IN.items); for (const fn of [...IN.subs]) { try { fn(IN.items); } catch (e) {} }
+    // Notifications' own list too, so a carried item leaves its app's badge at once.
+    if (NOTES.all.some(i => ids.includes(i.id))) { NOTES.all = upd(NOTES.all); paint(); }
     inboxChanged();
     if (appIds.length) { FD.marks = { ...(FD.marks || {}) }; for (const id of appIds) FD.marks[id] = { ...(FD.marks[id] || {}), ...next, at: at[id] }; writeJson(MARK_KEY, FD.marks); }
     let ok = !installed();
@@ -544,7 +549,7 @@
   const routing = Object.freeze({ version: PART.version, replace: replaceRouting, get owner() { return PART.live?.owner || null; } });
   /** The label of where this source goes now (its picker's choice: Chats, Badge, Morning report, Off). */
   function routeLabel(id) { id = String(id || ''); const now = route(id), got = P.choices(id, nameOf(id)), list = Array.isArray(got) ? got : STOCK.choices(id, nameOf(id)); const c = list.find(x => x && String(x.to) === now); return c ? String(c.label || now).slice(0, 40) : ''; }
-  window.WosBell = { html, refresh, paint, watch, mark, readyCount, unreadCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
+  window.WosBell = { html, refresh, paint, watch, mark, readyCount, unreadCount, readyMore, route, setRoute, inChats, isOff, routeIdOf, itemInChats, carried: carriedFor, routes, discover, picker, routeLabel, movedToast, nameOf, describe, ask, intro, groups, attention, routing,
     entered: () => { P.entered(); }, left: () => { P.left(); },
     get chatsAvailable() { return chatsReady(); }, item: id => IN.items.find(i => i.id === String(id)) || null, items: () => IN.items, icon: BELL, get state() { return { ...S }; } };
 })();

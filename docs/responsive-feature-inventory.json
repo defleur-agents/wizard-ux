@@ -35,6 +35,13 @@
       ],
       "note": "Direct entrypoint import"
     },
+    "core/app-notes.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Notifications items carried to an app, read and marked read inside that app's window"
+    },
     "core/app-reading-position.js": {
       "loadedBy": [
         "phone",
@@ -834,6 +841,8 @@
     "core/android-relay.js",
     "core/app-capture.js",
     "core/app-kinds.js",
+    "core/app-notes.css",
+    "core/app-notes.js",
     "core/app-reading-position.js",
     "core/app-route.css",
     "core/app-route.js",
