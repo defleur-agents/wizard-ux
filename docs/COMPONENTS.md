@@ -88,6 +88,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/de
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) |
 | Update notices | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`); `WizAppCapture.rescueTake` / `pageAudioFree` |
+| App audio storage diagnostics | `WizAppCapture` (`app-capture.js`): bounded Android code-only open/transaction/recovery events, DB version/block status, quota/usage and capture-lock counts; existing private append-only `scroll_diagnostics.py` collector, never audio, rows or exception text |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`web/core/media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic recording | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) |
