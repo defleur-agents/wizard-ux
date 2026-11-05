@@ -51,14 +51,14 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
-| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
+| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; badge `WizCore.workspaceNav.refreshChats` = `WizLive.visibleUnread(unified())` (Ready separate) |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
-| Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` |
+| Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`, receipt IDs); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; scoped tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
@@ -101,7 +101,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
 | Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; AI apps: sheet yielding + desktop-only boot guard; Group/Sort (One list follows Sort) and project titles); `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; built-in layouts (`api.apps` / `api.desk`; core `setStandardLayout` desktop ownership; read-only `api.aiUsage` for the AI apps fuel gauge); `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
 | Pins-only orb radial | `WosCreateOrbSwitcher` / `WosOrbSwitcher` (`web/core/orb-switcher.js`, `web/core/orb-switcher.css`), core phone dock default (not desktop/corner orb); saves pins/voice options as before |
-| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop with independent living-canvas default |
+| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop with independent canvas default and palette-stable opaque materials |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) |
