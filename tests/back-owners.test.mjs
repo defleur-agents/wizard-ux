@@ -29,7 +29,7 @@ function fixture() {
  c.VOICE={get state(){return state.voice?'listen':'idle';}};c.vMode='talk';c.talk=()=>{state.voice=false;hits.push('voice-cancel');};c.dictate=c.talk;c.escStep=()=>{hits.push('surface');return '';};
  vm.runInContext(desktop.slice(desktop.indexOf('  function desktopBack('),desktop.indexOf('  // Navigation only.')),c);
  vm.runInContext(desktop.slice(desktop.indexOf('  function onKey('),desktop.indexOf("  addEventListener('keydown', e => onKey(e), true);")),c);
- return {state,hits,stack,press:()=>c.onKey({key:'Escape',preventDefault(){},stopPropagation(){},stopImmediatePropagation(){}})};
+ return {state,hits,stack,c,w,press:()=>c.onKey({key:'Escape',preventDefault(){},stopPropagation(){},stopImmediatePropagation(){}})};
 }
 test('phone history/native Back and desktop Escape install the identical shared owner catalog',()=>{
  assert.match(phone,/WizEscapeBack\.installOwners\(phoneBack/);
@@ -48,4 +48,32 @@ test('voice-note cancellation beats image viewer, menu, chat and app focus; neve
 });
 test('image viewer Back closes only the image, then focused navigation runs on the NEXT press',()=>{
  const f=fixture();f.state.open='viewer';f.press();assert.deepEqual(f.hits,['viewer']);f.press();assert.deepEqual(f.hits,['viewer','surface']);
+});
+function appFocusFixture({paneOn=false,appFocused=true,docked=false}={}) {
+ const f=fixture(),frame={tagName:'IFRAME'},field={tagName:'TEXTAREA'};
+ f.c.doc=f.c.document;f.c.document.activeElement=appFocused?frame:field;
+ f.c.pane=paneOn?{id:'browser',el:{contains:a=>a===frame}}:null;
+ f.c.pTop={contains:()=>false};f.c.lastSurface=appFocused?'app':'chat';f.c.chatsEl=()=>({contains:a=>a===field});
+ f.c.docked=docked;f.c.closeChat=()=>f.hits.push('close-chat');
+ f.c.api={back:{surface:fn=>{f.w.WosSkinHost={escapeSurface:fn};}},apps:{back:id=>f.hits.push('layout-app:'+id)}};
+ f.c.escStep=()=>{f.hits.push('focused-app-fallback');return 'hosted';};
+ const layout=read('layouts/ai-apps/desktop.js'),start=layout.indexOf('  api.back.surface?.(() => {');
+ vm.runInContext(layout.slice(start,layout.indexOf('  /* round 18 item 3b',start)),f.c);return f;
+}
+test('Escape reaches the focused app on a mixed Chats/app desk with no layout pane',()=>{
+ const f=appFocusFixture({docked:true});f.press();assert.deepEqual(f.hits,['focused-app-fallback']);
+});
+test('an iframe outside the remembered app pane also yields to its actual focused window',()=>{
+ const f=appFocusFixture({paneOn:true,docked:true});f.c.pane.el.contains=()=>false;
+ f.press();assert.deepEqual(f.hits,['focused-app-fallback']);
+});
+test('recording and shared overlays keep priority over the focused app fallback',()=>{
+ const f=appFocusFixture();f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
+ assert.deepEqual(f.hits,['voice-cancel','viewer','focused-app-fallback']);
+});
+test('a modeled app pane receives one Back per press, including root; chat focus does not navigate it',()=>{
+ const f=appFocusFixture({paneOn:true});f.press();f.press();
+ assert.deepEqual(f.hits,['layout-app:browser','layout-app:browser']);
+ const chat=appFocusFixture({paneOn:true,appFocused:false,docked:true});chat.press();assert.deepEqual(chat.hits,['close-chat']);
+ const root=appFocusFixture({appFocused:false});root.press();assert.deepEqual(root.hits,[]);
 });
