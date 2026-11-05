@@ -671,7 +671,7 @@
     try { cap = window.WizAppCapture?.reloadCheck?.(); } catch (_) { cap = { safe: false, reason: 'capture' }; }
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
     const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
-    if (!cap.safe) blocking.push({ appId: null, kind: 'capture', reason: cap.reason || 'capture' });
+    if (!cap.safe) blocking.push({ appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
     for (const st of frames.values()) for (const reason of st.holds.values()) {
       const capture = CAPTURE_HOLD.test(reason);
       // App-owned holds are released only by their owner. Durable shared storage cannot prove an

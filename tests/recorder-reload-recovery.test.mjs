@@ -189,7 +189,7 @@ test('recording/work starting during asynchronous native backup flush prevents r
 test('hung recorder check has a bounded UI wait without cancelling the underlying take',async()=>{
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
   f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');await tick();
-  f.timers.find(([,ms])=>ms===15000)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
+  f.timers.find(([,ms])=>ms===4500)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
 });
 
 test('aborted native flush preserves the actual frame, hold and registered observers; commit alone detaches',async()=>{
