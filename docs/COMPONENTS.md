@@ -37,7 +37,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native/desktop; 
 | Title-bar tools | `WizardApp.titlebar.set(tools)` |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) |
-| Update holds/draft keep | `WizardApp.update.hold`; `WizAppServices.update.keepDrafts` uses one monotonic 1.5s deadline, checks admission and confirmation, and retains expired holds |
+| Draft holds/keep (1.5s) | `WizardApp.update.hold` |
 | Offline shell | `web/sw.js` |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic |
 | Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) |
