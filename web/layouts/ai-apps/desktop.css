@@ -25,7 +25,7 @@ html[data-shell="desktop"][data-layout="ai-apps"] {
 }
 /* Wizard's window material stays the same opaque palette tint for every background. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-wizard-backgrounds] {
-  --aad-main: rgb(from var(--sk-win) r g b);
+  --aad-main: color(from var(--sk-win) srgb r g b / 1);
 }
 /* Other image skins retain their existing sidebar material. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-image-background]:not([data-wizard-backgrounds]) {

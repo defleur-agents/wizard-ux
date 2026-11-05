@@ -80,11 +80,11 @@ html[data-win-glass] .win { background: var(--sk-win); }
 /* Wizard desktop keeps its own opaque palette materials on canvas AND images.
    Strip only alpha; mixing over --wz-panel would change the palette's surface tint. */
 html[data-shell="desktop"][data-wizard-backgrounds] :is(.dsettings, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card, .home-card, .home .rs-widget, .home-unsent, .home-tools button) {
-  background: rgb(from var(--glass-2) r g b);
+  background: color(from var(--glass-2) srgb r g b / 1);
   color: var(--ink);
 }
 html[data-shell="desktop"][data-wizard-backgrounds] .win {
-  background: rgb(from var(--sk-win) r g b);
+  background: color(from var(--sk-win) srgb r g b / 1);
   color: var(--ink);
 }
 /* Other image skins retain their existing Appearance v1 surface policy. */

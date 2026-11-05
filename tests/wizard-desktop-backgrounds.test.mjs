@@ -50,8 +50,8 @@ test('invalid saved desktop images fall back without changing Mizel; renderer an
   assert.match(r,/image \? wizardWall : wall/);
   const css=read('web/core/skins.css');
   assert.match(css,/\[data-image-background\]:not\(\[data-wizard-backgrounds\]\) :is\(\.win/);
-  assert.match(css,/\[data-wizard-backgrounds\] \.win \{\s*background: rgb\(from var\(--sk-win\) r g b\)/);
-  assert.match(read('web/layouts/ai-apps/desktop.css'),/\[data-wizard-backgrounds\] \{\s*--aad-main: rgb\(from var\(--sk-win\) r g b\)/);
+  assert.match(css,/\[data-wizard-backgrounds\] \.win \{\s*background: color\(from var\(--sk-win\) srgb r g b \/ 1\)/);
+  assert.match(read('web/layouts/ai-apps/desktop.css'),/\[data-wizard-backgrounds\] \{\s*--aad-main: color\(from var\(--sk-win\) srgb r g b \/ 1\)/);
 });
 
 // Resolve the root-only material rules as well as skins.js's token writes. The old
@@ -82,7 +82,7 @@ for (const palette of ['nebula','grove','tide','ember','signal']) {
   test(palette+': every background preserves the resolved palette and layout token set', () => {
     const b=boot({'wos.skin':palette}), expected=resolved(b);
     assert.equal(b.root.dataset.wizardBackgrounds,'');
-    assert.match(expected.tokens['--aad-main'], /^rgb\(from /);
+    assert.match(expected.tokens['--aad-main'], /^color\(from /);
     for (const background of ['living',...Array.from(b.S.wallpapers,w=>w.id),'living']) {
       b.S.setWallpaper(background);
       assert.deepEqual(resolved(b),expected,background);
@@ -107,4 +107,3 @@ test('Wizard material scope leaves Mizel and Landscapes unchanged on both shells
     assert.deepEqual(resolved(b),expected);
   }
 });
-
