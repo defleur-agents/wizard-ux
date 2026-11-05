@@ -11,10 +11,16 @@ const now = Date.now(), ids = ['qa_option_one', 'qa_option_two'];
 const sessions = ids.map((id, i) => ({ id, title: 'Synthetic shortcut thread ' + (i + 1), status: 'completed', message_count: 2,
   last_active: new Date(now - i * 60000).toISOString(), wizard_last_assistant_at: new Date(now - i * 60000).toISOString(), latest_message: { role: 'assistant', content: 'Synthetic answer.', timestamp: now / 1000 } }));
 function save() { fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify(report, null, 2)); }
+function actionWrites() { return report.writes.filter(r => r.path === '/wizard/thread-dispositions' || r.path === '/wizard/v1/boomerangs').length; }
 async function check(name, p, fn) {
   try { await fn(); report.results.push({ name, pass: true }); console.log('PASS', name); }
   catch (e) { report.results.push({ name, pass: false, error: String(e), stack: e.stack }); console.log('FAIL', name, String(e)); await p.screenshot({ path: path.join(out, name.replace(/[^a-z0-9]/gi, '-') + '.png') }).catch(() => {}); }
-  finally { await p.keyboard.up('Alt').catch(() => {}); }
+  finally {
+    await p.keyboard.up('Alt').catch(() => {});
+    // Reset only via the real sheet close control so a negative-control failure cannot poison later cases.
+    const close = p.locator('.boom-sheet:visible [data-boom-close]');
+    if (await close.count()) await close.first().click({ timeout: 1500 }).catch(() => {});
+  }
   save();
 }
 async function open(p) {
@@ -85,11 +91,11 @@ async function arrow(p, code) {
     for (const value of ['', '   ', 'alpha beta']) for (const code of ['ArrowLeft', 'ArrowRight']) {
       await check(tag + ' ' + code + ' composer=' + JSON.stringify(value), p, async () => {
         await open(p); const field = p.locator('.ch-compose textarea:visible').first(); await field.fill(value); await field.focus();
-        const before = await p.evaluate(() => JSON.stringify(Object.values(__wux.wins).map(w => [w.id, w.thread]))), count = report.writes.length;
+        const before = await p.evaluate(() => JSON.stringify(Object.values(__wux.wins).map(w => [w.id, w.thread]))), count = actionWrites();
         const events = await arrow(p, code);
         assert.deepEqual(events, [{ code, prevented: false, trusted: true }], 'trusted chord must bubble, unprevented');
         assert.equal(await field.inputValue(), value); assert.equal(await p.evaluate(() => JSON.stringify(Object.values(__wux.wins).map(w => [w.id, w.thread]))), before);
-        assert.equal(await p.locator('.boom-sheet:visible').count(), 0); assert.equal(report.writes.length, count, 'no thread/disposition write');
+        assert.equal(await p.locator('.boom-sheet:visible').count(), 0); assert.equal(actionWrites(), count, 'no thread/disposition write');
       });
     }
     await check(tag + ' body focus and help hints', p, async () => {
@@ -108,10 +114,10 @@ async function arrow(p, code) {
       await p.locator('.ch-compose textarea:visible').first().evaluate(n => n.blur());
       await p.keyboard.press('Alt+KeyZ'); await p.locator('.boom-sheet:visible').waitFor();
       assert.ok(await p.locator('.boom-sheet:visible').evaluate(n => { const s = getComputedStyle(n); return s.opacity === '1' && !/rgba\([^)]*,\s*(?:0|0\.[0-9]+)\s*\)/.test(s.backgroundColor) && s.backgroundColor !== 'transparent'; }), 'text-bearing snooze panel is opaque');
-      const count = report.writes.length;
+      const count = actionWrites();
       for (const code of ['ArrowLeft', 'ArrowRight']) {
         assert.deepEqual(await arrow(p, code), [{ code, prevented: false, trusted: true }]);
-        assert.equal(await p.locator('.boom-sheet:visible').count(), 1); assert.equal(report.writes.length, count);
+        assert.equal(await p.locator('.boom-sheet:visible').count(), 1); assert.equal(actionWrites(), count);
       }
       await p.keyboard.down('Alt'); await p.waitForTimeout(800); await p.screenshot({ path: path.join(out, tag + '-snooze.png') }); await p.keyboard.up('Alt');
       await p.keyboard.press('Alt+KeyZ'); assert.equal(await p.locator('.boom-sheet:visible').count(), 0);
