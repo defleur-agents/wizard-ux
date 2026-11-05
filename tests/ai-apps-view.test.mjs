@@ -1945,7 +1945,10 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
-test('round 20 item 9 / round 22: Ready is one flat list in priority order by default (each row its time since the last message, no status tags); Group Ready by status brings the sub-headers back', async () => {
+test('round 20 item 9 / round 22: Ready is one flat list in priority order by default (each row its time since the last message, no status tags); Group Ready by status brings the sub-headers back', async t => {
+  // This checks same-day relative labels, not the calendar-day boundary (covered by shortTime).
+  // Real CI at 01:00 made the three-hour row correctly say Yesterday instead of 3h.
+  t.mock.timers.enable({ apis: ['Date'], now: new Date(2026, 10, 3, 15).getTime() });
   const { w, store } = deskWorld();
   w.st.sessions.ready[0].state = 'fyi'; w.st.sessions.ready[1].state = 'needs';
   w.st.sessions.ready[0].at = new Date(Date.now() - 5 * 60e3).toISOString(); w.st.sessions.ready[1].at = new Date(Date.now() - 3 * 3600e3).toISOString();
