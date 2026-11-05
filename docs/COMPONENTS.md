@@ -56,7 +56,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Chats time labels | `WizCore.ago` (`core.js`): phone, classic desktop, shared thread headers and AI apps `shortTime`; elapsed hours <24h, then owner-calendar day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; badge `WizCore.workspaceNav.refreshChats` = `WizLive.visibleUnread(unified())` (Ready separate) |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; pills: `workspaceNav.chatsCount/refreshChats` (canonical unread + routed notes); subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
