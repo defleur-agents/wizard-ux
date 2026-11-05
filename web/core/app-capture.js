@@ -1048,8 +1048,12 @@
    * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
   function reloadCheck() {
     const no = reason => ({ safe: false, reason, keeps: null });
+    const pageHoldsNoAudio = !active && preparations.size === 0 && !recoveryLease &&
+      !attachedMeetingBridge && !W.wizardNative?.meetings && !configuredNative;
     if (preparations.size) return no('capture_starting');
-    if (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status))) return no('native_owner_uncertain');
+    let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
+    if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
+    if (uncertain && !pageHoldsNoAudio) return no(uncertain);
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
@@ -1057,6 +1061,8 @@
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
+    if (!uncertain && [...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) uncertain = 'capture_custody_uncertain';
+    if (uncertain && !pageHoldsNoAudio) return no(uncertain);
     if (active) {
       const s = active;
       const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&
@@ -1066,7 +1072,21 @@
       return { safe: true, reason: null, keeps: keep(s.row) };
     }
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
+    // IndexedDB rows and Android services survive reload. Unknown custody is not page-held audio;
+    // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
+    if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
+      recheck: true, durable: false, uncertain };
     return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null };
+  }
+  // Re-use recovery only; this never stops, acknowledges or discards a take.
+  let reloadReconcile = null;
+  function reconcileReload() {
+    if (!reloadReconcile) reloadReconcile = (async () => {
+      await ready;
+      if (!active && !preparations.size) await recover();
+      return reloadCheck();
+    })().finally(() => { reloadReconcile = null; });
+    return reloadReconcile;
   }
   // Last moment before the shell reloads with a kept native meeting: let queued backup-PCM writes land (bounded).
   async function prepareReload() {
@@ -1076,7 +1096,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow, reloadCheck, prepareReload, closeApp,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       const live = active?.row.id === r?.id;
       return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,
