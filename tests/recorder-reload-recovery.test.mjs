@@ -351,6 +351,9 @@ test('wire evidence sink retains exact binary Blob bytes and rejects malformed r
   const sink=await stopEvidence.start({out,mode:'phone',report});
   try{
     assert.equal(stopEvidence.origin(sink),sink.url);assert.throws(()=>stopEvidence.origin({...sink}),/owned/);
+    const favicon=await fetch(sink.url+'/favicon.ico');assert.equal(favicon.status,204);
+    assert.equal(report.errors.length,0);
+    assert.deepEqual(report.evidenceRequests,[{mode:'phone',method:'GET',url:'/favicon.ico',host:new URL(sink.url).host,admitted:'favicon',status:204}]);
     const preflight=await fetch(sink.url+'/fixture-capture-evidence?id=preflight',{method:'POST',body:new Blob([Uint8Array.of(0,255,128)])});assert.equal(preflight.status,204);
     assert.equal(report.evidencePreflights[0].hash,createHash('sha256').update(Buffer.from([0,255,128])).digest('hex'));
     const bytes=Buffer.from([0,255,1,128,10,13]);
@@ -359,7 +362,19 @@ test('wire evidence sink retains exact binary Blob bytes and rejects malformed r
     assert.equal(kept.hash,createHash('sha256').update(bytes).digest('hex'));
     assert.deepEqual(readFileSync(path.join(out,'phone-stop.bin')),bytes);
     assert.deepEqual(JSON.parse(readFileSync(path.join(out,'phone-stop.json'),'utf8')),kept);
-    const invalid=await fetch(sink.url+'/unexpected');assert.equal(invalid.status,500);assert.equal(report.errors.length,1);
+    assert.deepEqual(report.evidenceRequests.slice(1).map(r=>[r.method,r.url,r.status,r.admitted]),[
+      ['POST','/fixture-capture-evidence?id=preflight',204,'preflight'],['POST','/fixture-capture-evidence?id=aabb-0011',204,'stop']]);
+    const denied=[['GET','/unexpected'],['GET','/favicon.ico?'],['GET','/favicon.ico?x=1'],['POST','/favicon.ico'],['GET','/favicon.ico/'],['GET','/']];
+    const {request:httpRequest}=await import('node:http');
+    for(const [method,url] of denied){
+      // Keep raw request targets, including an empty query marker (fetch normalizes it).
+      const status=await new Promise((resolve,reject)=>{
+        const req=httpRequest(sink.url,{method,path:url},res=>{res.resume();res.on('end',()=>resolve(res.statusCode))});req.on('error',reject);req.end();
+      });assert.equal(status,500,method+' '+url);
+    }
+    assert.equal(report.errors.length,denied.length);
+    assert.deepEqual(report.errors,denied.map(([method,url])=>({evidence:'Error: Unexpected synthetic evidence request',mode:'phone',method,url,host:new URL(sink.url).host})));
+    assert.deepEqual(report.evidenceRequests.slice(3),denied.map(([method,url])=>({mode:'phone',method,url,host:new URL(sink.url).host,status:500,error:'Error: Unexpected synthetic evidence request'})));
   }finally{await sink.close();rmSync(out,{recursive:true,force:true})}
 });
 

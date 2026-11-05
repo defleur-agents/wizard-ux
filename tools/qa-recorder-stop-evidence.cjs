@@ -11,8 +11,14 @@ async function start({out,mode,report}){
  if(!['phone','desktop'].includes(mode))throw Error('Invalid synthetic evidence mode');
  let receive;const received=new Promise(resolve=>{receive=resolve});
  const server=http.createServer((req,res)=>{
-  const reject=error=>{report.errors.push({evidence:String(error)});res.writeHead(500);res.end('Synthetic evidence failed');receive({error:String(error)})};
+  const request={mode,method:req.method,url:req.url,host:req.headers.host};
+  (report.evidenceRequests??=[]).push(request);
+  const reject=error=>{request.status=500;request.error=String(error);report.errors.push({evidence:String(error),mode,method:req.method,url:req.url,host:req.headers.host});res.writeHead(500);res.end('Synthetic evidence failed');receive({error:String(error)})};
   try{
+   // Browser-generated favicon is the only admitted non-evidence wire request.
+   if(req.method==='GET'&&req.url==='/favicon.ico'){
+    request.admitted='favicon';request.status=204;res.writeHead(204);res.end();return;
+   }
    const u=new URL(req.url,'http://127.0.0.1'),id=u.searchParams.get('id');
    if(req.method!=='POST'||u.pathname!=='/fixture-capture-evidence'||!id||!(/^[a-f0-9-]+$/.test(id)||id==='preflight'))throw Error('Unexpected synthetic evidence request');
    const chunks=[];let size=0;
@@ -29,6 +35,7 @@ async function start({out,mode,report}){
      fs.writeFileSync(path.join(out,mode+'-stop.json'),JSON.stringify(kept,null,2));
      receive(kept);
     }
+    request.admitted=id==='preflight'?'preflight':'stop';request.status=204;
     res.writeHead(204);res.end();
    }catch(e){reject(e)}});
   }catch(e){reject(e)}
