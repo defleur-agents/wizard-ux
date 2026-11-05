@@ -73,16 +73,19 @@ test('Notifications on Chats: its items are in Chats and counted there, its own 
   assert.match(B.html(), /data-chbell hidden/, 'no bell beside Chats search either');
 });
 
-test('Notifications on Badge: nothing in Chats, its count is a badge (and the bell shows it)', async () => {
-  const w = boot(), B = w.WosBell, N = w.WizCore.workspaceNav;
+// Miguel, 5 Nov 2026: the agent's own notes (about no app) only wait in Chats, so the owner fixes the cause or gives
+// the noise an app of its own; Badge, Morning report and Off are refused for them, whatever an old device saved.
+test('the agent\'s own notes cannot go to Badge: they stay in Chats, with no badge and no bell', async () => {
+  const w = boot({ storage: new Map([['wos.notify.route.v1', JSON.stringify({ notifications: 'badge' })]]) }), B = w.WosBell, N = w.WizCore.workspaceNav;
+  assert.equal(B.route('notifications'), 'chats', 'an old saved Badge reads as Chats');
   B.watch(() => {}); await B.refresh(true); await settle();
-  assert.equal(B.setRoute('notifications', 'badge'), true); await settle();
-  assert.ok(!B.items().some(i => !i.app), 'gone from Chats at once');
-  assert.equal(B.readyCount(), 1, 'and from the Chats count (Messenger\'s item stays)');
-  assert.equal(N.counts.notifications, 3, 'its badge comes back');
-  assert.match(B.html(), /class="ch-bell"[^>]*aria-label="Notifications, 3 unread"/);
-  await B.refresh(true); await settle();
-  assert.ok(!B.items().some(i => !i.app), 'its list is still read (System rows need it), but nothing of it is listed in Chats');
+  for (const to of ['badge', 'daily', 'off']) assert.equal(B.setRoute('notifications', to), false, to);
+  await settle();
+  assert.ok(B.items().some(i => i.id === 'n1'), 'still in Chats');
+  assert.equal(B.readyCount(), 2);
+  assert.equal(N.counts.notifications || 0, 0, 'no badge');
+  assert.match(B.html(), /data-chbell hidden/, 'no bell');
+  assert.deepEqual([...B.picker('notifications').matchAll(/data-notify-to="(\w+)"/g)].map(m => m[1]), ['chats'], 'its picker offers Chats only');
 });
 
 test('an app on Badge puts nothing in Chats and keeps its badge; set to Chats it swaps', async () => {
@@ -122,9 +125,9 @@ test('Archive / Snooze on an app item are inbox marks, so it leaves the Chats co
 
 test('the choice is saved per device and survives a reload', () => {
   const storage = new Map();
-  boot({ storage }).WosBell.setRoute('notifications', 'badge');
-  assert.equal(JSON.parse(storage.get('wos.notify.route.v1')).notifications, 'badge');
-  assert.equal(boot({ storage }).WosBell.route('notifications'), 'badge');
+  boot({ storage }).WosBell.setRoute('messenger', 'badge');
+  assert.equal(JSON.parse(storage.get('wos.notify.route.v1')).messenger, 'badge');
+  assert.equal(boot({ storage }).WosBell.route('messenger'), 'badge');
   assert.equal(boot().WosBell.setRoute('wizard', 'badge'), false, 'Chats is the inbox, not a choice');
   assert.equal(boot().WosBell.setRoute('../x', 'chats'), false);
   assert.equal(boot().WosBell.setRoute('messenger', 'both'), false, 'one place, never both');
@@ -179,9 +182,9 @@ test('one saved setting: a pick in either place updates the other at once', asyn
   const w = boot(), B = w.WosBell; let heard = 0;
   w.addEventListener('wizard:notify-route', () => heard++);
   B.watch(() => {}); await B.refresh(true); await settle();
-  B.setRoute('notifications', 'badge');
+  B.setRoute('messenger', 'badge');
   assert.equal(heard, 1, 'both Settings and Chats repaint on wizard:notify-route');
-  assert.match(B.picker('notifications'), /data-notify-to="badge" aria-checked="true"/);
+  assert.match(B.picker('messenger'), /data-notify-to="badge" aria-checked="true"/);
   const c = read('web/core/chats.js'), s = read('web/core/settings.js');
   assert.match(c, /window\.addEventListener\('wizard:notify-route', \(\) => \{[^\n]*renderThreadNow\(x\)/, 'an open notification repaints its picker');
   assert.match(s, /window\.addEventListener\?\.\('wizard:notify-route', appsChanged\)/, 'Settings repaints too');

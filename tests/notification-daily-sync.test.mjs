@@ -42,14 +42,18 @@ function boot({ storage = new Map(), server = { routes: {}, saved: false }, up =
   return ctx;
 }
 
-test('Morning report is greyed out for an app like Mail and refused if asked; Notifications and System can take it', () => {
+test('Morning report is greyed out for an app like Mail and refused if asked; System can take it, the agent\'s notes cannot', () => {
   const B = boot().WosBell;
   assert.match(B.picker('mail'), /data-notify-to="daily" aria-checked="false" disabled title="Mail would lose its point waiting for the Morning Report"/);
-  assert.doesNotMatch(B.picker('notifications'), /data-notify-to="daily"[^>]*disabled/);
+  assert.doesNotMatch(B.picker('system:app-updates'), /data-notify-to="daily"[^>]*disabled/);
   assert.equal(B.setRoute('mail', 'daily'), false);
-  assert.equal(B.setRoute('notifications', 'daily'), true);
-  assert.equal(B.route('notifications'), 'daily');
-  assert.equal(B.isOff('notifications'), true, 'Morning report shows no badge and nothing in Chats');
+  assert.equal(B.setRoute('system:app-updates', 'daily'), true);
+  assert.equal(B.route('system:app-updates'), 'daily');
+  assert.equal(B.isOff('system:app-updates'), true, 'Morning report shows no badge and nothing in Chats');
+  // The agent's own notes (Notifications, about no app) only wait in Chats (Miguel, 5 Nov 2026).
+  assert.equal(B.setRoute('notifications', 'daily'), false);
+  assert.equal(B.route('notifications'), 'chats');
+  assert.doesNotMatch(B.picker('notifications'), /data-notify-to="daily"/);
 });
 
 test('a choice is saved on the box, so another device gets it', async () => {
@@ -62,10 +66,10 @@ test('a choice is saved on the box, so another device gets it', async () => {
 });
 
 test('a box with nothing saved takes this device\'s choices once; then the box wins', async () => {
-  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ messenger: 'chats', notifications: 'badge' })]]);
+  const storage = new Map([['wos.notify.route.v1', JSON.stringify({ messenger: 'chats', 'system:app-updates': 'off', notifications: 'badge' })]]);
   const server = { routes: {}, saved: false };
   const w = boot({ storage, server }); await settle();
-  assert.deepEqual(server.routes, { messenger: 'chats', notifications: 'badge' });
+  assert.deepEqual(server.routes, { messenger: 'chats', 'system:app-updates': 'off' }, 'an old Badge for the agent\'s notes is not carried over');
   server.routes.messenger = 'off';
   await w.WosBell.refresh(true); await settle();
   assert.equal(w.WosBell.route('messenger'), 'off');
@@ -83,7 +87,7 @@ test('offline: the choice holds on this device and is sent once Notifications an
 });
 
 test('the fourth choice is called Morning report and wears its coffee cup', () => {
-  const h = boot().WosBell.picker('notifications');
+  const h = boot().WosBell.picker('system:app-updates');
   assert.match(h, /data-notify-to="daily"[^>]*><svg class="wos-route-ic wos-route-mr" viewBox="0 0 512 512" aria-hidden="true"><path d="M96 235H349[^]*?<span>Morning report<\/span>/);
 });
 

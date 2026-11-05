@@ -1,28 +1,27 @@
-/* Notes for an app, inside its own window (core/app-notes.js): "2 notes · Show" at the top of the window, and the list
- * under it. Drawn by the shell over the app, on both shells and every skin (skin ink/background tokens only). */
-.app-notes { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 29; width: max-content; max-width: calc(100% - 20px);
-  display: flex; flex-direction: column; align-items: stretch; font-size: 13px; color: var(--ink, #f4f0ff); animation: app-notes-in .22s ease-out; }
+/* Notes for an app, inside its own window (core/app-notes.js): small banners stacked at the top of the window (title,
+ * one line of message, time, ✓ Mark read), "+N more" past three, Mark all read with two or more. Drawn by the shell
+ * over the app, on both shells and every skin (skin ink/background tokens only). */
+.app-notes { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); z-index: 29; width: min(420px, calc(100% - 20px));
+  display: flex; flex-direction: column; align-items: stretch; gap: 6px; font-size: 13px; color: var(--ink, #f4f0ff); animation: app-notes-in .22s ease-out;
+  pointer-events: none; }
+.app-notes > * { pointer-events: auto; }
 .app-upd-host:has(> .app-upd) > .app-notes { top: 52px; }
 .win.full .app-notes, #singleApp .app-notes { top: calc(var(--safe-t, 0px) + 8px); }
-.app-notes-bar, .app-notes-list { background: color-mix(in srgb, var(--bg, #0e0822) 94%, transparent); border: 1px solid var(--line-2, rgba(255,255,255,.16));
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .28); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
-.app-notes-bar { align-self: center; display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 13px; border-radius: 99px; }
-.app-notes-m { white-space: nowrap; color: var(--ink-2, #d9d2f0); font-weight: 600; }
-.app-notes button { flex: none; border: 0; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
-.app-notes-bar button { padding: 5px 13px; border-radius: 99px; background: var(--wz-accent, var(--violet, #8f63ff)); color: var(--wz-on-accent, #fff); font-weight: 700; font-size: 12.5px; }
-.app-notes.open { width: min(380px, calc(100% - 20px)); }
-.app-notes-list { margin-top: 6px; padding: 4px 0; border-radius: 14px; max-height: min(60vh, 420px); overflow: auto; overscroll-behavior: contain; }
-.app-notes-row { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; }
-.app-notes-row + .app-notes-row { border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
+.app-notes-list { display: flex; flex-direction: column; gap: 6px; max-height: min(60vh, 440px); overflow: auto; overscroll-behavior: contain; }
+.app-notes-row, .app-notes-foot button { background: color-mix(in srgb, var(--bg, #0e0822) 94%, transparent); border: 1px solid var(--line-2, rgba(255,255,255,.16));
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .22); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.app-notes-row { flex: none; display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 13px; border-radius: 14px; }
 .app-notes-tx { flex: 1; min-width: 0; }
 .app-notes-t { display: flex; align-items: baseline; gap: 8px; }
-.app-notes-t b { flex: 1; min-width: 0; font-weight: 650; color: var(--ink, #fff); overflow-wrap: anywhere; }
+.app-notes-t b { flex: 1; min-width: 0; font-weight: 650; color: var(--ink, #fff); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .app-notes-t time { flex: none; font-size: 11.5px; color: var(--ink-3, #a79fc4); font-variant-numeric: tabular-nums; }
-.app-notes-tx p { margin: 3px 0 0; color: var(--ink-2, #d9d2f0); line-height: 1.35; overflow-wrap: anywhere; white-space: pre-line;
-  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.app-notes-row button, .app-notes-foot button { padding: 5px 11px; border-radius: 99px; background: transparent; color: var(--ink, #fff);
-  border: 1px solid var(--line-2, rgba(255,255,255,.2)); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.app-notes-foot { display: flex; justify-content: flex-end; padding: 6px 12px 8px; border-top: 1px solid var(--line, rgba(255,255,255,.08)); }
+.app-notes-tx p { margin: 2px 0 0; color: var(--ink-2, #d9d2f0); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.app-notes button { flex: none; border: 0; cursor: pointer; font: inherit; -webkit-tap-highlight-color: transparent; }
+.app-notes-ok { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 99px; padding: 0;
+  background: var(--wz-accent, var(--violet, #8f63ff)); color: var(--wz-on-accent, #fff); }
+.app-notes-ok svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.app-notes-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.app-notes-foot button { padding: 5px 12px; border-radius: 99px; color: var(--ink, #fff); font-size: 12px; font-weight: 600; white-space: nowrap; }
 .app-notes button:focus-visible { outline: 2px solid var(--violet-2, #b69cff); outline-offset: 2px; }
 @media (hover: hover) { .app-notes button:hover { filter: brightness(1.12); } }
 @keyframes app-notes-in { from { opacity: 0; transform: translate(-50%, -6px); } }

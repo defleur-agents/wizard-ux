@@ -87,8 +87,9 @@ test('Badge apps count their carried items on their own badge, not on Notificati
   assert.equal(N.counts.sniper, 1, '… and onto Sniper\'s badge');
   B.setRoute('sniper', 'off'); await settle();
   assert.equal(N.counts.sniper || 0, 0, 'Off: no badge at all');
-  B.setRoute('notifications', 'badge'); await settle();
-  assert.equal(N.counts.notifications, 3, 'Notifications\' badge counts only its own (6 − Sniper − Card Benefits − Backup)');
+  assert.equal(B.setRoute('notifications', 'badge'), false, 'the agent\'s own notes never go to a badge');
+  await settle();
+  assert.equal(N.counts.notifications || 0, 0, 'Notifications\' own wait in Chats: no badge');
 });
 
 test('the app\'s own reported badge and the carried count add up', async () => {
