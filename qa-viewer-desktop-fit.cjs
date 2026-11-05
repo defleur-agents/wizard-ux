@@ -51,10 +51,16 @@ await check('desktop portrait initial-fit',async()=>{await clickOpen();await cap
 await close();
 await check('iframe gallery arrows focus/order/count/propagation',async()=>{await clickOpen();assert(await p.evaluate(()=>document.activeElement.classList.contains('mviewer')),'focus leaves original iframe');for(const [key,index]of [['ArrowRight',2],['ArrowRight',3],['ArrowLeft',2],['ArrowLeft',1],['ArrowLeft',0],['ArrowLeft',4],['ArrowRight',0]]){await p.keyboard.press(key);await ready();assert.equal((await state()).i,index);assert.equal(await p.locator('.mv-ti small').textContent(),`${index+1} of 5`);}assert.equal(await p.evaluate(()=>__underArrows),0,'underlying capture handler sees no gallery arrows');assert.equal(await p.frameLocator('#synthetic-album').locator('body').evaluate(()=>arrows),0);});
 await check('native media controls seek without gallery navigation',async()=>{
-  const journal=[];const cdp=await ctx.newCDPSession(p);
+  const journal=[];
+  for(const phone of [false,true]) {
+  if(phone){await ctx.close();await boot(true);}
+  const shell=phone?'phone':'desktop',cdp=await ctx.newCDPSession(p);
+  const shellState=()=>p.evaluate(()=>({shell:document.documentElement.dataset.shell,idx:window.__wos?.idx??null,track:document.querySelector('#track')?.style.transform??null}));
   try {
     // Observe only. No test keyboard listener changes time, focus or event cancellation.
-    await p.evaluate(()=>{window.__nativeKeys=[]});
+    await F.settle(p);assert.equal((await shellState()).shell,shell);
+    if(phone)assert(await p.evaluate(()=>Number.isInteger(__wos.idx)&&__wos.desks.length>1),'real phone workspace navigation is reachable');
+    await p.evaluate(()=>{window.__nativeKeys=[];window.__underArrows=0});
     for(const kind of ['video','audio']) for(const count of [1,3]) {
       await close();await p.evaluate(({kind,count})=>{const media={kind,url:kind==='video'?'/viewer-fixture/native-video.webm':'/viewer-fixture/native-audio.wav',name:'Synthetic native '+kind,mime:kind==='video'?'video/webm':'audio/wav'};WosChat.viewer.open(count===1?[media]:[__album[0],media,__album[2]],count===1?0:1)}, {kind,count});
       const selector='.mv-stage '+kind;
@@ -69,16 +75,20 @@ await check('native media controls seek without gallery navigation',async()=>{
       assert(await p.locator(selector).evaluate(m=>m===document.activeElement&&m.controls),'native media host owns focus');
       const initial=await state();
       for(const [key,direction] of [['ArrowRight',1],['ArrowLeft',-1]]) {
-        const before=await p.locator(selector).evaluate(m=>m.currentTime),start=await p.evaluate(()=>__nativeKeys.length);
+        const before=await p.locator(selector).evaluate(m=>m.currentTime),start=await p.evaluate(()=>__nativeKeys.length),shellBefore=await shellState(),underBefore=await p.evaluate(()=>__underArrows);
         await p.keyboard.press(key);await p.waitForTimeout(120);
-        const after=await p.locator(selector).evaluate(m=>m.currentTime),events=await p.evaluate(start=>__nativeKeys.slice(start),start),current=await state();
-        const row={kind,count,key,before,after,delta:after-before,events,indexBefore:initial.i,indexAfter:current.i,timelineBackendNodeId:timeline.backendNodeId};journal.push(row);fs.writeFileSync(path.join(OUT,'native-media-keys.json'),JSON.stringify(journal,null,2));
+        const after=await p.locator(selector).evaluate(m=>m.currentTime),events=await p.evaluate(start=>__nativeKeys.slice(start),start),current=await state(),shellAfter=await shellState(),underAfter=await p.evaluate(()=>__underArrows);
+        const row={shell,kind,count,key,before,after,delta:after-before,events,indexBefore:initial.i,indexAfter:current.i,shellBefore,shellAfter,underBefore,underAfter,timelineBackendNodeId:timeline.backendNodeId};journal.push(row);fs.writeFileSync(path.join(OUT,'native-media-keys.json'),JSON.stringify(journal,null,2));
         assert(events.length===1&&events[0].trusted&&events[0].target===kind.toUpperCase()&&!events[0].prevented,'trusted retargeted native key must remain uncancelled');
         assert.equal(current.i,initial.i,'native seek must not navigate gallery');assert(current.open);
+        assert.equal(underBefore,0,'no prior underlying native arrows');assert.equal(underAfter,0,'underlying capture handler sees no native arrows');
+        assert.deepEqual(shellAfter,shellBefore,'native seek must not change underlying shell workspace');
         assert(direction*(after-before)>.01,'native browser seeking must change currentTime in the requested direction');
       }
     }
   }finally{await cdp.detach();await close();}
+  }
+  await ctx.close();await boot();
 });
 if(!RED){
 await check('desktop shapes at large/small/resized hosts',async()=>{for(const size of [{width:1440,height:900},{width:760,height:540},{width:420,height:650}]){await p.setViewportSize(size);for(let i=0;i<5;i++){await open(i);await fits(`${size.width}x${size.height} item ${i}`)}}await p.setViewportSize({width:1440,height:900});});

@@ -37,7 +37,7 @@ test('gallery arrows consume browser/default/shell propagation but leave Escape 
       let prevented=0,stopped=0;
       key({key:k,target,...(composed?{composedPath:()=>[target,media]}:{}),preventDefault(){prevented++},stopImmediatePropagation(){stopped++}});
       assert.equal(prevented,0,`${kind}/${count}/${composed}: native seek default`);
-      assert.equal(stopped,0,'native dispatch remains intact');assert.equal(calls.length,n,'no gallery navigation');
+      assert.equal(stopped,1,'block underlying shell propagation; native browser default is not cancelled');assert.equal(calls.length,n,'no gallery navigation');
     }
   }
 });
