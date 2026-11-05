@@ -31,7 +31,7 @@
       const top = [...entries].filter(e => e.watched ? e.token : e.active()).sort((a, b) => b.at - a.at)[0];
       // A layer may be waiting for an asynchronous stop/close. Never fall through
       // to a second owner just because its callback returned false or a promise.
-      if (top) { top.back(); return top.name; }
+      if (top) { if (!top.watched) entries.delete(top); top.back(); return top.name; }
       if (surface?.()) return 'surface';
       return fallback?.() || '';
     }

@@ -61,10 +61,21 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
   await p.keyboard.press('Escape'); assert.equal(await p.evaluate(()=>WosContextMenu.isOpen),false,'next Escape dismisses menu only');
   assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),true);
   // Focus the chat, not the app. Its next Back returns to the list.
-  await p.locator('.win .ch-compose textarea').first().focus(); await p.keyboard.press('Escape');
+  await p.locator('.win .ch-compose textarea').first().click(); await p.keyboard.press('Escape');
   assert.equal(await p.evaluate(()=>Object.values(__wux.wins).some(w=>w.thread==='qa-thread')),false,'focused chat closes');
   assert.equal(await field.inputValue(),'unsent','chat back keeps app mounted');
   await p.screenshot({path:path.join(out,view+'-'+skin+'.png')});
+  // Live skin switching preserves ownership and focus behavior without reload.
+  await p.evaluate(s=>WosSkin.set(s),skin==='nebula'?'sepia':'nebula');
+  await p.waitForFunction(s=>WosSkin.current===s && !WosExperience.state.busy,skin==='nebula'?'sepia':'nebula');
+  await p.evaluate(s=>WosSkin.set(s),skin);
+  await p.waitForFunction(s=>WosSkin.current===s && !WosExperience.state.busy,skin);
+  // Release the AI apps list owner: Classic renders the actual list again.
+  await p.evaluate(()=>WosExperience.chooseDesktopView('classic'));
+  await p.evaluate(()=>__wux.openChatsList());
+  await p.waitForFunction(()=>[...document.querySelectorAll('.pane-list [data-part="list"]')].some(n=>{const r=n.getBoundingClientRect();return r.width>0&&r.height>0;}));
+  await p.keyboard.press('Escape');
+  assert.ok(await p.locator('.pane-list [data-part="list"]').first().isVisible(),'Classic list unaffected by Escape at root');
   assert.deepEqual(runs,[]); assert.ok(writes.every(w=>/thread-seen|ui-preferences|appearance/.test(w)),JSON.stringify(writes)); assert.deepEqual(errors,[]);
   fs.writeFileSync(path.join(out,view+'-'+skin+'.json'),JSON.stringify({view,skin,writes,runs,errors,legacySamples:samples},null,2));
   console.log('PASS',view,skin,'root/no-flash, iframe app back/root, recording, menu, focused chat');

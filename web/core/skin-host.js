@@ -1050,7 +1050,8 @@
         },
         push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
-        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const done = guard(a, 'back', close);
+        const entry = { a, close: () => { off(); return done(); } }; overlays.push(entry);
         const offEscape = shell?.escapeOverlay?.(entry.close);
         const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
@@ -1306,7 +1307,8 @@
       // open one closes first. push(close) while it is open; the returned release (or teardown) takes it out.
       api.back = Object.freeze({ push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
-        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
+        const done = guard(a, 'back', close);
+        const entry = { a, close: () => { off(); return done(); } }; overlays.push(entry);
         const offEscape = shell?.escapeOverlay?.(entry.close);
         const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
