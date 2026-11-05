@@ -14,7 +14,7 @@ function extract(from,to,ctx) {
   vm.runInNewContext(source.slice(a,b),ctx); return ctx;
 }
 function capture(overrides={}) {
-  const ctx={active:null,preparations:new Map(),ownedRows:new Map(),recoveryLive:new Set(),unknownMeetingActive:false,
+  const ctx={active:null,memoryTakes:new Map(),preparations:new Map(),ownedRows:new Map(),recoveryLive:new Set(),unknownMeetingActive:false,
     ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},...overrides};
   // This fail-closed matrix models an in-page adapter; the Android/no-page-audio
   // matrix lives in reload-page-audio-custody.test.mjs with configuredNative:null.
@@ -272,7 +272,7 @@ test('consumed warm preparation release cannot close input now owned by a sessio
 });
 test('unknown native status cannot become an empty app-custody proof, but repaired browser takes remain accessible',async()=>{
   const row={id:'browser',appId:'fixture',status:'pending',bytes:32000};let data=[];
-  const c={validate(){},ready:Promise.resolve(),recover:async()=>{},rows:async()=>data,result:async r=>r,
+  const c={validate(){},memoryTakes:new Map(),ready:Promise.resolve(),recover:async()=>{},rows:async()=>data,result:async r=>r,
     recoveryError:Object.assign(Error('native unknown'),{code:'native_owner_uncertain'}),unknownMeetingActive:false,ownershipLoaded:true,ownedRows:new Map(),
     fail:(code,message)=>Object.assign(Error(message),{code})};
   extract('  async function pending(appId)', '  async function ack(',c);
