@@ -24,7 +24,7 @@ function box({ shell = 'desktop', storage = new Map() } = {}) {
   s.WizCore = { refreshApps: async () => {} };
   s.WizChatsHost = { defaultId: () => 'wizard-chats', installed: () => [] };
   s.WosSkin = { current: 'obsidian-light', list: ['obsidian', 'obsidian-light'], families: [], familyOf: () => null };
-  s.WosSkinHost = { layouts:[{id:'ai-apps', name:'AI apps', desc:'Chats beside your apps'}], personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, setStandardLayout(id) { this.layout=id; }, loadTweaks: async ids => { active = [...ids]; loads.push([...ids]); } };
+  s.WosSkinHost = { layouts:[{id:'ai-apps', name:'AI apps', credit:'designed by Miguel'}], personalState: { ready: false }, get tweakState() { return active; }, layout: 'classic', setLayout() {}, setStandardLayout(id) { this.layout=id; }, loadTweaks: async ids => { active = [...ids]; loads.push([...ids]); } };
   s.fetch = async url => {
     const path = String(url.pathname || url).split('/wizard-os-home/')[1] || '';
     if (/^tweaks\/|^core\/slots\.json/.test(path)) return { ok: true, status: 200, json: async () => JSON.parse(read('web/' + path.replace(/\?.*$/, ''))) };
@@ -49,12 +49,11 @@ const look = async b => { b.view.focus('look'); await tick(); return b.root.inne
 for (const shell of ['desktop', 'phone']) test(`${shell}: no Shell view row; Miguel's Tweaks list has both shell views as plain switches, off`, async () => {
   const b = box({ shell }); await b.E.refresh();
   const html = await look(b);
-  if(shell==='phone') assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'phone unchanged'); else assert.match(html,/data-desktop-view="ai-apps"[^]*?<small>Chats beside your apps<\/small>/);
+  if(shell==='phone') assert.doesNotMatch(html, /Shell view|data-shellview|sv-seg|sv-group/, 'phone unchanged'); else assert.match(html,/data-desktop-view="ai-apps"[^]*?designed by Miguel/);
   assert.deepEqual(viewSwitches(html), [['miguel/orb-shell', 'Different shell view - Orb', false], ['miguel/apps-home', 'Different shell view - Apps', false]]);
-  // One flat list: no author sections or contributor credits.
+  // one flat list (Miguel, 1 Nov 2026): no author sections, each row says who made it
   assert.doesNotMatch(html, /tw-author|data-tweakauthor|All of /, 'no per-author quick buttons');
-  assert.doesNotMatch(html, /tw-by|designed by|>by (Miguel|miguel)</, 'no contributor credits');
-  if(shell==='phone') for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?<small>Phone view</small>`), id + ' labelled for this device type');
+  if(shell==='phone') for (const id of VIEWS) assert.match(html, new RegExp(`data-tweak-toggle="${id}"[^]*?class="tw-by">${shell === 'desktop' ? 'Desktop' : 'Phone'} view · by (Miguel|miguel)<`), id + ' labelled by Miguel, for this device type');
   assert.deepEqual(b.views(), [], 'a fresh device wears no view (Desks)');
 });
 

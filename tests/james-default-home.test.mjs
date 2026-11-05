@@ -131,12 +131,11 @@ test('James: the default desktop bar has no AI fuel, security, backup or machine
   assert.match(s, /<b>Show every voice button<\/b>/);
 });
 
-test('#755 stays: tweaks are their own switches, described by function, in every skin; Welcome never switches skin', () => {
+test('#755 stays: tweaks are their own switches, labelled by author, in every skin; Welcome never switches skin', () => {
   const s = read('web/core/settings.js');
   // Miguel, 1 Nov 2026: one flat list, no per-author "All of …" quick buttons.
   assert.doesNotMatch(s, /data-tweakauthor=|All of \$\{/, 'no per-author quick button');
-  assert.doesNotMatch(s, /tw-by|t\.author|authorList/, 'tweak rows never render contributor credits');
-  assert.match(s, /<small>\$\{esc\(t\.where\)\}<\/small>/, 'views still say which device type they are for');
+  assert.match(s, /<small class="tw-by">\$\{t\.where \? esc\(t\.where\) \+ ' · ' : ''\}by \$\{esc\(by\(t\.author\)\)\}<\/small>/, 'each tweak says who made it (a view also says which device type it is for)');
   assert.match(read('web/core/experience.js'), /A color pick never changes tweaks/);
   assert.ok(existsSync(new URL('../web/core/welcome.js', import.meta.url)));
 });

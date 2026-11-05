@@ -31,7 +31,7 @@
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
