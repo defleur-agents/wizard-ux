@@ -1,12 +1,12 @@
 # Shared components
 
-Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native Back and desktop Escape share owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists, and `WosSkinHost` decides the desktop view synchronously at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), so Classic's list never mounts or paints first on a refresh; `WizAppServices.back` keeps root apps mounted.
+Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/desktop owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WosSkinHost` resolves the desktop at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), preventing Classic first paint; `WizAppServices.back` keeps root apps mounted.
 
-[Full contracts, prohibited duplicates and proof pointers](component-contract-details.md).
+[Contracts](component-contract-details.md).
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One owner per capability: [gate](app-reuse-gate.md).
+[Reuse gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits |
 
@@ -52,11 +52,12 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): pure rows, Sort/Group, notes, visible-ID walk; all shells/layouts |
-| Chats time labels | `WizCore.ago` (`core.js`): phone, classic desktop, shared thread headers and AI apps `shortTime`; elapsed hours <24h, then owner-calendar day |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
+| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns, AI apps geometry; slots, ratios, side, dock, device-local state |
+| Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; badge `WizCore.workspaceNav.refreshChats` = `WizLive.visibleUnread(unified())` (Ready separate) |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; pills: `workspaceNav.chatsCount/refreshChats` (canonical unread + routed notes); subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
@@ -65,6 +66,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
+| Thread tracker (off-by-default tweak) | `WosThreadTracker` (`thread-tracker.js`): ask strip, Chats row dots, quote Reply; reads `/wizard/v1/thread-items` |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
@@ -120,7 +122,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 
 ## Plumbing (single owner; files in `web/core/` unless noted)
 
-`WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`: reload guards page-held audio, not surviving custody; instant takes retain ordered in-memory handoff when device storage fails; explicit Discard releases mic/custody), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia` (`media-watch.js`).
+`WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia` (`media-watch.js`).
 
 AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; an unknown cap or spend shows as text, never zero or unlimited (`tests/claude-extra-usage.test.mjs`).
 

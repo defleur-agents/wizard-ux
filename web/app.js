@@ -1427,8 +1427,8 @@
   /* ---------------- home desk ---------------- */
   function renderHome() {
     const L = live(), needs = L.needs.length;
-    // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
-    const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length + (window.WosBell?.readyCount?.() || 0);
+    // The card still opens all Ready threads; its pill shares the phone/desktop unread projection.
+    const ready = window.WizCore.workspaceNav.chatsCount(LIVE);
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const now = new Date();
@@ -1441,7 +1441,7 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span></button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready${ready ? `, ${ready} unread` : ''}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span>${ready ? `<span class="n">${ready}</span>` : ''}</button>
         <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}

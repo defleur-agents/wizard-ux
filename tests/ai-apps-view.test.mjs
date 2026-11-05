@@ -51,6 +51,7 @@ class El {
   get title() { return this.attrs.title || ''; } set title(v) { this.attrs.title = String(v); }
   get value() { return this.attrs.value || ''; } set value(v) { this.attrs.value = String(v); }
   setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; }
+  hasAttribute(k) { return k in this.attrs; }
   append(...n) { for (const c of n) { if (c == null) continue; if (typeof c === 'string') { this._text += c; continue; } c.remove(); c.parentNode = this; this.children.push(c); } }
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
@@ -69,6 +70,8 @@ class El {
 class FakePointerEvent { constructor(type, init = {}) { Object.assign(this, init, { type }); } preventDefault() { this.defaultPrevented = true; } stopPropagation() {} }
 
 function world({ shell = 'phone', route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' } } = {}) {
+  const paneContext = {}; vm.runInNewContext(read('web/core/pane-layout.js'), paneContext);
+  globalThis.WizCore = { ...globalThis.WizCore, panes: paneContext.WizCore.panes };
   const html = new El('html'), body = new El('body'), device = new El('div'), dock = new El('div'), orbWrap = new El('div');
   html.append(body); body.append(device); device.append(dock); dock.append(orbWrap);
   const docListeners = {};
@@ -951,13 +954,13 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => (n.className.includes('is-sub') ? '  ' : '') + n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n),
-    ['Working 1', '  Needs you 1', '  Done 1'], 'round 22: By status = Working, then each status alone (no Ready total over them: no double count)');
+    ['Working 1', '  Needs you 1', '  Done 0'], 'By status keeps read-only groups navigable but counts only unread');
   w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.querySelector('.aad-rk-w').textContent + ' ' + n.querySelector('.aad-rk-n').dataset.n), ['Working 1', 'Ready 2'], 'round 22: One list = Ready alone on the rail too');
   w.st.setting[1].querySelector('[data-aad-group="status"]').dispatchEvent(new FakePointerEvent('click'));
   // round 19 item 1: a status opens its first chat in the docked column, the rail staying folded (only ◫ expands)
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
-  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1\. Click opens the first; hover lists them$/);
+  assert.match(w.q('.aad-rk[data-k="needs"]').getAttribute('aria-label'), /^Needs you, 1 unread\. Click opens the first; hover lists them$/);
   w.q('.aad-rk[data-k="needs"]').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aadSide, 'rail', 'never expands'); assert.equal(w.st.opened.at(-1), 'thread:r1');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
@@ -965,7 +968,7 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.ok(w.q('.aad-rk[data-k="needs"]').classList.contains('is-on'), 'its group marked');
   w.q('.aad-rk[data-k="done"]').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'thread:r2'); assert.equal(w.html.dataset.aadSide, 'rail');
   w.q('.aad-tog').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadSide, 'open', 'the toggle is the only thing that expands');
-  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done1'], 'the rail\'s statuses as sub-headers with counts, in its order');
+  assert.deepEqual(w.qa('#aad-sec-ready .aad-grp').map(g => g.dataset.state + ':' + g.textContent), ['needs:Needs you1', 'done:Done'], 'status subheaders hide the count for read groups');
   const css = read('web/layouts/ai-apps/desktop.css'), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
   assert.ok(css.includes(P + ' .aad-sec[data-sec="archive"] > :is(span, .aad-sec-c) { opacity: .85; }'), 'Archive a step quieter');
   assert.match(css, /\.aad-tally::after \{ content: attr\(data-n\);/);
@@ -1425,7 +1428,7 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
   assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
-  assert.ok(css.includes(`${P}[data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }`), 'a docked chat and the panel never overlap');
+  assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
   assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
   const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);

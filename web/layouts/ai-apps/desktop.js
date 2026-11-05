@@ -98,6 +98,26 @@ export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !
 
 export default function desktop(api) {
   const doc = document, root = doc.documentElement;
+  const panes = globalThis.WizCore.panes;
+  let paneGeometry = null, secondEl = null;
+  const paneVars = new Set();
+  function placePanes(s) {
+    const m = panes.get(), focus = root.hasAttribute('data-aad-focus');
+    // Horizontal dock interaction is not admitted yet: keep the saved model but render at end.
+    const edge = ['start', 'end'].includes(m.dock.edge) ? m.dock.edge : 'end';
+    const sideWidth = focus ? 0 : root.dataset.aadSide === 'open' ? s.side[0] : RAIL;
+    const dockWidth = focus ? 0 : root.dataset.aadTabs === 'rail' ? COLS.tabsRail : s.tabs[0];
+    paneGeometry = panes.geometry({ ...m, dock: { ...m.dock, edge } }, { width: vw(), height: globalThis.innerHeight || 900 }, {
+      sideWidth, dockWidth, appWidth: s.app[0], chatOn: !!root.dataset.aadChat, appOn: !!root.dataset.aadSplit, wide: root.hasAttribute('data-aad-wide'), app2On: !!secondEl,
+    });
+    root.dataset.aadPaneSide = m.side; root.dataset.aadDockEdge = edge;
+    root.dataset.aadPaneTiled = String(paneGeometry.tiled);
+    const put = (k, v) => { const key = '--aad-pane-' + k; paneVars.add(key); if (root.style.getPropertyValue(key) !== v + 'px') root.style.setProperty(key, v + 'px'); };
+    for (const [id, b] of Object.entries({ side: paneGeometry.sidebar, dock: paneGeometry.dock, main: paneGeometry.content, chat: paneGeometry.panes.chats, app: paneGeometry.panes.app, app2: paneGeometry.panes.app2 || { x: 0, y: 0, width: 0, height: 0 } })) {
+      for (const [k, v] of Object.entries(b)) put(id + '-' + k, v);
+      put(id + '-right', vw() - b.x - b.width); put(id + '-bottom', (globalThis.innerHeight || 900) - b.y - b.height);
+    }
+  }
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };
   const icon = (name, cls = 'aad-ico') => svgIcon(doc, name, cls);
   const desks = () => api.desks.list();
@@ -147,6 +167,9 @@ export default function desktop(api) {
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
   const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
   const titleOf = id => { const s = sessions || readSessions(); for (const k of KINDS) { const r = (s[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
+  // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
+  const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
+  const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
   const appName = id => (api.apps.list().find(a => a.id === id) || desks().find(d => d.id === id) || {}).name || '';
   const badgeText = id => { const n = badgeMap[id] || 0; if (!n) return ''; const t = api.apps.badgeText?.(id); return t || (n > 99 ? '99+' : String(n)); };
   const lit = id => (badgeMap[id] || 0) > 0;
@@ -309,6 +332,7 @@ export default function desktop(api) {
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
+  api.listen(globalThis, 'wos:thread-tracker', () => paintList());
   api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
   api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
@@ -336,6 +360,7 @@ export default function desktop(api) {
   const shownVars = {}, shownAria = {};
   function applySizes() {
     const s = sizes();
+    placePanes(s);
     for (const id of Object.keys(SIZE_VARS)) {
       const px = s[id][0] + 'px';
       if (shownVars[id] !== px) { shownVars[id] = px; root.style.setProperty(SIZE_VARS[id], px); }
@@ -379,12 +404,12 @@ export default function desktop(api) {
     const g = el('div', 'aad-grip', { role: 'separator', 'aria-orientation': 'vertical', tabindex: '0', 'aria-label': GRIP_NAMES[id], title: GRIP_NAMES[id] + ' · double-click: back to default', 'data-grip': id });
     grips.append(g); grip[id] = g;
     // the sidebar grows to the right, the open-apps column and the app panel to the left
-    const sign = id === 'side' ? 1 : -1;
+    const sign = () => id === 'tabs' ? (root.dataset.aadDockEdge === 'start' ? 1 : -1) : (id === 'side' ? 1 : -1) * (root.dataset.aadPaneSide === 'end' ? -1 : 1);
     let drag = null, cancelFrame = null;
     // (the pointer's latest x, applied once a frame: a fast mouse sends several moves a frame)
     const step = t => {
       cancelFrame = null; if (!drag || drag.at === drag.done) return;
-      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign, false);
+      drag.done = drag.at; setSize(id, drag.w + (drag.at - drag.x) * sign(), false);
       if (t && t - drag.fit > FRAME_FIT_MS) { drag.fit = t; fitFrames(drag.frames); }
     };
     api.listen(g, 'pointerdown', e => {
@@ -407,7 +432,7 @@ export default function desktop(api) {
     api.listen(g, 'keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); resetSize(id); return; }
       const dir = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!dir) return;
-      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign * (e.shiftKey ? 64 : 16), true); sizing = '';
+      e.preventDefault(); sizing = id; setSize(id, sizes()[id][0] + dir * sign() * (e.shiftKey ? 64 : 16), true); sizing = '';
     });
   }
   api.listen(globalThis, 'resize', () => applySizes());
@@ -577,6 +602,8 @@ export default function desktop(api) {
     // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
     const t0 = inProject ? titleInProject(s) : s.title;
     b.append(el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) }));
+    const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
+    if (dots) b.append(dots);
     // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
@@ -680,7 +707,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -699,12 +726,14 @@ export default function desktop(api) {
         if (k === 'snoozed' && !rows.length) continue;
         const hd = el('button', 'aad-lab aad-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aad-sec-' + k });
         hd.append(el('span', 'aad-sec-w', { text: word0 }));
-        // round 18 item 4a: Ready's count on its own header (the rail's amber disc, the Chats badge)
-        if (k === 'ready' && rows.length) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: rows.length > 99 ? '99+' : String(rows.length) }));
+        // Ready keeps every row; its pill uses the same canonical unread feed as the phone menu.
+        const unread = k === 'ready' ? badgeText(CHATS) : '';
+        if (unread) hd.append(el('b', 'aad-sec-n', { 'aria-hidden': 'true', text: unread }));
         hd.append(icon('down', 'aad-ico aad-sec-c'));
         // folded (round 7): a minimal tally after the chevron: Working its count with a tiny spinner, Ready its count
         if (!on && k !== 'archive' && k !== 'ready' && rows.length) hd.append(el('span', 'aad-tally', { 'data-n': String(rows.length), 'aria-hidden': 'true' }));
-        if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
+        if (k === 'ready') hd.setAttribute('aria-label', `${word0}${unread ? `, ${unread} unread` : ''}${on ? '' : ', folded'}`);
+        else if (!on && rows.length) hd.setAttribute('aria-label', `${word0}, ${rows.length}, folded`);
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on && k === 'ready' && rows.length && groupBy() === 'none') {
@@ -721,7 +750,9 @@ export default function desktop(api) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
             const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
-            gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
+            gh.append(el('span', 'aad-grp-w', { text: g.word }));
+            const n = globalThis.WizChatsListModel.unreadCount(g.rows);
+            if (n) gh.append(el('span', 'aad-grp-n', { text: n > 99 ? '99+' : String(n) }));
             body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
           }
         } else if (on) {
@@ -786,16 +817,16 @@ export default function desktop(api) {
     railLast = key; stepAt = id; noteWant = id.startsWith('notif:'); api.sessions.open(id);
     paintRail(true);
   }
-  function railRow(k, n, word0, state = '', act = null) {
+  function railRow(k, n, word0, state = '', act = null, text = n > 99 ? '99+' : String(n)) {
     const key = state || k, sub = !!state, on = !!act && act.key === key;
-    const label = `${word0}, ${n}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
+    const label = `${word0}${n ? `, ${text}${k === 'ready' ? ' unread' : ''}` : ''}${on ? `, chat ${act.i + 1} of ${act.n} open` : ''}. Click opens ${on ? 'the next' : 'the first'}; hover lists them`;
     const b = el('button', 'aad-rk' + (sub ? ' is-sub' : '') + (n ? '' : ' is-zero') + (on ? ' is-on' : ''), { type: 'button', role: 'listitem', 'data-k': key, 'aria-label': label, ...(on ? { 'aria-current': 'true' } : {}) });
     // round 23c (Miguel, 4 Nov 2026: a tally of dots looked weird past four): every row is Working's pattern, ONE mark
     // and its number: a spinner while chats work, a solid dot once ready (amber in Ready, the ink in a status), a ring
     // when snoozed; nothing waiting = the faint empty ring alone
     const kind = key === 'working' ? 'spin' : key === 'snoozed' ? 'ring' : 'dot';
     const wk = el('span', 'aad-rk-n aad-rk-wk', { 'data-n': String(n), 'aria-hidden': 'true' });
-    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text: n > 99 ? '99+' : String(n) }));
+    if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text }));
     else wk.append(el('i', 'aad-d is-none'));
     b.append(wk, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
     if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
@@ -812,7 +843,8 @@ export default function desktop(api) {
     // status alone (plain chats as 'Other'), no Ready total over them
     const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
-    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
+    const unread = badgeMap[CHATS] || 0, text = badgeText(CHATS);
+    const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, unread, text, gm, groups.map(g => [g.state, g.rows.length, globalThis.WizChatsListModel.unreadCount(g.rows)]), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
     railDrawn = sig;
     // Snoozed (when there are any), Ready (only when something is ready), then Ready's statuses
@@ -820,9 +852,9 @@ export default function desktop(api) {
     // expanded list's tiny spinner, in the expanded list's order (Working, Snoozed, Ready)
     const out = working ? [railRow('working', working, 'Working', '', act)] : [];
     if ((s.snoozed || []).length) out.push(railRow('snoozed', s.snoozed.length, 'Snoozed', '', act));
-    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', g.rows.length, g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
+    if (grouped && groups.length) out.push(...groups.map(g => railRow('ready', globalThis.WizChatsListModel.unreadCount(g.rows), g.state === 'none' ? 'Other' : g.word, g.state, act)));   // (round 24b: or each project)
     // nothing ready (Miguel, 4 Nov 2026): no Ready mark at all, so the rail reads just "9 Working"
-    else if (ready.length) out.push(railRow('ready', ready.length, 'Ready', '', act));
+    else if (ready.length || unread) out.push(railRow('ready', unread, 'Ready', '', act, text));
     rList.replaceChildren(...out);
     if (fly) paintFly();
   }
@@ -1224,11 +1256,18 @@ export default function desktop(api) {
       fixingBehind = true; const d0 = pane.desk, id0 = pane.id;
       api.sessions.newChat(); api.after(80, () => { want = id0; api.nav.goDesk(d0); api.after(600, () => { fixingBehind = false; }); });
     }
-    for (const w of wsps()) { const r = w === pane?.el ? 'app' : w === chat ? 'chat' : ''; if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; } }
+    const model = panes.get();
+    const second = model.slots.includes('app2') && model.app2 && desks().find(d => d.id === model.app2 && d.id !== pane?.id && d.id !== CHATS);
+    secondEl = second ? wsps().find(w => Number(w.dataset.ws) === second.desk && w !== chat) || null : null;
+    for (const w of wsps()) {
+      const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : '';
+      if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; }
+      if (r && !model.slots.includes(r === 'chat' ? 'chats' : r)) w.dataset.aadOmitted = ''; else delete w.dataset.aadOmitted;
+    }
     const was = `${!!root.dataset.aadSplit}${docked}`, wasDocked = docked;
-    docked = !!(chatOn && chat);
+    docked = !!(model.slots.includes('chats') && chatOn && chat);
     const setState = () => {
-      if (pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
+      if (model.slots.includes('app') && pane && chat) root.dataset.aadSplit = 'on'; else delete root.dataset.aadSplit;
       if (docked) root.dataset.aadChat = 'on'; else delete root.dataset.aadChat;
     };
     if (!docked && !wasDocked && !!(pane && chat) !== !!root.dataset.aadSplit) flip([homeComposer(), orbBox], setState); else setState();
@@ -1239,7 +1278,7 @@ export default function desktop(api) {
     // the header (not cloning it) preserves its tools/listeners and iframe state.
     const headerHost = pane?.el || top;
     if (pTop.parentNode !== headerHost) headerHost.append(pTop);
-    pTop.hidden = !pane; cX.hidden = !docked;
+    pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
     if (loadId && pane?.id === loadId) waitLoaded(pane.el); else if (loadId && !want) doneLoading();
@@ -1700,7 +1739,7 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
+    shows: desk => (!!secondEl && Number(secondEl.dataset.ws) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
@@ -1709,18 +1748,21 @@ export default function desktop(api) {
   root.dataset.settingsOver = '';
   { const r = api.route(); chatsFresh = !!r.home || (r.desk === mainChats()?.desk && r.view === 'thread' && r.thread === '__new__'); }
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
+  const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); });
   globalThis.dispatchEvent?.(new Event('resize'));
   if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
+    offPanes(); for (const v of paneVars) root.style.removeProperty(v);
+    for (const k of ['aadPaneSide', 'aadDockEdge', 'aadPaneTiled']) delete root.dataset[k];
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
     toolsMo?.disconnect();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
-    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; }
+    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };

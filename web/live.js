@@ -37,6 +37,7 @@
   };
   const clean = s => String(s || '')
     .replace(/\n*^\[WIZARD_REPLY_V1\]\n[\s\S]*?\n^\[\/WIZARD_REPLY_V1\][ \t]*$/m, ' ') // a Notifications Reply's framed item (quoted lines can't close it)
+    .replace(/\n*\[WIZARD_REPLY_TO_V1\]\{[^\n]*?\}(?:\n[\s\S]*?)?\[\/WIZARD_REPLY_TO_V1\]/g, ' ') // a Thread tracker quote
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
@@ -65,10 +66,10 @@
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
-    const status = ALIASES[raw] || raw || undefined;
+    const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
     const lastUserAt = optIso(item.wizard_last_user_at ?? item.last_user_at);
     const lastAssistantAt = optIso(item.wizard_last_assistant_at ?? item.last_assistant_at);
     const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
