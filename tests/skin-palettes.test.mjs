@@ -9,7 +9,7 @@ test('the two skins hold the right palettes, and an unlisted skin becomes its ow
   const s = read('web/core/skins.js');
   assert.match(s, /\{ id: 'wizard', name: 'Wizard', [^\n]*palettes: \['nebula', 'grove', 'tide', 'ember', 'signal'\] \}/);
   assert.match(s, /\{ id: 'mizel', name: 'Mizel', [^\n]*palettes: \['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'\] \}/);
-  assert.match(s, /\{ id: 'novairecito', name: 'Novairecito', [^\n]*palettes: \['novairecito', 'sepia'\] \}/, 'Novaire’s looks are colours of one skin');
+  assert.match(s, /\{ id: 'novairecito', name: 'Noir & Sepia', [^\n]*palettes: \['novairecito', 'sepia'\] \}/, 'Novaire’s looks are colours of one skin');
   assert.match(s, /if \(!f\) f = \{ id: s\.id, name: s\.name, who: s\.who, palettes: \[s\.id\] \};/);
   assert.match(s, /families: FAMS,/);
 });
@@ -42,7 +42,7 @@ test('colors and tweaks are separate: onboarding offers every color; Look offers
   assert.match(w, /const cur = S\.current, list = S\.list;/, 'first run lists every color, not one skin\'s');
   assert.doesNotMatch(w, /fam\.palettes/);
   assert.doesNotMatch(s, /data-tweakauthor=/, 'one flat list: no per-author quick button (Miguel, 1 Nov 2026)');
-  assert.match(s, /list\.map\(t => tweakSwitches\(\[t\], 'data-tweak-toggle', s\.busy, name\)/, 'a switch per tweak');
+  assert.match(s, /list\.map\(t => tweakSwitches\(\[t\], 'data-tweak-toggle', s\.busy\)/, 'a switch per tweak');
   assert.doesNotMatch(s, /data-tweakpreset/, 'no preset sets: everything starts off');
   assert.match(e, /chooseSkin\(\) \{ if \(error \|\| wornOwner\(\) !== owner\) return apply\(\); return Promise\.resolve\(\); \}/, 'a color pick never swaps the tweak set');
   for (const who of ['wizard', 'miguel']) assert.equal(typeof JSON.parse(read(`web/tweaks/${who}/profile.json`)).name, 'string', who + ' set has a display name');
