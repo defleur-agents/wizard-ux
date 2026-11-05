@@ -2306,7 +2306,7 @@
     const f = focused();
     if (f?.app === 'feature') { closeWin(f.id);return 'view'; }
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
-    if (f && f.app !== 'chats' && ws[cur].mono) { toggleMono(); return 'mono'; }
+    if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
