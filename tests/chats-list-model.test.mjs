@@ -130,3 +130,15 @@ test('raw and projected tie keys agree even when display titles add a source or 
     assert.deepEqual(ids(M.readySort(projected, order)), ['alpha', 'note', 'untitled']);
   }
 });
+
+test('folded notifications have the same Priority in core and host, even with omitted/mixed item priorities', () => {
+  for (const items of [
+    [{ id: 'n', title: 'Newest' }, { id: 'o', priority: 3 }],
+    [{ id: 'n', title: 'Newest', priority: 1 }, { id: 'o', priority: 3 }],
+    [{ id: 'n', title: 'Newest', priority: 1 }, { id: 'o', priority: 2 }],
+  ]) {
+    const core = { ...items[0], items, priority: Math.max(...items.map(i => Number(i.priority) || 3)) };
+    assert.equal(M.notificationRow(items[0], items).rank, M.notificationRow(core).rank);
+  }
+  assert.equal(M.notificationRow({}).rank, 3, 'single missing-priority note stays FYI');
+});

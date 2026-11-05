@@ -515,7 +515,7 @@ window.WizCore.chats = function createChats(H) {
   }
   window.addEventListener('wos:prefs-error', () => toast('!', 'Saved on this device only — box preferences unavailable', 4000));
   const waitsOn = s => !(snoozeLast() && deferredOf(s) && !isWorking(s)) && (['waiting_for_approval', 'unknown'].includes(s.status) || (!deferredOf(s) && ['needs_you', 'check'].includes(attOf(s)?.state)));
-  // Newest keeps groupWork's recency order; Priority and By subject put what waits on James first.
+  // Every Sort uses the same row model; By subject orders its rows by Priority.
   const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
   const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
   // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
@@ -585,7 +585,6 @@ window.WizCore.chats = function createChats(H) {
     return window.WizChatsListModel.priorityGroups(list, awake, sesRank).map(g => { const r = g.rank, n = g.rows.length + g.notes.length;
       return `<div class="ch-subj ch-pri" data-pri="${r}" data-morph-key="${esc(sec === 'ready' ? `pri:${r}` : `pri:${sec}:${r}`)}"><span>${PRI_LABEL[r] || 'Other'}</span><small>${n}</small></div>` + withNotes(g.rows, g.notes, rowFn); }).join('');
   }
-  // The notes' own order, and whether a note goes above a given chat row, for the current Ready order.
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
   // An app's item (Settings › Notifications set to Chats) wears that app's own mark in the yellow tile; Notifications keeps the bell.
   function noteIcon(it) {

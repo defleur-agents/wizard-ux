@@ -123,9 +123,10 @@ function orderSessions(list, order, { at, rank, state } = {}) {
   return readySort((list || []).map(s => ({ id: s.id, title: sessionTitle(s), at: at(s), rank: rank(s), state: state?.(s), value: s })), order).map(r => r.value);
 }
 const sortNotes = (items, order) => readySort(items.map(notificationRow), order).map(r => r.value);
-function notificationRow(it) {
+function notificationRow(it, items = it.items || []) {
+  const priority = items.length > 1 ? Math.max(...items.map(i => Number(i.priority) || 3)) : Number(it.priority);
   return { id: it.id, title: it.title || '', sortTitle: it.title || '', at: new Date((Number(it.time) || 0) * 1000).toISOString(),
-    note: true, snoozed: !!it.read, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, value: it };
+    note: true, snoozed: !!it.read, rank: priority >= 4 ? 1 : priority === 3 ? 2 : 3, value: it };
 }
 /** Combine sessions and notes before drawing; the same comparator owns both. */
 function mixedRows(list, notes, order, facts, { timeOnly = false } = {}) {
