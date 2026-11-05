@@ -95,6 +95,12 @@ function readyStep(ids, cur, dir) {
 
 
 const sessionTitle = s => s.title || 'New chat';
+/** A live controller receipt outranks attention/preview-derived completion. No
+ * receipt means no inference: an old run id alone must never pin Working. */
+function executionStatus(status, runId, runStatus) {
+  if (['waiting_for_approval', 'unknown', 'stopping'].includes(status)) return status;
+  return runId && ['submitting', 'queued', 'running', 'stopping'].includes(runStatus) ? runStatus : status;
+}
 /** Project raw sessions once, with the shell's read/actions/attention facts. */
 function sessionRow(s, kind, { live, chats, pins } = {}) {
   const fresh = !!live.isNew?.(s), state = chats.stiKind?.(s) || '';
@@ -156,7 +162,7 @@ function priorityGroups(list, notes, rank) {
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
-root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort,
+root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
   readyStep, visibleIds, unreadCount, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);
