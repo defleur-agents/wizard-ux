@@ -1,0 +1,3 @@
+# Bind metadata to the commit archived by immutable-release publishers.
+# Raw checkouts retain a non-SHA placeholder; About rejects it fail-closed.
+web/build.json export-subst
