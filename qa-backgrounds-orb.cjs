@@ -9,6 +9,13 @@ let origin=process.env.QA_PREVIEW_URL, server, browser;
 const cases=[],errors=[];
 const record=(name,value=true)=>{assert.ok(value,name);cases.push({name,pass:true});console.log('PASS',name);};
 const shot=(p,name)=>p.screenshot({path:path.join(out,name+'.png')});
+// Include resolved layout colours: inline tokens alone missed the photo CSS swap.
+const paletteState=p=>p.evaluate(()=>{
+  const s=getComputedStyle(document.documentElement),tokens={};
+  for(const k of Array.from(s).sort()) if(/^--(?:wz-|ink|glass|line|bg$|violet|cyan|sk-win|sk-bar|sk-line|aad-)/.test(k)) tokens[k]=s.getPropertyValue(k).trim();
+  const panel=document.getElementById('dsettings'),c=panel&&getComputedStyle(panel);
+  return {skin:document.documentElement.dataset.skin,scheme:s.colorScheme,tokens,panel:c&&{bg:c.backgroundColor,color:c.color}};
+});
 // CSS Color 4 serializes color-mix differently by palette. Test rendered alpha, not a string format.
 async function surfaces(p, selector) {
   return p.locator(selector).evaluateAll(ns => {
@@ -33,10 +40,13 @@ async function main(){
   for(const [palette,image] of [['nebula','lake'],['grove','landscapes']]){
     await p.locator(`[data-skinpick="${palette}"]`).click();
     await p.waitForFunction(id=>WosSkin.current===id,palette);
+    await p.locator('[data-bgpick="living"]').click();await p.waitForTimeout(350);
+    const canvasPalette=await paletteState(p);await shot(p,'desktop-'+palette+'-living-picker');
     await p.locator(`[data-bgpick="${image}"]`).click();
     await p.waitForFunction(([id,img])=>WosSkin.current===id&&WosSkin.wallpaper===img,[palette,image]);
     await p.waitForFunction(()=>{const c=document.getElementById('skinA');if(!c?.width||+c.style.opacity<.9)return false;const d=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let min=255,max=0;for(let i=0;i<d.length;i+=Math.max(4,Math.floor(d.length/400/4)*4)){min=Math.min(min,d[i]);max=Math.max(max,d[i]);}return max-min>20;});
-    record(palette+': real Background card preserves color and paints an image');
+    assert.deepEqual(await paletteState(p),canvasPalette,palette+': image and canvas keep identical resolved colours');
+    record(palette+': real Background card preserves resolved palette and paints an image');
     const panels=await surfaces(p,'.win:visible, #dsettings:visible');console.log('PANELS',palette,JSON.stringify(panels));
     await shot(p,'desktop-'+palette+'-'+image+'-picker');
     record(palette+': text windows are fully opaque',panels.length>0&&panels.every(c=>c.alpha===255));
@@ -48,6 +58,18 @@ async function main(){
     record(palette+': selection survives reload',await p.evaluate(img=>WosSkin.wallpaper===img,image));
     await p.evaluate(()=>__wux.openSettings('look'));await p.waitForSelector('[data-bgpick="living"]');
   }
+  // Every Wizard palette, every shared background, real Settings controls.
+  for(const palette of ['nebula','grove','tide','ember','signal']){
+    await p.locator(`[data-skinpick="${palette}"]`).click();
+    await p.locator('[data-bgpick="living"]').click();await p.waitForTimeout(350);
+    const expected=await paletteState(p);
+    for(const image of await p.evaluate(()=>WosSkin.wallpapers.map(w=>w.id))){
+      await p.locator(`[data-bgpick="${image}"]`).click();await p.waitForTimeout(250);
+      assert.deepEqual(await paletteState(p),expected,palette+' / '+image);
+    }
+    record(palette+': every background has identical resolved colour tokens and Settings material');
+  }
+  await p.locator('[data-skinpick="grove"]').click();
   await p.locator('[data-bgpick="living"]').click();
   record('Living canvas restores scenery without changing color',await p.evaluate(()=>WosSkin.current==='grove'&&WosSkin.wallpaper==='living'&&!document.documentElement.hasAttribute('data-image-background')));
   await p.locator('[data-skinfamily="mizel"]').click();await p.waitForSelector('[data-bgpick="sea"]');
@@ -67,6 +89,19 @@ async function main(){
   const sidePanels=await surfaces(p,'.aad-side:visible, .aad-vt:visible');
   record('AI apps text sidebars are fully opaque',sidePanels.length===2&&sidePanels.every(c=>c.alpha===255));
   await shot(p,'desktop-grove-lake-ai-apps');
+  for(const palette of ['nebula','grove']){
+    await p.evaluate(id=>{WosSkin.set(id);WosSkin.setWallpaper('living');},palette);await p.waitForTimeout(350);
+    const expected=await paletteState(p),panelBefore=await surfaces(p,'.aad-side:visible, .aad-vt:visible');
+    await shot(p,'desktop-'+palette+'-living-ai-apps');
+    for(const image of await p.evaluate(()=>WosSkin.wallpapers.map(w=>w.id))){
+      await p.evaluate(id=>WosSkin.setWallpaper(id),image);await p.waitForTimeout(250);
+      assert.deepEqual(await paletteState(p),expected,palette+' AI apps / '+image);
+      assert.deepEqual(await surfaces(p,'.aad-side:visible, .aad-vt:visible'),panelBefore);
+    }
+    await p.evaluate(()=>WosSkin.setWallpaper('lake'));await p.waitForTimeout(350);
+    await shot(p,'desktop-'+palette+'-lake-ai-apps-palette');
+    record(palette+': AI apps palette and opaque sidebars match canvas for every background');
+  }
   const phone=await browser.newContext({viewport:{width:412,height:892},isMobile:true,hasTouch:true,deviceScaleFactor:2,reducedMotion:'reduce',serviceWorkers:'block',ignoreHTTPSErrors:true,userAgent:'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36'});
   const q=await phone.newPage();q.on('pageerror',e=>errors.push(String(e)));
   await q.goto(origin+'/wizard-os-home/?shell=phone');await ready(q);await q.waitForFunction(()=>window.WosOrbSwitcher?.active());
