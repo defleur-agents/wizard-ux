@@ -57,6 +57,8 @@ async function boot(phone, configure, evidenceSink = null) {
     ['/wizard/v1/app-bindings', { bindings: [] }],
     // notif-bell.js getFeed: synthetic Recorder has no pending inbox items.
     ['/mizel/api/inbox', { inbox: 1, items: [] }],
+    // app-setup/store-router: this synthetic app declares no model/service requirements.
+    ['/wizard-os-home/store-data/router/v1/needs/mizel', { app_id: 'mizel', models: [], services: [], ready_to_open: true }],
     ['/wizard/v1/skins', { skins: [], active: null }],
     ['/wizard/v1/pages', { pages: [] }],
     ['/wizard/v1/schedules', { schedules: [] }],

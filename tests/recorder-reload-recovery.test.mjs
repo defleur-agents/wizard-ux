@@ -334,6 +334,7 @@ test('closed startup routes answer only pinned synthetic seed/inbox semantics an
     assert.deepEqual(JSON.parse((await request('GET','/wizard/v1/ui-preferences')).body),first.preferences);
     assert.deepEqual(JSON.parse((await request('POST','/wizard/v1/ui-preferences/seed',seed)).body),first,'idempotent synthetic migration');
     assert.deepEqual(JSON.parse((await request('GET','/mizel/api/inbox')).body),{inbox:1,items:[]});
+    assert.deepEqual(JSON.parse((await request('GET','/wizard-os-home/store-data/router/v1/needs/mizel')).body),{app_id:'mizel',models:[],services:[],ready_to_open:true});
     assert.equal(fixture.report.unknown.length,0);assert.equal(fixture.report.refusedWrites.length,0);assert.equal(fixture.report.mutations.length,2);
     await assert.rejects(request('POST','/wizard/v1/ui-preferences/seed',{...seed,marker:'private'}));
     await assert.rejects(request('POST','/wizard/v1/ui-preferences/seed',{...seed,launcher:{}}));
