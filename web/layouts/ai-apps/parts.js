@@ -305,12 +305,18 @@ export function projectGroups(rows, order) {
   return [...by.keys()].sort((a, b) => tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
     .map(k => ({ state: 'proj:' + k, word: k, rows: readySort(by.get(k), order) }));
 }
-/** Ready's grouping: 'status' (sub-headers per status), 'project' (per project) or 'none' (one list, still in the
- * status order). Any other value reads as 'none'. */
+/** Ready's grouping: 'status' (sub-headers per status), 'project' (per project) or 'none' (one list in the chosen
+ * Sort). Any other value reads as 'none'. */
 export const GROUP_MODES = Object.freeze([['status', 'By status'], ['project', 'By project'], ['none', 'One list']]);
 export const groupMode = m => m === 'status' || m === 'project' ? m : 'none';
-/** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
-export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'project' ? projectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
+/** Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). By status / By project: the groups in
+ * turn. One list (James, 4 Nov 2026: "One list, Newest" must read newest first, not Needs you on top): the chosen
+ * Sort alone (readySort: stock's pins, approvals first and snoozed last). */
+export const readyFlat = (rows, order, mode) => {
+  const m = groupMode(mode);
+  if (m === 'none') return readySort(rows, order);
+  return (m === 'project' ? projectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
+};
 /** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
  * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
 export function readyStep(ids, cur, dir) {
@@ -328,7 +334,7 @@ export function readyStep(ids, cur, dir) {
 export const GROUP_ORDERS = Object.freeze([['newest', 'Newest first'], ['oldest', 'Oldest first']]);
 export const groupOrder = o => o === 'oldest' ? 'oldest' : 'newest';
 /** The chats behind one rail item, in the order the open sidebar draws them: 'snoozed' (as listed), 'ready' (all of
- * Ready, grouped: what ⌥↓ walks), or one of Ready's statuses (that group only). */
+ * Ready in the chosen Group/Sort: what ⌥↓ walks), or one of Ready's statuses (that group only). */
 export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
