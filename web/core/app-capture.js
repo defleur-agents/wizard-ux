@@ -63,7 +63,7 @@
   function bounded(work, ms = 1500, code = 'storage_failed') {
     let timer;
     return Promise.race([work, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(fail(code, code === 'storage_failed' ? 'On-device audio storage timed out (timeout).' : 'Audio stop timed out; the take is kept. Retry Send or Discard.', { detail: 'timeout' })), ms);
+      timer = setTimeout(() => reject(fail(code, code === 'storage_failed' ? 'On-device audio storage timed out (timeout).' : code === 'recovery_timeout' ? 'Recorder recovery timed out. Your audio is kept (RECOVERY_TIMEOUT).' : 'Audio stop timed out; the take is kept. Retry Send or Discard.', { detail: 'timeout' })), ms);
     })]).finally(() => clearTimeout(timer));
   }
   function openDB() {
@@ -98,8 +98,9 @@
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(stores, mode); let result;
-      tx.oncomplete = () => resolve(result);
-      tx.onerror = tx.onabort = () => reject(tx.error || fail('storage_failed', 'Capture could not be saved.'));
+      const timer = setTimeout(() => { try { tx.abort(); } catch (_) {} reject(fail('storage_failed', 'On-device audio storage timed out (timeout).')); }, 1500);
+      tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
+      tx.onerror = tx.onabort = () => { clearTimeout(timer); reject(tx.error || fail('storage_failed', 'Capture could not be saved.')); };
       try { result = work(tx); } catch (e) { tx.abort(); reject(e); }
     });
   }
@@ -793,9 +794,17 @@
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
     let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
-    const meeting = meetingBridge();
+    const meeting = meetingBridge(); let meetingStatus = null;
+    const readMeetingStatus = async () => {
+      let st;
+      try { st = await meeting.status(); }
+      catch (_) { st = null; }
+      check();
+      if (typeof st?.recording !== 'boolean') recoveryError = fail('native_owner_uncertain', 'Native recorder status is unknown.');
+      return st;
+    };
     if (meeting?.status) {
-      const st = await meeting.status(); check();
+      const st = await readMeetingStatus(); meetingStatus = st;
       // A live status without an ID still owns the mic; never invent an ID to recover it.
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
@@ -808,7 +817,7 @@
     // Positive proof that no native recorder runs: the device reports no take and the meeting bridge (if any) is not recording.
     let nativeQuiet = false;
     try { nativeQuiet = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null') === null && !unknownMeetingActive &&
-      !(meeting?.status && (await meeting.status())?.recording); } catch (_) { nativeQuiet = false; }
+      (!meeting?.status || meetingStatus?.recording === false); } catch (_) { nativeQuiet = false; }
     check();
     for (const row of all) {
       check();
@@ -825,7 +834,7 @@
         recoveryLive.delete(row.id);
         if (recovered?.blob && !row.bytes) {
           const s = { row, queue: [], writes: Promise.resolve(), opts: {}, limit: DEFAULT_LIMIT };
-          enqueue(s, recovered.blob); await s.writes; if (s.error) throw s.error; Object.assign(row, s.row);
+          enqueue(s, recovered.blob); await s.writes; check(); if (s.error) throw s.error; Object.assign(row, s.row); row.rescueComplete = true;
         }
         if (recovered?.meta) row.meta = { ...row.meta, native: recovered.meta };
         if (recovered?.durationMs != null) row.durationMs = recovered.durationMs;
@@ -838,16 +847,35 @@
         await put({ ...row, status: 'recoverable', partial: true, recoveryError: e.code || 'native_recovery_failed' });
       }
     }
+    // Native notification controls can start while rows/chunks are read. Never call the old idle
+    // snapshot fresh truth. A newly seen owner is blocked until a later pass adopts its real ID.
+    if (meeting?.status) {
+      const st = await readMeetingStatus();
+      const knownLive = st?.recording === true && !!st.meetingId && [...recoveryLive].some(id => {
+        const r = ownedRows.get(id); return r?.native === 'wizard-meetings' && r.nativeId === st.meetingId;
+      });
+      const unknown = st?.recording === true && !knownLive;
+      if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
+    }
+  }
+  async function acquireBounded() {
+    let expired = false;
+    const waiting = acquire().then(unlock => {
+      if (expired) { unlock(); throw fail('recovery_timeout', 'Recorder lock timed out. Your audio is kept.'); }
+      return unlock;
+    });
+    try { return await bounded(waiting, 1500, 'recovery_timeout'); }
+    finally { expired = true; }
   }
   async function recover() {
     let unlock, lease;
-    try { unlock = await acquire();
+    try { unlock = await acquireBounded();
       if (active?.instant) return;
       lease = { unlock, cancelled: false }; recoveryLease = lease;
-      recoveryError = null; await recoverLocked(lease); }
+      recoveryError = null; await bounded(recoverLocked(lease), 4500, 'recovery_timeout'); }
     catch (e) { if (e.code === 'recovery_yielded') return; if (e.code !== 'busy') { recoveryError = e; throw e; }
       const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
-    finally { if (recoveryLease === lease) recoveryLease = null; unlock?.(); }
+    finally { if (lease) lease.cancelled = true; if (recoveryLease === lease) recoveryLease = null; unlock?.(); changed(); }
   }
   // Start budget per attempt. Messenger hands its composer back at 8 s; the shared bound frees the mic just after.
   const START_BOUND_MS = 10000, PROMPT_BOUND_MS = 60000;
@@ -948,6 +976,7 @@
       s.stage = 'shared capture store'; live(await ready);
       s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
       s.stage = 'recovery check'; live(await recoverLocked());
+      if (recoveryError?.code === 'native_owner_uncertain') throw recoveryError;
       const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
@@ -1073,7 +1102,13 @@
     const memory = [...memoryTakes.values()].filter(t => t.session.row.appId === appId).map(t => t.result);
     if (memory.length) return memory; // keep a retry usable even while the store is unavailable
     await ready; await recover();
-    return Promise.all((await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status)).map(result));
+    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
+    // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
+    if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
+        [...ownedRows.values()].some(r => r.appId === appId && r.status !== 'pending')))
+      throw recoveryError || fail('capture_custody_uncertain', 'Capture ownership is still being recovered.');
+    return Promise.all(selected.map(result));
   }
   async function ack(appId, id) {
     validate(appId, {});
@@ -1128,7 +1163,10 @@
    * microphone loan to the orb, start/stop/save in flight, an unknown native owner) would lose audio, so it
    * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
   function reloadCheck() {
-    const no = reason => ({ safe: false, reason, keeps: null });
+    const no = reason => {
+      const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
+      return { safe: false, reason, keeps: null, appId: row?.appId || null, startedAt: row?.startedAt || null, recheck: !active && preparations.size === 0 };
+    };
     const pageHoldsNoAudio = !active && preparations.size === 0 && !recoveryLease &&
       !attachedMeetingBridge && !W.wizardNative?.meetings && !configuredNative;
     if (preparations.size) return no('capture_starting');
@@ -1149,8 +1187,14 @@
       const s = active;
       const steady = isMeeting(s.row) && !!s.engine && ['recording', 'paused'].includes(s.phase) && !s.borrow && !s.borrowWork &&
         !s.finishPromise && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
-      if (!steady) return no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
-      if (live.some(r => r.id !== s.row.id)) return no('capture');
+      if (live.some(r => r.id !== s.row.id)) return no('capture_custody_uncertain');
+      if (!steady) {
+        const blocked = no(s.borrow || s.borrowWork ? 'microphone_loan' : 'capture');
+        // Waiting for an end is a positive live-engine contract, not a synonym for unsafe custody.
+        blocked.waitForEnd = !!s.engine && ['recording', 'paused', 'stopping'].includes(s.phase) &&
+          !s.borrow && !s.borrowWork && !s.error && !s.engineDetached && !s.interrupted && !s.discard;
+        return blocked;
+      }
       return { safe: true, reason: null, keeps: keep(s.row) };
     }
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
@@ -1158,9 +1202,105 @@
     // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
     if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
       recheck: true, durable: false, uncertain };
-    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null };
+    return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
+      recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
+        [...ownedRows.values()].every(r => r.status === 'pending') };
   }
-  // Re-use recovery only; this never stops, acknowledges or discards a take.
+  /* Host-only rescue. Metadata exposed to notices is app + date only, never a title/content.
+   * A stored browser row belongs to a previous page unless it is the active session. Native
+   * rows require positive quiet truth at execution time; age alone never proves native quiet. */
+  function staleTakes() {
+    if (active || preparations.size) return [];
+    const all = new Map(ownedRows);
+    for (const [id, t] of memoryTakes) all.set(id, t.session.row);
+    return [...all.values()].filter(r => r.id !== active?.row.id && !preparations.size &&
+      (memoryTakes.has(r.id) ? Date.now() - r.startedAt > 10 * 60e3 : true) &&
+      (!r.native || (r.status === 'pending' && r.rescueComplete === true)) && !recoveryLive.has(r.id)).map(r =>
+      ({ id: r.id, appId: r.appId, startedAt: r.startedAt, memory: memoryTakes.has(r.id) }));
+  }
+  let rescueWork = null;
+  function rescueTake(id, action, confirmed = false) {
+    if (!['save', 'discard'].includes(action)) return Promise.reject(fail('invalid_action', 'Choose Save to Files or Discard.'));
+    if (action === 'discard' && confirmed !== true) return Promise.reject(fail('confirm_discard', 'Tap Discard again to permanently delete this recording.'));
+    if (rescueWork) return Promise.reject(fail('busy', 'A recording is already being saved.'));
+    rescueWork = rescueRun(id, action).finally(() => { rescueWork = null; });
+    return rescueWork;
+  }
+  async function rescueRun(id, action) {
+    let unlock;
+    const quiet = async row => {
+      if (active || preparations.size || recoveryLease || unknownMeetingActive ||
+          !staleTakes().some(t => t.id === id)) throw fail('capture_active', 'A recording is running or still being recovered. Nothing was cleared.');
+      let device;
+      try { device = JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null'); }
+      catch (_) { throw fail('native_owner_uncertain', 'Could not check the phone recorder. Nothing was cleared.'); }
+      if (device !== null) throw fail('capture_active', 'The phone recorder is running. Nothing was cleared.');
+      const bridge = meetingBridge();
+      if (row.native && ((row.native === 'wizard-device' && typeof (W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive !== 'function') ||
+          (row.native === 'wizard-meetings' && !bridge) || !['wizard-device', 'wizard-meetings'].includes(row.native)))
+        throw fail('native_owner_uncertain', 'The native recorder cannot be checked. Nothing was cleared.');
+      if (bridge) {
+        const st = await bounded(Promise.resolve().then(() => bridge.status?.()), 1500, 'recovery_timeout');
+        if (st?.recording !== false) throw fail('native_owner_uncertain', 'The native recorder is running or cannot be checked. Nothing was cleared.');
+      }
+      if (row.native && row.status !== 'pending') throw fail('native_owner_uncertain', 'Recover this recording in Recorder first. Nothing was cleared.');
+    };
+    try {
+      unlock = await acquireBounded(); // non-queuing; another page or recording always wins
+      const memory = memoryTakes.get(id);
+      const row = memory?.session.row || (await bounded(rows())).find(r => r.id === id);
+      if (!row) throw fail('not_found', 'This recording has already been cleared.');
+      await quiet(row);
+      let receipts = [];
+      if (action === 'save') {
+        const take = memory?.result || await bounded(result(row));
+        if (!memory) {
+          const blobs = [take.blob, ...(take.meta?.captureTracks || []).map(t => t.blob)];
+          const payloadBytes = blobs.reduce((n, b) => n + b.size - (row.pcm ? 44 : 0), 0);
+          if (!row.bytes || payloadBytes !== row.bytes) throw fail('empty_audio', 'Not every stored audio chunk could be read. Nothing was cleared.');
+        }
+        const audio = [{ blob: take.blob, source: 'voice' }, ...(take.meta?.captureTracks || []).map(t => ({ blob: t.blob, source: t.source }))];
+        if (!audio[0].blob?.size) throw fail('empty_audio', 'No stored audio could be read. Nothing was cleared.');
+        const stamp = new Date(row.startedAt || Date.now()).toISOString().replace(/[:.]/g, '-');
+        for (const track of audio) {
+          const blob = track.blob;
+          if (!blob?.size) throw fail('empty_audio', 'Part of this recording could not be read. Nothing was cleared.');
+          const mime = blob.type || row.mime || 'audio/webm', ext = /wav/.test(mime) ? 'wav' : /mp4|aac/.test(mime) ? 'm4a' : 'webm';
+          // Existing Chats upload route puts these in owner Files (no folder API on this route).
+          const filename = 'Recovered-recording-' + stamp + '-' + track.source + '.' + ext;
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 30000);
+          try {
+            await bounded((async () => {
+            const response = await fetch(W.WizConfig?.endpoint?.('upload') || '/wizard/files/upload', {
+              method: 'POST', credentials: 'same-origin', signal: controller.signal,
+              headers: { 'Content-Type': 'application/octet-stream', 'X-Wizard-Filename': filename, 'X-Wizard-Mime': mime }, body: blob });
+            const receipt = await response.json();
+            if (!response.ok || !/^[A-Za-z0-9._:-]{1,256}$/.test(receipt.file?.id || '') || receipt.file.bytes !== blob.size)
+              throw fail('upload_unverified', 'Files did not confirm every audio byte. The recording is still kept.');
+            const readback = await fetch('/wizard/files/' + encodeURIComponent(receipt.file.id) + '/content', { method: 'HEAD', credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+            if (!readback.ok || readback.status !== 200 || Number(readback.headers.get('content-length')) !== blob.size)
+              throw fail('upload_unverified', 'Files could not read back every audio byte. The recording is still kept.');
+            receipts.push(receipt.file);
+            })(), 30000, 'upload_timeout');
+          } finally { clearTimeout(timer); }
+        }
+      }
+      // Native notifications are outside the browser lock. Check again after slow upload.
+      await quiet(row);
+      if (row.nativeId && row.native !== 'wizard-meetings')
+        await bounded(Promise.resolve().then(() => adapter({ kind: row.kind }, row).ack?.(row)));
+      // Only this explicit discard or verified upload authorizes removal. Never swallow a failed delete.
+      await bounded(remove(id));
+      if (memory) {
+        memoryTakes.delete(id); memory.session.memoryParts = []; memory.session.queue.length = 0;
+        memory.session.final = null; memory.session.uploads = {};
+      }
+      recoveryLive.delete(id); changed(); return { cleared: true, files: receipts };
+    } finally { unlock?.(); }
+  }
+  // Reload may re-probe an abandoned owner, never Stop/Cancel a live session. Recovery holds the same
+  // microphone lock as Start and only commits pending custody; no ack/delete or app data is involved.
   let reloadReconcile = null;
   function reconcileReload() {
     if (!reloadReconcile) reloadReconcile = (async () => {
@@ -1178,7 +1318,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp, staleTakes, rescueTake,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       const live = active?.row.id === r?.id;
       return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,
