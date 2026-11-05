@@ -135,18 +135,19 @@
     const p = plan(), takes = window.WizAppCapture?.staleTakes?.() || [];
     const take = !p.ok ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;
     let reason = notice;
-    if (!reason && checking) reason = 'Checking the recorder. Your audio is still kept.';
+
     if (!reason && take) {
       const date = Number.isFinite(take.startedAt) ? new Date(take.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : 'an earlier session';
-      reason = appName(take.appId) + ' has an unsent recording from ' + date + ' holding the update.';
+      reason = appName(take.appId) + ' has an unsent recording from ' + date + '.';
     }
-    if (!reason && p.host) reason = 'Wizard is sending audio or saving your work. Finish that first, then tap Reload.';
+    if (!reason && p.host) reason = 'Wizard is sending audio or saving your work.';
     if (!reason && !p.ok) {
       const b = p.blocking?.[0];
-      reason = b?.kind === 'work' ? appName(b.appId) + ' has an unsent draft or unsaved work. Save it in the app, then tap Reload.' :
-        p.capture?.waitForEnd ? appName(b?.appId || p.capture?.appId) + ' is recording. Stop and save it first.' :
-        (b?.appId ? appName(b.appId) + (Number.isFinite(b.startedAt) ? ' has a recording from ' + new Date(b.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : ' has a recording') + ' holding the update. ' : '') +
-        'Recorder recovery has not finished. Your audio is kept. Try Reload again (RECOVERY_CHECK).';
+      reason = p.capture?.waitForEnd ? appName(b?.appId || p.capture?.appId) + ' is recording.' :
+        /sending/i.test(b?.reason || '') ? appName(b.appId) + ' is sending.' :
+        /saving|task save/i.test(b?.reason || '') ? appName(b.appId) + ' is saving.' :
+        b?.kind === 'work' && !/voice|audio/i.test(b.reason || '') ? appName(b.appId) + ' has unsaved work.' :
+        appName(b?.appId || p.capture?.appId) + ' has a voice note that isn’t sent yet.';
     }
     return { reason, take, rescuing, discardId, checking, going, armed: !!armed };
   }
@@ -170,9 +171,10 @@
       notice = ''; rescuing = false; repaint(); reload('tap');
     } catch (e) {
       rescuing = false;
-      blocked(e?.code === 'empty_audio' ? 'No stored audio could be read. Nothing was cleared (EMPTY_AUDIO).' :
-        e?.code === 'capture_active' || e?.code === 'native_owner_uncertain' ? 'A recorder is running or cannot be checked. Nothing was cleared. Stop it in Recorder first.' :
-        'Could not save or clear this recording. Your audio is still kept. Try again (RECOVERY_SAVE).');
+      log('web:rescue-failed', e?.code || 'RECOVERY_SAVE');
+      blocked(e?.code === 'empty_audio' ? 'Couldn’t read this recording. Nothing was cleared.' :
+        e?.code === 'capture_active' || e?.code === 'native_owner_uncertain' ? 'Recorder has audio that isn’t saved yet.' :
+        'Couldn’t save this recording. Your audio is still kept.');
     }
   }
   // A wait worth arming: a recording/save that will end on its own, or app work beside a meeting that survives.
@@ -209,7 +211,7 @@
     const current = plan();
     if (!reloadAllowed(current)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
-      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+      blocked(''); H?.toast?.('◌', reloadStatus().reason || 'Couldn’t reload. Try again.', 2500); return false;
     }
     const sameKept = p => !!current.keeps === !!p.keeps && ['appId','id','meetingId'].every(k => current.keeps?.[k] === p.keeps?.[k]);
     if (current.keeps) {
@@ -217,15 +219,15 @@
       try { await deadline(Promise.resolve().then(() => window.WizAppServices?.update.prepareReload?.(current)), 3500); }
       catch (_) {
         going = false; document.querySelector('.wos-burst')?.remove(); render();
-        blocked('Could not prepare the recorder in time. Your audio is kept. Try Reload again (RELOAD_PREPARE).');
-        H?.toast?.('◌', 'Couldn’t prepare the recorder. Your audio is still kept. Try Reload again.', 3000); return false;
+        log('web:reload-blocked', 'RELOAD_PREPARE');
+        blocked('Recorder has audio that isn’t saved yet.'); return false;
       }
     }
     // Check after the animation AND asynchronous native backup flush, not merely at the original tap.
     const final = plan();
     if (!reloadAllowed(final) || !sameKept(final)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
-      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+      blocked(''); H?.toast?.('◌', reloadStatus().reason || 'Couldn’t reload. Try again.', 2500); return false;
     }
     try { H?.beforeReload?.(); } catch (_) {}
     window.WizAppReadingPosition?.flush();
@@ -233,7 +235,7 @@
     const committed = plan();
     if (!reloadAllowed(committed) || !sameKept(committed)) {
       going = false; document.querySelector('.wos-burst')?.remove(); render();
-      H?.toast?.('◌', 'Reload paused: recording or unsaved work started. Nothing was discarded.', 2500); return false;
+      blocked(''); H?.toast?.('◌', reloadStatus().reason || 'Couldn’t reload. Try again.', 2500); return false;
     }
     if (audioFreeReload(committed) && window.WizAppCapture?.cancelReloadRecovery?.() !== true) {
       going = false; document.querySelector('.wos-burst')?.remove();
@@ -241,16 +243,21 @@
     }
     window.WizAppServices?.update.commitReload?.(committed);
     log('web:reload', why); window.__wosReloading = why; location.reload();
-    setTimeout(() => { going = false; document.querySelector('.wos-burst')?.remove(); blocked('The page did not reload. Finish any open confirmation, then tap Reload again (RELOAD_NAVIGATION).'); }, 4500);
+    setTimeout(() => { going = false; document.querySelector('.wos-burst')?.remove(); log('web:reload-blocked', 'RELOAD_NAVIGATION'); blocked('Couldn’t reload. Try again.'); }, 4500);
     return true;
-    } catch (_) { going = false; document.querySelector('.wos-burst')?.remove(); blocked('The page could not reload. Your audio is kept. Try Reload again (RELOAD_FAILED).'); return false; }
+    } catch (_) { going = false; document.querySelector('.wos-burst')?.remove(); log('web:reload-blocked', 'RELOAD_FAILED'); blocked('Couldn’t reload. Try again.'); return false; }
   }
   function deadline(work, ms) { let t; return Promise.race([work, new Promise((_, reject) => { t = setTimeout(() => reject(Error('Timed out')), ms); })]).finally(() => clearTimeout(t)); }
-  function reload(why, checked = false) {
+  function reload(why, checked = false, draftsChecked = false) {
     if (going || checking || rescuing) return false;
     notice = ''; discardId = '';
     if (armed && why === 'tap') { disarm('tap'); H?.toast?.('◌', 'Reload cancelled', 1400); return false; }
     const p = plan();
+    if (!draftsChecked && why === 'tap' && p.blocking?.some(b => b.keepable) && window.WizAppServices?.update.keepDrafts) {
+      checking = true; repaint();
+      deadline(Promise.resolve().then(() => window.WizAppServices.update.keepDrafts()), 1700).catch(() => log('web:reload-blocked', 'DRAFT_KEEP_TIMEOUT')).finally(() => { checking = false; reload(why, checked, true); });
+      return false;
+    }
     // A reload cannot lose rows already in IndexedDB. Do not wait on that same
     // broken store when this page positively holds no audio and no app holds work.
     if (audioFreeReload(p)) { void go(why, p); return true; }
@@ -264,8 +271,8 @@
         const current = plan();
         if (audioFreeReload(current)) { void go(why, current); return; }
         blocked(''); const reason = reloadStatus().reason;
-        blocked('Could not finish checking the recorder. Your audio is kept. ' + (reason || 'Stop and save any recording, then try Reload again.') + ' (RECOVERY_TIMEOUT).');
-        H?.toast?.('◌', 'Couldn’t check the recorder. Your audio is still kept. Try Reload again.', 3000);
+        log('web:reload-blocked', 'RECOVERY_TIMEOUT');
+        blocked(reason || 'Recorder has audio that isn’t saved yet.');
       };
       Promise.race([
         Promise.resolve().then(() => window.WizAppCapture.reconcileReload()),
@@ -281,7 +288,7 @@
     if (!p.host && p.ok) { void go(why, p); return true; }
     if (armable(p)) { arm(p); return false; }
     blocked('');
-    H?.toast?.('◌', loan(p) ? 'Finish the voice message first' : 'Finish recording or save your work first', 2000); return false;
+    H?.toast?.('◌', reloadStatus().reason, 2000); return false;
   }
   /* The banner says which thread the update came from and links there, so you can see what a reload brings
    * (James, 12 Oct): "Update ready / Bound views  [Thread] [Reload]". Several threads: "[Threads ▾]" opens a
@@ -319,7 +326,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Checking recorder…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${reloadStatus().reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${esc(reloadStatus().reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Getting ready…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${reloadStatus().reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${esc(reloadStatus().reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }

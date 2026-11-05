@@ -81,7 +81,7 @@
     if (window.WizWebUpdate?.pending) {
       const s = window.WizWebUpdate.reloadStatus?.() || {};
       const c = { state: 'reload', title: 'Interface updated', line: 'Reload to see the changes', action: 'reload', label: 'Reload' };
-      return { ...c, line: s.reason || c.line, label: s.rescuing ? 'Saving…' : s.checking ? 'Checking recorder…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : c.label, disabled: !!(s.rescuing || s.checking || s.going) };
+      return { ...c, line: s.reason || c.line, label: s.rescuing ? 'Saving…' : s.checking ? 'Getting ready…' : s.going ? 'Reloading…' : s.armed ? 'Cancel waiting reload' : c.label, disabled: !!(s.rescuing || s.checking || s.going) };
     }
     if (!st || issue) return null;
     const auto = st.mode === 'auto';
