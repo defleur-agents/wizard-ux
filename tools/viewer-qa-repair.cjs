@@ -92,14 +92,26 @@ async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [left, right] });
     for (let n = 1; n <= 10; n++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...left, x: x - 40 - n * 6 }, { ...right, x: x + 40 + n * 6 }] }); await p.waitForTimeout(20); }
     assert((await record('pinch expanded')).scale > 1.8);
-    const remaining = { id: 1, x: x - 100, y };
-    // CDP touchEnd requires zero points. A touchMove with the surviving active
-    // ID releases the omitted finger; assert actual trusted pointerup delivery.
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [remaining] }); await record('one finger lifted');
-    assert(await p.evaluate(() => __viewerTouchActive.size === 1 && __viewerTouchInput.some(e => e.type === 'pointerup' && e.trusted && e.active === 1)), 'native partial lift retains exactly one active pointer');
+    const remaining = { id: 1, x: x - 100, y }, released = { id: 2, x: x + 100, y };
+    // Chromium 156 has two implementations. Default CreateWebTouchEvents accepts
+    // touchEnd with the RELEASED ID (not the survivor); omitted MOVE IDs persist.
+    // SyntheticPointerActions instead rejects nonempty End and diffs MOVE IDs.
+    // See docs/evidence/media-viewer-cdp-input.md. Never fake a DOM pointerup.
+    let releasePath = 'CreateWebTouchEvents: touchEnd released ID';
+    try { await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [released] }); }
+    catch (e) {
+      if (!String(e.message).includes('TouchEnd and TouchCancel must not have any touch points.')) throw e;
+      releasePath = 'SyntheticPointerActions: touchMove surviving ID';
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [remaining] });
+    }
+    // Command ACK and renderer pointer delivery are separate observations.
+    try { await p.waitForFunction(() => __viewerTouchActive.size === 1 && __viewerTouchInput.some(e => e.type === 'pointerup' && e.trusted && e.active === 1), null, { timeout: 3000 }); }
+    finally { await record('partial lift via ' + releasePath); }
+    const beforePan = await state();
     for (let n = 1; n <= 10; n++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...remaining, x: remaining.x + n * 4.5, y: y - n * 8 }] }); await p.waitForTimeout(20); }
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-    const pan = await record('remaining finger pan and lift'); assert(Math.abs(pan.x) > 1 || Math.abs(pan.y) > 1, 'partial-lift continuation really pans');
+    await p.waitForFunction(() => __viewerTouchActive.size === 0, null, { timeout: 3000 });
+    const pan = await record('remaining finger pan and lift'); assert(Math.abs(pan.x - beforePan.x) > 1 || Math.abs(pan.y - beforePan.y) > 1, 'partial-lift continuation really pans');
     await p.waitForTimeout(400); await p.touchscreen.tap(x, y); await p.waitForTimeout(100); await p.touchscreen.tap(x, y); await settle(p);
     assert.equal((await record('trusted double tap reset')).scale, 1);
     await open(2); await drag(cdp, [{ x: x + 110, y }], [{ x: x - 110, y }]);
@@ -114,10 +126,19 @@ async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }
     await p.waitForTimeout(400);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 5, x, y }] }); await p.waitForTimeout(650);
     await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); assert((await record('long press lift')).menu, 'held lift keeps menu open');
-    await p.touchscreen.tap(b.x + 4, b.y + 4); assert(!(await record('fresh menu outside tap')).menu, 'outside closes menu only');
+    const menuOutside = await p.locator('.mv-menu').evaluate(e => { const r = e.getBoundingClientRect(), x = r.left + 4, y = r.top + 4; return { x, y, hit: document.elementFromPoint(x, y) === e }; });
+    assert(menuOutside.hit, 'fresh menu outside point hits the real menu scrim');
+    await p.touchscreen.tap(menuOutside.x, menuOutside.y); assert(!(await record('fresh menu outside tap')).menu, 'outside closes menu only');
     await open(0); await drag(cdp, [{ x, y: b.y + b.height * .25 }], [{ x, y: b.y + b.height * .65 }]);
     assert(!(await state()).open, 'downward swipe still dismisses');
-    await open(0); await p.touchscreen.tap(b.x + 4, b.y + 4); assert(!(await state()).open, 'new outside press after reopen dismisses');
+    await open(2);
+    const outside = await p.locator('.mv-stage img').evaluate(i => {
+      const r = i.getBoundingClientRect(), s = i.parentElement.getBoundingClientRect(), k = Math.min(r.width / i.naturalWidth, r.height / i.naturalHeight), inkTop = r.top + (r.height - i.naturalHeight * k) / 2;
+      const x = s.left + s.width / 2, y = s.top + (inkTop - s.top) / 2;
+      return { x, y, gap: inkTop - s.top, hit: !!document.elementFromPoint(x, y)?.closest('.mv-stage') };
+    });
+    assert(outside.gap > 8 && outside.hit, 'outside tap is in a measured real letterbox, never image ink');
+    await p.touchscreen.tap(outside.x, outside.y); assert(!(await state()).open, 'new outside press after reopen dismisses');
     await open(2); // leave the next original Back/menu case an open viewer
   } finally { await cdp.detach(); }
 }
