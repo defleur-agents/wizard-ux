@@ -72,7 +72,7 @@ import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
 import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
-  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
+  TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject, moveProject } from './parts.js';
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
@@ -140,7 +140,7 @@ export default function desktop(api) {
   let noteWant = false;
   let sessions = null, badgeMap = api.apps.badges(m => { badgeMap = m; paintBadges(); });
   const agentName = () => (api.agents.list().find(a => a.main) || api.agents.here?.() || {}).label || (api.workspaces?.list()[0] || {}).name || 'Wizard';
-  const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
+  const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; sessions.projectOrder = api.sessions.subjectOrder?.() || []; return sessions; };
   const titleOf = id => { const s = sessions || readSessions(); for (const k of KINDS) { const r = (s[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   const appName = id => (api.apps.list().find(a => a.id === id) || desks().find(d => d.id === id) || {}).name || '';
   const badgeText = id => { const n = badgeMap[id] || 0; if (!n) return ''; const t = api.apps.badgeText?.(id); return t || (n > 99 ? '99+' : String(n)); };
@@ -305,7 +305,7 @@ export default function desktop(api) {
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
   api.listen(shade, 'click', unpeek);
   api.listen(globalThis, 'resize', () => { if (!narrow() && peek) { peek = false; offPeek?.(); offPeek = null; } const want = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open'; if (want !== root.dataset.aadSide) paintSide(); });
-  api.keys.on({ down: e => { if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
+  api.keys.on({ down: e => { if (projKey(e)) return true; if (!isSideKey(e) || e.repeat) return false; toggleSide(); return true; } });
   /* ---------- round 9 (Miguel, 2 Nov 2026): the panels resizable by drag (round 15: the sidebar, the open apps, the app panel) ----------
    * A thin separator on its inner edge (a hairline in the accent on hover); drag it, or ←/→ (⇧ for bigger steps) with it
    * focused; a double click or Enter goes back to the default. Kept per device. */
@@ -669,11 +669,12 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
+    if (pdrag?.on) { pdrag.repaint = true; return; }   // (a project being dragged: the list is redrawn once it lands)
     const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
+      secOpen, readyOrder(), groupBy(), s.projectOrder || [], KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -708,13 +709,23 @@ export default function desktop(api) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
           // the chosen order (item 3: group first, then the order inside each)
           // (round 24c: or one per project, Wizard OS, Messenger, … under their own headers)
-          const groups = groupBy() === 'project' ? projectGroups(rows, readyOrder()) : readyGroups(rows, readyOrder());
+          const groups = groupBy() === 'project' ? projectGroups(rows, readyOrder(), s.projectOrder) : readyGroups(rows, readyOrder());
           for (const g of groups) {
             // (only plain chats: no sub-header, as the rail shows Ready alone)
             if (groups.length === 1 && g.state === 'none') { body.append(...g.rows.map(r => chatRow(r, h.thread))); break; }
-            const gh = el('div', 'aad-grp', { 'data-state': g.state.startsWith('proj:') ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
+            const proj = g.state.startsWith('proj:');
+            const gh = el('div', 'aad-grp', { 'data-state': proj ? 'project' : g.state, role: 'heading', 'aria-level': '4' });
             gh.append(el('span', 'aad-grp-w', { text: g.word }), el('span', 'aad-grp-n', { text: String(g.rows.length) }));
-            body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, g.state.startsWith('proj:'))));
+            if (proj && groups.length > 1) {
+              // (5 Nov 2026, Miguel: drag the projects into his own order) each project is one block, header and chats:
+              // click and drag its header to move it; the grip (on hover) also moves it with ↑ / ↓ when focused
+              const gp = el('button', 'aad-pgrip', { type: 'button', 'data-proj': g.word, 'aria-label': `Move ${g.word}: drag, or press up or down`, title: 'Drag to move this project · ↑ ↓ when selected' });
+              gp.append(icon('grip', 'aad-ico'));
+              gh.append(gp);
+              const box = el('div', 'aad-pg', { 'data-proj': g.word });
+              box.append(gh, ...g.rows.map(r => chatRow(r, h.thread, true)));
+              body.append(box);
+            } else body.append(gh, ...g.rows.map(r => chatRow(r, h.thread, proj)));
           }
         } else if (on) {
           if (rows.length) body.append(...rows.map(r => chatRow(r, h.thread)));
@@ -741,6 +752,79 @@ export default function desktop(api) {
     }
     closeMenu();
     scroll.replaceChildren(...out);
+  }
+  /* ---------- 5 Nov 2026 (Miguel: "I'd love to choose myself which project moves to the top… click and drag"): By
+   * project, a project's header drags its whole block (header and chats) up or down; the others slide aside to show
+   * where it lands, Esc cancels. The order is the stock By subject order, saved for the box (every device the same);
+   * ⌥↓ walks Ready in it. With the grip focused, ↑ / ↓ move the project one place. ---------- */
+  const PDRAG_PX = 4;
+  let pdrag = null, pSwallow = 0;
+  const pBoxes = () => [...scroll.querySelectorAll('.aad-sec-b > .aad-pg')];
+  function pStart() {
+    const g = pdrag; if (!g || g.on) return; g.on = true;
+    try { scroll.setPointerCapture?.(g.pid); } catch (_) {}
+    g.boxes = pBoxes(); g.oi = g.boxes.indexOf(g.box); g.rects = g.boxes.map(b => b.getBoundingClientRect()); g.st0 = scroll.scrollTop || 0;
+    const r = g.rects, i = g.oi, n = r.length;
+    g.h = i < n - 1 ? r[i + 1].top - r[i].top : r[i].height + (n > 1 ? r[i].top - r[i - 1].bottom : 0);
+    g.ins = i; g.box.classList.add('is-drag'); g.box.parentElement.dataset.pdrag = ''; root.dataset.aadPdrag = '';
+  }
+  function pMove(y) {
+    const g = pdrag; if (!g?.on) return;
+    g.y = y; const dy = y - g.y0 + ((scroll.scrollTop || 0) - g.st0);
+    g.box.style.translate = `0px ${Math.round(dy)}px`;
+    // where it lands: past the middle of each other block it has crossed
+    const me = g.rects[g.oi], top = me.top + dy, bot = me.bottom + dy;
+    let ins = g.oi;
+    for (let j = g.oi - 1; j >= 0; j--) if (top < g.rects[j].top + g.rects[j].height / 2) ins = j; else break;
+    for (let j = g.oi + 1; j < g.boxes.length; j++) if (bot > g.rects[j].top + g.rects[j].height / 2) ins = j; else break;
+    g.ins = ins;
+    g.boxes.forEach((b, j) => { if (j === g.oi) return; const s = j > g.oi && j <= ins ? -g.h : j < g.oi && j >= ins ? g.h : 0; b.style.translate = s ? `0px ${Math.round(s)}px` : ''; });
+  }
+  function pEnd(commit) {
+    const g = pdrag; pdrag = null; if (!g) return false;
+    if (!g.on) return false;
+    for (const b of g.boxes) b.style.translate = '';
+    g.box.classList.remove('is-drag'); delete g.box.parentElement?.dataset.pdrag; delete root.dataset.aadPdrag;
+    try { scroll.releasePointerCapture?.(g.pid); } catch (_) {}
+    pSwallow = Date.now() + 400;
+    if (commit && g.ins !== g.oi) placeProject(g.boxes.map(b => b.dataset.proj), g.box.dataset.proj, g.ins);
+    else if (g.repaint) paintList(true);
+    return true;
+  }
+  function placeProject(keys, key, to, focus = false) {
+    const next = moveProject(keys, key, to);
+    if (next.join('\n') === keys.join('\n')) return false;
+    api.sessions.setSubjectOrder?.(next); readSessions(); paintList(true);
+    // (the moved block flashes once where it landed, as a rail group does)
+    const box = pBoxes().find(b => b.dataset.proj === key), gh = box?.querySelector('.aad-grp');
+    if (gh) { gh.classList.add('is-flash'); api.after(450, () => gh.classList.remove('is-flash')); }
+    if (focus) box?.querySelector('.aad-pgrip')?.focus?.({ preventScroll: false });
+    return true;
+  }
+  api.listen(scroll, 'pointerdown', e => {
+    if (e.button || pdrag || q || groupBy() !== 'project') return;
+    const gh = e.target?.closest?.('.aad-pg > .aad-grp'); if (!gh) return;
+    pdrag = { box: gh.parentElement, pid: e.pointerId, x0: e.clientX, y0: e.clientY, y: e.clientY, on: false, repaint: false };
+    if (e.target.closest?.('.aad-pgrip')) e.preventDefault?.();   // (no focus ring flash on a mouse drag)
+  });
+  api.listen(scroll, 'pointermove', e => {
+    const g = pdrag; if (!g) return;
+    if (!g.on) { if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < PDRAG_PX) return; pStart(); }
+    pMove(e.clientY);
+  });
+  api.listen(scroll, 'pointerup', () => { if (!pEnd(true)) pdrag = null; });
+  api.listen(scroll, 'pointercancel', () => pEnd(false));
+  api.listen(scroll, 'lostpointercapture', () => { if (pdrag?.on) pEnd(true); });
+  api.listen(scroll, 'scroll', () => { if (pdrag?.on) pMove(pdrag.y); });
+  api.listen(scroll, 'click', e => { if (Date.now() < pSwallow) { e.stopPropagation?.(); e.preventDefault?.(); } }, true);
+  // (read by the sidebar's key handler above, so the layout's key handlers stay as they were)
+  function projKey(e) {
+    if (e.key === 'Escape' && pdrag?.on) { pEnd(false); return true; }
+    const a = doc.activeElement;
+    if (!a?.classList?.contains('aad-pgrip') || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return false;
+    const keys = pBoxes().map(b => b.dataset.proj), i = keys.indexOf(a.dataset.proj); if (i < 0) return false;
+    placeProject(keys, a.dataset.proj, i + (e.key === 'ArrowUp' ? -1 : 1), true);
+    return true;
   }
   /** the chat in front, marked in the list where it already is (round 14: no rebuild for it) */
   function markCurrent(id) {
@@ -802,7 +886,7 @@ export default function desktop(api) {
     if (root.dataset.aadSide !== 'rail') return;
     // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
     // status alone (plain chats as 'Other'), no Ready total over them
-    const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder()) : grouped ? stateGroups(ready) : [], act = railNow();
+    const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder(), s.projectOrder) : grouped ? stateGroups(ready) : [], act = railNow();
     const working = (s.working || []).length;
     const sig = JSON.stringify([working, (s.snoozed || []).length, ready.length, gm, groups.map(g => g.state + g.rows.length), act]);
     if (!force && sig === railDrawn && rList.childElementCount) return;
@@ -1407,7 +1491,7 @@ export default function desktop(api) {
   }
   api.listen(doc, 'click', e => { const b = e.target?.closest?.('.win .dchats .pane-main [data-chact="done"], .win .dchats .pane-main [data-chact="resolve"]'); if (b && docked) nextAfterAct(); }, true);
   let stepAt = null;
-  const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
+  const readyIds = () => { const s = sessions || readSessions(); return readyFlat(s.ready || [], readyOrder(), groupBy(), s.projectOrder).map(r => r.id); };
   function stepReady(dir) {
     readSessions();
     const ids = readyIds();

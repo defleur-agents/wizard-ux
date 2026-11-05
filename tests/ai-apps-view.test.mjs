@@ -2338,3 +2338,22 @@ test('a remembered rail key cannot hide the current chat marker after switching 
  assert.equal(P.railActive(sessions,'qa-project-current','ready','newest','groups').key,'needs');
  assert.equal(P.railActive(sessions,'qa-project-current','proj:Wizard OS','newest','groups').key,'needs');
 });
+
+test('5 Nov 2026 (Miguel: "choose myself which project moves to the top… click and drag"): his own project order (the stock By subject order) leads; the rest follow the default; ⌥↓ and the rail follow it; the sidebar drags a project block and saves the order through the layout API', async () => {
+  const P = await import(new URL('web/layouts/ai-apps/parts.js', root).href);
+  const at = m => new Date(Date.now() - m * 60e3).toISOString();
+  const rows = [
+    { id: 'a', title: 'Messenger · Voice notes', state: 'fyi', at: at(5) }, { id: 'b', title: 'Wizard OS · Hotkeys', state: 'done', at: at(1) },
+    { id: 'c', title: 'Wizard OS · Rail', state: 'fyi', at: at(9) }, { id: 'd', title: 'New chat', state: 'fyi', at: at(2) },
+    { id: 'e', title: 'AI Wizards · Azad', state: 'needs', at: at(30) }];
+  assert.deepEqual(P.projectGroups(rows, 'newest', ['Other', 'Messenger', 'Gone']).map(g => g.word), ['Other', 'Messenger', 'AI Wizards', 'Wizard OS'], 'placed first, in his order; unplaced in the default order');
+  assert.deepEqual(P.projectGroups(rows, 'newest', []).map(g => g.word), P.projectGroups(rows, 'newest').map(g => g.word), 'nothing saved = the default');
+  assert.deepEqual(P.readyFlat(rows, 'newest', 'project', ['Messenger']).map(r => r.id), ['a', 'e', 'b', 'c', 'd'], 'the ⌥↓ walk follows it');
+  assert.deepEqual(P.railRows({ ready: rows, projectOrder: ['Messenger'] }, 'ready', 'newest', 'project').map(r => r.id), ['a', 'e', 'b', 'c', 'd']);
+  assert.deepEqual(P.moveProject(['A', 'B', 'C'], 'C', 0), ['C', 'A', 'B']);
+  assert.deepEqual(P.moveProject(['A', 'B', 'C'], 'A', 9), ['B', 'C', 'A'], 'clamped');
+  assert.deepEqual(P.moveProject(['A', 'B'], 'Z', 0), ['A', 'B'], 'an unknown project changes nothing');
+  const host = read('web/core/skin-host.js'), desk = read('web/layouts/ai-apps/desktop.js');
+  assert.match(host, /subjectOrder: \(\) =>/); assert.match(host, /prefOps\(\[\{ op: 'front', key: 'subjectOrder', items \}\]\)/, 'saved for the box, as stock By subject');
+  assert.match(desk, /api\.sessions\.setSubjectOrder\?\.\(next\)/); assert.match(desk, /'\.aad-pg > \.aad-grp'/, 'the header is the handle');
+});

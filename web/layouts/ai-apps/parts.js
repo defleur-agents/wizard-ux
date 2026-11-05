@@ -14,6 +14,8 @@ export const ICON = {
   chev: ['m10 7 5 5-5 5'],
   down: ['m7 10 5 5 5-5'],
   more: ['M5.5 12h.01', 'M12 12h.01', 'M18.5 12h.01'],
+  // six dots: a project's header can be dragged (5 Nov 2026)
+  grip: ['M9.5 6.5h.01', 'M9.5 12h.01', 'M9.5 17.5h.01', 'M14.5 6.5h.01', 'M14.5 12h.01', 'M14.5 17.5h.01'],
   // the sidebar toggle (ChatGPT's ◫): a panel with its left column
   side: ['M4.5 5.5h15v13h-15z', 'M9.5 5.5v13'],
   pin: ['M9 4h6l-1 6 3 3H7l3-3-1-6z', 'M12 13v7'],
@@ -298,11 +300,15 @@ export const titleInProject = r => {
   if (r?.note || i <= 0 || !t.slice(0, i).trim()) return t;
   return t.slice(i + 1).trim() || t;
 };
-export function projectGroups(rows, order) {
+/* (5 Nov 2026, Miguel: "I'd love to choose myself which project moves to the top") saved = his own order of projects
+ * (dragged in the sidebar; the stock By subject order): projects he placed come first in that order, the rest follow
+ * in the order above. */
+export function projectGroups(rows, order, saved) {
   const by = new Map();
   for (const r of rows || []) { const k = projectOf(r); if (!by.has(k)) by.set(k, []); by.get(k).push(r); }
   const tail = k => k === NO_PROJECT ? 2 : k === NOTES_PROJECT ? 1 : 0, waits = k => by.get(k).filter(r => rankOf(r) <= 1).length;
-  return [...by.keys()].sort((a, b) => tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
+  const rank = new Map((Array.isArray(saved) ? saved : []).map((k, i) => [k, i])), rk = k => rank.has(k) ? rank.get(k) : Infinity;
+  return [...by.keys()].sort((a, b) => (rk(a) !== rk(b) ? (rk(a) < rk(b) ? -1 : 1) : 0) || tail(a) - tail(b) || waits(b) - waits(a) || by.get(b).length - by.get(a).length || a.localeCompare(b))
     .map(k => ({ state: 'proj:' + k, word: k, rows: readySort(by.get(k), order) }));
 }
 /** Ready's grouping: 'status' (sub-headers per status), 'project' (per project) or 'none' (one list, still in the
@@ -310,7 +316,12 @@ export function projectGroups(rows, order) {
 export const GROUP_MODES = Object.freeze([['status', 'By status'], ['project', 'By project'], ['none', 'One list']]);
 export const groupMode = m => m === 'status' || m === 'project' ? m : 'none';
 /** The grouped Ready as one list, in the order it is drawn (⌥↓ / ⌥↑ walk exactly this). */
-export const readyFlat = (rows, order, mode) => (groupMode(mode) === 'project' ? projectGroups(rows, order) : readyGroups(rows, order)).flatMap(g => g.rows);
+export const readyFlat = (rows, order, mode, saved) => (groupMode(mode) === 'project' ? projectGroups(rows, order, saved) : readyGroups(rows, order)).flatMap(g => g.rows);
+/** The projects as drawn (keys) with one moved to index `to` (clamped): the new order to save. Pure. */
+export function moveProject(keys, key, to) {
+  const out = (keys || []).filter(k => k !== key); if (out.length === (keys || []).length) return (keys || []).slice();
+  out.splice(Math.max(0, Math.min(out.length, to | 0)), 0, key); return out;
+}
 /** The ⌥↓ / ⌥↑ step through a list of ids (stock stepReady): from the one in front, the next / previous, wrapping;
  * from elsewhere, the top. Returns { id, wrapped } (null when the list is empty). */
 export function readyStep(ids, cur, dir) {
@@ -332,9 +343,9 @@ export const groupOrder = o => o === 'oldest' ? 'oldest' : 'newest';
 export function railRows(s, key, order, mode) {
   if (key === 'working') return (s?.working || []).slice();
   if (key === 'snoozed') return (s?.snoozed || []).slice();
-  if (key === 'ready') return readyFlat(s?.ready || [], order, mode);
+  if (key === 'ready') return readyFlat(s?.ready || [], order, mode, s?.projectOrder);
   // (round 24b: a project on the folded rail, 'proj:<name>')
-  if (String(key).startsWith('proj:')) return (projectGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
+  if (String(key).startsWith('proj:')) return (projectGroups(s?.ready || [], order, s?.projectOrder).find(g => g.state === key) || { rows: [] }).rows;
   return (readyGroups(s?.ready || [], order).find(g => g.state === key) || { rows: [] }).rows;
 }
 /** Which rail item is current for the chat in front (cur): the one last clicked while that chat is in it, else the
@@ -349,7 +360,7 @@ export function railActive(s, cur, last, order, mode) {
     : mode === 'list' ? common || last === 'ready' : true;
   if (last && visible) { const a = at(last); if (a) return a; }
   // round 24b (Miguel, 4 Nov 2026: By project on the folded rail too): each project alone, as 'groups' does statuses
-  if (mode === 'projects') { const sg = projectGroups(s?.ready || [], order).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
+  if (mode === 'projects') { const sg = projectGroups(s?.ready || [], order, s?.projectOrder).find(x => x.rows.some(r => r.id === cur)); return (sg && at(sg.state)) || at('snoozed') || at('working'); }
   // round 22: the rail shows Ready alone ('list') or its statuses alone ('groups', plain chats as 'none'); no mode = both
   const g = mode === 'list' ? null : stateGroups(s?.ready || []).find(x => (mode === 'groups' || x.state !== 'none') && x.rows.some(r => r.id === cur));
   return (g && at(g.state)) || (mode === 'groups' ? null : at('ready')) || at('snoozed') || at('working');

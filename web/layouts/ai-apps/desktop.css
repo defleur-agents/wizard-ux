@@ -845,3 +845,19 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk .aad-rk-w { white-spac
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] .aad-rk-w { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: normal; word-break: normal; hyphens: none; font-size: 0.5625rem; letter-spacing: -.03em; max-width: none; margin-inline: -3px; }
 /* (a word wider than the rail ends in a fade, never broken mid-word) */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-k^="proj:"] { overflow: hidden; }
+/* 5 Nov 2026 (Miguel: drag the projects into his own order): By project, each project is one block; its header is the
+ * handle (grab cursor, a six-dot grip on hover); while held the block lifts and the others slide aside to show where
+ * it lands. */
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg { position: relative; border-radius: 10px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-b > .aad-pg:first-child > .aad-grp { margin-top: 2px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg > .aad-grp { cursor: grab; user-select: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg > .aad-grp:hover { color: var(--aad-ink-2); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pgrip { display: grid; place-items: center; width: 20px; height: 20px; margin: 0 -6px 0 auto; padding: 0; border: 0; border-radius: 6px; background: none; color: inherit; cursor: grab; opacity: 0; transition: opacity 120ms ease; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pgrip .aad-ico { width: 14px; height: 14px; stroke-width: 2.6; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-pg > .aad-grp:hover, .aad-pg.is-drag > .aad-grp) .aad-pgrip, html[data-shell="desktop"][data-layout="ai-apps"] .aad-pgrip:focus-visible { opacity: .8; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pgrip:focus-visible { outline: 2px solid var(--wz-accent, var(--aad-ink)); outline-offset: 1px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-sec-b[data-pdrag] > .aad-pg:not(.is-drag) { transition: translate 160ms cubic-bezier(.2, .8, .2, 1); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg.is-drag { z-index: 3; background: var(--aad-canvas); box-shadow: var(--aad-menu); outline: 1.5px solid var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg.is-drag > .aad-grp { color: var(--aad-ink); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag], html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag] * { cursor: grabbing !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag] .aad-pg :is(.aad-row, .aad-more) { pointer-events: none; }

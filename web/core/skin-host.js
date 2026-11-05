@@ -842,6 +842,17 @@
           try { window.WizLive?.putPrefs?.({ readyOrder: o }); } catch (_) {}
           window.dispatchEvent?.(new Event('wos:prefs')); return true;
         },
+        // The owner's own order of projects (Miguel, 5 Nov 2026: drag the projects in the sidebar): the stock Chats By
+        // subject order (wos.chats.subjectOrder.v1, shared across devices through the box preferences' item ops), so
+        // both views keep one order. setSubjectOrder(keys) puts these first, in this order; the rest keep their place.
+        subjectOrder: () => { try { const v = JSON.parse(localStorage.getItem(SUBJ_ORDER_KEY) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (_) { return []; } },
+        setSubjectOrder: keys => {
+          if (!live() || !Array.isArray(keys)) return false;
+          const items = [...new Set(keys.filter(k => typeof k === 'string' && k && k.length <= 120))].slice(0, 60); if (!items.length) return false;
+          if (window.WizLive?.prefOps) { try { window.WizLive.prefOps([{ op: 'front', key: 'subjectOrder', items }]); return true; } catch (_) {} }
+          try { const old = JSON.parse(localStorage.getItem(SUBJ_ORDER_KEY) || '[]'); localStorage.setItem(SUBJ_ORDER_KEY, JSON.stringify(items.concat((Array.isArray(old) ? old : []).filter(x => !items.includes(x))).slice(0, 60))); } catch (_) {}
+          window.dispatchEvent?.(new Event('wos:prefs')); return true;
+        },
         // The Chats window as it is (its thread kept), and a New chat in it: the AI apps view's main screen.
         chats: () => live() ? !!shell.showChats?.() : false,
         newChat: () => live() ? !!shell.newChat?.() : false,
@@ -1081,6 +1092,7 @@
     void window.WosBell.mark(ids, action === 'restore' ? { archived: false, read: false } : action === 'snooze' ? { read: true } : { read: true, archived: true });
     return true;
   }
+  const SUBJ_ORDER_KEY = 'wos.chats.subjectOrder.v1';   // core/chats.js's By subject order
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function withNoteRows(ready) {
     const notes = noteRows(); if (!notes.length) return ready;
