@@ -1425,6 +1425,9 @@ export default function desktop(api) {
   api.listen(doc, 'focusin', rememberSurface, true);
   api.back.surface?.(() => {
     const a = doc.activeElement;
+    // A mixed Chats/app desk can have a focused iframe without an AI-apps pane.
+    // Do not consume its Back: the shell's focused-window fallback owns that app.
+    if (a?.tagName === 'IFRAME' && !pane?.el?.contains(a)) return false;
     const appFocused = !!pane && (pane.el.contains(a) || pTop.contains(a) || (lastSurface === 'app' && !chatsEl()?.contains(a)));
     if (appFocused) api.apps.back?.(pane.id);
     else if (docked) closeChat();
