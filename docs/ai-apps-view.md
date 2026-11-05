@@ -84,8 +84,8 @@ only keycap in the middle is ⌥H's, in the empty middle of Home while nothing c
 | ⌥W | Close the app in front (a pinned one hides), else the docked chat / notification (✕ / —) |
 | ⌥F | App wide / back to the side (⤢) |
 | ⌥− / ⌥= | App narrower / wider (the panel's edge) |
-| ⌥← (⌥Z) | Snooze the item in front (Snooze); ⌥← again in the snooze sheet = Someday |
-| ⌥→ (⌥E) | Archive it, then the next Ready item opens (Archive) |
+| ⌥Z | Snooze the item in front (Snooze); closes the snooze sheet when open |
+| ⌥E | Archive it, then the next Ready item opens (Archive) |
 | ⌥X | Resolve the notification ("Have <agent> handle it"), then the next |
 | ⌥B | Where this app's notifications go (the "From … · shows in …" line) |
 | ⌥Space | Talk (the orb) |
@@ -93,7 +93,7 @@ only keycap in the middle is ⌥H's, in the empty middle of Home while nothing c
 | ⌥V / ⌥C | New voice chat / command (the shell's own; no keycap) |
 
 With an app in front, an ⌥ letter it marks is the app's (App keys below). Every other ⌥ key does nothing here (no ⌥G
-letters, no ⌥/ pinned guide, no desk keys), so nothing acts unseen on a hidden desk. While typing, ⌥E / ⌥U / ⌥I and ⌥← / ⌥→ stay the field's (accents, word jumps).
+letters, no ⌥/ pinned guide, no desk keys), so nothing acts unseen on a hidden desk. Plain ⌥← / ⌥→ always pass through, including in the snooze sheet (Someday remains a button). While typing, ⌥E / ⌥U / ⌥I stay the field's accents. A/S remain All apps/Settings, not Archive/Snooze.
 Everything else in both panels (the Archive / Working / Snoozed / Ready headers, every chat row and its ⋯) is a plain
 button Tab reaches, in order, from ⌥K's search; the right column's rows are ⌥1–⌥0 and ⌥[ ].
 
@@ -112,7 +112,7 @@ for Wizard in an app; they are the app's own business (typing, its own shortcuts
 - Mark a button with `data-wz-key="<key>"`, optionally `data-wz-key-label="Play / pause"` (else its `aria-label`).
   The key means ⌥ + key. Keys: one lower-case letter `a`–`z`, or `/`, `,`, `.`, `;`. No Space, Enter, arrows, digits,
   brackets or Escape (Escape is Back, the shell's).
-- Reserved for Wizard, never an app's (also with ⇧): ⌥1–⌥0, ⌥[ ⌥], ⌥↑ ⌥↓ ⌥← ⌥→, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the
+- Reserved from app-declared shortcuts (also with ⇧): ⌥1–⌥0, ⌥[ ⌥], ⌥↑ ⌥↓, horizontal arrows (native word navigation, not Wizard actions), ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the
   voice keys ⌥D ⌥V ⌥C. A mark on `h`, `w`, `s`, `d`, `v` or `c` is ignored. The list is one constant,
   `RESERVED_KEYS` in `web/layouts/ai-apps/desktop.js` (the SDK carries its letters).
 - The key is read from `e.code` (`KeyJ` → `j`, `Slash` → `/`, `Comma`, `Period`, `Semicolon`), never `e.key`, since

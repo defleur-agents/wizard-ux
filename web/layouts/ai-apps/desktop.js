@@ -85,7 +85,8 @@ export const TIDY_EVERY = 3600e3;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
 /** One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of the app in front included
  * (docs/ai-apps-view.md › App keys). These ⌥ keys are Wizard's and never go to an app (⇧ variants too): ⌥1–⌥0, ⌥[ ⌥],
- * the ⌥ arrows, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. */
+ * ⌥↑/↓, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. Horizontal arrows stay reserved
+ * from app-declared shortcuts so plain ⌥←/→ remain native word navigation, not a Wizard action. */
 export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
   'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
 /** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
@@ -1231,27 +1232,32 @@ export default function desktop(api) {
     if (docked && !wasDocked) anim('dock');
     applySizes();
     if (was !== `${!!root.dataset.aadSplit}${docked}`) retileSoon();
+    // One physical pane owns both the layout header and the app window. Moving
+    // the header (not cloning it) preserves its tools/listeners and iframe state.
+    const headerHost = pane?.el || top;
+    if (pTop.parentNode !== headerHost) headerHost.append(pTop);
     pTop.hidden = !pane; cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
     if (loadId && pane?.id === loadId) waitLoaded(pane.el); else if (loadId && !want) doneLoading();
   }
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
-  let closing = null;
+  let closing = null, exitMotion = null;
   function hidePanel({ home: goBack = true } = {}) {
     if (!pane || closing) return !!pane;
     const was = pane, el0 = was.el, w0 = el0.getBoundingClientRect?.().width || 480;
     const finish = () => {
-      closing = null; if (pane !== was) return;
+      closing = null; if (pane !== was) { out?.cancel?.(); exitMotion = null; return; }
       pane = null; setWide(false); doneLoading(); anim('close');
       // (Home / Focus: the route still names the app until the new chat lands; don't take it back as the panel meanwhile)
       if (!goBack) dropped = { id: was.id, desk: Number(was.desk) };
       const m = mainChats();
       if (goBack && here().app === was.id) { if (m) api.nav.goDesk(m.desk); else api.sessions.newChat(); }
       paintSplit(!!chatThread); paintTop();
-      api.frame(() => { out?.cancel?.(); });
+      api.frame(() => { out?.cancel?.(); if (exitMotion === out) exitMotion = null; });
     };
     const out = goBack && !reduced() && typeof el0.animate === 'function' ? el0.animate([{ translate: '0px 0px', opacity: 1 }, { translate: `${Math.min(w0, 480)}px 0px`, opacity: 0.3 }], { duration: 180, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' }) : null;
+    exitMotion = out;
     if (out) closing = api.after(180, finish); else finish();
     return true;
   }
@@ -1263,7 +1269,7 @@ export default function desktop(api) {
   }
   function setWide(on) {
     const w = !!on && !!pane; if (w === wide) { paintWide(); return; } wide = w;
-    flip([pane?.el, pTop], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
+    flip([pane?.el], () => { if (wide) root.dataset.aadWide = ''; else delete root.dataset.aadWide; });
     paintWide(); retileSoon();
   }
   function paintWide() {
@@ -1299,7 +1305,7 @@ export default function desktop(api) {
   function anim(kind) {
     animOff?.(); for (const n of animOn) delete n.dataset.aadAnim;
     const chatDesk = chatsEl();
-    animOn = (kind === 'app' ? [pane?.el, pTop] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
+    animOn = (kind === 'app' ? [pane?.el] : kind === 'dock' ? [chatDesk, cTop] : kind === 'thread' ? [chatDesk] : []).filter(Boolean);
     for (const n of animOn) n.dataset.aadAnim = kind;
     animOff = api.after(320, () => { for (const n of animOn) delete n.dataset.aadAnim; animOn = []; animOff = null; });
   }
@@ -1455,10 +1461,12 @@ export default function desktop(api) {
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    // Native word jumps are never a view action, including with a modal or snooze sheet in front.
+    if (!sh && (code === 'ArrowLeft' || code === 'ArrowRight')) return false;
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
     if (settingsOpen()) return code === 'KeyS' && !sh ? once(closeSettings) : KEY_LIKE.test(code);
-    // the snooze sheet: ⌥← again = Someday (so ⌥← ⌥← snoozes with no time, Miguel 4 Nov 2026); ⌥Z closes it
-    if (snoozeOpen()) return code === 'ArrowLeft' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-someday]')?.click?.()) : code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
+    // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
+    if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -1494,8 +1502,8 @@ export default function desktop(api) {
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
     if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
     // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
-    // (⌥→ archive and ⌥← snooze are back as the natural pair, Miguel 4 Nov 2026; ⌥E / ⌥Z stay as letters)
-    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' }[code];
+    // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
+    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
@@ -1545,7 +1553,7 @@ export default function desktop(api) {
     // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
     if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
     if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
-    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); putIn(doc.querySelector('.boom-sheet [data-boom-someday]'), '←'); return out; }
+    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); return out; }
     put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
     // ⌥H in the empty middle of Home too (focus or not), only while nothing covers it
     const midH = () => { if (!pane && !docked && !fly && !q && !wsPop && !menu && !tidyPop && midFree()) out.push({ el: hMid, key: 'H', at: 'mid', free: true }); };
@@ -1581,7 +1589,7 @@ export default function desktop(api) {
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (docked) put(cX, 'W');
     midH();
     if (docked) {
-      for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
+      for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
     // the app in front: its own ⌥ keys (data-wz-key) on its own controls, the same keycaps as Wizard's (one anchor); a
@@ -1703,6 +1711,8 @@ export default function desktop(api) {
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {
+    closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
+    top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
     toolsMo?.disconnect();
