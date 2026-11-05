@@ -65,10 +65,10 @@
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
-    const status = ALIASES[raw] || raw || undefined;
+    const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
     const lastUserAt = optIso(item.wizard_last_user_at ?? item.last_user_at);
     const lastAssistantAt = optIso(item.wizard_last_assistant_at ?? item.last_assistant_at);
     const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
