@@ -25,9 +25,11 @@ async function paint(locator) {
     const chain=[];for(let p=el;p;p=p.parentElement)chain.unshift(p);
     let bg=[0,0,0,0],opacity=1;const layers=[];
     for(const p of chain){const s=getComputedStyle(p);opacity*=Number(s.opacity);if(s.filter!=='none')throw Error('filtered notice');let c=rgba(s.backgroundColor);bg=over(c,bg);
-      if(s.backgroundImage!=='none'){
-        const m=s.backgroundImage.match(/^linear-gradient\((rgba?\([^)]*\)), (rgba?\([^)]*\))\)$/);
-        if(!m||m[1]!==m[2])throw Error('unsupported painted gradient '+s.backgroundImage);
+      // Computed multi-layer backgrounds list unused layers as 'none'; drop only those.
+      const image=s.backgroundImage.replace(/(?:,\s*none)+$/,'').replace(/^(?:none,\s*)+/,'');
+      if(image!=='none'){
+        const m=image.match(/^linear-gradient\((rgba?\([^)]*\)), (rgba?\([^)]*\))\)$/);
+        if(!m||m[1]!==m[2])throw Error('unsupported painted gradient '+image);
         bg=over(rgba(m[1]),bg);
       }
       layers.push({tag:p.tagName,id:p.id,opacity:s.opacity,background:s.backgroundColor,image:s.backgroundImage});
