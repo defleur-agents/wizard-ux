@@ -707,7 +707,7 @@ export default function desktop(api) {
     // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
     // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
     const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
-      secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join(), ttDots(r.id)]))]);
+      secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
