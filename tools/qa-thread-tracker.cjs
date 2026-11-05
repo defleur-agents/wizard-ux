@@ -178,6 +178,50 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors);
       await ctx.close();
     }
+    /* ---- reply synthesis: old per-ask API counts deliberately retained for rolling-upgrade proof ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+      const tag = `grouped/${shell}/${skin}`, svc = service();
+      const anchor = svc.items.find(i => i.id === 'tap-lag');
+      svc.items = [
+        { ...anchor, id: 'nightly', title: 'Nightly maintenance helper', state: 'needs_you', try: true },
+        { ...anchor, id: 'messenger', title: 'Messenger sign-in code', state: 'done' },
+        { ...anchor, id: 'old', title: 'Nightly checks', state: 'done' },
+      ];
+      svc.seen = new Set(['old']);
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await page.waitForFunction(() => /1 need you/.test(window.WosThreadTracker.dots('tt-main')) && !/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      check(`${tag}: unopened Chats dots count replies even with old backend counts`, await page.evaluate(() => { const d = window.WosThreadTracker.dots('tt-main'); return /1 need you/.test(d) && !/finished, not seen|<b>/.test(d); }));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip] .tt-h');
+      check(`${tag}: three asks on one reply count as 1 ask`, /^1 ask/.test(await strip(page).locator('.tt-h').innerText()));
+      await strip(page).locator('.tt-h').click();
+      check(`${tag}: one synthesized row with member count`, await strip(page).locator('.tt-row').count() === 1 && /Nightly maintenance helper · Messenger sign-in code · Nightly checks/.test(await strip(page).innerText()) && /3 asks in one reply · Ready to try/.test(await strip(page).innerText()));
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
+      const geometry = await page.evaluate(() => { const s = document.querySelector('[data-tt-strip] .tt-panel'), n = s?.querySelector('.tt-t'), r = s?.getBoundingClientRect(); return { skin: document.documentElement.dataset.skin, shell: document.documentElement.dataset.shell, ellipsis: n && getComputedStyle(n).textOverflow, whiteSpace: n && getComputedStyle(n).whiteSpace, visible: r && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight && s.contains(document.elementFromPoint(r.left + 8, r.top + 8)) }; });
+      check(`${tag}: settled single-line ellipsis, visible on the correct skin and shell`, geometry?.visible && geometry.ellipsis === 'ellipsis' && geometry.whiteSpace === 'nowrap' && geometry.skin === skin && geometry.shell === shell, geometry);
+      await page.screenshot({ path: path.join(OUT, `grouped-${shell}-${skin}.png`) });
+      // Open the synthesized reply rather than any separate issue, then use the group's single Seen action.
+      await strip(page).locator('.tt-row .tt-ti').click();
+      await page.waitForSelector(`.msg[data-mid="${anchor.message_id}"].tt-flash`);
+      check(`${tag}: group Open jumps to its one reply`, await page.locator(`.msg[data-mid="${anchor.message_id}"].tt-flash`).count() === 1);
+      await strip(page).locator('.tt-h').click();
+      await strip(page).locator('[data-tt-seen]').click();
+      check(`${tag}: group Seen clears all local dots immediately`, await page.evaluate(() => window.WosThreadTracker.dots('tt-main') === ''));
+      await page.waitForFunction(() => /1 acknowledged/.test(document.querySelector('[data-tt-strip]')?.innerText));
+      check(`${tag}: Seen sends every member id and service readback agrees`, svc.writes.some(w => w.p.endsWith('/thread-items/seen') && JSON.stringify([...w.b.ids].sort()) === JSON.stringify(['messenger', 'nightly', 'old'])) && svc.view().every(i => i.seen));
+      // Move one ask to a newer reply, as the canonical per-id ledger does. Only its new update becomes unseen.
+      svc.items[0] = { ...svc.items[0], message_id: svc.items[0].message_id + '-new', updated_at: Date.now(), state: 'blocked' };
+      svc.seen.delete('nightly');
+      await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(() => /^2 asks/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
+      await strip(page).locator('[data-tt-ack]').click();
+      check(`${tag}: asks on two current replies produce two rows`, await strip(page).locator('.tt-row').count() === 2);
+      check(`${tag}: newer update resurfaces only its reply dot`, await page.evaluate(() => /1 stuck/.test(window.WosThreadTracker.dots('tt-main')) && !/need you|finished, not seen/.test(window.WosThreadTracker.dots('tt-main'))));
+      await page.screenshot({ path: path.join(OUT, `grouped-two-${shell}-${skin}.png`) });
+      check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
+      await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
+    }
     /* ---- 2. on: phone + desktop AI apps, two skins ---- */
     if (!process.env.QA_LATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `${shell}/${skin}`;
