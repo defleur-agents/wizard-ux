@@ -78,7 +78,7 @@ html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--in
    the shared glass token, so one number sets them all. Untouched = each skin exactly as shipped. */
 html[data-win-glass] .win { background: var(--sk-win); }
 /* Pictures must never show through a text-bearing desktop panel. Appearance v1 owns the surface. */
-html[data-shell="desktop"][data-image-background] :is(.win, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card) {
+html[data-shell="desktop"][data-image-background] :is(.win, #settings, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card, .home-card, .home .rs-widget, .home-unsent, .home-tools button) {
   background: var(--wz-panel, var(--wz-base, var(--bg)));
   color: var(--wz-text, var(--ink));
 }
