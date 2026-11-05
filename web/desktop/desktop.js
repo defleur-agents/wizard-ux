@@ -471,7 +471,7 @@
     const a = appAt(url);
     if (a && !setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openAppLink(url, title, true));
-    const go = () => !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
+    const go = desk => !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }, Number.isInteger(desk) && ws[desk] ? { ws: desk } : {});
     const r = window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;
     return go();
   }
@@ -2845,10 +2845,11 @@
   });
   // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
   const LINKS = window.WizLinks ? window.WizLinks.mount({
+    readerApp: () => APP.browser,
     parent: document.body, mode: 'pane',
     onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
     // A page preview opens as a window like any other (wizard-os#265 rule 7): ✕, ⌥W and Esc close it, Keep is not needed.
-    asWindow: (url, title) => { const o = appAt(url), go = () => { newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }); return true; };
+    asWindow: (url, title) => { const o = appAt(url), go = desk => { newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }, Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}); return true; };
       return window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: o ? o.id : '' }, go) ? true : go(); },   // a layout placing opens: its panel
   }) : null;
   // A link to a page inside an installed app opens as that app's window (its services: shared microphone,
