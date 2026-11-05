@@ -85,7 +85,8 @@ export const TIDY_EVERY = 3600e3;
 /** Ctrl / ⌘ + Shift + S: ChatGPT's sidebar key (the shell's own keys are all ⌥, so it takes nothing of theirs). */
 /** One anchor (Miguel, 4 Nov 2026): every Wizard key is left ⌥ + a key, the keys of the app in front included
  * (docs/ai-apps-view.md › App keys). These ⌥ keys are Wizard's and never go to an app (⇧ variants too): ⌥1–⌥0, ⌥[ ⌥],
- * the ⌥ arrows, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. */
+ * ⌥↑/↓, ⌥H (and ⌥`), ⌥W, ⌥S, ⌥Space and the voice keys ⌥D ⌥V ⌥C. Horizontal arrows stay reserved
+ * from app-declared shortcuts so plain ⌥←/→ remain native word navigation, not a Wizard action. */
 export const RESERVED_KEYS = Object.freeze(['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9', 'Digit0',
   'BracketLeft', 'BracketRight', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyH', 'Backquote', 'KeyW', 'KeyS', 'Space', 'KeyD', 'KeyV', 'KeyC']);
 /** An app key (data-wz-key): one lower-case letter or / , . ; that is not Wizard's. appKeyOf reads it from e.code,
@@ -1455,10 +1456,12 @@ export default function desktop(api) {
   api.keys.on({ down: e => {
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    // Native word jumps are never a view action, including with a modal or snooze sheet in front.
+    if (!sh && (code === 'ArrowLeft' || code === 'ArrowRight')) return false;
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
     if (settingsOpen()) return code === 'KeyS' && !sh ? once(closeSettings) : KEY_LIKE.test(code);
-    // the snooze sheet: ⌥← again = Someday (so ⌥← ⌥← snoozes with no time, Miguel 4 Nov 2026); ⌥Z closes it
-    if (snoozeOpen()) return code === 'ArrowLeft' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-someday]')?.click?.()) : code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
+    // The snooze sheet keeps ⌥Z to close; Someday is an explicit button, never an arrow shortcut.
+    if (snoozeOpen()) return code === 'KeyZ' && !sh ? once(() => doc.querySelector('.boom-sheet [data-boom-close]')?.click?.()) : KEY_LIKE.test(code);
     // voice: the shell's own keys (⌥D into the open chat's box, ⌥V a new voice chat, ⌥C a command); ⌥Space = the orb
     if (code === 'KeyV' || code === 'KeyC' || code === 'KeyD') return false;
     // a word with an accent while typing (⌥E é, ⌥U ü, ⌥I î on a Mac) and ⌥← / ⌥→ word jumps stay the field's
@@ -1494,8 +1497,8 @@ export default function desktop(api) {
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
     if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
     // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
-    // (⌥→ archive and ⌥← snooze are back as the natural pair, Miguel 4 Nov 2026; ⌥E / ⌥Z stay as letters)
-    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve', ArrowLeft: 'snooze', ArrowRight: 'done' }[code];
+    // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
+    const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
@@ -1545,7 +1548,7 @@ export default function desktop(api) {
     // a modal in front: its own key on its ✕ (what is behind sits under its scrim)
     if (allOpenNow()) { put(doc.querySelector('.vc-sheet .vc-x'), 'A'); return out; }
     if (settingsOpen()) { put(doc.querySelector('#dsettings .st-close'), 'S'); return out; }
-    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); putIn(doc.querySelector('.boom-sheet [data-boom-someday]'), '←'); return out; }
+    if (snoozeOpen()) { putIn(doc.querySelector('.boom-sheet [data-boom-close]'), 'Z'); return out; }
     put(orbBtn, 'Space'); putIn(homeComposer(), 'D');
     // ⌥H in the empty middle of Home too (focus or not), only while nothing covers it
     const midH = () => { if (!pane && !docked && !fly && !q && !wsPop && !menu && !tidyPop && midFree()) out.push({ el: hMid, key: 'H', at: 'mid', free: true }); };
@@ -1581,7 +1584,7 @@ export default function desktop(api) {
     if (pane) { put(pX, 'W'); put(pW, 'F'); if (!wide) put(grip.app, '− =', 'mid'); put(pIcon, 'H'); } else if (docked) put(cX, 'W');
     midH();
     if (docked) {
-      for (const [a, k] of [['snooze', '←'], ['done', '→'], ['resolve', 'X']]) putIn(chatBtn(a), k);
+      for (const [a, k] of [['snooze', 'Z'], ['done', 'E'], ['resolve', 'X']]) putIn(chatBtn(a), k);
       if (frontNote()) putIn(routeBtn(), 'B', 'start');
     }
     // the app in front: its own ⌥ keys (data-wz-key) on its own controls, the same keycaps as Wizard's (one anchor); a
