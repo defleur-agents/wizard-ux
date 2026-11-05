@@ -2306,6 +2306,7 @@
     const f = focused();
     if (f?.app === 'feature') { closeWin(f.id);return 'view'; }
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
+    if (f && f.app !== 'chats' && ws[cur].mono) { toggleMono(); return 'mono'; }
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
@@ -2315,7 +2316,7 @@
       if (f.preview) { closeWin(f.id); return 'preview'; }
       return '';
     }
-    if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
+
     if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
     if (f?.appId === 'app-store') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
