@@ -9,7 +9,7 @@ const state=()=>p.evaluate(()=>WosChat.viewer.state);
 async function check(name,fn){active=name;try{await fn();results.push({name,pass:true});console.log('PASS',name);}catch(e){results.push({name,pass:false,error:String(e.stack||e)});console.log('FAIL',name,String(e));if(p)await p.screenshot({path:path.join(OUT,'failure-'+results.length+'.png')}).catch(()=>{});}}
 async function ready(){await p.waitForFunction(()=>{const i=document.querySelector('.mviewer img');return i&&i.complete&&i.naturalWidth>0});await F.settle(p);}
 async function boot(phone=false){const b=await F.boot(phone,async c=>{
-  await c.route('**/wizard/v1/apps',r=>r.fulfill({json:{apps:[{id:'viewer-fixture',name:'Synthetic album',kind:'wizard',url:'/viewer-fixture/'}]}}));
+  await c.route(/\/wizard\/v1\/apps(?:\?.*)?$/,r=>r.fulfill({json:{apps:[{id:'viewer-fixture',name:'Synthetic album',kind:'wizard',url:'/viewer-fixture/'}]}}));
   await c.route('**/viewer-fixture/**',r=>{
     const u=new URL(r.request().url());
     if(r.request().method()!=='GET')return r.fulfill({status:403,body:'No writes'});
