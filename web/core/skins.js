@@ -225,7 +225,7 @@
         this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
       },
       draw(c, s, t, dt, W, H, selected = wall) {
-        if (selected !== 'landscapes') { const w = WIZ.get(selected, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = this.LIGHT ? '#ece8f6' : '#0B0A10'; c.fillRect(0, 0, W, H); } return; }
+        if (selected !== 'landscapes') { const w = WIZ.get(selected, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = SKINS[Math.round(pos)].t.bg; c.fillRect(0, 0, W, H); } return; }
         const cur = s.img[s.cur];
         if (cur?.ready && t - s.shownAt > this.HOLD) {
           const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);

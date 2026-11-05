@@ -79,8 +79,8 @@ html:not([data-skin="nebula"]) .win { background: var(--sk-win); color: var(--in
 html[data-win-glass] .win { background: var(--sk-win); }
 /* Pictures must never show through a text-bearing desktop panel. Appearance v1 owns the surface. */
 html[data-shell="desktop"][data-image-background] :is(.win, .sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .pal-card, .keys-card, .inbox, .bar, .now-card) {
-  background: var(--wz-panel, var(--wz-base, var(--bg, #05030c)));
-  color: var(--wz-text, var(--ink, #f3efff));
+  background: var(--wz-panel, var(--wz-base, var(--bg)));
+  color: var(--wz-text, var(--ink));
 }
 :where(html:not([data-skin="nebula"])) :is(.sheet, .wmenu, .pk-card, .ov-card, .dv-sheet, .ch-sheet-b, .ch-fcard, .wx-fcard, .ls-panel) { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--ink); }
 :where(html:not([data-skin="nebula"])) .ov-card.ov-home { background: linear-gradient(var(--glass-2), var(--glass-2)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); }

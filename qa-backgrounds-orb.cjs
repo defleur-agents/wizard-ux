@@ -33,7 +33,7 @@ async function main(){
     const panels=await p.locator('.win:visible').evaluateAll(ns=>ns.map(n=>getComputedStyle(n).backgroundColor));
     record(palette+': text windows are fully opaque',panels.length>0&&panels.every(c=>!c.includes('rgba')&&!c.includes('/')));
     await shot(p,'desktop-'+palette+'-'+image+'-picker');
-    await p.evaluate(()=>__wux.closeSettings());await shot(p,'desktop-'+palette+'-'+image+'-home');
+    await p.evaluate(()=>{__wux.closeSettings();__wux.goHome();});await shot(p,'desktop-'+palette+'-'+image+'-home');
     await p.reload();await ready(p);
     record(palette+': selection survives reload',await p.evaluate(img=>WosSkin.wallpaper===img,image));
     await p.evaluate(()=>__wux.openSettings('look'));await p.waitForSelector('[data-bgpick="living"]');
@@ -43,7 +43,7 @@ async function main(){
   await p.locator('[data-skinfamily="mizel"]').click();await p.waitForSelector('[data-bgpick="sea"]');
   await p.locator('[data-bgpick="sea"]').click();await p.waitForFunction(()=>WosSkin.current==='landscapes'&&WosSkin.wallpaper==='sea');
   await p.waitForTimeout(800);await shot(p,'desktop-mizel-sea-picker');
-  await p.evaluate(()=>__wux.closeSettings());await shot(p,'desktop-mizel-sea-home');
+  await p.evaluate(()=>{__wux.closeSettings();__wux.goHome();});await shot(p,'desktop-mizel-sea-home');
   record('Mizel keeps its existing Background/Mode picker and independent preference');
   await p.evaluate(()=>__wux.openSettings('look'));await p.locator('[data-skinmode="light"]').click();
   await p.waitForFunction(()=>WosSkin.current==='landscapes-light'&&WosSkin.wallpaper==='sea');record('Mizel light mode preserves chosen image');
@@ -55,7 +55,7 @@ async function main(){
   record('phone starts with core radial and no activation tweak',await q.evaluate(()=>!WosExperience.state.tweaks.some(t=>t.id==='wizard/orb-radial')));
   await q.evaluate(()=>__wos.openSheet('settings'));await q.locator('[data-st-page="appearance"]').click();
   record('phone Wizard background behaviour is unchanged',await q.locator('[data-bgpick]').count()===0);
-  await q.locator('[data-st-page="phone"]').click();await q.locator('[data-orbsw-open]').click();
+  await q.evaluate(()=>WosSettings.focus('orb-switcher'));await q.locator('[data-orbsw-open]').click();
   await q.locator('[data-app="preview-notes"] [data-pin]').click();
   await q.locator('[data-app="preview-calendar"] [data-pin]').click();
   await q.locator('.wor-sheet [data-close]').click();await q.evaluate(()=>__wos.closeSheets());

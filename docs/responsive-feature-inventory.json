@@ -726,6 +726,14 @@
     }
   },
   "exceptions": {
+    "core/orb-switcher.js": {
+      "shell": "phone", "classification": "adapter",
+      "reason": "Existing phone dock hold adapter promoted from a phone-only tweak. Desktop orb and full-screen phone corner orb keep their different input contracts."
+    },
+    "core/orb-switcher.css": {
+      "shell": "phone", "classification": "adapter",
+      "reason": "Paint for the phone dock hold adapter; no desktop radial is mounted."
+    },
     "pwa-install.js": {
       "shell": "phone",
       "classification": "native",
