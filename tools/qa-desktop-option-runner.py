@@ -9,7 +9,7 @@ stage = pathlib.Path(a.stage).resolve()
 manifest = json.loads((stage / 'manifest.json').read_text())
 summary = {'phases': [], 'cleanup': [], 'manifest_sha256': hashlib.sha256((stage / 'manifest.json').read_bytes()).hexdigest()}
 def digest(file): return hashlib.sha256(file.read_bytes()).hexdigest()
-def inventory(root): return {str(f.relative_to(root)): digest(f) for f in sorted(root.rglob('*')) if f.is_file()}
+def inventory(root): return {str(f.relative_to(root)): {'sha256': digest(f), 'mode': f.stat().st_mode & 0o777} for f in sorted(root.rglob('*')) if f.is_file()}
 def verify():
     for name in ['baseline', 'candidate']:
         assert inventory(stage / name) == manifest['sources'][name]['files'], 'Source drift: ' + name
