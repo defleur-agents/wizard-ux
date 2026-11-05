@@ -873,7 +873,7 @@
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
-        openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
+        openDesk: (id, place = null) => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id, typeof place === 'function' ? place : null) : shell.openApp?.(id)) : false,
         // Add to home screen: the Desks' own hold on an app tile (core/home-screen-apps.js, its sheet and its checks), for a
         // layout's own app icons (the AI apps view's Home, round 7). can(id) says whether that app may be offered.
         homeScreen: Object.freeze({
@@ -1645,7 +1645,7 @@
       for (const h of [...openRoutes]) {
         if (h.a.dead) continue;
         let out, ran = false;
-        const g = () => { if (!ran) { ran = true; out = typeof go === 'function' ? go() : undefined; } return out; };
+        const g = desk => { if (!ran) { ran = true; out = typeof go === 'function' ? go(desk) : undefined; } return out; };
         routing++;
         let took; try { took = h.open(String(kind), Object.freeze({ ...detail }), g); } finally { routing--; }
         if (took === true) return Object.freeze({ value: out });

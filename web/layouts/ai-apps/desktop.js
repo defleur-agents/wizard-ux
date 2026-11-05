@@ -455,12 +455,12 @@ export default function desktop(api) {
   }
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
-  const goApp = (id, desk = null, then = null) => {
+  const goApp = (id, desk = null, then = null, place = null) => {
     unpeek(); closeAll(); focusWant = id === CHATS ? '' : id;
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
-    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); then?.(); };
+    const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id, place); then?.(); };
     // the Chats desk stays behind the panel: Home's new chat there first (never its bare list's empty pane beside the app)
     if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); }
     // Deep links deliver their page to the frame in this same call, not a timer later.
@@ -1665,7 +1665,7 @@ export default function desktop(api) {
       if (kind === 'app' || (kind === 'link' && d.app)) {
         const id = kind === 'app' ? d.id : d.app, path = kind === 'app' ? d.path : d.url;
         if (!id || id === CHATS) return false;
-        goApp(id, null, path ? () => api.apps.path(id, path) : null); return true;
+        goApp(id, null, path ? () => api.apps.path(id, path) : null, go); return true;
       }
       if (kind === 'link') { unpeek(); closeAll(); return api.apps.openLink(d.url, d.title); }
       if (kind === 'draft' || kind === 'thread') {

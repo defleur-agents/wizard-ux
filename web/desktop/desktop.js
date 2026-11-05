@@ -482,7 +482,7 @@
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
-    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;
+    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;
     if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
@@ -3013,8 +3013,8 @@
     // The Apps view: one entry per desk (the app in front on it; a Chats desk is 'wizard'), and opening an app on a desk
     // of its own (the current desk when it is empty, else a fresh one), never tiled beside another app.
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
-    openAppDesk: id => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
-      if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
+    openAppDesk: (id, place = null) => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
+      if (ws[cur].wins.length) { ws.push(freshDesk()); const desk = ws.length - 1; return (place ? place(desk) : openApp(a, { ws: desk })) !== false; } return (place ? place(cur) : openApp(a)) !== false; },
     // A layout placing the shell's opens (apps.routeOpens): the app's window (the one in front first) at one of its own
     // pages, and one link page no app owns on a desk of its own, reused and taken to the next link (never a second).
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;

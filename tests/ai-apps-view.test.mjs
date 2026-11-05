@@ -2092,14 +2092,16 @@ test('desktop cold Store opens synchronously in the app pane and deferred Home c
   w.st.route = { home: true, desk: 1, view: 'home', thread: null };
   let router, opened = 0;
   w.api.apps.routeOpens = h => { router = h; };
-  w.api.apps.openDesk = id => {
-    assert.equal(id, 'app-store'); opened++;
+  w.api.apps.openDesk = (id, place) => {
+    assert.equal(id, 'app-store'); place(8); opened++;
     w.st.desks.push({ desk: 8, id, name: 'Store' });
     w.st.route = { home: false, desk: 8, view: 'desk', thread: null };
     w.emit('route', w.st.route);
   };
   (await layout()).default(w.api);
-  router.open('app', { id: 'app-store' }, () => assert.fail('no stock tiled open'));
+  let placed = null;
+  router.open('app', { id: 'app-store' }, desk => { placed = desk; });
+  assert.equal(placed, 8, 'the already-checked open is placed on the app desk, never re-gated');
   assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
   assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
   const drafts = w.st.newChats;
@@ -2347,7 +2349,7 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const goApp = \(id, desk = null, then = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
+  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
   assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
