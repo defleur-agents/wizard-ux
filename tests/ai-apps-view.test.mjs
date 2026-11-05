@@ -2357,3 +2357,12 @@ test('5 Nov 2026 (Miguel: "choose myself which project moves to the top… click
   assert.match(host, /subjectOrder: \(\) =>/); assert.match(host, /prefOps\(\[\{ op: 'front', key: 'subjectOrder', items \}\]\)/, 'saved for the box, as stock By subject');
   assert.match(desk, /api\.sessions\.setSubjectOrder\?\.\(next\)/); assert.match(desk, /'\.aad-pg > \.aad-grp'/, 'the header is the handle');
 });
+
+test('5 Nov 2026 (Miguel: reorder projects on the folded rail too, a little wider): By project the rail is RAIL_WIDE with a grip per project and drags them through the same saved order', async () => {
+  const L = await import(new URL('web/layouts/ai-apps/desktop.js', root).href);
+  assert.ok(L.RAIL_WIDE > L.RAIL);
+  const desk = read('web/layouts/ai-apps/desktop.js'), css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(desk, /const railW = \(\) => groupBy\(\) === 'project' \? RAIL_WIDE : RAIL/);
+  assert.match(desk, /'\.aad-rk\[data-proj\]'/, 'a rail project is the handle'); assert.match(desk, /aad-rgrip/);
+  assert.match(css, /\[data-aad-rail="wide"\][^{]*\{ --aad-side: 64px; \}/);
+});

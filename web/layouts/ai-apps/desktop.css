@@ -861,3 +861,17 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg.is-drag { z-index: 3; 
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-pg.is-drag > .aad-grp { color: var(--aad-ink); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag], html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag] * { cursor: grabbing !important; }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pdrag] .aad-pg :is(.aad-row, .aad-more) { pointer-events: none; }
+
+/* (5 Nov 2026) By project the folded rail is a little wider (RAIL_WIDE, 64 px): each project carries a six-dot grip on
+ * hover and drags up or down like the open sidebar's headers. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-rail="wide"]:is([data-aad-side="rail"], [data-aad-side="over"]) { --aad-side: 64px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-rail="wide"][data-aad-side="rail"] .aad-side, html[data-shell="desktop"][data-layout="ai-apps"][data-aad-rail="wide"] .aad-rail { width: 64px; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-rail="wide"] .aad-rk { width: 56px; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-proj] { position: relative; cursor: grab; touch-action: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk[data-proj] .aad-rk-w { max-width: calc(100% - 12px); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rgrip { position: absolute; top: 50%; left: 0; width: 10px; height: 16px; translate: 0 -50%; display: grid; place-items: center; color: var(--aad-ink-2); opacity: 0; transition: opacity 120ms ease; pointer-events: none; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rgrip .aad-ico { width: 14px; height: 14px; stroke-width: 2.8; }
+html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rk[data-proj]:hover, .aad-rk[data-proj]:focus-visible, .aad-rk.is-drag) .aad-rgrip { opacity: .85; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[data-pdrag] > .aad-rk[data-proj]:not(.is-drag) { transition: translate 160ms cubic-bezier(.2, .8, .2, 1); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-drag { z-index: 3; border-radius: 10px; background: var(--aad-canvas); box-shadow: var(--aad-menu); outline: 1.5px solid var(--wz-accent, var(--aad-ink)); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-flash { background: color-mix(in srgb, var(--wz-accent, var(--amber, var(--aad-ink))) 22%, transparent); }

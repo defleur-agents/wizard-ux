@@ -76,6 +76,8 @@ import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot,
 import { homeView } from './home.js';
 
 export const SIDE = 288, RAIL = 52, DOCKED_FROM = 900;
+// (5 Nov 2026, Miguel: reorder the projects on the folded rail too, "worth it" a little wider) the rail By project
+export const RAIL_WIDE = 64;
 /** Round 9 (Miguel, 2 Nov 2026): the panels resizable by drag, within these limits (px). Round 15: the sidebar, the
  * open-apps column on the right (Arc's vertical tabs; 52 px folded) and the app panel docked left of it. */
 export const SIZE_LIMITS = { side: [220, 440], tabs: [160, 320], app: [360, 1400] };
@@ -259,13 +261,17 @@ export default function desktop(api) {
   /* ---------- the sidebar's width: open, the rail, or open over the page (narrow) ---------- */
   let folded = api.storage.get('folded') === true, peek = false;
   const narrow = () => (globalThis.innerWidth || 1440) < DOCKED_FROM;
+  // By project the rail is a little wider (RAIL_WIDE): room for each project's drag grip and more of its name
+  const railW = () => groupBy() === 'project' ? RAIL_WIDE : RAIL;
+  function markRail() { const wide = groupBy() === 'project'; if (wide) root.dataset.aadRail = 'wide'; else delete root.dataset.aadRail; }
   function paintSide(relayout = true) {
+    markRail();
     const mode = narrow() ? (peek ? 'over' : 'rail') : folded ? 'rail' : 'open';
     const was = root.dataset.aadSide;
     if (relayout && was && was !== mode) flip([top, orbBox, ...shownDesks()], () => { root.dataset.aadSide = mode; });
     else root.dataset.aadSide = mode;
     // the sidebar opens with a short reveal (clip, no width animation); folding snaps to the rail
-    if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${RAIL}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
+    if (relayout && was === 'rail' && mode !== 'rail' && !reduced() && typeof side.animate === 'function') side.animate([{ clipPath: `inset(0 calc(100% - ${railW()}px) 0 0)` }, { clipPath: 'inset(0 0 0 0)' }], { duration: FLIP_MS, easing: EASE });
     const open = mode !== 'rail';
     if (open) closeFly();
     togBtn.title = 'Close sidebar (⌥L)';
@@ -299,7 +305,7 @@ export default function desktop(api) {
   const tickTimes = () => { const now = Date.now(); for (const t of scroll.querySelectorAll('.aad-time')) { const v = shortTime(t.dataset.at, now); if (v && t.textContent !== v) t.textContent = v; } api.after(10e3, tickTimes); };
   api.after(10e3, tickTimes);
   const setOrder = o => { api.sessions.setOrder?.(groupOrder(o)); paintList(true); paintRail(true); paintSetting(); };
-  const setGroup = m => { m = groupMode(m); api.storage.set('groupBy', m); api.storage.set('groupReady', m === 'status'); paintSetting(); paintList(true); paintRail(true); };
+  const setGroup = m => { m = groupMode(m); api.storage.set('groupBy', m); api.storage.set('groupReady', m === 'status'); markRail(); paintSetting(); paintList(true); paintRail(true); if (root.dataset.aadSide !== 'open') { applySizes(); globalThis.dispatchEvent?.(new Event('resize')); } };
   api.listen(globalThis, 'wos:prefs', () => { if (root.dataset.aadSide !== 'rail') paintList(); else paintRail(); paintSetting(); });
   const unpeek = () => { if (!peek) return; peek = false; offPeek?.(); offPeek = null; paintSide(); };
   api.listen(togBtn, 'click', toggleSide); api.listen(rTog, 'click', toggleSide);
@@ -320,7 +326,7 @@ export default function desktop(api) {
     const W = vw(), hi = Math.round(Math.min(SIZE_LIMITS.side[1], W * .32));
     const side = clampTo(sized.side ?? SIDE, SIZE_LIMITS.side[0], hi);
     const tabs = clampTo(sized.tabs ?? COLS.tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25));
-    const sideNow = root.dataset.aadSide === 'open' ? side : RAIL, tabsNow = root.dataset.aadTabs === 'rail' ? COLS.tabsRail : tabs;
+    const sideNow = root.dataset.aadSide === 'open' ? side : railW(), tabsNow = root.dataset.aadTabs === 'rail' ? COLS.tabsRail : tabs;
     const appHi = Math.min(SIZE_LIMITS.app[1], W - sideNow - tabsNow - 320);
     const app = clampTo(sized.app ?? Math.round(Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
     return { side: [side, SIZE_LIMITS.side[0], hi], tabs: [tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25)], app: [app, SIZE_LIMITS.app[0], appHi] };
@@ -794,7 +800,9 @@ export default function desktop(api) {
   function placeProject(keys, key, to, focus = false) {
     const next = moveProject(keys, key, to);
     if (next.join('\n') === keys.join('\n')) return false;
-    api.sessions.setSubjectOrder?.(next); readSessions(); paintList(true);
+    api.sessions.setSubjectOrder?.(next); readSessions(); paintList(true); paintRail(true);
+    const rk = [...rList.querySelectorAll('.aad-rk[data-proj]')].find(n => n.dataset.proj === key);
+    if (rk) { rk.classList.add('is-flash'); api.after(450, () => rk.classList.remove('is-flash')); }
     // (the moved block flashes once where it landed, as a rail group does)
     const box = pBoxes().find(b => b.dataset.proj === key), gh = box?.querySelector('.aad-grp');
     if (gh) { gh.classList.add('is-flash'); api.after(450, () => gh.classList.remove('is-flash')); }
@@ -817,9 +825,58 @@ export default function desktop(api) {
   api.listen(scroll, 'lostpointercapture', () => { if (pdrag?.on) pEnd(true); });
   api.listen(scroll, 'scroll', () => { if (pdrag?.on) pMove(pdrag.y); });
   api.listen(scroll, 'click', e => { if (Date.now() < pSwallow) { e.stopPropagation?.(); e.preventDefault?.(); } }, true);
+  /* The same on the folded rail (5 Nov 2026): press a project and drag it past 4 px; the others slide aside, it lands
+   * on release (a plain click still opens its chats; Esc cancels). */
+  let rdrag = null;
+  const rItems = () => [...rList.querySelectorAll('.aad-rk[data-proj]')];
+  function rStart() {
+    const g = rdrag; if (!g || g.on) return; g.on = true; closeFly();
+    try { rList.setPointerCapture?.(g.pid); } catch (_) {}
+    g.items = rItems(); g.oi = g.items.indexOf(g.b); g.rects = g.items.map(b => b.getBoundingClientRect()); g.st0 = rList.scrollTop || 0;
+    const r = g.rects, i = g.oi, n = r.length;
+    g.h = n > 1 ? (i < n - 1 ? r[i + 1].top - r[i].top : r[i].top - r[i - 1].top) : r[i].height;
+    g.ins = i; g.b.classList.add('is-drag'); rList.dataset.pdrag = ''; root.dataset.aadPdrag = '';
+  }
+  function rMove(y) {
+    const g = rdrag; if (!g?.on) return;
+    g.y = y; const dy = y - g.y0 + ((rList.scrollTop || 0) - g.st0);
+    g.b.style.translate = `0px ${Math.round(dy)}px`;
+    const me = g.rects[g.oi], top = me.top + dy, bot = me.bottom + dy;
+    let ins = g.oi;
+    for (let j = g.oi - 1; j >= 0; j--) if (top < g.rects[j].top + g.rects[j].height / 2) ins = j; else break;
+    for (let j = g.oi + 1; j < g.items.length; j++) if (bot > g.rects[j].top + g.rects[j].height / 2) ins = j; else break;
+    g.ins = ins;
+    g.items.forEach((b, j) => { if (j === g.oi) return; const s = j > g.oi && j <= ins ? -g.h : j < g.oi && j >= ins ? g.h : 0; b.style.translate = s ? `0px ${Math.round(s)}px` : ''; });
+  }
+  function rEnd(commit) {
+    const g = rdrag; rdrag = null; if (!g) return false;
+    if (!g.on) return false;
+    for (const b of g.items) b.style.translate = '';
+    g.b.classList.remove('is-drag'); delete rList.dataset.pdrag; delete root.dataset.aadPdrag;
+    try { rList.releasePointerCapture?.(g.pid); } catch (_) {}
+    pSwallow = Date.now() + 400;
+    if (commit && g.ins !== g.oi) placeProject(g.items.map(b => b.dataset.proj), g.b.dataset.proj, g.ins);
+    else if (g.repaint) paintRail(true);
+    return true;
+  }
+  api.listen(rList, 'pointerdown', e => {
+    if (e.button || rdrag || groupBy() !== 'project') return;
+    const b = e.target?.closest?.('.aad-rk[data-proj]'); if (!b) return;
+    rdrag = { b, pid: e.pointerId, x0: e.clientX, y0: e.clientY, y: e.clientY, on: false, repaint: false };
+  });
+  api.listen(rList, 'pointermove', e => {
+    const g = rdrag; if (!g) return;
+    if (!g.on) { if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) < PDRAG_PX) return; rStart(); }
+    rMove(e.clientY);
+  });
+  api.listen(rList, 'pointerup', () => { if (!rEnd(true)) rdrag = null; });
+  api.listen(rList, 'pointercancel', () => rEnd(false));
+  api.listen(rList, 'lostpointercapture', () => { if (rdrag?.on) rEnd(true); });
+  api.listen(rList, 'click', e => { if (Date.now() < pSwallow) { e.stopPropagation?.(); e.preventDefault?.(); } }, true);
   // (read by the sidebar's key handler above, so the layout's key handlers stay as they were)
   function projKey(e) {
     if (e.key === 'Escape' && pdrag?.on) { pEnd(false); return true; }
+    if (e.key === 'Escape' && rdrag?.on) { rEnd(false); return true; }
     const a = doc.activeElement;
     if (!a?.classList?.contains('aad-pgrip') || e.altKey || e.metaKey || e.ctrlKey || e.shiftKey || !['ArrowUp', 'ArrowDown'].includes(e.key)) return false;
     const keys = pBoxes().map(b => b.dataset.proj), i = keys.indexOf(a.dataset.proj); if (i < 0) return false;
@@ -874,9 +931,11 @@ export default function desktop(api) {
     if (n) wk.append(el('i', 'aad-d is-' + kind), el('span', 'aad-rk-wn', { text: n > 99 ? '99+' : String(n) }));
     else wk.append(el('i', 'aad-d is-none'));
     b.append(wk, el('span', 'aad-rk-w', { text: RAIL_WORDS[key] || word0 }));
+    // (5 Nov 2026) a project drags up or down on the rail too: its six-dot grip shows on hover
+    if (String(key).startsWith('proj:')) { b.dataset.proj = word0; b.title = `${word0} · drag to move`; const gp = el('span', 'aad-rgrip', { 'aria-hidden': 'true' }); gp.append(icon('grip', 'aad-ico')); b.append(gp); }
     if (on && act.n > 1) b.append(el('span', 'aad-rk-p', { 'aria-hidden': 'true', text: `${act.i + 1}/${act.n}` }));
     api.listen(b, 'click', () => railGo(key));
-    api.listen(b, 'pointerenter', () => flyWant(b, key, word0));
+    api.listen(b, 'pointerenter', () => { if (!rdrag?.on) flyWant(b, key, word0); });
     api.listen(b, 'pointerleave', flyLeave);
     api.listen(b, 'focus', () => { if (fly) flyWant(b, key, word0); });
     return b;
@@ -884,6 +943,7 @@ export default function desktop(api) {
 
   function paintRail(force = false) {
     if (root.dataset.aadSide !== 'rail') return;
+    if (rdrag?.on) { rdrag.repaint = true; return; }   // (a project being dragged: redrawn once it lands)
     // round 22 (Miguel, 4 Nov 2026: never both, it reads as double counting): One list = Ready alone; By status = each
     // status alone (plain chats as 'Other'), no Ready total over them
     const s = sessions || readSessions(), ready = s.ready || [], gm = groupBy(), grouped = gm !== 'none', groups = gm === 'project' ? projectGroups(ready, readyOrder(), s.projectOrder) : grouped ? stateGroups(ready) : [], act = railNow();
@@ -934,7 +994,7 @@ export default function desktop(api) {
     });
     card.replaceChildren(el('h3', 'aad-pop-h', { text: `${word} · ${rows.length}` }), ...(items.length ? items : [el('p', 'aad-empty', { text: 'Nothing here now.' })]));
     const r = fly.at.getBoundingClientRect?.(), H = globalThis.innerHeight || 900, h = Math.min(420, rows.length * 34 + 44);
-    const x = (rail.getBoundingClientRect?.().right || RAIL) + 6;
+    const x = (rail.getBoundingClientRect?.().right || railW()) + 6;
     card.style.left = Math.round(x) + 'px';
     card.style.top = Math.round(Math.max(8, Math.min((r?.top ?? 60) - 4, H - h - 8))) + 'px';
   }
