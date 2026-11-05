@@ -1759,7 +1759,9 @@ test('round 18 item 3c / round 21 desktop: ⌥A the picker, ⌥K the search, ⌥
 });
 
 /* ---------- round 19 (Miguel, 3 Nov 2026) ---------- */
-test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async () => {
+test('round 19 parts: the order inside each group (Newest / Oldest; stock Priority and By subject read as Newest), a rail item\'s chats, the current item, short times', async t => {
+  const tz = process.env.TZ; process.env.TZ = 'UTC';
+  t.after(() => { if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz; });
   const P = await import('../web/layouts/ai-apps/parts.js');
   assert.deepEqual(P.GROUP_ORDERS.map(o => o[1]), ['Newest first', 'Oldest first']);
   for (const [o, want] of [['newest', 'newest'], ['oldest', 'oldest'], ['priority', 'newest'], ['subject', 'newest'], [undefined, 'newest']]) assert.equal(P.groupOrder(o), want);

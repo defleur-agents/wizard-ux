@@ -12,7 +12,9 @@ function core(zone = 'UTC') {
   vm.runInContext(read('web/core/core.js'), c);
   return c.window.WizCore.ago;
 }
-test('one core Chats label: elapsed hours across midnight; calendar day only after a full 24h', () => {
+test('one core Chats label: elapsed hours across midnight; calendar day only after a full 24h', t => {
+  const tz = process.env.TZ; process.env.TZ = 'UTC';
+  t.after(() => { if (tz === undefined) delete process.env.TZ; else process.env.TZ = tz; });
   const ago = core();
   for (const [at, want] of [
     [now, 'now'], [now + 60000, 'now'], [now - 5 * 60000, '5m'],
@@ -25,6 +27,15 @@ test('one core Chats label: elapsed hours across midnight; calendar day only aft
     assert.equal(shortTime(new Date(at).toISOString(), now), want, 'AI apps sidebar/flyout alias matches phone and classic desktop');
   }
   for (const invalid of ['', undefined, 'not-a-date', NaN, Infinity]) assert.equal(ago(invalid, now), '');
+});
+test('classic boot and later ES-layout evaluation keep one helper instance and registered core modules', () => {
+  const c = vm.createContext({ window: {} });
+  vm.runInContext(read('web/core/core.js'), c);
+  const original = c.window.WizCore.ago, chats = {};
+  c.window.WizCore.chats = chats;
+  vm.runInContext(read('web/core/core.js'), c);
+  assert.equal(c.window.WizCore.ago, original);
+  assert.equal(c.window.WizCore.chats, chats);
 });
 test('older labels follow the owner time zone, not the desktop midnight', () => {
   const at = Date.UTC(2026, 10, 1, 23, 30);

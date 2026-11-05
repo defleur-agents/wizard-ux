@@ -1090,7 +1090,7 @@
       if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
       return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
         kind: 'ready', note: true, sortTitle: row.sortTitle, rank: row.rank, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
-        unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
+        unread: !it.read, snoozed: !!it.read, pinned: false, needs: row.rank === 1, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
     });
   }
   // A folded row's action covers every item in it (the inbox marks them together); a single row goes through the inbox.

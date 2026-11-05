@@ -9,6 +9,8 @@
  * A shell never loads the other shell's code: shell-select.js picks one before anything else loads. */
 ((root) => {
   'use strict';
+  // Classic boot and ES layout imports can both evaluate this file; preserve the original helper instances.
+  if (root.WizCore?.ago && root.WizCore?.store && root.WizCore?.emoOf) return;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s; };
   const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9ก-๙ ]+/g, ' ').replace(/\s+/g, ' ').trim();

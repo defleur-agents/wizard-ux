@@ -130,3 +130,18 @@ test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the a
   assert.deepEqual(rows.map(r => r.title), ['Sniper (2) · Sniper daily scan · Daily Sniper outcome', 'Oscar (2) · Release review · Whiteboard']);
   assert.equal(rows[0].app, 'sniper');
 });
+
+
+test('host note groups retain max-member Check rank; Needs you never folds and state/rank agree', () => {
+  const host = read('web/core/skin-host.js');
+  const src = host.match(/  const NOTE_ID = [\s\S]*?\n  function inboxAct\(action, id\) \{[^\n]*\n/)[0];
+  const items = [{ id: 'new', title: 'New low', time: 30, priority: 1 }, { id: 'check', title: 'Older check', time: 20, priority: 3 }, { id: 'urgent', title: 'Urgent older', time: 10, priority: 5 }];
+  const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Wizard' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };
+  runWithChatsModel(src + ';globalThis.noteRows = noteRows;', ctx);
+  const rows = ctx.noteRows(), M = ctx.window.WizChatsListModel;
+  assert.equal(rows.length, 2, 'priority4+ is excluded from folding before projection');
+  const folded = rows.find(r => r.count === 2), urgent = rows.find(r => r.needs);
+  assert.equal(folded.rank, 2); assert.equal(M.stateOf(folded), 'fyi');
+  assert.equal(urgent.id, 'notif:urgent'); assert.equal(urgent.count, 1);
+  for (const row of rows) assert.equal(M.stateOf(row) === 'needs', M.rankOf(row) <= 1);
+});
