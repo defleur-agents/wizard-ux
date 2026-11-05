@@ -34,11 +34,12 @@ test('Home Ready counts unread and snoozed notification rows but not completed r
   await bell.mark(['unread','snoozed'],{archived:true}); assert.equal(bell.readyCount(),0);
 });
 
-test('phone Home and the phone and desktop Chats badges use the notification Ready count and repaint when it changes', () => {
-  // Phone: Home's Ready card and the Chats badge; desktop: the Chats badge (its stock Home lists threads, no count).
-  for(const [file,n] of [['web/app.js',2],['web/desktop/desktop.js',1]]) {
+test('Home retains the notification Ready inventory; phone and desktop publish Chats through the shared unread projection', () => {
+  // Ready's action inventory remains on Home, never on a notification badge.
+  for(const [file,n] of [['web/app.js',1],['web/desktop/desktop.js',0]]) {
     const src=read(file);
     assert.equal((src.match(/\+ \(window\.WosBell\?\.readyCount\?\.\(\) \|\| 0\)/g)||[]).length,n,file);
+    assert.match(src,/workspaceNav\.refreshChats\(LIVE,/);
     assert.match(src,/addEventListener\('wizard:notifications',/);
   }
 });
