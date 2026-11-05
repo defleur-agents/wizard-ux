@@ -1,3 +1,4 @@
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Notifications about an app are that app's (Miguel, 4 Nov 2026: the agent's "Oscar" group held Sniper scans, backup
 // checks and Marketplace sales). A sender tags an item `app:<id>` (the Notifications cron relay's CRON_JOB_APPS, the
 // notify tool's `app`); core lists it under that app (name, mark, fold) and routes it by that app's own choice: in
@@ -124,7 +125,7 @@ test('sidebar / AI apps rows (skin-host noteRows) fold and name them under the a
   const items = [{ id: 's1', title: 'Sniper daily scan', time: 30, from: 'sniper', fromName: 'Sniper', priority: 2 }, { id: 's2', title: 'Daily Sniper outcome', time: 20, from: 'sniper', fromName: 'Sniper', priority: 2 },
     { id: 'o1', title: 'Release review', time: 10, priority: 2 }, { id: 'o2', title: 'Whiteboard', time: 5, priority: 2 }];
   const ctx = { isDoc: true, window: { WizConfig: { agent: () => 'Oscar' }, WosBell: { items: () => items } }, inboxThreads: new Map([['p', { list: true, act() {} }]]) };
-  vm.runInNewContext(src + ';globalThis.noteRows = noteRows;', ctx);
+  runWithChatsModel(src + ';globalThis.noteRows = noteRows;', ctx);
   const rows = JSON.parse(JSON.stringify(ctx.noteRows()));
   assert.deepEqual(rows.map(r => r.title), ['Sniper (2) · Sniper daily scan · Daily Sniper outcome', 'Oscar (2) · Release review · Whiteboard']);
   assert.equal(rows[0].app, 'sniper');

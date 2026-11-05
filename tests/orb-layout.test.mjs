@@ -1,3 +1,4 @@
+import { runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Orb desktop (Miguel, 31 Oct 2026): the miguel/orb-shell tweak wears the built-in Orb layout.
 // These tests hold its contract:
 //   - phone (experimental): the same layout, Home only (layouts/orb/phone.js; guards in tests/orb-phone-home.test.mjs);
@@ -28,7 +29,7 @@ function desk({ layout = null } = {}) {
     document: { baseURI: 'https://wizard.test/wizard-os-home/', documentElement: { dataset: { shell: 'desktop' } }, createElement: el, head: { appendChild(n) { links.push(n); } }, querySelector: () => null, getElementById: () => null, addEventListener() {} },
   };
   ctx.window = ctx; ctx.window.WosSkin = { current: 'obsidian', list: [], pkgOf: () => null }; ctx.module = { exports: {} };
-  vm.runInNewContext(read('web/core/skin-host.js'), ctx);
+  runWithChatsModel(read('web/core/skin-host.js'), ctx);
   const host = ctx.window.WosSkinHost; let api = null;
   host._test.setImporter(async () => ({ default: a => { api = a; return () => calls.push(['teardown']); } }));
   const rows = { working: [{ id: 'w1', title: 'Working one', kind: 'working', actions: [] }], ready: [{ id: 'r1', title: 'Ready one', kind: 'ready', needs: true, actions: ['snooze', 'done'] }] };
@@ -126,7 +127,8 @@ test('skins and tweaks never get the layout-only lists or the command take', asy
 test('the desktop adapter routes Snooze / Done through Chats\' own threadAct and feeds the orb voice and level', () => {
   const src = read('web/desktop/desktop.js');
   assert.match(src, /sessionAct: \(sid, act\) => \{[^}]*CHATS\.threadAct\(/);
-  assert.match(src, /KEEP = \['snooze', 'done', 'restore'\];[\s\S]{0,600}CHATS\.threadActions\(s\)\.filter\(a => KEEP\.includes\(a\)\)/, 'Snooze / Done (and Restore for the AI apps search) as Chats offers them');
+  assert.match(src, /sessionList: \(\) => window\.WizChatsListModel\.sessionList\(/, 'one row projection');
+  assert.match(read('web/core/chats-list-model.js'), /chats\.threadActions\(s, null\)\.filter\(a => \['snooze', 'done', 'restore'\]\.includes\(a\)\)/, 'Snooze / Done / Restore remain the Chats actions');
   assert.match(src, /window\.WosSkinHost\?\.voice\(st\)/); assert.match(src, /window\.WosSkinHost\?\.level\(l\)/);
   assert.match(src, /home: homeOpen \|\| !ws\[cur\]\.wins\.length/);
   assert.match(src, /removeDesktop\(d\); if \(window\.WosSkinHost\?\.emptyHome\) goHome\(\);/);

@@ -86,7 +86,12 @@ test('core/classic desktop and stock phone use shared ordering/grouping while ke
   for (const order of ['newest', 'oldest', 'priority']) {
     c.readyOrder = order;
     const ordered = M.orderSessions(sessions, order, { at: s => s.at, rank: s => M.sessionRank(s) });
-    assert.deepEqual(renderedIds(c.render(ordered, row)), ids(ordered));
+    const golden = {
+      newest: ['approval', 'new', 'failed', 'tie-a', 'tie-b', 'needs', 'sleep'],
+      oldest: ['approval', 'needs', 'tie-a', 'tie-b', 'failed', 'new', 'sleep'],
+      priority: ['approval', 'failed', 'needs', 'tie-a', 'tie-b', 'new', 'sleep'],
+    };
+    assert.deepEqual(renderedIds(c.render(ordered, row)), golden[order]);
   }
   c.readyOrder = 'subject';
   const html = c.render(sessions, row);
@@ -102,4 +107,26 @@ test('notifications share time/priority/ties, never mutate inputs, and read note
   assert.deepEqual(ids(M.mixedRows(sessions, notes, 'oldest', facts)), ['urgent-old', 'chat', 'fresh', 'read']);
   assert.deepEqual(ids(M.mixedRows(sessions, notes, 'priority', facts)), ['urgent-old', 'fresh', 'chat', 'read']);
   assert.equal(notes[2].rank, undefined);
+});
+
+test('raw live time key remains cardAt, not updatedAt, for Newest/Oldest/Priority compatibility helpers', () => {
+  const src = read('web/live.js');
+  const block = (from, to) => src.slice(src.indexOf(from), src.indexOf(to, src.indexOf(from)));
+  const c = modelContext({ Date, document: { documentElement: { dataset: {} } }, localStorage: { getItem: () => null }, window: { WizConfig: { dayStart: n => n - n % 864e5 } } });
+  vm.runInContext(block('  const DAY = 864e5;', '  // Agent Service owns box-wide preferences.') + block('  const sectionTime =', '  async function fetchDispositions()') + '\nthis.group = groupWork; this.priority = byPriority; this.oldest = byOldest;', c);
+  const sessions = [{ id: 'preview-new', title: 'N', status: 'completed', previewAt: at(8), updatedAt: at(1) }, { id: 'updated-new', title: 'U', status: 'completed', previewAt: at(2), updatedAt: at(9) }];
+  const ready = c.group(sessions, Date.parse(at(12))).ready;
+  assert.deepEqual(ids(ready), ['preview-new', 'updated-new']);
+  assert.deepEqual(ids(c.priority(ready)), ['preview-new', 'updated-new']);
+  assert.deepEqual(ids(c.oldest(ready)), ['updated-new', 'preview-new']);
+});
+test('raw and projected tie keys agree even when display titles add a source or an untitled-chat fallback', () => {
+  const sessions = [{ id: 'untitled', title: '', at: at(4) }, { id: 'alpha', title: 'Alpha', at: at(4) }];
+  const notes = [{ id: 'note', title: 'Middle', time: Date.parse(at(4)) / 1000 }];
+  const facts = { at: s => s.at, rank: () => 5 };
+  const projected = [...sessions.map(s => ({ ...s, title: s.title || 'New chat', rank: 5 })), { ...M.notificationRow(notes[0]), title: 'Z source · Middle' }];
+  for (const order of ['newest', 'oldest']) {
+    assert.deepEqual(ids(M.mixedRows(sessions, notes, order, facts)), ['alpha', 'note', 'untitled']);
+    assert.deepEqual(ids(M.readySort(projected, order)), ['alpha', 'note', 'untitled']);
+  }
 });

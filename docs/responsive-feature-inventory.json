@@ -221,6 +221,11 @@
       "loadedBy": [],
       "note": "Dev-only Chats slot module, dynamically loaded only with explicit fixture opt-in"
     },
+    "core/chats-list-model.js": {
+      "loadedBy": ["phone", "desktop"],
+      "classification": "shared",
+      "note": "Pure row projection, Sort/Group and visible-ID walk; all shells/layouts"
+    },
     "core/chats-view.js": {
       "loadedBy": [
         "phone",
@@ -875,6 +880,7 @@
     "core/chat-topic-emojis-data.js",
     "core/chat-topic-emojis.js",
     "core/chat-work.js",
+    "core/chats-list-model.js",
     "core/chats-view.css",
     "core/chats-view.js",
     "core/chats.css",
