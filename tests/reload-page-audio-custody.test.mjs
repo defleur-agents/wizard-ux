@@ -8,7 +8,7 @@ const read = name => readFileSync(process.env.QA_REVIEW_CORE ? `${process.env.QA
 function capture(patch={}) {
   const source=read('app-capture'),start=source.indexOf('  function reloadCheck()'),end=source.indexOf('  // Last moment before the shell reloads',start);
   assert(start>=0&&end>start);
-  const c={active:null,preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
+  const c={active:null,memoryTakes:new Map(),preparations:new Map(),recoveryLease:null,configuredNative:null,attachedMeetingBridge:null,
     ownedRows:new Map(),recoveryLive:new Set(),ownershipLoaded:true,recoveryError:null,unknownMeetingActive:false,
     W:{wizardMizelPort:{}},ready:Promise.resolve(),recover:async()=>{},...patch};
   vm.runInNewContext(source.slice(start,end),c);return c;
@@ -33,6 +33,7 @@ function updater(c,s) {
   return {web:window.WizWebUpdate,timers,toasts,get reloads(){return reloads}};
 }
 const tick=async()=>{for(let i=0;i<40;i++)await Promise.resolve()};
+test('memory-only audio blocks Reload until its app acknowledges handoff',()=>{const c=capture({memoryTakes:new Map([['synthetic',{}]])});assert.equal(c.reloadCheck().safe,false);c.memoryTakes.clear();assert.equal(c.reloadCheck().safe,true);});
 const retained=()=>Object.freeze({id:'synthetic-retained',appId:'synthetic',native:'device',nativeId:'synthetic-take',kind:'audio',status:'recoverable',bytes:32000,meta:Object.freeze({synthetic:true})});
 for(const mode of ['native_claim_pending','unloaded','native_owner_uncertain','recoverable_row'])test(`page-independent ${mode} allows check, reconciliation and the actual Reload tap without mutating custody`,async()=>{
   const row=retained(),map=new Map([[row.id,row]]),before=JSON.stringify([...map]);let recoveries=0;
