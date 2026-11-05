@@ -5,6 +5,8 @@ import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import stopEvidence from '../tools/qa-recorder-stop-evidence.cjs';
 import {randomUUID,createHash} from 'node:crypto';
 import path from 'node:path';
+import {createRequire} from 'node:module';
+const require=createRequire(import.meta.url);
 const read = name => readFileSync(process.env.QA_REVIEW_CORE ? process.env.QA_REVIEW_CORE+'/'+name+'.js' : new URL('../web/core/'+name+'.js', import.meta.url),'utf8');
 const source = read('app-capture');
 function extract(from,to,ctx) {
@@ -291,23 +293,65 @@ test('browser Stop evidence callback sends the genuine blob without awaiting a d
   assert.deepEqual(opened,['POST','/fixture-capture-evidence?id=aabb-0011',false]);
   assert.deepEqual(stored,['syntheticCapture','aabb-0011']);
 });
-test('closed Stop evidence route forwards the genuine wire body only to its disposable loopback sink',async()=>{
-  const start=runner.indexOf('   await c.route(/^http:');
+test('closed Stop evidence route continues genuine wire bytes at the same owned origin without URL rewriting',async()=>{
+  const start=runner.indexOf('   await c.route(u=>');
   const end=runner.indexOf('\n   });',start)+7;assert(start>=0&&end>start);
-  let route,pattern,forwarded;const report={requests:[]};
+  let route,pattern,continued=false,options;const report={requests:[]};
   const ctx={c:{route:async(p,fn)=>{pattern=p;route=fn}},fixture:{report},assert,URL,sink:{url:'http://127.0.0.1:43210'}};
   await vm.runInNewContext('(async()=>{'+runner.slice(start,end)+'})()',ctx);
-  assert(pattern.test('http://wizard-qa.invalid/fixture-capture-evidence?id=aabb-0011'));
-  assert(!pattern.test('https://owner.invalid/fixture-capture-evidence?id=aabb-0011'));
-  await route({request:()=>({method:()=> 'POST',url:()=> 'http://wizard-qa.invalid/fixture-capture-evidence?id=aabb-0011'}),continue:async v=>{forwarded=v}});
-  assert.equal(forwarded.url,'http://127.0.0.1:43210/fixture-capture-evidence?id=aabb-0011');
-  assert.deepEqual(Object.keys(forwarded),['url'],'no body reconstruction or postDataBuffer dependency');
+  const url='http://127.0.0.1:43210/fixture-capture-evidence?id=aabb-0011';
+  assert(pattern(new URL(url)));assert(pattern(new URL(url.replace('aabb-0011','preflight'))));
+  for(const bad of [url.replace('43210','43211'),url.replace('127.0.0.1','localhost'),url.replace('127.0.0.1:43210','owner.invalid'),url+'&extra=1',url.replace('aabb-0011','private')])assert(!pattern(new URL(bad)),bad);
+  await route({request:()=>({method:()=> 'POST',url:()=>url}),continue:async v=>{continued=true;options=v}});
+  assert(continued);assert.equal(options,undefined,'no URL/header/body rewriting or postDataBuffer dependency');
+  await assert.rejects(route({request:()=>({method:()=> 'GET',url:()=>url})}),/POST/);
+  assert(runner.includes('},sink);'),'whole fixture uses the owned evidence origin');
+});
+test('closed startup routes answer only pinned synthetic seed/inbox semantics and retain refusal/unknown logs',async()=>{
+  let route,goto;const page={on(){},clock:{install:async()=>{}},goto:async u=>{goto=u},waitForFunction:async()=>{},evaluate:async fn=>fn.toString().includes('WosSkin.current')?'nebula':false};
+  const c={routeWebSocket:async()=>{},addInitScript:async()=>{},route:async(_,fn)=>{route=fn},newPage:async()=>page};
+  const module={exports:{}};
+  const realRequire=require;
+  vm.runInNewContext(readFileSync(new URL('../tools/qa-closed-shell.cjs',import.meta.url),'utf8'),{
+    module,__dirname:path.resolve('tools'),process:{env:{QA_OUT:process.cwd(),QA_TREE:process.cwd()}},console,URL,JSON,
+    require:name=>name==='./qa-playwright.cjs'?{devices:{'Pixel 7':{}}}:name==='./qa-recorder-stop-evidence.cjs'?stopEvidence:realRequire(name)});
+  const fixture=module.exports;fixture.setBrowser({newContext:async()=>c});
+  await assert.rejects(fixture.boot(true,null,{url:'http://127.0.0.1:43210'}),/owned/);
+  const out=mkdtempSync(path.join(process.env.TMPDIR||process.cwd(),'.qa-origin-'));
+  const sink=await stopEvidence.start({out,mode:'phone',report:{errors:[]}});
+  try{
+    await fixture.boot(true,null,sink);assert(goto.startsWith(sink.url+'/wizard-os-home/'));
+    const request=async(method,payloadPath,body)=>{
+      let response;
+      await route({request:()=>({method:()=>method,url:()=>new URL(payloadPath,sink.url).href,postDataJSON:()=>body}),fulfill:async v=>{response=v},abort:async v=>{response={abort:v}}});
+      return response;
+    };
+    const before=JSON.parse((await request('GET','/wizard/v1/ui-preferences')).body);assert.deepEqual(before,{migrations:{}});
+    const launcher={window:{}};vm.runInNewContext(readFileSync(new URL('../web/core/launcher-defaults.js',import.meta.url),'utf8'),launcher);
+    const seed={marker:'launcher-seed-v1',launcher:JSON.parse(JSON.stringify(launcher.window.WizLauncherDefaults))};
+    const first=JSON.parse((await request('POST','/wizard/v1/ui-preferences/seed',seed)).body);
+    assert.deepEqual(first.preferences,{launcher:seed.launcher,migrations:{'launcher-seed-v1':true}});
+    assert.deepEqual(JSON.parse((await request('GET','/wizard/v1/ui-preferences')).body),first.preferences);
+    assert.deepEqual(JSON.parse((await request('POST','/wizard/v1/ui-preferences/seed',seed)).body),first,'idempotent synthetic migration');
+    assert.deepEqual(JSON.parse((await request('GET','/mizel/api/inbox')).body),{inbox:1,items:[]});
+    assert.equal(fixture.report.unknown.length,0);assert.equal(fixture.report.refusedWrites.length,0);assert.equal(fixture.report.mutations.length,2);
+    await assert.rejects(request('POST','/wizard/v1/ui-preferences/seed',{...seed,marker:'private'}));
+    await assert.rejects(request('POST','/wizard/v1/ui-preferences/seed',{...seed,launcher:{}}));
+    assert.equal((await request('POST','/wizard/v1/ui-preferences/seed?extra=1',seed)).status,403);
+    assert.equal((await request('POST','/mizel/api/inbox',{})).status,403);
+    assert.equal((await request('GET','/mizel/api/inbox?private=1')).status,451);
+    assert.equal((await request('GET','https://owner.invalid/mizel/api/inbox')).abort,'blockedbyclient');
+    assert.equal(fixture.report.unknown.length,2);assert.equal(fixture.report.refusedWrites.length,2,'denials are kept, not blanked');
+  }finally{await sink.close();rmSync(out,{recursive:true,force:true})}
+  assert.throws(()=>stopEvidence.origin(sink),/owned/,'closed servers cannot become an origin override');
 });
 test('wire evidence sink retains exact binary Blob bytes and rejects malformed requests without hanging',async()=>{
   const out=mkdtempSync(path.join(process.env.TMPDIR||process.cwd(),'.qa-stop-')),report={errors:[]};
   const sink=await stopEvidence.start({out,mode:'phone',report});
   try{
+    assert.equal(stopEvidence.origin(sink),sink.url);assert.throws(()=>stopEvidence.origin({...sink}),/owned/);
     const preflight=await fetch(sink.url+'/fixture-capture-evidence?id=preflight',{method:'POST',body:new Blob([Uint8Array.of(0,255,128)])});assert.equal(preflight.status,204);
+    assert.equal(report.evidencePreflights[0].hash,createHash('sha256').update(Buffer.from([0,255,128])).digest('hex'));
     const bytes=Buffer.from([0,255,1,128,10,13]);
     const response=await fetch(sink.url+'/fixture-capture-evidence?id=aabb-0011',{method:'POST',body:new Blob([bytes])});assert.equal(response.status,204);
     const kept=await sink.received();assert.equal(kept.id,'aabb-0011');assert.equal(kept.bytes,bytes.length);

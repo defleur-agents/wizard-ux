@@ -35,11 +35,17 @@ async function snap(name, phone) {
   const b = fs.readFileSync(file); assert.equal(b.readUInt32BE(16), state.width); assert.equal(b.readUInt32BE(20), state.height);
   report.captures.push({ file, ...state }); fs.writeFileSync(path.join(OUT, 'captures.json'), JSON.stringify(report.captures, null, 2));
 }
-async function boot(phone, configure) {
+async function boot(phone, configure, evidenceSink = null) {
+  // No arbitrary origin override: only a live server created by our evidence helper.
+  const origin = evidenceSink ? require('./qa-recorder-stop-evidence.cjs').origin(evidenceSink) : ORIGIN;
   const c = await browser.newContext({ ...(phone ? devices['Pixel 7'] : { viewport: { width: 1440, height: 900 } }), deviceScaleFactor: 1, serviceWorkers: 'block' });
   await c.routeWebSocket('**/*', w => w.close());
   const at = FIXTURE_NOW - 120000;
   const s = { rows: [raw('badge-read-ready', at)], seen: { initializedAt: 1, threads: { 'direct:badge-read-ready': { seenAt: at + 1000, assistantActivityAt: new Date(at).toISOString() } } } };
+  s.preferences = { migrations: {} };
+  const launcherContext = { window: {} };
+  require('node:vm').runInNewContext(fs.readFileSync(path.join(TREE, 'web/core/launcher-defaults.js'), 'utf8'), launcherContext);
+  const launcherDefaults = JSON.parse(JSON.stringify(launcherContext.window.WizLauncherDefaults));
   await c.addInitScript(phone => {
     if (window !== window.top) return;
     for (const [k, v] of Object.entries({ 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': phone ? 'phone' : 'desktop' })) localStorage.setItem(k, v);
@@ -49,6 +55,8 @@ async function boot(phone, configure) {
     ['/wizard/v1/agents', { agents: [] }],
     ['/wizard/v1/agent-options', { harnesses: [], providers: [], presets: [], wizard_apps: [], agent_apps: [], outside_tools: [] }],
     ['/wizard/v1/app-bindings', { bindings: [] }],
+    // notif-bell.js getFeed: synthetic Recorder has no pending inbox items.
+    ['/mizel/api/inbox', { inbox: 1, items: [] }],
     ['/wizard/v1/skins', { skins: [], active: null }],
     ['/wizard/v1/pages', { pages: [] }],
     ['/wizard/v1/schedules', { schedules: [] }],
@@ -68,12 +76,22 @@ async function boot(phone, configure) {
   await c.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
     report.requests.push({ method, path: p + u.search });
-    if (u.origin !== ORIGIN) { report.unknown.push({ method, url: u.href }); return r.abort('blockedbyclient'); }
+    if (u.origin !== origin) { report.unknown.push({ method, url: u.href }); return r.abort('blockedbyclient'); }
     // Only synthetic read receipts are accepted, in memory. All other writes (including sends) are refused.
     if (method === 'PUT' && p === '/wizard/thread-seen' && !u.search) {
       const next = q.postDataJSON();
       assert(next && typeof next.threads === 'object' && Object.keys(next.threads).every(k => s.rows.some(x => k === 'direct:' + x.id)), 'only synthetic thread receipts');
       s.seen = { ...s.seen, threads: { ...s.seen.threads, ...next.threads } }; return json(r, { state: s.seen });
+    }
+    // launcher.js owns this exact bootstrap migration; synthetic, in-memory and idempotent.
+    if (method === 'POST' && p === '/wizard/v1/ui-preferences/seed' && !u.search) {
+      const next = q.postDataJSON();
+      assert.deepEqual(Object.keys(next).sort(), ['launcher', 'marker']);
+      assert.equal(next.marker, 'launcher-seed-v1');
+      assert.deepEqual(next.launcher, launcherDefaults, 'only pinned synthetic launcher defaults');
+      if (!s.preferences.migrations[next.marker]) s.preferences = { launcher: next.launcher, migrations: { [next.marker]: true } };
+      (report.mutations ??= []).push({ method, path: p, marker: next.marker, synthetic: true });
+      return json(r, { preferences: s.preferences });
     }
     if (!['GET', 'HEAD'].includes(method)) { report.refusedWrites.push({ method, path: p }); return json(r, { error: 'fixture refuses owner writes' }, 403); }
     if (p === '/wizard/v1/my-skin' && !u.search) return r.fulfill({ contentType: 'text/css', body: '/* Synthetic QA: no personal CSS. */' });
@@ -96,7 +114,7 @@ async function boot(phone, configure) {
     if (p === '/wizard/v1/apps') return json(r, { apps: [] });
     if (p === '/wizard/hermes/api/sessions') return json(r, { object: 'list', data: s.rows, has_more: false, limit: 100, offset: 0 });
     if (p === '/wizard/thread-seen') return json(r, { state: s.seen });
-    if (p === '/wizard/v1/ui-preferences') return json(r, { preferences: {}, migrations: {} });
+    if (p === '/wizard/v1/ui-preferences' && !u.search) return json(r, s.preferences);
     if (p === '/wizard/hermes/api/model/options') return json(r, { provider: 'qa', model: 'synthetic', providers: [{ slug: 'qa', name: 'Synthetic QA', authenticated: true, is_current: true, models: [{ id: 'synthetic', name: 'Synthetic' }] }] });
     const m = p.match(/^\/wizard\/hermes\/api\/sessions\/(badge-[a-z-]+)(\/messages)?$/);
     if (m) { const item = s.rows.find(x => x.id === m[1]); if (!item) return json(r, { error: 'no synthetic thread' }, 404);
@@ -116,7 +134,7 @@ async function boot(phone, configure) {
   if (configure) await configure(c);
   page = await c.newPage(); page.on('pageerror', e => report.errors.push(String(e)));
   await page.clock.install({ time: new Date(FIXTURE_NOW) });
-  await page.goto(ORIGIN + PREFIX + (phone ? '' : 'desktop.html') + '?shell=' + (phone ? 'phone' : 'desktop') + '&view=chats');
+  await page.goto(origin + PREFIX + (phone ? '' : 'desktop.html') + '?shell=' + (phone ? 'phone' : 'desktop') + '&view=chats');
   await page.waitForFunction(() => window.WizLive?.ok && document.documentElement.dataset.shell &&
     window.WosWelcome?.log.some(x => x === 'deeplink' || x === 'boot:true:done:false'));
   assert.equal(await page.evaluate(() => WosWelcome.active || !!document.getElementById('wosWelcome')), false, 'established owner boot must not show Welcome');

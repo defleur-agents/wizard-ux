@@ -4,14 +4,40 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {chromium}=require('./tools/qa-playwright.cjs');
 const fixture=require('./tools/qa-closed-shell.cjs');
 const OUT=process.env.QA_OUT;assert(OUT);fs.mkdirSync(OUT,{recursive:true});
-const ORIGIN='http://wizard-qa.invalid',results={source:process.env.QA_SOURCE_SHA,synthetic:true,cases:[],screenshots:[]};
+const results={source:process.env.QA_SOURCE_SHA,synthetic:true,cases:[],screenshots:[],transport:[]};
 let browser,page,stage='boot';const evidenceSinks=[];const pass=name=>{results.cases.push(name);console.log('PASS',name)};
 const recorderSource=process.env.QA_RECORDER_SOURCE;assert(recorderSource,'QA_RECORDER_SOURCE must pin the actual Recorder app source');
 const recorderBytes=fs.readFileSync(recorderSource);results.recorder={sha:process.env.QA_RECORDER_SHA,appSha256:require('node:crypto').createHash('sha256').update(recorderBytes).digest('hex')};
 const app=require('./tools/qa-recorder-controller.cjs').fixture(recorderBytes.toString());
+const browserArgs=['--disable-background-networking','--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream'];
+// Retain exact browser diagnostics for r5's URL rewrite, then exercise the same Blob
+// directly at the owned origin below. This disposable page contains no product code.
+async function diagnoseR5Transport(){
+ const report={errors:[]},sink=await require('./tools/qa-recorder-stop-evidence.cjs').start({out:OUT,mode:'phone',report});
+ const b=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:[...browserArgs,'--unsafely-treat-insecure-origin-as-secure=http://wizard-qa.invalid']});
+ const c=await b.newContext({serviceWorkers:'block'}),p=await c.newPage();
+ const diagnostic={kind:'r5-rewrite',origin:'http://wizard-qa.invalid',sink:sink.url,events:[]};results.transport.push(diagnostic);
+ const cdp=await c.newCDPSession(p);await cdp.send('Network.enable');
+ cdp.on('Network.loadingFailed',e=>diagnostic.events.push({kind:'cdp-failed',...e}));
+ p.on('console',m=>{if(m.type()==='error')diagnostic.events.push({kind:'console',text:m.text()})});
+ p.on('requestfailed',q=>diagnostic.events.push({kind:'failed',url:q.url(),error:q.failure()}));
+ p.on('response',r=>diagnostic.events.push({kind:'response',url:r.url(),status:r.status()}));
+ try{
+  await c.route('**/*',r=>{
+   const u=new URL(r.request().url());
+   if(u.origin===diagnostic.origin&&u.pathname==='/fixture-capture-evidence'&&u.search==='?id=preflight'&&r.request().method()==='POST')return r.continue({url:sink.url+u.pathname+u.search});
+   if(u.href===diagnostic.origin+'/')return r.fulfill({contentType:'text/html',body:'<!doctype html><title>Synthetic r5 transport diagnostic</title>'});
+   return r.abort('blockedbyclient');
+  });
+  await p.goto(diagnostic.origin+'/');
+  diagnostic.result=await p.evaluate(()=>{try{const x=new XMLHttpRequest();x.open('POST','/fixture-capture-evidence?id=preflight',false);x.send(new Blob([Uint8Array.of(0,255,128)]));return {status:x.status}}catch(e){return {error:String(e)}}});
+ }finally{await b.close();await sink.close();diagnostic.sinkReport=report}
+ fs.writeFileSync(path.join(OUT,'transport-diagnostics.json'),JSON.stringify(results.transport,null,2));
+}
 async function load(phone){
  let version='a'.repeat(40);
  const sink=await require('./tools/qa-recorder-stop-evidence.cjs').start({out:OUT,mode:phone?'phone':'desktop',report:fixture.report});evidenceSinks.push(sink);
+ if(phone)await diagnoseR5Transport();
  const {c}=await fixture.boot(phone,async c=>{
    await c.addInitScript(()=>{if(window===top)sessionStorage.setItem('syntheticLoads',String(+(sessionStorage.getItem('syntheticLoads')||0)+1));});
    await c.route('**/wizard/v1/apps',r=>r.fulfill({contentType:'application/json',body:JSON.stringify({apps:[{id:'mizel',name:'Synthetic Recorder',kind:'wizard',url:'/fixture-recorder/',source:'apps.json'}]})}));
@@ -19,17 +45,26 @@ async function load(phone){
    await c.route('**/wizard-os-home/ux-version.txt',r=>r.fulfill({contentType:'text/plain',body:version}));
    // Evidence sink only, not an app/server API: retain the exact Stop blob outside the navigating page.
    // The synchronous synthetic POST finishes in the Stop callback's task, before deferred Reload unloads it.
-   await c.route(/^http:\/\/wizard-qa\.invalid\/fixture-capture-evidence\?id=(?:[a-f0-9-]+|preflight)$/,async r=>{
+   await c.route(u=>u.origin===sink.url&&/^\/fixture-capture-evidence\?id=(?:[a-f0-9-]+|preflight)$/.test(u.pathname+u.search),async r=>{
      const q=r.request();
      fixture.report.requests.push({method:q.method(),path:new URL(q.url()).pathname});
      assert.equal(q.method(),'POST');
-     // Only this exact synthetic route reaches a disposable loopback sink. Every other request
-     // retains the closed fixture fence. Preserve the real wire body, including native Blob elements.
-     await r.continue({url:sink.url+new URL(q.url()).pathname+new URL(q.url()).search});
+     // Same-origin socket: do not rewrite URL/origin or reconstruct Chromium Blob bytes.
+     // Only this exact POST escapes fulfillment; all other traffic stays closed.
+     await r.continue();
    });
- });
+ },sink);
  page=fixture.getPage();await page.clock.resume();
- assert.equal(await page.evaluate(()=>{const xhr=new XMLHttpRequest();xhr.open('POST','/fixture-capture-evidence?id=preflight',false);xhr.send(new Blob([Uint8Array.of(0,255,128)]));return xhr.status}),204,'exact synthetic Blob wire transport preflight');
+ const transport={kind:'same-origin',mode:phone?'phone':'desktop',origin:sink.url,events:[]};results.transport.push(transport);
+ const cdp=await c.newCDPSession(page);await cdp.send('Network.enable');
+ cdp.on('Network.loadingFailed',e=>transport.events.push({kind:'cdp-failed',...e}));
+ page.on('console',m=>{if(m.type()==='error')transport.events.push({kind:'console',text:m.text()})});
+ page.on('requestfailed',q=>transport.events.push({kind:'failed',url:q.url(),error:q.failure()}));
+ page.on('response',r=>{if(new URL(r.url()).pathname==='/fixture-capture-evidence')transport.events.push({kind:'response',url:r.url(),status:r.status()})});
+ try{
+  assert.equal(await page.evaluate(()=>{const xhr=new XMLHttpRequest();xhr.open('POST','/fixture-capture-evidence?id=preflight',false);xhr.send(new Blob([Uint8Array.of(0,255,128)]));return xhr.status}),204,'exact synthetic Blob wire transport preflight');
+  assert.equal(await page.evaluate(()=>isSecureContext),true,'owned loopback is a secure context without security bypass flags');
+ }finally{fs.writeFileSync(path.join(OUT,'transport-diagnostics.json'),JSON.stringify(results.transport,null,2))}
  await page.waitForFunction(()=>window.WizAppCapture&&window.WizWebUpdate&&window.WizAppServices);
  await page.evaluate(()=>WizOpenApp('mizel'));
  await page.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.fixtureReady));
@@ -46,7 +81,7 @@ async function shot(name,skin){
  const file=path.join(OUT,name+'.png');await page.screenshot({path:file});results.screenshots.push({file,skin,box,shell:await page.evaluate(()=>document.documentElement.dataset.shell)});
 }
 (async()=>{try{
- browser=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:['--disable-background-networking','--use-angle=swiftshader','--enable-unsafe-swiftshader','--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream','--unsafely-treat-insecure-origin-as-secure='+ORIGIN]});fixture.setBrowser(browser);
+ browser=await chromium.launch({executablePath:process.env.QA_CHROME||undefined,args:browserArgs});fixture.setBrowser(browser);
  for(const phone of [true,false]){
   const mode=phone?'phone':'desktop';stage=mode+': failed Start';const {c,frame,update,stopped}=await load(phone);
   await page.waitForFunction(()=>WizAppCapture.getState().nativeRegistryReady===true);
@@ -93,5 +128,5 @@ async function shot(name,skin){
   assert.deepEqual(after,kept);pass(mode+': Stop then Reload retains exact durable synthetic audio bytes');
   results[mode]={kept};await c.close();
  }
- assert.deepEqual(fixture.report.unknown,[],'no uncatalogued or owner network paths');assert.deepEqual(fixture.report.errors,[],'no page exceptions');pass('closed synthetic fence: no private content/API access');
-}catch(e){results.failure={stage,error:String(e.stack)};await page?.screenshot({path:path.join(OUT,'failure.png')}).catch(()=>{});process.exitCode=1;console.error(results.failure)}finally{fs.writeFileSync(path.join(OUT,'recorder-reload.json'),JSON.stringify(results,null,2));fs.writeFileSync(path.join(OUT,'fixture-requests.json'),JSON.stringify(fixture.report,null,2));await browser?.close();await Promise.all(evidenceSinks.map(sink=>sink.close()));}})();
+ assert.deepEqual(fixture.report.unknown,[],'no uncatalogued or owner network paths');assert.deepEqual(fixture.report.errors,[],'no page exceptions');assert.deepEqual(fixture.report.refusedWrites,[],'no unadmitted writes');pass('closed synthetic fence: no private content/API access');
+}catch(e){results.failure={stage,error:String(e.stack)};await page?.screenshot({path:path.join(OUT,'failure.png')}).catch(()=>{});process.exitCode=1;console.error(results.failure)}finally{fs.writeFileSync(path.join(OUT,'transport-diagnostics.json'),JSON.stringify(results.transport,null,2));fs.writeFileSync(path.join(OUT,'recorder-reload.json'),JSON.stringify(results,null,2));fs.writeFileSync(path.join(OUT,'fixture-requests.json'),JSON.stringify(fixture.report,null,2));await browser?.close();await Promise.all(evidenceSinks.map(sink=>sink.close()));}})();
