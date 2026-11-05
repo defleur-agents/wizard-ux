@@ -11,7 +11,7 @@
  * GET …/counts → { threads: { '<agent>/<thread>': counts } }. Seen is stored on the box, so phone and desktop agree.
  * Everything paints from local state first (a tap never waits on the box); the box then confirms.
  *
- *   WosThreadTracker.on() · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · loadCounts()
+ *   WosThreadTracker.on() · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · dotsNode(sid, agent) · loadCounts()
  *   · click(e, { sid, agent, jump }) · itemFor(message) · isOpen() · close() · repaint()
  */
 (() => {
@@ -137,6 +137,11 @@
     const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, 'run', 'running') + n(c.done_unseen, 'done', 'finished, not seen');
     return html ? `<span class="tt-dots" data-tt-dots="${esc(key(sid, agent))}">${html}</span>` : '';
   }
+  // The same dots as a node, for a list that builds its rows with the DOM (the AI apps sidebar).
+  function dotsNode(sid, agent = '') {
+    const html = dots(sid, agent); if (!html || typeof document === 'undefined') return null;
+    const t = document.createElement('template'); t.innerHTML = html; return t.content.firstElementChild;
+  }
   // Repaint what is on screen from local state (a tap and a poll both end here). Only the strip's inside and the
   // dots are replaced, so the thread, its scroll and the composer are never touched.
   function repaint() {
@@ -203,7 +208,7 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, repaint, click, close, isOpen: () => !!opened, itemFor, flash, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, key, _tally: tally });
   // A tweak turned on or off: paint (or remove) at once.
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) { if (e.detail.on) { countsAt = 0; loadCounts(true); } changedEvent(); } });
   // A tap anywhere outside the open list closes it on the same frame (the tap itself still goes through).

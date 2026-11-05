@@ -241,7 +241,7 @@ window.WizCore.chats = function createChats(H) {
   } catch (e) {}
   const paintPins = () => { try { if (pinsOn()) delete document.documentElement.dataset.pins; else document.documentElement.dataset.pins = 'off'; } catch (e) {} };
   paintPins();
-  const TT = () => window.WosThreadTracker; // Thread tracker (tweak, off by default): strip, row dots, Reply
+  // Thread tracker (tweak, off by default): strip, row dots, Reply. Read from globalThis, only when something asks.
   const PIN = { ...PIN0, on: pinsOn, has: id => pinsOn() && PIN0.has(id), toggle: id => PIN0.toggle(id), partition: (rows, keep) => pinsOn() ? PIN0.partition(rows, keep) : { pinned: [], rest: rows } };
   const BOOM = () => window.WosBoomerang || null;
   const PIN_SVG = '<svg class="ch-pin-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 4 5 5-4 2-3 5-2-2-5 5-1-1 5-5-2-2 5-3 2-4Z"/></svg>';
@@ -470,7 +470,7 @@ window.WizCore.chats = function createChats(H) {
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
-      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}${TT()?.on() ? TT().dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}<time>${esc(ago(LIVE.cardAt(s)))}</time>${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}</span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -646,7 +646,7 @@ window.WizCore.chats = function createChats(H) {
   function newDrafts() {
     const all = KIT.drafts.all();
     return Object.keys(all).filter(k => SAVED_NEW.test(k)).map(k => ({ key: k, ...KIT.drafts.get(k), at: all[k].at || 0 }))
-      .filter(d => d.text.trim() || d.files.length || (d.reply && !d.reply.quote && !(window.WosSkinHost?.inboxThreads && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
+      .filter(d => d.text.trim() || d.files.length || (d.reply && !d.reply.quote && !(globalThis.WosSkinHost?.inboxThreads && NOTIF_KEY.test(d.reply.key || '')))).sort((a, b) => b.at - a.at);
   }
   function draftRow(d, cur) {
     const t = d.text.trim().replace(/\s+/g, ' ');
@@ -917,7 +917,7 @@ window.WizCore.chats = function createChats(H) {
     const clone = node.querySelector('.bub')?.cloneNode(true); if (clone) clone.querySelectorAll('.ch-rq, .rsum, .rtools, button, details').forEach(n => n.remove());
     const excerpt = clip(((clone?.textContent) || '').replace(/\s+/g, ' ').trim(), 200) || 'Photo or file';
     const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : '';
-    const item = !mine ? TT()?.itemFor(w.thread, agent, { message_id: mid, at })?.id || null : null;
+    const item = !mine ? globalThis.WosThreadTracker?.itemFor(w.thread, agent, { message_id: mid, at })?.id || null : null;
     const safe = (mid || String(at)).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 100) || String(at);
     const r = KIT.reply.clean({ key: `quote:${mid ? 'm' : 't'}${safe}`, title: mine ? 'You' : agentName(agent), message: excerpt, quote: { message_id: mid || null, at, item, role: mine ? 'user' : 'assistant' } });
     if (!r) return;
@@ -950,24 +950,15 @@ window.WizCore.chats = function createChats(H) {
       if (!node) { if (tries > 0) requestAnimationFrame(() => go(tries - 1)); return; }
       // Far away: land there at once (a long smooth scroll hides the highlight); near: glide. Highlight once it has settled.
       const far = Math.abs(node.getBoundingClientRect().top - innerHeight / 2) > innerHeight * 1.5;
-      const calm = far || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      const calm = far || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
       node.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
       let last = NaN, still = 0, frames = 0;
-      const settle = () => { const t = node.getBoundingClientRect().top; still = Math.abs(t - last) < 1 ? still + 1 : 0; last = t; if (still >= 3 || ++frames > 90 || !node.isConnected) TT()?.flash(elOf(wid)?.querySelector(q) || node); else requestAnimationFrame(settle); };
+      const settle = () => { const t = node.getBoundingClientRect().top; still = Math.abs(t - last) < 1 ? still + 1 : 0; last = t; if (still >= 3 || ++frames > 90 || !node.isConnected) globalThis.WosThreadTracker?.flash(elOf(wid)?.querySelector(q) || node); else requestAnimationFrame(settle); };
       requestAnimationFrame(settle);
     };
     requestAnimationFrame(() => go(8));
     return true;
   }
-  // The tracker (or a poll) changed: add or drop the strip and the row dots where they now belong.
-  window.addEventListener('wos:thread-tracker', () => {
-    for (const wid of Object.keys(W)) {
-      const w = W[wid], el = w && elOf(wid); if (!el) continue;
-      if (w.thread && w.thread !== '__new__') { const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : ''; if (!!el.querySelector('[data-tt-strip]') !== !!TT().stripHtml(w.thread, agent)) renderThreadLive(w); }
-      else if (!w.thread && !holdList(wid)) renderChatList(w, el);
-    }
-  });
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/thread-tracker') for (const wid of Object.keys(W)) { const w = W[wid]; if (w && elOf(wid)) (w.thread ? renderThreadLive(w) : renderChatList(w, elOf(wid))); } });
   function replyBubble(r) {
     if (!r) return '';
     const pv = KIT.reply.preview(r, 180);
@@ -982,6 +973,15 @@ window.WizCore.chats = function createChats(H) {
     return `<div class="ch-rq" role="note" aria-label="Reply to a quoted item"><b>${esc(clip(r.title || pv || 'Notification', 120))}</b>${r.title && pv ? `<span>${esc(pv)}</span>` : ''}</div>`;
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
+  // The tracker (or a poll) changed: add or drop the strip and the row dots where they now belong.
+  window.addEventListener('wos:thread-tracker', () => {
+    for (const wid of Object.keys(W)) {
+      const w = W[wid], el = w && elOf(wid); if (!el) continue;
+      if (w.thread && w.thread !== '__new__') { const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : ''; if (!!el.querySelector('[data-tt-strip]') !== !!globalThis.WosThreadTracker.stripHtml(w.thread, agent)) renderThreadLive(w); }
+      else if (!w.thread && !holdList(wid)) renderChatList(w, el);
+    }
+  });
+  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/thread-tracker') for (const wid of Object.keys(W)) { const w = W[wid]; if (w && elOf(wid)) (w.thread ? renderThreadLive(w) : renderChatList(w, elOf(wid))); } });
   // Changed elsewhere (Settings, another tab): an open notification's picker shows the new choice.
   window.addEventListener('wizard:notify-route', () => { for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === '__new__' && notifOf(x)) renderThreadNow(x); } });
 
@@ -1247,7 +1247,7 @@ window.WizCore.chats = function createChats(H) {
   window.addEventListener('pagehide', flushListPlaces);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
   function renderChatList(w, el) {
-    if (TT()?.on()) TT().loadCounts();
+    if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.loadCounts();
     // A layout which owns the list supplies its own sidebar. Do not paint a
     // second, CSS-covered list underneath it (including a thread returning Back).
     if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
@@ -1598,8 +1598,8 @@ window.WizCore.chats = function createChats(H) {
     return `<section class="msg runcontext" data-run-context><div class="laterrun" data-later><span class="lr-ic">\u21aa</span><span>Started without a new message from you</span>${timeTag(later.at)}</div><div class="rc-body">${body}</div></section>`;
   }
   // Thread tracker: every message carries its row id and time so a tracker row or a quote can find it again.
-  const msgIds = (m, at) => (TT()?.on() && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
-  const quoteBtn = () => (TT()?.on() ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
+  const msgIds = (m, at) => (globalThis.WosThreadTracker?.on() && m ? `${m.id != null ? ` data-mid="${esc(String(m.id))}"` : ''}${isFinite(at ?? m.at) ? ` data-mat="${at ?? m.at}"` : ''}` : '');
+  const quoteBtn = () => (globalThis.WosThreadTracker?.on() ? '<button type="button" data-mquote aria-label="Reply to this message" title="Reply"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v3"/></svg>Reply</button>' : '');
   function turnHtml(c, tn, last, working, helperStatus, reconnect) {
     let h = '';
     // A provider sign-out has its own panel (Open Claude / Open ChatGPT) in place of Hermes' generic failed-turn notice.
@@ -2246,7 +2246,7 @@ window.WizCore.chats = function createChats(H) {
     const openContexts = el.dataset.draftFor === dkey ? new Set([...el.querySelectorAll('[data-run-original][open]')].map(e => e.dataset.runOriginal)) : new Set();
     const threadHTML = `<div data-part="thread" class="ch-thread${TAG ? ' agent' : ''}${NV ? ' ch-notif-thread' : ''}"${TAG ? ` style="--agc:${AGS()?.colour(agentRec(TAG)) || ''}"` : ''}>
       <div class="ch-head"><button class="ch-back" data-chback aria-label="Back to threads"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>${s && !isNew && stiKind(s) !== 'none' ? stiBadge(s, ' ch-head-sti') : ''}<div class="ti" title="${esc(sub)}">${s ? `<button type="button" class="ti-b" data-chrename aria-label="Rename thread"><b>${esc(winTitle(w))}</b></button>` : `<b>${esc(NV ? NV.reply.title || NV.item?.title || 'Notification' : winTitle(w))}</b>${NQ ? `<span class="ch-notif-hsrc"><span class="ch-notif-hic" aria-hidden="true">${NV.item ? noteIcon(NV.item) : window.WosBell?.icon || ''}</span>${esc(NV.item?.source === 'cron' ? 'Scheduled job' : NV.item?.appName || NV.item?.app || 'Notifications')}${NV.item?.time ? ` · ${timeTag(NV.item.time * 1000)}` : ''}</span>` : ''}`}${privTag}</div>${chip}${incognitoAction}<span data-slot="thread-header-actions"></span></div>
-      ${s && !isNew && TT()?.on() ? TT().stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
+      ${s && !isNew && globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.stripHtml(s.id, TAG) : ''}${s && BOOM() ? BOOM().banner(s.id) : ''}<div class="ch-msgs">${msgs}${tacts}${fail}</div>${PW ? PW.latestBtn() : ''}
       ${msw ? `<div class="ch-swrow">${msw}<span data-slot="thread-switch-row-end"></span></div>` : '<div data-slot="thread-switch-row-end"></div>'}<form data-slot="composer-end" data-part="composer" class="ch-compose${hasContent(draft, c.files || []) ? ' has-text' : ''}${rpl ? ' has-reply' : ''}" data-chform>${replyBubble(rpl)}${attachTray(c)}<div class="ch-row2"><button type="button" class="ch-attach" data-chattach aria-label="Attach photos or files">${CLIP_SVG}</button><div class="ch-field"><textarea rows="1" placeholder="${working ? `Steer ${esc(agentName(TAG))}…` : `Message ${esc(agentName(TAG))}`}" enterkeyhint="enter">${esc(draft)}</textarea>${mlabel}</div>${PW ? PW.micBtn(w.id) : ''}${canStop ? `<button type="button" class="ch-stop" data-chstop aria-label="Stop ${esc(window.WizConfig.agent())}"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/></svg></button>` : ''}<button type="submit" class="ch-send" aria-label="Send"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button></div></form>
     </div>`;
     // A focused composer must never leave the page during a live repaint: iPhone Safari closes the keyboard the
@@ -2695,7 +2695,7 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      if (TT()?.on()) TT().load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); // the asks of this thread (read right after the history that carries them)
+      if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); // the asks of this thread (read right after the history that carries them)
       Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
@@ -3072,8 +3072,8 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
-    if (TT()?.on()) {
-      if (TT().click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a) })) return true;
+    if (globalThis.WosThreadTracker?.on()) {
+      if (globalThis.WosThreadTracker.click(e, { sid: w.thread, agent: LIVE.agentOf && w.thread ? LIVE.agentOf(w.thread) : '', jump: a => jumpToMessage(id, a) })) return true;
       const mq = e.target.closest('[data-mquote]'); if (mq) { quoteMessage(w, mq.closest('.msg')); return true; }
     }
     const qj = e.target.closest('[data-ttjump]'); if (qj) { jumpToMessage(id, { message_id: qj.dataset.ttjump || null, at: +qj.dataset.ttjumpAt || 0 }); return true; }
@@ -3288,7 +3288,7 @@ window.WizCore.chats = function createChats(H) {
     root.addEventListener('keydown', e => {
       if (e.target.matches('[data-chemosearch]')) { e.stopPropagation(); if (e.key === 'Escape' && e.target.value) { e.preventDefault(); e.target.value = ''; renderEmojiSearch(e.target.closest('.ch-emoji-sheet'), ''); } return; }
       if (rowSheet && e.key === 'Escape') { e.preventDefault(); closeRowSheet(); return; }
-      if (e.key === 'Escape' && TT()?.isOpen()) { e.preventDefault(); TT().close(); return; }
+      if (e.key === 'Escape' && globalThis.WosThreadTracker?.isOpen()) { e.preventDefault(); globalThis.WosThreadTracker.close(); return; }
       if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('[data-tt-row], [data-ttjump]') && !e.target.closest('button')) { e.preventDefault(); e.target.click(); return; }
       if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
         const row = e.target.closest(ROW_MENU);

@@ -168,7 +168,8 @@ export default function desktop(api) {
   const readSessions = () => { sessions = api.sessions.list() || { working: [], snoozed: [], ready: [], archive: [] }; return sessions; };
   const titleOf = id => { const s = sessions || readSessions(); for (const k of KINDS) { const r = (s[k] || []).find(x => x.id === id); if (r) return r.title; } return ''; };
   // Thread tracker (tweak, off by default): the row's ask dots, drawn by the tracker itself so every list agrees.
-  const ttDots = id => { const T = window.WosThreadTracker; return T?.on?.() ? T.dots(id, window.WizLive?.agentOf?.(id) || '') : ''; };
+  const ttAgent = id => globalThis.WizLive?.agentOf?.(id) || '';
+  const ttDots = id => { const T = globalThis.WosThreadTracker; return T?.on?.() ? T.dots(id, ttAgent(id)) : ''; };
   const appName = id => (api.apps.list().find(a => a.id === id) || desks().find(d => d.id === id) || {}).name || '';
   const badgeText = id => { const n = badgeMap[id] || 0; if (!n) return ''; const t = api.apps.badgeText?.(id); return t || (n > 99 ? '99+' : String(n)); };
   const lit = id => (badgeMap[id] || 0) > 0;
@@ -601,8 +602,8 @@ export default function desktop(api) {
     // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
     const t0 = inProject ? titleInProject(s) : s.title;
     b.append(el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) }));
-    const dots = ttDots(s.id);
-    if (dots) { const h = document.createElement('template'); h.innerHTML = dots; b.append(h.content); }
+    const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
+    if (dots) b.append(dots);
     // round 22 (Miguel, 4 Nov 2026: the time says more than a status tag, and makes Newest / Oldest readable): how long
     // ago its last message came in, muted at the row's end (a working chat has its spinner instead)
     if (s.kind !== 'working' && s.at) { const t = shortTime(s.at, Date.now()); if (t) b.append(el('span', 'aad-time', { 'data-at': String(s.at), text: t })); }
