@@ -1186,6 +1186,9 @@ window.WizCore.chats = function createChats(H) {
   window.addEventListener('pagehide', flushListPlaces);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushListPlaces(); });
   function renderChatList(w, el) {
+    // A layout which owns the list supplies its own sidebar. Do not paint a
+    // second, CSS-covered list underneath it (including a thread returning Back).
+    if (H.ownsChatList?.()) { el?.replaceChildren(); return; }
     syncListTitle(w);
     closeStream(ch(w.id));
     if (!el) return;
@@ -3240,6 +3243,17 @@ window.WizCore.chats = function createChats(H) {
   // Back / Esc: the media viewer, then the actions sheet. Returns what it closed, or ''.
   function closeFilterSheet() { for (const id of Object.keys(CH)) { const c = CH[id]; if (c.sheet) { c.sheet = false; const w = H.win(id); if (w) rerenderList(w); return true; } } return false; }
   const closeOverlay = () => (closeSwipe() ? 'row-swipe' : null) || (closeSpacePicker() ? 'space-picker' : null) || (closeFilterSheet() ? 'filter-sheet' : null) || (window.WizCore.status?.back() || (KIT.viewer.close() ? 'viewer' : closeRowSheet() ? 'thread-actions' : PW?.closeSheet() ? 'chat-sheet' : ''));
+  function registerBack(stack, after) {
+    // Each activity has its own recency, not one fixed-priority closeOverlay bucket.
+    const owners = [
+      ['row-swipe', () => swipeOpen, closeSwipe],
+      ['space-picker', () => spacePicker, closeSpacePicker],
+      ['filter-sheet', () => Object.values(CH).find(c => c.sheet), closeFilterSheet],
+      ['thread-actions', () => rowSheet, closeRowSheet],
+      ['chat-sheet', () => PW?.sheetOpen(), () => PW.closeSheet()],
+    ];
+    return owners.map(([name, active, back]) => stack.watch(active, () => { back(); after?.(); }, name));
+  }
   // Put words (and already-uploaded files) back into a composer, e.g. editing an unsent message.
   function setDraft(wid, text, files) {
     if (INC?.active(wid)) { toast('!', 'Close Incognito before opening a saved draft', 2200); return; }
@@ -3266,5 +3280,5 @@ window.WizCore.chats = function createChats(H) {
   const tweakModel = (wid, choice, alive) => PW?.tweakModel(wid, choice, alive);
   return { beforeNavigate: ids => INC?.beforeNavigate(ids) ?? true, beforeLeave: (id, checkOnly = false) => !INC?.active(id) || INC.close(id, false, checkOnly), incognitoActive: id => !!INC?.active(id), tweakModels: wid => PW?.tweakModels(wid), tweakModel, openHosted, prepThread, closeHosted, isHosted, CH, ch, click, bind, PW, listTitle, modelRoute: (wid, sid) => window.WosModels.snapshot(sid === '__new__' ? '' : sid || '', sid === '__new__' ? PW?.newModel(ch(wid)) : null, sid === '__new__' ? (winAgent(W[wid]) || PW?.newModel(ch(wid))?.agent || '') : ''), winAgent, agentRec, leaveAfterSend, takeComposer, composerBusy, joinWords, sendVoiceTo: (...a) => { if (INC?.active(a[0])) { toast('!', 'Incognito is text only', 2200); return null; } return PW?.sendVoiceTo(...a); }, insertText, forget, renderChats, renderChatList, renderThread, loadThread, openChat, chatsBack, threadBack, setFilter, clearFilter, readyBack, setFocus, focusOf, focusMatches, addFilter, hasFilter, clearAll, setQuery, matchFilters, subjects, closeFilterSheet, sendChat, uploadFile,
     refreshCompose, toggleVoice, growTa, markVisibleThreadsSeen, addFiles, toTurns, md, MIC_SVG, CLIP_SVG, WORKING_ST, isWorking,
-    KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
+    registerBack, KIT, threadAct, threadActions, stiKind, notifOpen: wid => notifOf(W[owner(wid)])?.id || '', openRowSheet, openRenameSheet, closeRowSheet, closeOverlay, holdList, justPressed, setDraft, saveDraft, openNewDraft, openContextDraft, newDrafts };
 };

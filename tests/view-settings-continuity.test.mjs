@@ -27,5 +27,5 @@ test('AI apps sets the everywhere-modal contract before preparing its Home chat'
   const at=ai.indexOf("root.dataset.settingsOver = '';");
   assert.ok(at>=0 && at<ai.lastIndexOf('if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });'));
   assert.match(source,/scrim.addEventListener\('click', \(\) => closeSettings\(\)\)/);
-  assert.match(source,/if \(settingsFocused\(\)\) \{ if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
+  assert.match(source,/watchEscape\('settings', \(\) => settingsFocused\(\), \(\) => \{ if \(settingsView.back\(\)\) return 'settings-page'; closeSettings\(\); return 'settings'; \}/);
 });

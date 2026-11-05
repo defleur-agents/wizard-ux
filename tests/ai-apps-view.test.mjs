@@ -55,6 +55,7 @@ class El {
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
   get childElementCount() { return this.children.length; }
+  contains(n) { return n === this || this.all().includes(n); }
   get isConnected() { let n = this; while (n.parentNode) n = n.parentNode; return n.tagName === 'HTML'; }
   all() { return this.children.flatMap(c => [c, ...c.all()]); }
   querySelectorAll(sel) { sel = sel.replace(/\s*>\s*/g, ' '); return this.all().filter(n => matchesSel(n, sel)); }
@@ -80,13 +81,15 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
       archive: [{ id: 'a1', title: 'Old money talk', kind: 'archive', unread: false, pinned: false, actions: ['pin', 'rename', 'restore', 'snooze'] }] },
     desks: [{ desk: 1, id: 'wizard', name: 'Chats' }, ...['mail', 'music', 'money', 'notes', 'maps'].map((id, i) => ({ desk: i + 2, id, name: id[0].toUpperCase() + id.slice(1) }))] };
   const apps = ['mail', 'music', 'money', 'notes', 'maps', 'movies'].map(id => ({ id, name: id[0].toUpperCase() + id.slice(1) }));
+  const backWindow = {}; vm.runInNewContext(read('web/core/escape-back.js'), {window:backWindow});
+  const dispatcher = backWindow.WizEscapeBack.create();
   const api = {
     env: { shell, edgeInset: 24 }, route: () => ({ ...st.route }), on: (t, fn) => { (st.on[t] ||= []).push(fn); return () => {}; },
     listen: (t, type, fn) => { if (t === doc) doc.addEventListener(type, fn); else if (t?.addEventListener) t.addEventListener(type, fn); return () => {}; },
     mount: n => { device.append(n); return () => n.remove(); },
     after: (ms, fn) => { const h = { ms, fn, dead: false }; st.timers.push(h); return () => { h.dead = true; }; },
     frame: fn => { fn(0); return () => {}; },
-    back: { push: fn => { st.backs.push(fn); return () => { const i = st.backs.indexOf(fn); if (i >= 0) st.backs.splice(i, 1); }; } },
+    back: { surface: fn => { st.surface = fn; return () => { st.surface = null; }; }, push: fn => { st.backs.push(fn); const release = dispatcher.push(fn); return () => { release(); const i = st.backs.indexOf(fn); if (i >= 0) st.backs.splice(i, 1); }; } },
     gesture: { intent: dx => dx > 60, claim: id => { (st.claims ||= []).push(id); return true; } },
     agents: { list: () => [{ id: 'hermes', label: 'Oscar', main: true }] },
     workspaces: { list: () => [{ id: 'this', name: 'Miguel', current: true, owner: 'Miguel Collins' }, { id: 'g1', name: 'Carlos', org: 'Acme', current: false }], refresh() {} },
@@ -104,7 +107,7 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
   const emit = (t, v) => { for (const fn of st.on[t] || []) fn(v); };
   const run = () => { const t = st.timers.splice(0); for (const h of t) if (!h.dead) h.fn(); };
   const q = s => html.querySelector(s), qa = s => html.querySelectorAll(s);
-  return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc };
+  return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc, escape: () => !!dispatcher.run({surface:st.surface}) };
 }
 const layout = () => import(new URL('web/layouts/ai-apps/layout.js', root).href);
 
@@ -204,8 +207,8 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.html.dataset.vcSheet, undefined, 'a pick closes the picker');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
   w.q('.vc-pick .vc-more').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.opened.at(-1), 'app-store', 'Get more = the App Store as it is');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyR' }), true, 'round 21: ⌥R folds the apps column (the right one)');
-  assert.equal(w.html.dataset.aadTabs, 'rail'); keys[2].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyR' }), true, 'round 21: ⌥R folds the apps column (the right one)');
+  assert.equal(w.html.dataset.aadTabs, 'rail'); keys[1].down({ altKey: true, code: 'KeyR' }); assert.equal(w.html.dataset.aadTabs, 'open');
   // ⋯ on a row: the same menu as the phone's long press, through Chats' own actions
   w.q('.aad-rw[data-sid="r2"] .aad-more').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-pop-i').map(b => b.textContent), ['Pin', 'Rename', 'Mark unread', 'Snooze', 'Archive']);
@@ -226,13 +229,13 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-d\.is-spin \{[^}]*animation: aad-spin 900ms linear infinite;/, 'the same spin as the expanded Working tally');
   assert.equal(w.q('.aad-rail .aad-pins'), null, 'round 16: no pinned apps on the rail');
   assert.equal(w.q('.aad-rlist .aad-sti'), null, 'round 12: no status icons'); assert.equal(w.q('.aad-rc'), null); assert.equal(w.q('.aad-rg'), null, 'no coloured dots');
-  assert.equal(keys.length, 3, 'Ctrl/⌘+Shift+S, Esc for the app panel / chat column (round 7), the view\'s ⌥ keys');
+  assert.equal(keys.length, 2, 'Ctrl/⌘+Shift+S and the view’s ⌥ keys; Escape belongs to the core dispatcher');
   assert.equal(w.st.guides.length, 1, 'round 21: one hold-⌥ guide, the view\'s targets (no app letters any more)');
   const chips = w.st.guides[0]();
   assert.ok(Array.isArray(chips), 'the guide lists chips');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
-  assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc closes the picker'); assert.equal(w.html.dataset.vcSheet, undefined);
-  assert.equal(keys[1].down({ key: 'Escape' }), false, 'Esc with nothing open: not the layout\'s');
+  assert.equal(w.escape(), true, 'Esc closes the picker'); assert.equal(w.html.dataset.vcSheet, undefined);
+  assert.equal(w.escape(), true, 'bare AI apps root consumes Escape without legacy navigation');
   assert.equal(keys[0].down({ ctrlKey: true, shiftKey: true, code: 'KeyS', key: 'S' }), true); assert.equal(w.html.dataset.aadSide, 'open');
   assert.equal(keys[0].down({ metaKey: true, shiftKey: true, code: 'KeyS', key: 's' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   assert.equal(keys[0].down({ altKey: true, code: 'KeyS', key: 's' }), false, 'the ⌥ keys stay the shell\'s');
@@ -937,11 +940,11 @@ test('round 7 + 15 desktop: a chat docks beside the sidebar (✕, Esc and ⌥W b
   assert.equal(w.html.dataset.aadChat, 'on', 'the docked column'); assert.equal(w.q('.aad-cx').hidden, false);
   assert.equal(w.q('.aad-tt').textContent, 'Ready one'); assert.equal(chatDesk.dataset.aadRole, 'chat');
   const n0 = w.st.newChats;
-  assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc closes the column'); assert.equal(w.st.newChats, n0 + 1, 'Home = a new chat');
+  assert.equal(w.escape(), true, 'Esc closes the column'); assert.equal(w.st.newChats, n0 + 1, 'Home = a new chat');
   w.st.route = { home: false, view: 'thread', thread: '__new__', desk: 1 }; w.emit('route', w.st.route);
   assert.equal(w.html.dataset.aadChat, undefined, 'Home: no column');
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyW' }), true, '⌥W too'); assert.equal(w.st.newChats, n0 + 2);
   w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route);
   w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.st.newChats, n0 + 3, 'and its ✕');
   // the rail (round 12; round 13: the expanded list's order, Archive, Working, Snoozed, Ready and its statuses)
@@ -1369,8 +1372,8 @@ test('round 15: pins (defaults if installed, the owner\'s order, pin / unpin), a
   w.q('.aad-vtab.is-pinned[data-app="maps"]').dispatchEvent(new FakePointerEvent('contextmenu', { clientX: 10, clientY: 10 }));
   w.q('.aad-appmenu .aad-pop-i[data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
   assert.ok(!pinsNow().includes('maps'), 'Unpin');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open', '⌥A the picker (round 21)');
-  keys[1].down({ key: 'Escape' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open', '⌥A the picker (round 21)');
+  w.escape();
   // the tidy (6 s after load): Maps (30 h) closes, Money is pinned, Movies is recent
   for (const tm of w.st.timers.filter(x => x.ms === 6000)) tm.fn();
   assert.deepEqual(closed, [2], 'only the stale unpinned one');
@@ -1541,7 +1544,7 @@ test('round 16: drag to rearrange the right column: within Pinned, within the op
     list.dispatchEvent(new FakePointerEvent('pointermove', { pointerId: 1, clientX: 20, clientY: y }));
     assert.ok(r.classList.contains('is-drag') && list.dataset.drag === '', 'it floats');
     assert.equal(w.q('.aad-vtdrop').hidden, false, 'the drop line shows');
-    if (esc) assert.equal(keys[1].down({ key: 'Escape' }), true, 'Esc cancels');
+    if (esc) assert.equal(w.escape(), true, 'Esc cancels');
     else list.dispatchEvent(new FakePointerEvent('pointerup', { pointerId: 1 }));
     w.run(); rects();
   };
@@ -1839,7 +1842,7 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   go('n1'); assert.equal(w.q('.aad-rk[data-k="needs"] .aad-rk-p').textContent, '3/3');
   // Esc closes it (before closing the chat)
   w.st.timers.length = 0; w.q('.aad-rk[data-k="fyi"]').dispatchEvent(new FakePointerEvent('pointerenter')); w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
-  assert.ok(w.q('.aad-fly')); assert.equal(keys.find(h => h.down({ key: 'Escape' }) === true) !== undefined, true);
+  assert.ok(w.q('.aad-fly')); assert.equal(w.escape(), true);
   assert.equal(w.q('.aad-fly'), null, 'Esc closes the flyout'); assert.equal(w.html.dataset.aadChat, 'on', 'and only the flyout');
   // no rail item expands the sidebar; the source never calls the old openSection
   assert.ok(!/openSection\(/.test(noComments(read('web/layouts/ai-apps/desktop.js'))), 'no rail item expands the sidebar');
@@ -1927,14 +1930,14 @@ test('round 21: hold-⌥ chips per state: a keycap on each visible target, 1–9
   assert.ok(!open.some(c => /^(W|F|Z|E|X|B)@/.test(c)), 'nothing to close, widen or act on at Home');
   assert.ok(!open.some(c => /^(V|C|G|\/|I|\\|\.|,|T@aad-vall)/.test(c)), 'no keycap for keys with no target or gone keys');
   // folded: the rail's buttons, no H / O (their header is away)
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  keys[1].down({ altKey: true, code: 'KeyL' });
   const rail = chips();
   for (const want of ['L@aad-rtog', 'K@aad-rfind', 'N@aad-rnew', 'S@aad-rset']) assert.ok(rail.includes(want), `rail: ${want}`);
   assert.ok(!rail.some(c => /^(H@aad-wsn|O)@?/.test(c)), 'no H on the (gone) name, no O');
   assert.ok(rail.includes('H@aad-hmid'), 'app keys round: ⌥H in the empty middle of Home, folded or not');
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  keys[1].down({ altKey: true, code: 'KeyL' });
   // ⌥H Home: the orb (Space) and ◫ back (H) only
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true);
   assert.deepEqual(chips(), ['Space@aad-orbbtn', 'H@aad-hback', 'H@aad-hmid'], 'focus: ◫ and the middle wear H');
   assert.ok(raw().find(c => c.el.className === 'aad-hmid').free === true && raw().find(c => c.el.className === 'aad-hmid').at === 'mid', 'the middle spot is known empty (no hit test), centred');
   const css = read('web/layouts/ai-apps/desktop.css');
@@ -1952,22 +1955,22 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   const before = { side: w.html.dataset.aadSide, tabs: w.html.dataset.aadTabs, folded: store.folded, tabsFolded: store.tabsFolded };
   assert.equal(before.side, 'open'); assert.equal(before.tabs, 'open');
   const writes = JSON.stringify(store);
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H is the view\'s');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true, '⌥H is the view\'s');
   assert.equal(w.html.dataset.aadFocus, '', 'focus on'); assert.equal(w.html.dataset.aadSide, 'rail'); assert.equal(w.html.dataset.aadTabs, 'rail');
   assert.equal(JSON.stringify(store), writes, 'nothing stored: the stash is in memory only');
-  keys[1].down({ key: 'Escape' });
+  w.escape();
   assert.equal(w.html.dataset.aadFocus, '', 'Esc leaves focus (and its stash) alone');
-  keys[2].down({ altKey: true, code: 'Backquote' });
+  keys[1].down({ altKey: true, code: 'Backquote' });
   assert.equal(w.html.dataset.aadFocus, undefined, 'back (⌥`, the stock Home key, is the same key quietly)');
   assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar back open'); assert.equal(w.html.dataset.aadTabs, 'open', 'the apps column back open');
   // a folded sidebar before focus stays folded after
-  keys[2].down({ altKey: true, code: 'KeyL' }); assert.equal(w.html.dataset.aadSide, 'rail');
-  keys[2].down({ altKey: true, code: 'KeyH' }); keys[2].down({ altKey: true, code: 'KeyH' });
+  keys[1].down({ altKey: true, code: 'KeyL' }); assert.equal(w.html.dataset.aadSide, 'rail');
+  keys[1].down({ altKey: true, code: 'KeyH' }); keys[1].down({ altKey: true, code: 'KeyH' });
   assert.equal(w.html.dataset.aadSide, 'rail', 'exactly as it was: folded stays folded');
   // a side opened by hand at Home ends it (the rails back); ⌥H then hides everything again (a fresh stash)
-  keys[2].down({ altKey: true, code: 'KeyH' }); keys[2].down({ altKey: true, code: 'KeyR' });
+  keys[1].down({ altKey: true, code: 'KeyH' }); keys[1].down({ altKey: true, code: 'KeyR' });
   assert.equal(w.html.dataset.aadFocus, undefined, 'a side by hand ends it');
-  keys[2].down({ altKey: true, code: 'KeyH' }); assert.equal(w.html.dataset.aadFocus, '', '⌥H after that: Home again, not a stale restore');
+  keys[1].down({ altKey: true, code: 'KeyH' }); assert.equal(w.html.dataset.aadFocus, '', '⌥H after that: Home again, not a stale restore');
   w.q('.aad-hback').dispatchEvent(new FakePointerEvent('click')); assert.equal(w.html.dataset.aadFocus, undefined, 'the ◫ at the top left comes back too');
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /focusStash = \{ folded, vtFolded, thread: [^;]+, app: pane \? \{ id: pane\.id, desk: Number\(pane\.desk\) \} : null, wide, widths: \{ \.\.\.sized \} \};/, 'the stash: both sides, the chat, the app, wide, the widths');
@@ -2071,14 +2074,14 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   assert.match(js, /if \(allOpenNow\(\)\) \{ put\(doc\.querySelector\('\.vc-sheet \.vc-x'\), 'A'\); return out; \}/);
   assert.match(js, /if \(settingsOpen\(\)\) \{ put\(doc\.querySelector\('#dsettings \.st-close'\), 'S'\); return out; \}/);
   // the picker open: ⌥V (voice) is taken too; ⌥A again closes it
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar stays as it is behind it');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, undefined);
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'open', 'the sidebar stays as it is behind it');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, undefined);
   // nothing open: the view's keys act, voice is the shell's
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyV' }), false, '⌥V: the shell\'s new voice chat');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
-  keys[2].down({ altKey: true, code: 'KeyL' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), false, '⌥V: the shell\'s new voice chat');
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
+  keys[1].down({ altKey: true, code: 'KeyL' });
 });
 
 test('desktop cold Store opens synchronously in the app pane and deferred Home cannot steal it', async () => {
@@ -2318,7 +2321,7 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   // ⌥ + Music's row digit: Music becomes the panel and its frame takes the keyboard
   const rows = w.qa('.aad-vtab'), i = rows.findIndex(r => r.dataset.app === 'music');
   assert.ok(i >= 0 && i < 10, 'Music has a digit');
-  keys[2].down({ altKey: true, code: 'Digit' + ((i + 1) % 10) });
+  keys[1].down({ altKey: true, code: 'Digit' + ((i + 1) % 10) });
   assert.deepEqual(w.st.gone.at(-1), 3, 'its desk');
   w.st.route = { home: false, view: 'desk', thread: null, desk: 3 }; w.emit('route', w.st.route);
   assert.equal(appDesk.dataset.aadRole, 'app', 'Music is the panel');
@@ -2344,8 +2347,8 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   claimK = true;
   assert.ok(chips().includes('H@aad-pti'), '⌥H with an app in front: on the panel\'s app icon');
   assert.ok(!chips().includes('H@aad-hmid'), 'the middle is the app\'s now: no middle H');
-  assert.equal(keys[2].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
-  keys[2].down({ altKey: true, code: 'KeyH' });
+  assert.equal(keys[1].down({ altKey: true, code: 'KeyH' }), true, '⌥H works with an app in front'); assert.equal(w.html.dataset.aadFocus, '');
+  keys[1].down({ altKey: true, code: 'KeyH' });
   // plain keys are never the view's and press nothing (they go on to the app as its own typing)
   for (const k of [{ key: ' ', code: 'Space' }, { key: 'j', code: 'KeyJ' }, { key: 'ArrowRight', code: 'ArrowRight' }, { key: 'Enter', code: 'Enter' }]) for (const h of keys) assert.notEqual(h.down({ ...k, altKey: false }), true, `${k.code} passes through`);
   assert.equal(clicks.length, 2, 'plain j does nothing');

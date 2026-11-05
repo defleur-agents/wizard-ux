@@ -69,8 +69,9 @@ test('api.back.push: newest package overlay closes first on shell Back; released
   api.back.push(() => closed.push(3)); await f.clear();
   assert.equal(f.host.back(), false, 'teardown removes open entries'); assert.deepEqual(closed, [2]);
   const app = read('web/app.js'), desk = read('web/desktop/desktop.js');
-  assert.match(app, /if \(window\.WosSkinHost\?\.back\?\.\(\)\) return 'tweak-overlay';.*\n    if \(window\.WosResources\?\.back\(\)\)/);
-  assert.match(desk, /if \(window\.WosSkinHost\?\.back\?\.\(\)\) return 'tweak-overlay';/);
+  assert.match(app, /escapeOverlay: close => phoneBack\.push\(close\)/);
+  assert.match(desk, /escapeOverlay: close => escapeBack\.push\(close\)/);
+  assert.match(read('web/core/skin-host.js'), /shell\?\.escapeOverlay\?\.\(entry.close\)/);
 });
 
 test('machines-home: one inline map, the same on every workspace', () => {
@@ -236,8 +237,8 @@ test('second review: no unverified all-clear, stock loading state, Settings dial
   }
   const desk = read('web/desktop/desktop.js');
   assert.match(desk, /if \(!settingsModal \|\| e\.key !== 'Tab'\) return;/, 'Tab stays inside the Home Settings dialog');
-  assert.match(desk, /if \(voiceMenuBack\(\)\) return 'voice-menu';/, 'Back closes the one-mic menu first');
-  assert.ok(desk.indexOf("if (voiceMenuBack()) return 'voice-menu'") < desk.indexOf("if (!pal.hidden) { closePalette(); return 'palette'; }"));
+  assert.match(desk, /watchEscape\('voice-menu', \(\) => !voiceMenu.hidden, \(\) => closeVoiceMenu\(\)\)/, 'voice menu participates in the shared recency stack');
+  assert.match(desk, /watchEscape\('palette', \(\) => !pal.hidden/);
 });
 
 test('third review: AI page offers sign-in with no accounts, backup read failure is not "no backup", tab label never claims an unchecked all-clear', () => {
@@ -500,8 +501,8 @@ test('final review 2: exposure dates must be real; an open warning from a last r
 
 test('every Back path cancels a waiting System link', () => {
   // #880 adds outside-dismiss options; every Back still cancels pending navigation.
-  assert.match(read('web/app.js'), /function backStep\(skipHosted(?:, \{ outside = false \} = \{\})?\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
-  assert.match(read('web/desktop/desktop.js'), /function escStep\(\) \{\n[^\n]*WosWelcome[^\n]*\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(read('web/app.js'), /function backStep\([^\n]+\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
+  assert.match(read('web/desktop/desktop.js'), /function desktopBack\(event\) \{\n    window\.WosSettings\?\.cancelWait\?\.\(\);/);
   assert.match(read('web/core/settings.js'), /register, mount, route, cancelWait,/);
 });
 
