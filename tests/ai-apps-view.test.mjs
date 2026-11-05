@@ -51,6 +51,7 @@ class El {
   get title() { return this.attrs.title || ''; } set title(v) { this.attrs.title = String(v); }
   get value() { return this.attrs.value || ''; } set value(v) { this.attrs.value = String(v); }
   setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; }
+  hasAttribute(k) { return k in this.attrs; }
   append(...n) { for (const c of n) { if (c == null) continue; if (typeof c === 'string') { this._text += c; continue; } c.remove(); c.parentNode = this; this.children.push(c); } }
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
@@ -69,6 +70,8 @@ class El {
 class FakePointerEvent { constructor(type, init = {}) { Object.assign(this, init, { type }); } preventDefault() { this.defaultPrevented = true; } stopPropagation() {} }
 
 function world({ shell = 'phone', route = { home: false, view: 'thread', thread: '__new__', desk: 1, app: 'chats' } } = {}) {
+  const paneContext = {}; vm.runInNewContext(read('web/core/pane-layout.js'), paneContext);
+  globalThis.WizCore = { ...globalThis.WizCore, panes: paneContext.WizCore.panes };
   const html = new El('html'), body = new El('body'), device = new El('div'), dock = new El('div'), orbWrap = new El('div');
   html.append(body); body.append(device); device.append(dock); dock.append(orbWrap);
   const docListeners = {};
@@ -1425,7 +1428,7 @@ test('round 15 desktop: the open apps as vertical tabs on the right (1:1 with th
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(!\(api\.desks\.close\?\.\(d\.desk\)\)\) api\.apps\.close\?\.\(d\.id\);/, '✕: the stock close of that desk');
   assert.match(js, /if \(pane && !chatOn && chat && !chat\.querySelector\('\.pane-main \.ch-compose'\) && !fixingBehind\) \{/, 'the Chats desk behind the panel never shows its bare list');
-  assert.ok(css.includes(`${P}[data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }`), 'a docked chat and the panel never overlap');
+  assert.ok(css.includes('--aad-chat-w: var(--aad-pane-chat-width)') && css.includes('--aad-app-w: var(--aad-pane-app-width)'), 'both docked widths come from the tested core geometry');
   assert.ok(css.includes(`${P}[data-vc-sheet] .aad-orb { opacity: 0; visibility: hidden; }`), 'the orb steps aside under the picker');
   const host = read('web/core/skin-host.js'), dj = read('web/desktop/desktop.js');
   assert.match(host, /close: desk => live\(\) && Number\.isInteger\(desk\) && desk >= 0 \? !!shell\.closeDesk\?\.\(desk\) : false,/);
