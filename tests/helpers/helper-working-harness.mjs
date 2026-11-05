@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from '../fixtures/chats-list-model.mjs';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
@@ -26,7 +27,7 @@ export function helperWorkingHarness({ source, row, detail, agent = '' }) {
     }
   };
   context.window=context;
-  vm.runInNewContext(source.replace('window.__wizLiveInternals = {', 'window.__wizLiveInternals = { syncPending, applyLocal,'), context);
+  runWithChatsModel(source.replace('window.__wizLiveInternals = {', 'window.__wizLiveInternals = { syncPending, applyLocal,'), context);
   const L=context.WizLive, api=context.__wizLiveInternals;
   if(agent) L.pinAgent(row.id,agent);
   const rows=()=>agent ? L.agentSessions[agent] : L.sessions;
