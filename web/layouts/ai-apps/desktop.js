@@ -133,7 +133,10 @@ export default function desktop(api) {
   const css = el('link', '', { rel: 'stylesheet', href: api.asset('desktop.css') || '' });
   const unmountCss = api.mount(css);
   // the desks' windows are laid out in pixels from the page's sizes: again once this sheet (the sidebar, the widths) applies
-  api.listen(css, 'load', () => globalThis.dispatchEvent?.(new Event('resize')));
+  // first paint after a refresh stays clear (html[data-layout-booting], layout.css) until this sheet has applied
+  const endBoot = () => doc.documentElement.removeAttribute('data-layout-booting');
+  api.listen(css, 'load', () => { endBoot(); globalThis.dispatchEvent?.(new Event('resize')); });
+  api.listen(css, 'error', endBoot);
 
 
   /* ---------- data ---------- */

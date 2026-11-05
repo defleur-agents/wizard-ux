@@ -124,7 +124,7 @@
   /* ---------------- chats (shared core) ---------------- */
   const stage = $('#stage');
   const escapeBack = window.WizEscapeBack.create();
-  var ownsChatList = false;
+  var ownsChatList = !!globalThis.WosSkinHost?.chatsClaimed?.();   // a chat-owning layout decided at boot: the list never mounts first
   const CHATS = window.WizChatsHost.create({
     ownsChatList: () => ownsChatList,
     win: id => W[id] || (/::list$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6)) : undefined),
