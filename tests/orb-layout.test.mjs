@@ -173,9 +173,9 @@ test('no desks: while a layout holds the panel everything opens in panels over H
   assert.match(fn('panelDock'), /if \(on && !panelListW\(\)\) \{ const id = uid\(\); W\[id\] = \{ id, app: 'chats', thread: null/);
   assert.match(src, /leaveOnSend: id => !!\(globalThis\.WosSkinHost\?\.panelMode && panelDocked && panel\?\.id === id\),/);
   assert.match(read('web/core/chats.js'), /!\(isNew \|\| PHONE\(\) \|\| H\.leaveOnSend\?\.\(wid\)\)\) return false;/);
-  // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread), ⌥→/⌥← on its thread
+  // the keys reach the docked Chats over Home: ⌥↓/⌥↑ (also with its list folded behind a thread); plain ⌥←/⌥→ stay native
   assert.match(fn('stepReady'), /const atHome = homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelWins\(\)\.some\(mainChats\)\);/);
-  assert.match(src, /const chatOpen = \(\) => \{ const f = focused\(\); return \(!homeOpen \|\| !!\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)\) && f\?\.app/);
+  assert.match(fn('chatAct'), /homeOpen && !\(globalThis\.WosSkinHost\?\.panelMode && panelHas\(f\?\.id\)\)/, 'remaining Resolve action still reaches a docked panel over Home');
   assert.match(css, /@keyframes panel-in-left \{ from \{ transform: translateX\(calc\(-100% - 24px\)\); \}/);
   // it slides in from the right, a replacement settles in place, closing slides it away; reduced motion: none
   assert.match(css, /\.panel-layer \{ position: absolute; inset: 0; z-index: 140; pointer-events: none; \}/);
