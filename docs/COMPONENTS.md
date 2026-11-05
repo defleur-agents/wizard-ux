@@ -1,6 +1,6 @@
 # Shared components
 
-Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/desktop owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WosSkinHost` resolves the desktop at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), preventing Classic first paint; `WizAppServices.back` keeps root apps mounted. AI-apps yields focused iframes outside its modeled app pane to the existing desktop Back fallback, so mixed Chats/app desks do not swallow app-menu dismissal.
+Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native/desktop; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WosSkinHost` boots desktop (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), preventing Classic first paint; `WizAppServices.back` keeps root apps mounted. Unowned frames yield Back.
 
 [Contracts](component-contract-details.md).
 
