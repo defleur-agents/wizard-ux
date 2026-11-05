@@ -74,8 +74,13 @@ async function opacityProof(p,popup){
    assert.equal(await p.locator('[data-skinpick="'+skin+'"]:visible').getAttribute('aria-pressed'),'true');
    await p.evaluate(()=>__wos.closeSheets());
    await p.waitForFunction(s=>WosSkin.current===s,skin);await p.evaluate(()=>document.fonts.ready);await p.locator('.mz-intro').waitFor({state:'detached',timeout:15000});await p.waitForTimeout(500);
-   await p.evaluate(()=>WosUpdates.popup());
-   const popup=p.locator('.osu-pop');await popup.waitFor({state:'visible'});
+   // The pop-up shows only on an empty Home (homeInView): the fixture boots into Chats, so close its windows first.
+   await p.evaluate(()=>{const P=window.__wos;P.closeSheets?.();for(const d of P.desks||[])for(const id of [...(d.wins||[])])P.closeWin?.(id,true);});
+   await p.waitForTimeout(400);await p.evaluate(()=>WosUpdates.popup());
+   const popup=p.locator('.osu-pop');
+   try{await popup.waitFor({state:'visible',timeout:8000});}catch(e){
+    const diag=await p.evaluate(()=>({card:WosUpdates.card?.(),key:WosUpdates.popKey?.(WosUpdates.card?.()),pending:WizWebUpdate.pending,idx:__wos.idx,wins:(__wos.desks||[]).map(d=>(d.wins||[]).length),hidden:document.hidden,blockers:[...document.querySelectorAll('.mz-intro, .rs-sheet, .wos-burst, .tour.on')].map(n=>n.className),stale:WizAppCapture.staleTakes?.()}));
+    console.error('POPUP_DIAG '+JSON.stringify(diag));throw e;}
    await assert.equal(await popup.getByText('Save to Files and clear',{exact:true}).count(),1);
    assert.match(await popup.innerText(),/Messenger.*(3 Nov|Nov 3)/);
    assert.match(await popup.innerText(),/Discard/);
