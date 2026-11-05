@@ -62,7 +62,7 @@ test('desktop page previews open as a window; images still use the viewer and fi
   assert.ok(img > 0 && file > img && win > file, 'asWindow only after the image and file branches');
   assert.ok(win < go.indexOf('stack.push'), 'before the pane opens');
   // (stock; a layout placing the shell's opens, apps.routeOpens, may put it in its own panel first)
-  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = \(\) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
+  assert.match(desk, /asWindow: \(url, title\) => \{ const o = appAt\(url\)(?:;|, go = (?:\(\)|desk) => \{) newWin\(\{ app: 'frame', url, title: o \? o\.name : title, preview: true,/);
   assert.match(desk, /if \(f\.preview\) \{ closeWin\(f\.id\); return 'preview'; \}/, 'Esc closes a preview window');
   assert.doesNotMatch(phone, /asWindow/, 'phone keeps its full-height link sheet');
 });
