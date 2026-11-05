@@ -106,3 +106,11 @@ test('stale memory/row notice names app and date only, with Save default and con
 test('Save on notice automatically retries safe Reload and failure keeps the rescue controls',async()=>{
   for(const bad of [false,true]){const f=updater();f.plan={ok:false,blocking:[{kind:'capture',appId:'messenger'}],capture:{safe:false}};f.takes=[{id:'old',appId:'messenger',startedAt:0}];f.window.WizAppCapture.rescueTake=async()=>{if(bad)throw Error('offline');f.plan={ok:true,blocking:[],capture:{safe:true}};f.takes=[]};await f.web.rescue('save');if(bad){assert.match(f.web.reloadStatus().reason,/still kept/);assert.match(f.web.rescueHtml(),/Save to Files/);assert.equal(f.reloads,0)}else{await fire(f,900);assert.equal(f.reloads,1)}}
 });
+
+test('a fresh take this page started (still uploading) is never offered for Save or Discard',async()=>{
+  const {state:s,row}=custody();row.startedAt=Date.now()-19;
+  assert.equal(s.staleTakes().length,0);
+  await assert.rejects(s.rescueTake(row.id,'discard',true));assert.equal(s.removed.length,0);
+  row.startedAt=Date.now()+5*60e3; assert.equal(s.staleTakes().length,0);
+  row.startedAt=Date.parse('2026-11-03T10:00:00Z'); assert.equal(s.staleTakes().length,1);
+});
