@@ -1,6 +1,6 @@
 # Shared components
 
-Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native Back and desktop Escape share owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists, and `WosSkinHost` decides the desktop view synchronously at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), so Classic's list never mounts or paints first on a refresh; `WizAppServices.back` keeps root apps mounted.
+Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: shared phone/native/desktop owners; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WosSkinHost` resolves the desktop at boot (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), preventing Classic first paint; `WizAppServices.back` keeps root apps mounted.
 
 [Full contracts, prohibited duplicates and proof pointers](component-contract-details.md).
 
