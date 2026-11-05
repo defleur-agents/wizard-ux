@@ -31,7 +31,7 @@ try {for(const variant of [{shell:'phone',view:'classic'},{shell:'desktop',view:
  await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.src.includes('/store/index.html')&&!!f.contentWindow.__store;}catch{return false;}})).catch(e=>{console.error(shell,errors);throw e;});
  let f=p.frames().find(f=>f.url().includes('/store/index.html'));await f.locator('[data-link-install]').waitFor().catch(async e=>{console.error(JSON.stringify({shell,view,errors,state:await p.evaluate(()=>({layout:document.documentElement.dataset.layout,front:document.documentElement.dataset.aiFront,ws:__wux?.ws,cur:__wux?.cur,wins:__wux?.wins,links:WizCore.deeplink.log}))}));throw e;});
  if(shell==='desktop'){
-  await p.waitForFunction(v=>v==='classic'?document.documentElement.dataset.layout==='classic':document.documentElement.dataset.aiFront==='app',view);
+  await p.waitForFunction(v=>v==='classic'?!document.documentElement.dataset.layout:document.documentElement.dataset.aiFront==='app',view);
   assert.equal(await p.locator('iframe[src*="/store/index.html"]').evaluate(f=>f.closest('.win').classList.contains('focus')),true,'Store takes window focus before its first click');
   if(view==='ai-apps')assert.equal(await p.locator('iframe[src*="/store/index.html"]').evaluate(f=>f.closest('.wsp').dataset.aadRole),'app','deep link routes to the app pane');
  }
