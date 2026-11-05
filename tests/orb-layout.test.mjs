@@ -185,7 +185,7 @@ test('no desks: while a layout holds the panel everything opens in panels over H
 });
 
 test('Orb layout files: desktop-scoped CSS only, no second composer, no raw storage or network', () => {
-  const css = read('web/layouts/orb/layout.css').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@property[^{]*\{[^}]*\}/g, '');
+  const css = read('web/layouts/orb/layout.css').replace(/@import[^;]+;/g, '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/@property[^{]*\{[^}]*\}/g, '');
   const rules = [...css.matchAll(/([^{}@]+)\{[^{}]*\}/g)].map(m => m[1].trim()).filter(sel => sel && !/^(to|from|\d+%)$/.test(sel));
   assert.ok(rules.length > 40);
   for (const sel of rules) for (const part of sel.split(/,(?![^(]*\))/)) {

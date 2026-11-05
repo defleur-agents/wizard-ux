@@ -269,7 +269,9 @@
     if (!authorList) E.authors?.().then(list => { authorList = list; for (const m of mounts) m.render(); }, () => {});
     const name = who => (authorList || []).find(a => a.id === who)?.name || who;
     // Release-wide features are ordinary settings on their own pages (settingRow below), never tweaks.
-    const exp = s.tweaks.filter(t => !t.builtin);
+    const exp = s.tweaks.filter(t => !t.builtin && !(E.desktopViews?.length && t.layout));
+    const views = E.desktopViews || [];
+    const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b>${v.credit ? `<small>${esc(v.credit)}</small>` : ''}</span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
     const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
     const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
@@ -278,7 +280,7 @@
     // quick buttons. Same list whatever skin is worn; skins are looks only.
     const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
     const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
-    return `<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
+    return `${viewPicker}<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
@@ -437,6 +439,8 @@
     const own = el.closest('[data-ownskin]');
     // Tapping the skin you wear takes it off (back to plain color + tweaks); any other one puts it on.
     if (own) { skinAction(() => M.active?.id === own.dataset.ownskin ? M.leave() : M.wear(own.dataset.ownskin), () => ctx.render(), e => ctx.toast?.('!', e.message, 3000)); return true; }
+    const view = el.closest('[data-desktop-view]');
+    if (view) { void window.WosExperience.chooseDesktopView(view.dataset.desktopView).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const tweak = el.closest('[data-tweak-toggle]');
     if (tweak) { void window.WosExperience.toggle(tweak.dataset.tweakToggle).catch(e => ctx.toast?.('!', e.message, 2400)); return true; }
     const my = el.closest('[data-myskin]');

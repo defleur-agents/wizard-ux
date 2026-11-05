@@ -482,7 +482,7 @@
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
-    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;
+    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;
     if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
@@ -2905,17 +2905,9 @@
     agent: id => openAgentChats(id),
     toast,
   });
-  C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && !keyHints.pinned() && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
-  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
-  // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
-  window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
-    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
-    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
-    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
   C.status?.attach({ openChats: openChatsList, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
-  const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   /* "Update ready" pill in the top bar: the same banner as the phone (core/web-update.js), names the thread that made the
    * update with a Thread button that opens it in a window here; Reload is held while recording or uploading. */
@@ -3021,8 +3013,8 @@
     // The Apps view: one entry per desk (the app in front on it; a Chats desk is 'wizard'), and opening an app on a desk
     // of its own (the current desk when it is empty, else a fresh one), never tiled beside another app.
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
-    openAppDesk: id => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
-      if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
+    openAppDesk: (id, place = null) => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
+      if (ws[cur].wins.length) { ws.push(freshDesk()); const desk = ws.length - 1; return (place ? place(desk) : openApp(a, { ws: desk })) !== false; } return (place ? place(cur) : openApp(a)) !== false; },
     // A layout placing the shell's opens (apps.routeOpens): the app's window (the one in front first) at one of its own
     // pages, and one link page no app owns on a desk of its own, reused and taken to the next link (never a second).
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
@@ -3068,6 +3060,19 @@
     mediaApp: id => { const a = APP[id]; return a ? { name: a.name || id, icon: ico('span', 'np-ic', a) } : null; },
     mediaOpen: id => !!window.WizOpenApp?.(id),
   });
+  // Cold links use the same registered app-open router as later clicks.
+  // Wait for static view setup only, never backend data.
+  await window.WosExperience?.whenReady?.();
+  await window.WosSkinHost?.whenLayoutReady?.();
+  C.deeplink.consume();
+  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
+  // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
+  window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
+    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
+    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
+    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
+  const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
+
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {

@@ -31,11 +31,12 @@
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', credit: 'designed by Miguel', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
+  let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
@@ -347,7 +348,9 @@
     }
   }
   // Loading a layout holds the panel too (a tweak reload re-wears it a moment after the tweaks settle).
-  async function loadLayout(id) {
+  let layoutLoading = Promise.resolve();
+  function loadLayout(id) { return layoutLoading = loadLayoutHeld(id); }
+  async function loadLayoutHeld(id) {
     panelHold++;
     try { return await loadLayoutNow(id); } finally { panelHold--; panelSync(); }
   }
@@ -870,7 +873,7 @@
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
-        openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
+        openDesk: (id, place = null) => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id, typeof place === 'function' ? place : null) : shell.openApp?.(id)) : false,
         // Add to home screen: the Desks' own hold on an app tile (core/home-screen-apps.js, its sheet and its checks), for a
         // layout's own app icons (the AI apps view's Home, round 7). can(id) says whether that app may be offered.
         homeScreen: Object.freeze({
@@ -1111,9 +1114,9 @@
     if (on === panelOn) return; panelOn = on;
     try { shell?.panelMode?.(on); } catch (e) { try { console.warn('[layout] panel mode:', e); } catch (_) {} }
   }
-  function setLayout(id) {
+  function setLayout(id, persist = true) {
     const next = layoutOf(id) ? id : 'classic';
-    try { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } catch (_) {}
+    try { if (persist) { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } } catch (_) {}
     layoutId = next; paintLayout(next);
     if (shell) loadLayout(next); else if (next === 'classic') { layoutSeq++; dispose(layoutRec, 'off'); }
     try { shell?.relayout?.(); } catch (_) {}
@@ -1280,7 +1283,7 @@
         if (layoutId !== id || (!layoutRec && !layoutSeq)) setLayout(id);
         layoutHolder = a.id;
         let released = false;
-        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id) setLayout('classic'); } };
+        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id && standardLayout !== id) setLayout('classic'); } };
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
@@ -1604,7 +1607,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if (VIEW_LAYOUTS.has(layoutId) && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if (VIEW_LAYOUTS.has(layoutId) && standardLayout !== layoutId && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
@@ -1629,6 +1632,8 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
+    async whenLayoutReady() { let p; do { p = layoutLoading; await p; } while (p !== layoutLoading); },
+    setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
@@ -1640,7 +1645,7 @@
       for (const h of [...openRoutes]) {
         if (h.a.dead) continue;
         let out, ran = false;
-        const g = () => { if (!ran) { ran = true; out = typeof go === 'function' ? go() : undefined; } return out; };
+        const g = desk => { if (!ran) { ran = true; out = typeof go === 'function' ? go(desk) : undefined; } return out; };
         routing++;
         let took; try { took = h.open(String(kind), Object.freeze({ ...detail }), g); } finally { routing--; }
         if (took === true) return Object.freeze({ value: out });

@@ -113,7 +113,7 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   const cat = JSON.parse(read('web/tweaks/catalog.json')), prof = JSON.parse(read('web/tweaks/miguel/profile.json'));
   assert.ok(cat.tweaks.includes('miguel/ai-apps') && !cat.defaults.includes('miguel/ai-apps'), 'listed, never a default');
   assert.ok(prof.tweaks.includes('miguel/ai-apps') && prof.off.includes('miguel/ai-apps'), 'off in his profile until he turns it on');
-  assert.ok(!/ai-apps/.test(read('web/core/experience.js')), 'no migration turns it on');
+  assert.ok(!/miguel\/ai-apps/.test(read('web/core/experience.js')), 'the standard desktop choice never depends on a personal tweak');
   const p = fixture({ shell: 'phone' });
   await p.mount('miguel/ai-apps'); await settle();
   assert.equal(p.host.layout, 'classic', 'desktop only (Miguel, 4 Nov 2026): the phone keeps its stock view');
@@ -126,7 +126,20 @@ test('packaging: an ordinary Miguel view tweak, off by default; the desktop wear
   const host = read('web/core/skin-host.js');
   assert.match(host, /Object\.freeze\(\{ id: 'ai-apps', name: 'AI apps',/);
   assert.match(host, /const VIEW_LAYOUTS = new Set\(\['orb', 'apps', 'ai-apps'\]\);/);
-  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'a stale stored AI apps layout goes back to Desks');
+  assert.match(host, /if \(VIEW_LAYOUTS\.has\(layoutId\) && standardLayout !== layoutId && !\(layoutHolder && tweaks\.has\(layoutHolder\)\)\) setLayout\('classic'\);/, 'only unowned stale layouts go back to Desks; a standard desktop layout stays');
+});
+
+test('standard AI apps and the personal tweak are idempotent and release cannot remove the standard view', async () => {
+  const d = fixture({ shell: 'desktop' });
+  d.host.setStandardLayout('ai-apps'); await settle();
+  assert.ok(!d.ctx.localStorage.getItem('wos.layout'), 'desktop default must not leak into the phone legacy layout key');
+  await d.mount('miguel/ai-apps'); await settle();
+  assert.equal(d.host.layout, 'ai-apps');
+  await d.clear(); assert.equal(d.host.layout, 'ai-apps');
+  d.ctx.localStorage.setItem('wos.layout', 'orb');
+  d.host.setStandardLayout('classic'); assert.equal(d.host.layout, 'classic');
+  d.host.setStandardLayout('ai-apps'); assert.equal(d.host.layout, 'ai-apps');
+  assert.equal(d.ctx.localStorage.getItem('wos.layout'), 'orb', 'desktop changes preserve an existing phone choice');
 });
 
 test('scoped and quiet: every rule needs the worn layout on the phone; skin tokens only; no timers or storage of its own', () => {
@@ -2066,6 +2079,46 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   keys[2].down({ altKey: true, code: 'KeyL' });
 });
 
+test('desktop cold Store opens synchronously in the app pane and deferred Home cannot steal it', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chat = new El('div'); chat.className = 'wsp'; chat.dataset.ws = '1';
+  const dc = new El('div'); dc.className = 'dchats'; chat.append(dc);
+  const app = new El('div'); app.className = 'wsp'; app.dataset.ws = '8';
+  const win = new El('div'); win.className = 'win focus';
+  const frame = new El('iframe'); frame.focus = () => { w.doc.activeElement = frame; };
+  frame.contentWindow = { focus() {} }; win.append(frame); app.append(win);
+  stage.append(chat, app); w.html.children[0].append(stage);
+  w.st.route = { home: true, desk: 1, view: 'home', thread: null };
+  let router, opened = 0;
+  w.api.apps.routeOpens = h => { router = h; };
+  w.api.apps.openDesk = (id, place) => {
+    assert.equal(id, 'app-store'); place(8); opened++;
+    w.st.desks.push({ desk: 8, id, name: 'Store' });
+    w.st.route = { home: false, desk: 8, view: 'desk', thread: null };
+    w.emit('route', w.st.route);
+  };
+  (await layout()).default(w.api);
+  let placed = null;
+  router.open('app', { id: 'app-store' }, desk => { placed = desk; });
+  assert.equal(placed, 8, 'the already-checked open is placed on the app desk, never re-gated');
+  assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
+  assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
+  const drafts = w.st.newChats;
+  w.run();
+  assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');
+  assert.equal(w.doc.activeElement, frame, 'the opened app receives focus');
+  const shell = read('web/desktop/desktop.js');
+  const attach = shell.indexOf('window.WosSkinHost?.attach({');
+  assert.ok(attach >= 0);
+  assert.ok(shell.indexOf('await window.WosExperience?.whenReady?.();') > attach);
+  assert.ok(shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();') > attach);
+  assert.ok(shell.indexOf('C.deeplink.consume();') > shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();'), 'cold links wait for the same open router');
+  const css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.win:not\(\.gone\):not\(\.drag\) \.wbody iframe \{ pointer-events: auto;/);
+  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important;/, 'resizing still shields app frames');
+});
+
 test('round 21 desktop: one left/right model: apps and their links on the right (one window, taken to the page), other links in the same panel, no view beside a thread, an app\'s Reply in the left column with the app kept', async () => {
   const { w } = deskWorld();
   const stage = new El('div'); stage.id = 'stage';
@@ -2296,7 +2349,7 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const goApp = \(id, desk = null, then = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
+  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
   assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
