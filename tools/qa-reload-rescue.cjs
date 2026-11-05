@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 /* Closed synthetic shell: never contacts the owner server or opens owner audio. */
-const {boot,assert,fs,path}=require('./qa-closed-shell.cjs');
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const shell=require('./qa-closed-shell.cjs'),{chromium}=require('./qa-playwright.cjs');
+// Adapter onto the shared closed shell: boot(phone, configure) -> {c}; page via getPage().
+let browser;
+async function boot({configure}){
+ if(!browser){browser=await chromium.launch({headless:true,args:['--disable-lcd-text','--disable-gpu'],...(process.env.QA_CHROME?{executablePath:process.env.QA_CHROME}:{})});shell.setBrowser(browser);}
+ const from=shell.report.errors.length,{c}=await shell.boot(true,configure);
+ return {page:shell.getPage(),get errors(){return shell.report.errors.slice(from)},close:()=>c.close()};
+}
 const out=path.resolve(process.env.QA_OUT||'qa-reload-rescue');fs.mkdirSync(out,{recursive:true});
 // Decode browser PNG pixels: compressed PNG bytes are not an opacity oracle.
 function pixels(png){
@@ -81,5 +89,5 @@ async function opacityProof(p,popup){
    assert.deepEqual(f.errors,[]);
   }finally{await f.close()}
  }
- fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({ok:true,results},null,2));console.log(JSON.stringify({ok:true,cases:results.length,results}));
-})().catch(e=>{console.error(e.stack||e);process.exitCode=1});
+ fs.writeFileSync(path.join(out,'report.json'),JSON.stringify({ok:true,results,unknown:shell.report.unknown},null,2));console.log(JSON.stringify({ok:true,cases:results.length,results}));
+})().catch(e=>{console.error(e.stack||e);process.exitCode=1}).finally(()=>browser?.close());
