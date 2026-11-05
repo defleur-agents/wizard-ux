@@ -974,14 +974,17 @@ window.WizCore.chats = function createChats(H) {
   }
   function discardDraft(key) { KIT.drafts.clear(key); toast('✕', 'Draft discarded', 1400); }
   // The tracker (or a poll) changed: add or drop the strip and the row dots where they now belong.
-  window.addEventListener('wos:thread-tracker', () => {
-    for (const wid of Object.keys(W)) {
+  window.addEventListener('wos:thread-tracker', e => {
+    const toggled = typeof e?.detail?.enabled === 'boolean';
+    for (const wid of Object.keys(CH)) {
       const w = W[wid], el = w && elOf(wid); if (!el) continue;
-      if (w.thread && w.thread !== '__new__') { const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : ''; if (!!el.querySelector('[data-tt-strip]') !== !!globalThis.WosThreadTracker.stripHtml(w.thread, agent)) renderThreadLive(w); }
-      else if (!w.thread && !holdList(wid)) renderChatList(w, el);
+      if (w.thread) {
+        const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : '';
+        if (toggled && e.detail.enabled) globalThis.WosThreadTracker.load(w.thread, agent);
+        if (toggled || (!!el.querySelector('[data-tt-strip]') !== !!globalThis.WosThreadTracker.stripHtml(w.thread, agent))) renderThreadLive(w);
+      } else if (!holdList(wid)) renderChatList(w, el);
     }
   });
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === 'wizard/thread-tracker') for (const wid of Object.keys(W)) { const w = W[wid]; if (w && elOf(wid)) (w.thread ? renderThreadLive(w) : renderChatList(w, elOf(wid))); } });
   // Changed elsewhere (Settings, another tab): an open notification's picker shows the new choice.
   window.addEventListener('wizard:notify-route', () => { for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === '__new__' && notifOf(x)) renderThreadNow(x); } });
 

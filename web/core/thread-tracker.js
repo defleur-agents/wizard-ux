@@ -93,7 +93,7 @@
     } catch (_) { /* offline: dots stay as they were */ }
     countsLoading = false;
   }
-  const changedEvent = () => { repaint(); try { window.dispatchEvent(new CustomEvent('wos:thread-tracker')); } catch (_) { /* no window events */ } };
+  const changedEvent = detail => { repaint(); try { window.dispatchEvent(new CustomEvent('wos:thread-tracker', { detail })); } catch (_) { /* no window events */ } };
 
   /* ---------- the strip ---------- */
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
@@ -220,12 +220,19 @@
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
   window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, key, _tally: tally });
-  // A tweak turned on or off: paint (or remove) at once.
-  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) { if (e.detail.on) { countsAt = 0; loadCounts(true); } changedEvent(); } });
+  // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
+  let wasOn = on();
+  function syncEnabled() {
+    const enabled = on(); if (enabled === wasOn) return;
+    wasOn = enabled;
+    if (enabled) { countsAt = 0; loadCounts(true); }
+    else { openKeys.clear(); opened = null; }
+    changedEvent({ enabled }); // Chats hydrates every currently open thread and refreshes Reply on both edges.
+  }
+  window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) syncEnabled(); });
   // A tap anywhere outside the open list closes it on the same frame (the tap itself still goes through).
   document.addEventListener('pointerdown', e => { if (opened && !e.target.closest?.('[data-tt-strip]')) close(); }, true);
   // The host writes data-tweaks once the package is mounted (a toggle, a sync from the other device, a reload).
-  let wasOn = on();
-  try { new MutationObserver(() => { const now = on(); if (now === wasOn) return; wasOn = now; if (now) { countsAt = 0; loadCounts(true); } changedEvent(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) { /* no observer: the toggle event above still repaints */ }
+  try { new MutationObserver(syncEnabled).observe(document.documentElement, { attributes: true, attributeFilter: ['data-tweaks'] }); } catch (_) { /* no observer: the toggle event above still repaints */ }
   setInterval(() => { if (on() && !document.hidden) loadCounts(); }, 15000);
 })();

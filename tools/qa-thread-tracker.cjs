@@ -140,8 +140,44 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.screenshot({ path: path.join(OUT, 'off-phone.png') });
       check('off: no page errors', ctx.errors.length === 0, ctx.errors); await ctx.close();
     }
-    /* ---- 2. on: phone + desktop AI apps, two skins ---- */
+    /* ---- late Look: the thread is already open before the host mounts the tweak ---- */
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+      const tag = `late/${shell}/${skin}`, svc = service();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [] });
+      await page.waitForFunction(() => window.WosExperience && !window.WosExperience.state.busy);
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main');
+      check(`${tag}: thread starts open with tracker off`, !(await tt(page)).on && await page.locator('.ch-thread .msg').count() > 0 && await strip(page).count() === 0);
+      // Desktop uses the exact Look-sync adoption path (no tweak-choice event); phone uses the Settings toggle.
+      await page.evaluate(async ({ id, shell }) => {
+        const x = window.WosExperience;
+        if (shell === 'desktop') await x.adopt({ ...x.mix, [id]: true }, x.views);
+        else await x.toggle(id);
+      }, { id: ID, shell });
+      const appeared = await page.waitForSelector('[data-tt-strip] .tt-h', { timeout: 5000 }).then(() => true, () => false);
+      check(`${tag}: enabling hydrates the strip without reopening`, appeared, (svc.reqs || []).filter(r => /thread-items/.test(r)));
+      check(`${tag}: Reply appears on the already-open messages`, await page.locator('[data-mquote]').count() > 0);
+      if (appeared) {
+        await page.locator('.ch-compose textarea').fill('Keep my draft');
+        await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-late-on.png`) });
+        await strip(page).locator('.tt-h').click();
+        check(`${tag}: dropdown paints before the next frame without an API roundtrip`, await strip(page).locator('.tt-panel').isVisible());
+      }
+      await page.evaluate(async id => { const x = window.WosExperience; await x.adopt({ ...x.mix, [id]: false }, x.views); }, ID);
+      await page.waitForFunction(() => !window.WosThreadTracker.on());
+      await page.waitForFunction(() => !document.querySelector('[data-tt-strip], [data-mquote], [data-tt-dots]'), null, { timeout: 5000 }).catch(() => {});
+      check(`${tag}: disabling removes strip, Reply and dots without reload`, await page.locator('[data-tt-strip], [data-mquote], [data-tt-dots]').count() === 0 && !(await page.evaluate(() => window.WosThreadTracker.isOpen())));
+      if (appeared) check(`${tag}: draft survives the Look change`, await page.locator('.ch-compose textarea').inputValue() === 'Keep my draft');
+      await page.evaluate(async id => { const x = window.WosExperience; await x.adopt({ ...x.mix, [id]: true }, x.views); }, ID);
+      if (shell === 'phone') await page.locator('[data-chback]').first().click();
+      const dots = await page.waitForSelector('[data-tt-dots="hermes/tt-main"]', { timeout: 5000 }).then(() => true, () => false);
+      check(`${tag}: Chats list dots appear without reopening the thread`, dots);
+      check(`${tag}: no agent runs or steers`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)));
+      check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors);
+      await ctx.close();
+    }
+    /* ---- 2. on: phone + desktop AI apps, two skins ---- */
+    if (!process.env.QA_LATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `${shell}/${skin}`;
       const svc = service();
       const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
