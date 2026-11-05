@@ -1665,7 +1665,7 @@ export default function desktop(api) {
       if (kind === 'app' || (kind === 'link' && d.app)) {
         const id = kind === 'app' ? d.id : d.app, path = kind === 'app' ? d.path : d.url;
         if (!id || id === CHATS) return false;
-        goApp(id, null, path ? () => api.apps.path(id, path) : null, go); return true;
+        goApp(id, null, path ? () => api.apps.path(id, path) : null, kind === 'app' && !path ? go : null); return true;
       }
       if (kind === 'link') { unpeek(); closeAll(); return api.apps.openLink(d.url, d.title); }
       if (kind === 'draft' || kind === 'thread') {
