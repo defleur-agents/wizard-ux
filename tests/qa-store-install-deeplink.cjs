@@ -2,9 +2,10 @@
 const {chromium}=require('../tools/qa-playwright.cjs');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{const browser=await chromium.launch({headless:true});let results=[];
-try {for(const shell of ['phone','desktop']){
+try {for(const variant of [{shell:'phone',view:'classic'},{shell:'desktop',view:'ai-apps'},{shell:'desktop',view:'classic'}]){
+ const {shell,view}=variant;
  const ctx=await browser.newContext({viewport:{width:shell==='phone'?390:1280,height:844},isMobile:shell==='phone',hasTouch:shell==='phone',serviceWorkers:'block'});
- await ctx.addInitScript(shell=>{localStorage.setItem('wos.shell',shell);},shell);
+ await ctx.addInitScript(({shell,view})=>{localStorage.setItem('wos.shell',shell);if(shell==='desktop'&&view==='classic')localStorage.setItem('wos.desktop-view.v1','classic');},variant);
  const errors=[],writes=[],runs=[],posts=[];const installedNow=[{id:'shared',name:'Shared app',type:'view',repo:'o/r',commit:'b'.repeat(40),source:'link',state:'running'}];
  await ctx.route('**/*',async r=>{
   const req=r.request(),u=new URL(req.url());
@@ -29,6 +30,11 @@ try {for(const shell of ['phone','desktop']){
  await p.goto('https://shell.test/wizard-os-home/'+(shell==='desktop'?'desktop.html':'')+'?view=install&repo=o/r&from=Jane');
  await p.waitForFunction(()=>Array.from(document.querySelectorAll('iframe')).some(f=>{try{return f.src.includes('/store/index.html')&&!!f.contentWindow.__store;}catch{return false;}})).catch(e=>{console.error(shell,errors);throw e;});
  let f=p.frames().find(f=>f.url().includes('/store/index.html'));await f.locator('[data-link-install]').waitFor();
+ if(shell==='desktop'){
+  await p.waitForFunction(v=>v==='classic'?document.documentElement.dataset.layout==='classic':document.documentElement.dataset.aiFront==='app',view);
+  assert.equal(await p.locator('iframe[src*="/store/index.html"]').evaluate(f=>f.closest('.win').classList.contains('focus')),true,'Store takes window focus before its first click');
+  if(view==='ai-apps')assert.equal(await p.locator('iframe[src*="/store/index.html"]').evaluate(f=>f.closest('.wsp').dataset.aadRole),'app','deep link routes to the app pane');
+ }
  assert.match(await f.locator('#sheet').innerText(),/Shared with you by Jane/);await f.locator('#sheet [data-back]').click();assert.ok(await f.locator('#discover').isVisible());
  // A second link reuses the same Store frame, preserves its prior screen, and invalid input never blanks.
  await p.evaluate(()=>window.WizCore.deeplink.route(location.origin+'/wizard-os-home/?view=install&repo=bad'));
@@ -52,6 +58,16 @@ try {for(const shell of ['phone','desktop']){
   assert.notEqual(await p.locator('#settings [data-settings-root]').getAttribute('data-settings-page'),'');
   await p.locator('#scrim').tap({position:{x:5,y:5}});assert.equal(await p.evaluate(()=>__wos.sheet),null,'one outside tap dismisses nested Settings');
   assert.equal(p.frames().filter(f=>f.url().includes('/store/index.html')).length,1,'app remains mounted');
+ }else if(view==='ai-apps'){
+  // The AI apps launcher replaces the hidden stock palette button.
+  await p.locator('.aad-vall').click();assert.ok(await p.locator('.vc-pick').isVisible());
+  await p.mouse.click(5,840);assert.equal(await p.locator('.vc-pick').isVisible(),false);
+  // Its Keys guide is the same shell guide, reachable through Help rather than the hidden bar button.
+  await p.evaluate(()=>WizCore.deeplink.route(location.origin+'/wizard-os-home/?view=help'));
+  assert.ok(await p.locator('#keyHints').isVisible());
+  await p.mouse.click(5,840);assert.equal(await p.locator('#keyHints').isVisible(),false);
+  await p.locator('.aad-ws').click();assert.ok(await p.locator('.aad-wspop').isVisible());
+  await p.mouse.click(5,840);assert.equal(await p.locator('.aad-wspop').isVisible(),false);
  }else{
   for(const [button,layer] of [['#searchBtn','#palette'],['#keysBtn','#keyHints']]){
    await p.locator(button).click();assert.ok(await p.locator(layer).isVisible());
@@ -59,6 +75,6 @@ try {for(const shell of ['phone','desktop']){
   }
  }
  assert.deepEqual(errors,[]);
- results.push({shell,deepLink:true,reused:true,badLink:true,backStays:true,rootBackToShell:true,pinnedSwitch:true,outsideBack:shell==='phone'?['launcher','settings','nested-settings-back']:['palette','key-hints'],writes:writes.length,runs:runs.length});await ctx.close();
+ results.push({shell,view,deepLink:true,reused:true,badLink:true,backStays:true,rootBackToShell:true,pinnedSwitch:true,outsideBack:shell==='phone'?['launcher','settings','nested-settings-back']:view==='ai-apps'?['app-picker','key-hints','workspaces']:['palette','key-hints'],writes:writes.length,runs:runs.length});await ctx.close();
  }}finally{await browser.close();}console.log(JSON.stringify({passed:results.length,results},null,2));
 })().catch(e=>{console.error(e);process.exitCode=1;});

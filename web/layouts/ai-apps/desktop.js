@@ -462,7 +462,9 @@ export default function desktop(api) {
     want = id; if (!d) loading(id);
     const go = () => { if (d) api.nav.goDesk(d.desk); else api.apps.openDesk(id); then?.(); };
     // the Chats desk stays behind the panel: Home's new chat there first (never its bare list's empty pane beside the app)
-    if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); api.after(60, go); } else go();
+    if (!chatsFresh && !chatThread && mainChats()) { chatsFresh = true; api.sessions.newChat(); }
+    // Deep links deliver their page to the frame in this same call, not a timer later.
+    go();
   };
   let chatsFresh = false;
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
@@ -658,8 +660,8 @@ export default function desktop(api) {
       gw.append(b);
     }
     setNode.replaceChildren(el('h4', '', { text: 'AI apps view' }), el('p', 'aad-stg-l', { text: 'Group Ready' }), gw,
-      el('p', 'aad-stg-l', { text: 'Order chats within each status' }), radios,
-      el('p', 'aad-stg-n', { text: 'Ready is in priority order (Needs you, Your call, FYI, …), this order within each. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
+      el('p', 'aad-stg-l', { text: 'Order Ready chats' }), radios,
+      el('p', 'aad-stg-n', { text: 'One list follows this order across chats. By status or project keeps the group order, with this order inside each group. The same choice as Chats\' own order; Priority or By subject there reads as Newest first here.' }));
   }
   paintSetting();
   api.desk.setting?.('ai-apps-order', setNode);
@@ -701,8 +703,9 @@ export default function desktop(api) {
         api.listen(hd, 'click', () => { secOpen[k] = !secOpen[k]; api.storage.set('sections', { ...secOpen }); paintList(true); });
         const body = el('div', 'aad-sec-b', { id: 'aad-sec-' + k, role: 'group', 'aria-label': word0 }); body.hidden = !on;
         if (on && k === 'ready' && rows.length && groupBy() === 'none') {
-          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready in priority order by default (the order ⌥↓ walks), a tiny
-          // muted tag on Needs you / Your call rows; 'Group Ready by status' in Settings brings the sub-headers back
+          // round 20 item 9 (Miguel, 3 Nov 2026): one flat Ready (the order ⌥↓ walks), a tiny muted tag on Needs you /
+          // Your call rows; 'Group Ready by status' in Settings brings the sub-headers back. In the chosen Sort (James,
+          // 4 Nov 2026: Newest means newest first here, not Needs you on top)
           body.append(...readyFlat(rows, readyOrder()).map(r => chatRow(r, h.thread)));
         } else if (on && k === 'ready' && rows.length) {
           // round 18 item 4b: a sub-header per status with its count (the rail's words and order), its chats under it in
@@ -1684,7 +1687,7 @@ export default function desktop(api) {
   { const r = api.route(); chatsFresh = !!r.home || (r.desk === mainChats()?.desk && r.view === 'thread' && r.thread === '__new__'); }
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
   globalThis.dispatchEvent?.(new Event('resize'));
-  if (api.route().home) soon(() => api.sessions.newChat());
+  if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
   api.listen(css, 'load', () => api.after(260, () => syncOrb()));
 
   return () => {

@@ -152,7 +152,9 @@
     for (const id of catalog.tweaks) { if (globalIds().includes(id)) continue; const who = id.split('/')[0]; if (!out.has(who)) out.set(who, { id: who, name: names.get(who) || who, ids: [] }); out.get(who).ids.push(id); }
     return [...out.values()];
   }
-  async function apply(warm = false) {
+  let applying = Promise.resolve();
+  function apply(warm = false) { return applying = applyNow(warm); }
+  async function applyNow(warm = false) {
     const seq = ++generation; busy = true; error = ''; changed();
     try {
       // Retain explicit legacy offs across overlapping refreshes / interrupted migration.
@@ -248,6 +250,8 @@
         tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : t) });
     },
     installed, defaults, authors,
+    // Initial shell routes must see the selected view, including overlapping refreshes.
+    async whenReady() { let p; do { p = applying; await p; } while (p !== applying); },
     get desktopView() { return desktop ? effectiveDesktopView() : null; },
     get desktopViews() { return desktop ? desktopViews.map(id => { const l = window.WosSkinHost.layouts?.find(l => l.id === id); return { id, name: id === 'classic' ? 'Desks' : l?.name || id, credit: l?.credit || '' }; }) : []; },
     chooseDesktopView(id) {

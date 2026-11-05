@@ -1619,7 +1619,11 @@ test('round 18 parts: Ready sorts (stock Priority / Newest / Oldest), grouped li
   assert.deepEqual(P.readyGroups(rows, 'newest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:notif:n1,c2', 'approval:c4', 'fyi:notif:n3,c1', 'deferred:notif:n2', 'none:c3'], 'grouped in the rail\'s order (STATES), the order inside');
   assert.deepEqual(P.readyGroups(rows, 'oldest').map(g => g.state + ':' + ids(g.rows).join()), ['needs:c2,notif:n1', 'approval:c4', 'fyi:c1,notif:n3', 'deferred:notif:n2', 'none:c3']);
   assert.equal(P.readyGroups(rows, 'priority').at(-1).word, 'No status');
-  assert.deepEqual(ids(P.readyFlat(rows, 'newest')), P.readyGroups(rows, 'newest').flatMap(g => ids(g.rows)));
+  // One list (the default) is the chosen Sort alone, never Needs you hoisted to the top (James, 4 Nov 2026)
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest')), ids(P.readySort(rows, 'newest')), 'One list, Newest: newest first');
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest', 'none')), ['c4', 'c3', 'notif:n1', 'notif:n3', 'c2', 'c1', 'notif:n2']);
+  assert.deepEqual(ids(P.readyFlat(rows, 'oldest', 'none')), ids(P.readySort(rows, 'oldest')), 'One list, Oldest: oldest first');
+  assert.deepEqual(ids(P.readyFlat(rows, 'newest', 'status')), P.readyGroups(rows, 'newest').flatMap(g => ids(g.rows)), 'By status: the groups in turn');
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], null, 1), { id: 'a', wrapped: false }, 'from elsewhere: the top');
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'x', -1), { id: 'a', wrapped: false });
   assert.deepEqual(P.readyStep(['a', 'b', 'c'], 'b', 1), { id: 'c', wrapped: false });
@@ -1758,11 +1762,16 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
   const s = { snoozed: [{ id: 'z1' }], ready: [{ id: 'n1', state: 'needs', at: at(1) }, { id: 'n2', state: 'needs', at: at(3) }, { id: 'f1', state: 'fyi', at: at(2) }, { id: 'p1', state: 'none', at: at(4) }] };
   const ids = l => l.map(r => r.id);
   assert.deepEqual(ids(P.railRows(s, 'needs', 'newest')), ['n2', 'n1']); assert.deepEqual(ids(P.railRows(s, 'needs', 'oldest')), ['n1', 'n2']);
-  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest')), ['n2', 'n1', 'f1', 'p1'], 'Ready = the whole grouped list (what ⌥↓ walks)');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest')), ['p1', 'n2', 'f1', 'n1'], 'One list defaults to Newest across statuses (what ⌥↓ walks)');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'oldest', 'none')), ['n1', 'f1', 'n2', 'p1'], 'One list, Oldest across statuses');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'newest', 'status')), ['n2', 'n1', 'f1', 'p1'], 'By status keeps priority groups, Newest inside each');
+  assert.deepEqual(ids(P.railRows(s, 'ready', 'oldest', 'status')), ['n1', 'n2', 'f1', 'p1'], 'By status keeps priority groups, Oldest inside each');
   assert.deepEqual(ids(P.railRows(s, 'snoozed', 'newest')), ['z1']);
   assert.deepEqual(P.railActive(s, 'n1', '', 'newest'), { key: 'needs', i: 1, n: 2 }, 'derived: its status group');
-  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest'), { key: 'ready', i: 1, n: 4 }, 'the item last clicked while the chat is in it');
-  assert.deepEqual(P.railActive(s, 'p1', 'needs', 'newest'), { key: 'ready', i: 3, n: 4 }, 'a plain chat: Ready');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest'), { key: 'ready', i: 3, n: 4 }, 'the item last clicked while the chat is in it, at its Newest position');
+  assert.deepEqual(P.railActive(s, 'p1', 'needs', 'newest'), { key: 'ready', i: 0, n: 4 }, 'a plain chat: Ready, at its Newest position');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'oldest', 'list'), { key: 'ready', i: 0, n: 4 }, 'One list position follows Oldest too');
+  assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest', 'groups'), { key: 'needs', i: 1, n: 2 }, 'By status keeps the current status group and its position');
   assert.equal(P.railActive(s, null, 'needs', 'newest'), null, 'Home: nothing current');
   assert.deepEqual(P.railNext(['a', 'b', 'c'], null), { id: 'a', wrapped: false }); assert.deepEqual(P.railNext(['a', 'b', 'c'], 'c'), { id: 'a', wrapped: true });
   const now = new Date(2026, 10, 3, 15, 0).getTime();
@@ -1773,6 +1782,8 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
 
 test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap, the group marked with its place; the hover flyout (300 ms), a pick, Esc; nothing expands', async () => {
   const { w, keys } = deskWorld();
+  let order = 'newest';
+  w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
   const at = h => new Date(Date.UTC(2026, 10, 3, h)).toISOString();
   const row = (id, title, state, h) => ({ id, title, kind: 'ready', state, at: at(h), unread: false, pinned: false, actions: ['snooze', 'done'] });
   w.st.sessions.ready = [row('n1', 'Needs old', 'needs', 1), row('n2', 'Needs mid', 'needs', 2), row('n3', 'Needs new', 'needs', 3), row('f1', 'An fyi', 'fyi', 4), row('p1', 'Plain', 'none', 5)];
@@ -1794,8 +1805,19 @@ test('round 19 item 1 desktop: the folded rail used as it is: first, next, wrap,
   w.st.setting[1].querySelector('[data-aad-group="none"]').dispatchEvent(new FakePointerEvent('click'));   // One list
   assert.deepEqual(w.q('.aad-rlist').children.map(n => n.dataset.k), ['working', 'snoozed', 'ready'], 'round 22: One list on the rail');
   assert.equal(w.q('.aad-rk[data-k="ready"]').classList.contains('is-on'), true, 'switching grouping keeps the current chat marked on the visible Ready row');
-  assert.equal(click('ready'), 'n3', 'another item: its first chat (Ready = the whole grouped list)');
-  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'n2');
+  assert.equal(click('ready'), 'p1', 'another item: its first chat (One list = Newest across statuses)');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5'); assert.equal(click('ready'), 'f1');
+  assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '2/5');
+  assert.deepEqual([click('ready'), click('ready'), click('ready'), click('ready')], ['n3', 'n2', 'n1', 'p1'], 'One list walks Newest, then wraps to the newest chat');
+  for (const [sort, want] of [['oldest', ['n1', 'n2', 'n3', 'f1', 'p1']], ['newest', ['p1', 'f1', 'n3', 'n2', 'n1']]]) {
+    w.st.setting[1].querySelector(`[data-aad-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    w.st.timers.length = 0; w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+    w.st.timers.find(h => h.ms === 300 && !h.dead).fn();
+    assert.deepEqual(w.qa('.aad-fly-i').map(n => n.dataset.sid), want, `One list flyout follows ${sort}, not priority groups`);
+    w.q(`.aad-fly-i[data-sid="${want[0]}"]`).dispatchEvent(new FakePointerEvent('click')); go(want[0]);
+    assert.equal(w.q('.aad-rk[data-k="ready"] .aad-rk-p').textContent, '1/5');
+    assert.deepEqual(want.map(() => click('ready')), [...want.slice(1), want[0]], `One list rail follows ${sort}, including wrap`);
+  }
   assert.equal(click('snoozed'), 's1'); assert.equal(w.q('.aad-rk[data-k="snoozed"] .aad-rk-p'), null, 'one chat: no 1/1');
   // ⌥↓ still walks the whole Ready
   const alt = code => keys.find(h => h.down({ altKey: true, code, key: code }) === true);
@@ -1958,22 +1980,40 @@ test('round 20 item 1 / round 21: ⌥H Home folds both sides away, closes the ch
   assert.match(js, /cc && ids\.includes\(cc\) \? cc : null;/);
 });
 
-test('round 20 item 9 / round 22: Ready is one flat list in priority order by default (each row its time since the last message, no status tags); Group Ready by status brings the sub-headers back', async () => {
-  const { w, store } = deskWorld();
+test('round 20 item 9 / round 22: Ready defaults to One list following the chosen Sort (each row its time since the last message, no status tags); By status keeps priority groups', async t => {
+  t.mock.method(Date, 'now', () => new Date(2026, 10, 4, 15).getTime());
+  const { w, store, keys } = deskWorld();
+  let order = 'newest';
+  w.api.sessions.order = () => order; w.api.sessions.setOrder = o => { order = o; return true; };
   w.st.sessions.ready[0].state = 'fyi'; w.st.sessions.ready[1].state = 'needs';
   w.st.sessions.ready[0].at = new Date(Date.now() - 5 * 60e3).toISOString(); w.st.sessions.ready[1].at = new Date(Date.now() - 3 * 3600e3).toISOString();
+  w.st.sessions.ready.push({ id: 'r3', title: 'Plain middle', kind: 'ready', state: 'none', at: new Date(Date.now() - 3600e3).toISOString(), actions: [] });
   (await layout()).default(w.api);
   assert.equal(w.q('.aad-grp'), null, 'no sub-headers');
-  assert.deepEqual(w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid), ['r2', 'r1'], 'priority order: Needs you first');
+  const ready = () => w.qa('.aad-rw[data-kind="ready"]').map(r => r.dataset.sid);
+  assert.deepEqual(ready(), ['r1', 'r3', 'r2'], 'One list, Newest: newer FYI and plain chat before older Needs you');
   assert.equal(w.q('.aad-tag'), null, 'round 22: no status tags');
-  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 2, 'round 22: each Ready row shows how long ago');
-  assert.deepEqual(times.map(t => t.textContent), ['3h', '5m'], 'its time since the last message (Needs you first)');
+  const times = w.qa('.aad-rw[data-kind="ready"] .aad-time'); assert.equal(times.length, 3, 'round 22: each Ready row shows how long ago');
+  assert.deepEqual(times.map(t => t.textContent), ['5m', '1h', '3h'], 'its time since the last message (newest first)');
+  for (const [sort, want] of [['oldest', ['r2', 'r3', 'r1']], ['newest', ['r1', 'r3', 'r2']]]) {
+    w.q('.aad-orderb').dispatchEvent(new FakePointerEvent('click'));
+    w.q(`.aad-sortmenu [data-order="${sort}"]`).dispatchEvent(new FakePointerEvent('click'));
+    assert.deepEqual(ready(), want, `One list follows ${sort} from the sidebar Sort control`);
+    assert.equal(w.q('.aad-grp'), null, 'sorting never adds status groups');
+    for (const code of ['ArrowDown', 'ArrowUp']) for (let i = 0; i < want.length; i++) {
+      w.st.route = { home: false, view: 'thread', thread: want[i], desk: 1 }; w.emit('route', w.st.route);
+      assert.ok(keys.some(h => h.down({ altKey: true, code, key: code }) === true));
+      const step = code === 'ArrowDown' ? 1 : -1;
+      assert.equal(w.st.opened.at(-1), 'thread:' + want[(i + step + want.length) % want.length], `${sort}: ⌥${code} walks the drawn One list, wrapping`);
+    }
+  }
   assert.match(read('web/layouts/ai-apps/desktop.css'), /\.aad-rw:focus-within\) \.aad-time \{ visibility: hidden; \}/, 'the ⋯ takes its place on hover');
   const sw = w.q('[data-aad-group="status"]'); assert.ok(sw, 'the Settings choice'); assert.equal(sw.getAttribute('aria-checked'), 'false', 'off at first'); assert.equal(w.q('[data-aad-group="none"]').getAttribute('aria-checked'), 'true', 'One list at first');
   sw.dispatchEvent(new FakePointerEvent('click'));
   assert.equal(store.groupReady, true);
-  assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi'], 'grouped: the sub-headers');
-  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 2, 'grouped: the times too');
+  assert.deepEqual(w.qa('.aad-grp').map(g => g.dataset.state), ['needs', 'fyi', 'none'], 'grouped: the sub-headers');
+  assert.deepEqual(ready(), ['r2', 'r1', 'r3'], 'By status still puts Needs you before FYI and plain chats, even with Newest selected');
+  assert.equal(w.qa('.aad-rw[data-kind="ready"] .aad-time').length, 3, 'grouped: the times too');
 });
 
 test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the open one expanded in place with its own buttons', () => {
@@ -2037,6 +2077,44 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   assert.equal(keys[2].down({ altKey: true, code: 'KeyV' }), false, '⌥V: the shell\'s new voice chat');
   assert.equal(keys[2].down({ altKey: true, code: 'KeyL' }), true); assert.equal(w.html.dataset.aadSide, 'rail');
   keys[2].down({ altKey: true, code: 'KeyL' });
+});
+
+test('desktop cold Store opens synchronously in the app pane and deferred Home cannot steal it', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chat = new El('div'); chat.className = 'wsp'; chat.dataset.ws = '1';
+  const dc = new El('div'); dc.className = 'dchats'; chat.append(dc);
+  const app = new El('div'); app.className = 'wsp'; app.dataset.ws = '8';
+  const win = new El('div'); win.className = 'win focus';
+  const frame = new El('iframe'); frame.focus = () => { w.doc.activeElement = frame; };
+  frame.contentWindow = { focus() {} }; win.append(frame); app.append(win);
+  stage.append(chat, app); w.html.children[0].append(stage);
+  w.st.route = { home: true, desk: 1, view: 'home', thread: null };
+  let router, opened = 0;
+  w.api.apps.routeOpens = h => { router = h; };
+  w.api.apps.openDesk = id => {
+    assert.equal(id, 'app-store'); opened++;
+    w.st.desks.push({ desk: 8, id, name: 'Store' });
+    w.st.route = { home: false, desk: 8, view: 'desk', thread: null };
+    w.emit('route', w.st.route);
+  };
+  (await layout()).default(w.api);
+  router.open('app', { id: 'app-store' }, () => assert.fail('no stock tiled open'));
+  assert.equal(opened, 1, 'frame exists before deep-link delivery, not 60ms later');
+  assert.equal(app.dataset.aadRole, 'app', 'separate app pane');
+  const drafts = w.st.newChats;
+  w.run();
+  assert.equal(w.st.newChats, drafts, 'the deferred mount-time Home task cannot steal the Store');
+  assert.equal(w.doc.activeElement, frame, 'the opened app receives focus');
+  const shell = read('web/desktop/desktop.js');
+  const attach = shell.indexOf('window.WosSkinHost?.attach({');
+  assert.ok(attach >= 0);
+  assert.ok(shell.indexOf('await window.WosExperience?.whenReady?.();') > attach);
+  assert.ok(shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();') > attach);
+  assert.ok(shell.indexOf('C.deeplink.consume();') > shell.indexOf('await window.WosSkinHost?.whenLayoutReady?.();'), 'cold links wait for the same open router');
+  const css = read('web/layouts/ai-apps/desktop.css');
+  assert.match(css, /\.win:not\(\.gone\):not\(\.drag\) \.wbody iframe \{ pointer-events: auto;/);
+  assert.match(css, /\[data-aad-resizing\] iframe \{ pointer-events: none !important;/, 'resizing still shields app frames');
 });
 
 test('round 21 desktop: one left/right model: apps and their links on the right (one window, taken to the page), other links in the same panel, no view beside a thread, an app\'s Reply in the left column with the app kept', async () => {

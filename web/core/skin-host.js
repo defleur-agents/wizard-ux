@@ -348,7 +348,9 @@
     }
   }
   // Loading a layout holds the panel too (a tweak reload re-wears it a moment after the tweaks settle).
-  async function loadLayout(id) {
+  let layoutLoading = Promise.resolve();
+  function loadLayout(id) { return layoutLoading = loadLayoutHeld(id); }
+  async function loadLayoutHeld(id) {
     panelHold++;
     try { return await loadLayoutNow(id); } finally { panelHold--; panelSync(); }
   }
@@ -1630,6 +1632,7 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
+    async whenLayoutReady() { let p; do { p = layoutLoading; await p; } while (p !== layoutLoading); },
     setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
