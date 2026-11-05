@@ -689,9 +689,9 @@
   }
   // Preparation is non-destructive: an async flush may reveal new work and abort the reload.
   // All frames share one 1.5s budget. Late callbacks, edits and document changes cannot admit reload.
-  async function keepDrafts() {
+  async function keepDrafts(frame = null) {
     reconcile();
-    await Promise.all([...frames.values()].flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
+    await Promise.all([...frames.values()].filter(st => !frame || st.frame === frame).flatMap(st => [...(st.drafts || [])].map(async ([id, draft]) => {
       if (draft.kept || !valid(st, draft.doc)) return;
       const generation = draft.generation;
       let timer;
@@ -736,7 +736,7 @@
     reconcile();
     return [...frames.values()].filter(st => valid(st)).map(st => {
       let visible = true; try { if (st.isVisible) visible = st.isVisible() === true; } catch (_) { visible = false; }
-      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds.values()], suspect: !!st.suspect });
+      return Object.freeze({ frame: st.frame, appId: st.appId, visible, holds: [...st.holds].filter(([id]) => !st.drafts?.get(id)?.kept).map(([,reason]) => reason), keepable: [...(st.drafts?.values() || [])].some(d => !d.kept), suspect: !!st.suspect });
     });
   }
   // One-shot, after a reload that kept a recording: put the kept app's frame back on the route it showed.
