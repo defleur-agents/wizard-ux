@@ -25,6 +25,7 @@
   let counts = {}, countsAt = 0, countsLoading = false;
   const openKeys = new Set(), ackKeys = new Set();
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
+  const pendingSeen = new Map(); // key → seen writes in flight
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
@@ -79,7 +80,13 @@
       if (r.ok) {
         const next = (await r.json())?.threads || {};
         // A thread open in this shell knows its own latest; keep that over a poll that raced a tap.
-        for (const [k, t] of threads) if (t.items.length && next[k]) next[k] = tally(t.items);
+        // Only a tap the box has not confirmed yet is kept over the poll; otherwise the poll is the newer truth, and a
+        // loaded thread whose tally moved is reloaded so its strip follows.
+        for (const [k, t] of threads) {
+          if (!t.items.length) continue;
+          if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(t.items);
+          else if (JSON.stringify(next[k] || null) !== JSON.stringify(counts[k] || null) && !t.loading) { t.at = 0; const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)); }
+        }
         if (JSON.stringify(next) !== JSON.stringify(counts)) { counts = next; changedEvent(); }
         countsAt = Date.now();
       }
@@ -168,9 +175,13 @@
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
     counts[k] = tally(t.items);
     changedEvent(); // painted before the box hears about it
+    pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
+    const settle = () => pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1));
+    // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
+    const undo = () => { settle(); const set = seenLocally.get(k); for (const i of ids) for (const tok of [...(set || [])]) if (tok.startsWith(`${i}@`)) set.delete(tok); const cur = threads.get(k); if (cur) cur.at = 0; load(sid, agent); };
     req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
-      .then(r => (r.ok ? r.json() : null)).then(j => { if (j?.items) { threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); } })
-      .catch(() => { /* kept locally; the next read reconciles */ });
+      .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
+      .catch(undo);
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
