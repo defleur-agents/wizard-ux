@@ -1162,6 +1162,19 @@
    * the row live, the app reattaches with resumeId). Every other recorder (browser mic, device AAC takes, a
    * microphone loan to the orb, start/stop/save in flight, an unknown native owner) would lose audio, so it
    * blocks. keeps names the meeting that survives; the shell uses it to let that app's capture holds through. */
+  // Synchronous page-memory proof, independent of slow/unavailable durable recovery.
+  // Stored rows survive navigation; in-page engines and unacknowledged takes do not.
+  function pageAudioFree() {
+    if (active || preparations.size || memoryTakes.size || attachedMeetingBridge ||
+        W.wizardNative?.meetings || configuredNative) return false;
+    try { return !JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id; }
+    catch (_) { return false; }
+  }
+  function cancelReloadRecovery() {
+    if (!pageAudioFree()) return false;
+    // Cancel before navigation so late storage/native callbacks cannot adopt an owner.
+    yieldRecovery(); return true;
+  }
   function reloadCheck() {
     const no = reason => {
       const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
@@ -1322,7 +1335,7 @@
   // Host-only adapter seam. Apps get only the frozen facade via app-services;
   // never expose configureNative through RPC or allow arbitrary bridge eval.
   W.WizAppCapture = Object.freeze({ version: 1, start, attach, settle, pending, ack, prepare, discardPrepared, capabilities, getState: state,
-    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, prepareReload, closeApp, staleTakes, rescueTake,
+    beginVoiceBorrow, endVoiceBorrow, reloadCheck, reconcileReload, pageAudioFree, cancelReloadRecovery, prepareReload, closeApp, staleTakes, rescueTake,
     current(appId) { validate(appId,{}); const r=active?.row.appId===appId ? active.row : [...recoveryLive].map(id=>ownedRows.get(id)).find(r=>r?.appId===appId);
       const live = active?.row.id === r?.id;
       return r ? {id:r.id,appId:r.appId,active:live,recording:live && active.phase === 'recording' && !!active.engine && !active.inputStopped,

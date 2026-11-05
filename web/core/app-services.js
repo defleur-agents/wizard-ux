@@ -671,13 +671,13 @@
     try { cap = window.WizAppCapture?.reloadCheck?.(); } catch (_) { cap = { safe: false, reason: 'capture' }; }
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
     const keeps = cap.safe ? cap.keeps || null : null, blocking = [];
-    if (!cap.safe) blocking.push({ appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
+    if (!cap.safe) blocking.push({ source: 'capture', appId: cap.appId || null, kind: 'capture', reason: cap.reason || 'capture', startedAt: cap.startedAt || null });
     for (const st of frames.values()) for (const reason of st.holds.values()) {
       const capture = CAPTURE_HOLD.test(reason);
       // App-owned holds are released only by their owner. Durable shared storage cannot prove an
       // app has no private in-memory work. Only the existing native-survival contract passes here.
       if (capture && keeps && st.appId === keeps.appId) continue;
-      blocking.push({ appId: st.appId, kind: capture ? 'capture' : 'work', reason });
+      blocking.push({ source: 'frame', appId: st.appId, kind: capture ? 'capture' : 'work', reason });
     }
     // A blocker says reload is unsafe, not that a known recording will eventually end.
     return { ok: !blocking.length, keeps, capture: cap, blocking, recording: cap.waitForEnd === true };
