@@ -112,12 +112,7 @@
   let EMO = {}, emoAt = 0;
   const emoOf = id => { if (Date.now() - emoAt > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} emoAt = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
   const live = () => (LIVE && LIVE.ok ? LIVE.groups() : { needs: [], ready: [], working: [] });
-  const ago = iso => {
-    const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
-    const m = Math.round((Date.now() - t) / 6e4);
-    if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
-    const d = window.WizConfig.dayParts(t); return `${DOW[d.dow]} ${d.d}`;
-  };
+  const ago = window.WizCore.ago;
 
   /* ---------------- window model ---------------- */
   const track = $('#track');

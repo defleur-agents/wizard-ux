@@ -1779,9 +1779,11 @@ test('round 19 parts: the order inside each group (Newest / Oldest; stock Priori
   assert.deepEqual(P.railActive(s, 'n1', 'ready', 'newest', 'groups'), { key: 'needs', i: 1, n: 2 }, 'By status keeps the current status group and its position');
   assert.equal(P.railActive(s, null, 'needs', 'newest'), null, 'Home: nothing current');
   assert.deepEqual(P.railNext(['a', 'b', 'c'], null), { id: 'a', wrapped: false }); assert.deepEqual(P.railNext(['a', 'b', 'c'], 'c'), { id: 'a', wrapped: true });
-  const now = new Date(2026, 10, 3, 15, 0).getTime();
+  const now = Date.UTC(2026, 10, 3, 5); // fixed UTC clock: yesterday afternoon is still less than 24h ago
   assert.equal(P.shortTime(new Date(now - 5 * 60e3).toISOString(), now), '5m'); assert.equal(P.shortTime(new Date(now - 3 * 3600e3).toISOString(), now), '3h');
-  assert.equal(P.shortTime(new Date(2026, 10, 2, 9).toISOString(), now), 'Yesterday'); assert.equal(P.shortTime(new Date(2026, 9, 12, 9).toISOString(), now), '12 Oct');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 14)).toISOString(), now), '15h');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 10, 2, 1)).toISOString(), now), 'Mon 2');
+  assert.equal(P.shortTime(new Date(Date.UTC(2026, 9, 12, 9)).toISOString(), now), 'Mon 12');
   assert.equal(P.shortTime('', now), '');
 });
 
@@ -2482,4 +2484,18 @@ for (const order of ['newest', 'oldest']) for (const mode of ['none', 'status', 
   (await layout()).default(phone.api);
   phone.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(phone.qa('.aa-chat').map(n => n.dataset.sid), M.visibleIds(rows, order, 'none'), 'phone drawer Sort');
+});
+
+test('desktop AI apps sidebar and rail flyout keep phone hours across midnight with a fixed clock', async t => {
+  const now = Date.UTC(2026, 10, 3, 5);
+  t.mock.method(Date, 'now', () => now);
+  const { w, keys } = deskWorld();
+  w.st.sessions.ready = [{ id: 'midnight', title: 'Yesterday afternoon', kind: 'ready', state: 'fyi', at: new Date(now - 15 * 3600e3).toISOString(), actions: [] }];
+  w.st.sessions.working = []; w.st.sessions.snoozed = []; w.st.sessions.archive = [];
+  (await layout()).default(w.api);
+  assert.equal(w.q('.aad-rw[data-sid="midnight"] .aad-time').textContent, '15h');
+  keys[1].down({ altKey: true, code: 'KeyL' });
+  w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
+  w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
+  assert.equal(w.q('.aad-fly-i[data-sid="midnight"] .aad-fly-at').textContent, '15h');
 });

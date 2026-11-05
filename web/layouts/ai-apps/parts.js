@@ -1,4 +1,5 @@
 import '../../core/chats-list-model.js';
+import '../../core/core.js';
 const { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep } = globalThis.WizChatsListModel;
 export { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep };
 /* The AI apps view's shared marks and words (phone layout.js and desktop.js): one icon set, one row-menu order, so the
@@ -276,19 +277,8 @@ export function railActive(s, cur, last, order, mode) {
 }
 /** A rail item clicked: its first chat, or (when the chat in front is already in it) the next one, wrapping. */
 export const railNext = (ids, cur) => readyStep(ids, cur, 1);
-/** A short time for the flyout's rows: '5m', '3h', 'Yesterday', 'Mon', '12 Oct' ('' when unknown). Pure (now passed in). */
-export function shortTime(at, now) {
-  const t = Date.parse(at); if (!t) return '';
-  const d = Math.max(0, now - t), m = Math.floor(d / 60e3);
-  if (m < 1) return 'now'; if (m < 60) return m + 'm';
-  const h = Math.floor(m / 60), day = x => { const z = new Date(x); z.setHours(0, 0, 0, 0); return z.getTime(); };
-  const days = Math.round((day(now) - day(t)) / 864e5);
-  if (days === 0) return h + 'h';
-  if (days === 1) return 'Yesterday';
-  const z = new Date(t);
-  if (days < 7) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][z.getDay()];
-  return z.getDate() + ' ' + ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][z.getMonth()];
-}
+/** Sidebar and flyout use the phone/core labels, including elapsed hours across midnight. */
+export const shortTime = (typeof window === 'object' ? window : globalThis).WizCore.ago;
 
 /* ---------- round 19 item 4 (Miguel, 3 Nov 2026): the phone Home's dock ----------
  * The pinned apps live in a dock just above the composer (up to 2 rows × 4 = 8 a page; more pins page sideways with
