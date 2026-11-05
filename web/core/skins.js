@@ -23,8 +23,8 @@
   // A skin entry not listed here is a skin of its own with one palette (so a new collaborator skin needs no edit here).
   const FAMILIES = [
     { id: 'wizard', name: 'Wizard', tweaks: 'wizard', who: 'The original Wizard look, in five moods.', palettes: ['nebula', 'grove', 'tide', 'ember', 'signal'] },
-    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'] },
-    { id: 'novairecito', name: 'Noir & Sepia', who: 'A noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
+    { id: 'mizel', name: 'Mizel', tweaks: 'miguel', recommends: { chats: 'mizel-chats' }, who: 'Miguel’s skin: black and white, or a new landscape every minute.', palettes: ['obsidian', 'obsidian-light', 'landscapes', 'landscapes-light'] },
+    { id: 'novairecito', name: 'Novairecito', who: 'Novaire’s skin: a noir violet command deck, or warm paper for long reads.', palettes: ['novairecito', 'sepia'] },
   ];
   const LAST = 'wos.skin.last.';
   const SKINS = [
@@ -48,7 +48,7 @@
       t: T({ bg: '#000000', ink: '#d8ffd8', 'ink-2': '#8fc79a', 'ink-3': '#4f8a5a', line: 'rgba(57,255,140,.16)', 'line-2': 'rgba(57,255,140,.32)', glass: 'rgba(0,10,4,.62)', 'glass-2': 'rgba(0,20,8,.76)',
         violet: '#39ff8c', 'violet-2': '#ffbe55', pink: '#5ad1ff', cyan: '#5ad1ff', amber: '#ffbe55', green: '#39ff8c', red: '#ff5f56',
         'sk-time-a': '#e6ffe6', 'sk-time-b': '#39ff8c', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(57,255,140,.18)', 'sk-ddot': 'rgba(57,255,140,.5)', 'sk-tour': 'rgba(0,8,3,.88)', 'sk-dim': 'rgba(0,0,0,.76)', 'sk-win': 'rgba(0,10,4,.86)' }) },
-    { id: 'novairecito', pkg: { css: true, js: true, when: 'always', dir: 'novairecito' }, name: 'Noir', who: 'Noir focus with Wizard violet. A quiet command deck.', orb: [0, 1.12, .96],
+    { id: 'novairecito', pkg: { css: true, js: true, when: 'always', dir: 'novairecito' }, name: 'Noir', who: 'Noir focus with Wizard violet. The boss’s quiet command deck.', orb: [0, 1.12, .96],
       t: T({ bg: '#05030a', ink: '#f4f0ff', 'ink-2': '#c2b8da', 'ink-3': '#81769a', line: 'rgba(197,174,255,.14)', 'line-2': 'rgba(197,174,255,.28)', glass: 'rgba(13,9,24,.66)', 'glass-2': 'rgba(22,14,40,.82)',
         violet: '#946cff', 'violet-2': '#c3aaff', pink: '#d96fc7', cyan: '#75cfe8', amber: '#d8ad63', green: '#70d4a2', red: '#ef718a',
         'sk-time-a': '#ffffff', 'sk-time-b': '#a98bff', 'sk-dock': 'rgba(6,4,12,.96)', 'sk-dock-line': 'rgba(197,174,255,.12)', 'sk-ddot': 'rgba(197,174,255,.5)', 'sk-tour': 'rgba(8,5,16,.86)', 'sk-dim': 'rgba(2,1,6,.78)', 'sk-win': 'rgba(9,6,18,.9)' }) },
@@ -56,22 +56,22 @@
       t: T({ bg: '#f3ead2', ink: '#332b22', 'ink-2': '#5f5243', 'ink-3': '#786651', line: 'rgba(86,65,40,.16)', 'line-2': 'rgba(86,65,40,.30)', glass: 'rgba(236,222,190,.76)', 'glass-2': 'rgba(247,239,219,.92)',
         violet: '#76533d', 'violet-2': '#684733', pink: '#9a5c56', cyan: '#557878', amber: '#94691d', green: '#57704d', red: '#a34236',
         'sk-time-a': '#3a3026', 'sk-time-b': '#735b43', 'sk-dock': 'rgba(238,225,197,.96)', 'sk-dock-line': 'rgba(86,65,40,.16)', 'sk-ddot': 'rgba(86,65,40,.52)', 'sk-tour': 'rgba(247,239,219,.94)', 'sk-dim': 'rgba(75,55,32,.24)', 'sk-win': 'rgba(247,239,219,.94)' }) },
-    { id: 'obsidian', pkg: { css: true, dir: 'obsidian' }, name: 'Dark', who: 'Black and white, with the violet orb.', orb: [0, 1, 1.05],
+    { id: 'obsidian', pkg: { css: true, dir: 'obsidian' }, name: 'Dark', who: 'Miguel’s dark skin. Black and white, with the violet orb.', orb: [0, 1, 1.05],
       t: T({ bg: '#000000', ink: '#f7f7f7', 'ink-2': '#c4c4c4', 'ink-3': '#8a8a8a', line: 'rgba(255,255,255,.12)', 'line-2': 'rgba(255,255,255,.26)', glass: 'rgba(20,20,20,.62)', 'glass-2': 'rgba(24,24,24,.86)',
         violet: '#ffffff', 'violet-2': '#e8e8e8', pink: '#bdbdbd', cyan: '#d6d6d6', amber: '#e6b15c', green: '#9fd8a8', red: '#ff6b6b',
         'sk-time-a': '#ffffff', 'sk-time-b': '#9a9a9a', 'sk-dock': 'rgba(0,0,0,.96)', 'sk-dock-line': 'rgba(255,255,255,.12)', 'sk-ddot': 'rgba(255,255,255,.5)', 'sk-tour': 'rgba(10,10,10,.9)', 'sk-dim': 'rgba(0,0,0,.78)', 'sk-win': 'rgba(10,10,10,.9)' }) },
-    { id: 'obsidian-light', pkg: { css: true, dir: 'obsidian' }, name: 'Light', who: 'Ink on white paper, with the violet orb.', orb: [0, 1.1, .95],
+    { id: 'obsidian-light', pkg: { css: true, dir: 'obsidian' }, name: 'Light', who: 'Miguel’s light skin. Ink on white paper, with the violet orb.', orb: [0, 1.1, .95],
       t: T({ bg: '#ffffff', ink: '#000000', 'ink-2': '#2e2e2e', 'ink-3': '#6b6b6b', line: 'rgba(0,0,0,.14)', 'line-2': 'rgba(0,0,0,.32)', glass: 'rgba(244,244,244,.78)', 'glass-2': 'rgba(240,240,240,.94)',
         violet: '#000000', 'violet-2': '#1a1a1a', pink: '#555555', cyan: '#3a3a3a', amber: '#9a6400', green: '#0f7a3e', red: '#c62828',
         'sk-time-a': '#000000', 'sk-time-b': '#5a5a5a', 'sk-dock': 'rgba(255,255,255,.96)', 'sk-dock-line': 'rgba(0,0,0,.12)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,250,.94)', 'sk-dim': 'rgba(255,255,255,.72)', 'sk-win': 'rgba(255,255,255,.94)' }) },
     // Opinionated: Landscapes rotates the classic macOS landscape wallpapers (Mavericks → Golden Gate) behind frosted glass.
     // Split by Miguel (28 Oct 2026): Landscapes Dark rotates the night and dusk photos under dark glass; Landscapes Light the
     // day photos under light glass. The dark one keeps the 'landscapes' id so a saved choice carries over.
-    { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Dark', who: 'Night and dusk views under dark glass.', orb: [0, 1, 1.05],
+    { id: 'landscapes', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Dark', who: 'Miguel’s photo skin after dark: night and dusk views under dark glass.', orb: [0, 1, 1.05],
       t: T({ bg: '#0B0A10', ink: '#ffffff', 'ink-2': 'rgba(255,255,255,.80)', 'ink-3': 'rgba(255,255,255,.58)', line: 'rgba(255,255,255,.16)', 'line-2': 'rgba(255,255,255,.28)', glass: 'rgba(16,14,22,.52)', 'glass-2': 'rgba(20,18,26,.74)',
         violet: '#7A5CFF', 'violet-2': '#A08CFF', pink: '#ff7ac8', cyan: '#6fd8ff', amber: '#ffbe55', green: '#62e6a8', red: '#ff6b86',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(11,10,16,.62)', 'sk-dock-line': 'rgba(255,255,255,.10)', 'sk-ddot': 'rgba(255,255,255,.6)', 'sk-tour': 'rgba(11,10,16,.80)', 'sk-dim': 'rgba(11,10,16,.70)', 'sk-win': 'rgba(16,14,22,.85)' }) },
-    { id: 'landscapes-light', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Light', who: 'Bright views under light glass.', orb: [0, 1.1, .95],
+    { id: 'landscapes-light', pkg: { css: true, dir: 'landscapes' }, name: 'Landscapes Light', who: 'Miguel’s photo skin by day: bright views under light glass.', orb: [0, 1.1, .95],
       t: T({ bg: '#EEF1F4', ink: '#111216', 'ink-2': 'rgba(17,18,22,.76)', 'ink-3': 'rgba(17,18,22,.54)', line: 'rgba(0,0,0,.12)', 'line-2': 'rgba(0,0,0,.26)', glass: 'rgba(250,250,252,.58)', 'glass-2': 'rgba(250,250,252,.80)',
         violet: '#5B3FE6', 'violet-2': '#4A30CC', pink: '#c42a83', cyan: '#0a7fae', amber: '#9a6400', green: '#0f7a4a', red: '#c8304c',
         'sk-time-a': '#ffffff', 'sk-time-b': '#ffffff', 'sk-dock': 'rgba(250,250,252,.66)', 'sk-dock-line': 'rgba(0,0,0,.08)', 'sk-ddot': 'rgba(0,0,0,.5)', 'sk-tour': 'rgba(250,250,252,.88)', 'sk-dim': 'rgba(240,242,246,.66)', 'sk-win': 'rgba(250,250,252,.85)' }) },
@@ -140,7 +140,8 @@
       st.setProperty('--sk-win', `rgba(${w[0] | 0},${w[1] | 0},${w[2] | 0},${glass})`); root.dataset.winGlass = '';
     }
     // space layers belong to Nebula only
-    const space = a === 0 ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
+    const space = a === 0 && !wizardImage(SKINS[a]) ? 1 - f : 0; st.setProperty('--sk-space', space.toFixed(3));
+    imageState(SKINS[Math.round(p)]);
     const near = Math.round(p);
     if (near !== shown) { shown = near; root.dataset.skin = SKINS[near].id; window.WosSkinHost?.preview(SKINS[near].id); const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = SKINS[near].t.bg; }
     applyFrame(SKINS[near]);
@@ -170,6 +171,15 @@
     { id: 'glass', name: 'Glass', who: 'The hat in frosted glass over soft colour.' },
   ];
   let wall = (() => { try { const v = localStorage.getItem(WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'landscapes'; } catch (_) { return 'landscapes'; } })();
+  // Wizard desktop has its own choice: never adopt a Mizel preference or change the phone.
+  const WIZARD_WALL_KEY = 'wos.skin.wallpaper.wizard.desktop';
+  let wizardWall = (() => { try { const v = localStorage.getItem(WIZARD_WALL_KEY); return WALLS.some(w => w.id === v) ? v : 'living'; } catch (_) { return 'living'; } })();
+  const wizardBackgrounds = skin => root.dataset.shell === 'desktop' && skin.family === 'wizard';
+  const wizardImage = skin => wizardBackgrounds(skin) && wizardWall !== 'living';
+  function imageState(skin) {
+    if (wizardImage(skin) || /^landscapes/.test(skin.id)) root.dataset.imageBackground = '';
+    else delete root.dataset.imageBackground;
+  }
   const WIZ = {
     memo: {},
     get(id, light, W, H) {
@@ -214,8 +224,8 @@
         s.img = {}; s.cur = at; s.from = null; s.fadeAt = 0; s.shownAt = BGL.t; s.n = n;
         this.load(s, at, W, H); this.load(s, (at + 1) % n, W, H);
       },
-      draw(c, s, t, dt, W, H) {
-        if (wall !== 'landscapes') { const w = WIZ.get(wall, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = this.LIGHT ? '#ece8f6' : '#0B0A10'; c.fillRect(0, 0, W, H); } return; }
+      draw(c, s, t, dt, W, H, selected = wall) {
+        if (selected !== 'landscapes') { const w = WIZ.get(selected, this.LIGHT, W, H); if (w) c.drawImage(w, 0, 0, W, H); else { c.fillStyle = SKINS[Math.round(pos)].t.bg; c.fillRect(0, 0, W, H); } return; }
         const cur = s.img[s.cur];
         if (cur?.ready && t - s.shownAt > this.HOLD) {
           const nx = (s.cur + 1) % s.n, nxt = this.load(s, nx, W, H);
@@ -406,18 +416,19 @@
     const c = BGL.cv[k], x = BGL.cx[k];
     c.style.opacity = op.toFixed(3);
     if (op < .002) return;
-    const id = SKINS[i].id, R = BG[id]; if (!R) return;
+    const image = wizardImage(SKINS[i]), id = image ? 'landscapes' : SKINS[i].id, R = BG[id]; if (!R) return;
     if (!BGL.st[id]) { BGL.st[id] = {}; R.init.call(R, BGL.st[id], BGL.W, BGL.H); }
-    x.setTransform(BGL.dpr, 0, 0, BGL.dpr, 0, 0); R.draw.call(R, x, BGL.st[id], BGL.t, dt, BGL.W, BGL.H);
+    x.setTransform(BGL.dpr, 0, 0, BGL.dpr, 0, 0); R.draw.call(R, x, BGL.st[id], BGL.t, dt, BGL.W, BGL.H, image ? wizardWall : wall);
   }
   // Motion belongs to the scenery gate (core/scenery.js): it calls draw() ~30 fps only while Home is live, and
   // still() once after a change (skin picked, resize) so a frozen scene still shows the right skin.
-  const needs = () => BGL.a !== 0 || BGL.f > .002;
+  const needs = () => BGL.a !== 0 || BGL.f > .002 || wizardImage(SKINS[BGL.a]);
   function drawAll(dt) {
     if (!BGL.cv.length) return;
     BGL.t += dt;
     const { a, b, f } = BGL;
-    const opA = a === 0 ? 0 : (b === 0 ? 1 - f : 1), opB = (b === a || b === 0) ? 0 : f;
+    const blank = i => i === 0 && !wizardImage(SKINS[i]);
+    const opA = blank(a) ? 0 : (blank(b) ? 1 - f : 1), opB = (b === a || blank(b)) ? 0 : f;
     drawLayer(0, a, opA, dt); drawLayer(1, b, opB, dt);
   }
   const LAYER = { name: 'skin', fps: 30, active: () => BGL.cv.length > 0 && needs(), draw: dt => drawAll(dt), still: () => drawAll(0), off: () => BGL.cv.forEach(c => { if (c.style.opacity !== '0') c.style.opacity = 0; }) };
@@ -460,16 +471,20 @@
       const token = {}; borrowedFoundation = foundation; this._foundationToken = token; applyFrame(SKINS[Math.round(pos)]);
       return () => { if (this._foundationToken === token) { borrowedFoundation = null; this._foundationToken = null; applyFrame(SKINS[Math.round(pos)]); } };
     },
-    // Background (Landscapes palettes only): 'landscapes' (the photos) or a Wizard OS hat background. Per device.
+    // One catalogue/renderer for Mizel (both shells) and Wizard desktop; choices stay independent.
+    get wizardBackgrounds() { return wizardBackgrounds(SKINS[Math.round(pos)]); },
+
     wallpapers: Object.freeze(WALLS.map(w => Object.freeze({ ...w }))),
     // a small preview of a background in the current palette (night or day)
     wallpaperThumb(id) { const light = /-light$/.test(SKINS[Math.round(pos)].id); return id === 'landscapes' ? `/wizard-os-home/skins/landscapes/preview${light ? '' : '-dark'}.webp` : `/wizard-os-home/core/skins/wizard/${id}${light ? '-light' : ''}-thumb.webp`; },
-    get wallpaper() { return wall; },
-    get wallpaperable() { return /^landscapes/.test(SKINS[Math.round(pos)].id); },
+    get wallpaper() { return this.wizardBackgrounds ? wizardWall : wall; },
+    get wallpaperable() { return this.wizardBackgrounds || /^landscapes/.test(SKINS[Math.round(pos)].id); },
     setWallpaper(id) {
-      if (!WALLS.some(w => w.id === id)) throw new Error('Unknown background');
-      wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {}
-      wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
+      const wizard = this.wizardBackgrounds;
+      if (!(wizard && id === 'living') && !WALLS.some(w => w.id === id)) throw new Error('Unknown background');
+      if (wizard) { wizardWall = id; try { id === 'living' ? localStorage.removeItem(WIZARD_WALL_KEY) : localStorage.setItem(WIZARD_WALL_KEY, id); } catch (_) {} }
+      else { wall = id; try { id === 'landscapes' ? localStorage.removeItem(WALL_KEY) : localStorage.setItem(WALL_KEY, id); } catch (_) {} }
+      paint(pos); wake(); try { dispatchEvent(new CustomEvent('wos:wallpaper', { detail: { wallpaper: id } })); } catch (_) {}
       return id;
     },
     // Window opacity: null = the skin's own glass. setGlass(null) returns to it.
