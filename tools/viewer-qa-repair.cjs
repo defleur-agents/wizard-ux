@@ -77,10 +77,9 @@ async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }
   await p.evaluate(() => {
     window.__viewerTouchInput = []; window.__viewerTouchActive = new Set();
     for (const type of ['pointerdown','pointermove','pointerup','pointercancel','gotpointercapture','lostpointercapture','click']) document.addEventListener(type, e => {
-      if (!e.target.closest?.('.mviewer')) return;
       if (type === 'pointerdown') __viewerTouchActive.add(e.pointerId);
       if (type === 'pointerup' || type === 'pointercancel') __viewerTouchActive.delete(e.pointerId);
-      __viewerTouchInput.push({ type, trusted: e.isTrusted, id: e.pointerId, target: e.target.className || e.target.tagName, x: e.clientX, y: e.clientY, t: e.timeStamp, active: __viewerTouchActive.size });
+      __viewerTouchInput.push({ type, trusted: e.isTrusted, id: e.pointerId, pointerType: e.pointerType, target: e.target.className || e.target.tagName, inViewer: !!e.target.closest?.('.mviewer'), x: e.clientX, y: e.clientY, t: e.timeStamp, active: __viewerTouchActive.size, state: WosChat.viewer.state });
     }, true);
   });
   const ledger = [], record = async label => { const s = await state(), input = await p.evaluate(() => ({ active: __viewerTouchActive.size, events: __viewerTouchInput })); ledger.push({ label, state: s, input }); write(out, 'phone-gesture-input', ledger); assert(s.open && Number.isFinite(s.x) && Number.isFinite(s.y) && Number.isFinite(s.scale), 'gesture remains open and finite: ' + label); return s; };
@@ -135,10 +134,30 @@ async function phoneGestures({ p, ctx, out, drag, open, state, capture, settle }
     const outside = await p.locator('.mv-stage img').evaluate(i => {
       const r = i.getBoundingClientRect(), s = i.parentElement.getBoundingClientRect(), k = Math.min(r.width / i.naturalWidth, r.height / i.naturalHeight), inkTop = r.top + (r.height - i.naturalHeight * k) / 2;
       const x = s.left + s.width / 2, y = s.top + (inkTop - s.top) / 2;
-      return { x, y, gap: inkTop - s.top, hit: !!document.elementFromPoint(x, y)?.closest('.mv-stage') };
+      const hit = document.elementFromPoint(x, y);
+      return { x, y, gap: inkTop - s.top, hit: !!hit?.closest('.mv-stage'), actualHit: { tag: hit?.tagName, className: hit?.className }, image: r.toJSON(), stage: s.toJSON(), inkTop };
     });
-    assert(outside.gap > 8 && outside.hit, 'outside tap is in a measured real letterbox, never image ink');
-    await p.touchscreen.tap(outside.x, outside.y); assert(!(await state()).open, 'new outside press after reopen dismisses');
+    const finalTap = { label: 'fresh final letterbox tap after reopen', outside, before: await state(), start: await p.evaluate(() => __viewerTouchInput.length) };
+    try {
+      assert(outside.gap > 8 && outside.hit, 'outside tap is in a measured real letterbox, never image ink');
+      await p.touchscreen.tap(outside.x, outside.y);
+      // Input ACK is not renderer delivery. Match this fresh pointer's trusted
+      // down/up/click, not an earlier menu tap or a synthetic DOM dispatch.
+      await p.waitForFunction(({ start, x, y }) => {
+        const events = __viewerTouchInput.slice(start);
+        const downIndex = events.findIndex(e => e.type === 'pointerdown' && e.trusted && e.pointerType === 'touch' && Math.abs(e.x - x) < 2 && Math.abs(e.y - y) < 2);
+        if (downIndex < 0) return false;
+        const down = events[downIndex];
+        const upIndex = events.findIndex((e, i) => i > downIndex && e.type === 'pointerup' && e.trusted && e.id === down.id);
+        return upIndex >= 0 && events.some((e, i) => i > upIndex && e.type === 'click' && e.trusted && e.id === down.id && e.pointerType === 'touch');
+      }, { start: finalTap.start, x: outside.x, y: outside.y }, { timeout: 3000 });
+      finalTap.trustedClickDelivered = true;
+      assert(!(await state()).open, 'new outside press after reopen dismisses after actual trusted click delivery');
+    } catch (e) { finalTap.error = String(e.stack || e); throw e; }
+    finally {
+      finalTap.after = await p.evaluate(({ x, y }) => { const hit = document.elementFromPoint(x, y); return { state: WosChat.viewer.state, actualHit: { tag: hit?.tagName, className: hit?.className }, active: __viewerTouchActive.size, events: [...__viewerTouchInput] }; }, outside);
+      ledger.push(finalTap); write(out, 'phone-gesture-input', ledger); write(out, 'phone-final-outside-input', finalTap);
+    }
     await open(2); // leave the next original Back/menu case an open viewer
   } finally { await cdp.detach(); }
 }
