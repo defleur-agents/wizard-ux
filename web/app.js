@@ -955,7 +955,7 @@
   function mountLinks() {
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
-      // An installed Reader preview paints its loading frame in this tap task, just like desktop asWindow.
+      // An installed Reader preview paints its loading frame in this tap task, just like desktop previews.
       // Do not send it through the launcher's asynchronous setup check; ordinary app links still use that gate.
       readerApp: () => APP.browser, readerOpen: href => openLinkDesk(href, null, true),
       parent: device, mode: 'sheet',
