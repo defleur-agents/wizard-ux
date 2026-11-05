@@ -64,7 +64,7 @@ for(const reason of ['unsent draft','recording upload','capture_custody_uncertai
 for(const boundary of ['animation','persistence'])test(`new memory audio at ${boundary} aborts Reload`,async()=>{
   const f=fixture(),start=()=>f.c.memoryTakes.set('new',{session:{row:{id:'new',appId:'messenger'}}});
   f.web.reload('tap');if(boundary==='animation')start();else f.beforeReload=start;
-  await f.fire(900);assert.equal(f.reloads,0);assert.match(f.toasts.at(-1)[1],/Reload paused/);assert.equal(f.lease.cancelled,false);
+  await f.fire(900);assert.equal(f.reloads,0);assert.match(f.toasts.at(-1)[1],/has a voice note|has unsaved work/);assert.equal(f.lease.cancelled,false);
 });
 for(const result of ['timeout','reject','uncertain'])test(`recheck ${result} proceeds if page becomes audio-free`,async()=>{
   const f=fixture({attachedMeetingBridge:{}});
