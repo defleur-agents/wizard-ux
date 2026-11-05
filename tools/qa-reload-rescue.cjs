@@ -6,8 +6,10 @@ const shell=require('./qa-closed-shell.cjs'),{chromium}=require('./qa-playwright
 let browser;
 async function boot({configure}){
  if(!browser){browser=await chromium.launch({headless:true,args:['--disable-lcd-text','--disable-gpu'],...(process.env.QA_CHROME?{executablePath:process.env.QA_CHROME}:{})});shell.setBrowser(browser);}
- const from=shell.report.errors.length,{c}=await shell.boot(true,configure);
- return {page:shell.getPage(),get errors(){return shell.report.errors.slice(from)},close:()=>c.close()};
+ // Secure loopback origin: Web Locks (microphone arbitration) need a secure context.
+ const sink=await require('./qa-recorder-stop-evidence.cjs').start({out,mode:'phone',report:shell.report});
+ const from=shell.report.errors.length,{c}=await shell.boot(true,configure,sink);
+ return {page:shell.getPage(),get errors(){return shell.report.errors.slice(from)},close:async()=>{await c.close();await sink.close();}};
 }
 const out=path.resolve(process.env.QA_OUT||'qa-reload-rescue');fs.mkdirSync(out,{recursive:true});
 // Decode browser PNG pixels: compressed PNG bytes are not an opacity oracle.
