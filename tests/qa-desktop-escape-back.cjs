@@ -30,7 +30,7 @@ const out = process.env.QA_OUT || 'escape-back-evidence'; fs.mkdirSync(out, {rec
   });
   const p=await context.newPage(); p.on('pageerror', e=>errors.push(e.message));
   await p.goto(origin+prefix+'desktop.html');
-  await p.waitForFunction(()=>window.__wux && !WosWelcome.active && !WosExperience.state.busy);
+  await p.waitForFunction(()=>window.__wux && !WosWelcome.active && !WosExperience.state.busy).catch(async e=>{console.error({view,skin,errors});throw e;});
   if(view==='ai-apps') await p.waitForFunction(()=>document.documentElement.dataset.aiApps==='desktop' && document.querySelector('.ch-compose'));
   // Bare root cannot navigate/repaint the Classic list beneath AI apps.
   if(view==='classic') await p.evaluate(()=>{for(const w of Object.values(__wux.wins))__wux.closeWin(w.id);});

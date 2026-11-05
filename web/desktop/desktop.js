@@ -2326,8 +2326,14 @@
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
-      return ['handled', 'pending', 'stay'].includes(result) ? 'hosted' : '';
+      if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+      // Shell-owned previews and sign-in workflows return to their opener;
+      // ordinary installed apps at root stay mounted.
+      if (f.workflow && closeWorkflow(f)) return 'workflow';
+      if (f.preview) { closeWin(f.id); return 'preview'; }
+      return '';
     }
+    if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
     if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
     if (f?.appId === 'app-store') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
@@ -2619,24 +2625,24 @@
   watchEscape('welcome', () => window.WosWelcome?.active, () => window.WosWelcome.back());
   watchEscape('pick', () => pick.active(), () => pick.key({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
   watchEscape('keys', () => keyHints.pinned(), () => { toggleKeys(false); returnToSettings(); });
-  watchEscape('tour', () => tour.go, () => tour.quit());
+  watchEscape('tour', () => window.WosTour?.desk?.active, () => window.WosTour.desk.finish('skip'));
   watchEscape('context', () => window.WosContextMenu?.isOpen, () => window.WosContextMenu.back());
-  watchEscape('reminder', () => visibleEscape('[data-reminder-sheet], .reminder-sheet'), () => window.WizScheduledReminders?.back());
+  watchEscape('reminder', () => window.WosBoomerang?.isOpen(), () => window.WosBoomerang.back());
   watchEscape('selection', () => window.WosSelMenu?.state?.open, () => window.WosSelMenu.back());
   watchEscape('route', () => window.WosAppRoute?.isOpen(), () => window.WosAppRoute.back());
-  watchEscape('setup', () => window.WizAppSetup?.isOpen(), () => window.WizAppSetup.back());
+  watchEscape('setup', () => window.WosAppSetup?.isOpen(), () => window.WosAppSetup.back());
   watchEscape('share', () => window.WosShareSheet?.isOpen(), () => window.WosShareSheet.back());
   watchEscape('share-wizard', () => visibleEscape('.wz-share.open'), () => window.WizShareWizard.back());
-  watchEscape('viewer', () => window.WosChat?.viewer?.isOpen(), () => window.WosChat.viewer.close());
+  watchEscape('viewer', () => CHATS.KIT?.viewer?.isOpen(), () => CHATS.KIT.viewer.close());
   watchEscape('chat-overlay', () => visibleEscape('.ch-sheet, [data-chfsheet], .ch-space-picker, .ch-files-sheet'), () => CHATS.closeOverlay());
   watchEscape('resources', () => visibleEscape('.rs-sheet'), () => window.WosResources.back());
-  watchEscape('link-menu', () => visibleEscape('.wiz-linkmenu'), () => window.WizLinkMenu.back());
+  watchEscape('link-menu', () => visibleEscape('.wiz-linkmenu'), () => window.WizLinks.backMenu());
   watchEscape('palette', () => !pal.hidden, () => closePalette());
   watchEscape('links', () => LINKS?.isOpen(), () => LINKS.back());
-  watchEscape('menu', () => menuFor, () => closeMenu());
+
   watchEscape('voice-menu', () => !voiceMenu.hidden, () => closeVoiceMenu());
-  watchEscape('files', () => !filesPanel.hidden, () => closeFiles());
-  watchEscape('settings', () => settingsOpen(), () => { if (!window.WosSettings.back()) closeSettings(); });
+  watchEscape('usage', () => !usageEl.hidden, () => closeUsage());
+  watchEscape('settings', () => settingsFocused(), () => { if (!settingsView.back()) closeSettings(); });
   const escapeObserver = new MutationObserver(() => escapeBack.sync());
   escapeObserver.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden', 'class', 'style', 'open'] });
   escapeBack.sync();
@@ -2645,7 +2651,8 @@
       if (e.isComposing || e.keyCode === 229) return;
       // Run BEFORE layout keys and before the app's own capture listeners. The
       // focused iframe is a surface, not permission to hide its window.
-      e.preventDefault(); e.stopImmediatePropagation();
+      e.preventDefault?.(); e.stopPropagation?.(); e.stopImmediatePropagation?.();
+      if (e.repeat) return;
       const did = escapeBack.run({ event: e,
         recording: () => { if (VOICE.state === 'idle') return false; vMode === 'dictate' ? dictate('cancel') : talk('cancel'); return true; },
         surface: () => window.WosSkinHost?.escapeSurface?.(),

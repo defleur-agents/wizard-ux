@@ -78,13 +78,14 @@ test('Home is ⌥` (again goes back); desktops are ⌥1…9 from the first desk'
 
 test('⌥G Pick anything: letter chips on every clickable, typed letters click it, guide lists it', () => {
   assert.match(js, /code === 'KeyG'\) return hit\(\(\) => \{ if \(!e\.repeat\) pick\.start\(\); \}\)/);
-  // Pick still owns ordinary keys; the search-only IME/repeat guard is permitted before it.
+  // Pick owns ordinary keys; Escape is dispatched once by core (repeat/IME inert).
   const start = js.indexOf('  function onKey(e, fromFrame = false)');
   const head = js.slice(start, js.indexOf('    keyHints.down(e);', start));
-  const context = { pick: { active: () => true, key: () => 'picked' }, window: {} };
+  const context = { pick: { active: () => true, key: () => 'picked' }, window: {}, escapeBack:{run:()=>{context.escaped++;return 'pick';}}, escaped:0, log(){} };
   vm.createContext(context); vm.runInContext(head + ' return "shell"; }', context);
   for (const flags of [{}, {repeat:true}, {isComposing:true}, {keyCode:229}]) {
-    assert.equal(context.onKey({key:'Escape',target:{matches:()=>false},...flags}), 'picked');
+    const n=context.escaped; context.onKey({key:'Escape',target:{matches:()=>false},...flags});
+    assert.equal(context.escaped,n+(Object.keys(flags).length ? 0 : 1));
     assert.equal(context.onKey({key:'g',target:{matches:()=>true},...flags}), 'picked');
   }
   assert.match(js, /\[data-chopen\],\[data-chdraft\]/);

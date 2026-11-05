@@ -77,7 +77,7 @@ test('Welcome: never covers work already started, keeps keys and focus, Back can
   // Exercise ownership instead of requiring Welcome at a fixed source line before IME guards.
   const desktop = read('web/desktop/desktop.js'), start = desktop.indexOf('  function onKey(e, fromFrame = false)');
   const head = desktop.slice(start, desktop.indexOf('    keyHints.down(e);', start)), calls = [];
-  const context = { pick: { active: () => false }, window: { WosWelcome: { active: true, back: () => calls.push('back') } } };
+  const context = { pick: { active: () => false }, window: { WosWelcome: { active: true, back: () => calls.push('back') } }, escapeBack:{run:()=>{context.window.WosWelcome.back();return 'welcome';}},log(){} };
   vm.createContext(context); vm.runInContext(head + ' calls.push("shell"); }', Object.assign(context,{calls}));
   context.onKey({key:'Escape',target:{matches:()=>false},preventDefault:()=>calls.push('prevent'),stopPropagation:()=>calls.push('stop')});
   assert.deepEqual(calls,['prevent','stop','back']);

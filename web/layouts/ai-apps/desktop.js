@@ -1368,6 +1368,7 @@ export default function desktop(api) {
   // and the shared recency stack must finish first. A root press is consumed
   // without sending the hidden Classic Chats window through threadBack(__new__).
   let lastSurface = 'chat';
+  const typing = () => { const a = doc.activeElement; return !!a && /^(TEXTAREA|INPUT)$/.test(a.tagName || '') && !!a.value; };
   const rememberSurface = e => {
     if (pane?.el?.contains(e.target) || pTop.contains(e.target)) lastSurface = 'app';
     else if (chatsEl()?.contains(e.target) || cTop.contains(e.target) || side.contains(e.target)) lastSurface = 'chat';
