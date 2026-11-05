@@ -519,36 +519,29 @@ window.WizCore.chats = function createChats(H) {
   const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
   const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
   // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
-  const readyOrdered = list => readyOrder === 'newest' ? list : readyOrder === 'oldest' ? (LIVE.readyByOldest ? LIVE.readyByOldest(list) : list.slice().reverse()) : LIVE.readyByPriority(list);
+  const readyOrdered = list => window.WizChatsListModel.orderSessions(list, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank });
   // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.
   window.addEventListener('wos:prefs', () => { if (notesOff && !window.WosSkinHost?.inboxList) { notesOff(); notesOff = null; } });
   function readyBody(list, rowFn, nt = null, sec = 'ready') {
-    const later = nt ? nt.later.slice().sort(noteTimeOrder).map(noteRow).join('') : '', awake = nt ? nt.awake.slice().sort(noteOrder) : [];
+    const later = nt ? window.WizChatsListModel.sortNotes(nt.later, readyOrder).map(noteRow).join('') : '', awake = nt ? nt.awake : [];
     // Subject grouping must not pull a snoozed row ahead of another subject's awake rows.
     // Keep one order bar, then all awake groups, then the snoozed tail (no new category).
-    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }, sec) + withNotes(list.filter(deferredOf), nt ? nt.later.slice().sort(noteTimeOrder) : [], rowFn, noteByTime);
+    if (snoozeLast() && list.some(deferredOf)) return readyBody(list.filter(s => !deferredOf(s)), rowFn, nt && { awake, later: [] }, sec) + withNotes(list.filter(deferredOf), nt ? nt.later : [], rowFn, true);
     const bar = `<div class="ch-rdy-bar" role="group" aria-label="Order Ready">${READY_ORDERS.map(o => { const on = readyOrder === o || (o === 'newest' && readyOrder === 'oldest'); return `<button type="button" data-rdyorder="${o}" aria-pressed="${on}"${on ? ' class="on"' : ''}>${o === 'newest' && readyOrder === 'oldest' ? 'Oldest' : READY_ORDER_LABEL[o]}</button>`; }).join('')}</div>`;
     // Yesterday and Past week follow Ready's order but carry no controls: the order bar and subject moves live on Ready
     // only, so a move never rewrites the saved subject order from a partial list.
     const top = sec === 'ready' ? bar : '', mk = k => sec === 'ready' ? `subj:${k}` : `subj:${sec}:${k}`;
     if (readyOrder === 'priority') return top + priorityGroups(list, awake, rowFn, sec) + later;
     if (readyOrder !== 'subject') return top + withNotes(list, awake, rowFn) + later;
-    const groups = new Map();
-    for (const s of list) { const k = attOf(s)?.subject || 'Other'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(s); }
-    if (awake.length && !groups.has(NOTES_SUBJECT)) groups.set(NOTES_SUBJECT, []);
-    // Subjects with something waiting on James first, then by size; "Other" last. Notifications are their own subject.
-    const notesOf = k => k === NOTES_SUBJECT ? awake : [];
-    const waits = k => groups.get(k).filter(waitsOn).length + notesOf(k).filter(it => noteRank(it) === 1).length, size = k => groups.get(k).length + notesOf(k).length;
-    const keys = subjectSort([...groups.keys()], (a, b) => (a === 'Other') - (b === 'Other') || waits(b) - waits(a) || size(b) - size(a) || a.localeCompare(b));
+    const groups = window.WizChatsListModel.subjectGroups(list, awake, { subject: s => attOf(s)?.subject, waits: waitsOn, saved: subjOrder() });
     const ar = (dir, k, off, label, glyph) => `<button type="button" data-subjmove="${dir}" data-subjkey="${esc(k)}" aria-label="${label} ${esc(k)}"${off ? ' disabled' : ''}>${glyph}</button>`;
-    return top + keys.map((k, i) => { const l = groups.get(k), wN = waits(k), last = i === keys.length - 1;
-      return `<div class="ch-subj" data-morph-key="${esc(mk(k))}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${size(k)}</small>${sec === 'ready' ? `<span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span>` : ''}</div>` + withNotes(l, notesOf(k), rowFn); }).join('') + later;
+    return top + groups.map((g, i) => { const k = g.key, l = g.rows, wN = g.waiting, last = i === groups.length - 1;
+      return `<div class="ch-subj" data-morph-key="${esc(mk(k))}"><span>${esc(k)}</span><small>${wN ? `${wN} waiting · ` : ''}${g.size}</small>${sec === 'ready' ? `<span class="ch-subj-mv" role="group" aria-label="Reorder ${esc(k)}">${ar('top', k, !i, 'Move to top', '<span class="ch-subj-2up" aria-hidden="true"><i>↑</i><i>↑</i></span>')}${ar('up', k, !i, 'Move up', '↑')}${ar('down', k, last, 'Move down', '↓')}</span>` : ''}</div>` + withNotes(l, g.notes, rowFn); }).join('') + later;
   }
   /* Notifications listed in Ready like any chat (a live package holds WosSkinHost.inboxList): unread ones are awake
    * rows that Newest / Oldest place by when they arrived, Priority by their own priority (4–5 beside Needs you, 3
    * beside Test this, the rest with everything else) and By subject under their own "Notifications" subject. Read
    * and kept (snoozed) ones join the snoozed tail. A tap opens one in the chat window (the package's act('open')). */
-  const NOTES_SUBJECT = 'Notifications';
   let notesOff = null, notesT = 0;
   function notes() {
     const on = !!window.WosSkinHost?.inboxList;
@@ -582,28 +575,17 @@ window.WizCore.chats = function createChats(H) {
     const k = noteSrc(it);
     return (window.WosBell?.items?.() || []).filter(i => i && i.id && !i.archived && i.id !== it.id && noteFolds(i) && noteSrc(i) === k).sort((a, b) => noteAt(b) - noteAt(a));
   }
-  const noteAt = it => (Number(it.time) || 0) * 1000, sesAt = s => Date.parse(LIVE.cardAt(s)) || 0;
-  const noteRank = it => it.priority >= 4 ? 1 : it.priority === 3 ? 2 : 3;
-  const SES_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
-  const sesRank = s => LIVE.readyRank ? LIVE.readyRank(s) : ['waiting_for_approval', 'unknown'].includes(s.status) ? 0 : deferredOf(s) ? 9 : SES_RANK[attOf(s)?.state] || 5;
+  const noteAt = it => (Number(it.time) || 0) * 1000;
+  const sesRank = s => window.WizChatsListModel.sessionRank(s, { snoozeLast: snoozeLast(), failed: stiKind(s) === 'failed' });
   /* Priority shows its groups (Miguel, 29 Oct 2026: "they're not grouped properly … it doesn't really change from
    * newest"): a small header per status, most urgent first, newest first inside each. Notifications join the group of
    * their own priority (4–5 Needs you, 3 Your call, the rest FYI). */
   const PRI_LABEL = { 0: 'Needs approval', 1: 'Needs you', 2: 'Your call', 3: 'FYI', 4: 'Done', 5: 'No status', 9: 'Snoozed' };
   function priorityGroups(list, awake, rowFn, sec) {
-    const groups = new Map();
-    for (const s of list) { const r = sesRank(s); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).rows.push(s); }
-    for (const it of awake) { const r = noteRank(it); if (!groups.has(r)) groups.set(r, { rows: [], notes: [] }); groups.get(r).notes.push(it); }
-    return [...groups.keys()].sort((a, b) => a - b).map(r => { const g = groups.get(r), n = g.rows.length + g.notes.length;
+    return window.WizChatsListModel.priorityGroups(list, awake, sesRank).map(g => { const r = g.rank, n = g.rows.length + g.notes.length;
       return `<div class="ch-subj ch-pri" data-pri="${r}" data-morph-key="${esc(sec === 'ready' ? `pri:${r}` : `pri:${sec}:${r}`)}"><span>${PRI_LABEL[r] || 'Other'}</span><small>${n}</small></div>` + withNotes(g.rows, g.notes, rowFn); }).join('');
   }
   // The notes' own order, and whether a note goes above a given chat row, for the current Ready order.
-  const noteOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : readyOrder === 'newest' ? noteAt(b) - noteAt(a) : noteRank(a) - noteRank(b) || noteAt(b) - noteAt(a);
-  function noteBefore(it, s) {
-    const r = sesRank(s);
-    if (readyOrder === 'newest' || readyOrder === 'oldest') return r === 0 ? false : r === 9 ? true : readyOrder === 'newest' ? noteAt(it) >= sesAt(s) : noteAt(it) <= sesAt(s);
-    return noteRank(it) < r || (noteRank(it) === r && noteAt(it) >= sesAt(s));
-  }
   const notePlain = t => String(t || '').replace(/\[([^\]\n]+)\]\((https?:[^\s)]+)\)/g, '$1').replace(/[*`#>]/g, '').replace(/\s+/g, ' ').trim();
   // An app's item (Settings › Notifications set to Chats) wears that app's own mark in the yellow tile; Notifications keeps the bell.
   function noteIcon(it) {
@@ -623,13 +605,9 @@ window.WizCore.chats = function createChats(H) {
       <span class="bd"><span class="tp"><span class="ch-notif-from">${esc(clip(from, 40))}</span><b>${esc(clip(title, 160))}</b>${n ? `<span class="ch-notif-n">${n > 99 ? '99+' : n}</span>` : ''}<time>${esc(ago(new Date(noteAt(it)).toISOString()))}</time></span><span class="pv">${later ? '<em class="att ch-notif-snz">Snoozed:</em> ' : ''}${esc(pv)}</span></span></button></div>`;
   }
   // The snoozed tail is one time-ordered run (Oldest reverses it), snoozed notes included, whatever the order.
-  const noteTimeOrder = (a, b) => readyOrder === 'oldest' ? noteAt(a) - noteAt(b) : noteAt(b) - noteAt(a);
-  const noteByTime = (it, s) => readyOrder === 'oldest' ? noteAt(it) <= sesAt(s) : noteAt(it) >= sesAt(s);
-  function withNotes(list, nts, rowFn, before = noteBefore) {
-    const out = []; let i = 0;
-    for (const s of list) { while (i < nts.length && before(nts[i], s)) out.push(noteRow(nts[i++])); out.push(rowFn(s)); }
-    while (i < nts.length) out.push(noteRow(nts[i++]));
-    return out.join('');
+  function withNotes(list, nts, rowFn, timeOnly = false) {
+    return window.WizChatsListModel.mixedRows(list, nts, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank }, { timeOnly })
+      .map(r => r.note ? noteRow(r.value) : rowFn(r.value)).join('');
   }
   /* Android Back on the list puts Ready back to Newest, the default (James, 12 Oct 2026: "go back to the default
    * thread list, which is sequential", so no reach to the top bar). Runs after search and filter chips come off. */
@@ -644,10 +622,7 @@ window.WizCore.chats = function createChats(H) {
    * order (waiting first, then size, Other last). */
   const SUBJ_ORDER_KEY = 'wos.chats.subjectOrder.v1';
   const subjOrder = () => { try { const v = JSON.parse(localStorage.getItem(SUBJ_ORDER_KEY) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string') : []; } catch (e) { return []; } };
-  function subjectSort(keys, dflt) {
-    const saved = subjOrder(), rank = new Map(saved.map((k, i) => [k, i]));
-    return keys.sort((a, b) => { const ra = rank.has(a) ? rank.get(a) : Infinity, rb = rank.has(b) ? rank.get(b) : Infinity; return ra !== rb ? ra - rb : dflt(a, b); });
-  }
+
   function moveSubject(key, dir, shown) {
     const keys = shown.slice(), i = keys.indexOf(key); if (i < 0) return false;
     const j = dir === 'top' ? 0 : dir === 'up' ? i - 1 : i + 1; if (j < 0 || j >= keys.length || j === i) return false;

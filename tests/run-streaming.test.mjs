@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ for (const agent of ['', 'philosopher']) test(`an earlier run replay retires eve
   const ctx = { LIVE: { pendingRun: () => '', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }),
     isWorking: s => s.status === 'running', esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive() {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout() {} };
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   const old = 'It is a 48 KB file of login keys and settings from Buzz.', newest = 'Noted: the Buzz keys file stays.';
   const turns = [{ notes: ['I checked the file.'], a: { at: 1, text: old, final: true } }, { notes: [], a: { at: 2, text: newest, final: true } }];
   ctx.syncStream(w, c, turns, agent);
@@ -28,7 +29,7 @@ for (const agent of ['', 'philosopher']) test(`an earlier run replay retires eve
 
 test('earlier-turn replay matching keeps the existing per-turn length, final and media guards', () => {
   const ctx = {};
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.shown = streamShown;', ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.shown = streamShown;', ctx);
   const turn = (text, notes = [], final = true) => ({ notes, a: { text, final } });
   const newer = turn('A different, newer answer.', ['Notes from another run must not enlarge the old answer budget.']);
   assert.equal(ctx.shown({ text: 'Yes.' }, [turn('Yes.'), newer]), true);
@@ -47,7 +48,7 @@ test('earlier-turn replay matching keeps the existing per-turn length, final and
 for (const agent of ['', 'host-profile', 'container', 'restricted']) test(`live matching old words never closes a new stream (${agent || 'main'})`, () => {
  const w={id:'w',thread:'sid'},c={},row={status:'running',runId:'fresh-run'};let callback,closed=0;
  const ctx={LIVE:{pendingRun:()=>'',session:()=>row,openRunStream:(_s,_a,_r,cb)=>(callback=cb,{close:()=>closed++})},W:{w},elOf:()=>({}),agentRec:()=>({privacy:'standard'}),isWorking:()=>true,esc:s=>s,md:s=>s,renderThreadLive(){},loadThread:async()=>{},setTimeout:()=>1,clearTimeout(){}};
- vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='),chats.indexOf('  function renderThread(w, el, keep)')),ctx);
+ runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='),chats.indexOf('  function renderThread(w, el, keep)')),ctx);
  const turns=[{notes:[],a:{at:1,text:'Yes.',final:true}},{notes:[],a:{at:2,text:'A different newest answer.',final:true}}];
  ctx.syncStream(w,c,turns,agent);const baseline=c.stream.baseline;
  callback({text:'Yes.',terminal:false});assert.match(ctx.syncStream(w,c,turns,agent),/Yes\./);assert.equal(c.stream.landed,false);assert.equal(closed,0);
@@ -67,7 +68,7 @@ function harness() {
     requestAnimationFrame: fn => (frames.push(fn), frames.length), cancelAnimationFrame: () => {},
     setTimeout: fn => (timers.push(fn), timers.length), clearTimeout: () => {}, PEND: new Map(), PEND_MAX: 120000, Date,
     req: async url => { calls.push(url); return { json: async () => c.receipt }; } };
-  vm.runInNewContext(live.slice(live.indexOf('  const RUN_STREAMS ='), live.indexOf('  function attachOutbox() {')), c);
+  runWithChatsModel(live.slice(live.indexOf('  const RUN_STREAMS ='), live.indexOf('  function attachOutbox() {')), c);
   return { c, L, sources, frames, timers, calls, paint: () => { for (const fn of frames.splice(0)) fn(); } };
 }
 test('Incognito reuses the shared stream with a scoped ephemeral target and no normal read route', async () => {
@@ -141,7 +142,7 @@ test('hidden raw-session receipt streams without list status; provisional retire
   const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }),
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => loads++, setTimeout: () => 1, clearTimeout: () => {} };
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   assert.equal(ctx.syncStream(w, c, [], 'philosopher'), '');
   callback({ text: '**Words**', terminal: false });
   assert.match(ctx.syncStream(w, c, [], 'philosopher'), /<p>\*\*Words\*\*<\/p>/);
@@ -155,7 +156,7 @@ test('hidden raw-session receipt streams without list status; provisional retire
 });
 test('protocol trailers and every partial status-marker prefix stay out of streamed answer HTML', () => {
   const ctx = {};
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.cleanStream = streamAnswer;', ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function closeStream(c)')) + '\nglobalThis.cleanStream = streamAnswer;', ctx);
   const marker = '[WIZARD_STATUS_V1]';
   for (let n = 1; n <= marker.length; n++) assert.equal(ctx.cleanStream('Answer\n\n'+marker.slice(0,n)), 'Answer');
   assert.equal(ctx.cleanStream('Answer\n\n'+marker+'{"ask":"not answer"}[/WIZARD_STATUS_V1]'), 'Answer');
@@ -280,17 +281,17 @@ test('running reply shows one activity section, not two', () => {
   const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   assert.equal(ctx.syncStream(w, c, [], ''), '');
   const work = { window: {} };
-  vm.runInNewContext(readFileSync(new URL('../web/core/chat-work.js', import.meta.url), 'utf8'), work);
+  runWithChatsModel(readFileSync(new URL('../web/core/chat-work.js', import.meta.url), 'utf8'), work);
   const tn = { u: { at: 1000 }, notes: [], work: [
     { at: 2000, calls: [{ id: 'command', label: 'Checked the release state' }] },
     { role: 'tool', at: 3000, callId: 'command' }
   ] };
   const power = readFileSync(new URL('../web/core/chat-power.js', import.meta.url), 'utf8');
   const receipt = { WK: work.window.WosWork, A: { md: s => s }, esc: s => s, clip: s => s };
-  vm.runInNewContext(power.slice(power.indexOf('  const turnKey ='), power.indexOf('  /* ================= #11 models')), receipt);
+  runWithChatsModel(power.slice(power.indexOf('  const turnKey ='), power.indexOf('  /* ================= #11 models')), receipt);
   c.wkOpen = new Set(['1000:0']);
   for (const agent of ['', 'host-profile', 'container', 'restricted']) {
     // The one history-owned disclosure is present before words, during tokens and at completion.
@@ -315,7 +316,7 @@ test('a reopened thread whose answer already landed never shows the replayed run
   const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   const answer = "**You're right, and that's fixed.**\n\n**What I did:** switched the job.";
   const turns = [{ u: { text: 'hi' }, notes: ["Now I'll save the rule."], a: { at: 5, text: answer, final: true } }];
   assert.equal(ctx.syncStream(w, c, turns, ''), '');
@@ -337,7 +338,7 @@ test('a terminal provisional that never matches the transcript retires after the
     WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
     esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => repaints++, loadThread: async () => {}, setTimeout: fn => (timer = fn, 1), clearTimeout: () => {},
     Date: { now: () => clock } };
-  vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+  runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
   const turns = [{ a: { at: 5, text: 'older answer', final: true } }];
   ctx.syncStream(w, c, turns, '');
   callback({ text: 'words never persisted', steps: [], terminal: true }); await settle();
@@ -353,7 +354,7 @@ test('a new run that only ends like the previous short answer keeps streaming (m
     const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
       WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
       esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
-    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
     const turns = [{ notes: [], a: { at: 5, text: 'Yes.', final: true } }];
     ctx.syncStream(w, c, turns, agent);
     callback({ text: 'I checked the request. Yes.', steps: [], terminal: false });
@@ -373,7 +374,7 @@ test('interim words the transcript already shows mid-run are not drawn again und
     const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close() {} }) },
       WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
       esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
-    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
     const interim = "You're right, I should have read the code first. Doing that now.";
     const turns = [{ u: { text: 'read the code' }, notes: [], a: { at: 5, text: interim, final: false } }];
     ctx.syncStream(w, c, turns, agent);
@@ -400,7 +401,7 @@ test('a reply with a mid-reply MEDIA line shows once: no raw path while streamin
     const ctx = { LIVE: { pendingRun: () => 'rid', session: () => row, openRunStream: (_s, _a, _r, cb) => (callback = cb, { close: () => closed++ }) },
       WORKING_ST: new Set(['running']), W: { w }, elOf: () => ({}), agentRec: () => ({ privacy: 'standard' }), clip: (s, n) => s.slice(0, n),
       esc: s => s, md: s => `<p>${s}</p>`, renderThreadLive: () => {}, loadThread: async () => {}, setTimeout: () => 1, clearTimeout: () => {} };
-    vm.runInNewContext(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
+    runWithChatsModel(chats.slice(chats.indexOf('  const assistantStamp ='), chats.indexOf('  function renderThread(w, el, keep)')), ctx);
     const intro = 'I redid the mockup in a cleaner style. It now has five screens.';
     const outro = 'The proposal for James now has the new image.';
     const streamed = `${intro}\n\nMEDIA:/home/oscar/.hermes/cache/images/friendly-sharing-v2.png\n\n${outro}`;

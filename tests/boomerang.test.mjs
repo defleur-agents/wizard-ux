@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 // Boomerang on the one Wizard scheduler (kind "return"). Picker design: Novaire, wizard-ux #255.
 import test from 'node:test'
 import assert from 'node:assert/strict'
@@ -14,7 +15,7 @@ function load(schedules = [], extra = {}) {
     fetch: async (url, init = {}) => { calls.push({ url, method: init.method || 'GET', body: init.body ? JSON.parse(init.body) : null }); return { ok: true, status: 200, json: async () => init.method === 'POST' ? { id: 'j1', kind: 'return', thread: 'wizard_t', when: { once: JSON.parse(init.body).when.once }, timezone: 'Asia/Bangkok', prompt: '', target: JSON.parse(init.body).target } : { schedules } } },
     ...extra }
   sandbox.window = sandbox
-  vm.runInNewContext(read('web/core/scheduled-reminders.js'), sandbox)
+  runWithChatsModel(read('web/core/scheduled-reminders.js'), sandbox)
   return { B: sandbox.WosBoomerang, calls, sandbox }
 }
 

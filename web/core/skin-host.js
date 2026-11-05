@@ -1073,7 +1073,7 @@
       const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : it.from ? String(it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
       if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
       return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
-        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+        kind: 'ready', note: true, rank: window.WizChatsListModel.notificationRow(it).rank, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
         unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
     });
   }
@@ -1087,10 +1087,8 @@
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
   function withNoteRows(ready) {
     const notes = noteRows(); if (!notes.length) return ready;
-    const t = r => Date.parse(r.at) || 0, awake = notes.filter(n => n.unread).sort((a, b) => t(b) - t(a)), later = notes.filter(n => !n.unread).sort((a, b) => t(b) - t(a));
-    const out = []; let i = 0;
-    for (const r of ready) { while (i < awake.length && t(awake[i]) >= t(r)) out.push(awake[i++]); out.push(r); }
-    return [...out, ...awake.slice(i), ...later];
+    let order = 'newest'; try { order = localStorage.getItem(READY_ORDER_KEY) || order; } catch (_) {}
+    return window.WizChatsListModel.readySort([...ready, ...notes], order);
   }
   const inboxList = () => { for (const h of inboxThreads.values()) if (h.list) return true; return false; };
   function inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; }
