@@ -15,8 +15,9 @@ function extract(from,to,ctx) {
 }
 function capture(overrides={}) {
   const ctx={active:null,preparations:new Map(),ownedRows:new Map(),recoveryLive:new Set(),unknownMeetingActive:false,
-    // Model an in-page Recorder adapter; page-independent uncertainty is tested separately.
-    recoveryLease:null,configuredNative:{},ownershipLoaded:true,recoveryError:null,attachedMeetingBridge:null,W:{},...overrides};
+    ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},...overrides};
+  // This fail-closed matrix models an in-page adapter; the Android/no-page-audio
+  // matrix lives in reload-page-audio-custody.test.mjs with configuredNative:null.
   extract('  function reloadCheck()', '  // Last moment before the shell reloads',ctx);
   return ctx;
 }

@@ -1111,7 +1111,8 @@
       recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
         [...ownedRows.values()].every(r => r.status === 'pending') };
   }
-  // Re-use recovery only; this never stops, acknowledges or discards a take.
+  // Reload may re-probe an abandoned owner, never Stop/Cancel a live session. Recovery holds the same
+  // microphone lock as Start and only commits pending custody; no ack/delete or app data is involved.
   let reloadReconcile = null;
   function reconcileReload() {
     if (!reloadReconcile) reloadReconcile = (async () => {
