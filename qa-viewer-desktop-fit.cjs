@@ -15,7 +15,26 @@ const {chromium}=require('./tools/qa-playwright.cjs');
 const F=require('./tools/qa-closed-shell.cjs'),OUT=process.env.QA_OUT,RED=process.env.QA_RED==='1';
 const Repair=require('./tools/viewer-qa-repair.cjs');
 const SELECT=process.env.QA_ONLY?new Set(process.env.QA_ONLY.split('|')):null;
-const results=[],geometries=[],captures=[];let browser,p,ctx,active='boot';
+const results=[],geometries=[],captures=[],mediaTransport=[],nativeDiagnostics=[];let browser,p,ctx,active='boot';
+// Synthetic origin must implement byte ranges: a full 200 for Range can stall native seeks.
+function nativeMediaResponse(body,contentType,range){
+  const size=body.length,headers={'accept-ranges':'bytes','content-type':contentType,'content-length':String(size)};
+  if(!range)return {status:200,headers,body};
+  const match=/^bytes=(\d*)-(\d*)$/.exec(range);
+  const unsatisfied=()=>({status:416,headers:{...headers,'content-range':`bytes */${size}`,'content-length':'0'},body:Buffer.alloc(0)});
+  if(!match||(!match[1]&&!match[2]))return unsatisfied();
+  let start,end;
+  if(!match[1]){const suffix=Number(match[2]);if(!Number.isSafeInteger(suffix)||suffix<=0)return unsatisfied();start=Math.max(0,size-suffix);end=size-1;}
+  else{start=Number(match[1]);end=match[2]?Number(match[2]):size-1;}
+  if(!Number.isSafeInteger(start)||!Number.isSafeInteger(end)||start>=size||end<start)return unsatisfied();
+  end=Math.min(end,size-1);const slice=body.subarray(start,end+1);
+  return {status:206,headers:{...headers,'content-range':`bytes ${start}-${end}/${size}`,'content-length':String(slice.length)},body:slice};
+}
+function persistNative(journal){for(const [name,value] of [['native-media-keys',journal],['native-media-diagnostics',nativeDiagnostics],['native-media-transport',mediaTransport]])fs.writeFileSync(path.join(OUT,name+'.json'),JSON.stringify(value,null,2));}
+async function nativeSnapshot(selector,meta){
+  let media;try{media=await p.locator(selector).evaluate(m=>({currentSrc:m.currentSrc,currentTime:m.currentTime,duration:m.duration,paused:m.paused,readyState:m.readyState,networkState:m.networkState,seeking:m.seeking,seekable:Array.from({length:m.seekable.length},(_,i)=>[m.seekable.start(i),m.seekable.end(i)]),buffered:Array.from({length:m.buffered.length},(_,i)=>[m.buffered.start(i),m.buffered.end(i)]),error:m.error?{code:m.error.code,message:m.error.message}:null,events:m.__qaMediaEvents||[]}));}catch(e){media={snapshotError:String(e)}}
+  nativeDiagnostics.push({...meta,at:Date.now(),media});fs.writeFileSync(path.join(OUT,'native-media-diagnostics.json'),JSON.stringify(nativeDiagnostics,null,2));
+}
 const state=()=>p.evaluate(()=>WosChat.viewer.state);
 async function check(name,fn){if(SELECT&&!SELECT.has(name))return;active=name;try{await fn();results.push({name,pass:true});console.log('PASS',name);}catch(e){results.push({name,pass:false,error:String(e.stack||e)});console.log('FAIL',name,String(e));if(p)await p.screenshot({path:path.join(OUT,'failure-'+results.length+'.png')}).catch(()=>{});}}
 async function ready(){await p.waitForFunction(()=>{const i=document.querySelector('.mviewer img');return i&&i.complete&&i.naturalWidth>0});await F.settle(p);}
@@ -28,7 +47,11 @@ async function boot(phone=false){const b=await F.boot(phone,async c=>{
     if(u.pathname==='/viewer-fixture/')return r.fulfill({contentType:'text/html',body:'<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><title>Synthetic album</title><button id="open">Open synthetic album</button><input id="draft" value="Synthetic unsent draft"><script>window.documentIdentity="synthetic-retained";window.arrows=0;addEventListener("keydown",e=>{if(/^Arrow/.test(e.key))arrows++});document.querySelector("#open").onclick=()=>parent.WizAppServices.connect(window,{}).media.view(parent.__album,1);</script>'});
     if(['/viewer-fixture/native-video.webm','/viewer-fixture/native-audio.wav'].includes(u.pathname)) {
       assert(process.env.QA_MEDIA_DIR,'sealed synthetic native media required');
-      return r.fulfill({contentType:u.pathname.endsWith('.webm')?'video/webm':'audio/wav',body:fs.readFileSync(path.join(process.env.QA_MEDIA_DIR,path.basename(u.pathname)))});
+      const body=fs.readFileSync(path.join(process.env.QA_MEDIA_DIR,path.basename(u.pathname))),range=r.request().headers()['range']||null;
+      const response=nativeMediaResponse(body,u.pathname.endsWith('.webm')?'video/webm':'audio/wav',range);
+      const row={url:u.pathname,requestRange:range,status:response.status,responseHeaders:response.headers,fixtureBytes:body.length,fixtureSha256:crypto.createHash('sha256').update(body).digest('hex'),responseBytes:response.body.length,fulfilled:false};
+      mediaTransport.push(row);fs.writeFileSync(path.join(OUT,'native-media-transport.json'),JSON.stringify(mediaTransport,null,2));
+      return r.fulfill(response).then(()=>{row.fulfilled=true;fs.writeFileSync(path.join(OUT,'native-media-transport.json'),JSON.stringify(mediaTransport,null,2));});
     }
     const m=/^\/viewer-fixture\/(\d+)x(\d+)\.svg$/.exec(u.pathname);if(!m)throw Error('uncatalogued synthetic media');
     const w=+m[1],h=+m[2];return r.fulfill({contentType:'image/svg+xml',body:`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect width="100%" height="100%" fill="#19344d"/><path d="M0 0L${w} ${h}M${w} 0L0 ${h}" stroke="#8df" stroke-width="12"/><rect x="0" y="${h-30}" width="${w}" height="30" fill="#ffdf00"/><rect x="0" y="0" width="${w}" height="30" fill="#ef6b7b"/><text x="20" y="90" fill="white" font-size="45">SYNTHETIC ${w} × ${h}</text></svg>`});
@@ -51,7 +74,8 @@ await check('desktop portrait initial-fit',async()=>{await clickOpen();await cap
 await close();
 await check('iframe gallery arrows focus/order/count/propagation',async()=>{await clickOpen();assert(await p.evaluate(()=>document.activeElement.classList.contains('mviewer')),'focus leaves original iframe');for(const [key,index]of [['ArrowRight',2],['ArrowRight',3],['ArrowLeft',2],['ArrowLeft',1],['ArrowLeft',0],['ArrowLeft',4],['ArrowRight',0]]){await p.keyboard.press(key);await ready();assert.equal((await state()).i,index);assert.equal(await p.locator('.mv-ti small').textContent(),`${index+1} of 5`);}assert.equal(await p.evaluate(()=>__underArrows),0,'underlying capture handler sees no gallery arrows');assert.equal(await p.frameLocator('#synthetic-album').locator('body').evaluate(()=>arrows),0);});
 await check('native media controls seek without gallery navigation',async()=>{
-  const journal=[];
+  const journal=[];persistNative(journal);
+  try {
   for(const phone of [false,true]) {
   if(phone){await ctx.close();await boot(true);}
   const shell=phone?'phone':'desktop',cdp=await ctx.newCDPSession(p);
@@ -63,10 +87,21 @@ await check('native media controls seek without gallery navigation',async()=>{
     await p.evaluate(()=>{window.__nativeKeys=[];window.__underArrows=0});
     for(const kind of ['video','audio']) for(const count of [1,3]) {
       await close();await p.evaluate(({kind,count})=>{const media={kind,url:kind==='video'?'/viewer-fixture/native-video.webm':'/viewer-fixture/native-audio.wav',name:'Synthetic native '+kind,mime:kind==='video'?'video/webm':'audio/wav'};WosChat.viewer.open(count===1?[media]:[__album[0],media,__album[2]],count===1?0:1)}, {kind,count});
-      const selector='.mv-stage '+kind;
+      const selector='.mv-stage '+kind,meta={shell,kind,count};
+      let phase='metadata';
+      try {
+      await p.locator(selector).evaluate(m=>{m.__qaMediaEvents=[];for(const name of ['loadedmetadata','loadeddata','progress','canplay','seeking','seeked','stalled','suspend','error'])m.addEventListener(name,()=>m.__qaMediaEvents.push({name,currentTime:m.currentTime,readyState:m.readyState,networkState:m.networkState,seeking:m.seeking,at:performance.now()}));});
+      await nativeSnapshot(selector,{...meta,phase:'opened'});
       await p.waitForFunction(s=>{const m=document.querySelector(s);return m&&m.readyState>=2&&Number.isFinite(m.duration)&&m.duration>20&&!m.error},selector);
+      await nativeSnapshot(selector,{...meta,phase:'metadata-ready'});
+      phase='seekable-precondition';
+      await p.waitForFunction(s=>{const m=document.querySelector(s);return Array.from({length:m.seekable.length},(_,i)=>[m.seekable.start(i),m.seekable.end(i)]).some(([start,end])=>start<=10&&end>10)},selector);
+      phase='initial-seek';
       await p.locator(selector).evaluate(m=>{m.pause();m.currentTime=10});
+      await nativeSnapshot(selector,{...meta,phase:'seek-requested'});
       await p.waitForFunction(s=>Math.abs(document.querySelector(s).currentTime-10)<.1&&!document.querySelector(s).seeking,selector);
+      await nativeSnapshot(selector,{...meta,phase:'seek-precondition-valid'});
+      phase='trusted-native-keys';
       // Focus Chromium's actual UA timeline, not a synthetic substitute or JS seek handler.
       const dom=await cdp.send('DOM.getDocument',{depth:-1,pierce:true});
       const walk=n=>[n,...(n.children||[]).flatMap(walk),...(n.shadowRoots||[]).flatMap(walk)];
@@ -85,10 +120,13 @@ await check('native media controls seek without gallery navigation',async()=>{
         assert.deepEqual(shellAfter,shellBefore,'native seek must not change underlying shell workspace');
         assert(direction*(after-before)>.01,'native browser seeking must change currentTime in the requested direction');
       }
+      }catch(e){await nativeSnapshot(selector,{...meta,phase,error:String(e.stack||e)});throw e;}
+      finally{persistNative(journal);}
     }
   }finally{await cdp.detach();await close();}
   }
   await ctx.close();await boot();
+  }finally{persistNative(journal);}
 });
 if(!RED){
 await check('desktop shapes at large/small/resized hosts',async()=>{for(const size of [{width:1440,height:900},{width:760,height:540},{width:420,height:650}]){await p.setViewportSize(size);for(let i=0;i<5;i++){await open(i);await fits(`${size.width}x${size.height} item ${i}`)}}await p.setViewportSize({width:1440,height:900});});
