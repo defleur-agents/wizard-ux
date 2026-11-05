@@ -48,6 +48,9 @@ let currentPage;
     if (u.pathname.includes('/v1/runs')) { runs.push(u.pathname); return r.abort(); }
     if (!['GET', 'HEAD'].includes(q.method())) { writes.push(q.method() + ' ' + u.pathname); return r.fulfill({ status: 403, json: { error: 'No writes in QA' } }); }
     if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: [{ id: 'qa-thread', title: 'Synthetic chat', status: 'completed', updatedAt: '2026-11-05T00:00:00Z' }], has_more: false } });
+    // An established owner has already completed the launcher migration. Keep the zero-write assertion strict:
+    // a missing migration in the generic fixture would trigger an unrelated bootstrap seed POST.
+    if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
     if (u.pathname.startsWith('/wizard/')) return r.fulfill({ json: ownerRead(u.pathname) });
     if (u.pathname.startsWith(prefix)) {
      const root = path.resolve(__dirname, '../web'), file = path.resolve(root, u.pathname.slice(prefix.length) || 'index.html');

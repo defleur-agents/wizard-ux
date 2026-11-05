@@ -382,7 +382,7 @@
     if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
     const href = layoutUrl(id, 'layout.js'); requested.push(href);
     let mod;
-    try { mod = await importer(href); } catch (e) { try { console.warn(`[layout ${id}] import failed:`, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id) : false; }
+    try { mod = await importer(href); } catch (e) { try { console.warn('[layout] import failed:', id, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id) : false; }
     if (seq !== layoutSeq || layoutId !== id) return false;
     if (typeof mod?.default !== 'function') return layoutLoadFailed(id);
     const a = record(key, L.name + ' layout'); layoutRec = a;
