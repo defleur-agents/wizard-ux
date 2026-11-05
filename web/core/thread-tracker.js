@@ -29,16 +29,32 @@
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
+  // Same read-time projection as Agent Service: a reply is one thing to check, not one row per ask.
+  const anchorKey = value => typeof value === 'string' && value.trim() ? value
+    : typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
+  const memberKind = i => (isSeen(i) && (i.state === 'done' || (i.state === 'needs_you' && i.try)) ? 'ack' : i.state === 'done' ? 'done' : i.state === 'blocked' ? 'bad' : i.state === 'needs_you' ? 'you' : 'run');
+  const urgency = { bad: 0, you: 1, run: 2, done: 3, ack: 4 };
+  const groupsOf = items => {
+    const groups = [], anchors = new Map();
+    for (const i of items) {
+      if (!i || typeof i !== 'object' || Array.isArray(i)) continue;
+      const anchor = anchorKey(i.message_id);
+      let members = anchor === null ? null : anchors.get(anchor);
+      if (!members) { members = []; groups.push(members); if (anchor !== null) anchors.set(anchor, members); }
+      members.push(i);
+    }
+    return groups.map(members => {
+      const member = [...members].sort((a, b) => urgency[memberKind(a)] - urgency[memberKind(b)])[0];
+      return { ...member, members, ids: members.map(i => i.id),
+        title: [...new Set(members.map(i => i.title))].join(' · '),
+        updated_at: Math.max(...members.map(i => i.updated_at || i.at || 0)),
+        kind: members.length > 1 && members.every(isSeen) ? 'ack' : memberKind(member) };
+    });
+  };
   const tally = items => {
     const out = { needs_you: 0, running: 0, done_unseen: 0, blocked: 0, acknowledged: 0, total: 0 };
-    for (const i of items) {
-      out.total++;
-      if (isSeen(i) && (i.state === 'done' || (i.state === 'needs_you' && i.try))) out.acknowledged++;
-      else if (i.state === 'done') out.done_unseen++;
-      else if (i.state === 'blocked') out.blocked++;
-      else if (i.state === 'needs_you') out.needs_you++;
-      else out.running++;
-    }
+    const names = { ack: 'acknowledged', done: 'done_unseen', bad: 'blocked', you: 'needs_you', run: 'running' };
+    for (const i of groupsOf(items)) { out.total++; out[names[i.kind]]++; }
     return out;
   };
   const ago = ms => {
@@ -69,7 +85,7 @@
       const items = merge(k, j.items);
       const changed = JSON.stringify(items) !== JSON.stringify(cur?.items || []);
       threads.set(k, { items, at: Date.now(), loading: false });
-      if (changed) { counts[k] = tally(items); changedEvent(); }
+      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(items))) { counts[k] = tally(items); changedEvent(); }
     } catch (_) { threads.set(k, { items: cur?.items || [], at: Date.now(), loading: false }); }
   }
   async function loadCounts(force = false) {
@@ -85,10 +101,19 @@
         for (const [k, t] of threads) {
           if (!t.items.length) continue;
           if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(t.items);
-          else if (JSON.stringify(next[k] || null) !== JSON.stringify(counts[k] || null) && !t.loading) { t.at = 0; const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)); }
+          else {
+            if (JSON.stringify(next[k] || null) !== JSON.stringify(counts[k] || null) && !t.loading) { t.at = 0; const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)); }
+            // Loaded items own the paint, even while an older backend still returns per-ask counts.
+            next[k] = tally(t.items);
+          }
         }
         if (JSON.stringify(next) !== JSON.stringify(counts)) { counts = next; changedEvent(); }
         countsAt = Date.now();
+        // A rolling backend upgrade can still count asks. Hydrate multi-ask list rows so unopened Chats dots
+        // use the same reply projection too; no change to the stored ledger or the wire schema is needed.
+        for (const [k, c] of Object.entries(next)) if (c.total > 1 && !threads.has(k)) {
+          const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s));
+        }
       }
     } catch (_) { /* offline: dots stay as they were */ }
     countsLoading = false;
@@ -97,7 +122,7 @@
 
   /* ---------- the strip ---------- */
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
-  const kindOf = i => (isSeen(i) && (i.state === 'done' || (i.state === 'needs_you' && i.try)) ? 'ack' : i.state === 'done' ? 'done' : i.state === 'blocked' ? 'bad' : i.state === 'needs_you' ? 'you' : 'run');
+  const kindOf = i => i.kind || memberKind(i);
   const subOf = i => {
     const when = ago(i.updated_at || i.at || Date.now());
     if (kindOf(i) === 'ack') return `Seen · ${when}`;
@@ -110,12 +135,12 @@
     const kind = kindOf(i);
     const act = kind === 'ack' || kind === 'run' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
       : i.try ? '<button type="button" class="tt-btn" data-tt-seen aria-label="Looks good">Looks good</button>' : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
-    return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc(subOf(i))}</span></span>${act}</div>`;
+    return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
-    const k = key(sid, agent), items = threads.get(k)?.items || [];
+    const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
     if (!items.length) return '';
-    const c = tally(items), open = openKeys.has(k), fold = ackKeys.has(k);
+    const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
@@ -138,7 +163,8 @@
   }
   function dots(sid, agent = '') {
     if (!on()) return '';
-    const c = counts[key(sid, agent)];
+    const k = key(sid, agent), loaded = threads.get(k);
+    const c = loaded?.items.length ? tally(loaded.items) : counts[k];
     if (!c) return '';
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
     const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, 'run', 'running') + n(c.done_unseen, 'done', 'finished, not seen');
@@ -197,21 +223,21 @@
     if (t.closest('[data-tt-ack]')) { ackKeys.has(k) ? ackKeys.delete(k) : ackKeys.add(k); repaint(); return true; }
     const row = t.closest('[data-tt-row]');
     if (!row) return true;
-    const item = (threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
+    const item = groupsOf(threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
-    if (t.closest('[data-tt-seen]')) { markSeen(s, a, [item.id]); return true; }
+    if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
     // Open, or the row itself: close the list so the reply is visible, then go to it. Finished asks that were
     // opened count as seen (you are looking at the answer).
     openKeys.delete(k); opened = null; repaint();
     if (typeof jump === 'function') jump(anchorOf(item), item);
-    if (item.state === 'done' && !item.seen) markSeen(s, a, [item.id]);
+    if (item.state === 'done' && !item.seen) markSeen(s, a, item.ids);
     return true;
   }
   const itemFor = (sid, agent, m) => {
     const list = threads.get(key(sid, agent))?.items || [];
-    const hit = list.filter(i => (m.message_id && i.message_id && String(i.message_id) === String(m.message_id)) || (m.at && i.at && Math.abs(i.at - m.at) < 1500));
-    const rank = { needs_you: 0, blocked: 1, running: 2, done: 3 };
-    return hit.sort((x, y) => (rank[x.state] ?? 9) - (rank[y.state] ?? 9))[0] || null;
+    const hit = list.filter(i => m.message_id && anchorKey(i.message_id) !== null
+      ? String(i.message_id) === String(m.message_id) : m.at && i.at && Math.abs(i.at - m.at) < 1500);
+    return hit.sort((x, y) => urgency[memberKind(x)] - urgency[memberKind(y)])[0] || null;
   };
   // A brief highlight on the message that was jumped to.
   function flash(node) {
