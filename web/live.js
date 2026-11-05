@@ -37,6 +37,7 @@
   };
   const clean = s => String(s || '')
     .replace(/\n*^\[WIZARD_REPLY_V1\]\n[\s\S]*?\n^\[\/WIZARD_REPLY_V1\][ \t]*$/m, ' ') // a Notifications Reply's framed item (quoted lines can't close it)
+    .replace(/\n*\[WIZARD_REPLY_TO_V1\]\{[^\n]*?\}(?:\n[\s\S]*?)?\[\/WIZARD_REPLY_TO_V1\]/g, ' ') // a Thread tracker quote
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
@@ -65,10 +66,10 @@
     return { active: true, count: v.count, names, ...(nextRun ? { nextRun } : {}) };
   }
   function normalize(item) {
-    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, runtime: 'direct', request: '', renames: [], detailNeeded: true };
+    if (item.listVersion === 1) return { safeError:'', reconnect:null, critical:false, waitingOn:'', helperStatus:null, attention:null, ...item, status: globalThis.WizChatsListModel.executionStatus(item.status, item.runId, item.lastRunStatus), runtime: 'direct', request: '', renames: [], detailNeeded: true };
     const id = item.id || item.session_id; if (!id) return null;
     const raw = String(item.status || item.run_status || '');
-    const status = ALIASES[raw] || raw || undefined;
+    const status = globalThis.WizChatsListModel.executionStatus(ALIASES[raw] || raw || undefined, item.wizard_run_id, ALIASES[item.wizard_last_run_status] || item.wizard_last_run_status);
     const lastUserAt = optIso(item.wizard_last_user_at ?? item.last_user_at);
     const lastAssistantAt = optIso(item.wizard_last_assistant_at ?? item.last_assistant_at);
     const latest = item.latest_message && typeof item.latest_message === 'object' ? item.latest_message : null;
@@ -496,17 +497,15 @@
   // Snoozed (deferred) threads leave the list (James, 23 Oct 2026: "It doesn't remove the thread from my list,
   // which is the purpose of snoozing it"; supersedes 10 Oct "bottom of today"). They wait in the collapsed Snoozed
   // section until their return time, Restore or Done. A message James sends after snoozing brings the thread back.
-  const isDeferred = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
+  const isDeferred = s => window.WizChatsListModel.deferred(s);
   // Priority ranks every status line, so Done threads (nothing left to do) sink below FYI answers and unlabelled
   // threads come last: with only needs you / check ranked, most of Ready tied and Priority read like Newest.
-  const ATT_RANK = { needs_you: 1, check: 2, fyi: 3, done: 4 };
-  const readyRank = s => snoozeLast() && isDeferred(s) ? 9 : needsApproval(s) ? 0 : isDeferred(s) ? 9 : ATT_RANK[s.attention?.state] || 5;
-  const byPriority = list => list.slice().sort((l, r) => readyRank(l) - readyRank(r) || newestFirst(l, r));
+  const readyRank = s => window.WizChatsListModel.sessionRank(s, { approval: needsApproval(s), snoozeLast: snoozeLast() });
+  const byPriority = list => window.WizChatsListModel.orderSessions(list, 'priority', { at: cardAt, rank: readyRank });
   // Oldest (James, 23 Oct 2026: "oldest messages at the top … the newest one at the bottom"): Newest's pins kept
   // (approvals first, deferred last), only time reversed in between. The same order applies to Yesterday and Past week.
   // snoozeOrder('last'): Snooze is a lower place in Ready, ahead of no unsnoozed row (even approvals).
-  const snoozeOrder = (l, r) => snoozeLast() ? Number(isDeferred(l)) - Number(isDeferred(r)) : 0;
-  const byOldest = list => list.slice().sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(r, l));
+  const byOldest = list => window.WizChatsListModel.orderSessions(list, 'oldest', { at: cardAt, rank: readyRank });
   function groupWork(sessions, now = Date.now()) {
     const g = { errors: [], working: [], ready: [], yesterday: [], pastWeek: [], deferred: [], archive: [] };
     const readyB = workDayStart(now), yB = readyB - DAY, archDays = archiveAfterDays(), archB = archDays ? now - archDays * DAY : -Infinity;
@@ -528,7 +527,7 @@
     }
     for (const list of Object.values(g)) list.sort(newestFirst);
     // Newest: approvals pinned, then recency; deferred threads always last (Priority re-sorts with readyRank).
-    g.ready.sort((l, r) => snoozeOrder(l, r) || Number(needsApproval(r)) - Number(needsApproval(l)) || Number(isDeferred(l)) - Number(isDeferred(r)) || newestFirst(l, r));
+    g.ready = window.WizChatsListModel.orderSessions(g.ready, 'newest', { at: cardAt, rank: readyRank });
     return g;
   }
   async function fetchDispositions() {

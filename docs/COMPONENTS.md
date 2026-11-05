@@ -1,10 +1,12 @@
 # Shared components
 
-[Full contracts, prohibited duplicates and proof pointers](component-contract-details.md).
+Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native/desktop; `WizChatsHost.registerBack` and layout back.push join recency. sessions.ownList excludes legacy lists; `WosSkinHost` boots desktop (`wos.desktop-view.v1`, default AI apps: `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), preventing Classic first paint; `WizAppServices.back` keeps root apps mounted. Unowned frames yield Back.
+
+[Contracts](component-contract-details.md).
 
 [Style guide](https://github.com/humanitylabs-org/wizard-os/blob/main/style/APP-DESIGN-RULES.md).
 
-One owner per capability: [gate](app-reuse-gate.md).
+[Reuse gate](app-reuse-gate.md).
 
 | Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits |
 
@@ -35,7 +37,7 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Title-bar tools | `WizardApp.titlebar.set(tools)` |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) |
-| Protect unsaved work from updates | `WizardApp.update.hold` |
+| Update holds/draft keep | `WizardApp.update.hold` |
 | Offline shell | `web/sw.js` |
 | App reading place | `WizAppReadingPosition` (`web/core/app-reading-position.js`), automatic |
 | Motion/haptics | `WizardMotion` (`/wizard-os-home/motion/wizard-motion.js`) |
@@ -49,18 +51,22 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
-| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
+| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
+| Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns, AI apps geometry; slots, ratios, side, dock, device-local state |
+| Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Optional Group by day | `WizCore.chats` / `WizLive.groups`: individual `miguel/group-by-day` switch changes grouping only; independent Pins and compact controls remain intact; migration never opts in |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; badge `WizCore.workspaceNav.refreshChats` = `WizLive.visibleUnread(unified())` (Ready separate) |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; pills: `workspaceNav.chatsCount/refreshChats` (canonical unread + routed notes); subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, receipts, retry; keep label clear of draft | `WosChatPower` (`chat-power.js`); `WosModels` (`chat-models.js`); `WosErrors` (`chat-errors.js`); `WosWork` (`chat-work.js`); composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
-| Markdown, drafts, inline/bottom media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`); Chats `mediaBlock` |
+| Text/media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`; desktop fit / phone long / keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; scoped tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
+| Thread tracker (off-by-default tweak) | `WosThreadTracker` (`thread-tracker.js`): reply-group strip/counts/dots; group Seen, quote Reply; mounted on/off refreshes open chats; reads `/wizard/v1/thread-items` |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
@@ -70,19 +76,19 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; named registry glyphs and HOUSE masks beat cached package pictures; unbranded apps keep package/catalog fallback; pin raster masks contain-fit. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; registry glyphs and HOUSE masks beat cached package pictures; unbranded apps use package/catalog. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
-| Links: sheet/window (`asWindow`), images, long-press browser/Download/Copy | `WizLinks` (`links.js`; Android: `WizardOSNative.openInBrowser` / `download`) |
+| Links: outside → Browser Reader, sheet/window, long-press menu; `data-wizard-browse` = original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); mono voice (`voice.js`); mic choice `WosMic` (`mic.js`) |
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) |
-| Update banners/card/pop-up | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`: `card`/`popup`) |
-| Notes for an app in its window ("2 notes · Show", Mark read) | `WosAppNotes` (`app-notes.js`): Notifications items carried to that app's badge, marked via `WosBell.mark`; Back closes the list |
+| Reload notices/keep, update banners/card/pop-up | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`: `card`/`popup`); `WizAppCapture.rescueTake` / `pageAudioFree` |
+| App notes in its window | `WosAppNotes` (`app-notes.js`; `WosBell.mark`; Back owner) |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`web/core/media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |
 | Native mic recording | `NoteRecorder` (`audio/NoteRecorder.java`) over `MicRoute` (`audio/MicRoute.java`: `MicRoute.start`: `MicRoute.NOTE_SOURCES` for notes, `MicRoute.SOURCES` for STT) |
@@ -98,13 +104,14 @@ One owner per capability: [gate](app-reuse-gate.md).
 | Need | Use |
 |---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
-| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; AI apps: sheet yielding + desktop-only boot guard; Group/Sort and project titles); `api.orb.switcher()` awaits readiness/retry; `api.settings.section(id, 'look', node)` for inline tweak options; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; built-in layouts (`api.apps` / `api.desk`; read-only `api.aiUsage` for the AI apps fuel gauge); `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
-| Pins-only orb radial | `WosOrbSwitcher` (`web/core/orb-switcher.js`) |
+| Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; AI apps: sheet yielding + desktop-only boot guard; Group/Sort (One list follows Sort) and project titles); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): plain ⌥←/→ pass through; AI apps E/Z stay Archive/Snooze; standard Z stays Back; `api.settings.section(id, 'look', node)`; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; built-in layouts (`api.apps` / `api.desk`; AI apps desk slides title + body together; core `setStandardLayout` desktop ownership; read-only `api.aiUsage` for the AI apps fuel gauge); `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
+| Pins-only orb radial | `WosCreateOrbSwitcher` / `WosOrbSwitcher` (`web/core/orb-switcher.js`, `web/core/orb-switcher.css`), core phone dock default (not desktop/corner orb); saves pins/voice options as before |
+| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop with independent canvas default and palette-stable opaque materials |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) |
 | Install prompt; `hold(on, owner?)` during tours/overlays | `WizardPwaInstall` (`web/pwa-install.js`) |
-| First run (Welcome: name, AI, colour, import, hello; Setup) and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); built-in checklist `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`, Settings + onboarding) |
+| First run and tour | `WosWelcome` (`web/core/welcome.js`); `WosSetupLaunch` (`web/core/setup-launch.js`); `web/setup/setup.js`; phone: `WizPhoneConnect` (`web/core/phone-connect.js`) |
 
 ## App voice/audio
 

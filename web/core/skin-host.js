@@ -31,12 +31,18 @@
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true }),
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
+  let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
+  const escapeSurfaces = new Set(), chatListOwners = new Set();
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
+  let layoutFailed = null;          // a chat-owning layout whose code could not load: Classic's list comes back (never a blank desktop)
+  /* Who draws the chat list. True from the first frame for a layout that owns chats (decided synchronously at boot, before
+   * Classic paints) until that layout fails to load; a layout that has claimed the list holds it too. */
+  const chatsClaimed = () => chatListOwners.size > 0 || (!!layoutOf(layoutId)?.ownsChats && layoutFailed !== layoutId);
   const taps = new Set();           // orb tap interceptors (layout first-wins); each returns true when handled
   const levels = new Set();         // microphone level listeners (0..1) during a take
   const isDoc = typeof document !== 'undefined';
@@ -52,7 +58,7 @@
   window.addEventListener?.('pointerdown', () => { claimAt = -Infinity; backClaims.clear(); }, true);
   let claimAt = -Infinity;          // when a claimed finger last went down or lifted (a back swipe that follows is the gesture's)
   const requested = [];             // asset URLs requested (diagnostics + tests)
-  let importer = url => import(url), orbRetry = 0;
+  let importer = url => import(url);
   let committedId = null, loadSeq = 0;
   let personal = null, personalSeq = 0, packageReady = Promise.resolve();
   // Built-in gestures every skin wears (core files register them; same API, guards and cleanup as a skin script).
@@ -336,10 +342,25 @@
   /* ---------- layout layer ---------- */
   const layoutUrl = (id, file) => isDoc ? stamp(new URL(`layouts/${id}/${file}`, document.baseURI).href) : `layouts/${id}/${file}`;
   let layoutCss = null;
+  // html[data-chats-owner] lets the layout's blocking stylesheet keep Classic's list pane hidden from the first frame.
+  function paintChatsOwner() {
+    if (!isDoc) return;
+    if (chatsClaimed()) document.documentElement.dataset.chatsOwner = 'layout'; else delete document.documentElement.dataset.chatsOwner;
+  }
+  // data-layout-booting: first frames of a refresh that wears a layout. The layout's own stylesheet keeps the page clear
+  // (opacity) until the layout removes it; failure, a switch or this timer always do, so a refresh never sticks on blank.
+  function endBoot() { if (isDoc) delete document.documentElement.dataset.layoutBooting; }
+  function layoutLoadFailed(id) {
+    if (layoutId !== id) return false;
+    layoutFailed = id; endBoot(); paintChatsOwner();
+    try { shell?.ownsChatList?.(chatsClaimed()); } catch (_) {}
+    return false;
+  }
   function paintLayout(id) {
     if (!isDoc) return;
     const L = layoutOf(id);
     if (L) document.documentElement.dataset.layout = id; else delete document.documentElement.dataset.layout;
+    paintChatsOwner();
     if (layoutCss && (!L || layoutCss.dataset.layoutPkg !== id)) { layoutCss.remove(); layoutCss = null; }
     if (L && L.css && !layoutCss) {
       const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, 'layout.css'); l.dataset.layoutPkg = id;
@@ -347,21 +368,25 @@
     }
   }
   // Loading a layout holds the panel too (a tweak reload re-wears it a moment after the tweaks settle).
-  async function loadLayout(id) {
+  let layoutLoading = Promise.resolve();
+  function loadLayout(id) { return layoutLoading = loadLayoutHeld(id); }
+  async function loadLayoutHeld(id) {
     panelHold++;
     try { return await loadLayoutNow(id); } finally { panelHold--; panelSync(); }
   }
   async function loadLayoutNow(id) {
     const seq = ++layoutSeq;
     dispose(layoutRec, 'switch');
+    layoutFailed = null; paintChatsOwner();
     const L = layoutOf(id); const key = 'layout:' + id;
-    if (!L || !L.js || !shell || disabled.has(key)) return false;
+    if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
     const href = layoutUrl(id, 'layout.js'); requested.push(href);
     let mod;
-    try { mod = await importer(href); } catch (e) { try { console.warn(`[layout ${id}] import failed:`, e); } catch (_) {} return false; }
-    if (seq !== layoutSeq || layoutId !== id || typeof mod?.default !== 'function') return false;
+    try { mod = await importer(href); } catch (e) { try { console.warn('[layout] import failed:', id, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id) : false; }
+    if (seq !== layoutSeq || layoutId !== id) return false;
+    if (typeof mod?.default !== 'function') return layoutLoadFailed(id);
     const a = record(key, L.name + ' layout'); layoutRec = a;
-    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return false; }
+    try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return layoutLoadFailed(id); }
     lastRoute = ''; emitRoute();
     return layoutRec === a;
   }
@@ -822,6 +847,12 @@
         },
       }),
       sessions: Object.freeze({
+        ownList() {
+          if (!live() || !shell.ownsChatList) return () => {};
+          chatListOwners.add(a); shell.ownsChatList(true);
+          const off = () => { chatListOwners.delete(a); a.offs.delete(off); shell.ownsChatList(chatsClaimed()); };
+          a.offs.add(off); return off;
+        },
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
@@ -835,7 +866,7 @@
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
         // Ready's order (the AI apps view, round 18): the stock Chats Filter's own saved choice (wos.chats.readyOrder.v1,
         // shared across devices through the box preferences, like Chats' own buttons), so both views always agree.
-        order: () => { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } },
+        order: () => readReadyOrder(),
         setOrder: o => {
           if (!live() || !['newest', 'oldest', 'priority'].includes(o)) return false;
           try { localStorage.setItem(READY_ORDER_KEY, o); } catch (_) {}
@@ -877,11 +908,12 @@
         live: el => { if (live() && el?.nodeType === 1) try { window.WosResources?.watch?.(el); } catch (_) {} },
       }),
       apps: Object.freeze({
+        back: id => live() && typeof id === 'string' ? !!shell.appBack?.(id) : false,
         list: () => { const l = live() ? shell.apps?.() : null; return Array.isArray(l) ? structuredClone(l) : []; },
         open: id => live() && typeof id === 'string' && id ? !!shell.openApp?.(id) : false,
         // Open it on a desk of its own (the Apps and Orb views' + sheet: one app per desk). The phone already gives a
         // new app its own desk; the desktop adapter starts a fresh desk for it (openAppDesk).
-        openDesk: id => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id) : shell.openApp?.(id)) : false,
+        openDesk: (id, place = null) => live() && typeof id === 'string' && id ? !!(shell.openAppDesk ? shell.openAppDesk(id, typeof place === 'function' ? place : null) : shell.openApp?.(id)) : false,
         // Add to home screen: the Desks' own hold on an app tile (core/home-screen-apps.js, its sheet and its checks), for a
         // layout's own app icons (the AI apps view's Home, round 7). can(id) says whether that app may be offered.
         homeScreen: Object.freeze({
@@ -1042,10 +1074,18 @@
         move: (from, to) => live() && Number.isInteger(from) && Number.isInteger(to) && from >= 0 && to >= 0 ? !!shell.moveDesk?.(from, to) : false,
       }),
       // The layout's own overlay (e.g. a popover) joins the shell's Back order (desktop Esc), newest first.
-      back: Object.freeze({ push(close) {
+      back: Object.freeze({
+        surface(back) {
+          if (!live() || typeof back !== 'function') return () => {};
+          const h = { a, back: guard(a, 'escape.surface', back) }; escapeSurfaces.add(h);
+          const off = () => { escapeSurfaces.delete(h); a.offs.delete(off); }; a.offs.add(off); return off;
+        },
+        push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
-        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
-        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        const done = guard(a, 'back', close);
+        const entry = { a, close: () => { off(); return done(); } }; overlays.push(entry);
+        const offEscape = shell?.escapeOverlay?.(entry.close);
+        const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
       } }),
     };
@@ -1078,11 +1118,11 @@
     }
     for (const l of by.values()) if (l.length < 2) sets.push(l); else sets.push(l.slice().sort((a, b) => (Number(b.time) || 0) - (Number(a.time) || 0)));
     return sets.map(l => {
-      const it = l[0], n = l.length, from = it.app ? String(it.appName || it.app) : it.from ? String(it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
+      const it = l[0], row = window.WizChatsListModel.notificationRow(it, l), n = l.length, from = it.app ? String(it.appName || it.app) : it.from ? String(it.fromName || it.from) : (window.WizConfig?.agent?.() || 'Wizard');
       if (n > 1) NOTE_FOLD.set(NOTE_ID + it.id, l.map(i => i.id));
       return { id: NOTE_ID + it.id, title: (n > 1 ? `${from} (${n}) · ${l.slice(0, 3).map(noteTitle).join(' · ')}` : `${from} · ${noteTitle(it)}`).slice(0, 160),
-        kind: 'ready', note: true, rank: Number(it.priority) >= 4 ? 1 : Number(it.priority) === 3 ? 2 : 3, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
-        unread: !it.read, snoozed: !!it.read, pinned: false, needs: Number(it.priority) >= 4, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
+        kind: 'ready', note: true, sortTitle: row.sortTitle, rank: row.rank, app: String(it.app || it.from || ''), appName: String(it.appName || it.fromName || ''), at: new Date((Number(it.time) || 0) * 1000).toISOString(),
+        unread: !it.read, snoozed: !!it.read, pinned: false, needs: row.rank === 1, from, count: n, actions: it.read ? ['restore', 'done'] : ['snooze', 'done'] };
     });
   }
   // A folded row's action covers every item in it (the inbox marks them together); a single row goes through the inbox.
@@ -1094,12 +1134,9 @@
   }
   const SUBJ_ORDER_KEY = 'wos.chats.subjectOrder.v1';   // core/chats.js's By subject order
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
+  function readReadyOrder() { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } }
   function withNoteRows(ready) {
-    const notes = noteRows(); if (!notes.length) return ready;
-    const t = r => Date.parse(r.at) || 0, awake = notes.filter(n => n.unread).sort((a, b) => t(b) - t(a)), later = notes.filter(n => !n.unread).sort((a, b) => t(b) - t(a));
-    const out = []; let i = 0;
-    for (const r of ready) { while (i < awake.length && t(awake[i]) >= t(r)) out.push(awake[i++]); out.push(r); }
-    return [...out, ...awake.slice(i), ...later];
+    return window.WizChatsListModel.readySort([...ready, ...noteRows()], readReadyOrder());
   }
   const inboxList = () => { for (const h of inboxThreads.values()) if (h.list) return true; return false; };
   function inboxAct(action, id) { for (const h of inboxThreads.values()) { h.act(String(action), String(id)); return true; } return false; }
@@ -1123,10 +1160,10 @@
     if (on === panelOn) return; panelOn = on;
     try { shell?.panelMode?.(on); } catch (e) { try { console.warn('[layout] panel mode:', e); } catch (_) {} }
   }
-  function setLayout(id) {
+  function setLayout(id, persist = true) {
     const next = layoutOf(id) ? id : 'classic';
-    try { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } catch (_) {}
-    layoutId = next; paintLayout(next);
+    try { if (persist) { if (next === 'classic') localStorage.removeItem(LAYOUT_KEY); else localStorage.setItem(LAYOUT_KEY, next); } } catch (_) {}
+    layoutId = next; endBoot(); paintLayout(next);
     if (shell) loadLayout(next); else if (next === 'classic') { layoutSeq++; dispose(layoutRec, 'off'); }
     try { shell?.relayout?.(); } catch (_) {}
     return next;
@@ -1292,7 +1329,7 @@
         if (layoutId !== id || (!layoutRec && !layoutSeq)) setLayout(id);
         layoutHolder = a.id;
         let released = false;
-        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id) setLayout('classic'); } };
+        const release = () => { if (!released) { released = true; if (layoutHolder === a.id) layoutHolder = null; if (layoutId === id && standardLayout !== id) setLayout('classic'); } };
         a.offs.add(release); return release;
       } });
       api.part = name => /^[a-z-]+$/.test(name) ? shell?.root()?.querySelector(`[data-part="${name}"]`) || null : null;
@@ -1300,8 +1337,10 @@
       // open one closes first. push(close) while it is open; the returned release (or teardown) takes it out.
       api.back = Object.freeze({ push(close) {
         if (a.dead || typeof close !== 'function') return () => {};
-        const entry = { a, close: guard(a, 'back', close) }; overlays.push(entry);
-        const off = () => { const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
+        const done = guard(a, 'back', close);
+        const entry = { a, close: () => { off(); return done(); } }; overlays.push(entry);
+        const offEscape = shell?.escapeOverlay?.(entry.close);
+        const off = () => { offEscape?.(); const i = overlays.indexOf(entry); if (i >= 0) overlays.splice(i, 1); a.offs.delete(off); };
         a.offs.add(off); return off;
       } });
       const slot = name => {
@@ -1375,30 +1414,6 @@
       const release = shell?.windowRefresh?.use?.(Object.freeze({ pull: options.pull })) || (() => {});
       let released = false; const off = () => { if (!released) { released = true; release(); } };
       a.offs.add(off); return off;
-    } });
-    // The orb hold is shell-owned (pointer capture + voice custody); raw gesture.claim cannot
-    // replace it safely. A trusted layout+nav tweak borrows this lazy, reversible adapter.
-    if (trusted && caps.has('layout') && caps.has('nav')) api.orb = Object.freeze({ switcher() {
-      if (a.dead || base.env.shell !== 'phone' || !shell?.orbSwitcher) return () => {};
-      let stopped = false, instance = null;
-      const off = () => { if (stopped) return; stopped = true; instance?.dispose(); a.offs.delete(off); };
-      a.offs.add(off);
-      const href = stamp(new URL('core/orb-switcher.js', document.baseURI).href); requested.push(href);
-      // A saved ON choice is not a ready handler. Include this lazy dependency in
-      // package readiness; one failed import otherwise leaves an inert "active" tweak.
-      a.ready = bounded(importer(href), 8000).catch(e => {
-        if (stopped || a.dead) return null;
-        // Browsers cache rejected ES modules by URL. Keep the release stamp but
-        // use one fresh key; an explicit later refresh gets a fresh retry too.
-        const retry = href + (href.includes('?') ? '&' : '?') + 'orb-retry=' + (++orbRetry);
-        requested.push(retry); return bounded(importer(retry), 30000);
-      }).then(mod => {
-        if (stopped || a.dead) return;
-        instance = mod.default(shell.orbSwitcher);
-        window.WosSettings?.refresh?.();
-      }).catch(e => { off(); throw e; });
-      a.ready.catch(() => {}); // teardown API is synchronous; loadTweaks owns failure reporting
-      return off;
     } });
     // Trusted packages may show and pause what the apps play (api.media above).
     if (trusted && caps.has('media')) api.media = base.media;
@@ -1616,7 +1631,7 @@
     if (slow) { expected.clear(); try { localStorage.setItem(EXPECT_KEY, JSON.stringify(want)); } catch (_) {} paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true; }
     expected.clear();
     // A layout stored on this device that no live tweak wears any more (switched off on another load) goes back to Classic.
-    if (VIEW_LAYOUTS.has(layoutId) && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
+    if (VIEW_LAYOUTS.has(layoutId) && standardLayout !== layoutId && !(layoutHolder && tweaks.has(layoutHolder))) setLayout('classic');
     try { localStorage.setItem(EXPECT_KEY, JSON.stringify([...tweaks].filter(([, a]) => !a.dead).map(([id]) => id))); } catch (_) {}
     paintTweaks(); lastRoute = ''; emitRoute(); window.dispatchEvent?.(new Event('wos:prefs')); return true;
   }
@@ -1641,7 +1656,11 @@
     attach(adapter) { shell = adapter; for (const n of builtinDefs.keys()) startBuiltin(n); const id = committedId || (window.WosSkin && window.WosSkin.current); committedId = id; if (id) packageReady = load(id); window.WosMySkin?.startScript(); if (layoutOf(layoutId)) loadLayout(layoutId); window.dispatchEvent?.(new Event('wos:skin-host-ready')); },
     /* Layouts: Settings › Look. Classic loads nothing. */
     layouts: LAYOUTS, setLayout,
+    escapeSurface() { for (const h of [...escapeSurfaces].reverse()) if (!h.a.dead && h.back() === true) return true; return false; },
+    async whenLayoutReady() { let p; do { p = layoutLoading; await p; } while (p !== layoutLoading); },
+    setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
+    chatsClaimed,
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
     /* app.js / desktop.js / bound-view.js: an open the shell starts by itself (apps.routeOpens). A holder that placed it
@@ -1652,7 +1671,7 @@
       for (const h of [...openRoutes]) {
         if (h.a.dead) continue;
         let out, ran = false;
-        const g = () => { if (!ran) { ran = true; out = typeof go === 'function' ? go() : undefined; } return out; };
+        const g = desk => { if (!ran) { ran = true; out = typeof go === 'function' ? go(desk) : undefined; } return out; };
         routing++;
         let took; try { took = h.open(String(kind), Object.freeze({ ...detail }), g); } finally { routing--; }
         if (took === true) return Object.freeze({ value: out });
@@ -1752,7 +1771,20 @@
       // wos.layout is a device-local materialized hint, not the per-shell shared choice.
       // Drop only a known unsupported hint; never touch experience/views, skin, mix or unknown keys.
       if (known?.shells && !known.shells.includes(env().shell)) localStorage.removeItem(LAYOUT_KEY);
-      else if (layoutOf(l)) { layoutId = l; paintLayout(l); }
+      let chosen = layoutOf(l) ? l : 'classic';
+      if (isDoc && env().shell === 'desktop') {
+        const q = new URLSearchParams(location.search).get('layout'), explicit = q === 'classic' || !!layoutOf(q);
+        const saved = localStorage.getItem('wos.desktop-view.v1');
+        // A saved per-shell choice beats a stale legacy hint. Resolve before paintLayout, so even a saved Classic
+        // choice never requests/claims the old AI apps layout. An explicit supported preview URL still wins.
+        if (!explicit && (saved === 'classic' || layoutOf(saved))) chosen = saved;
+        else if (!explicit && chosen === 'classic') chosen = 'ai-apps';
+        standardLayout = chosen;
+      }
+      layoutId = chosen; paintLayout(chosen);
+      if (isDoc && env().shell === 'desktop' && layoutOf(chosen)?.ownsChats) {
+        document.documentElement.dataset.layoutBooting = ''; setTimeout(endBoot, 5000);
+      }
     } catch (_) {}
     if (isDoc) for (const pid of ['pointerup', 'pointercancel']) document.addEventListener(pid, e => release(e.pointerId), true);
   }

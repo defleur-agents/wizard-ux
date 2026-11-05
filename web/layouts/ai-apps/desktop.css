@@ -23,6 +23,14 @@ html[data-shell="desktop"][data-layout="ai-apps"] {
   --aad-lift: 0 0 0 1px var(--aad-line), 0 2px 10px color-mix(in srgb, black 12%, transparent);
   --aad-menu: 0 0 0 1px var(--aad-line), 0 12px 32px color-mix(in srgb, black 24%, transparent);
 }
+/* Wizard's window material stays the same opaque palette tint for every background. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-wizard-backgrounds] {
+  --aad-main: color(from var(--sk-win) srgb r g b / 1);
+}
+/* Other image skins retain their existing sidebar material. */
+html[data-shell="desktop"][data-layout="ai-apps"][data-image-background]:not([data-wizard-backgrounds]) {
+  --aad-main: var(--wz-panel, var(--aad-canvas));
+}
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="rail"],
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="over"] { --aad-side: 52px; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; pointer-events: none; flex: none; }
@@ -408,6 +416,10 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) #s
 }
 html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) #stage > .wsp > .win:not(.gone):has(.dchats .ch-newchat) :is(.wbody, .dchats, .pane-main, .ch-thread, .ch-msgs) { background: none !important; }
 
+/* Both visible panes are directly interactive: their first click reaches the app.
+ * The resizing iframe guard below remains stronger (!important). */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }
+
 /* ---------- round 9 (Miguel, 2 Nov 2026): the sidebar resizable by drag (round 13: the only panel left) ----------
  * The width is the owner's (kept per device), set by desktop.js as --aad-side-w; the folded rail keeps its own. */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-side="open"] { --aad-side: var(--aad-side-w, 288px); }
@@ -456,10 +468,9 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-pop-h { margin: 4px 10px 
  * the skin's background and the composer. Transforms only for the motion (flip in desktop.js, short keyframes here). */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="open"] { --aad-rs: var(--aad-tabs-px, 200px); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] { --aad-rs: 52px; }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] { --aad-app-w: var(--aad-app-px, 560px); }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-wide] { --aad-app-w: calc(100vw - var(--aad-side) - var(--aad-rs)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split] { --aad-app-w: var(--aad-pane-app-width); }
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-loading]:not([data-aad-split]) { --aad-app-w: var(--aad-app-px, 560px); }
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] { --aad-chat-w: clamp(400px, 33.333vw, 560px); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] { --aad-chat-w: var(--aad-pane-chat-width); }
 html[data-shell="desktop"][data-layout="ai-apps"] #bar { right: var(--aad-rs); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-orb { left: calc(var(--aad-side) + var(--aad-chat-w, 0px) + (100vw - var(--aad-side) - var(--aad-chat-w, 0px) - var(--aad-app-w, 0px) - var(--aad-rs)) / 2 - 30px); }
 
@@ -507,7 +518,19 @@ html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-split], [data-aad
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .wsp[data-aad-role="chat"] .win .dchats .pane-main :is(.ch-compose, .ch-swrow) { width: min(768px, calc(100% - 40px)); }
 /* motion: the panel slides in from the right, the column from the left; one short slide and fade */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"][data-aad-anim="app"] { animation: aad-in-right 220ms cubic-bezier(.2, .8, .2, 1) both; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[data-aad-anim="app"] { animation: aad-fade 220ms ease both; }
+/* app-pane-slides-as-one: the visible header lives on the app desk, not in
+ * .aad-top. The desk starts below the 44px shell bar; its header fills that gap.
+ * Only this parent slides. Stock window tiling must not ease underneath it. */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .aad-ptop {
+  top: -44px; bottom: auto; height: 44px; width: 100%; color: var(--aad-ink); transition: none; animation: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win {
+  transition: border-color 120ms;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win > :is(.wbar, .wbody),
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win > .wbody > iframe {
+  transition: none;
+}
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"], html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop[data-aad-anim="dock"] { animation: aad-col-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes aad-in-right { from { translate: min(100%, 480px) 0; opacity: .3; } }
 @keyframes aad-col-in { from { translate: -48px 0; opacity: 0; } }
@@ -607,7 +630,7 @@ html[data-shell="desktop"][data-layout="ai-apps"][data-aad-tabs="rail"] .aad-vti
 /* a docked chat is narrow: ↓ Latest on the left, Snooze / Archive keep the right (they met in the middle) */
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .win .dchats .pane-main .ch-thread > .ch-latest { align-self: flex-start; margin-left: max(20px, calc((100% - 768px) / 2)) !important; margin-right: 0 !important; }
 /* both docked (a chat and an app): the chat a little narrower and the app the rest, never over each other */
-html[data-shell="desktop"][data-layout="ai-apps"][data-aad-split][data-aad-chat] { --aad-chat-w: clamp(360px, 30vw, 480px); --aad-app-w: min(var(--aad-app-px, 560px), calc(100vw - var(--aad-side) - var(--aad-chat-w) - var(--aad-rs))); }
+
 
 /* ---------- round 16 (Miguel, 3 Nov 2026): the apps in one place, the right column ----------
  * The pinned apps on top (open or not; one not open: its name a step quieter, no dot), a hairline, the other open apps,
@@ -875,3 +898,50 @@ html[data-shell="desktop"][data-layout="ai-apps"] :is(.aad-rk[data-proj]:hover, 
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rlist[data-pdrag] > .aad-rk[data-proj]:not(.is-drag) { transition: translate 160ms cubic-bezier(.2, .8, .2, 1); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-drag { z-index: 3; border-radius: 10px; background: var(--aad-canvas); box-shadow: var(--aad-menu); outline: 1.5px solid var(--wz-accent, var(--aad-ink)); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rk.is-flash { background: color-mix(in srgb, var(--wz-accent, var(--amber, var(--aad-ink))) 22%, transparent); }
+
+/* Placement comes from WizCore.panes, not the renderer's left/right assumptions.
+ * The legacy null-ratio policy intentionally retains its Home overlay behaviour. */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-omitted] { display: none !important; }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-side {
+  left: var(--aad-pane-side-x); top: var(--aad-pane-side-y); bottom: var(--aad-pane-side-bottom);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-vt {
+  left: var(--aad-pane-dock-x); right: auto; top: var(--aad-pane-dock-y); bottom: var(--aad-pane-dock-bottom); width: var(--aad-pane-dock-width);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] :is(#bar, .aad-top) {
+  left: var(--aad-pane-main-x); right: var(--aad-pane-main-right); top: var(--aad-pane-main-y);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]) {
+  left: var(--aad-pane-main-x); right: var(--aad-pane-main-right);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp:not([data-aad-role]):not(:has(> .win:not(.gone) ~ .win:not(.gone))) {
+  left: calc(var(--aad-pane-main-x) - 8px); right: calc(var(--aad-pane-main-right) - 8px);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-split]:not([data-aad-chat]) #stage > .wsp[data-aad-role="chat"] {
+  inset: var(--aad-pane-main-y) var(--aad-pane-main-right) var(--aad-pane-main-bottom) var(--aad-pane-main-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app"] {
+  inset: var(--aad-pane-app-y) var(--aad-pane-app-right) var(--aad-pane-app-bottom) var(--aad-pane-app-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side][data-aad-chat] #stage > .wsp[data-aad-role="chat"] {
+  inset: var(--aad-pane-chat-y) auto var(--aad-pane-chat-bottom) var(--aad-pane-chat-x) !important; width: var(--aad-pane-chat-width) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-ctop {
+  position: fixed; left: var(--aad-pane-chat-x); width: var(--aad-pane-chat-width); top: var(--aad-pane-chat-y); height: 44px;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-pload {
+  left: var(--aad-pane-app-x); right: auto; width: var(--aad-pane-app-width);
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="side"] { left: calc(var(--aad-pane-side-x) + var(--aad-pane-side-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-grip[data-grip="side"] { left: var(--aad-pane-side-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="tabs"] { left: var(--aad-pane-dock-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-dock-edge="start"] .aad-grip[data-grip="tabs"] { left: calc(var(--aad-pane-dock-x) + var(--aad-pane-dock-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] .aad-grip[data-grip="app"] { left: var(--aad-pane-app-x); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side="end"] .aad-grip[data-grip="app"] { left: calc(var(--aad-pane-app-x) + var(--aad-pane-app-width)); }
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app2"] {
+  z-index: 3; inset: var(--aad-pane-app2-y) var(--aad-pane-app2-right) var(--aad-pane-app2-bottom) var(--aad-pane-app2-x) !important;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-side] #stage > .wsp[data-aad-role="app2"] > .win > .wbar {
+  position: relative; visibility: visible; width: auto; height: auto; pointer-events: auto;
+}
+html[data-shell="desktop"][data-layout="ai-apps"][data-aad-pane-tiled="true"] .aad-grip[data-grip="app"] { display: none; }

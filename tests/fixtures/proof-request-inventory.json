@@ -1008,6 +1008,12 @@
         }
       ],
       "note": "Only GET is admitted by the proof fixture. Route writes remain refused."
+    },
+    "/wizard/v1/thread-items": {
+      "status": "not-exercised",
+      "source": "web/core/thread-tracker.js",
+      "kind": "read",
+      "note": "Thread tracker is an off-by-default tweak; none of qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed turns it on, so nothing reaches it. Refused and collected, never answered, if a flow reaches it."
     }
   }
 }

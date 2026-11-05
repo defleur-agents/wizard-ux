@@ -1,3 +1,6 @@
+/* Third harmless interface-update delivery test; no style or behavior changes. */
+/* Second harmless interface-update delivery test; retry Reload with no style or behavior changes. */
+/* Harmless interface-update delivery test; no style or behavior changes. */
 /* Update banners (.dv-update): the phone's APK updater (#dvUpdate) and the web "Update ready" banner (#dvWeb,
  * core/web-update.js). One look in both shells; each shell places it for its form factor:
  * phone = glass strip under the status bar, desktop = one-line pill in the top bar. */
@@ -112,4 +115,16 @@
 .osu-pop .osu-pop-x { width: 38px; height: 38px; border-radius: 50%; background: transparent; color: var(--wz-text-secondary); font-size: 22px; line-height: 1; }
 .osu-pop button:focus:not(:focus-visible) { outline: none; }
 .osu-pop button:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; }
+/* The recovery explanation is never clipped, and every text-bearing panel is opaque. */
+.osu-pop[data-state="reload"] { flex-wrap: wrap; }
+.osu-pop[data-state="reload"] .osu-pop-tx { flex-basis: calc(100% - 160px); }
+.osu-pop[data-state="reload"] .osu-pop-tx span { display: block; overflow: visible; -webkit-line-clamp: unset; }
+.wos-reload-reason { margin: 8px 0; color: var(--wz-text-secondary, var(--ink-2)); font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
+.wos-reload-rescue { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 8px; }
+.wos-reload-rescue button { min-height: 44px; padding: 8px 12px; border-radius: 12px; background: var(--wz-accent, var(--violet)); color: var(--wz-on-accent, var(--bg)); font: inherit; font-weight: 650; }
+.wos-reload-rescue button:last-child { background: var(--wz-panel, var(--bg)); color: var(--wz-text-secondary, var(--ink-2)); border: 1px solid var(--wz-border, var(--line-2)); }
+.wos-reload-rescue button:disabled { opacity: .65; }
+.osu-card:has(.wos-reload-rescue) { flex-wrap: wrap; }
+.wos-reload-detail { background: var(--wz-panel, var(--bg)); color: var(--wz-text, var(--ink)); }
+#dvWeb[data-shell="desktop"] .wos-reload-detail { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; max-width: 80vw; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 12px; }
 @keyframes osu-pop-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }

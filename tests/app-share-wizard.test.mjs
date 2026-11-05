@@ -83,7 +83,8 @@ test('share receipt toast names the actual destination agent, only after durable
 });
 test('both shells load the same sheet and route Back to it, native imports reuse it without desktop device.js',()=>{
  for(const p of ['index.html','desktop.html']){const s=read('web/'+p);assert.match(s,/core\/share-wizard.js/);assert.match(s,/core\/share-wizard.css/);}
- for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizShareWizard\?\.back\(\)/);
+ for(const p of ['app.js','desktop/desktop.js'])assert.match(read('web/'+p),/WizEscapeBack\.installOwners\(/);
+ assert.match(read('web/core/escape-back.js'),/add\('share-wizard',[^\n]+WizShareWizard.back\(\)/);
  assert.match(read('web/device.js'),/await window.WizShareWizard.open/);assert.doesNotMatch(read('web/device.js'),/data-shareto/);
  assert.match(read('web/core/app-client.js'),/get wizard\(\)/);assert.match(read('web/core/chats.js'),/const MAX_FILES = 10/);
 });

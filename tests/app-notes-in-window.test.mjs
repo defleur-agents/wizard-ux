@@ -151,8 +151,10 @@ test('both shells give Back/Esc to the list; core names no app; both entrypoints
   assert.doesNotMatch(src, /second-hand|money|wizard-mail|messenger|card-benefits/, 'core never tests specific app ids');
   assert.match(src, /WosBell\.mark\(/, 'reuses the one write path');
   assert.doesNotMatch(src, /fetch\(/, 'no new network path');
-  assert.match(read('web/app.js'), /WosAppNotes\?\.back\(\)\) return 'app-notes'/);
-  assert.match(read('web/desktop/desktop.js'), /WosAppNotes\?\.back\(\)\) return 'app-notes'/);
+  // both shells install the one shared Back/Esc owner catalog (core/escape-back.js), which owns the list
+  assert.match(read('web/core/escape-back.js'), /add\('app-notes', [^\n]*WosAppNotes\.back\(\)/);
+  assert.match(read('web/app.js'), /WizEscapeBack\.installOwners\(phoneBack/);
+  assert.match(read('web/desktop/desktop.js'), /WizEscapeBack\.installOwners\(escapeBack/);
   for (const f of ['web/index.html', 'web/desktop.html']) {
     const s = read(f);
     assert.ok(s.indexOf('core/notif-bell.js') < s.indexOf('core/app-notes.js'), f);

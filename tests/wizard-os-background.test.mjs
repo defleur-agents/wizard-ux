@@ -17,14 +17,17 @@ test('every scene ships baked for night and day, desktop and phone', () => {
 test('Landscapes stays the default and every Wizard OS option is listed', () => {
   for (const id of ['landscapes', 'lake', 'valley', 'moonrise', 'sea', 'clouds', 'glass']) assert.match(skins, new RegExp(`id: '${id}'`));
   assert.match(skins, /: 'landscapes'; \} catch \(_\) \{ return 'landscapes'; \}/);
-  assert.match(skins, /if \(wall !== 'landscapes'\) \{ const w = WIZ\.get\(wall, this\.LIGHT, W, H\)/);
+  assert.match(skins, /if \(selected !== 'landscapes'\) \{ const w = WIZ\.get\(selected, this\.LIGHT, W, H\)/);
   assert.match(skins, /setWallpaper\(id\) \{/);
 });
 
 test('twinned skins show Background cards and a separate Dark | Light mode instead of a colour per mode', () => {
   // Miguel's release: Mode + Background replace the per-mode Colors on a twinned skin (main keeps both)
-  assert.match(settings, /const colours = !own && twinned\(S, family\) \? backgroundHtml\(S, family, cur\) :/);
+  assert.match(settings, /const colours = !own && twinned\(S, family\) \? bg :/);
   assert.match(settings, /: `<div class="skp-colours"><h4>Colors<\/h4>/, 'every other skin keeps its Colors');
+  // main: the Wizard OS skins keep their Colors and add the Background cards
+  assert.match(settings, /const bg = !own && \(S\.wizardBackgrounds \|\| twinned\(S, family\)\) \? backgroundHtml\(S, family, cur\) : ''/);
+  assert.match(settings, /<\/div><\/div>` \+ bg;/, 'Wizard OS skins show Colors and Background');
   assert.match(settings, /class="skp-card" data-bgpick=/, 'the same cards as Colors');
   const background = settings.slice(settings.indexOf('function backgroundHtml('), settings.indexOf('function backgroundAct('));
   assert.match(background, /color-mix\(in srgb, var\(--p-bg, var\(--wz-bg\)\)/, 'thumbnail shading follows the preview skin with a shell-token fallback');
@@ -32,7 +35,7 @@ test('twinned skins show Background cards and a separate Dark | Light mode inste
   assert.match(settings, /data-skinmode="\$\{m\}"/);
   assert.match(settings, /if \(backgroundAct\(ctx, el, pickPalette\)\) return true;/);
   assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);
-  assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
+  assert.match(skins, /get wallpaperable\(\) \{ return this\.wizardBackgrounds \|\| \/\^landscapes\/\.test/);
 });
 
 test('wallpaper generator dispatches only explicit scenes, never query-selected methods', () => {

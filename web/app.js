@@ -112,12 +112,7 @@
   let EMO = {}, emoAt = 0;
   const emoOf = id => { if (Date.now() - emoAt > 2000) { try { EMO = JSON.parse(localStorage.getItem('wizard.thread-emojis.v1') || '{}'); } catch (e) {} emoAt = Date.now(); } return EMO[`direct:${id}`] || window.WizBrand.html; };
   const live = () => (LIVE && LIVE.ok ? LIVE.groups() : { needs: [], ready: [], working: [] });
-  const ago = iso => {
-    const t = Date.parse(iso || ''); if (!isFinite(t)) return '';
-    const m = Math.round((Date.now() - t) / 6e4);
-    if (m < 1) return 'now'; if (m < 60) return m + 'm'; if (m < 24 * 60) return Math.round(m / 60) + 'h';
-    const d = window.WizConfig.dayParts(t); return `${DOW[d.dow]} ${d.d}`;
-  };
+  const ago = window.WizCore.ago;
 
   /* ---------------- window model ---------------- */
   const track = $('#track');
@@ -960,6 +955,9 @@
   function mountLinks() {
     if (LINKS || !window.WizLinks) return;
     LINKS = window.WizLinks.mount({
+      // An installed Reader preview paints its loading frame in this tap task, just like desktop previews.
+      // Do not send it through the launcher's asynchronous setup check; ordinary app links still use that gate.
+      readerApp: () => APP.browser, readerOpen: href => openLinkDesk(href, null, true),
       parent: device, mode: 'sheet',
       onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a); else { const o = appAt(url); openWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
       onChange: on => { device.classList.toggle('link-open', on); if (on) { closeSheets(true); armBack(); } },
@@ -1431,8 +1429,8 @@
   /* ---------------- home desk ---------------- */
   function renderHome() {
     const L = live(), needs = L.needs.length;
-    // Opinionated: Ready = everything not working (read or not); unread is not a useful count.
-    const RD = LIVE && LIVE.ok ? (LIVE.workGroups().ready || []) : [], ready = RD.length + (window.WosBell?.readyCount?.() || 0);
+    // The card still opens all Ready threads; its pill shares the phone/desktop unread projection.
+    const ready = window.WizCore.workspaceNav.chatsCount(LIVE);
     // Working counts what the Chats Working list (and the Working card's filter) shows, sending messages included.
     const W0 = LIVE && LIVE.ok ? (LIVE.workGroups().working || []) : [], working = W0.length;
     const now = new Date();
@@ -1445,7 +1443,7 @@
       <div class="home-gap home-gap-a"></div>
       <div class="home-attn">
       <div class="constellation">
-        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready ${ready}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span><span class="n">${ready}</span></button>
+        <button class="now-card wz-home-widget" style="--c:${needs ? 'var(--amber)' : 'var(--green)'}" data-act="ready" aria-label="Ready${ready ? `, ${ready} unread` : ''}"><span class="pip"></span><span class="meta"><span class="k">Ready</span></span>${ready ? `<span class="n">${ready}</span>` : ''}</button>
         <button class="now-card wz-home-widget" style="--c:var(--violet-2)" data-act="working" aria-label="Working ${working}"><span class="pip pulse"></span><span class="meta"><span class="k">Working</span></span><span class="n">${working}</span></button>
       </div>
       ${unsentCard()}
@@ -3591,6 +3589,9 @@
       pause: () => { V.stopAsked = true; pauseCommandCapture(); }, // capture lost: keep the take paused with controls, never discard
     },
   };
+  // Core dock behaviour: no skin recipe or old tweak switch can disable it.
+  window.WosCreateOrbSwitcher(orbSwitcherHost);
+
   // Slide-to-aim is retired (James, 11 Oct 2026): a held command already opens on the desk beside this one, so
   // sliding while holding does nothing (no desk label, no aim). A hold that starts travelling at once is a swipe.
   const aimFor = () => null;
@@ -3789,40 +3790,33 @@
    *   2. a history guard entry pushed during a user gesture; popstate → one step. */
   let guardOn = history.state?.wos === 'guard', ignorePop = 0;
   const watchers = new Set();
+  const phoneBack = window.WizEscapeBack.create();
+  window.WizEscapeBack.installOwners(phoneBack, { chats: () => CHATS, links: () => LINKS,
+    afterTour: () => { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } },
+    afterChat: () => { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } },
+  });
+  phoneBack.watch(() => document.querySelector('#txChips [data-handoff], #txChips [data-hold]'), () => { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); }, 'draft');
+  phoneBack.watch(() => ovEl?.classList.contains('open'), closeOverview, 'overview');
+  phoneBack.watch(() => rvCoach, closeReviewCoach, 'review-coach');
+  phoneBack.watch(() => menuFor, closeMenu, 'menu');
+  phoneBack.watch(() => sheet, ({ outside }) => { if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page'; closeSheets(); return 'sheet'; }, 'sheet');
+  window.WosBack = Object.freeze({ names: phoneBack.names, escape(e) { e.preventDefault?.(); e.stopImmediatePropagation?.(); if (!e.repeat && !e.isComposing) return onBack(); } });
   function hostedBack(f) {
     const frame = winEl(f.id)?.querySelector('iframe');
     const result = window.WizAppServices?.back(frame);
     return result || 'notReady';
   }
   function backStep(skipHosted, { outside = false } = {}) {
-    { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
     window.WosSettings?.cancelWait?.(); // every Back path (native, CloseWatcher, history) drops a System link still waiting
-    { const o = window.WosOrbSwitcher?.back(); if (o) return 'orb-' + o; } // optional picker peels one layer after the shared first-run guard
-    if (window.WizShareWizard?.back()) return 'share-wizard';
-    if (window.WizHomeScreenApps?.back()) return 'pin-sheet';
-    { const t = window.WosTour?.back(); if (t) { if (settingsReturn === 'help') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="help"]')?.focus(); } return t; } } // the first-run tour and the Help sheet sit above everything
-    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu that opened it
-    { const sm = window.WosSelMenu?.back(); if (sm) return sm; } // selected words + their menu: Back lets go of them first
-    if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet sits above the windows
-    if (window.WosAppNotes?.back()) return 'app-notes'; // an app's notes list (shell-drawn over its window)
-    if (window.WosAppSetup?.back()) return 'app-setup';
-    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
-    // Explicit bypass capture follows the retain-on-Back contract; ordinary recordings keep navigating.
-    if (V.snap?.general && ['listen', 'command'].includes(V.state)) { V.stopAsked = true; pauseCommandCapture(); return 'recording'; }
-    if (document.querySelector('#txChips [data-handoff], #txChips [data-hold]')) { $('#txChips').innerHTML = ''; V.holdText = ''; txHide(0); return 'draft'; }
-    if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
-    if (window.WizLinks?.backMenu()) return 'link-menu';
-    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    const ov = CHATS.closeOverlay(); if (ov) { if (settingsReturn === 'files') { settingsReturn = ''; openSettings(); $('#settingsBody [data-st="files"]')?.focus(); } return ov; } // media viewer, then the thread actions sheet
-    const dv = window.WosDevice?.back?.(); if (dv) return dv; // share picker, recovered-recording card
-    if (window.WosSkinHost?.back?.()) return 'tweak-overlay'; // a package's own sheet (api.back.push)
-    if (window.WosResources?.back()) return 'resources';
-    if (closeOverview()) return 'overview';
-    if (closeReviewCoach()) return 'review-coach';
-    if (menuFor) { closeMenu(); return 'menu'; }
-    if (sheet === 'settings' && !outside && settingsView?.back()) return 'settings-page';
-    if (sheet) { closeSheets(); return 'sheet'; }
-    if (window.WosSkinFrame?.back()) return 'skin-controls';
+    // The Review coach promises that Back closes the review, not just this first-use hint.
+    // Outside still dismisses only the hint; Back continues to the Reader's own history, then its chat.
+    if (rvCoach && !outside) closeReviewCoach();
+    const transient = phoneBack.run({ outside, recording: () => {
+      // Retain/pause phone capture; only desktop Escape discards its voice note.
+      if (!V.snap?.general || !['listen', 'command'].includes(V.state)) return false;
+      V.stopAsked = true; pauseCommandCapture(); return 'recording';
+    } }); if (transient) return transient;
+
     const d = desks[idx], f = W[d.focus];
     if (f && CHATS.isHosted(f.id)) return CHATS.threadBack(f);
     if (f) {
@@ -4186,11 +4180,10 @@
   }
   const skinChatsWin = () => { const f = desks[idx]?.focus; if (W[f]?.app === 'chats') return W[f]; const id = desks[idx]?.wins.find(x => W[x]?.app === 'chats'); return id ? W[id] : null; };
   window.WosSkinHost?.attach({
-    orbSwitcher: orbSwitcherHost,
     overview: overviewAdapter,
     windowRefresh: windowRefreshAdapter,
     route() { const w = skinChatsWin(), f = W[desks[idx]?.focus]; let ag = ''; try { ag = agentHere().id; } catch (_) {} return { view: w ? (w.thread ? 'thread' : 'list') : 'desk', thread: w?.thread || null, desk: idx, app: f ? (f.appId || f.app || null) : null, agent: ag || null, beside: device.classList.contains('bound-peeking') ? 1 : device.classList.contains('bound-view-peeking') ? -1 : 0, home: idx === HOME }; },
-    back: () => backStep(),
+    back: () => backStep(), escapeOverlay: close => phoneBack.push(close),
     openList: () => openChatsList(),
     openThread: id => openWizardThread(id),
     goDesk: i => goDesk(i),
@@ -4248,23 +4241,7 @@
     phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },
     /* The AI apps view (layouts/ai-apps): its drawer's chats (Working, Ready; the rest for its search), each with the
      * actions Chats' row sheet offers, acted on through Chats' own paths; the Chats window as it is; a New chat in it. */
-    sessionList: () => {
-      const G = LIVE && LIVE.ok ? LIVE.workGroups() : null; if (!G) return null;
-      const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
-      const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
-        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt?.(s) || '', rank: CHATS.stiKind?.(s) === 'failed' ? 1 : Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, unread: fresh, snoozed: !!s.deferred, pinned: !!P?.has(s.id),
-          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
-          actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s, null).filter(a => KEEP.includes(a))] }; };
-      // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
-      // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
-      const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
-      // Every chat not archived, working or snoozed is Ready here: this view has no Errors or day sections, so a failed /
-      // interrupted chat (stock Errors) and, under the By day layout, Yesterday / Past week join Ready (its Error group;
-      // its own time order). Leaving them out hid those chats from the sidebar and the rail altogether.
-      const ready = [...(G.errors || []), ...(G.ready || []), ...(G.yesterday || []), ...(G.pastWeek || [])];
-      return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
-        snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
-    },
+    sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     sessionAct: (sid, act) => {
       if (act === 'pin') { const P = window.WosChatPins; if (!P) return false; const on = P.toggle(sid); toast('⌖', on ? 'Pinned' : 'Unpinned', 1400); return true; }
       const w = showChats(); if (!w) return false;

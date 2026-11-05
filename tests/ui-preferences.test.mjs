@@ -1,3 +1,4 @@
+import { modelContext, runWithChatsModel } from './fixtures/chats-list-model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -9,7 +10,7 @@ function device(req, initial = {}) {
   const ctx = { req, console, Event: class { constructor(type) { this.type = type; } }, setInterval() {},
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
     addEventListener: (k, fn) => handlers[k] = fn };
-  ctx.window = { dispatchEvent: e => events.push(e.type) }; vm.createContext(ctx);
+  ctx.window = { dispatchEvent: e => events.push(e.type) }; modelContext(ctx);
   vm.runInContext(live.slice(live.indexOf("  const PREFS_URL ="), live.indexOf('  const sectionTime =')) + '\nthis.api = { pullPrefs, putPrefs };', ctx);
   return { ...ctx.api, store, events, handlers };
 }

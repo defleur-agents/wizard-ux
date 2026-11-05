@@ -10,7 +10,7 @@
  * Keys use ⌥ (Option/Alt) as the window-manager modifier, so they never fight the browser's ⌘ keys:
  *   ⌘K / ⌥Space   search and launch           ⌥` Home, ⌥1…⌥9 go to desktop
  *   ⌥Enter        new chat                    ⇧⌥1…9      send window to workspace
- *   Right ⌘ tap   talk (tap again to send)    ⌥←↑→↓ focus window
+ *   Right ⌘ tap   talk (tap again to send)    ⌥↑↓ Ready chats
  *   Right ⌥ tap   dictate (tap again: insert at the cursor, else copy)
  *   ⌥I            Chats                       ⇧⌥←→       swap window
  *   ⌘W / ⌥W       close app                   ⌥F         full screen
@@ -123,7 +123,10 @@
 
   /* ---------------- chats (shared core) ---------------- */
   const stage = $('#stage');
+  const escapeBack = window.WizEscapeBack.create();
+  var ownsChatList = !!globalThis.WosSkinHost?.chatsClaimed?.();   // a chat-owning layout decided at boot: the list never mounts first
   const CHATS = window.WizChatsHost.create({
+    ownsChatList: () => ownsChatList,
     win: id => W[id] || (/::list$/.test(id) && W[id.slice(0, -6)] ? listWin(id.slice(0, -6)) : undefined),
     root: () => stage,
     save,
@@ -335,7 +338,7 @@
   }
   /* ⌥− / ⌥= (Omarchy's resize): the window in front gets narrower / wider. Each desk keeps its own split. */
   const SPLIT = [0.25, 0.75];
-  function splitOf(d, n) { const v = +d.split; return v >= SPLIT[0] && v <= SPLIT[1] ? v : n === 2 ? 0.5 : 0.56; }
+  const splitOf = C.panes.splitOf;
   function resizable(d) { return !homeOpen && !d.mono && d.wins.length >= 2 && !(d.wins.length <= 4 && d.wins.some(id => W[id]?.share > 0)); }
   function resizeFocused(dir) {
     if (globalThis.WosSkinHost?.panelMode) return false; // no desks while a layout holds the panel
@@ -468,7 +471,7 @@
     const a = appAt(url);
     if (a && !setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openAppLink(url, title, true));
-    const go = () => !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title });
+    const go = desk => !!newWin({ app: 'frame', appId: a ? a.id : 'link', url, title: a ? a.name : title }, Number.isInteger(desk) && ws[desk] ? { ws: desk } : {});
     const r = window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: a ? a.id : '' }, go); if (r) return true;
     return go();
   }
@@ -482,7 +485,7 @@
     const pageSlug = a.url && window.WosPages?.match(a.url);
     if (pageSlug) { const ex = !opts.fresh && findWin(w => w.app === 'pages' && w.pageSlug === pageSlug); if (ex) focusWin(ex.id); else newWin({app:'pages',appId:'pages',pageSlug}, opts); return true; }
     // a layout placing the shell's opens (apps.routeOpens) puts an app where it shows apps (a desk given is stock's)
-    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, () => openApp(a, opts))) return true;
+    if (a.url && a.kind !== 'chats' && opts.ws == null && !opts.fresh && window.WosSkinHost?.routeOpen?.('app', { id: a.id, path: '' }, desk => openApp(a, { ...opts, ...(Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}) }))) return true;
     if (a.id !== 'troubleshooter' && a.url && !opts.setupChecked && window.WosAppSetup)
       return window.WosAppSetup.gate(a, () => openApp(a, { ...opts, setupChecked: true }));
     if (a.kind === 'chats') {
@@ -589,6 +592,7 @@
     const base = String(id).replace(/::list$/, ''); const w = W[base]; if (!w || w.app !== 'chats') return;
     if (globalThis.WosSkinHost?.panelMode && panelDocked) { const sid = w.thread; if (sid && panelList?.id === base) queueMicrotask(() => panelForward(base, sid)); else if (sid && panel?.id === base) panel.held = true; else if (!sid && panel?.id === base && panel.held) queueMicrotask(() => panelThreadLeft(base)); }
     const el = winEl(base); if (!el) return;
+    for (const n of el.querySelectorAll('.pane-list, .pane-split, .pane-empty')) { n.hidden = ownsChatList; n.style.display = ownsChatList ? 'none' : ''; }
     const box = el.querySelector('.dchats'); if (box) box.dataset.thread = w.thread || '';
     $$('.ch-row', el).forEach(r => r.classList.toggle('cur', r.dataset.chopen === w.thread));
     window.WosAgents.refreshTitlebars();
@@ -801,10 +805,8 @@
     const shared = !d.mono && n >= 2 && n <= 4 && d.wins.some(id => W[id]?.share > 0);
     if (d.mono) d.wins.forEach(id => { rects[id] = id === d.focus || n === 1 ? [g, g, W_ - 2 * g, H_ - 2 * g] : null; });
     else if (shared) {
-      const avail = Math.max(0, W_ - (n + 1) * g), asked = d.wins.reduce((t, id) => t + (W[id]?.share > 0 ? W[id].share : 0), 0);
-      const rest = d.wins.filter(id => !(W[id]?.share > 0)).length, scale = rest ? Math.min(1, 0.8 / asked) : 1 / asked;
-      const free = rest ? (1 - asked * scale) / rest : 0;
-      let x = g; for (const id of d.wins) { const w = Math.round(avail * (W[id]?.share > 0 ? W[id].share * scale : free)); rects[id] = [x, g, w, H_ - 2 * g]; x += w + g; }
+      const cols = C.panes.columns(W_, d.wins.map(id => W[id]?.share), g);
+      d.wins.forEach((id, j) => { rects[id] = [cols[j].x, g, cols[j].width, H_ - 2 * g]; });
     } else if (n === 1) {
       const width = Math.min(maxWidth, Math.max(0, W_ - 2 * g));
       rects[d.wins[0]] = [(W_ - width) / 2, g, width, H_ - 2 * g];
@@ -1161,7 +1163,7 @@
   // ⌥] / ⌥[ (Miguel, 28 Oct 2026): walk this desk's windows left to right first (left to right), and only
   // past the last (or first) one step on to the next (or previous) desk. Chats with a chat open is two stops: the
   // chat list, then the message box. Arriving on a desk with ] starts at its leftmost stop, with [ at its rightmost.
-  // ⌥← / ⌥→ stay Snooze / Done on an open chat.
+  // Plain ⌥← / ⌥→ belong to native word navigation, never thread actions.
   function chatsZone(f) {
     const el = winEl(f.id), a = document.activeElement;
     if (a && el?.contains(a)) { if (a.closest('.pane-list')) return 'list'; if (a.closest('.pane-main')) return 'thread'; }
@@ -1296,9 +1298,9 @@
       const names = d.wins.map(id => winTitle(W[id])).join(', ');
       return `<button class="ws${!homeOpen && i === cur ? ' cur' : ''}${d.wins.length ? ' used' : ''}${hot ? ' hot' : ''}" data-ws="${i}" aria-label="${esc(names || 'Empty desktop')} · Desktop ${C.workspaceNav.slot(i)}" aria-current="${!homeOpen && i === cur ? 'page' : 'false'}"${C.workspaceNav.slot(i) <= 9 ? ` aria-keyshortcuts="Alt+${C.workspaceNav.slot(i)}"` : ''} title="${esc(names || 'Empty desktop')}${C.workspaceNav.slot(i) <= 9 ? ` (${MOD}${C.workspaceNav.slot(i)})` : ''}">${C.workspaceNav.icon(d, W, appOf)}${d.wins.length || ws.length > 1 ? `<span class="ws-close" role="button" data-wsclose="${i}" tabindex="-1" aria-label="Close desktop ${C.workspaceNav.slot(i)}" title="Close desktop">✕</span>` : ''}</button>`;
     }).join('') + `<button class="ws ws-add" data-newdesk aria-label="New desktop" title="New desktop (${MOD}T${C.workspaceNav.slot(ws.length) <= 9 ? ` / ${MOD}${C.workspaceNav.slot(ws.length)}` : ''})">+</button>`;
-    const st = $('#status');
+    const st = $('#status'), unread = C.workspaceNav.chatsCount(LIVE);
     if (!LIVE?.ok) st.innerHTML = `<span class="off">${LIVE?.error === 'access' ? 'Sign in to Wizard' : 'Connecting…'}</span>`;
-    else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}<span title="Unread"><i class="st unread"></i>${L.ready.length}</span>${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
+    else st.innerHTML = `${L.needs.length ? `<span title="Needs you"><i class="st needs"></i>${L.needs.length}</span>` : ''}${unread ? `<span title="Unread"><i class="st unread"></i>${C.workspaceNav.label(APP.wizard?.id || 'wizard')}</span>` : ''}${L.working.length ? `<span title="Working"><i class="st working"></i>${L.working.length}</span>` : ''}`;
   }
   function tickClock() { const C = window.WizConfig; $('#clock').textContent = C.dateLabel() + '  ' + C.hm(); }
   setInterval(tickClock, 15000); tickClock(); window.addEventListener('wizard:config', tickClock);
@@ -1409,7 +1411,7 @@
       <nav class="home-tools" aria-label="System and settings"><button data-home-settings>Settings</button></nav>
       <div class="home-time">${window.WizConfig.hm()}</div>
       <div class="home-date">${window.WizConfig.dateLabel(Date.now(), { weekday: 'long', day: 'numeric', month: 'long' })}${i == null ? '' : ` · Desktop ${C.workspaceNav.slot(i)}`}</div>
-      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${L.ready.length} unread, ${working.length} working.` : 'Connecting to Wizard…'}</div>
+      <div class="home-line">${LIVE?.ok ? `<b>${L.needs.length} need${L.needs.length === 1 ? 's' : ''} you</b>, ${C.workspaceNav.chatsCount(LIVE)} unread, ${working.length} working.` : 'Connecting to Wizard…'}</div>
       <div class="home-cols"><div class="home-card"><h4>Needs you · Unread</h4>${rows(L.needs.concat(L.ready))}</div><div class="home-card"><h4>Working</h4>${rows(working)}</div></div>
       ${pending.length ? `<button class="home-unsent" data-home-unsent>${pending.length} ${pending.some(u => u.state === 'failed') ? 'not sent' : 'waiting to send'} · View unsent messages</button>` : ''}
       <h3 class="home-resources-title">Resources</h3>${window.WosResources?.home() || ''}
@@ -2272,34 +2274,15 @@
     if (!best && d.mono) { const i = d.wins.indexOf(d.focus); best = d.wins[(i + (dx || dy) + d.wins.length) % d.wins.length]; }
     if (best) focusWin(best);
   }
-  // Esc peels one layer: palette → keys → voice → thread → (nothing: stays put, never leaves).
+  function desktopBack(event) {
+    window.WosSettings?.cancelWait?.();
+    return escapeBack.run({ event,
+      recording: () => { if (VOICE.state === 'idle') return false; vMode === 'dictate' ? dictate('cancel') : talk('cancel'); return true; },
+      surface: () => window.WosSkinHost?.escapeSurface?.(), fallback: () => escStep(),
+    });
+  }
+  // Navigation only. ALL transient owners live in the shared phone Back registry.
   function escStep() {
-    { const w = window.WosWelcome?.back(); if (w) return w; } // the first-run Welcome sits above everything
-    window.WosSettings?.cancelWait?.(); // every Back path drops a System link still waiting
-    if (window.WosContextMenu?.back()) return 'context-menu';
-    if (voiceMenuBack()) return 'voice-menu'; // the one-mic menu sits above the bar
-    if (window.WizShareWizard?.back()) return 'share-wizard';
-    { const sh = window.WosShareSheet?.back(); if (sh) return sh; } // the share sheet sits above everything, incl. the selection menu
-    if (window.WosSelMenu?.back()) return 'selection';
-    if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
-    if (!pal.hidden) { closePalette(); return 'palette'; }
-    if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet
-    if (window.WosAppNotes?.back()) return 'app-notes'; // an app's notes list (shell-drawn over its window)
-    if (window.WosAppSetup?.back()) return 'app-setup';
-    if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
-    if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
-    if (window.WizLinks?.backMenu()) return 'link-menu';
-    if (LINKS && LINKS.isOpen()) { LINKS.back(); return 'link'; }
-    if (keyHints.pinned()) { toggleKeys(false); returnToSettings(); return 'keys'; }
-    if (window.WosSkinHost?.back?.()) return 'tweak-overlay'; // a package's own sheet (api.back.push)
-    if (window.WosResources?.back()) return 'resources';
-    if (closeUsage()) return 'usage';
-    if (settingsReturn === 'files') { const nested = CHATS.closeOverlay(); if (nested) { returnToSettings(); return nested; } settingsReturn = ''; }
-    if (settingsFocused()) { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; }
-    const ov = CHATS.closeOverlay(); if (ov) return ov; // media viewer, then the thread actions sheet
-    if (window.WosSkinFrame?.back()) return 'skin-controls';
-    // The first-message guide: once nothing sits above it, Esc/Back dismisses it (= Skip tour) before any navigation.
-    if (window.WosTour?.desk?.active) { window.WosTour.desk.finish('skip'); return 'tour'; }
     // The floating chat, when the keyboard is in it, walks back from its open thread before anything behind it.
     { const hb = hudBack(); if (hb) return hb; }
     // No desks: Esc (and Back) slides the panel away, back to Home.
@@ -2316,17 +2299,22 @@
     }
     if (focused() && CHATS.isHosted(focused().id)) return CHATS.threadBack(focused());
     if (focused()?.app === 'pages') { const w = focused(); if (window.WosPages.back(winEl(w.id)?.querySelector('.pg-host'))) return 'pages'; closeWin(w.id); return 'pages-close'; }
-    if (ws[cur].mono) { toggleMono(); return 'mono'; }
+
     // Back navigates while recording; only the explicit Cancel control may discard audio.
     const f = focused();
     if (f?.app === 'feature') { closeWin(f.id);return 'view'; }
     if (f?.app === 'chats' && f.thread) { const r = CHATS.threadBack(f); syncChatsPane(f.id); winEl(f.id)?.focus({ preventScroll: true }); return r; }
+    if (f && f.app !== 'chats') { if (ws[cur].mono) { toggleMono(); return 'mono'; } }
     if (f?.app === 'frame') {
       const result = window.WizAppServices?.back(winEl(f.id)?.querySelector('iframe'));
       if (['handled', 'pending', 'stay'].includes(result)) return 'hosted';
+      // Shell-owned previews and sign-in workflows return to their opener;
+      // ordinary installed apps at root stay mounted.
       if (f.workflow && closeWorkflow(f)) return 'workflow';
       if (f.preview) { closeWin(f.id); return 'preview'; }
+      return '';
     }
+
     if (f && window.WizCompanionPane?.back(f.id)) return 'companion-back';
     if (f?.appId === 'app-store') {
       if (!ws[cur].mono) { closeWin(f.id); return 'store-parent'; }
@@ -2351,7 +2339,7 @@
       ['D', 'Type with your voice', 'Your words go into the box you’re typing in'],
     ];
     const TYPE = [['N', 'New chat', 'Type a new message'], ['␣', 'Search', 'Apps, chats and commands'], ['I', 'Inbox', 'All your chats']];
-    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['→  ←', 'Archive / Snooze', 'The open chat'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
+    const READY = [['↓', 'Next ready chat', 'From anywhere. Opens it ready to reply'], ['X', 'Resolve this', 'An open notification: stop these or fix the cause']];
     const GO = [['G', 'Pick anything', 'Letters appear on every button, app and chat; type them to click'], ['`', 'Home', 'Again to go back'], ['1–9', 'Desktop 1 to 9', 'Jump straight to it'], ['T', 'New desktop', ''], ['⇧ [ ]', 'Move desktop left / right', ''], ['O', 'Open an app', '']];
     const WIN = [['P', 'Float chat', 'Over every desk; again puts it back on desktop 1'], ['F', 'Full screen', ''], ['W', 'Close', ''], ['⇧W', 'Reopen closed window', 'The last window you closed, where it was'], ['−', 'Narrower', 'The window in front'], ['=', 'Wider', 'The window in front'], ['Z', 'Back to where you were', 'Again flips back'], ['L', 'Dark / Light', 'Same skin, light or dark'], ['R', 'Refresh window', ''], [']', 'Next window', 'Past the last one: the next desktop'], ['[', 'Previous window', 'Past the first one: the previous desktop'], ['⇧ ← →', 'Swap places', ''], ['⇧ 1–9', 'Send to a desktop', '']];
     // (a node inside an app frame reads its own window's styles)
@@ -2429,7 +2417,7 @@
       // While recording: the same key again sends, Esc cancels, right on the pill.
       if (VOICE.state !== 'idle') { const send = $('#voiceSend'), cancel = $('#voiceCancel'); if (vis(send)) chip(send, ($('#voiceKey')?.textContent || '').replace(MOD, '') || 'S'); if (vis(cancel)) chip(cancel, 'Esc'); }
       const f = !homeOpen && focused(), d = ws[cur];
-      // Chats: ↓ sits on the Ready chat it opens next; → ← on Done / Snooze; ↵ on Send; / on search; N on New chat.
+      // Chats: ↓ sits on the Ready chat it opens next; X on Resolve; ↵ on Send; / on search; N on New chat.
       const cw = !homeOpen && (f?.app === 'chats' ? f : d.wins.map(x => W[x]).find(mainChats));
       if (cw) {
         const wel = winEl(cw.id), rows = readyRows(cw.id), i = cw === f ? rows.findIndex(r => (r.dataset.chopen || 'n:' + r.dataset.chnotif) === (cw.thread === '__new__' && CHATS.notifOpen?.(cw.id) ? 'n:' + CHATS.notifOpen(cw.id) : cw.thread)) : -1;
@@ -2444,8 +2432,8 @@
           if (!lr || (nr.top >= lr.top && nr.bottom <= lr.bottom - 4)) chip(next, '↓', 'inside'); else if (!(vis(head) && chip(head, '↓', 'inside')) && pl) chip(pl, '↓', 'bottom-in');
         }
         if (cw === f) {
-          // → ← on the Done / Snooze buttons; scrolled out of sight, they sit on the chat's header with their word.
-          if (f.thread && (f.thread !== '__new__' || CHATS.notifOpen?.(f.id))) for (const [q, l, word] of [['[data-chact="done"]', '→', 'Archive'], ['[data-chact="snooze"]', '←', 'Snooze'], ['[data-chact="resolve"]', 'X', 'Resolve']]) {
+          // Resolve's key follows its button; Archive and Snooze have no standard-desktop key.
+          if (f.thread && (f.thread !== '__new__' || CHATS.notifOpen?.(f.id))) for (const [q, l, word] of [['[data-chact="resolve"]', 'X', 'Resolve']]) {
             const on = [...wel.querySelectorAll(q)].filter(vis).map(n => chip(n, l, 'above')).some(Boolean);
             const head = wel.querySelector('.pane-main .ch-head');
             if (!on && wel.querySelector(q) && vis(head)) chip(head, l, l === '→' ? 'inside' : 'inside-2', word);
@@ -2611,12 +2599,34 @@
   })();
   const NATIVE_MENU = !!window.webkit?.messageHandlers?.wizardNative;
   const vis0 = n => !!n && !!n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden';
+  // Legacy owners join the SAME recency stack as layout back.push overlays.
+  // Observe opening, not keyboard priority, so a newer menu beats an older sheet.
+  const watchEscape = (name, active, back) => escapeBack.watch(active, back, name);
+  window.WizEscapeBack.installOwners(escapeBack, { chats: () => CHATS, links: () => LINKS, afterChat: () => { if (settingsReturn === 'files') returnToSettings(); } });
+  watchEscape('pick', () => pick.active(), () => pick.key({ key: 'Escape', preventDefault() {}, stopPropagation() {} }));
+  watchEscape('keys', () => keyHints.pinned(), () => { toggleKeys(false); returnToSettings(); });
+
+  watchEscape('palette', () => !pal.hidden, () => closePalette());
+
+
+  watchEscape('voice-menu', () => !voiceMenu.hidden, () => closeVoiceMenu());
+  watchEscape('usage', () => !usageEl.hidden, () => closeUsage());
+  watchEscape('settings', () => settingsFocused(), () => { if (settingsView.back()) return 'settings-page'; closeSettings(); return 'settings'; });
+  window.WosBack = Object.freeze({ escape: e => onKey(e, true), names: escapeBack.names });
   function onKey(e, fromFrame = false) {
-    // IME owns Escape during composition; a held Escape must not peel several search layers.
-    if (e.key === 'Escape' && e.target.matches?.('[data-chsearch]')) {
+    // macOS word jumps belong to the field/app, even with an empty composer or a sheet open.
+    // Yield before layout, picker and window-manager dispatch; shifted arrows keep their distinct controls.
+    if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && (e.code === 'ArrowLeft' || e.code === 'ArrowRight')) return;
+    if (e.key === 'Escape') {
       if (e.isComposing || e.keyCode === 229) return;
-      if (e.repeat) { e.preventDefault(); e.stopPropagation(); return; }
+      // Run BEFORE layout keys and before the app's own capture listeners. The
+      // focused iframe is a surface, not permission to hide its window.
+      e.preventDefault?.(); e.stopPropagation?.(); e.stopImmediatePropagation?.();
+      if (e.repeat) return;
+      const did = desktopBack(e);
+      log('esc:' + (did || 'root')); return;
     }
+
     if (pick.active()) return pick.key(e);
     if (window.WosWelcome?.active) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); window.WosWelcome.back(); } return; } // first run: no shell shortcuts behind it
     if (e.key === 'Escape' && keyHints.pinned()) { e.preventDefault(); e.stopPropagation(); toggleKeys(false); returnToSettings(); return; }
@@ -2648,12 +2658,7 @@
     if ((menu || alt) && !shift && code === 'KeyN') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); newChat(); });
     if (alt && !shift && code === 'Enter') return hit(() => { if (!e.repeat) newChat(); });
     if (alt && code === 'KeyV') return hit(() => { if (e.repeat) return; closePalette(); toggleKeys(false); closeSettings(); closeUsage(); talkNew(`${MOD}V`); });
-    // ⌥→ Done, ⌥← Snooze (Miguel, 27 Oct 2026): with a chat open in Chats, the arrows act on it, also from an EMPTY
-    // message box (the Ready loop). Once there is text in the box, ⌥←/→ jump words as usual: an accidental ⌥→ while
-    // typing archived a chat. The hidden duplicates ⌥E / ⌥Z are gone (Miguel: only the keys the guide shows).
-    const chatOpen = () => { const f = focused(); return (!homeOpen || !!(globalThis.WosSkinHost?.panelMode && panelHas(f?.id))) && f?.app === 'chats' && f.thread && (f.thread !== '__new__' || !!CHATS.notifOpen?.(f.id)); };
-    const midText = typing(e.target) && String(e.target.value ?? e.target.textContent ?? '').trim() !== '';
-    if (alt && !shift && (code === 'ArrowLeft' || code === 'ArrowRight') && chatOpen() && !midText) return hit(() => { if (!e.repeat) chatAct(code === 'ArrowRight' ? 'done' : 'snooze', code === 'ArrowRight' ? '→' : '←'); });
+
     // ⌥X Resolve this: an open notification goes to the agent to stop these or fix the cause.
     if (alt && !shift && code === 'KeyX') return hit(() => { if (!e.repeat) chatAct('resolve', 'X'); });
     function chatAct(act, keyName) {
@@ -2682,11 +2687,7 @@
     if (alt && !shift && code === 'KeyP') return hit(() => { if (!e.repeat) { closePalette({ restore: false }); hudKey(); } });
     // Link pane: ⌘Enter keeps it as a window, ⌘⇧Enter opens it in the browser.
     if (LINKS && LINKS.isOpen() && (e.metaKey || e.ctrlKey) && k === 'Enter') return hit(() => LINKS.el.querySelector(shift ? '[data-ls="out"]' : '[data-ls="keep"]')?.click());
-    // Escape while recording cancels the take first (James, 19 Oct); the next Escape navigates. Only the
-    // keyboard does this: Back (escStep via history/native) still navigates and keeps recording.
-    if (k === 'Escape' && !e.repeat && VOICE.state !== 'idle' && pal.hidden && !window.WosSelMenu?.state?.open) return hit(() => { vMode === 'dictate' ? dictate('cancel') : talk('cancel'); log('esc:voice-cancel'); });
-    if (k === 'Escape' && LINKS && LINKS.isOpen() && fromFrame) { const did = escStep(); if (did) { e.preventDefault(); e.stopPropagation(); } return; }
-    if (k === 'Escape') { const did = escStep(); if (did || fromFrame) { e.preventDefault(); e.stopPropagation(); } log('esc:' + (did || 'root')); return; }
+
     if (!pal.hidden) {
       // ⌘K's palette owns the keyboard while open. The app selector lets the window manager's ⌥ chords
       // through (⌥Enter, ⌥1…9, ⌥[ ], ⌥W…), stepping aside first, so a fresh desktop never traps them.
@@ -2755,7 +2756,7 @@
   if (history.state?.wux !== 'guard') { history.replaceState({ wux: 'root' }, ''); history.pushState({ wux: 'guard' }, ''); }
   if (!window.WizAppServices?.guardBack) {
     addEventListener('popstate', () => {
-      const did = escStep(); log('back:' + (did || 'root'));
+      const did = desktopBack(); log('back:' + (did || 'root'));
       history.pushState({ wux: 'guard' }, '');
       if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);
     });
@@ -2821,7 +2822,7 @@
       if (f?.app === 'chats' && f.thread && CHATS.insertText(f.id, text)) return;
       if (f?.app === 'chats') { newChat(); setTimeout(() => CHATS.insertText(focused().id, text), 60); return; }
     },
-    back() { const did = escStep(); log('native-back:' + (did || 'root')); },
+    back() { const did = desktopBack(); log('native-back:' + (did || 'root')); },
   });
 
   /* ---------------- deep links + boot ---------------- */
@@ -2844,10 +2845,11 @@
   });
   // In-app browser (core/links.js): links tapped in Wizard open in a right-half pane.
   const LINKS = window.WizLinks ? window.WizLinks.mount({
+    readerApp: () => APP.browser,
     parent: document.body, mode: 'pane',
     onKeep: (url, title) => { const a = APPS.find(x => x.url && x.url.replace(/[#?].*$/, '') === url.replace(/[#?].*$/, '')); if (a) openApp(a, { fresh: false }); else { const o = appAt(url); newWin({ app: 'frame', url, title: o ? o.name : title, ...(o ? { appId: o.id } : {}) }); } },
     // A page preview opens as a window like any other (wizard-os#265 rule 7): ✕, ⌥W and Esc close it, Keep is not needed.
-    asWindow: (url, title) => { const o = appAt(url), go = () => { newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }); return true; };
+    asWindow: (url, title) => { const o = appAt(url), go = desk => { newWin({ app: 'frame', url, title: o ? o.name : title, preview: true, ...(o ? { appId: o.id } : {}) }, Number.isInteger(desk) && ws[desk] ? { ws: desk } : {}); return true; };
       return window.WosSkinHost?.routeOpen?.('link', { url, title: String(title || ''), app: o ? o.id : '' }, go) ? true : go(); },   // a layout placing opens: its panel
   }) : null;
   // A link to a page inside an installed app opens as that app's window (its services: shared microphone,
@@ -2906,17 +2908,9 @@
     agent: id => openAgentChats(id),
     toast,
   });
-  C.deeplink.consume();
   window.WosScenery?.attach({ device: document.body, homeInView: () => (homeOpen || !ws[cur].wins.length) && setEl.hidden && pal.hidden && !keyHints.pinned() && usageEl.hidden && !window.WosResources?.state?.panel });
   new MutationObserver(() => window.WosScenery?.update()).observe(stage, { attributes: true, subtree: true, attributeFilter: ['class', 'hidden'] });
-  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
-  // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
-  window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
-    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
-    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
-    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
   C.status?.attach({ openChats: openChatsList, current: () => { const f = focused(); return f?.app === 'chats' && f.thread !== '__new__' ? f.thread || '' : ''; } });
-  const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
 
   /* "Update ready" pill in the top bar: the same banner as the phone (core/web-update.js), names the thread that made the
    * update with a Thread button that opens it in a window here; Reload is held while recording or uploading. */
@@ -2934,7 +2928,7 @@
     shell: 'desktop', get ws() { return ws; }, get voiceState() { return VOICE.state; },
  get wins() { return W; }, get cur() { return cur; }, live: LIVE, outbox: OUTBOX, chats: CHATS, canSearch: () => !!APP['wizard-search'],
     get homeOpen() { return homeOpen; }, goHome, get palMode() { return pal.hidden ? '' : palMode; },
-    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openChatsList, talk, ask, escStep, viewContext,
+    goWs, newDesktop, closeDesktop, closeCurrent, newWin, closeWin, focusWin, moveWin, openApp, openThread, newChat, openPalette, closePalette, openPicker, openChatsList, talk, ask, escStep: desktopBack, viewContext,
     openFiles, openUsage, recordReply, openSearch, localCommand, commandText, commandVoice, dictate, toast,
     pauseVoice: () => VOICE.state === 'paused' ? VOICE.resume() : VOICE.pause(),
     openSettings, closeSettings, stepThread, setListW, get listW() { return listW(); },
@@ -2984,23 +2978,7 @@
     agentHere: () => ({ id: '', label: window.WizConfig.agent(), main: true }),
     /* Working / Ready rows (the rest too, for the AI apps view's search), each with the actions Chats' own row offers
      * (Pin, Rename, Mark unread, Snooze, Done, Restore), acted on through Chats' own paths; the Orb view reads the same. */
-    sessionList: () => {
-      const G = LIVE?.ok ? LIVE.workGroups() : null; if (!G) return null;
-      const P = window.WosChatPins, KEEP = ['snooze', 'done', 'restore'];
-      const row = (s, kind) => { const fresh = !!LIVE.isNew?.(s);
-        return { id: s.id, title: s.title || 'New chat', kind, at: LIVE.cardAt(s) || '', rank: CHATS.stiKind?.(s) === 'failed' ? 1 : Number.isFinite(LIVE.readyRank?.(s)) ? LIVE.readyRank(s) : undefined, snoozed: !!s.deferred, unread: fresh, pinned: !!P?.has(s.id),
-          needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state: CHATS.stiKind?.(s) || '',
-          actions: [...(P ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []), ...CHATS.threadActions(s).filter(a => KEEP.includes(a))] }; };
-      // Snoozed (round 13, Miguel): the stock snooze state, whatever files it (the stock Snoozed group, or Ready's bottom
-      // under the snooze-someday tweak); a snoozed chat waiting on an approval stays in Ready, as in stock
-      const snoozed = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt)) && !['waiting_for_approval', 'unknown'].includes(s.status);
-      // Every chat not archived, working or snoozed is Ready here: this view has no Errors or day sections, so a failed /
-      // interrupted chat (stock Errors) and, under the By day layout, Yesterday / Past week join Ready (its Error group;
-      // its own time order). Leaving them out hid those chats from the sidebar and the rail altogether.
-      const ready = [...(G.errors || []), ...(G.ready || []), ...(G.yesterday || []), ...(G.pastWeek || [])];
-      return { working: (G.working || []).map(s => row(s, 'working')), ready: ready.filter(s => !snoozed(s)).map(s => row(s, 'ready')),
-        snoozed: [...(G.deferred || []), ...ready.filter(snoozed)].map(s => row(s, 'snoozed')), archive: (G.archive || []).slice(0, 200).map(s => row(s, 'archive')) };
-    },
+    sessionList: () => window.WizChatsListModel.sessionList(LIVE?.ok ? LIVE.workGroups() : null, { live: LIVE, chats: CHATS, pins: window.WosChatPins }),
     // The thread's own actions (Chats threadAct: the snooze tweak's interception, toasts, optimistic list); Pin = the Pins
     // toggle; Rename = Chats' rename sheet, over the chat.
     sessionAct: (sid, act) => {
@@ -3022,8 +3000,8 @@
     // The Apps view: one entry per desk (the app in front on it; a Chats desk is 'wizard'), and opening an app on a desk
     // of its own (the current desk when it is empty, else a fresh one), never tiled beside another app.
     deskApps: () => ws.map((d, i) => { const w = d.wins.length ? W[d.focus] || W[d.wins[0]] : null; if (!w) return null; const a = appOf(w); return { desk: i, id: w.app === 'chats' && !w.agent ? 'wizard' : w.appId || a?.id || w.app || '', name: w.app === 'chats' && !w.agent ? 'Chats' : a?.name || winTitle(w) }; }).filter(Boolean),
-    openAppDesk: id => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
-      if (ws[cur].wins.length) { ws.push(freshDesk()); return openApp(a, { ws: ws.length - 1 }) !== false; } return openApp(a) !== false; },
+    openAppDesk: (id, place = null) => { const a = APP[id]; if (!a) return false; const at = ws.findIndex(d => d.wins.some(x => W[x] && (id === 'wizard' ? W[x].app === 'chats' && !W[x].agent : W[x].appId === id))); if (at >= 0) { goWs(at); return true; }
+      if (ws[cur].wins.length) { ws.push(freshDesk()); const desk = ws.length - 1; return (place ? place(desk) : openApp(a, { ws: desk })) !== false; } return (place ? place(cur) : openApp(a)) !== false; },
     // A layout placing the shell's opens (apps.routeOpens): the app's window (the one in front first) at one of its own
     // pages, and one link page no app owns on a desk of its own, reused and taken to the next link (never a second).
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
@@ -3048,7 +3026,24 @@
     openPicker: () => openPicker(),
     openPalette: () => palToggle('all'),   // ⌥Space / ⌘K search & launch
     home: () => goHome(),
-    back: () => !!escStep(),
+    back: () => !!desktopBack(),
+    escapeOverlay: close => escapeBack.push(close),
+    appBack(id) {
+      const w = Object.values(W).find(w => w.app === 'frame' && w.appId === id && winEl(w.id)?.getClientRects().length);
+      if (!w) return false;
+      window.WizAppServices?.back(winEl(w.id)?.querySelector('iframe'));
+      return true; // atRoot/notReady never means close the app
+    },
+    ownsChatList(on) {
+      if (ownsChatList === !!on) return;
+      ownsChatList = !!on;
+      for (const w of Object.values(W)) if (w.app === 'chats') {
+        const el = winEl(w.id); if (!el) continue;
+        CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
+        if (!w.thread) CHATS.renderChats(w);
+        syncChatsPane(w.id);
+      }
+    },
     openList: () => { const w = skinChatsWin(); if (w) { CHATS.openChat(w.id, null); syncChatsPane(w.id); } },
     openThread: id => openThread(id),
     goDesk: i => goWs(i),
@@ -3069,10 +3064,23 @@
     mediaApp: id => { const a = APP[id]; return a ? { name: a.name || id, icon: ico('span', 'np-ic', a) } : null; },
     mediaOpen: id => !!window.WizOpenApp?.(id),
   });
+  // Cold links use the same registered app-open router as later clicks.
+  // Wait for static view setup only, never backend data.
+  await window.WosExperience?.whenReady?.();
+  await window.WosSkinHost?.whenLayoutReady?.();
+  C.deeplink.consume();
+  // First run is the Welcome modal (core/welcome.js): connect an AI, pick a look, send a first message. It replaces
+  // the automatic Setup window and the composer guide (Miguel, 29 Oct 2026); ?view=tour still opens the guide.
+  window.WosWelcome?.boot({ app: id => APP[id] || findApp(id, true) || null, openStore: () => openApp(APP['app-store']),
+    deeplinked: () => (window.__deeplinkLog || []).length > 0, busy: () => VOICE.state !== 'idle',
+    // One main Chats window (reused wherever it is), and the new thread opens in it as soon as it is saved.
+    send: async text => { const w = findWin(mainChats) || newWin({ app: 'chats', thread: null }); const it = await CHATS.sendChat(w.id, text, 'the first message, from the Welcome screen', null, { sid: '__new__', away: true }); if (!it) return null; focusWin(w.id); if (it.sessionId) window.WosWelcome.whenThreadExists(it.sessionId, sid => openThread(sid)); return it; } });
+  const f0 = focused(); if (f0) setTimeout(() => focusInside(f0.id), 50);
+
   // Closed means closed: an app with no window left on any desktop stops its microphone (take saved for recovery).
   window.WizAppServices?.trackOpenApps?.(() => [...ws.flatMap(d => d.wins), ...(panel ? [panel.id] : []), ...(panelApp ? [panelApp.id] : [])].map(id => W[id]).filter(Boolean).flatMap(w => [w.appId, w.servicesAs]));
   window.WizAppServices?.guardBack(() => {
-    const did = escStep(); log('back:' + (did || 'root'));
+    const did = desktopBack(); log('back:' + (did || 'root'));
     if (!did) toast('⌂', 'You’re home · Back never leaves Wizard', 1400);
     return true;
   }, toast);
