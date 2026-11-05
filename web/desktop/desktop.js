@@ -2284,6 +2284,7 @@
     if (window.WosBoomerang?.back()) return 'boomerang'; // the Boomerang picker sits above the thread it was opened from
     if (!pal.hidden) { closePalette(); return 'palette'; }
     if (window.WosAppRoute?.back()) return 'app-route'; // an app's settings sheet
+    if (window.WosAppNotes?.back()) return 'app-notes'; // an app's notes list (shell-drawn over its window)
     if (window.WosAppSetup?.back()) return 'app-setup';
     if (window.WizWebUpdate?.back()) return 'update-list'; // the update card's thread list folds first
     if (CHATS.KIT?.viewer?.isOpen() && CHATS.KIT.viewer.close()) return 'viewer'; // an image opened from a link sits above the sheet
