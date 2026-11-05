@@ -141,6 +141,8 @@
       const content = m.display_content ?? m.content;
       const raw = partsText(content);
       const at = tsMs(m.timestamp ?? m.created_at);
+      const identity = { ...((m.id ?? m.message_id) != null ? { id: m.id ?? m.message_id } : {}),
+        ...((m.client_message_id ?? m.wizard_client_message_id) ? { clientMessageId: m.client_message_id ?? m.wizard_client_message_id } : {}) };
       // Display-only startup context is supplied by the service. It belongs to
       // the following run, never to the owner's preceding request or work receipt.
       if (kind === 'run_context' && m.role === 'system' && m.run_context && typeof m.run_context === 'object') {
@@ -159,7 +161,7 @@
         // A mid-run steer the agent has taken in: shown inside the turn it steered, marked as received.
         if (isSteer) {
           const st = note ? note.text : steerText(raw);
-          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { text: st, at, files: chipFiles(raw) });
+          if (st && cur && !cur.steers.some(x => x.text === st)) cur.steers.push(note ? { text: st, at, files: [], note: true, from: note.from } : { ...identity, text: st, at, files: chipFiles(raw) });
           if (cur) cur.steps++;
           continue;
         }
@@ -171,7 +173,7 @@
         if ((files.length || images.length) && /^Please use the attached (file|files)\.$/.test(t)) t = '';
         if (hasImage) t = t.replace(/^\s*\[screenshot\]\s*$/gmi, '').replace(/\n{3,}/g, '\n\n').trim();
         if (!t && !files.length && !images.length && !rq) continue;
-        newTurn({ text: t, files, images, at, ...(rq ? { reply: rq } : {}) });
+        newTurn({ ...identity, text: t, files, images, at, ...(rq ? { reply: rq } : {}) });
       } else if (m.role === 'assistant') {
         const h = helm(cleanText(raw));
         const t = h.text;
