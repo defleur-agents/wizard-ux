@@ -17,12 +17,12 @@ test('every scene ships baked for night and day, desktop and phone', () => {
 test('Landscapes stays the default and every Wizard OS option is listed', () => {
   for (const id of ['landscapes', 'lake', 'valley', 'moonrise', 'sea', 'clouds', 'glass']) assert.match(skins, new RegExp(`id: '${id}'`));
   assert.match(skins, /: 'landscapes'; \} catch \(_\) \{ return 'landscapes'; \}/);
-  assert.match(skins, /if \(wall !== 'landscapes'\) \{ const w = WIZ\.get\(wall, this\.LIGHT, W, H\)/);
+  assert.match(skins, /if \(selected !== 'landscapes'\) \{ const w = WIZ\.get\(selected, this\.LIGHT, W, H\)/);
   assert.match(skins, /setWallpaper\(id\) \{/);
 });
 
 test('twinned skins keep Colors alongside Background cards and separate Dark | Light mode', () => {
-  assert.match(settings, /!own && twinned\(S, family\) \? backgroundHtml\(S, family, cur\) : ''/);
+  assert.match(settings, /!own && \(S\.wizardBackgrounds \|\| twinned\(S, family\)\) \? backgroundHtml\(S, family, cur\) : ''/);
   assert.match(settings, /const colours = `<div class="skp-colours"><h4>Colors<\/h4>/, 'the separate Color control stays on every skin');
   assert.match(settings, /class="skp-card" data-bgpick=/, 'the same cards as Colors');
   const background = settings.slice(settings.indexOf('function backgroundHtml('), settings.indexOf('function backgroundAct('));
@@ -31,7 +31,7 @@ test('twinned skins keep Colors alongside Background cards and separate Dark | L
   assert.match(settings, /data-skinmode="\$\{m\}"/);
   assert.match(settings, /if \(backgroundAct\(ctx, el, pickPalette\)\) return true;/);
   assert.doesNotMatch(settings, /register\(\{ id: 'wallpaper'/);
-  assert.match(skins, /get wallpaperable\(\) \{ return \/\^landscapes\/\.test/);
+  assert.match(skins, /get wallpaperable\(\) \{ return this\.wizardBackgrounds \|\| \/\^landscapes\/\.test/);
 });
 
 test('wallpaper generator dispatches only explicit scenes, never query-selected methods', () => {

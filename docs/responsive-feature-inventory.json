@@ -464,8 +464,8 @@
       "note": "Direct entrypoint import; Settings → About: base main commit and how far ahead/behind main"
     },
     "core/orb-switcher.js": {
-      "loadedBy": [],
-      "note": "Lazy opt-in pins-only Orb radial via the phone skin-host orb adapter. Neither entrypoint imports it; desktop does not mount it. Open desktops remain on the existing swipe-up path."
+      "loadedBy": ["phone"],
+      "note": "Core phone dock hold: pins-only radial, loaded by index.html and initialized with app.js shell adapter. Desktop and full-screen corner orbs unchanged; open desktops remain on swipe up."
     },
     "core/os-updates.js": {
       "loadedBy": [

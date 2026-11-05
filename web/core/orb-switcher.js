@@ -10,7 +10,7 @@
  *   WosOrbSwitcher.open({x, y})       the radial, centred on the orb; move(x, y); release(cancelled) -> outcome
  *   WosOrbSwitcher.get()              the settings (localStorage wos.orbSwitcher.v1)
  *   WosOrbSwitcher.openSettings()     the Orb switcher sheet; back() closes the sheet, then the radial, one layer */
-export default function createOrbSwitcher(adapter) {
+window.WosCreateOrbSwitcher = function createOrbSwitcher(adapter) {
   'use strict';
   const KEY = 'wos.orbSwitcher.v1', EVT = 'wos:orb-switcher';
   const HOLDS = [200, 300, 450], MAX_PINS = 13;

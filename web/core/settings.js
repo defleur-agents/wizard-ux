@@ -339,7 +339,7 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && twinned(S, family) ? backgroundHtml(S, family, cur) : '');
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur) : '');
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
@@ -352,13 +352,13 @@
   function backgroundHtml(S, family, cur) {
     const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
     const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
-    const onScene = /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
+    const wizard = !!S.wizardBackgrounds, onScene = wizard || /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
     const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 35%, transparent), transparent 34%, transparent 66%, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 45%, transparent)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
-    const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === scenic);
-    const cards = [pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, w.id === 'landscapes' ? '' : S.wallpaperThumb(w.id))) : [])].join('');
-    const note = onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
+    const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === (wizard ? cur : scenic));
+    const cards = [wizard ? card('living', 'Living canvas', lk) : pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, S.wallpaperThumb(w.id))) : [])].join('');
+    const note = wizard && chosen === 'living' ? 'The living canvas for this color.' : onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
     const mode = `<div class="st-seg" role="radiogroup" aria-label="Mode">${[['dark', 'Dark'], ['light', 'Light']].map(([m, n]) => `<button type="button" role="radio" aria-checked="${(m === 'light') === light}" data-skinmode="${m}">${n}</button>`).join('')}</div>`;
-    return `<div class="skp-colours"><h4>Mode</h4>${mode}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p></div>`;
+    return `<div class="skp-colours">${wizard ? '' : `<h4>Mode</h4>${mode}`}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p></div>`;
   }
   function backgroundAct(ctx, el, pick) {
     const S = window.WosSkin, cur = S.current, light = isLight(cur);
@@ -366,6 +366,7 @@
     if (m) { const want = m.dataset.skinmode === 'light'; if (want !== light) { const t = S.twin(cur); if (t) pick(t.id); } return true; }
     const b = el.closest('[data-bgpick]'); if (!b) return false;
     const fam = S.families.find(f => f.id === S.familyOf(cur)), id = b.dataset.bgpick;
+    if (S.wizardBackgrounds) { S.setWallpaper(id); ctx.render(); ctx.haptic?.(8); return true; }
     const target = fam.palettes.find(p => isLight(p) === light && (id === 'plain' ? !/^landscapes/.test(p) : /^landscapes/.test(p)));
     if (id !== 'plain') S.setWallpaper(id);
     if (target && target !== cur) pick(target); else { ctx.render(); ctx.haptic?.(8); }
