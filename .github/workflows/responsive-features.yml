@@ -55,6 +55,7 @@ jobs:
       - run: npm install --no-save --package-lock=false playwright@1.55.1
       - run: npx playwright install --with-deps chromium
       - run: node tests/qa-desktop-escape-back.cjs
+      - run: QA_OUT=escape-back-evidence node tests/qa-desktop-boot-layout.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
