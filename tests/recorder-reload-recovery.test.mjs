@@ -378,6 +378,21 @@ test('wire evidence sink retains exact binary Blob bytes and rejects malformed r
   }finally{await sink.close();rmSync(out,{recursive:true,force:true})}
 });
 
+test('teardown wire requests serve only the exact pinned shell orb image',async()=>{
+  const out=mkdtempSync(path.join(process.env.TMPDIR||process.cwd(),'.qa-orb-')),report={errors:[]};
+  const sink=await stopEvidence.start({out,mode:'phone',report});
+  try{
+    const response=await fetch(sink.url+'/wizard-os-home/robert-thread-orb.png');assert.equal(response.status,200);
+    const expected=readFileSync(new URL('../web/robert-thread-orb.png',import.meta.url));
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()),expected);
+    assert.equal(report.evidenceRequests[0].hash,createHash('sha256').update(expected).digest('hex'));
+    assert.equal(report.evidenceRequests[0].admitted,'source-orb-image');assert.equal(report.errors.length,0);
+    for(const [url,method] of [['/wizard-os-home/robert-thread-orb.png?x=1','GET'],['/wizard-os-home/robert-thread-orb.png','POST'],['/wizard-os-home/other.png','GET']]){
+      assert.equal((await fetch(sink.url+url,{method})).status,500);
+    }
+    assert.equal(report.errors.length,3,'unadmitted asset paths, queries and methods remain failures');
+  }finally{await sink.close();rmSync(out,{recursive:true,force:true})}
+});
 test('a different native take appearing during flush cannot inherit the prior take preparation',async()=>{
   const f=updater();let finish,commits=0;
   f.plan={ok:true,keeps:{appId:'fixture',id:'original',meetingId:'original'}};

@@ -15,7 +15,13 @@ async function start({out,mode,report}){
   (report.evidenceRequests??=[]).push(request);
   const reject=error=>{request.status=500;request.error=String(error);report.errors.push({evidence:String(error),mode,method:req.method,url:req.url,host:req.headers.host});res.writeHead(500);res.end('Synthetic evidence failed');receive({error:String(error)})};
   try{
-   // Browser-generated favicon is the only admitted non-evidence wire request.
+   // During context teardown Chromium may finish an already-admitted shell image on the wire.
+   // Serve only this exact immutable asset from the selected source tree; no arbitrary static fallback.
+   if(req.method==='GET'&&req.url==='/wizard-os-home/robert-thread-orb.png'){
+    const bytes=fs.readFileSync(path.join(path.resolve(process.env.QA_TREE||path.join(__dirname,'..')),'web/robert-thread-orb.png'));
+    request.admitted='source-orb-image';request.status=200;request.hash=createHash('sha256').update(bytes).digest('hex');
+    res.writeHead(200,{'Content-Type':'image/png','Content-Length':bytes.length});res.end(bytes);return;
+   }
    if(req.method==='GET'&&req.url==='/favicon.ico'){
     request.admitted='favicon';request.status=204;res.writeHead(204);res.end();return;
    }
