@@ -155,7 +155,14 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       const c = svc.counts();
       check(`${tag}: Chats list dots match the counts (needs ${c.needs_you} · running ${c.running} · unseen ${c.done_unseen})`, dots.length === 1 && dots[0].key === 'hermes/tt-main' && dots[0].n === 3 && dots[0].text === [c.needs_you, c.running, c.done_unseen].map(x => (x > 1 ? x : '')).join(''), dots);
       check(`${tag}: a thread without asks shows no dots`, !(await page.evaluate(() => !!document.querySelector('[data-tt-dots*="tt-other"]'))));
+      if (shell === 'phone') { // show the actual Chats list: the Ready pill on Home opens it
+        await page.getByText('Ready', { exact: true }).first().click().catch(() => {});
+        await page.waitForSelector('.ch-row, .ch-row2', { state: 'visible', timeout: 6000 }).catch(() => {});
+        await page.waitForTimeout(300);
+        check(`${tag}: the dots are visible on the phone Chats list row`, await page.evaluate(() => { const d = document.querySelector('[data-tt-dots]'); if (!d) return false; const r = d.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom <= innerHeight; }));
+      }
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-list.png`) });
+      if (shell === 'phone') await page.evaluate(() => (window.__wux || window.__wos)?.goHome?.()).catch(() => {});
       await openThread(page, 'tt-main');
       await page.waitForSelector('[data-tt-strip] .tt-h', { timeout: 15000 });
       const head = (await strip(page).locator('.tt-h').innerText()).replace(/\s+/g, ' ');
