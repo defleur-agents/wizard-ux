@@ -519,7 +519,19 @@ html[data-shell="desktop"][data-layout="ai-apps"]:is([data-aad-split], [data-aad
 html[data-shell="desktop"][data-layout="ai-apps"][data-aad-chat] .wsp[data-aad-role="chat"] .win .dchats .pane-main :is(.ch-compose, .ch-swrow) { width: min(768px, calc(100% - 40px)); }
 /* motion: the panel slides in from the right, the column from the left; one short slide and fade */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"][data-aad-anim="app"] { animation: aad-in-right 220ms cubic-bezier(.2, .8, .2, 1) both; }
-html[data-shell="desktop"][data-layout="ai-apps"] .aad-ptop[data-aad-anim="app"] { animation: aad-fade 220ms ease both; }
+/* app-pane-slides-as-one: the visible header lives on the app desk, not in
+ * .aad-top. The desk starts below the 44px shell bar; its header fills that gap.
+ * Only this parent slides. Stock window tiling must not ease underneath it. */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .aad-ptop {
+  top: -44px; bottom: auto; height: 44px; width: 100%; color: var(--aad-ink); transition: none; animation: none;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win {
+  transition: border-color 120ms;
+}
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win > :is(.wbar, .wbody),
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="app"] > .win > .wbody > iframe {
+  transition: none;
+}
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role="chat"][data-aad-anim="dock"], html[data-shell="desktop"][data-layout="ai-apps"] .aad-ctop[data-aad-anim="dock"] { animation: aad-col-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes aad-in-right { from { translate: min(100%, 480px) 0; opacity: .3; } }
 @keyframes aad-col-in { from { translate: -48px 0; opacity: 0; } }
