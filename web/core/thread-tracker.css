@@ -42,7 +42,9 @@ html.wos-doc-scroll .wos-doc-thread .tt-strip { position: sticky; top: calc(var(
 .tt-none { padding: 14px 12px; font-size: 0.7812rem; color: var(--wz-text-muted); }
 
 /* Dots on a Chats row: counts at a glance, no words. */
-.tt-dots { display: inline-flex; align-items: center; gap: 7px; margin-left: 8px; flex: none; }
+.tt-dots { display: inline-flex; align-items: center; gap: 7px; margin-left: 0; flex: none; }
+/* Row titles flex/truncate; the parent's 8px gap keeps dots + time together at the right. */
+html[data-shell="desktop"][data-layout="ai-apps"] .tt-dots + .aad-time { margin-left: 0; padding-left: 0; }
 .tt-d { display: inline-flex; align-items: center; gap: 3px; font-size: 0.6875rem; color: var(--wz-text-muted); font-variant-numeric: tabular-nums; }
 .tt-d b { font-weight: 600; }
 .tt-dots .tt-dot { width: 8px; height: 8px; box-shadow: none; }
