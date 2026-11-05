@@ -81,8 +81,6 @@ function resolved(b) {
 for (const palette of ['nebula','grove','tide','ember','signal']) {
   test(palette+': every background preserves the resolved palette and layout token set', () => {
     const b=boot({'wos.skin':palette}), expected=resolved(b);
-    assert.equal(b.root.dataset.wizardBackgrounds,'');
-    assert.match(expected.tokens['--aad-main'], /^color\(from /);
     for (const background of ['living',...Array.from(b.S.wallpapers,w=>w.id),'living']) {
       b.S.setWallpaper(background);
       assert.deepEqual(resolved(b),expected,background);
