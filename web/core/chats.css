@@ -403,9 +403,9 @@ a.fchip { color: inherit; text-decoration: none; }
 .ch-compose .ch-stop svg { fill: var(--red); stroke: none; }
 /* Media viewer: full-screen overlay inside the app (Back closes it). */
 .mviewer { position: absolute; inset: 0; z-index: 68; display: flex; flex-direction: column; background: rgba(2, 1, 8, calc(.96 * var(--fade, 1))); opacity: 0; transition: opacity 180ms var(--ease); touch-action: none; }
-/* The viewer is always a dark backdrop, so its chrome keeps the default light ink on every skin
- * (a light skin's black --ink made Close, the title and Download vanish into it). */
-.mviewer { --ink: color-mix(in srgb, white 94%, violet); --ink-2: color-mix(in srgb, var(--ink) 72%, transparent); --ink-3: color-mix(in srgb, var(--ink) 50%, transparent); --line: color-mix(in srgb, var(--ink) 13%, transparent); --line-2: color-mix(in srgb, var(--ink) 24%, transparent); color: var(--ink); color-scheme: dark; }
+/* Keep the photo backdrop dark; opaque text chrome follows Appearance live. */
+.mviewer { color: var(--wz-text, var(--ink)); }
+.mviewer .mv-top, .mviewer .mv-bar, .mviewer .mv-menu-b { background: var(--wz-panel, var(--bg)); color: var(--wz-text, var(--ink)); }
 .mviewer.open { opacity: 1; }
 .mviewer[hidden] { display: none; }
 .mv-top { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: calc(var(--sb, 0px) + var(--safe-t, 0px) + 8px) 10px 6px 6px; }

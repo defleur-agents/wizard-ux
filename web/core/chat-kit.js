@@ -735,7 +735,7 @@
   function build() {
     if (V.el) return V.el;
     const el = document.createElement('div');
-    el.className = 'mviewer'; el.hidden = true; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Media viewer');
+    el.className = 'mviewer'; el.hidden = true; el.tabIndex = -1; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Media viewer');
     el.innerHTML = `<div class="mv-top"><button type="button" class="mv-x" data-mv="close" aria-label="Close">×</button><div class="mv-ti"><b></b><small></small></div></div>
       <div class="mv-stage"></div>
       <div class="mv-bar"><button type="button" data-mv="prev" aria-label="Previous">‹</button><button type="button" data-mv="copy" hidden>Copy</button><button type="button" data-mv="share">Share</button><button type="button" data-mv="save">Save</button><button type="button" data-mv="next" aria-label="Next">›</button></div>
@@ -826,17 +826,23 @@
       if (V.items[V.i]?.kind !== 'image' || (!V.long && V.s <= 1.02)) return;
       e.preventDefault(); stopFling(); V.y -= e.deltaY; if (V.s > 1.02) V.x -= e.deltaX; clampPan(); paint(true);
     }, { passive: false });
-    document.addEventListener('keydown', e => {
-      if (!viewer.isOpen()) return;
-      if (e.key === 'ArrowLeft') go(-1); else if (e.key === 'ArrowRight') go(1);
-      else if (V.long && /^(ArrowDown|ArrowUp|PageDown|PageUp| )$/.test(e.key)) {
-        const h = stage.clientHeight, d = /Page| /.test(e.key) ? h * .85 : h * .15;
-        e.preventDefault(); V.y += /Up/.test(e.key) ? d : -d; clampPan(); paint();
-      }
-    });
     addEventListener('resize', () => { if (viewer.isOpen() && V.items[V.i]?.kind === 'image') fit(); });
+    // A hosted device can resize without a browser-window resize.
+    if (typeof ResizeObserver === 'function') new ResizeObserver(() => { if (viewer.isOpen() && V.items[V.i]?.kind === 'image') fit(); }).observe(stage);
     V.el = el; return el;
   }
+  // Register before shell/layout shortcuts. Focus transfers out of the source
+  // iframe on open; gallery arrows must not also navigate the app underneath.
+  window.addEventListener?.('keydown', e => {
+    if (!viewer.isOpen() || e.isComposing || e.altKey || e.ctrlKey || e.metaKey) return;
+    const horizontal = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+    const vertical = V.long && /^(ArrowDown|ArrowUp|PageDown|PageUp| )$/.test(e.key);
+    if (!horizontal && !vertical) return; // Escape/Back keeps the shell overlay stack.
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (V.el.classList.contains('menu-open')) return;
+    if (horizontal) go(e.key === 'ArrowLeft' ? -1 : 1);
+    else { stopFling(); const h = V.el.querySelector('.mv-stage').clientHeight, d = /Page| /.test(e.key) ? h * .85 : h * .15; V.y += /Up/.test(e.key) ? d : -d; clampPan(); paint(); }
+  }, true);
   function menu(on) {
     const m = V.el?.querySelector('.mv-menu'); if (!m) return false;
     if (!on) { if (m.hidden) return false; m.hidden = true; V.el.classList.remove('menu-open'); return true; }
@@ -874,7 +880,8 @@
     const r = st.getBoundingClientRect(), ox = px - r.left - r.width / 2, oy = py - r.top;
     V.x = ox - (ox - V.x) * s / V.s; V.y = oy - (oy - V.y) * s / V.s; V.s = s; clampPan(); paint();
   }
-  // Long screenshots (much taller than the screen) fit the width and scroll; the image's top sits at the stage top.
+  // Phone long screenshots retain width-fit reading; desktop always initially
+  // contains both dimensions, including in narrow desktop windows.
   function dims() {
     const st = V.el?.querySelector('.mv-stage'), img = st?.querySelector('img');
     if (!img || !img.naturalWidth || !st.clientWidth) return null;
@@ -887,7 +894,7 @@
   }
   function fit() {
     const d = dims(); if (!d || !V.el) return;
-    const was = V.long; V.long = d.r > (d.H / d.W) * 1.15;
+    const was = V.long; V.long = document.documentElement.dataset.shell !== 'desktop' && d.r > (d.H / d.W) * 1.15;
     V.el.classList.toggle('long', V.long);
     if (V.long !== was) { V.s = 1; V.x = 0; V.y = 0; }
     clampPan(); paint(true);
@@ -958,15 +965,16 @@
     open(items, i = 0) {
       items = (items || []).filter(x => x && x.url); if (!items.length) return false;
       V.items = items; V.i = Math.max(0, Math.min(items.length - 1, i));
-      const el = build(); el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
-      show(); K.onChange(true); return true;
+      const el = build(); if (el.hidden) V.focus = document.activeElement;
+      el.hidden = false; requestAnimationFrame(() => el.classList.add('open'));
+      show(); K.onChange(true); el.focus({ preventScroll: true }); return true;
     },
     close() {
       if (!V.el || V.el.hidden) return false;
       if (menu(false)) return true; // Back/Esc: the Save/Share menu first, the photo stays open
       for (const m of V.el.querySelectorAll('video,audio')) { try { m.pause(); } catch (e) {} }
       stopFling(); V.long = false; V.el.classList.remove('open', 'zoomed', 'long'); V.el.hidden = true; V.el.querySelector('.mv-stage').innerHTML = ''; dropPdf(); V.items = []; V.ptr.clear(); V.g = null;
-      K.onChange(false); return true;
+      K.onChange(false); if (V.focus?.isConnected) V.focus.focus({ preventScroll: true }); V.focus = null; return true;
     },
     isOpen: () => !!V.el && !V.el.hidden,
     menu: () => viewer.isOpen() && menu(true),
