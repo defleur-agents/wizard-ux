@@ -29,6 +29,39 @@ function service(cap,appId='mizel') {
   const host=window.WizAppServices;host.attach(frame,{appId,path:'/'+appId+'/'});
   return {host,window,frame,facade:host.connect(sourceWindow,{}),plan:()=>host.update.reloadPlan()};
 }
+test('draft hold requires an explicit kept confirmation and becomes busy again after an edit',async()=>{
+  const f=service({safe:true},'wisdom');let value='synthetic draft',stored='';
+  let h=f.facade.update.hold('Wisdom unsent request',{keep:()=>{stored=value;return 'kept'}});
+  assert.equal(f.plan().ok,false);assert.equal(f.host.update.busy(),true);
+  await f.host.update.keepDrafts();assert.equal(stored,value);assert.equal(f.plan().ok,true);assert.equal(f.host.update.busy(),false);
+  value+=' changed';h.release();h=f.facade.update.hold('Wisdom unsent request',{keep:()=>false});
+  assert.equal(f.plan().ok,false);await f.host.update.keepDrafts();assert.equal(f.plan().ok,false);h.release();
+});
+for(const result of [false,true,undefined,'saved','throw','timeout'])test('unconfirmed draft stays blocked: '+result,async()=>{
+  const f=service({safe:true},'wisdom');let late;
+  f.facade.update.hold('Wisdom unsent request',{keep:()=>{if(result==='throw')throw Error('storage denied');if(result==='timeout')return new Promise(r=>late=r);return result}});
+  await f.host.update.keepDrafts();assert.equal(f.plan().ok,false);
+  late?.('kept');await tick();assert.equal(f.plan().ok,false);
+});
+test('an edit or document replacement while keep is pending cannot waive the new hold',async()=>{
+ for(const mode of ['edit','document']){
+  const f=service({safe:true},'wisdom');let finish;const h=f.facade.update.hold('Wisdom unsent request',{keep:()=>new Promise(r=>finish=r)});
+  const p=f.host.update.keepDrafts();await tick();
+  if(mode==='edit'){h.release();f.facade.update.hold('Wisdom unsent request',{keep:()=>false});}
+  else f.frame.contentWindow.document={};
+  finish('kept');await p;
+  if(mode==='edit')assert.equal(f.plan().ok,false);else assert.equal(f.host.inspect()[0].ready,false);
+ }
+});
+for(const reason of ['Recording','voice note','audio in memory','capture upload'])test('audio can never opt into a text draft keeper: '+reason,async()=>{
+ const f=service({safe:true},'messenger');let calls=0;f.facade.update.hold(reason,{keep:()=>{calls++;return 'kept'}});
+ await f.host.update.keepDrafts();assert.equal(calls,0);assert.equal(f.plan().ok,false);
+});
+test('confirmed text draft never waives another active recording or network send',async()=>{
+ const f=service({safe:false,waitForEnd:true},'wisdom');f.facade.update.hold('Wisdom unsent request',{keep:()=> 'kept'});
+ const send=f.facade.update.hold('Wisdom sending');await f.host.update.keepDrafts();assert.equal(f.plan().ok,false);
+ assert(f.plan().blocking.some(b=>b.reason==='Wisdom sending'));send.release();assert.equal(f.plan().ok,false);
+});
 for(const status of ['null','invalid','missing','throw']) test(`native ${status} check cannot arm a later fresh recording or reload`,async()=>{
   const f=updater();let quiet=false;
   const c=capture({ready:Promise.resolve(),ownershipLoaded:false,
@@ -42,7 +75,7 @@ for(const status of ['null','invalid','missing','throw']) test(`native ${status}
   f.window.WizAppCapture.reconcileReload=c.reconcileReload;
   f.web.reload('tap');for(let i=0;i<8;i++)await tick();
   assert.equal(c.recoveryError.code,'native_owner_uncertain');
-  const failedCheck={armed:f.web.armed,recording:s.plan().recording,toast:f.toasts.at(-1)[1],reloads:f.reloads};
+  const failedCheck={armed:f.web.armed,recording:s.plan().recording,toast:f.web.reloadStatus().reason,reloads:f.reloads};
   quiet=true;await c.reconcileReload();
   c.active={row:{id:'fresh',appId:'mizel'},phase:'recording',engine:{}};
   f.emit('wizard-app-capture-state');
@@ -51,7 +84,7 @@ for(const status of ['null','invalid','missing','throw']) test(`native ${status}
   assert.equal(f.reloads,0,'quiet native recovery followed by fresh Start must not consume a failed Reload tap');
   assert.equal(failedCheck.armed,false,'failed check must not silently arm');
   assert.equal(failedCheck.recording,false,'unknown custody is not a recording-end promise');
-  assert.match(failedCheck.toast,/Try Reload again/);assert.equal(failedCheck.reloads,0);
+  assert.match(failedCheck.toast,/voice note|audio that isn’t saved/);assert.equal(failedCheck.reloads,0);
   assert.equal(f.web.armed,false);
   assert.equal(s.plan().recording,true);
   // A NEW explicit tap during the proven recording still intentionally waits for Stop/save.
@@ -91,7 +124,7 @@ test('unsafe, absent and throwing reconciliation results preserve retry rather t
     const f=updater();f.plan={ok:false,recording:true,blocking:[{kind:'capture'}],capture:{recheck:true,safe:false}};
     f.window.WizAppCapture.reconcileReload=async()=>{if(outcome==='throw')throw Error('offline');return outcome};
     f.web.reload('tap');await tick();assert.equal(f.web.armed,false);assert.equal(f.reloads,0);
-    assert.match(f.toasts.at(-1)[1],/Try Reload again/);
+    assert.match(f.web.reloadStatus().reason,/voice note|audio that isn’t saved/);
   }
 });
 test('an armed recording is cancelled if custody becomes unknown or the mic is lent',async()=>{
@@ -171,25 +204,25 @@ const tick=async()=>{for(let i=0;i<12;i++)await Promise.resolve()};
 test('Reload paints checking before I/O, retries once, and reloads only under the current predicate',async()=>{
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
   let release;f.window.WizAppCapture.reconcileReload=()=>new Promise(r=>release=r);
-  f.web.reload('tap');assert.match(f.els.get('dvWeb').innerHTML,/disabled aria-busy="true">Checking recorder/);assert.equal(release,undefined);await tick();assert.ok(release);assert.equal(f.reloads,0);
+  f.web.reload('tap');assert.match(f.els.get('dvWeb').innerHTML,/disabled aria-busy="true">Getting ready/);assert.equal(release,undefined);await tick();assert.ok(release);assert.equal(f.reloads,0);
   release({safe:true});await tick();const animation=f.timers.find(([,ms])=>ms===900);assert.ok(animation);
-  f.plan={ok:false,blocking:[{kind:'capture'}],recording:true};animation[0]();await tick();assert.equal(f.reloads,0);assert.equal(f.els.has('burst'),false);assert.match(f.toasts.at(-1)[1],/Reload paused/);
+  f.plan={ok:false,blocking:[{kind:'capture'}],recording:true};animation[0]();await tick();assert.equal(f.reloads,0);assert.equal(f.els.has('burst'),false);assert.match(f.toasts.at(-1)[1],/has a voice note|has unsaved work/);
   f.plan={ok:true,blocking:[],recording:false};f.web.reload('tap');f.timers.filter(([,ms])=>ms===900).at(-1)[0]();await tick();assert.equal(f.reloads,1);
 });
 test('reload recovery errors do not unload, discard, or get stuck in checking',async()=>{
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);f.window.WizAppCapture.reconcileReload=async()=>{throw Error('synthetic offline')};
-  f.web.reload('tap');await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
+  f.web.reload('tap');await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Getting ready/);assert.match(f.web.reloadStatus().reason,/voice note|audio that isn’t saved/);
 });
 test('recording/work starting during asynchronous native backup flush prevents reload',async()=>{
   const f=updater();let release;f.plan={ok:true,keeps:{appId:'mizel'},blocking:[],recording:false};
   f.window.WizAppServices.update.prepareReload=()=>new Promise(r=>release=r);
   f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();assert.ok(release);
-  f.plan={ok:false,blocking:[{kind:'work',reason:'unsaved notes'}],recording:false};release();await tick();assert.equal(f.reloads,0);assert.match(f.toasts.at(-1)[1],/Reload paused/);
+  f.plan={ok:false,blocking:[{kind:'work',reason:'unsaved notes'}],recording:false};release();await tick();assert.equal(f.reloads,0);assert.match(f.toasts.at(-1)[1],/has a voice note|has unsaved work/);
 });
 test('hung recorder check has a bounded UI wait without cancelling the underlying take',async()=>{
   const f=updater();await f.web.check(true);f.revision='b'.repeat(40);await f.web.check(true);
   f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');await tick();
-  f.timers.find(([,ms])=>ms===4500)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Checking recorder/);assert.match(f.toasts.at(-1)[1],/audio is still kept/);
+  f.timers.find(([,ms])=>ms===4500)[0]();await tick();assert.equal(f.reloads,0);assert.doesNotMatch(f.els.get('dvWeb').innerHTML,/Getting ready/);assert.match(f.web.reloadStatus().reason,/voice note|audio that isn’t saved/);
 });
 
 test('aborted native flush preserves the actual frame, hold and registered observers; commit alone detaches',async()=>{
@@ -231,7 +264,7 @@ test('native preparation failure is not swallowed into a reload',async()=>{
   f.window.WizAppServices.update.prepareReload=async()=>{throw Error('unknown flush')};
   f.window.WizAppServices.update.commitReload=()=>commits++;
   f.web.reload('tap');f.timers.find(([,ms])=>ms===900)[0]();await tick();
-  assert.equal(f.reloads,0);assert.equal(commits,0);assert.match(f.toasts.at(-1)[1],/still kept/);
+  assert.equal(f.reloads,0);assert.equal(commits,0);assert.match(f.web.reloadStatus().reason,/audio that isn’t saved/);
 });
 test('timed-out Reload retries join one underlying recovery until it settles',async()=>{
   let release,calls=0;const c=capture({ready:Promise.resolve(),recover:()=>{calls++;return new Promise(r=>release=r)}});

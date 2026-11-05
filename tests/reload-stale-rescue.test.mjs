@@ -91,12 +91,29 @@ function updater() {
 }
 async function fire(f,ms){const timer=f.timers.find(t=>t[1]===ms);assert(timer,'timer '+ms);timer[0]();await tick()}
 test('healthy Reload still navigates exactly once after the existing animation',async()=>{const f=updater();f.web.reload('tap');await fire(f,900);assert.equal(f.reloads,1)});
+test('Reload asks the app to keep its draft before checking the recorder, then navigates once',async()=>{
+ const f=updater();f.plan={ok:false,blocking:[{appId:'wisdom',kind:'work',keepable:true}],capture:{safe:true}};
+ let kept=0;f.window.WizAppServices.update.keepDrafts=async()=>{kept++;f.plan={ok:true,blocking:[],capture:{safe:true}}};
+ f.web.reload('tap');assert(f.web.reloadStatus().checking);assert.equal(kept,0);await tick();assert.equal(kept,1);
+ await fire(f,900);assert.equal(f.reloads,1);
+});
+test('a draft keeper that never confirms remains blocked with one plain app reason',async()=>{
+ const f=updater();f.window.WizCore.apps=()=>({APPS:[{id:'wisdom',name:'Wisdom'}]});f.plan={ok:false,blocking:[{appId:'wisdom',kind:'work',keepable:true}],capture:{safe:true}};
+ f.window.WizAppServices.update.keepDrafts=()=>new Promise(()=>{});f.web.reload('tap');await fire(f,1700);
+ assert.equal(f.reloads,0);assert.equal(f.web.reloadStatus().checking,false);assert.equal(f.web.reloadStatus().reason,'Wisdom has unsaved work.');
+});
+test('notice and blocked toast name the real blocker without troubleshooting codes or private draft text',()=>{
+ for(const [app,kind,reason,line] of [['messenger','work','Sending','Messenger is sending.'],['messenger','capture','voice recording','Messenger has a voice note that isn’t sent yet.'],['mizel','work','Saving','Recorder is saving.']]){
+  const f=updater();let toast;f.web.init({mount:()=>({appendChild(){}}),toast:(_i,t)=>toast=t});f.plan={ok:false,blocking:[{appId:app,kind,reason}],capture:{safe:false}};
+  f.web.reload('tap');assert.equal(f.web.reloadStatus().reason,line);assert.equal(toast,line);assert.doesNotMatch(line,/RECOVERY|RELOAD_|checking|recovery/i);
+ }
+});
 test('armed wait cannot silently last two minutes',()=>{const f=updater();f.plan={ok:false,blocking:[{kind:'capture',appId:'mizel'}],capture:{safe:false,waitForEnd:true},recording:true};f.web.reload('tap');assert(f.web.armed);f.advance(110001);f.intervals.at(-1)();assert(!f.web.armed);assert.match(f.web.reloadStatus().reason,/still waiting/);assert.equal(f.reloads,0)});
-test('never-resolving recorder check stops checking and explains retention within 4.5 seconds',async()=>{const f=updater();f.plan.capture.recheck=true;f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');assert(f.web.reloadStatus().checking);await fire(f,4500);assert(!f.web.reloadStatus().checking);assert.match(f.web.reloadStatus().reason,/RECOVERY_TIMEOUT/)});
-test('never-resolving native preparation stops Reloading and explains retention',async()=>{const f=updater();f.plan.keeps={appId:'mizel',id:'live'};f.window.WizAppServices.update.prepareReload=()=>new Promise(()=>{});f.web.reload('tap');await fire(f,900);await fire(f,3500);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/RELOAD_PREPARE/);assert.equal(f.reloads,0)});
-test('navigation blocked by beforeunload has a visible watchdog and retry',async()=>{const f=updater();f.web.reload('tap');await fire(f,900);await fire(f,4500);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/RELOAD_NAVIGATION/)});
-test('a synchronous persistence error never leaves the burst stuck',async()=>{const f=updater();f.window.WizAppReadingPosition.flush=()=>{throw Error('synthetic')};f.web.reload('tap');await fire(f,900);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/RELOAD_FAILED/)});
-for(const app of ['messenger','mizel'])test(app+' frame hold has an on-notice reason with no private hold text',()=>{const f=updater();f.plan={ok:false,blocking:[{kind:'work',appId:app,reason:'DO NOT DISPLAY PRIVATE DRAFT'}]};f.web.reload('tap');const s=f.web.reloadStatus();assert.match(s.reason,app==='mizel'?/Recorder/:/Messenger/);assert.match(s.reason,/unsent draft/);assert(!s.reason.includes('PRIVATE'))});
+test('never-resolving recorder check stops checking and explains retention within 4.5 seconds',async()=>{const f=updater();f.plan.capture.recheck=true;f.window.WizAppCapture.reconcileReload=()=>new Promise(()=>{});f.web.reload('tap');assert(f.web.reloadStatus().checking);await fire(f,4500);assert(!f.web.reloadStatus().checking);assert.match(f.web.reloadStatus().reason,/has a voice note|audio that isn’t saved/)});
+test('never-resolving native preparation stops Reloading and explains retention',async()=>{const f=updater();f.plan.keeps={appId:'mizel',id:'live'};f.window.WizAppServices.update.prepareReload=()=>new Promise(()=>{});f.web.reload('tap');await fire(f,900);await fire(f,3500);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/audio that isn’t saved/);assert.equal(f.reloads,0)});
+test('navigation blocked by beforeunload has a visible watchdog and retry',async()=>{const f=updater();f.web.reload('tap');await fire(f,900);await fire(f,4500);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/Couldn’t reload/)});
+test('a synchronous persistence error never leaves the burst stuck',async()=>{const f=updater();f.window.WizAppReadingPosition.flush=()=>{throw Error('synthetic')};f.web.reload('tap');await fire(f,900);assert(!f.web.reloadStatus().going);assert.match(f.web.reloadStatus().reason,/Couldn’t reload/)});
+for(const app of ['messenger','mizel'])test(app+' frame hold has an on-notice reason with no private hold text',()=>{const f=updater();f.plan={ok:false,blocking:[{kind:'work',appId:app,reason:'DO NOT DISPLAY PRIVATE DRAFT'}]};f.web.reload('tap');const s=f.web.reloadStatus();assert.match(s.reason,app==='mizel'?/Recorder/:/Messenger/);assert.match(s.reason,/unsaved work/);assert(!s.reason.includes('PRIVATE'))});
 test('stale memory/row notice names app and date only, with Save default and confirmed Discard',async()=>{
   const f=updater();f.plan={ok:false,blocking:[{kind:'capture',appId:'messenger'}],capture:{safe:false}};f.takes=[{id:'old',appId:'messenger',startedAt:Date.parse('2026-11-03T12:00:00Z')}];
   assert.match(f.web.reloadStatus().reason,/Messenger.*3 Nov|Messenger.*Nov 3/);assert.match(f.web.rescueHtml(),/Save to Files and clear.*Discard/);
