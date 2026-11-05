@@ -2,11 +2,32 @@
 /* Closed synthetic shell: never contacts the owner server or opens owner audio. */
 const {boot,assert,fs,path}=require('./qa-closed-shell.cjs');
 const out=path.resolve(process.env.QA_OUT||'qa-reload-rescue');fs.mkdirSync(out,{recursive:true});
+// Decode browser PNG pixels: compressed PNG bytes are not an opacity oracle.
+function pixels(png){
+ const zlib=require('node:zlib'),data=[];let w,h,type;
+ for(let off=8;off<png.length;){const n=png.readUInt32BE(off),tag=png.toString('ascii',off+4,off+8),b=png.subarray(off+8,off+8+n);if(tag==='IHDR'){w=b.readUInt32BE(0);h=b.readUInt32BE(4);assert.equal(b[8],8);type=b[9]}if(tag==='IDAT')data.push(b);off+=n+12}
+ assert([2,6].includes(type));const bpp=type===6?4:3,stride=w*bpp,raw=zlib.inflateSync(Buffer.concat(data)),out=Buffer.alloc(h*stride);
+ const paeth=(a,b,c)=>{const p=a+b-c,pa=Math.abs(p-a),pb=Math.abs(p-b),pc=Math.abs(p-c);return pa<=pb&&pa<=pc?a:pb<=pc?b:c};
+ for(let y=0;y<h;y++){const kind=raw[y*(stride+1)];for(let x=0;x<stride;x++){const i=y*stride+x,a=x>=bpp?out[i-bpp]:0,b=y?out[i-stride]:0,c=y&&x>=bpp?out[i-stride-bpp]:0;assert(kind<=4);out[i]=(raw[y*(stride+1)+1+x]+[0,a,b,Math.floor((a+b)/2),paeth(a,b,c)][kind])&255}}
+ return out;
+}
+async function opacityProof(p,popup){
+ const b=await popup.boundingBox(),clip={x:b.x+20,y:b.y+20,width:b.width-40,height:b.height-40};
+ await popup.evaluate(el=>{const behind=document.createElement('div');behind.id='synthetic-opacity-background';behind.style.cssText='position:fixed;inset:0;z-index:69;pointer-events:none;background:blue;color:yellow;font:900 30px/32px sans-serif';behind.textContent='SYNTHETIC LOUD TEXT '.repeat(300);el.before(behind);el.style.willChange='transform'});
+ const over=await p.screenshot({clip});await p.evaluate(()=>document.querySelector('#synthetic-opacity-background').style.visibility='hidden');const bare=await p.screenshot({clip});
+ assert(pixels(over).equals(pixels(bare)),'notice pixels must be independent of background text');
+ // Calibrate identical oracle against a deliberately transparent panel, then restore exact inline bytes.
+ const old=await popup.getAttribute('style');await popup.evaluate(el=>{el.style.setProperty('background','transparent','important');el.style.setProperty('backdrop-filter','none','important');el.style.setProperty('-webkit-backdrop-filter','none','important')});
+ const negativeBare=await p.screenshot({clip});await p.evaluate(()=>document.querySelector('#synthetic-opacity-background').style.visibility='visible');const negativeOver=await p.screenshot({clip});
+ assert(!pixels(negativeOver).equals(pixels(negativeBare)),'oracle must reject an actually transparent panel');
+ await popup.evaluate((el,old)=>{old===null?el.removeAttribute('style'):el.setAttribute('style',old);document.querySelector('#synthetic-opacity-background').remove()},old);
+ return {opaque:true,negativeRejected:true};
+}
 (async()=>{
  const results=[];
  for(const skin of ['nebula','obsidian-light']){
   let revision='a'.repeat(40),uploaded=0,bytes=0,heads=0;
-  const f=await boot({tree:process.env.QA_TREE,skin,configure:async c=>{
+  const f=await boot({tree:process.env.QA_TREE,skin:'nebula',configure:async c=>{
    await c.route('**/ux-version.txt',r=>r.fulfill({status:200,contentType:'text/plain',body:revision}));
    await c.route('**/synthetic-capture/',r=>r.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Synthetic capture fixture</title>'}));
    await c.route('**/wizard/files/upload',async r=>{const b=r.request().postDataBuffer();assert.equal(r.request().method(),'POST');assert.deepEqual([...b],[0,255,128,9]);bytes=b.length;uploaded++;await r.fulfill({status:201,contentType:'application/json',body:JSON.stringify({file:{id:'wf_synthetic_recovered',bytes:b.length}})});});
@@ -35,8 +56,14 @@ const out=path.resolve(process.env.QA_OUT||'qa-reload-rescue');fs.mkdirSync(out,
     await WizWebUpdate.check(true);
    });
    revision='b'.repeat(40);await p.evaluate(()=>WizWebUpdate.check(true));
-   await p.evaluate(skin=>WosSkin.set(skin),skin);
-   await p.waitForFunction(s=>WosSkin.current===s,skin);await p.evaluate(()=>document.fonts.ready);await p.waitForTimeout(500);
+   await p.evaluate(()=>WizCore.deeplink.route('/wizard-os-home/?view=skin'));
+   await p.locator('#settingsBody').waitFor({state:'visible'});
+   const family=await p.evaluate(s=>WosSkin.familyOf(s),skin);
+   const familyButton=p.locator('[data-skinfamily="'+family+'"]:visible');if(await familyButton.count())await familyButton.tap();
+   await p.locator('[data-skinpick="'+skin+'"]:visible').tap();
+   assert.equal(await p.locator('[data-skinpick="'+skin+'"]:visible').getAttribute('aria-pressed'),'true');
+   await p.evaluate(()=>__wos.closeSheets());
+   await p.waitForFunction(s=>WosSkin.current===s,skin);await p.evaluate(()=>document.fonts.ready);await p.locator('.mz-intro').waitFor({state:'detached',timeout:15000});await p.waitForTimeout(500);
    await p.evaluate(()=>WosUpdates.popup());
    const popup=p.locator('.osu-pop');await popup.waitFor({state:'visible'});
    await assert.equal(await popup.getByText('Save to Files and clear',{exact:true}).count(),1);
@@ -44,12 +71,13 @@ const out=path.resolve(process.env.QA_OUT||'qa-reload-rescue');fs.mkdirSync(out,
    assert.match(await popup.innerText(),/Discard/);
    const geometry=await popup.evaluate(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return{background:s.backgroundColor,image:s.backgroundImage,opacity:s.opacity,width:r.width,height:r.height,left:r.left,right:r.right,bottom:r.bottom,viewport:innerWidth}});
    assert.equal(geometry.opacity,'1');assert(geometry.left>=0&&geometry.right<=geometry.viewport);assert(geometry.height>100);
+   const opacity=await opacityProof(p,popup);
    const shot=path.join(out,'phone-'+skin+'-rescue.png');await p.screenshot({path:shot});
    await popup.getByRole('button',{name:'Save to Files and clear',exact:true}).click();
    await p.waitForFunction(()=>!document.querySelector('.osu-pop [data-osu="rescue-save"]'));
    await p.waitForTimeout(1200);
    assert.equal(uploaded,1);assert.equal(bytes,4);assert.equal(heads,1);
-   results.push({skin,shot,geometry,uploaded,bytes,heads,errors:f.errors});
+   results.push({skin,shot,geometry,opacity,uploaded,bytes,heads,errors:f.errors});
    assert.deepEqual(f.errors,[]);
   }finally{await f.close()}
  }

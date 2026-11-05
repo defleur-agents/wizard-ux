@@ -116,12 +116,12 @@
 .osu-pop[data-state="reload"] { flex-wrap: wrap; }
 .osu-pop[data-state="reload"] .osu-pop-tx { flex-basis: calc(100% - 160px); }
 .osu-pop[data-state="reload"] .osu-pop-tx span { display: block; overflow: visible; -webkit-line-clamp: unset; }
-.wos-reload-reason { margin: 8px 0; color: var(--wz-text-secondary, var(--ink-2, #d9d2f0)); font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.wos-reload-reason { margin: 8px 0; color: var(--wz-text-secondary, var(--ink-2)); font-size: .875rem; line-height: 1.4; overflow-wrap: anywhere; }
 .wos-reload-rescue { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; margin-top: 8px; }
-.wos-reload-rescue button { min-height: 44px; padding: 8px 12px; border-radius: 12px; background: var(--wz-accent, var(--violet, #a58bff)); color: var(--wz-on-accent, var(--bg, #0e0822)); font: inherit; font-weight: 650; }
-.wos-reload-rescue button:last-child { background: var(--wz-panel, var(--bg, #0e0822)); color: var(--wz-text-secondary, var(--ink-2, #d9d2f0)); border: 1px solid var(--wz-border, var(--line-2, #655a80)); }
+.wos-reload-rescue button { min-height: 44px; padding: 8px 12px; border-radius: 12px; background: var(--wz-accent, var(--violet)); color: var(--wz-on-accent, var(--bg)); font: inherit; font-weight: 650; }
+.wos-reload-rescue button:last-child { background: var(--wz-panel, var(--bg)); color: var(--wz-text-secondary, var(--ink-2)); border: 1px solid var(--wz-border, var(--line-2)); }
 .wos-reload-rescue button:disabled { opacity: .65; }
 .osu-card:has(.wos-reload-rescue) { flex-wrap: wrap; }
-.wos-reload-detail { background: var(--wz-panel, var(--bg, #0e0822)); color: var(--wz-text, var(--ink, #f4f0ff)); }
-#dvWeb[data-shell="desktop"] .wos-reload-detail { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; max-width: 80vw; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.wos-reload-detail { background: var(--wz-panel, var(--bg)); color: var(--wz-text, var(--ink)); }
+#dvWeb[data-shell="desktop"] .wos-reload-detail { position: absolute; top: calc(100% + 8px); right: 0; width: 340px; max-width: 80vw; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 12px; }
 @keyframes osu-pop-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
