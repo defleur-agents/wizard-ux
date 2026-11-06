@@ -422,6 +422,10 @@ html[data-shell="desktop"][data-layout="ai-apps"]:not([data-ai-front="list"]) #s
 /* Both visible panes are directly interactive: their first click reaches the app.
  * The resizing iframe guard below remains stronger (!important). */
 html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp:not([hidden]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }
+/* The app panel beside a docked chat is still a [hidden] desk to the shell while the chat's desk is current (after a
+ * reply), and its window is not the focused one: its iframe stays a pointer target all the same (James, 6 Nov 2026:
+ * "Messenger became unclickable"). */
+html[data-shell="desktop"][data-layout="ai-apps"] #stage > .wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }
 
 /* ---------- round 9 (Miguel, 2 Nov 2026): the sidebar resizable by drag (round 13: the only panel left) ----------
  * The width is the owner's (kept per device), set by desktop.js as --aad-side-w; the folded rail keeps its own. */
