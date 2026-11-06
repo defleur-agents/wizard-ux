@@ -105,3 +105,15 @@ test('an older language response cannot overwrite a new target', () => {
   h.st.to = 'French'; h.context.S.pictured(c.id, {lines: THAI});
   assert.equal(h.st.pic, null); assert.equal(h.calls.filter(c=>c.kind==='translate').length,1);
 });
+test('an outside pointer tap dismisses automatic picture translation and retains Copy', () => {
+  const h = harness(); h.nativeEnglish(); h.pictured({lines: THAI}); h.translated({items: EN, from: 'Thai'});
+  assert.equal(h.node('#sheet').classList.contains('show'), true);
+  const layer = h.node('#layer'); layer.setPointerCapture = () => {};
+  layer.fire('pointerdown', {clientX: 345, clientY: 100, pointerId: 1});
+  layer.fire('pointerup', {clientX: 345, clientY: 100, pointerId: 1});
+  assert.equal(h.node('#sheet').classList.contains('show'), false);
+  assert.equal(h.st.panel, 'sel');
+  assert.equal(h.st.pictureTranslation.text, EN.join('\n'));
+  h.node('#tCopy').fire('click');
+  assert.equal(h.next('copy').text, EN.join('\n'));
+});
