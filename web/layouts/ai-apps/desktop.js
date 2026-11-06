@@ -2,7 +2,7 @@
  * measured at 1440 × 900 and 1280 × 800 (~/.hermes/cache/screenshots/ai-apps-ref/REPORT.md §6), with Wizard's own
  * pieces in it. Worn by the same miguel/ai-apps tweak as the phone (layout.js hands the desktop shell here).
  *
- *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats and apps)
+ *   - Sidebar on the left, 288 px (Claude's width, ChatGPT's panel): the Wizard's name, 🔍 (searches chats only)
  *     and the collapse toggle ◫ in its header; where they list Projects / GPTs / Spaces, the open apps as a grid of
  *     small icons with their names (every open app = desks, badged first then desk order, the badge on the icon; the
  *     same list as the phone drawer, the Apps icons and the Orb satellites), ending in All apps = the three-level
@@ -194,11 +194,11 @@ export default function desktop(api) {
   // round 8 (Miguel): text only and a small chevron, no disc before the name
   const wsName = el('span', 'aad-wsn');
   wsBtn.append(wsName, icon('down', 'aad-ico aad-wsc'));
-  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); findBtn.append(icon('search'));
+  const findBtn = el('button', 'aad-ib aad-find', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); findBtn.append(icon('search'));
   const togBtn = el('button', 'aad-ib aad-tog', { type: 'button', 'aria-controls': 'aad-side' }); togBtn.append(icon('side'));
   // (round 18 item 4a, Miguel: the Ready count sits on Ready's own header, as on the rail; none on ◫ any more)
   const searchBox = el('label', 'aad-search'); searchBox.hidden = true;
-  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats and apps', 'aria-label': 'Search chats and apps', autocomplete: 'off' });
+  const field = el('input', 'aad-q', { type: 'search', placeholder: 'Search chats', 'aria-label': 'Search chats', autocomplete: 'off' });
   searchBox.append(icon('search', 'aad-ico aad-search-i'), field);
   const cancelBtn = el('button', 'aad-cancel', { type: 'button', text: 'Cancel' }); cancelBtn.hidden = true;
   // (round 16: no ⌂ here any more; Home = a chat's ✕, Esc, ⌥`)
@@ -215,7 +215,7 @@ export default function desktop(api) {
   const rail = el('div', 'aad-rail');
   const rTog = el('button', 'aad-ib aad-rtog', { type: 'button', 'aria-label': 'Open sidebar', title: 'Open sidebar' }); rTog.append(icon('side'));
   const rNew = el('button', 'aad-ib aad-rnew', { type: 'button', 'aria-label': 'New chat', title: 'New chat (⌥N)' }); rNew.append(icon('plus'));
-  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats and apps', title: 'Search (⌥K)' }); rFind.append(icon('search'));
+  const rFind = el('button', 'aad-ib aad-rfind', { type: 'button', 'aria-label': 'Search chats', title: 'Search chats (⌥K)' }); rFind.append(icon('search'));
   const rSet = el('button', 'aad-ib aad-rset', { type: 'button', 'aria-label': 'Settings', title: 'Settings (⌥S)' }); rSet.append(icon('cog'));
   const rList = el('div', 'aad-rlist', { role: 'list', 'aria-label': 'Chats' });
   rail.append(rTog, rNew, rFind, rList, rSet);
@@ -256,7 +256,7 @@ export default function desktop(api) {
   const vtFoot = el('div', 'aad-vtf');
   // All apps: the list's last row, kept in view under it (the grid as a sheet, ⌥T)
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
-  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥A)' });
+  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Open another app: search all installed apps, including open and pinned apps', title: 'Open another app (Left ⌥Space · ⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
   vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
@@ -360,7 +360,9 @@ export default function desktop(api) {
     const tabs = clampTo(sized.tabs ?? COLS.tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25));
     const sideNow = root.dataset.aadSide === 'open' ? side : RAIL, tabsNow = root.dataset.aadTabs === 'rail' ? COLS.tabsRail : tabs;
     const appHi = Math.min(SIZE_LIMITS.app[1], W - sideNow - tabsNow - 320);
-    const app = clampTo(sized.app ?? Math.round(Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
+    // an app shown with its companion pane (Video Editor's video + Feedback) needs room for both columns: wider by
+    // default until the owner sizes the panel himself (James, 6 Nov 2026)
+    const app = clampTo(sized.app ?? Math.round(paneWins() > 1 ? Math.max(900, W * .62) : Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
     return { side: [side, SIZE_LIMITS.side[0], hi], tabs: [tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25)], app: [app, SIZE_LIMITS.app[0], appHi] };
   }
   /* round 10 (Miguel: dragging felt laggy): a drag writes only what changed, once a frame. While a grip is held
@@ -447,7 +449,7 @@ export default function desktop(api) {
   api.listen(globalThis, 'resize', () => applySizes());
   scene.append(grips);
 
-  /* ---------- search (a field over the same lists, as on the phone) ---------- */
+  /* ---------- contextual Chats search (apps stay in the global launcher) ---------- */
   let q = '';
   function setSearch(on) {
     if (on && root.dataset.aadSide === 'rail') { if (narrow()) { peek = true; offPeek = api.back.push(() => { peek = false; offPeek = null; paintSide(); }); } else { folded = false; api.storage.set('folded', false); } paintSide(); }
@@ -527,16 +529,6 @@ export default function desktop(api) {
     if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1, generation)); return; }
     focusWant = ''; focusing = false;
   }
-  function appCell(a) {
-    const b = el('button', 'aad-gi', { type: 'button', role: 'listitem', 'data-app': a.id, title: a.name, ...(a.id === here().app ? { 'aria-current': 'page' } : {}) });
-    const ic = el('span', 'aad-gt'), n = el('b', 'aad-badge', { 'data-badge': a.id, 'aria-hidden': 'true', text: badgeText(a.id) }); n.hidden = !n.textContent;
-    ic.append(appTile(a.id), n);
-    b.append(ic, el('span', 'aad-gn', { text: a.name }));
-    b.setAttribute('aria-label', a.name + (n.textContent ? `, ${n.textContent} new` : ''));
-    api.listen(b, 'click', () => { if (q) setSearch(false); goApp(a.id); });
-    return b;
-  }
-  const grid = (label, cells) => { const g = el('div', 'aad-grid', { role: 'list', 'aria-label': label }); g.append(...cells); return g; };
 
   /* ---------- round 15: All apps (round 16: the right column's last row, ⌥T) ----------
    * A sheet over the main area: every app as a big icon with its name (the open ones, then every installed app, then
@@ -549,17 +541,20 @@ export default function desktop(api) {
   /* the picker (round 16 item 7; the shared sheet, chrome.js): installed apps neither open nor pinned, For people open,
    * For agents folded, + Get more last (the App Store as it is); ⌥T or the column's + */
   const allOpenNow = () => !!chrome.isOpen;
-  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ exclude: () => refreshPins(), people: 'For people' }); }
+  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ includeOpen: true, people: 'For people' }); }
   function closeAll() { chrome.close(); }
   api.listen(vtAll, 'click', openAll);
 
   /* ---------- round 15: the pinned apps (round 16: the right column's top) ---------- */
-  const installedIds = () => api.apps.list().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
+  // Launcher links (e.g. Video Editor) live in kinds.dev, not the quick-app list.
+  // Validate pins against the installed catalog, never just that quick projection.
+  const pinApps = () => { const K = api.apps.kinds?.() || {}; return [...api.apps.list(), ...(K.apps || []), ...(K.dev || [])]; };
+  const installedIds = () => pinApps().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
   // (until he pins or unpins, the defaults follow the installed list: it can still be empty on the first paint)
   let pinsStored = api.storage.get('pins'), pins = pinsFrom(pinsStored, installedIds());
   const refreshPins = () => { pins = pinsFrom(Array.isArray(pinsStored) ? pinsStored : null, installedIds()); return pins; };
   const setPins = list => { pinsStored = list; pins = list; api.storage.set('pins', list); paintVt(true); };
-  const pinApp = id => setPins(togglePin(pins, id));
+  const pinApp = id => setPins(togglePin(refreshPins(), id));
 
   /* the quick actions (round 10): Open; Add to Home Screen (the Desks' own sheet, apps it would offer); the App Store
    * page (its own Update / Remove, behind the Store's own confirmations); Close for an open app (it stays installed) */
@@ -719,22 +714,19 @@ export default function desktop(api) {
   let drawn = '', railDrawn = '';
   function paintList(force = false) {
     if (root.dataset.aadSide === 'rail') return;
-    const s = sessions || readSessions(), apps = api.apps.list(), dk = desks(), h = here();
-    // (round 14: what is in front is not part of what the list draws: a tab switch or a chat picked moves the current
-    // row's mark in place below, never rebuilding the list; the search's app hits are the exception)
-    const sig = JSON.stringify([q, q ? h.app : '', q ? dk.map(d => d.id + d.desk + (lit(d.id) ? '*' + badgeText(d.id) : '')) : 0, apps.length,
+    const s = sessions || readSessions(), h = here();
+    // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
+    const sig = JSON.stringify([q,
       secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
     if (q) {
-      const hitsA = apps.filter(a => a.id !== CHATS && !a.agent && !a.connector && !a.dev && matches(a, q));
       const seen = new Set(), hitsC = KINDS.flatMap(k => s[k] || []).filter(r => !seen.has(r.id) && seen.add(r.id) && matches({ name: r.title }, q));
-      if (hitsA.length) out.push(label('Apps'), grid('Apps', hitsA.map(appCell)));
       if (hitsC.length) out.push(label('Chats'), ...hitsC.map(r => chatRow(r, h.thread)));
-      if (!hitsA.length && !hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chat or app by that name.' }));
+      if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else {
-      // the sidebar is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
+      // The sidebar and its search are Chats only; app search belongs to the global launcher.
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         const rows = s[k] || [], on = !!secOpen[k];
@@ -1058,7 +1050,7 @@ export default function desktop(api) {
     refreshPins();
     // (round 16 item 7: parts.js appLayers, the phone's Home too; badged first until he orders them by hand: then his
     // order, i.e. the desks' order; the badge stays on the row)
-    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, appName(id) || id])), chats: CHATS });
+    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, pinApps().find(a => a.id === id)?.name || appName(id) || id])), chats: CHATS });
     return { pinned: L.pinned, others: L.open };
   }
   let manual = api.storage.get('vtManual') === true;
@@ -1502,9 +1494,16 @@ export default function desktop(api) {
   // (the one on screen: a second Chats window, e.g. the chat ⌥X starts, can hold another hidden one)
   const routeBtn = () => chatParts('routeButton')[0] || null;
   const chatBtn = act => chatAction(act);
+  let leftOption = false;
+  api.listen(globalThis, 'blur', () => { leftOption = false; });
   api.keys.on({ down: e => {
+    if (e.code === 'AltLeft') leftOption = true;
+    else if (!e.altKey) leftOption = false;
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    // Physical LEFT Option + Space is the existing app picker, never voice.
+    // Before modal/app key dispatch: repeats are consumed without reopening it.
+    if (code === 'Space' && !sh && leftOption) return once(openAll);
     // Native word jumps are never a view action, including with a modal or snooze sheet in front.
     if (!sh && (code === 'ArrowLeft' || code === 'ArrowRight')) return false;
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
@@ -1552,7 +1551,7 @@ export default function desktop(api) {
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
     return KEY_LIKE.test(code);
-  } });
+  }, up: e => { if (e.code === 'AltLeft' || !e.altKey) leftOption = false; } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
   /* Now playing (4 Nov 2026, minimal): a playing app's row wears data-media="playing" | "paused" and its icon small
    * bars (.aad-np, drawn by the miguel/now-playing tweak's css). Hovering the bars turns them into pause; a click
