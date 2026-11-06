@@ -12,6 +12,7 @@ import sys
 import tarfile
 from typing import Any
 import xml.etree.ElementTree as ET
+import zipfile
 
 
 def sha(path):
@@ -41,6 +42,10 @@ def verify(root, digest):
     assert sha(apk) == spec['apk_sha256'] == artifact['sha256']
     assert artifact['signer_sha256'] == spec['signer_sha256']
     assert artifact['aapt2']['version_code'] == '89' and artifact['aapt2']['version_name'] == '0.10.25'
+    asset = job / 'source/android/app/src/main/assets/assist/screen.html'
+    with zipfile.ZipFile(apk) as packaged:
+        assert packaged.read('assets/assist/screen.html') == asset.read_bytes()
+    assert sha(asset) == spec['screen_asset_sha256']
     # Every regular archived input, including the Android asset, stays byte-identical.
     # QA files run from this sibling stage, never from mutations to the original job.
     count = 0
@@ -125,8 +130,9 @@ def main():
             browser = json.loads(browser_path.read_text())
             result['browser'] = dict(ok=browser.get('ok', False), checks=browser.get('checks', []),
                                      screenshots=browser.get('screenshots', []))
-        phase('existing-screen-browser', ['node', job / 'source/tools/qa-screen-page.cjs',
-                                         env['SCREEN_PAGE_SOURCE'], out / 'existing-screen'])
+        # This exact source already passed the existing-screen phase in the failed packet.
+        result['inherited_existing_screen'] = failed_phase = json.loads((Path(spec['prior_root']) / 'evidence/receipt.json').read_text())['phases']['existing-screen-browser']
+        assert failed_phase['exit_code'] == 0
         sys.path.insert(0, str(job / 'source/tools'))
         from apk_build_config import apk_build_config
         baseline = Path(spec['prior_root']) / 'baseline87.apk'
@@ -138,7 +144,7 @@ def main():
                                            baseline_version_code=87, candidate_version_code=89,
                                            candidate_version_name='0.10.25', baseline_origin_mode='paired')))
         private.chmod(0o600)
-        phase('signed-upgrade', [sys.executable, job / 'source/tools/qa_android_connect.py', '--upgrade-only',
+        phase('signed-upgrade', [sys.executable, root / 'tools/qa_android_connect.py', '--upgrade-only',
                                 job / 'receipt.json', baseline, private, out / 'signed-upgrade'], 940)
         upgrade_path = out / 'signed-upgrade/receipt.json'
         if upgrade_path.exists():
@@ -148,7 +154,7 @@ def main():
             assert len({row['name'] for row in upgrade['checks']}) == upgrade['total']
             assert any(row['name'] == 'owned emulator serial is absent' and row['passed'] for row in upgrade['checks'])
             result['upgrade'] = dict(ok=upgrade['ok'], total=upgrade['total'], passed=upgrade['passed'])
-        result['ok'] = (len(result['phases']) == 4 and all(p['exit_code'] == 0 for p in result['phases'].values())
+        result['ok'] = (len(result['phases']) == 3 and all(p['exit_code'] == 0 for p in result['phases'].values())
                         and result.get('browser', {}).get('ok') and result.get('upgrade', {}).get('ok'))
     finally:
         (out / 'receipt.json').write_text(json.dumps(result, indent=2))

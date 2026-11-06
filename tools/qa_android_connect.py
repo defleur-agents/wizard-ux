@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -24,6 +25,22 @@ FORUM = sys.platform == 'linux' and os.uname().nodename == 'forum'
 SDK = Path('/srv/work/android-sdk' if FORUM else '/opt/homebrew/share/android-commandlinetools')
 BASE = Path(os.environ.get('ANDROID_BUILDS_ROOT') or ('/srv/work/AndroidBuilds' if FORUM else Path.home() / 'AndroidBuilds'))
 SIGNER = '3bf74d0b597bc170761079909d3692428702ba057f753ee1ffd62da3c76ed1fd'
+
+
+def choose_emulator_port(devices):
+    # Reuse the native share runner's serial + paired-socket availability check,
+    # bounded to the emulator's recommended console/ADB range (5554..5584/5555..5585).
+    for port in range(5584, 5553, -2):
+        if 'emulator-' + str(port) in devices:
+            continue
+        try:
+            with socket.socket() as console, socket.socket() as adb_socket:
+                console.bind(('127.0.0.1', port))
+                adb_socket.bind(('127.0.0.1', port + 1))
+            return port
+        except OSError:
+            continue
+    raise RuntimeError('no unused emulator port in the recommended range')
 
 
 def signed_artifact(receipt, config):
@@ -89,9 +106,21 @@ def main():
         old_code = int(re.search(r"versionCode='(\d+)'", badging).group(1))
         assert old_code == config['baseline_version_code'] < config['candidate_version_code']
     adb = SDK / 'platform-tools/adb'
-    serial = 'emulator-5686'
+    serial = ''
+    port = None
     def adb_run(*args, binary=False):
-        return run([adb, '-s', serial, *args], capture_output=True, text=not binary).stdout
+        try:
+            return run([adb, '-s', serial, *args], capture_output=True, text=not binary, timeout=60).stdout
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+            # Capture the actual transport failure; never retry/reconnect or convert it to a pass.
+            def decoded(value):
+                return value.decode(errors='replace') if isinstance(value, bytes) else value
+            devices = subprocess.run([str(adb), 'devices', '-l'], env=env, capture_output=True, text=True, timeout=10)
+            (out / 'adb-failure.json').write_text(json.dumps(dict(serial=serial, port=port,
+                args=list(args), stdout=decoded(error.stdout), stderr=decoded(error.stderr),
+                devices=devices.stdout, devices_stderr=devices.stderr,
+                emulator_returncode=em.poll() if em is not None else None), indent=2))
+            raise
     def shell(*args):
         return adb_run('shell', *args)
     def top():
@@ -119,11 +148,13 @@ def main():
             assert (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
         fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if inherited else 0))
         try:
-            assert serial not in run([adb, 'devices'], capture_output=True, text=True).stdout
+            port = choose_emulator_port(run([adb, 'devices'], capture_output=True, text=True).stdout)
+            serial = 'emulator-' + str(port)
+            (out / 'transport.json').write_text(json.dumps(dict(serial=serial, console_port=port, adb_port=port + 1)))
             run([SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'connect', '-k',
                  'system-images;android-35;google_apis;' + ('x86_64' if FORUM else 'arm64-v8a'), '-d', 'pixel_7', '-p', out / 'device'], input='no\n', text=True, capture_output=True)
             with (out / 'emulator.log').open('w') as log:
-                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', '5686', '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'on'] if FORUM else []), env=env, stdout=log, stderr=subprocess.STDOUT)
+                em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'connect', '-port', str(port), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'on'] if FORUM else []), env=env, stdout=log, stderr=subprocess.STDOUT)
             deadline = time.monotonic() + 240
             while time.monotonic() < deadline:
                 if em.poll() is not None: raise RuntimeError('emulator exited')
@@ -215,7 +246,9 @@ def main():
             check('notification grant preserved', 'android.permission.POST_NOTIFICATIONS: granted=true' in new_dump)
             check('signed release remains non-debuggable', 'DEBUGGABLE' not in new_dump)
             shell('logcat', '-c'); shell('am', 'start', '-W', '-n', 'ai.wizards.os/.MainActivity'); time.sleep(4)
-            check('app update never signs the owner out (no Connect after offline upgrade)', 'ai.wizards.os/.MainActivity' in top() and 'ConnectActivity' not in top(), top())
+            activity = top()  # One atomic observation, not three separate ADB round-trips.
+            (out / 'post-upgrade-top.txt').write_text(activity)
+            check('app update never signs the owner out (no Connect after offline upgrade)', 'ai.wizards.os/.MainActivity' in activity and 'ConnectActivity' not in activity, activity)
             screenshot('owner-upgrade-offline')
             # google_apis emulator supports root; read the exact release's migrated SharedPreferences.
             adb_run('root'); adb_run('wait-for-device')
@@ -242,6 +275,7 @@ def main():
                        'upgrade_network': 'offline, deliberately no owner traffic', 'published': False,
                        'pre_pref_baseline': config.get('pre_pref_baseline', False),
                        'upgrade_only': upgrade_only, 'host': os.uname().nodename,
+                       'emulator_serial': serial, 'console_port': port, 'adb_port': port + 1 if port is not None else None,
                        'synthetic_pairing_fixture': config.get('baseline_origin_mode') == 'synthetic-fixture-paired',
                        'authenticated_owner_proof': False,
                        'baseline_origin_mode': config.get('baseline_origin_mode', 'baked-preference-migration'),
