@@ -1,12 +1,1 @@
-{
-  "desktop.js": [
-    "#stage > .wsp:not([hidden])",
-    "#stage > .wsp"
-  ],
-  "layout.js": [
-    ".win.app-chats .ch-compose",
-    ".win.app-chats .ch-compose",
-    ".win.app-chats",
-    ".win.app-chats"
-  ]
-}
+{}

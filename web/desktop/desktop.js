@@ -585,6 +585,8 @@
     },
     close: id => { closeWin(id); return !W[id]; },
     chats: id => CHATS.surface(id),
+    // The desks' placement containers (Classic's own markup stays here).
+    placements: () => [...stage.children].filter(n => n.classList?.contains('wsp')).map(n => ({ desk: Number(n.dataset.ws), node: n, shown: !n.hidden })),
     settings: () => ({ isOpen: !setEl.hidden && setEl.parentNode === document.body, closePart: setEl.querySelector('.st-close') }),
     closeSettings: () => { const open = !setEl.hidden; if (open) closeSettings(); return open && setEl.hidden; },
     settingsOverlay: () => {
