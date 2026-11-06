@@ -3404,7 +3404,7 @@
     return window.WosCommands.execute(c, text, {
       search: openSearch, settings: openSettings,
       focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, chatList: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
-      findApp, openApp: (app, extra) => openApp(app, extra || {}, opts), musicDone: opts.musicDone, layout: c => {
+      findApp, appById: id => APP[id], openApp: (app, extra) => openApp(app, extra || {}, opts), musicDone: opts.musicDone, layout: c => {
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'desk') {
       const to = c.to; closeSheets();
