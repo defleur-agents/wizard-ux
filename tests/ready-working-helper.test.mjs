@@ -37,6 +37,22 @@ for (const layout of ['day', 'status']) for (const agent of ['', 'host-profile',
     assert.equal(c.orbCount(c.L), 1);
   });
 }
+for (const helperStatus of [{ phase: 'stalled', pending: 0, returned: 1 }, { phase: 'failed', failed: true, pending: 0 }]) {
+  test(`stopped helper ${helperStatus.phase} is Ready, Needs-you and orb, not Working`, () => {
+    const s = row({ status: 'running', waitingOn: 'helper', helperStatus, runId: 'old', lastRunStatus: 'completed' }), c = harness([s]);
+    assert.equal(c.group([s], now).working.length, 0);
+    assert.equal(c.group([s], now).ready.length, 1);
+    assert.equal(c.L.groups().working.length, 0);
+    assert.equal(c.needs(s), true); assert.equal(c.waits(s), true); assert.equal(c.orbCount(c.L), 1);
+  });
+}
+for (const extra of [{ background: 'helper' }, { runId: 'live', lastRunStatus: 'running' }, { helperStatus: { phase: 'running', pending: 0 } }, { helperStatus: { phase: 'stalled', pending: 1 } }]) {
+  test(`real run or active helper remains Working: ${JSON.stringify(extra)}`, () => {
+    const s = row({ status: 'running', waitingOn: 'helper', helperStatus: { phase: 'stalled', pending: 0 }, ...extra }), c = harness([s]);
+    assert.equal(c.group([s], now).working.length, 1);
+    assert.equal(c.needs(s), false); assert.equal(c.orbCount(c.L), 0);
+  });
+}
 test('plain Needs you and tracker-only running items remain Ready', () => {
   for (const extra of [{}, { tracker: { running: 4 }, items: [{ state: 'running' }], runId: 'old-id' }]) {
     const s = row(extra), c = harness([s]);
