@@ -271,6 +271,30 @@
       u.startMs += s.row.pcm ? u.bytes / 32 : 0; u.parts = []; u.bytes = 0;
     }
   }
+  // Native meetings upload full-quality audio to the meeting backend themselves; the on-device
+  // PCM copy is only a partial backup. A slow or broken phone store must never block or stop them.
+  function dropLocalBackup(s, e) {
+    if (s.noLocal) return;
+    s.noLocal = true; s.queue.length = 0; s.queuedBytes = 0; s.error = null; s.partial = true;
+    emit(s, 'warn', 'On-device backup is unavailable (' + storageFailure(e).detail + '). Recording continues to the meeting server.');
+    changed();
+  }
+  async function softStore(s, work) {
+    if (!s.meetingNative) return work();
+    if (s.noLocal) return undefined;
+    try { return await work(); }
+    catch (e) {
+      // Ownership/native errors still refuse; only storage failures fall back.
+      if (typeof e?.code === 'string' && !/^(storage_|recovery_timeout)/.test(e.code)) throw e;
+      dropLocalBackup(s, e); return undefined;
+    }
+  }
+  function noLocalResult(s) {
+    recoveryLive.delete(s.row.id);
+    return { id: s.row.id, blob: new Blob([], { type: s.row.mime || 'audio/wav' }), mime: s.row.mime || 'audio/wav', startedAt: s.row.startedAt,
+      durationMs: s.final?.durationMs ?? 0, meta: { ...s.row.meta, ...(s.final?.meta ? { native: s.final.meta } : {}) },
+      streamChunks: [], durable: false, storageError: 'local_backup_skipped', partial: true };
+  }
   function drain(s) {
     if (s.drainPromise) return s.drainPromise;
     s.drainPromise = drainQueue(s).finally(() => { s.drainPromise = null; });
@@ -278,6 +302,7 @@
   }
   async function drainQueue(s) {
     if (s.persistencePending || s.memoryOnly) return;
+    if (s.noLocal) { s.queue.length = 0; s.queuedBytes = 0; return; }
     while (s.queue.length && !s.discard) {
       const { blob, source, startMs } = s.queue[0];
       const track = s.row.tracks?.[source] || { seq: 0, bytes: 0, startMs: startMs || 0 };
@@ -294,6 +319,7 @@
         s.row = row; ownedRows.set(row.id, structuredClone(row)); s.queue.shift(); s.queuedBytes = Math.max(0, (s.queuedBytes || 0) - blob.size); s.error = null;
         uploadChunk(s, source, blob, startMs ?? (track.startMs + track.bytes / 32));
       } catch (e) {
+        if (s.meetingNative) { dropLocalBackup(s, e); return; }
         s.error = storageFailure(e);
         s.partial = true; changed();
         // Only instant takes may hand off an in-memory result. Durable recorders stay strict.
@@ -345,18 +371,21 @@
         } finally { cleanup(s); }
       }
       const save = async () => {
+        if (s.noLocal) return noLocalResult(s);
         if (s.persistencePending) await s.persistence;
         let writes;
         do { writes = s.writes; await writes; await drain(s); if (s.error) throw s.error; }
         while (!s.discard && !s.memoryOnly && (s.queue.length || writes !== s.writes));
         if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        if (s.noLocal) return noLocalResult(s);
         if (s.queue.length || s.error) throw s.error || fail('storage_failed', 'Capture was not saved.');
         for (const source of Object.keys(s.uploads || {})) uploadChunk(s, source, null, 0, true);
         if (s.final?.meta) s.row.meta = { ...s.row.meta, native: s.final.meta };
         if (s.final?.partial) s.partial = true;
         const row = { ...s.row, status: 'pending', partial: !!s.partial, durationMs: s.final?.durationMs ?? (s.row.durationMs || (s.row.pcm && !s.row.native ? 0 : (s.pausedAt || s.stopAt) - s.row.startedAt - (s.pausedTotal || 0))) };
         recoveryLive.delete(row.id);
-        await put(row); if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
+        await softStore(s, () => put(row)); if (s.noLocal) return noLocalResult(s);
+        if (s.discard || s.memoryOnly) throw fail('cancelled', 'Capture was cancelled or handed off.');
         s.row = row; return result(row);
       };
       let out;
@@ -1008,6 +1037,7 @@
     // WebAudio activation happens synchronously in the gesture, before IDB awaits.
     try {
       let native = adapter(opts);
+      s.meetingNative = native?.name === 'wizard-meetings';
       if (!native) {
         const AC = W.AudioContext || W.webkitAudioContext; if (AC && !s.ctx) { s.ctx = new AC(); void s.ctx.resume().catch(() => {}); }
         if (opts.systemAudio && !s.displayPromise) {
@@ -1035,24 +1065,24 @@
       } else {
       s.stage = 'shared capture store'; live(await ready);
       s.stage = 'microphone lock'; s.unlock = await acquire(true); live();
-      s.stage = 'recovery check'; live(await recoverLocked());
+      s.stage = 'recovery check'; live(await softStore(s, () => recoverLocked()));
       if (recoveryError?.code === 'native_owner_uncertain') throw recoveryError;
-      const recoverable = live(await rows()).find(r => r.appId === appId && r.status === 'recoverable');
+      const recoverable = (live(await softStore(s, rows)) || []).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
-        const row = live(await rows()).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
+        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
-        s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row);
+        s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row); s.meetingNative = native?.name === 'wizard-meetings';
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
       }
       // The persistence request is advisory; the IDB write itself is mandatory.
       try { void navigator.storage?.persist?.().catch(() => {}); } catch (_) {}
-      s.stage = 'saving the take'; live(await put(s.row));
+      s.stage = 'saving the take'; live(await softStore(s, () => put(s.row)));
       }
       if (native) {
         s.row.native = native.name || 'configured';
         if (s.row.native === 'wizard-meetings') s.row.nativeId = opts.meta?.meetingId || s.row.nativeId;
-        if (!s.instant) live(await put(s.row));
+        if (!s.instant) live(await softStore(s, () => put(s.row)));
         s.hasSystemAudio = !!opts.systemAudio && capabilities(opts).systemAudioStart;
         s.stage = 'native recorder';
         s.engine = await native.start({ ...opts, onPcm: frame => emit(s,'pcm',frame), onNativeState: st => { if(!st)return; s.nativeState=st; if(st.hasSystemAudio != null)s.hasSystemAudio=!!st.hasSystemAudio;
@@ -1066,7 +1096,7 @@
         if (s.engine.detach) s.offs.push(s.engine.detach);
       } else { s.stage = 'browser microphone'; await browserEngine(s); live(); }
       s.row.status = 'recording'; s.row.startedAt = opts.resumeId ? s.row.startedAt : Date.now();
-      if (!s.instant) { s.stage = 'saving the take'; await put(s.row); }
+      if (!s.instant) { s.stage = 'saving the take'; await softStore(s, () => put(s.row)); }
       s.settled = true; live();
       s.phase = s.nativeState?.paused ? 'paused' : 'recording';if(s.nativeState?.paused)s.pausedAt=Date.now(); if (!s.instant) s.writes = s.writes.then(() => drain(s)); changed();
       if (s.instant) {
