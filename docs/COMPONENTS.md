@@ -51,7 +51,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
-| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); desktop `keepThreadOpen`; sent reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` shares notification actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
+| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); `WizConfig.chatAfterAction` (phone); sent reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` shares notification actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frame/readiness, tools, open/focus/close, onChange, panes; Chats mounts pending |
@@ -65,7 +65,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Text/media | `WosChat` (`chat-kit.js`: `helm`, `md`, `copyRich`, `viewer`; desktop fit / phone long / keys+native seek); Chats `mediaBlock` |
 | Spaces / Focus | `WizCore` Chats (`chats.js`), `WizLive.prefOps` (`spaces`; add = move, one Space per chat); `WizLive.spaceSessions(ids)`; `winAgent`/`modelRoute`; `WosOutbox.onNew`; restored Focus awaits census; hidden routes; scoped tool; `WosAgents.colour`/`distinctHues` + `--ch-agent-hue` |
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
-| Snooze thread/message: relative dates, Someday, Other date… last; success via threadBack | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
+| Snooze thread/message: relative dates, Someday, Other date… last; action setting | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
 | Thread tracker | `WosThreadTracker` (`thread-tracker.js`): groups/dots/Seen; active groups: "N open". Green: 1s dwell or older than send; amber manual. Quote Reply, same-frame eye-line, opaque panel. |
 | Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) |

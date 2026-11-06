@@ -503,14 +503,16 @@ window.WizCore.chats = function createChats(H) {
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  // Phone Snooze steps back like Done; desktop keeps its reader open (James, 6 Nov 2026).
+  // Phone Snooze follows the action setting; desktop keeps its reader open.
   // The toast carries the return time.
+  // One action policy for every phone host; desktop keeps the already-visible reader pane.
+  const keepThreadOpen = () => H.keepThreadOpen || window.WizConfig?.chatAfterAction?.() !== 'list';
   window.addEventListener('wos:boomerang-set', e => {
     toast('◷', e.detail.label, 3200);
-    if (!H.keepThreadOpen && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
+    if (!keepThreadOpen() && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
   });
   window.addEventListener('wos:snooze-someday', e => {
-    if (!H.keepThreadOpen && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
+    if (!keepThreadOpen() && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
     if (!e.detail.quiet) toast('◷', snoozeLast() ? 'Snoozed · bottom of Ready' : 'Snoozed · out of your list', 2400); H.changed?.();
   });
   // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
@@ -823,6 +825,7 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
     if (a === 'app') return true; // the app opens on top; the item stays until the app (or Archive) clears it
+    if (PHONE() && keepThreadOpen()) { renderChats(w); H.changed?.(); return true; }
     // A stack stays open until it is all handled (Miguel, 4 Nov 2026): Archive / Snooze on one of several moves to the
     // next one in place (the older neighbour, else the newer); only the last one closes the chat.
     const stay = (a === 'done' || a === 'snooze') && noteQuiet() && n.item ? [n.item, ...noteSiblings(n.item)].sort((x, y) => noteAt(y) - noteAt(x)) : [];
@@ -882,9 +885,11 @@ window.WizCore.chats = function createChats(H) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || n.id !== nid || !n.item) return false;
     const ids = [n.id, ...noteSiblings(n.item).map(i => i.id)];
     vib(8);
-    const d = KIT.drafts.get('new');
-    if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
-    ch(w.id).draft = ''; chatsBack(w);
+    if (!PHONE() || !keepThreadOpen()) {
+      const d = KIT.drafts.get('new');
+      if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+      ch(w.id).draft = ''; chatsBack(w);
+    }
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     const ok = await window.WosBell?.mark?.(ids, { read: true, archived: true });
     toast(ok ? '✓' : '!', ok ? `${ids.length} done` : 'Couldn’t save · restored', ok ? 1600 : 3200);
@@ -907,7 +912,7 @@ window.WizCore.chats = function createChats(H) {
     // Anywhere but Chats (stock: Badge) takes it out of Chats at once.
     if (to !== 'chats') {
       const n = notifOf(w);
-      if (n && noteRoute(n) === app) {
+      if (n && noteRoute(n) === app && (!PHONE() || !keepThreadOpen())) {
         const d = KIT.drafts.get('new');
         if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
         ch(w.id).draft = ''; chatsBack(w);
@@ -1718,10 +1723,10 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     if (a === 'unread') {
       closeRowSheet();
-      // Hold the desktop's explicit unread marker until navigation; otherwise its live repaint reads it back.
+      // Hold an open reader's explicit unread marker until navigation; its live repaint must not consume it.
       for (const id of Object.keys(CH)) {
         const x = W[id]; if (!x || x.thread !== sid) continue;
-        if (H.keepThreadOpen) ch(id).unreadHold = { sid, nav: ch(id).readNav };
+        if (keepThreadOpen()) ch(id).unreadHold = { sid, nav: ch(id).readNav };
         else threadBack(x);
       }
       const ok = await LIVE.markUnread(sid);
@@ -1738,7 +1743,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    if (!H.keepThreadOpen && a !== 'restore' && w && w.thread === sid) threadBack(w);
+    if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2833,7 +2838,7 @@ window.WizCore.chats = function createChats(H) {
     if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
     chatsBack(w); return 'thread';
   }
-  /* Send steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
+  /* Opt-in Send and go steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
    * pane. The pinned send target is independent of this navigation; later callbacks cannot pop the parent.
    * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
    * newer navigation (including an A → B → A round trip). */
@@ -2861,7 +2866,7 @@ window.WizCore.chats = function createChats(H) {
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
   function leaveAfterSend(wid, sid, isNew, how = '') {
-    if (H.keepThreadOpen && !isNew) return false;
+    if (keepThreadOpen() && (!isNew || PHONE())) return false;
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
       const entry = hosted.get(wid); closeHosted(wid);
@@ -3009,6 +3014,7 @@ window.WizCore.chats = function createChats(H) {
     // Hold before navigation can paint a list (also covers desktop / hosted replies).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const trackerSeen = !isNew && here && !opts.away ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
+    const navAtSend = c.readNav;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
@@ -3033,6 +3039,8 @@ window.WizCore.chats = function createChats(H) {
     // The durable outbox allocates the final thread id before dispatch; retain that
     // membership even if delivery retries or this window navigates away.
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
+    // Follow only this New chat's allocated id, never a different chat opened during the disk save.
+    if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     window.WosSkinHost?.emit?.('sent', { thread: sid, wid, isNew, reply: reply?.key || '' });
@@ -3156,7 +3164,7 @@ window.WizCore.chats = function createChats(H) {
       const sid = w.thread, nav = ch(id).readNav;
       Promise.resolve(OUTBOX.remove(item.id)).then(ok => {
         if (!ok) { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); return; }
-        if (H.win(id) === w && w.thread === sid && ch(id).readNav === nav && sid) threadBack(w);
+        if ((!PHONE() || !keepThreadOpen()) && H.win(id) === w && w.thread === sid && ch(id).readNav === nav && sid) threadBack(w);
       }).catch(() => { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); });
       return true;
     }
