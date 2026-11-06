@@ -536,6 +536,9 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
       await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
       await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      // The reload that follows the count change must land first: Seen carries the loaded server version, and a version the
+      // client has not loaded yet is correctly refused as stale.
+      await page.waitForTimeout(1500);
       const tail=await page.evaluate(mid=>{
         const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
         n.style.height='4000px';n.style.minHeight='4000px';n.style.display='flex';n.style.flexDirection='column';n.style.justifyContent='flex-end';n.textContent='The end of a long reply, read before the next message.';
