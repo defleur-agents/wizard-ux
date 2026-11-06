@@ -243,7 +243,8 @@
       // Streamed/final bubbles may acquire their anchor after the last render or ledger read.
       watch(nb, v);
       // Phone WebViews can report no document focus while the front thread is being read.
-      const front = document.visibilityState === 'visible' && (document.documentElement.dataset.shell === 'phone' || document.hasFocus()) && v.active?.();
+      const nativePhone = document.documentElement.dataset.shell === 'phone' && (window.WizardNative || window.WizardOSNative || /; wv\)|WizardNative|WizardOS-DocScroll/.test(globalThis.navigator?.userAgent || ''));
+      const front = document.visibilityState === 'visible' && (nativePhone || document.hasFocus()) && v.active?.();
       const strip = nb.closest('.ch-thread')?.querySelector('[data-tt-strip]');
       const box = nb.getBoundingClientRect(), rstrip = strip?.getBoundingClientRect();
       const top = viewportTop(nb, Math.max(0, box.top)), bottom = Math.min(innerHeight, box.bottom);

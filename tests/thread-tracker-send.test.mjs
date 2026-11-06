@@ -23,3 +23,7 @@ for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const
   assert.deepEqual(order,[['seen','t',agent],['leave'],['enqueue',working?'run':''],...(save==='ok'?[['commit']]:[['cancel'],['draft'],['restore']])]);
  });
 }
+for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const working of [false,true])test(`away share never acknowledges a thread: ${agent||'main'}/${working}`,async()=>{
+ const {ctx,order}=fixture(agent,working,'ok');await ctx.send('w','Synthetic background share','typing',null,{sid:'t',away:true});
+ assert.deepEqual(order,[['enqueue',working?'run':'']]);
+});

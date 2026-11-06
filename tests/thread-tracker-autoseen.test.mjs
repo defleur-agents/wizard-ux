@@ -23,7 +23,7 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
     } });
   vm.runInContext(source, ctx);
   const T = win.WosThreadTracker;
-  return { T, doc, nb, node, writes, reads,
+  return { T, win, doc, nb, node, writes, reads,
     async start() { await T.load('t', agent); T.watch(nb, { sid: 't', agent, active: () => active }); },
     step(ms = 200) { now += ms; check(); },
     present(v) { present = v; }, active(v) { active = v; }, focus(v) { focus = v; events[v ? 'focus' : 'blur']?.(); }, open(v) { open = v; }, hit(v) { hit = v; },
@@ -134,7 +134,7 @@ test('reply inserted after item ingestion is discovered without another full ren
   h.present(true); h.step(); h.step(1000); assert.equal(h.writes.length, 1);
 });
 test('phone WebView can read a front visible reply even when hasFocus is false', async () => {
-  const h = harness(); h.doc.documentElement.dataset.shell = 'phone'; h.focus(false); await h.start();
+  const h = harness(); h.doc.documentElement.dataset.shell = 'phone'; h.win.WizardOSNative = {}; h.focus(false); await h.start();
   h.step(); h.step(1000); assert.equal(h.writes.length, 1);
 });
 test('a long reply tail visible for a second is read, not required to fill 40 percent of the viewport', async () => {
@@ -172,4 +172,8 @@ for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const
  assert.equal(h.T.stripHtml('t',agent),'','same-frame optimistic paint');assert.equal(h.writes.length,0,'not durable yet');
  if(commit){lease.commit();assert.equal(h.writes.length,1);lease.commit();assert.equal(h.writes.length,1);}
  else{lease.cancel();assert.match(h.T.stripHtml('t',agent),/data-tt-strip/);assert.equal(h.writes.length,0);}
+});
+test('ordinary phone browser still requires document focus',async()=>{
+ const h=harness();h.doc.documentElement.dataset.shell='phone';h.focus(false);await h.start();
+ h.step();h.step(1400);assert.equal(h.writes.length,0);h.focus(true);h.step();h.step(1000);assert.equal(h.writes.length,1);
 });
