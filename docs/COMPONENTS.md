@@ -97,7 +97,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Home-screen declaration | `WizHomeScreenCapabilities` (`web/core/home-screen-capabilities.js`): sanitize/matcher/replicaPrefix |
 | Long screenshot, text selection | WebView document scroll, `SelectionWebView`, `ScrollCaptureCrashGuard` (`docs/android-document-scroll.md`) |
 
-| Owner Look sync | `WosLookSync` (`look-sync.js`): logical skin/tweaks/defaults + desktop/phone views; legacy seeds; ordered equality-group causal base + pending ACK overlay for all fields; foreground refresh |
+| Owner Look sync | `WosLookSync` (`look-sync.js`): skin/tweaks/defaults, desktop backdrop + views; legacy seeds; ordered equality-group causal base + pending ACK overlay for all fields; foreground refresh |
 
 ## Visual (drawn/animated: side-by-side screenshot under `Visual:`)
 
@@ -106,7 +106,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
 | Skin, scenery and tweak switches (`--wos-reply-summary`) | `WosSkin` (`web/core/skins.js`: setGlass), `WosSkinHost` (`web/core/skin-host.js`; AI apps: sheet yielding + desktop-only boot guard; Group/Sort (One list follows Sort) and project titles); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): plain ⌥←/→ pass through; AI apps E/Z stay Archive/Snooze; standard Z stays Back; `api.settings.section(id, 'look', node)`; `core/slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; built-in layouts (`api.apps` / `api.desk`; AI apps desk slides title + body together; core `setStandardLayout` desktop ownership; read-only `api.aiUsage` for the AI apps fuel gauge); `WosExperience` (`web/core/experience.js`; error retry), `WosMySkin` (`web/core/my-skin.js`; read-only discovery + explicit recovery; bad `skin.js` → off), `WosScenery` (`web/core/scenery.js`), `WizAppearance` (`web/core/appearance-host.js`; desk geometry) |
 | Pins-only orb radial | `WosCreateOrbSwitcher` / `WosOrbSwitcher` (`web/core/orb-switcher.js`, `web/core/orb-switcher.css`), core phone dock default (not desktop/corner orb); saves pins/voice options as before |
-| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop with independent canvas default and palette-stable opaque materials |
+| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop: custom Files images (wide/tall), cover/scrim; opaque materials |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) |
