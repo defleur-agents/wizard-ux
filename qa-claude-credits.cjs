@@ -31,7 +31,11 @@ const snapshot=()=>({providers:[{id:'claude',name:'Claude',status:'ok',fetchedAt
     const shot=path.join(out,`${shell}-${skin}-${bars?'bars':'cells'}.png`);await page.screenshot({path:shot});
     results.push({shell,skin,variant:bars?'bars':'cells',text,shot,skinTokens:await page.evaluate(()=>({base:getComputedStyle(document.documentElement).getPropertyValue('--wz-base').trim(),text:getComputedStyle(document.documentElement).getPropertyValue('--wz-text').trim()}))});
    }
-   await page.locator('[data-res-open="ai"]').first().click();await page.locator('.rs-sheet').waitFor({state:'visible'});assert.match(await page.locator('.rs-sheet').innerText(),/\$123\.45 remaining/);
+   await page.locator('[data-res-open="ai"]').first().click();await page.locator('.rs-sheet').waitFor({state:'visible'});
+   // The dialog chrome appears before its selected-tab paint; use the real tab.
+   await page.locator('.rs-sheet [data-res-tab="ai"]').click();
+   await page.waitForFunction(()=>document.querySelector('.rs-sheet')?.innerText.includes('$123.45 remaining'));
+   assert.match(await page.locator('.rs-sheet').innerText(),/\$123\.45 remaining/);
    await page.screenshot({path:path.join(out,`${shell}-${skin}-details.png`)});await page.evaluate(()=>WosResources.back());
   }
   await ctx.close();
