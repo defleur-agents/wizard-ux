@@ -41,7 +41,7 @@ export default function setup(api) {
   api.listen(doc, 'focusout', e => {
     const l = list(); const input = l?.querySelector('[data-chsearch]');
     if (!input || e.target !== input || input.value || e.relatedTarget?.closest?.('.ch-top, .dc-head')) return;
-    searchOpen = false; api.after ? api.after(120, sync) : setTimeout(sync, 120);
+    searchOpen = false; api.frame(() => api.frame(sync));
   });
   api.listen(doc, 'input', e => { if (e.target?.matches?.('[data-chsearch]')) sync(); });
   return () => { head.remove(); list()?.classList.remove('dc-search'); };
