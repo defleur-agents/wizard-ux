@@ -1461,15 +1461,6 @@ export default function desktop(api) {
   api.listen(hBack, 'click', () => focusOut());
   /** the rails come back as they are now (a side opened by hand, a chat or an app opened): the stash stays for ⌥. */
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
-  /** Archive / Resolve on the open item, by key or button: then the next Ready one (the one ⌥↓ would open) */
-  function nextAfterAct() {
-    // a notification stack moves to its own next one in place (core/chats.js notifAct); the list moves on after the last
-    if ((doc.querySelectorAll('.win .dchats .pane-main .ch-nstack .ch-ncard').length || 0) > 0) return;
-    const ids = readyIds(), cur = curChat(); if (!cur || ids.length < 2 || !ids.includes(cur)) return;
-    const nx = readyStep(ids, cur, 1); if (!nx || nx.id === cur) return;
-    api.after(450, () => { if (!readyIds().includes(nx.id)) return; stepAt = nx.id; noteWant = nx.id.startsWith('notif:'); api.sessions.open(nx.id); });
-  }
-  api.listen(doc, 'click', e => { const b = e.target?.closest?.('.win .dchats .pane-main [data-chact="done"], .win .dchats .pane-main [data-chact="resolve"]'); if (b && docked) nextAfterAct(); }, true);
   let stepAt = null;
   const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
@@ -1544,7 +1535,7 @@ export default function desktop(api) {
     if (code === 'KeyW' && !sh && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
     if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
-    // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
+    // The open item's own buttons change its state, never the selected thread.
     // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
     const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];
     if (act) { if (!e.repeat) chatBtn(act)?.click?.(); return true; }
