@@ -19,7 +19,7 @@ for(const agent of ['', 'profile-agent', 'container-agent', 'restricted-agent'])
 test('detail hydration keeps failed status and saved retry identity on the list and durable outbox freezes it',async()=>{
  const body=live.slice(live.indexOf('    async sessionInfo(id) {'),live.indexOf('    /* ---- thread actions ---- */'))
  const s={id:'wizard_outage',status:'failed',request:'Saved',retryRunId:'wizardq_saved'},L={agentSessions:{},sessions:[{id:s.id,status:'completed'}],windows:{},agentOf:()=>''}
- const ctx={L,AGENT_OF:new Map(),DETAIL:new Map(),otherAgent:()=>false,normalize:()=>s,aq:()=>'',applyLocal(){},req:async()=>({json:async()=>({id:s.id,wizard_retry_input:'Saved'})})}
+ const ctx={L,titleRead:0,applyTitle(){},AGENT_OF:new Map(),DETAIL:new Map(),otherAgent:()=>false,normalize:()=>s,aq:()=>'',applyLocal(){},req:async()=>({json:async()=>({id:s.id,wizard_retry_input:'Saved'})})}
  runWithChatsModel(`L.sessionInfo=({${body}}).sessionInfo`,ctx);await L.sessionInfo(s.id);assert.equal(L.sessions[0].status,'failed');assert.equal(L.sessions[0].retryRunId,s.retryRunId)
  assert.match(outbox,/retryRunId: typeof o.retryRunId === 'string' \? o.retryRunId : ''/);assert.match(outbox,/wizard_retry_run_id: it.retryRunId/)
 })
