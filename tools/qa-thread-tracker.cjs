@@ -382,7 +382,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()}];svc.seen.clear();
       await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
       await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
-      await page.evaluate(()=>{const nb=document.querySelector('.ch-msgs');nb.append(window.__lateReply);Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      await page.evaluate(()=>{const nb=document.querySelector('.ch-msgs'),n=window.__lateReply;nb.append(n);const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().top-top-16;if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
       await page.waitForFunction(()=>!/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
       check(`autoseen/${profile}/${skin}: late streamed anchor re-arms without a render, including phone hasFocus false`,svc.view().every(i=>i.seen));
       // Keep just the tail of a genuinely viewport-tall reply on screen for a full second.
