@@ -271,7 +271,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items = svc.items.map(i => ({ ...i, state: 'needs_you', try: true, updated_at: i.updated_at + 1000 })); svc.seen.clear();
       await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.load('tt-main')); await page.waitForTimeout(1600);
       check(`autoseen/${profile}/${skin}: amber stays for manual action`, svc.view().every(i => !i.seen) && await page.evaluate(() => /need you/.test(window.WosThreadTracker.dots('tt-main'))));
-      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-open]').first().click(); await page.waitForTimeout(900);
+      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-row] .tt-t').first().click(); await page.waitForTimeout(900);
       check(`autoseen/${profile}/${skin}: tracker jump target fully below strip`, (await geometry()).visible);
       check(`autoseen/${profile}/${skin}: no real sends or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
       await ctx.close();
