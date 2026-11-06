@@ -26,6 +26,12 @@ public final class UpdatePolicy {
         return mic ? Hold.MIC : Hold.NONE;
     }
 
+    /** A floating-orb take counts as recording while listening AND while a sent take is still on its way into the
+     *  outbox (stop, fsync, save); only durable outbox custody releases the update fence. */
+    public static boolean captureHeld(boolean listening, int savingToOutbox) {
+        return listening || savingToOutbox > 0;
+    }
+
     public static final class Release {
         public final int versionCode;
         public final String versionName, url, sha256, notes, app, signer;
