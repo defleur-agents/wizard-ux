@@ -303,6 +303,15 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       const {ctx,page}=await mount(browser,svc,{shell,skin,tweaks:[ID]});
       if(shell==='desktop')await page.evaluate(()=>window.WosExperience.chooseDesktopView('ai-apps'));
       await openThread(page,'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      if(!working){
+        await page.locator('.ch-compose textarea').fill('Synthetic failed save keeps my unread green rows');
+        const refused=await page.evaluate(async()=>{
+          const ob=window.WosOutbox,original=ob.enqueue;ob.enqueue=()=>Promise.reject(Error('Synthetic storage refusal'));
+          try{document.querySelector('[data-chform]').requestSubmit();await new Promise(r=>setTimeout(r,0));return {green:/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')),draft:document.querySelector('.ch-compose textarea')?.value};}finally{ob.enqueue=original;}
+        });
+        check(`${tag}: failed durable save restores green and draft without synchronizing Seen`,refused.green && /failed save/.test(refused.draft||'') && !svc.writes.some(w=>w.p.endsWith('/thread-items/seen')),refused);
+        await page.screenshot({path:path.join(OUT,`running-save-refused-${shell}-${skin}.png`)});
+      }
       await page.locator('.ch-compose textarea').fill('Synthetic follow-up after reading the earlier replies');
       const immediate=await page.evaluate(()=>{document.querySelector('[data-chform]').requestSubmit();const d=window.WosThreadTracker.dots('tt-main');return {green:/finished, not seen/.test(d),amber:/need you/.test(d),red:/stuck/.test(d),running:/running/.test(d)};});
       check(`${tag}: green clears in the send frame; amber red and running stay`, !immediate.green && immediate.amber && immediate.red && immediate.running,immediate);

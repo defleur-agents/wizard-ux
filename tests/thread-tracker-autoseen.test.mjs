@@ -165,3 +165,11 @@ test('header counts only active reply groups as open, not acknowledged history',
  assert.match(h.T.stripHtml('t'), /class="tt-tot">1 open</); assert.match(h.T.stripHtml('t'), /3 acknowledged · show/);
  assert.doesNotMatch(h.T.stripHtml('t'), /4 asks/);
 });
+
+for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const commit of [false,true])test(`staged send Seen ${commit?'commits':'cancels'} in ${agent||'main'} without premature synchronization`,async()=>{
+ const h=harness(['done'],agent);await h.start();
+ const lease=h.T.beforeSend('t',agent,20000,{defer:true});
+ assert.equal(h.T.stripHtml('t',agent),'','same-frame optimistic paint');assert.equal(h.writes.length,0,'not durable yet');
+ if(commit){lease.commit();assert.equal(h.writes.length,1);lease.commit();assert.equal(h.writes.length,1);}
+ else{lease.cancel();assert.match(h.T.stripHtml('t',agent),/data-tt-strip/);assert.equal(h.writes.length,0);}
+});

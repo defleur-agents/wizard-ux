@@ -3002,7 +3002,7 @@ window.WizCore.chats = function createChats(H) {
     const instructions = opts.instructions || (opts.away ? '' : viewContext(wid, how));
     // Hold before navigation can paint a list (also covers desktop / hosted replies).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
-    if (!isNew) globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '');
+    const trackerSeen = !isNew ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
@@ -3010,7 +3010,9 @@ window.WizCore.chats = function createChats(H) {
     try {
       it = await OUTBOX.enqueue({ captureId: opts.captureId, custodyId: opts.custodyId, sealKey: sealed?.key, kind: isNew ? 'new' : 'reply', sessionId: isNew ? '' : sid, steerRunId, text, audio, typed: later ? typed : '',
         instructions, files: files.map(f => ({ id: f.id, name: f.name, mime: f.mime, bytes: f.bytes })), ...(reply ? { reply } : {}), wid: here ? wid : '', how, source: 'chat', space: false, ...(nm ? { model: nm.model, provider: nm.provider } : {}), ...(AGID ? { agent: AGID } : {}) });
+      trackerSeen?.commit(); // synchronize Seen only once the message/steer has durable custody
     } catch (e) {
+      trackerSeen?.cancel(); // a failed save must put the green rows back with the draft
       // Not saved anywhere: the words (and files) go back into that thread's composer, and James back into the
       // thread if the window is still on the list he was sent to.
       if (hold) LIVE.releaseSend?.(hold);
