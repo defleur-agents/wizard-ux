@@ -8,6 +8,10 @@ const fs = require('node:fs'), path = require('node:path'), assert = require('no
 const missing = process.env.QA_LAYOUT_BUNDLE_MISSING === '1';
 const faults = process.env.QA_LAYOUT_FAULTS === '1';
 const source = path.resolve(process.env.QA_SOURCE || path.join(__dirname, '..'));
+const { injectLayoutCallbackFault } = require('../tools/qa-layout-callback-fault.cjs');
+// Preflight once, outside the async route: a changed source anchor is a harness
+// error, never an unhandled route rejection or evidence of product fallback.
+const faultModule = faults ? injectLayoutCallbackFault(fs.readFileSync(path.join(source, 'web/layouts/ai-apps/desktop.js'), 'utf8')) : null;
 const origin = 'https://boot.test', prefix = '/wizard-os-home/';
 const out = process.env.QA_OUT || 'boot-layout-evidence'; fs.mkdirSync(out, { recursive: true });
 const apps = ['editor', 'notes', 'calendar', 'music'].map(id => ({
@@ -164,12 +168,8 @@ async function interaction(p, row) {
     if (u.pathname.startsWith(prefix)) {
       const root = path.resolve(source, 'web'), file = path.resolve(root, u.pathname.slice(prefix.length) || 'index.html');
       if (faults && u.pathname.endsWith('/layouts/ai-apps/desktop.js')) {
-       // Inject an explicitly labelled callback fault into the REAL layout module,
-       // not a mock layout. Old host loses the real sidebar at the third fault.
-       const body = fs.readFileSync(file, 'utf8').replace('export function setupDesktop(api) {', `export function setupDesktop(api) {
-        api.on('render', () => { if (globalThis.__qaLayoutFault) throw new Error('QA synthetic layout callback fault'); });`);
-       assert.ok(body.includes('QA synthetic layout callback fault'));
-       return r.fulfill({ contentType: 'text/javascript', body });
+       // REAL module + REAL guarded host callback, identical on old and new code.
+       return r.fulfill({ contentType: 'text/javascript', body: faultModule });
       }
       if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return r.fulfill({ path: file });
     }
@@ -250,8 +250,15 @@ async function interaction(p, row) {
         globalThis.__qaLayoutFault = true;
         for (let i = 0; i < 12; i++) WosSkinHost.rendered('thread', 'qa-thread');
         globalThis.__qaLayoutFault = false;
-        return { before, after: WosSkinHost.layoutState, sameScene: scene === document.querySelector('.aad'), choice: localStorage.getItem('wos.desktop-view.v1'), diagnostic: JSON.parse(localStorage.getItem('wos.layout-fault.v1')), backdrop: WosSkin.desktopBackdrop };
+        const visible = selector => {
+         const n = document.querySelector(selector); if (!n) return false;
+         const box = n.getBoundingClientRect(), style = getComputedStyle(n);
+         return box.width > 0 && box.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        return { before, after: WosSkinHost.layoutState, sameScene: scene === document.querySelector('.aad'), choice: localStorage.getItem('wos.desktop-view.v1'), diagnostic: JSON.parse(localStorage.getItem('wos.layout-fault.v1')), backdrop: WosSkin.desktopBackdrop,
+         sidebarVisible: visible('.aad-side'), classicMenuVisible: visible('#wsList') };
        });
+       assert.match(row.fault.diagnostic.stack, /QA synthetic layout callback fault/, 'fault reached the real guarded callback on both source revisions');
        assert.equal(row.fault.after.active, true, 'callback threshold never unloads the owner layout');
        assert.equal(row.fault.after.disabled, false); assert.equal(row.fault.sameScene, true);
        assert.equal(row.fault.choice, 'ai-apps'); assert.equal(row.fault.backdrop.id, 'custom');
