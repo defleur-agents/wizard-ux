@@ -4,12 +4,39 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const KEY = 'wos.skin.wallpaper.wizard.desktop';
+
+test('custom images upload through Wizard Files, persist references only and preserve palettes', async () => {
+  const b = boot({'wos.skin':'grove'}), before = resolved(b);
+  const file = {type:'image/webp',size:1024};
+  await b.S.uploadWallpaper(file);
+  assert.equal(b.S.wallpaper,'custom'); assert.equal(b.S.desktopBackdrop.wide,'test-wide');
+  assert.deepEqual(resolved(b),before); assert.equal(b.S.current,'grove');
+  b.ctx.WizUploads.upload = async () => ({id:'test-tall'});
+  await b.S.uploadWallpaper(file,{portrait:true});
+  assert.equal(b.S.desktopBackdrop.tall,'test-tall');
+  const next=boot(Object.fromEntries(b.storage));
+  assert.equal(next.S.wallpaper,'custom'); assert.equal(next.S.desktopBackdrop.tall,'test-tall');
+  next.S.setWallpaper('lake'); next.S.setWallpaper('custom'); assert.equal(next.S.desktopBackdrop.wide,'test-wide');
+  for(const value of b.storage.values()) assert.doesNotMatch(String(value),/data:|blob:/);
+  const phone=boot(Object.fromEntries(b.storage),'phone'); assert.equal(phone.root.dataset.imageBackground,undefined);
+});
+test('bad, oversized, corrupt and failed uploads leave the selected backdrop intact', async () => {
+  const b=boot(); b.S.setWallpaper('lake');
+  await assert.rejects(b.S.uploadWallpaper({type:'image/svg+xml',size:10}),/Choose/);
+  await assert.rejects(b.S.uploadWallpaper({type:'image/png',size:21*1024*1024}),/20 MB/);
+  b.ctx.createImageBitmap=async()=>{throw new Error('corrupt image');};
+  await assert.rejects(b.S.uploadWallpaper({type:'image/png',size:10}),/corrupt/);
+  b.ctx.createImageBitmap=async()=>({close(){}}); b.ctx.WizUploads.upload=async()=>{throw new Error('offline');};
+  await assert.rejects(b.S.uploadWallpaper({type:'image/png',size:10}),/offline/);
+  assert.equal(b.S.wallpaper,'lake');
+  assert.throws(()=>b.S.adoptDesktopBackdrop({id:'custom',wide:'../bad'}),/Unknown/);
+});
 function boot(saved = {}, shell = 'desktop') {
   const storage = new Map(Object.entries(saved)), props = new Map();
   const root = { dataset: { shell }, style: { setProperty: (k,v) => props.set(k,v), removeProperty: k => props.delete(k) } };
   const ctx = { document: { documentElement: root, readyState: 'loading', addEventListener() {}, querySelector: () => null, createElement: () => ({}) }, localStorage: { getItem: k => storage.get(k), setItem: (k,v) => storage.set(k,v), removeItem: k => storage.delete(k) }, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {}, requestAnimationFrame() {}, matchMedia: () => ({ matches: false }) };
-  ctx.window = ctx; vm.runInNewContext(read('web/core/skins.js'), ctx);
-  return { S: ctx.WosSkin, storage, root, props };
+  ctx.window = ctx; ctx.createImageBitmap = async () => ({ close() {} }); ctx.WizUploads = { supported: () => true, upload: async () => ({ id: 'test-wide' }) }; vm.runInNewContext(read('web/core/skins.js'), ctx);
+  return { S: ctx.WosSkin, storage, root, props, ctx };
 }
 
 test('fresh and existing Wizard desktops retain living canvas, regardless of Mizel wallpaper', () => {
