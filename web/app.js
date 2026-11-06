@@ -3938,6 +3938,14 @@
     apply(state, o = {}) {
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
+      // Joining the owner's shared workspaces: his open apps replace this device's starter apps (seed), so a phone
+      // whose storage was reset never shows Topics or Mizel he did not open (James, 6 Nov 2026).
+      if (o.join && state.desks.length) desks = desks.filter(d => {
+        if (d.home || !d.wins.some(id => W[id]?.seed)) return true;
+        d.wins = d.wins.filter(id => { if (!W[id]?.seed) return true; winEl(id)?.remove(); delete W[id]; return false; });
+        if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
+        return d.wins.length > 0;
+      });
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
       r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
