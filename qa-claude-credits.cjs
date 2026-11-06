@@ -23,8 +23,9 @@ const snapshot=()=>({providers:[{id:'claude',name:'Claude',status:'ok',fetchedAt
   for(const skin of ['nebula','grove']){
    await page.evaluate(s=>WosSkin.set(s),skin);await page.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
    await page.waitForTimeout(700);
-   // Both variants are in the real shell; apply only this disposable origin's tweak.
-   for(const bars of [false,true]){
+   // Capture the shipped cells variant. The removed home-bars tweak is not in
+   // the live catalog; forcing its dataset alone creates an unstyled fixture.
+   for(const bars of [false]){
     await page.evaluate(b=>{document.documentElement.dataset.tweaks=b?'miguel/home-bars':'';const h=document.querySelector('[data-home-resources]');if(h)h.outerHTML=WosResources.home();},bars);
     const widget=page.locator('.rs-widget').first();await widget.waitFor({state:'visible',timeout:15000});
     const text=await widget.innerText();assert.ok(text.includes('$123.45'),text);assert.ok(!text.includes('$875')&&!text.includes('spent'),text);assert.ok(text.includes('100%')&&text.includes('91%'),text);
