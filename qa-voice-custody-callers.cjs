@@ -33,6 +33,8 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
     const body=JSON.parse(q.postData());state.calls ||= [];state.calls.push({key:q.headers()['idempotency-key'],body:q.postData()});state.posts.push(body);if(state.down)return json({error:'offline'},503);
     const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});if(state.dropReceipt){state.dropReceipt=false;return r.abort('connectionreset');}return json(state.runs.get(key),202);
    }
+   if(fixture?.orb&&p==='/wizard/v1/setup')return json({first_run:false});
+   if(fixture?.orb&&p==='/wizard/hermes/v1/runs/orb-original-active-run'&&q.method()==='GET')return json({run_id:'orb-original-active-run',status:'running',runtime:{model,provider,model_lock:'accepted'}});
    if(fixture?.orb&&p.endsWith('/steer')&&q.method()==='POST'){
     state.steers||=[];state.steers.push({path:p,query:u.search,body:JSON.parse(q.postData())});
     return json({accepted:true,run_id:decodeURIComponent(p.split('/runs/')[1].split('/')[0]),status:'queued'});
@@ -59,6 +61,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await ctx.addInitScript(({allFail,model,provider,fixture})=>{
    localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.model.pref.v1',JSON.stringify({model,provider}));
    if(fixture&&!sessionStorage.getItem('dismissFixture')){sessionStorage.setItem('dismissFixture','1');localStorage.setItem('wos.skin',fixture.skin);}
+   if(fixture?.orb){localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.welcome.v1','done');}
    if(fixture?.orb&&fixture.layout)localStorage.setItem('wos.desktop-view.v1',fixture.layout);
    window.__fault={all:allFail};const put=IDBObjectStore.prototype.put,open=indexedDB.open.bind(indexedDB),set=Storage.prototype.setItem;
    IDBObjectStore.prototype.put=function(...args){if(__fault.all||__fault.idb)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};

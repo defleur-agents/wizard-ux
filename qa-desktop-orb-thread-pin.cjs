@@ -16,6 +16,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
   const agents=[{id:'hermes',is_default:true,label:'Wizard',status:'running',model:{model,provider}},{id:agent,label:'Research fixture',status:'running',model:{model,provider}}];
   const f=await boot(desktop,false,null,{orb:true,layout,skin,agents,sessions}),{p,wid,state}=f;
   state.down=false;state.sttDelay=scenario==='stt-nav'?1200:300;
+  if(scenario==='dictate')state.text='only synthetic STT words';
   const root=p.locator(`[data-chats="${wid}"]`),control=p.locator(desktop?(layout==='ai-apps'?'.aad-orbbtn':'#micBtn'):'#orb');
   const detail={...c,wid,requests:state.requests};
   const record=(v,n,d)=>ok(v,`${label}: ${n}`,d);
@@ -67,6 +68,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
     record(it?.durable&&!!it?.audioFile?.id&&!items.some(x=>x.kind==='capture'),'one owner retains uploaded audio receipt; no stray capture owner',items);
     if(newThread){
      record(it?.kind==='new'&&it.sessionId!==sid&&created.length===1&&state.posts.length===1,'intentional list/new-chat records create exactly one new thread',{it,created,posts:state.posts});
+     record(!it?.typed&&!(it?.files||[]).some(x=>x.id===image),'intentional list/new-chat shares no original composer context',it);
     }else{
      record(it?.kind==='reply'&&it.sessionId===sid&&created.length===0,'open thread remains exact original; zero thread creation',{it,created});
      record(it?.agent===agent&&it.model===before.route.model&&it.provider===before.route.provider,'original scoped agent/model/provider remain pinned',{it,before});
