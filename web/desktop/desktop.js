@@ -2972,7 +2972,7 @@
     // An ordinary orb tap is contextual, just like the bar mic. talk() pins the focused
     // window/thread, active run and model route BEFORE capture; talkNew is only the
     // explicit New voice chat action. Layouts must not turn a reply into a new thread.
-    talk: () => talk('send'),
+    talk: () => talk(),
     voiceTap: () => talk('send'),
     voiceCancel: () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'),
     command: () => commandVoice(),
