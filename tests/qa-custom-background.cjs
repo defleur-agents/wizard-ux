@@ -18,10 +18,19 @@ const results=[],requests=[],errors=[];let page;
   await context.addInitScript(()=>{
    if(window!==window.top)return;
    for(const[k,v]of Object.entries({'wos.coached':'true','wos.tour.v1':'true','wos.welcome.v1':'done','wos.skin':'nebula','wos.shell':'desktop'}))if(localStorage.getItem(k)===null)localStorage.setItem(k,v);
-   window.wallDraws=[];
-   const draw=CanvasRenderingContext2D.prototype.drawImage;
+   window.wallDraws=[];window.wallPaints={};
+   const covers=new WeakMap(),draw=CanvasRenderingContext2D.prototype.drawImage;
    CanvasRenderingContext2D.prototype.drawImage=function(im,...args){
-    if(im instanceof HTMLImageElement&&im.src.includes('/wizard/files/'))wallDraws.push({src:im.src,args,width:this.canvas.width,height:this.canvas.height,nw:im.naturalWidth,nh:im.naturalHeight});
+    if(im instanceof HTMLImageElement&&im.src.includes('/wizard/files/')){
+     const row={src:im.src,args,width:this.canvas.width,height:this.canvas.height,nw:im.naturalWidth,nh:im.naturalHeight};
+     covers.set(this.canvas,row);wallDraws.push(row);
+    }
+    // WIZ memoizes cover canvases. Observe their actual on-screen reuse, not
+    // the last image decoded (which can belong to the previous orientation).
+    if(this.canvas.matches('.skin-bg')){
+     const cover=covers.get(im);
+     wallPaints[this.canvas.id]=cover?{...cover,targetWidth:this.canvas.width,targetHeight:this.canvas.height}:null;
+    }
     return Reflect.apply(draw,this,[im,...args]);
    };
   });
@@ -79,12 +88,19 @@ const results=[],requests=[],errors=[];let page;
    await lookPage();await page.locator(`[data-skinpick="${skin}"]`).click();
    await page.waitForFunction(s=>WosSkin.current===s,skin);await page.waitForTimeout(700);
    assert.equal(await page.locator('[data-bgpick="custom"]').getAttribute('aria-pressed'),'true');
+   await page.locator('[data-background-portrait]').scrollIntoViewIfNeeded();
    await page.screenshot({path:path.join(out,`${skin}-look.png`)});
    await page.evaluate(()=>__wux.closeSettings());
    // The same real backdrop engine renders wide and tall without stretching or gaps.
    for(const viewport of [{width:1440,height:960},{width:720,height:1120}]){
     await page.setViewportSize(viewport);await page.waitForTimeout(700);
-    const draws=await page.evaluate(()=>wallDraws);const row=draws.at(-1);assert.ok(row);
+    const painted=()=>{
+     const canvas=[...document.querySelectorAll('.skin-bg')].filter(c=>Number(getComputedStyle(c).opacity)>.99).at(-1);
+     const row=canvas&&wallPaints[canvas.id],dpr=Math.min(devicePixelRatio||1,1.5);
+     return row&&row.width===(innerWidth*dpr|0)&&row.height===(innerHeight*dpr|0)&&row.targetWidth===row.width&&row.targetHeight===row.height?row:null;
+    };
+    await page.waitForFunction(painted);
+    const row=await page.evaluate(painted);assert.ok(row);
     const k=Math.max(row.width/row.nw,row.height/row.nh),[x,y,w,h]=row.args;
     assert.ok(Math.abs(w-row.nw*k)<.01&&Math.abs(h-row.nh*k)<.01,'cover retains image aspect ratio');
     assert.ok(w>=row.width-.01&&h>=row.height-.01&&x<=.01&&y<=.01,'cover fills canvas');

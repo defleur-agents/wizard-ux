@@ -205,10 +205,7 @@
       if (!m.ready) return null;
       if (m.key !== key) { const o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), im = m.im, k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
         x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
-        if (id === 'custom') { // Same top/bottom legibility policy as landscape photos; built-ins are already baked.
-          const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, 'rgba(11,10,16,.42)'); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, 'rgba(11,10,16,.55)');
-          x.fillStyle = g; x.fillRect(0, 0, o.width, o.height);
-        }
+        if (id === 'custom') LANDSCAPES.dark.shade(x, o); // Shared photo legibility policy; built-ins are already baked.
         m.c = o; m.key = key; }
       return m.c;
     },
@@ -233,9 +230,12 @@
       cover(slot, W, H) {
         const im = slot.im, o = mk(W * BGL.dpr, H * BGL.dpr), x = o.getContext('2d'), k = Math.max(o.width / im.naturalWidth, o.height / im.naturalHeight),
           w = im.naturalWidth * k, h = im.naturalHeight * k; x.drawImage(im, (o.width - w) / 2, (o.height - h) / 2, w, h);
+        this.shade(x, o); slot.c = o;
+      },
+      shade(x, o) {
           // a soft top and bottom scrim so the clock and the bottom bar stay legible on bright skies
           const g = x.createLinearGradient(0, 0, 0, o.height); g.addColorStop(0, `rgba(11,10,16,${scrim[0]})`); g.addColorStop(.28, 'rgba(11,10,16,0)'); g.addColorStop(.7, 'rgba(11,10,16,0)'); g.addColorStop(1, `rgba(11,10,16,${scrim[1]})`);
-        x.fillStyle = g; x.fillRect(0, 0, o.width, o.height); slot.c = o;
+        x.fillStyle = g; x.fillRect(0, 0, o.width, o.height);
       },
       // the window itself changed size: the same photo (never the next one), cropped again for the new size
       resize(s, W, H) { for (const slot of Object.values(s.img)) if (slot.ready && slot.im) this.cover(slot, W, H); },

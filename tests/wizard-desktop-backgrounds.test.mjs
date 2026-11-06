@@ -5,6 +5,28 @@ import vm from 'node:vm';
 const read = p => readFileSync(new URL('../' + p, import.meta.url), 'utf8');
 const KEY = 'wos.skin.wallpaper.wizard.desktop';
 
+test('browser oracle observes reused cached covers, not the last decoded orientation', () => {
+  const source=read('tests/qa-custom-background.cjs');
+  const start=source.indexOf('await context.addInitScript(()=>{')+'await context.addInitScript(()=>{'.length;
+  const init=source.slice(start,source.indexOf('\n  });',start));
+  class Image { constructor(src) { this.src=src;this.naturalWidth=2560;this.naturalHeight=1440; } }
+  class Context { constructor(canvas) { this.canvas=canvas; } drawImage() {} }
+  const b={HTMLImageElement:Image,CanvasRenderingContext2D:Context,localStorage:{getItem(){return 'saved';}}};
+  b.window=b;b.top=b;vm.runInNewContext(`(()=>{${init}})()`,b);
+  const canvas=(id,width,height)=>({id,width,height,matches:()=>id==='skinA'});
+  const wide=canvas('',1440,960),tall=canvas('',720,1120),screen=canvas('skinA',1440,960);
+  new Context(wide).drawImage(new Image('/wizard/files/wide/content'),0,0,1706,960);
+  new Context(tall).drawImage(new Image('/wizard/files/tall/content'),0,0,720,1280);
+  const paint=new Context(screen);paint.drawImage(wide,0,0,1440,960);
+  assert.equal(b.wallDraws.at(-1).src,'/wizard/files/tall/content','old oracle is stale');
+  assert.equal(b.wallPaints.skinA.src,'/wizard/files/wide/content','actual wide cache reuse');
+  assert.equal(b.wallPaints.skinA.targetWidth,1440);
+  paint.drawImage(tall,0,0,1440,960);
+  assert.notEqual(b.wallPaints.skinA.src,'/wizard/files/wide/content','wrong orientation remains detectable');
+  paint.drawImage(canvas('',1440,960),0,0,1440,960);
+  assert.equal(b.wallPaints.skinA,null,'non-custom painting clears prior custom evidence');
+});
+
 test('custom images upload through Wizard Files, persist references only and preserve palettes', async () => {
   const b = boot({'wos.skin':'grove'}), before = resolved(b);
   const file = {type:'image/webp',size:1024};
