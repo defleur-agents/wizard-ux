@@ -1418,7 +1418,7 @@ window.WizCore.chats = function createChats(H) {
     const dot = '<i class="ch-sync-dot" aria-hidden="true"></i>';
     const act = '<button type="button" class="ch-sync-act" data-chtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button>';
     // The text's title carries the whole line (its parts are already escaped, so stripping our own tags is enough).
-    const syncBar = (cls, lead, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${inner.replace(/<[^>]*>/g, '')}">${inner}</span>${extra}</div>`;
+    const syncBar = (cls, lead, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${inner.replace(/<[^>]*>/g, '').replace(/[<>"]/g, c => c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&quot;')}">${inner}</span>${extra}</div>`;
     const sync = c.ptrState === 'busy' ? syncBar('', spin, `Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}`)
       : LST.error ? syncBar('off', dot, `<b>Not up to date</b> · ${esc(reachLabel('read'))}${since ? ` · ${esc(since)}` : ''}`, act)
       : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
