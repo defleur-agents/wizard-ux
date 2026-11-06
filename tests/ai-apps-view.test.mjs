@@ -2622,5 +2622,7 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.match(css, /> \.win:not\(\.gone\):not\(\.win:not\(\.gone\) ~ \.win\) \{ flex-grow: 46 !important; \}/, 'the app gets the widest column');
   assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
   assert.match(js, /paneWins\(\) > 1 \? Math\.max\(900, W \* \.62\)/, 'the panel widens for two columns until the owner sizes it');
-  assert.match(js, /winsMo = new MutationObserver/, 'a companion opening or closing re-sizes the panel');
+  assert.match(js, /host\?\.onChange\(\(\) => \{ paintTop\(\); watchPaneWins\(\); \}\)/, 'a companion opening or closing re-sizes the panel through the host');
+  assert.match(js, /const desk = pane\?\.desk \?\? null, n = paneWins\(\)/, 'both group identity and count are observed');
+  assert.doesNotMatch(js, /winsMo|querySelectorAll\?\.\(':scope > \.win/, 'no Classic child observers remain');
 });
