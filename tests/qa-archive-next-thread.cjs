@@ -97,10 +97,13 @@ const snapshot = () => {
           if (scenario === 'middle') { await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: path.join(out, stem + '-before.png') }); }
           await page.evaluate(snapshot => {
             window.archiveReceipt = null;
-            window.addEventListener('click', e => {
-              if (e.target.closest('[data-chact="done"], [data-rsact="done"], [data-act="done"]')) {
-                const h = window.__wux || window.__wos;
-                window.archiveReceipt = { at: performance.now(), threads: Object.values(h.wins).filter(w => w.app === 'chats' && w.thread).map(w => w.thread), titles: [...document.querySelectorAll('.ch-thread .ti')].filter(n => n.getClientRects().length).map(n => n.textContent) };
+            const archiveTap = e => e.type === 'keydown' ? e.altKey && e.code === 'KeyE' : !!e.target.closest('[data-chact="done"], [data-rsact="done"], [data-act="done"]');
+            for (const type of ['click', 'keydown']) window.addEventListener(type, e => {
+              if (archiveTap(e)) {
+                const h = window.__wux || window.__wos, seen = () => [...document.querySelectorAll('.ch-thread .ti, .aad-tt')].filter(n => n.getClientRects().length && n.textContent).map(n => n.textContent);
+                window.archiveReceipt = { at: performance.now(), threads: Object.values(h.wins).filter(w => w.app === 'chats' && w.thread).map(w => w.thread), titles: seen() };
+                // The AI apps layout paints its header from the render event; rAF runs before this frame is painted.
+                requestAnimationFrame(() => { window.archiveReceipt.titles = [...new Set([...window.archiveReceipt.titles, ...seen()])]; window.archiveReceipt.framed = true; });
               }
             });
           });
@@ -116,6 +119,7 @@ const snapshot = () => {
           } else if (scenario === 'keyboard') {
             await page.keyboard.press('Alt+KeyE');
           } else await page.locator('.ch-thread [data-chact="done"]').filter({ visible: true }).click();
+          await page.waitForFunction(() => window.archiveReceipt?.framed);
           entry.receipt = await page.evaluate(() => archiveReceipt);
           assert.ok(entry.receipt, stem + ': post-handler click receipt');
           assert.deepEqual(entry.receipt.threads, next ? [next] : [], stem + ': same-task selection');
