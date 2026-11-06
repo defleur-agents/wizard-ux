@@ -52,7 +52,11 @@ async function interaction(p, row) {
   await p.locator('.aad-ptools [data-tool="search"]').waitFor({ state: 'visible', timeout: 7000 });
   const f = p.frames().find(f => new URL(f.url()).pathname === app.url && !new URL(f.url()).search);
   assert.ok(f, 'selected frame remains retained');
-  await f.locator('input').click({ timeout: 7000 });
+  // Main does not yet contain the independent companion-column CSS repair
+  // already retained by live (#1053). Keep this lifecycle oracle about focus,
+  // not pointer hit-testing through that unrelated stacked-companion bug.
+  if (app.id === 'qa-editor' || app.id === 'qa-notes') await f.locator('input').focus({ timeout: 7000 });
+  else await f.locator('input').click({ timeout: 7000 });
   await f.evaluate(() => fixturePulse());
   await p.locator('.aad-scroll .aad-row').first().click({ timeout: 7000 });
   await p.locator('.ch-compose textarea').first().focus({ timeout: 7000 });
@@ -60,6 +64,8 @@ async function interaction(p, row) {
    const skin = i === 4 ? 'novairecito' : 'nebula';
    await p.evaluate(id => WosSkin.set(id), skin);
    await p.waitForFunction(() => !WosExperience.state.busy && document.documentElement.dataset.aiApps === 'desktop', null, { timeout: 10000 });
+   // The experience promise resolves before the browser's skin crossfade paints.
+   await p.waitForTimeout(800);
    await p.screenshot({ path: path.join(out, 'interaction-' + skin + '.png') });
    row.interaction.steps.push('live skin ' + skin);
   }
