@@ -1,5 +1,7 @@
 # Shared components
 
+First-word app routes: REUSE `WosCommands`, the app registry and phone/desktop app windows. EXTEND `/wizard/v1/apps` and registry tiles with `voice_routes`; both adapters open the declared local URL, including an encoded rest parameter. NEW data shape only: `voice_routes: [{ words: ["music", "shazam"], open: "?view=identify&listen=1", rest_param: "q" }]`. No new speech service, priority claim, hidden receiver or app voice grant. Strong existing player/search spells retain their path; exact first words and registry order resolve routes. Destination stays within the declaring app’s same-origin path. Taps remain messages.
+
 Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push share recency. `WosSkinHost` boots default AI apps (`wos.desktop-view.v1`, `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`); sessions.ownList excludes legacy lists. `WizAppServices.back` retains root apps; unowned frames yield Back.
 
 [Contracts](component-contract-details.md).

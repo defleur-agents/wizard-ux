@@ -1,4 +1,9 @@
-# Shared app-services host/client v1
+# Shared app services host
+
+## First-word routing (data, not app voice access)
+
+Apps may declare `voice_routes: [{ words: ["music", "shazam"], open: "?view=identify&listen=1", rest_param: "q" }]` in their record/manifest. The Agent Service validates and projects the same field for installed apps and launcher links. `WosCommands` matches the first whole word on-device, opens the declaring app’s local route, and URL-encodes the remaining utterance into `rest_param` (omitted for an empty rest). This does not register a voice receiver or grant speech access. Existing strong shared player/search spells run first. No route match preserves normal AI/message routing. REUSE command grammar and window hosts; EXTEND registry metadata and route open; NEW declarative field only.
+
 
 Implementation is isolated on `fix/shared-app-services-20261012`, from daily `951290d2f886720b444570016bd27188214ac46c`. No deployment or live source edits are part of this slice. `app-capture.js` is supplied by its separate owner and must be integrated before release.
 
