@@ -43,7 +43,9 @@ A picture line is painted only when all of these hold:
 2. Scaled through `sw/sh`, `dpr` and the window offset, it is line-sized and mostly on screen: at least 4 px, at most
    20 % of the screen height and 30 % of its area, and at least 60 % visible.
 3. With the screenshot pixels loaded, `textPieces` finds text strokes there. The box is then tightened to those
-   strokes, so the sampled colours come from the real background. If there are no strokes, it is not placed.
+   strokes and padded by 22 % of their height above and below, exactly as `alignWords` pads a placed word. The sampled
+   colours come from the real background, sparse Thai marks above and below the line stay covered, and the text gets
+   the same size as painted app text. If there are no strokes, it is not placed.
 4. The app hasn't already reported it: the exact same text as an accessibility block, or 50 % or more of its box
    covered by the app's own word rects. The same words in two places stay two lines. Read twice in one place, they
    count once. When two different readings claim one place, the first keeps it.
@@ -54,12 +56,14 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
 
 ## Verification
 
-- `node --test tests/screen-picture-translation.test.mjs` (18 cases, model-free, synthetic geometry) runs the shipped
+- `node --test tests/screen-picture-translation.test.mjs` (19 cases, model-free, synthetic geometry) runs the shipped
   page through `S.open`. It covers: overlay placement and scaling (dpr, offset); malformed, absent and older-Search
   geometry; app/picture overlap dedupe; repeats; replies arriving in either order with no target-as-source; French +
   Thai; Original; tapping a painted line, outside tap and Back; Select text using the one read; target change during a
   read (one upload); stale replies; error/retry; no screenshot; image-only screens; ink tightening/rejection on
-  synthetic pixels; Appearance roles. It fails 16/18 against the release89 panel page and 18/18 against installed87.
+  synthetic pixels; sparse combining marks above and below a picture line (every ink pixel must be under the painted
+  translation); Appearance roles. It fails 16/18 against the release89 panel page and 18/18 against installed87.
+  Against the unpadded r1 page (`43165e80…`), the combining-mark case and the tightening case fail.
 - `tools/qa-screen-page.cjs` (browser, synthetic canvas): the existing Lens checks plus a scenario where the Thai dish
   exists only in the picture. The dish is painted over its own letters in sampled colours, with no panel and a Thai →
   English pill; Original, tap, outside tap and Copy are checked. The outside tap is a real touch at a point that
@@ -77,6 +81,16 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
   `read_image(geometry=True)` from Search source `cb5e8888…` in the installed Search container with its unchanged
   configuration: 9 lines, 8 boxes, all three Thai captions boxed, 5494 ms. `tools/qa_picture_geometry_probe.py`
   re-records the same files over live HTTP once the extension is deployed.
+- `tools/qa_orb_screen.py APK PKG` (native emulator lane; forum: API35 google_apis x86_64 under the inherited canonical
+  lease, 220 GiB free before boot, owned emulator/forward/reverse/fixture server cleaned in `finally`). It keeps every
+  earlier check and adds a picture-only Chrome canvas scene. The real production bridge asks `read-image?geometry=1`
+  of a fixture server whose boxes are computed from where Chrome draws the canvas, labelled synthetic, not inference.
+  The checks: English painted in place over the Thai, no automatic panel, a Thai → English pill, Original, a
+  hit-tested outside tap, Copy, and Back. `<job>/receipt.json` lists every check by name and the mode.
+  `--picture-only` runs the same real set-up, then only this scene, the crash check and cleanup; the default runs all
+  64 check sites. The emulator takes a spare recommended console/ADB pair (5554..5584/5555..5585, via
+  `qa_android_connect.choose_emulator_port`), never a fixed port.
+  `tools/test_qa_orb_screen_static.py` is its browser-free contract test, not native evidence.
 - Search: `python3 -m unittest tests.test_consolidation tests.test_search`. It checks that the default reply/prompt is
   unchanged, that geometry uses the same model with validated boxes, and that only `geometry=1` turns it on.
 
@@ -87,13 +101,11 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
 and the selected chip are opaque now. Painted text uses opaque sampled colours. `ScreenMode` doesn't inject the worn
 skin, so on the phone the page shows the dark fallback. Native skin transport isn't claimed.
 
-## Open finding (not fixed, not acceptance-complete)
+## Fixed finding, admitted by the parent (needs a rebuilt APK and visual re-review)
 
-Minor visual: in the synthetic r1 capture `08-picture-overlay.png`, a Thai below-vowel (from หมู) stays visible just
-under the painted picture-only line. The painted rect ends at 371 screen px, but the line is drawn to 384.8 px. The
-existing tolerance-6 check still passes. Cause: the stroke tightening in `pictureBox` misses sparse marks above/below
-the line. An optional one-line product patch (pad like `alignWords`, with a tightened check) is kept out of Git for the
-parent's separate decision. It is not applied: this QA-only follow-on inherits the r1 debug build unchanged.
+The Thai below-vowel left visible under the painted picture-only line in synthetic r1 capture `08-picture-overlay.png`
+(painted to 371 screen px, line drawn to 384.8 px) is covered by padding the stroke-tightened box like `alignWords`.
+The `qa-screen-page.cjs` coverage check is tightened to the line's full height within 3 css px.
 
 ## Release custody
 
