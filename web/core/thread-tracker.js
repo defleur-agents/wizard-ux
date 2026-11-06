@@ -214,8 +214,12 @@
     v.active = active;
     const groups = groupsOf(threads.get(key(sid, agent))?.items || []).filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done'));
     const wanted = new Set();
-    for (const node of nb.querySelectorAll('.msg[data-mid]')) {
-      const g = groups.find(g => anchorKey(g.message_id) === node.dataset.mid); if (!g) continue;
+    const nodes = [...nb.querySelectorAll('.msg.a[data-mid], .msg.a[data-mat]')];
+    for (const node of nodes) {
+      const g = groups.find(g => anchorKey(g.message_id) ? anchorKey(g.message_id) === node.dataset.mid
+        : g.at > 0 && Math.abs((+node.dataset.mat || 0) - g.at) < 1500
+          && nodes.filter(n => Math.abs((+n.dataset.mat || 0) - g.at) < 1500).length === 1);
+      if (!g) continue;
       wanted.add(node);
       const sig = JSON.stringify(g.members.map(i => [i.id, i.updated_at, i.seen]));
       if (v.nodes.get(node)?.sig !== sig) { v.nodes.set(node, { sig, group: g, since: 0, intersects: false }); v.io.unobserve(node); v.io.observe(node); }

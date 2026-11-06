@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
-function harness(states = ['done', 'done']) {
+function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
   let now = 100, active = true, focus = true, open = false, hit = true, inView = true, io, check;
-  let items = states.map((state, id) => ({ id: String(id), state, message_id: 'm', title: String(id), updated_at: 1, seen: false }));
-  const writes = [], events = {};
+  let items = states.map((state, id) => ({ id: String(id), state, message_id: timestampOnly ? null : 'm', at: 10000, title: String(id), updated_at: 1, seen: false }));
+  const writes = [], reads = [], events = {};
   const strip = { getClientRects: () => [1], getBoundingClientRect: () => ({ bottom: 160 }), classList: { contains: () => open } };
-  const node = { dataset: { mid: 'm' }, isConnected: true, getBoundingClientRect: () => ({ top: 176, bottom: 676, height: 500, left: 0, width: 400 }), contains: n => n === node };
+  const node = { dataset: timestampOnly ? { mat: '10000' } : { mid: 'm', mat: '10000' }, isConnected: true, getBoundingClientRect: () => ({ top: 176, bottom: 676, height: 500, left: 0, width: 400 }), contains: n => n === node };
   const nb = { isConnected: true, closest: () => ({ querySelector: () => strip }), querySelectorAll: () => [node], getBoundingClientRect: () => ({ top: 100, bottom: 800, left: 0, width: 400 }) };
   const doc = { documentElement: { dataset: { tweaks: 'wizard/thread-tracker' } }, visibilityState: 'visible', hasFocus: () => focus,
     querySelectorAll: () => [], addEventListener: (t, f) => { events[t] = f; }, elementFromPoint: () => hit ? node : null };
@@ -19,23 +19,36 @@ function harness(states = ['done', 'done']) {
       constructor(f) { io = f; } observe() { io([{ target: node, isIntersecting: inView }]); } unobserve() {} disconnect() {}
     }, fetch: async (p, init = {}) => {
       if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(() => {}); }
-      return { ok: true, json: async () => ({ items }) };
+      reads.push(p); return { ok: true, json: async () => ({ items }) };
     } });
   vm.runInContext(source, ctx);
   const T = win.WosThreadTracker;
-  return { T, doc, nb, node, writes,
-    async start() { await T.load('t'); T.watch(nb, { sid: 't', active: () => active }); },
+  return { T, doc, nb, node, writes, reads,
+    async start() { await T.load('t', agent); T.watch(nb, { sid: 't', agent, active: () => active }); },
     step(ms = 200) { now += ms; check(); },
     active(v) { active = v; }, focus(v) { focus = v; events[v ? 'focus' : 'blur']?.(); }, open(v) { open = v; }, hit(v) { hit = v; },
     visibility(v) { doc.visibilityState = v; events.visibilitychange(); },
     intersect(v) { inView = v; io([{ target: node, isIntersecting: v }]); },
-    async update() { items = items.map(i => ({ ...i, updated_at: 2 })); now += 3000; await T.load('t'); T.watch(nb, { sid: 't', active: () => active }); }
+    async update() { items = items.map(i => ({ ...i, updated_at: 2 })); now += 3000; await T.load('t', agent); T.watch(nb, { sid: 't', agent, active: () => active }); }
   };
 }
 test('green reply group auto-Seen after continuous visible dwell; paints all ids before I/O', async () => {
   const h = harness(); await h.start(); h.step(); h.step(999); assert.equal(h.writes.length, 0);
   h.step(1); assert.deepEqual(h.writes[0].ids, ['0', '1']); assert.equal(h.T.dots('t'), '');
   await h.update(); h.step(); h.step(1000); assert.equal(h.writes.length, 2, 'a later unseen update re-arms the anchor');
+});
+for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa']]) {
+  test(`main-versus-routed auto-Seen scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
+    const h = harness(['done', 'done'], agent); await h.start(); h.step(); h.step(1000);
+    assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
+    assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0', '1'] }]);
+    assert.equal(h.T.dots('t', agent), '');
+    const amber = harness(['needs_you'], agent); await amber.start(); amber.step(); amber.step(2000); assert.equal(amber.writes.length, 0);
+  });
+}
+test('timestamp-only legacy reply anchor receives the same green dwell', async () => {
+  const h = harness(['done'], '', true); await h.start(); h.step(); h.step(1000);
+  assert.equal(h.writes.length, 1); assert.equal(h.T.dots('t'), '');
 });
 for (const state of ['needs_you', 'blocked', 'running']) test(`${state}, including a mixed green group, is never auto-cleared`, async () => {
   const h = harness(['done', state]); await h.start(); h.step(); h.step(2000); assert.equal(h.writes.length, 0);
@@ -65,6 +78,8 @@ test('shared reading-position rule uses tracker eye-line; jumps retain unchanged
   assert.equal(relTop(nb, el), 8, 'latest reply top is 8px below the actual tracker eye-line');
   const chats = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
   assert.match(chats, /H\.front\(\) === w\.id/);
+  assert.match(chats, /typeof H\.front === 'function'/);
+  assert.match(chats, /H\.visible\(\)\.length === 1/);
   assert.match(chats, /else node\.scrollIntoView\(\{ block: 'center'/);
   assert.match(chats, /node\.getBoundingClientRect\(\)\.top - threadViewportTop\(nb, base\) - 8/);
 });
