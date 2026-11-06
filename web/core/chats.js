@@ -13,6 +13,7 @@
  *   newChatHint      → the line under "New chat" (the phone mentions the orb, the desktop its keys)
  *   openLink(url, title) → (optional) open a private-origin link in a window of this shell; return true if it did
  *   openApp(id, srcEl) → (optional) open an installed app, remembering the source window so Back returns to it
+ *   keepThreadOpen   → (optional) desktop retains existing threads on sends and state actions
  *   owner(id)        → (optional) the window a pane belongs to (the desktop's list pane id::list → id)
  *   overlay(open)         → (optional) the media viewer opened/closed (the phone arms its Back guard)
  *   vib(ms)               → (optional) haptic tick
@@ -502,14 +503,14 @@ window.WizCore.chats = function createChats(H) {
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  // A successful thread Snooze leaves the thread like Done does: back to wherever James came from, no extra tap
-  // (James, 24 Oct 2026; supersedes keeping it open on the Back-at banner). The toast carries the return time.
+  // Phone Snooze steps back like Done; desktop keeps its reader open (James, 6 Nov 2026).
+  // The toast carries the return time.
   window.addEventListener('wos:boomerang-set', e => {
     toast('◷', e.detail.label, 3200);
-    if (e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
+    if (!H.keepThreadOpen && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
   });
   window.addEventListener('wos:snooze-someday', e => {
-    if (!e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
+    if (!H.keepThreadOpen && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
     if (!e.detail.quiet) toast('◷', snoozeLast() ? 'Snoozed · bottom of Ready' : 'Snoozed · out of your list', 2400); H.changed?.();
   });
   // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
@@ -1717,8 +1718,12 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     if (a === 'unread') {
       closeRowSheet();
-      // Like an inbox: marking an open thread unread steps out of it first, or the open pane reads it straight back.
-      for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === sid) threadBack(x); }
+      // Hold the desktop's explicit unread marker until navigation; otherwise its live repaint reads it back.
+      for (const id of Object.keys(CH)) {
+        const x = W[id]; if (!x || x.thread !== sid) continue;
+        if (H.keepThreadOpen) ch(id).unreadHold = { sid, nav: ch(id).readNav };
+        else threadBack(x);
+      }
       const ok = await LIVE.markUnread(sid);
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -1733,7 +1738,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    if (a !== 'restore' && w && w.thread === sid) threadBack(w);
+    if (!H.keepThreadOpen && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2850,6 +2855,7 @@ window.WizCore.chats = function createChats(H) {
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
   function leaveAfterSend(wid, sid, isNew, how = '') {
+    if (H.keepThreadOpen && !isNew) return false;
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
       const entry = hosted.get(wid); closeHosted(wid);
@@ -3084,6 +3090,7 @@ window.WizCore.chats = function createChats(H) {
     if (!LIVE?.ok || !attended()) return;
     for (const id of desks[idx].wins) {
       const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
+      const hold = ch(id).unreadHold; if (hold?.sid === w.thread && hold.nav === ch(id).readNav) continue;
       const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
     }
   }

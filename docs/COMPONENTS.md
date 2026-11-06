@@ -51,7 +51,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Pages: list, viewer, editor, history, bridge | `WosPages` (`pages.js`) |
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
-| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
+| Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); desktop `keepThreadOpen`; sent reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` shares notification actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`web/core/desktop-host.js`): snapshots, retained frame, open/focus/close, onChange, panes. Classic first; AI apps migration pending. |
