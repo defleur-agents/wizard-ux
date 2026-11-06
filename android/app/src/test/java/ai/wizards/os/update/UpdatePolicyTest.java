@@ -34,8 +34,18 @@ public class UpdatePolicyTest {
                 UpdatePolicy.hold(false, true, false, false, false), true, false));
         assertEquals(UpdatePolicy.Hold.MIC, UpdatePolicy.hold(false, true, false, false, true));
     }
-    @Test public void liveOwnerProtectsPausedTakeWithoutAppOps() {
-        assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(false, true, true, false, false));
+    @Test public void idleLivingServiceAndStaleHolderCannotBlockATap() {
+        UpdatePolicy.Hold h = UpdatePolicy.hold(false, true, true, false, false);
+        assertEquals(UpdatePolicy.Hold.NONE, h);
+        assertEquals(UpdatePolicy.Step.INSTALL, UpdatePolicy.next(true, true, true, true, h, true, true));
+    }
+    @Test public void actualPausedTakeStillProtectsWithoutAppOpsOrHolder() {
+        for (boolean holder : new boolean[]{false, true}) for (boolean alive : new boolean[]{false, true}) {
+            UpdatePolicy.Hold h = UpdatePolicy.hold(true, holder, alive, false, false);
+            assertEquals(UpdatePolicy.Hold.TAKE, h);
+            assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, true, h, true, true));
+            assertEquals(UpdatePolicy.Step.DEFER, UpdatePolicy.next(true, true, true, false, h, true, false));
+        }
     }
     @Test public void genuineTakeWinsOverMusicAndMic() {
         assertEquals(UpdatePolicy.Hold.TAKE, UpdatePolicy.hold(true, false, false, true, true));

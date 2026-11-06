@@ -17,9 +17,11 @@ public final class UpdatePolicy {
         Hold(String reason) { this.reason = reason; }
     }
 
-    /** A dead owner's leftover claim is not a take; do not release it here (could race a new claim). */
+    /** Only an actual take protects capture. A holder/service can stay alive while idle.
+     * Keep the legacy inputs for callers/tests, but never infer recording from them or release a claim here.
+     */
     public static Hold hold(boolean take, boolean holderPresent, boolean ownerAlive, boolean music, boolean mic) {
-        if (take || (holderPresent && ownerAlive)) return Hold.TAKE;
+        if (take) return Hold.TAKE;
         if (music) return Hold.MUSIC;
         return mic ? Hold.MIC : Hold.NONE;
     }
