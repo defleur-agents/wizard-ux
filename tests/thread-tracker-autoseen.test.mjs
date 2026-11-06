@@ -38,6 +38,19 @@ test('green reply group auto-Seen after continuous visible dwell; paints all ids
   await h.update(); h.step(); h.step(1000); assert.equal(h.writes.length, 2, 'a later unseen update re-arms the anchor');
 });
 for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa']]) {
+  test(`running strip main-versus-routed scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
+    const h = harness(['running'], agent); await h.start(); h.step(); h.step(2000);
+    assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
+    assert.match(h.T.stripHtml('t', agent), /data-tt-strip/); assert.match(h.T.dots('t', agent), /running/);
+    assert.equal(h.writes.length, 0, 'running work is never auto-Seen');
+    if (agent) assert.equal(h.T.stripHtml('t'), '', 'routed work does not leak to the main thread');
+    const mixed = harness(['done', { state: 'running', message_id: 'run' }], agent); await mixed.start();
+    mixed.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: agent } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
+    assert.deepEqual(mixed.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0'] }]);
+    assert.match(mixed.T.stripHtml('t', agent), /data-tt-strip/); assert.match(mixed.T.dots('t', agent), /running/);
+    const ack = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }], agent); await ack.start();
+    assert.equal(ack.T.stripHtml('t', agent), '', 'acknowledged-only is hidden in every scope');
+  });
   test(`main-versus-routed auto-Seen scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
     const h = harness(['done', 'done'], agent); await h.start(); h.step(); h.step(1000);
     assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
