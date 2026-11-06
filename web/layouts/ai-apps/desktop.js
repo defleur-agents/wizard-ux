@@ -1216,14 +1216,24 @@ export default function desktop(api) {
   }
 
   /* the app's title-bar tools in the panel's header (round 7's), following the app's changes */
-  let toolsMo = null, toolsSrc = null;
+  let toolsMo = null, toolsSrc = null, toolsHost = null;
   const srcTools = () => pane?.el?.querySelector(':scope > .win:not(.gone) > .wbar > .wtools') || null;
   function paintTools() {
-    const src = srcTools();
-    if (src !== toolsSrc) {
-      toolsMo?.disconnect(); toolsMo = null; toolsSrc = src;
-      if (src && globalThis.MutationObserver) { toolsMo = new MutationObserver(() => api.frame(paintTools)); toolsMo.observe(src, { childList: true, subtree: true, attributes: true }); }
+    const host = pane?.el || null, src = srcTools();
+    if (host !== toolsHost) {
+      toolsMo?.disconnect(); toolsMo = null; toolsHost = host;
+      // Watch the stable app pane even before its tools exist. Watching only
+      // .wtools missed late registration and replacement of the window bar.
+      // Ignore our mirrored header: it lives in the same pane, and observing
+      // its clones as source changes would create a repaint feedback loop.
+      if (host && globalThis.MutationObserver) {
+        toolsMo = new MutationObserver(records => {
+          if (srcTools() !== toolsSrc || records.some(r => toolsSrc?.contains(r.target))) api.frame(paintTools);
+        });
+        toolsMo.observe(host, { childList: true, subtree: true, attributes: true });
+      }
     }
+    toolsSrc = src;
     pTools.replaceChildren(...(src ? [...src.children].map(c => { const n = c.cloneNode(true); if (c.tagName === 'SELECT') n.value = c.value; return n; }) : []));
     pTools.hidden = !pTools.children.length;
   }
