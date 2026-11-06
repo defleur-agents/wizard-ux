@@ -884,15 +884,38 @@
   }
   /**
    * Placed picture lines never cover each other: two boxes closer than textArea's 1 px paint margins (or overlapping)
-   * are split in the middle, so each painted line keeps its own area.
+   * are split along whichever axis they actually disagree on, so each painted line keeps its own area. Boxes in
+   * (nearly) the same column, offset in y, are a genuine vertical stack: split the middle of their y overlap. Boxes
+   * that merely share a baseline (nearly the same y extent, the 50-89% relaxed horizontal overlap that keeps
+   * distinct side-by-side captions, above) are not a stack along y at all: splitting them there would halve one
+   * caption's box and slide the other into the half it never owned. Those are split along x instead, at the middle
+   * of their x overlap, so each keeps the half of its own box that the other does not also claim.
    */
   function unstack(bs) {
     const s = [...bs].sort((p, q) => p.y - q.y);
     for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
       const u = s[i], d = s[j], gap = d.y - (u.y + u.h);
-      if (gap >= 2 || Math.min(u.x + u.w, d.x + d.w) <= Math.max(u.x, d.x)) continue;
-      const mid = (u.y + u.h + d.y) / 2, bottom = d.y + d.h;
-      u.h = Math.max(4, mid - 1 - u.y); d.y = mid + 1; d.h = Math.max(4, bottom - d.y);
+      if (gap >= 2) continue;
+      const hOverlap = Math.min(u.x + u.w, d.x + d.w) - Math.max(u.x, d.x);
+      if (hOverlap <= 0) continue; // no paint overlap at all: nothing to separate
+      const vOverlap = Math.min(u.y + u.h, d.y + d.h) - Math.max(u.y, d.y);
+      const sameColumn = hOverlap / Math.min(u.w, d.w) >= .9;
+      const sameRow = vOverlap / Math.min(u.h, d.h) >= .9;
+      if (sameColumn) {
+        const mid = (u.y + u.h + d.y) / 2, bottom = d.y + d.h;
+        u.h = Math.max(4, mid - 1 - u.y); d.y = mid + 1; d.h = Math.max(4, bottom - d.y);
+      } else if (sameRow) {
+        // textArea() pads a picture line's box by 2px on each side in x (unlike 1px in y), so the split needs the
+        // same 2px margin here to actually keep the two painted panels from touching, let alone overlapping.
+        const left = u.x <= d.x ? u : d, right = left === u ? d : u, rightEnd = right.x + right.w;
+        const mid = (Math.max(left.x, right.x) + Math.min(left.x + left.w, right.x + right.w)) / 2;
+        left.w = Math.max(4, mid - 2 - left.x); right.x = mid + 2; right.w = Math.max(4, rightEnd - right.x);
+      } else {
+        // neither a column stack nor a shared row: the two boxes still paint-overlap, so fall back to the original
+        // vertical split (every case before this fix) rather than leaving them touching.
+        const mid = (u.y + u.h + d.y) / 2, bottom = d.y + d.h;
+        u.h = Math.max(4, mid - 1 - u.y); d.y = mid + 1; d.h = Math.max(4, bottom - d.y);
+      }
     }
   }
   /** How much of box b the rects cover, 0..1. */
@@ -926,7 +949,9 @@
   /**
    * The picture's lines that the app's own text doesn't already hold (same words, or the same place on screen), each
    * with its place or none; then translate them. Repeated words in two places stay two lines; read twice in one place,
-   * one. Two different readings claiming one place: the first keeps it.
+   * one. Two different readings claiming the very same place: the first keeps it. Two different lines whose boxes
+   * merely overlap (close line spacing, an imprecise model box) are never both dropped: each keeps its place and
+   * unstack() (called once every picture block is in, below) splits them apart, same as any other placed blocks.
    */
   function pictureTranslate(read) {
     const key = s => String(s).normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
@@ -939,7 +964,10 @@
       if (box && covered(box, own) >= .5) return; // the app's own text, translated above
       const same = (a, c) => covered(a, [c]) >= .5 || covered(c, [a]) >= .5;
       if (rows.some(q => q.k === k && (!q.box || !box || same(q.box, box)))) return;
-      if (box && rows.some(q => q.box && same(q.box, box))) box = null;
+      // a different line only loses its place when the two boxes are effectively the same single spot (one of them
+      // almost entirely inside the other): that is one place claimed twice, not two real neighbouring lines.
+      const samePlace = (a, c) => covered(a, [c]) >= .9 || covered(c, [a]) >= .9;
+      if (box && rows.some(q => q.box && samePlace(q.box, box))) box = null;
       rows.push({ t, k, box });
     });
     if (!rows.length) { st.pictureState = 'done'; st.picRows = []; st.tr = st.tr || {}; pillDone(); syncSheet(); return; }
