@@ -51,10 +51,10 @@ const session = (id, title, n) => ({ ...fx.row, id, title: id === 'tt-main' ? 'W
   ...(!WORKING && id === 'tt-main' ? { wizard_attention: { state: 'needs_you', ask: 'Review this polish round' }, wizard_background: 'helper' } : {}),
   ...(WORKING && id === 'tt-main' ? { status: 'running', wizard_run_id: 'run-live-1', wizard_status: 'running' } : {}) });
 
-async function mount(browser, svc, { shell, skin, tweaks, storage }) {
+async function mount(browser, svc, { shell, skin, tweaks, storage, docScroll = false }) {
   const phone = shell === 'phone';
   const ctx = await browser.newContext({ viewport: phone ? { width: 412, height: 860 } : { width: 1360, height: 860 }, deviceScaleFactor: 2, isMobile: phone, hasTouch: phone, serviceWorkers: 'block',
-    userAgent: phone ? 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' : undefined });
+    userAgent: phone ? 'Mozilla/5.0 (Linux; Android 15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' + (docScroll ? ' WizardOS-DocScroll' : '') : undefined });
   const errors = []; ctx.errors = errors;
   await ctx.addInitScript(({ skin, mix, keep }) => {
     if (window !== top) return;
@@ -72,7 +72,15 @@ async function mount(browser, svc, { shell, skin, tweaks, storage }) {
     if (p.startsWith('/wizard-os-home/') && !p.startsWith('/wizard-os-home/store-')) {
       const rel = p.slice('/wizard-os-home/'.length) || (shell === 'desktop' ? 'desktop.html' : 'index.html');
       const file = path.resolve(WEB, decodeURIComponent(rel));
-      if (file.startsWith(WEB + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return route.fulfill({ path: file });
+      if (file.startsWith(WEB + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
+        if (process.env.QA_SERVED_BASE && !['data.js', 'summaries.js', 'ux-changes.json'].includes(rel)) {
+          const r = await fetch(process.env.QA_SERVED_BASE + '/wizard-os-home/' + rel, { headers: { 'Cache-Control': 'no-cache' }, redirect: 'error' });
+          const bytes = Buffer.from(await r.arrayBuffer());
+          if (r.status !== 200 || !bytes.equals(fs.readFileSync(file))) throw new Error(`Served static mismatch: ${rel} (${r.status})`);
+          return route.fulfill({ status: 200, body: bytes, contentType: /\.js$/.test(rel) ? 'text/javascript' : /\.css$/.test(rel) ? 'text/css' : /\.html$/.test(rel) ? 'text/html' : undefined });
+        }
+        return route.fulfill({ path: file });
+      }
     }
     if (p === '/wizard/v1/thread-items/counts') return json({ threads: { 'hermes/tt-main': svc.counts() } });
     if (p === '/wizard/v1/thread-items/seen' && m === 'POST') {
@@ -221,6 +229,50 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.screenshot({ path: path.join(OUT, `grouped-two-${shell}-${skin}.png`) });
       check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
       await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
+    }
+    /* ---- visible reply dwell and measured tracker inset ---- */
+    for (const skin of SKINS) for (const profile of ['phone', 'phone-doc', 'desktop']) {
+      const shell = profile === 'desktop' ? 'desktop' : 'phone', svc = service();
+      const latest = svc.rows.at(-1), anchor = svc.items[0];
+      latest.content = 'First line of the latest reply must be fully visible.\n\n' + 'Detailed explanation with enough text to exceed a phone viewport.\n\n'.repeat(60);
+      svc.items = ['green-a', 'green-b'].map(id => ({ ...anchor, id, title: 'Finished work', state: 'done', message_id: String(latest.id), at: latest.timestamp * 1000, updated_at: latest.timestamp * 1000 }));
+      svc.seen.clear();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID], docScroll: profile === 'phone-doc' });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip] .tt-h');
+      await page.waitForTimeout(500);
+      const geometry = () => page.evaluate(mid => {
+        const n = document.querySelector(`.msg[data-mid="${mid}"]`), s = document.querySelector('[data-tt-strip]'), r = n.getBoundingClientRect(), b = s.getBoundingClientRect();
+        return { top: r.top, stripBottom: b.bottom, shell: document.documentElement.dataset.shell, skin: document.documentElement.dataset.skin, doc: document.documentElement.classList.contains('wos-doc-scroll'), visible: r.top >= b.bottom + 6 && r.top < innerHeight - 80 };
+      }, String(latest.id));
+      const g = await geometry();
+      check(`autoseen/${profile}/${skin}: latest reply first line below actual strip`, g.visible && g.shell === shell && g.skin === skin && g.doc === (profile === 'phone-doc'), g);
+      await page.screenshot({ path: path.join(OUT, `autoseen-open-${profile}-${skin}.png`) });
+      await page.waitForFunction(() => window.WosThreadTracker.dots('tt-main') === '', null, { timeout: 6000 });
+      check(`autoseen/${profile}/${skin}: green group acknowledged and Chats dots cleared`, svc.view().every(i => i.seen) && svc.writes.some(w => w.b?.ids?.length === 2));
+      await strip(page).locator('.tt-h').click();
+      const seam = await page.evaluate(() => { const h = document.querySelector('.tt-h').getBoundingClientRect(), p = document.querySelector('.tt-panel').getBoundingClientRect(), c = getComputedStyle(document.querySelector('.tt-panel')); return { gap: p.top - h.bottom, radius: c.borderTopLeftRadius, base: c.backgroundColor, image: c.backgroundImage }; });
+      check(`autoseen/${profile}/${skin}: expanded panel continuous and opaque`, seam.gap <= 0 && seam.gap >= -2 && seam.radius === '0px' && !/rgba\([^)]*, 0\)/.test(seam.base), seam);
+      await page.screenshot({ path: path.join(OUT, `autoseen-panel-${profile}-${skin}.png`) });
+      // A later green update must not be consumed by opening the dropdown.
+      svc.items = svc.items.map(i => ({ ...i, updated_at: i.updated_at + 1000 })); svc.seen.clear();
+      await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.load('tt-main'));
+      await page.waitForTimeout(1400);
+      check(`autoseen/${profile}/${skin}: opening dropdown is not seeing`, svc.view().every(i => !i.seen));
+      await strip(page).locator('.tt-h').click();
+      // Browser visibility is controlled on this synthetic document; never change an owner document.
+      await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
+      await page.waitForTimeout(1400);
+      check(`autoseen/${profile}/${skin}: hidden document never clears`, svc.view().every(i => !i.seen));
+      await page.evaluate(() => { delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
+      await page.waitForFunction(() => window.WosThreadTracker.dots('tt-main') === '', null, { timeout: 5000 });
+      check(`autoseen/${profile}/${skin}: visible later update re-arms`, svc.view().every(i => i.seen));
+      // Amber remains an action even when anchored to the exact same visible reply.
+      svc.items = svc.items.map(i => ({ ...i, state: 'needs_you', try: true, updated_at: i.updated_at + 1000 })); svc.seen.clear();
+      await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.load('tt-main')); await page.waitForTimeout(1600);
+      check(`autoseen/${profile}/${skin}: amber stays for manual action`, svc.view().every(i => !i.seen) && await page.evaluate(() => /need you/.test(window.WosThreadTracker.dots('tt-main'))));
+      check(`autoseen/${profile}/${skin}: no real sends or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
+      await ctx.close();
     }
     /* ---- 2. on: phone + desktop AI apps, two skins ---- */
     if (!process.env.QA_LATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {

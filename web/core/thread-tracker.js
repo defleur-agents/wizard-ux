@@ -190,7 +190,67 @@
       if (!html) el.remove();
       else if (el.outerHTML !== html) el.outerHTML = html;
     }
+    for (const [nb, v] of views) if (nb.isConnected) watch(nb, v);
   }
+
+  /* A green reply is seen only in the front, visible thread, never in its dropdown.
+   * IO admits candidate anchors; geometry/hit testing and a continuous dwell guard occlusion,
+   * document scrolling, desk switches and focus changes that do not themselves emit IO entries. */
+  const views = new Map();
+  function viewportTop(nb, base) {
+    if (!on()) return base;
+    const strip = nb?.closest('.ch-thread')?.querySelector('[data-tt-strip]');
+    return strip?.getClientRects().length ? Math.max(base, strip.getBoundingClientRect().bottom + 8) : base;
+  }
+  function watch(nb, { sid, agent = '', active } = {}) {
+    if (!nb || typeof IntersectionObserver !== 'function') return;
+    let v = views.get(nb);
+    if (!v || v.sid !== sid || v.agent !== agent) {
+      v?.io.disconnect();
+      v = { nb, sid, agent, active, nodes: new Map() };
+      v.io = new IntersectionObserver(entries => { for (const e of entries) { const n = v.nodes.get(e.target); if (n) { n.intersects = e.isIntersecting; if (!e.isIntersecting) n.since = 0; } } }, { threshold: [0, .4, 1] });
+      views.set(nb, v);
+    }
+    v.active = active;
+    const groups = groupsOf(threads.get(key(sid, agent))?.items || []).filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done'));
+    const wanted = new Set();
+    for (const node of nb.querySelectorAll('.msg[data-mid]')) {
+      const g = groups.find(g => anchorKey(g.message_id) === node.dataset.mid); if (!g) continue;
+      wanted.add(node);
+      const sig = JSON.stringify(g.members.map(i => [i.id, i.updated_at, i.seen]));
+      if (v.nodes.get(node)?.sig !== sig) { v.nodes.set(node, { sig, group: g, since: 0, intersects: false }); v.io.unobserve(node); v.io.observe(node); }
+    }
+    for (const node of v.nodes.keys()) if (!wanted.has(node)) { v.io.unobserve(node); v.nodes.delete(node); }
+  }
+  function checkViews() {
+    for (const [nb, v] of views) {
+      if (!nb.isConnected || !on()) { v.io.disconnect(); views.delete(nb); continue; }
+      const front = document.visibilityState === 'visible' && document.hasFocus() && v.active?.();
+      const strip = nb.closest('.ch-thread')?.querySelector('[data-tt-strip]');
+      const box = nb.getBoundingClientRect(), rstrip = strip?.getBoundingClientRect();
+      const top = viewportTop(nb, Math.max(0, box.top)), bottom = Math.min(innerHeight, box.bottom);
+      for (const [node, n] of v.nodes) {
+        const r = node.getBoundingClientRect(), h = Math.min(r.bottom, bottom) - Math.max(r.top, top);
+        const x = Math.max(box.left, r.left) + Math.min(box.width, r.width) / 2;
+        const y = Math.max(r.top, top) + Math.min(20, h / 2);
+        const hit = h > 0 && document.elementFromPoint(x, y);
+        const visible = front && !strip?.classList.contains('open') && n.intersects && node.isConnected
+          && bottom > top && h >= Math.min(40, r.height) && (r.top >= top && r.top < bottom - 20 || h >= .4 * Math.min(r.height, bottom - top))
+          && node.contains(hit) && (!rstrip || y > rstrip.bottom);
+        if (!visible) { n.since = 0; n.attempted = false; continue; }
+        if (!n.since) n.since = Date.now();
+        if (!n.attempted && Date.now() - n.since >= 1000) {
+          n.attempted = true;
+          const current = groupsOf(threads.get(key(v.sid, v.agent))?.items || []).find(g => g.id === n.group.id);
+          if (current?.kind === 'done' && current.members.every(i => i.state === 'done')) markSeen(v.sid, v.agent, current.ids);
+        }
+      }
+    }
+  }
+  const resetDwell = () => { for (const v of views.values()) for (const n of v.nodes.values()) n.since = 0; };
+  document.addEventListener('visibilitychange', resetDwell);
+  window.addEventListener('blur', resetDwell);
+  setInterval(checkViews, 200);
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
@@ -226,11 +286,9 @@
     const item = groupsOf(threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
     if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
-    // Open, or the row itself: close the list so the reply is visible, then go to it. Finished asks that were
-    // opened count as seen (you are looking at the answer).
+    // Opening is not seeing: close the list and jump; the visible dwell acknowledges green replies.
     openKeys.delete(k); opened = null; repaint();
     if (typeof jump === 'function') jump(anchorOf(item), item);
-    if (item.state === 'done' && !item.seen) markSeen(s, a, item.ids);
     return true;
   }
   const itemFor = (sid, agent, m) => {
@@ -245,7 +303,7 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
   let wasOn = on();
   function syncEnabled() {
