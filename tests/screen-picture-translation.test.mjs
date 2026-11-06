@@ -299,8 +299,38 @@ test('with the pixels at hand, a box is tightened to real strokes; a box over no
     return { data };
   } } });
   const b = h.context.__test.pictureBox([90 / W, 590 / H, 420 / W, 650 / H]); // a loose model box
-  assert.ok(b && near(b.x, 50, 2) && near(b.y, 300, 2) && near(b.x + b.w, 200, 2) && near(b.y + b.h, 320, 2), JSON.stringify(b));
+  // strokes span css y 300..320; like a placed word the line is padded by 22 % of its height above and below
+  assert.ok(b && near(b.x, 50, 2) && near(b.y, 295.6, 2) && near(b.x + b.w, 200, 2) && near(b.y + b.h, 324.4, 2), JSON.stringify(b));
   assert.equal(h.context.__test.pictureBox([100 / W, 900 / H, 400 / W, 940 / H]), null, 'blank pixels: no place');
+});
+
+test('sparse combining marks above and below a picture line (like ้ and ู) stay under the painted translation', async () => {
+  const h = await harness();
+  // synthetic 720x1560 screenshot: a stroke band y 600..640 px, one isolated mark above it (y 590..598) and one below
+  // (y 642..650). A lone mark is too sparse to count as a row of text, as Thai tone marks and below-vowels are.
+  const W = 720, H = 1560;
+  const band = (x, y) => y >= 600 && y < 640 && x >= 100 && x < 400 && (x - 100) % 6 < 2;
+  const marks = [[250, 590, 256, 598], [160, 642, 166, 650]];
+  const mark = (x, y) => marks.some(([x0, y0, x1, y1]) => x >= x0 && x < x1 && y >= y0 && y < y1);
+  const ink = (x, y) => band(x, y) || mark(x, y);
+  h.context.__test.setPx({ w: W, h: H, k: 1, x: { getImageData(x0, y0, w, hh) {
+    const data = new Uint8ClampedArray(w * hh * 4);
+    for (let j = 0; j < hh; j++) for (let i = 0; i < w; i++) { const v = ink(x0 + i, y0 + j) ? 0 : 255, q = (j * w + i) * 4; data[q] = data[q + 1] = data[q + 2] = v; data[q + 3] = 255; }
+    return { data };
+  } } });
+  h.identity();
+  h.pictured({ lines: [THAI[0]], boxes: [[90 / W, 585 / H, 420 / W, 655 / H]] });
+  h.thaiEnglish();
+  const [p] = h.painted();
+  assert.ok(p && p.t === EN[0], 'the line is painted');
+  // every ink pixel of the line, marks included, must be under the painted rect (css px = screen px / dpr 2)
+  const uncovered = [];
+  for (let y = 585; y < 655; y++) for (let x = 90; x < 420; x++) {
+    if (!ink(x, y)) continue;
+    const cx = (x + 0.5) / DPR, cy = (y + 0.5) / DPR;
+    if (cx < p.left || cx > p.left + p.width || cy < p.top || cy > p.top + p.height) uncovered.push([x, y]);
+  }
+  assert.equal(uncovered.length, 0, 'uncovered ink px (first): ' + JSON.stringify(uncovered.slice(0, 4)) + ' painted ' + JSON.stringify(p));
 });
 
 test('Appearance v1 roles with dark standalone fallbacks; text overlays are opaque', () => {
