@@ -52,8 +52,10 @@ function ai({ modal = '', typing = false, docked = true } = {}) {
     stepReady: act('ready'), vtRows: () => [],
   };
   vm.createContext(context);
-  const src = between(layout, '  api.keys.on({ down: e => {\n    if (!e.altKey', '\n  const vtRows = ');
-  vm.runInContext('var down; var api = {keys:{on(h){down=h.down;}}};\n' + src, context);
+  // The live launcher keeps physical-left-Option state before its handler.
+  // Extract that state and its blur registration too; keep the same key assertions.
+  const src = between(layout, '  let leftOption = false;', '\n  const vtRows = ');
+  vm.runInContext('var down; var api = {listen(){},keys:{on(h){down=h.down;}}};\n' + src, context);
   return { calls, key: (code, extra = {}) => context.down(event(code, extra)) };
 }
 for (const code of ['ArrowLeft', 'ArrowRight']) {
