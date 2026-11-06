@@ -19,10 +19,11 @@ test('archive, Compact, Newest/Oldest and subject ordering synchronize to a fres
   let state = { archiveAfterDays: 7, compact: false, readyOrder: 'newest', subjectOrder: [] };
   const req = async (url, init = {}) => { assert.equal(url, '/wizard/v1/ui-preferences'); if (init.method === 'PUT') state = { ...state, ...JSON.parse(init.body) }; return { ok: true, json: async () => ({ ...state }) }; };
   const a = device(req); await tick();
-  await a.putPrefs({ archiveAfterDays: 0, compact: true }); await a.putPrefs({ readyOrder: 'oldest', subjectOrder: ['Work', 'Home'] });
+  await a.putPrefs({ archiveAfterDays: 0, compact: true }); await a.putPrefs({ readyOrder: 'oldest', workingOrder: 'oldest', subjectOrder: ['Work', 'Home'] });
   const b = device(req); await tick();
   assert.equal(b.store.get('wos.chats.archiveAfter.v1'), '0'); assert.equal(b.store.get('wos.chats.compact.v1'), '1');
   assert.equal(b.store.get('wos.chats.readyOrder.v1'), 'oldest'); assert.equal(b.store.get('wos.chats.subjectOrder.v1'), '["Work","Home"]');
+  assert.equal(b.store.get('wos.chats.workingOrder.v1'), 'oldest');
   assert.ok(b.events.includes('wos:prefs'));
 });
 test('old or unavailable service preserves local choices; failed writes are not silently called saved', async () => {
