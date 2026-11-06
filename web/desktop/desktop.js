@@ -567,7 +567,8 @@
       });
     },
     frame: id => winEl(id)?.querySelector('iframe') || null,
-    renderTools: (frame, slot) => window.WizAppServices?.titlebar.render(frame, slot) === true,
+    // A shell whose app services predate layout-owned toolbars still starts the layout: no tools, no crash (James, 6 Nov 2026).
+    renderTools: (frame, slot) => window.WizAppServices?.titlebar?.render?.(frame, slot) === true,
     openApp: id => Object.hasOwn(APP, id) && openApp(APP[id]) !== false,
     focus: (id, opts) => {
       // A layout already chose the visible panes. Keyboard focus is not a
