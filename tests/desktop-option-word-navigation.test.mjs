@@ -54,7 +54,10 @@ function ai({ modal = '', typing = false, docked = true } = {}) {
   vm.createContext(context);
   // The live left-Option picker adds physical-key bookkeeping before altKey's
   // guard. Extract the complete production handler, not its former first line.
-  const src = between(layout, '  api.keys.on({ down: e => {', '\n  const vtRows = ');
+  const start = layout.includes("  api.keys.on({ down: e => {\n    if (e.code === 'AltLeft')")
+    ? "  api.keys.on({ down: e => {\n    if (e.code === 'AltLeft')"
+    : '  api.keys.on({ down: e => {\n    if (!e.altKey';
+  const src = between(layout, start, '\n  const vtRows = ');
   vm.runInContext('var down; var api = {keys:{on(h){down=h.down;}}};\n' + src, context);
   return { calls, key: (code, extra = {}) => context.down(event(code, extra)) };
 }
