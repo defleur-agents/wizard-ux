@@ -2411,7 +2411,7 @@ test('app keys (Miguel, 4 Nov 2026; one ⌥ anchor): the app picked by ⌥ digit
   assert.equal(clicks.length, 2, 'plain j does nothing');
   // a click on the row picks it the same way
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); focusWant = id === CHATS \? '' : id;/, 'every pick (key, click, an Open) asks for the keyboard');
+  assert.match(js, /const goApp = \(id, desk = null, then = null, place = null\) => \{\n\s+unpeek\(\); closeAll\(\); wantAppFocus\(id === CHATS \? '' : id\);/, 'every pick (key, click, an Open) asks for the keyboard with a fresh retry generation');
   assert.match(js, /f\.focus\?\.\(\{ preventScroll: true \}\); f\.contentWindow\?\.focus\?\.\(\);/);
   assert.doesNotMatch(read('web/layouts/ai-apps/desktop.css'), /\.kh-chip\.kh-app \{/, 'one keycap style: no outlined app keycaps');
   assert.match(js, /if \(!sh && appFront\(\)\) \{ const t = appTarget\(appKeyOf\(code\)\); if \(t\) \{ if \(!e\.repeat\) pressApp\(t\); return true; \} \}/, 'app before the view\'s letters, after the modals, voice and the composer\'s accents');
