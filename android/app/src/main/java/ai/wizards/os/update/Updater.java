@@ -203,36 +203,43 @@ public final class Updater {
         if (bad && !tapped && !ok) { set("error", "message", prefs(app).getString("rejectedWhy", "Update refused")); return; }
         boolean silent = silentPossible(app);
         // Only an explicit install tap can interrupt a meeting; flush and journal it, never end it.
+        boolean prepared = false;
         if (tapped && ok && app.getPackageManager().canRequestPackageInstalls()
                 && ai.wizards.os.mizel.MeetingRecorderService.live() != null)
-            ai.wizards.os.mizel.MeetingRecorderService.prepareForUpdate();
-        UpdatePolicy.Hold hold = hold(app);
-        UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), hold, silent, tapped);
-        Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
-        switch (step) {
-            case NONE: return;
-            case OFFER: set("available"); return;
-            case DOWNLOAD:
-                if (!fetch(app, r)) return;
-                stepNow(app, tapped, act);
-                return;
-            case BANNER: set("ready"); return;
-            case DEFER:
-                set("deferred", "reason", hold.reason);
-                main.removeCallbacks(deferred);
-                main.postDelayed(deferred, 20_000);
-                return;
-            case WAIT_PERMISSION:
-                // Android would ask James and he isn't looking: tell him once per version; his tap does the rest.
-                set("ready");
-                if (!AppState.front() && UpdatePolicy.mayPromptAgain(prefs(app).getInt("noticed", 0), r.versionCode, false)) {
-                    prefs(app).edit().putInt("noticed", r.versionCode).apply();
-                    notice(app, "Wizard OS " + r.versionName + " is ready", "Tap to install");
-                }
-                return;
-            case INSTALL:
-                if (act != null && !app.getPackageManager().canRequestPackageInstalls()) { askPermission(act); return; }
-                commit(app, r, verified, tapped || AppState.front(), tapped);
+            prepared = ai.wizards.os.mizel.MeetingRecorderService.prepareForUpdate();
+        boolean committed = false;
+        try {
+            UpdatePolicy.Hold hold = hold(app);
+            UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), hold, silent, tapped);
+            Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
+            switch (step) {
+                case NONE: return;
+                case OFFER: set("available"); return;
+                case DOWNLOAD:
+                    if (!fetch(app, r)) return;
+                    stepNow(app, tapped, act);
+                    return;
+                case BANNER: set("ready"); return;
+                case DEFER:
+                    set("deferred", "reason", hold.reason);
+                    main.removeCallbacks(deferred);
+                    main.postDelayed(deferred, 20_000);
+                    return;
+                case WAIT_PERMISSION:
+                    // Android would ask James and he isn't looking: tell him once per version; his tap does the rest.
+                    set("ready");
+                    if (!AppState.front() && UpdatePolicy.mayPromptAgain(prefs(app).getInt("noticed", 0), r.versionCode, false)) {
+                        prefs(app).edit().putInt("noticed", r.versionCode).apply();
+                        notice(app, "Wizard OS " + r.versionName + " is ready", "Tap to install");
+                    }
+                    return;
+                case INSTALL:
+                    if (act != null && !app.getPackageManager().canRequestPackageInstalls()) { askPermission(act); return; }
+                    committed = commit(app, r, verified, tapped || AppState.front(), tapped);
+            }
+        } finally {
+            // Includes policy/permission changes, missing/hash-changed files and synchronous installer errors.
+            if (prepared && !committed) ai.wizards.os.mizel.MeetingRecorderService.resumeAfterFailedUpdate(app);
         }
     }
 
@@ -445,8 +452,8 @@ public final class Updater {
      * the new version is in (James was in it).
      */
     @android.annotation.SuppressLint("ApplySharedPref") // must hit disk before Android kills us for the install
-    private static void commit(Context app, UpdatePolicy.Release r, File f, boolean relaunch, boolean tapped) {
-        if (f == null || !f.isFile()) { verified = null; set("error", "message", "The download is gone · try again"); return; }
+    private static boolean commit(Context app, UpdatePolicy.Release r, File f, boolean relaunch, boolean tapped) {
+        if (f == null || !f.isFile()) { verified = null; set("error", "message", "The download is gone · try again"); return false; }
         set("installing");
         PackageInstaller pi = app.getPackageManager().getPackageInstaller();
         for (PackageInstaller.SessionInfo s : pi.getMySessions()) { try { pi.abandonSession(s.getSessionId()); } catch (RuntimeException ignored) { } }
@@ -479,7 +486,7 @@ public final class Updater {
                     //noinspection ResultOfMethodCallIgnored
                     f.delete();
                     set("error", "message", "The download changed after it was checked");
-                    return;
+                    return false;
                 }
                 // Copying/hash verification takes time: a take may have begun since stepNow's first check.
                 UpdatePolicy.Hold currentHold = hold(app);
@@ -488,7 +495,7 @@ public final class Updater {
                     set("deferred", "reason", currentHold.reason);
                     main.removeCallbacks(deferred);
                     main.postDelayed(deferred, 20_000);
-                    return;
+                    return false;
                 }
                 // commit(), not apply(): Android kills this process as soon as the new version is in.
                 prefs(app).edit().putInt("relaunch", relaunch ? r.versionCode : 0).commit();
@@ -498,11 +505,13 @@ public final class Updater {
                 Log.i(TAG, "session " + id + " commit " + r.versionName + " (" + r.versionCode + ") requireUserAction=" + ua
                         + " installer=" + installerOfRecord(app));
                 s.commit(cb.getIntentSender());
+                return true;
             }
         } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
             Log.w(TAG, "session: " + e);
             if (id >= 0) { try { pi.abandonSession(id); } catch (RuntimeException ignored) { } }
             set("error", "message", "Android’s installer refused the update (" + e.getClass().getSimpleName() + ")");
+            return false;
         }
     }
 
@@ -512,7 +521,11 @@ public final class Updater {
         appCtx = app;
         Log.i(TAG, "status " + status + " vc=" + vc + (message != null ? " msg=" + message : ""));
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
-            if (confirm == null) { set("error", "message", "Android’s installer didn’t open"); return; }
+            if (confirm == null) {
+                set("error", "message", "Android’s installer didn’t open");
+                ai.wizards.os.mizel.MeetingRecorderService.resumeAfterFailedUpdate(app);
+                return;
+            }
             confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             if (AppState.front()) {
                 try { app.startActivity(confirm); set("confirm"); Log.i(TAG, "installer opened (confirm)"); return; }
@@ -533,6 +546,7 @@ public final class Updater {
         String why = UpdatePolicy.failureMessage(status, message);
         Log.w(TAG, "install failed: " + why);
         set("error", "message", why == null ? "Update failed" : why, "status", status);
+        ai.wizards.os.mizel.MeetingRecorderService.resumeAfterFailedUpdate(app);
         if (!AppState.front()) notice(app, "Wizard OS couldn’t update", why);
     }
 

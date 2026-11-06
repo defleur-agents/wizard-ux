@@ -258,7 +258,19 @@ public class MeetingRecorderService extends Service {
     }
 
     /** Called only by a resumed visible Activity, including a direct notification Activity PendingIntent. */
-    public static void resumeUpdateFromActivity(android.app.Activity a) {
+    public static void resumeUpdateFromActivity(android.app.Activity a) { resumeUpdate(a); }
+
+    /** Installation never took custody: resume only while visible, otherwise keep the tap-to-resume notice. */
+    public static void resumeAfterFailedUpdate(Context c) {
+        onMain(() -> {
+            if (ai.wizards.os.device.AppState.front()) resumeUpdate(c);
+            else for (MizelJournal j : MizelHub.store(c).all())
+                if (MizelUpdatePolicy.pending(j)) notifyUpdatePaused(c, j.meetingId);
+            return "ok";
+        });
+    }
+
+    private static void resumeUpdate(Context a) {
         recover(a);
         for (MizelJournal j : MizelHub.store(a).all()) {
             if (!MizelUpdatePolicy.canResume(j, MizelConfig.origin(a))) continue;

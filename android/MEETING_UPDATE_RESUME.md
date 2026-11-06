@@ -19,9 +19,16 @@ Package replacement also adopts an active old-version journal when the app was i
 
 The existing chunk-recovery path adopts the last partial WAV without closing the session. Resume refuses unadopted nonempty chunk files, preserving evidence rather than overwriting a sequence. A user Stop clears update intent before any queued resume command can admit the microphone. Update pauses do not run the ordinary 30-minute pause-to-stop timer. Native bridge status reports `recording:true`, `paused:true`, `phase:paused_for_update`; it returns to the normal state after successful microphone admission. No `/stop` is sent just for an app update. The server retains the active meeting; this patch does not add a new server-side paused status endpoint.
 
+## Aborted installation
+
+A durable update pause is rolled back if policy/permission changes prevent installation, the APK disappears or changes, a late recording hold wins, or session creation/copy/commit throws. The installer reports whether it actually accepted custody; every earlier exit runs the same rollback. Asynchronous installer failure (including user cancellation) and a missing confirmation Intent also enter that path. A visible app resumes the same meeting through the existing origin/Stop/mic-permission fences; a background app keeps the paused journal and tap-to-resume notification, never starting a microphone in the background.
+
+The native rollback correction was added after the published 0.10.26 build (`build/meeting-resume-0.10.26`, `92555ed4`); it is not present in that APK. This PR repair does not rebuild, sign or republish the owner APK. The feature-reference ratchet admits only the exact native Recorder integration counts; web-shell limits remain unchanged.
+
 ## Verification
 
-- `nice -n 19 node --test tests/meeting-update-wiring.test.mjs`: 7 passed, 0 failed (wiring/source regression tests, not Android execution).
+- `nice -n 19 timeout 120 node --test tests/meeting-update-wiring.test.mjs`: 11 passed, 0 failed, including aborted-install wiring regressions (source checks, not Android device execution).
+- Focused `feature-ids-in-core.test.mjs` and `components-inventory.test.mjs`: 3 passed each; web-shell limits unchanged; inventory remains under its 14,000-byte cap.
 - `node --check web/device.js` and `git diff --check` passed.
 - Seven JVM tests added in `MizelUpdateResumeTest`: version mismatch vs crash; manual pause/Stop; acked sequence plus a torn final chunk across reload; origin/missing-meeting rejection; idempotent broadcasts; legacy defaults; journal write failure.
 - JVM tests, Gradle compilation/lint, Android 14/15 update/reopen/notification behavior and phone/desktop skin screenshots **have not run**. They require the parent's queued forum build/QA. No APK has been built, submitted or published by this worker.
