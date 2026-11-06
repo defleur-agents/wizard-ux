@@ -271,8 +271,20 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items = svc.items.map(i => ({ ...i, state: 'needs_you', try: true, updated_at: i.updated_at + 1000 })); svc.seen.clear();
       await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.load('tt-main')); await page.waitForTimeout(1600);
       check(`autoseen/${profile}/${skin}: amber stays for manual action`, svc.view().every(i => !i.seen) && await page.evaluate(() => /need you/.test(window.WosThreadTracker.dots('tt-main'))));
+      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-open]').first().click(); await page.waitForTimeout(900);
+      check(`autoseen/${profile}/${skin}: tracker jump target fully below strip`, (await geometry()).visible);
       check(`autoseen/${profile}/${skin}: no real sends or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
       await ctx.close();
+      const off = await mount(browser, svc, { shell, skin, tweaks: [], docScroll: profile === 'phone-doc' });
+      if (shell === 'desktop') await off.page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(off.page, 'tt-main'); await off.page.waitForTimeout(600);
+      const original = await off.page.evaluate(mid => {
+        const n = document.querySelector(`.msg[data-mid="${mid}"]`), nb = n.closest('.ch-msgs');
+        const base = document.documentElement.classList.contains('wos-doc-scroll') ? nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom : nb.getBoundingClientRect().top;
+        return { top: n.getBoundingClientRect().top, base, gap: n.getBoundingClientRect().top - base, strip: !!document.querySelector('[data-tt-strip]') };
+      }, String(latest.id));
+      check(`autoseen/${profile}/${skin}: tweak-off original opening eye-line unchanged`, !original.strip && Math.abs(original.gap - 8) <= 2, original);
+      await off.ctx.close();
     }
     /* ---- 2. on: phone + desktop AI apps, two skins ---- */
     if (!process.env.QA_LATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
