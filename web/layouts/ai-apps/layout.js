@@ -333,7 +333,7 @@ export default function setup(api) {
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
-    const sig = JSON.stringify([q, here, secOpen, readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
+    const sig = JSON.stringify([q, here, secOpen, api.sessions.workingOrder?.(), readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     if (q) {
@@ -347,7 +347,7 @@ export default function setup(api) {
       // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
       for (const [k, word0] of SECTIONS) {
         // round 18 item 3a: Ready in the stock Chats Filter's order (Priority / Newest / Oldest), notifications among it
-        const rows = k === 'ready' ? readySort(s[k] || [], readyOrder()) : s[k] || [], on = !!secOpen[k];
+        const rows = k === 'working' ? globalThis.WizChatsListModel.workingSort(s[k], api.sessions.workingOrder?.()) : k === 'ready' ? readySort(s[k] || [], readyOrder()) : s[k] || [], on = !!secOpen[k];
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
         h.append(el('span', '', { text: word0 }), icon('down', 'aa-ico aa-sec-c'));
         // folded (round 7): a minimal tally: Working its count with a tiny spinner, Ready its count
@@ -363,6 +363,12 @@ export default function setup(api) {
           for (const [v, w0] of READY_SORTS) { const o = el('option', '', { value: v, text: w0 }); if (v === readyOrder()) o.setAttribute('selected', ''); sort.append(o); }
           sort.value = readyOrder();
           api.listen(sort, 'change', () => { api.sessions.setOrder?.(sort.value); paintDrawer(true); });
+          row.append(h, sort); out.push(row, body);
+        } else if (k === 'working') {
+          const row = el('div', 'aa-sech'), sort = el('select', 'aa-sort', { 'aria-label': 'Sort Working' });
+          for (const [v, word] of globalThis.WizChatsListModel.WORKING_SORTS) sort.append(el('option', '', { value: v, text: word }));
+          sort.value = api.sessions.workingOrder?.() || 'alphabetical';
+          api.listen(sort, 'change', () => { api.sessions.setWorkingOrder?.(sort.value); paintDrawer(true); });
           row.append(h, sort); out.push(row, body);
         } else out.push(h, body);
       }

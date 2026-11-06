@@ -63,11 +63,17 @@
   // A fresh layout must not persist auto-open desks from compatibility defaults or a stale cache: the shell
   // may paint before synced preferences arrive (waitForShell), so seed only once the first load has settled.
   const launcherSettled = () => window.WizLauncher?.settled !== false;
+  // Starter apps are a brand-new device's first look, never the owner's open apps (James, 6 Nov 2026: "things keep
+  // popping open, particularly the Topics app"). They are marked `seed` (device-only: workspace sync never sends them),
+  // seed only into the layout this boot created, and never on a device that has already joined the shared workspaces.
+  let freshBoot = false;
+  const joinedWorkspaces = () => !!store.get('wsync.v2.phone', null)?.base;
   function seedApps() {
-    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId }; desks.push(blank({ wins: [id], focus: id })); }
+    if (!freshBoot || joinedWorkspaces()) return;
+    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId, seed: true }; desks.push(blank({ wins: [id], focus: id })); }
   }
   function freshLayout() {
-    W = {}; desks = [blank({ id: 'home', home: true })];
+    W = {}; desks = [blank({ id: 'home', home: true })]; freshBoot = true;
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
     if (launcherSettled()) seedApps();
   }
@@ -75,6 +81,16 @@
   if (!okStrip()) { if (migrateFive()) store.set('stripSeeded', true); else { freshLayout(); store.set('stripSeeded', launcherSettled() && !!window.WizLauncher?.get('autoOpen').some(id => APP[id])); } }
   window.WosFeatures.pruneWindows(W);
   desks = window.WizCore.migrateChatsFocus(W, desks);
+  /* Upgrade: starter windows the previous shell opened carry no `seed` mark. Until this device first joins the shared
+   * workspaces nothing it holds has reached the box, so its auto-open apps are still starter apps: mark them, and the
+   * first join drops them instead of pushing them to every device. A joined device's windows already synced as before. */
+  function markLegacyStarters(wins, autoOpen, joined) {
+    if (joined) return 0;
+    const auto = new Set(autoOpen || []); let n = 0;
+    for (const w of Object.values(wins || {})) if (w && w.app === 'frame' && auto.has(w.appId) && !w.seed) { w.seed = true; n++; }
+    return n;
+  }
+  markLegacyStarters(W, window.WizLauncher?.get('autoOpen'), joinedWorkspaces());
   // Mizel.ai moved from the old Meetings view (/meetings/, /mizel-preview/) to the canonical Mizel Live view.
   // A frame window remembers the page it was on, so a saved Mizel desk would keep the retired view: move it.
   Object.values(W).forEach(w => { if (w && w.app === 'frame' && w.appId === 'mizel' && /^\/(meetings|mizel-preview|apps)(\/|$)|^\/$/.test(w.url || '')) delete w.url; });
@@ -1154,6 +1170,7 @@
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
     openingReady();
     if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
+    delete W[here].seed; // the owner opened it himself: a starter app becomes one of his open apps (and syncs)
     if (W[here].app !== 'chats') bringBeside(here);
     const t = deskOf(here);
     if (refresh) refresh(W[here], t);
@@ -3928,6 +3945,14 @@
     apply(state, o = {}) {
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
+      // Joining the owner's shared workspaces: his open apps replace this device's starter apps (seed), so a phone
+      // whose storage was reset never shows starter apps he did not open (James, 6 Nov 2026).
+      if (o.join && state.desks.length) desks = desks.filter(d => {
+        if (d.home || !d.wins.some(id => W[id]?.seed)) return true;
+        d.wins = d.wins.filter(id => { if (!W[id]?.seed) return true; winEl(id)?.remove(); delete W[id]; return false; });
+        if (!d.wins.includes(d.focus)) d.focus = d.wins[d.wins.length - 1] || null;
+        return d.wins.length > 0;
+      });
       const r = window.WosWorkspaceSync.reconcile(desks.slice(1), W, state, { fresh: id => blank({ id }), max: MAXW });
       r.removed.forEach(id => { closeAppPlayback(W[id]); CHATS.closeHosted(id); CHATS.forget(id); delete W[id]; delete CH[id]; });
       desks = [desks[0], ...r.desks].map(d => { if (!d.wins.length) d.full = false; return d; });
