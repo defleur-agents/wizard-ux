@@ -48,7 +48,10 @@ A picture line is painted only when all of these hold:
    the same size as painted app text. If there are no strokes, it is not placed.
 4. The app hasn't already reported it: the exact same text as an accessibility block, or 50 % or more of its box
    covered by the app's own word rects. The same words in two places stay two lines. Read twice in one place, they
-   count once. When two different readings claim one place, the first keeps it.
+   count once. When two different readings claim the very same place (one box almost entirely inside the other, 90 %
+   or more), the first keeps it. Two different lines whose boxes merely overlap — close line spacing, an imprecise
+   model box — are never both dropped for that: each keeps its place, and the existing overlap splitter (`unstack`,
+   the same one that keeps any two placed picture lines apart) separates them instead of hiding one.
 
 A line that fails any of these is still translated, and it is included in Copy translation and Ask Wizard in reading
 order. It is never drawn. The pill says “· N not placed” and a short toast explains this. An older Search that sends no
@@ -56,13 +59,15 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
 
 ## Verification
 
-- `node --test tests/screen-picture-translation.test.mjs` (19 cases, model-free, synthetic geometry) runs the shipped
+- `node --test tests/screen-picture-translation.test.mjs` (25 cases, model-free, synthetic geometry) runs the shipped
   page through `S.open`. It covers: overlay placement and scaling (dpr, offset); malformed, absent and older-Search
   geometry; app/picture overlap dedupe; repeats; replies arriving in either order with no target-as-source; French +
   Thai; Original; tapping a painted line, outside tap and Back; Select text using the one read; target change during a
   read (one upload); stale replies; error/retry; no screenshot; image-only screens; ink tightening/rejection on
   synthetic pixels; sparse combining marks above and below a picture line (every ink pixel must be under the painted
-  translation); Appearance roles. It fails 16/18 against the release89 panel page and 18/18 against installed87.
+  translation); three distinct close-together lines keeping their own place instead of the later ones being dropped
+  (James's "misses the second line" report); Appearance roles. It fails 16/18 against the release89 panel page and
+  18/18 against installed87.
   Against the unpadded r1 page (`43165e80…`), the combining-mark case and the tightening case fail.
 - `tools/qa-screen-page.cjs` (browser, synthetic canvas): the existing Lens checks plus a scenario where the Thai dish
   exists only in the picture. The dish is painted over its own letters in sampled colours, with no panel and a Thai →

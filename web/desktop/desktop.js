@@ -141,6 +141,9 @@
     front: () => homeOpen ? (globalThis.WosSkinHost?.panelMode && panelWin()?.id) || null : ws[cur].focus,
     // Desktop readers stay on their thread through sends and state/actions; Back remains explicit.
     keepThreadOpen: true,
+    // A new chat sent from the Chats window a layout docks beside an app (AI apps: Resolve this on a notification) stays
+    // in that column, never the list / Home laid out full width under the app panel (James, 6 Nov 2026).
+    keepNewOpen: id => !homeOpen && !!globalThis.WosSkinHost?.routeShows?.(wsOf(id)),
     editUnsent: it => editUnsent(it),
     recoverUnsent: id => { openSettings('unsent'); window.WosSettings.focusUnsent(id); },
     openUnsent: () => openSettings('unsent'),
@@ -2933,7 +2936,8 @@
   /* "Update ready" pill in the top bar: the same banner as the phone (core/web-update.js), names the thread that made the
    * update with a Thread button that opens it in a window here; Reload is held while recording or uploading. */
   window.WizWebUpdate?.init({
-    shell: 'desktop', log: (...a) => { window.__wuxLog = (window.__wuxLog || []).concat(a.join(' ')).slice(-80); },
+    // Desktop applies a pending interface update by itself once the window is hidden or quiet (core/web-update.js).
+    shell: 'desktop', autoApply: true, log: (...a) => { window.__wuxLog = (window.__wuxLog || []).concat(a.join(' ')).slice(-80); },
     mount: () => document.querySelector('#bar .bar-r') || document.body, prepend: true,
     openThread: sid => openThread(sid),
     busy: () => window.WizShareWizard?.busy || ((dictationFinishing || VOICE.state !== 'idle') && !(vHandedOff && !['listen', 'paused'].includes(VOICE.state) && OUTBOX.handedOff?.(vHandedOff))) || Object.values(W).some(win => (CHATS.ch(win.id)?.files || []).some(f => f.uploading)),
@@ -3091,7 +3095,9 @@
     newThread: () => { const w = skinChatsWin(); if (w) CHATS.openChat(w.id, '__new__'); },
     openSettings: page => openSettings(page),
     // Inbox tweak: answer a notification in this Chats window (the Notifications Reply path); words send it at once.
-    contextDraft: (key, item, words, draft) => { let w = homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
+    // Resolve this on the notification this window already shows sends in place: re-opening it hopped the window through
+    // its list, and the AI apps layout then laid the chat out full width under the app panel (James, 6 Nov 2026).
+    contextDraft: (key, item, words, draft) => { let w = homeOpen ? null : skinChatsWin(); if (!w) { openChatsList(); w = skinChatsWin(); } if (!w) return false; focusWin(w.id); const inPlace = !!words && !draft && String(key).startsWith('notifications:') && CHATS.notifOpen?.(w.id) === String(key).slice(14); if (!inPlace) { CHATS.openContextDraft(w.id, key, item, draft); CHATS.renderChats(w); syncChatsPane(w.id); } if (words) CHATS.sendChat(w.id, words, 'tapping Resolve this on a notification in Chats'); else setTimeout(() => focusInside(w.id), 30); return true; },
     models: () => { const w = skinChatsWin(); return w ? CHATS.tweakModels(w.id) : []; },
     model: (choice, alive) => { const w = skinChatsWin(); return w ? CHATS.tweakModel(w.id, choice, alive) : null; },
     deskCount: () => ws.length,
