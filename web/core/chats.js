@@ -135,6 +135,12 @@ window.WizCore.chats = function createChats(H) {
       && nb.getClientRects().length && nb.querySelector('[data-morph-key]') && scrollBox(nb).clientHeight
       && (!androidDocument || docOwner === el));
   }
+  const threadViewportTop = (nb, base) => globalThis.WosThreadTracker?.viewportTop(nb, base) ?? base;
+  function watchTracker(w, nb) {
+    if (!w?.thread || !globalThis.WosThreadTracker?.on()) return;
+    globalThis.WosThreadTracker.watch(nb, { sid: w.thread, agent: LIVE.agentOf?.(w.thread) || '',
+      active: () => W[w.id]?.thread === w.thread && threadOnScreen(nb) && (typeof H.front === 'function' ? H.front() === w.id : H.visible().length === 1 && H.visible()[0] === w.id) });
+  }
   function sizeDocumentChrome() {
     if (!docOwner) return;
     const root = document.documentElement, vv = window.visualViewport;
@@ -951,7 +957,11 @@ window.WizCore.chats = function createChats(H) {
       // Far away: land there at once (a long smooth scroll hides the highlight); near: glide. Highlight once it has settled.
       const far = Math.abs(node.getBoundingClientRect().top - innerHeight / 2) > innerHeight * 1.5;
       const calm = far || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-      node.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+      const nb = node.closest('.ch-msgs'), tracker = globalThis.WosThreadTracker;
+      if (nb && tracker?.on() && nb.closest('.ch-thread')?.querySelector('[data-tt-strip]')) {
+        const sc = scrollBox(nb), base = sc === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom;
+        sc.scrollTo({ top: sc.scrollTop + node.getBoundingClientRect().top - threadViewportTop(nb, base) - 8, behavior: calm ? 'auto' : 'smooth' });
+      } else node.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
       let last = NaN, still = 0, frames = 0;
       const settle = () => { const t = node.getBoundingClientRect().top; still = Math.abs(t - last) < 1 ? still + 1 : 0; last = t; if (still >= 3 || ++frames > 90 || !node.isConnected) globalThis.WosThreadTracker?.flash(elOf(wid)?.querySelector(q) || node); else requestAnimationFrame(settle); };
       requestAnimationFrame(settle);
@@ -2276,6 +2286,7 @@ window.WizCore.chats = function createChats(H) {
     syncDocumentThread();
     const nb = el.querySelector('.ch-msgs');
     PW?.position(w, el, nb, { turns, working, notification: NV?.id, notificationScroll });
+    watchTracker(w, nb);
     if (hadFocus) { const ta = el.querySelector('textarea'); ta.focus({ preventScroll: true }); ta.setSelectionRange(...(keepRange || [ta.value.length, ta.value.length])); }
     growTa(el.querySelector('textarea'));
     // Re-attaching a field resets its scroll to the top; put the owner's view back where it was.
@@ -3342,7 +3353,7 @@ window.WizCore.chats = function createChats(H) {
     const el = elOf(wid); if (el) delete el.dataset.draftFor;
   }
   // Models, Errors actions, composer mic, work receipts, reading position, Files (core/chat-power.js).
-  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent }) : null;
+  const PW = window.WosChatPower ? window.WosChatPower({ CH, ch, toast, H, md, KIT, MIC_SVG, WORKING_ST, isWorking, scrollBox, threadOnScreen, threadViewportTop, elOf, owner, vib, renderChats, renderThreadNow, renderThreadLive, openChat, refreshCompose, saveDraft, closeRowSheet, leaveAfterSend, takeComposer, continueInAgent, winAgent }) : null;
   restoreSealed();
   // Chats lists show new chats still in the outbox (Sending): repaint open lists when that set changes.
   let outSig = '';
