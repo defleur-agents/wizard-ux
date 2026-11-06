@@ -439,3 +439,17 @@ test('a different native take appearing during flush cannot inherit the prior ta
   f.plan={ok:true,keeps:{appId:'fixture',id:'new',meetingId:'new'}};finish();await tick();
   assert.equal(f.reloads,0);assert.equal(commits,0);
 });
+// James, 6 Nov 2026: "make reloads work live". A steady Android meeting must not be held hostage by
+// phone-storage doubt (broken backup store, an older take still awaiting Retry save).
+test('steady Android meeting reloads live despite phone-storage custody doubt',()=>{
+  const row={id:'live',appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:'m2',meta:{meetingId:'m2'}};
+  const active={row,phase:'recording',engine:{}},W={wizardMizelPort:{}};
+  for(const o of [{recoveryError:new Error('storage timed out')},{ownershipLoaded:false},
+    {ownedRows:new Map([['live',{...row,status:'recording'}],['old',{id:'old',appId:'mizel',native:'wizard-meetings',nativeId:'m1',status:'retained'}]])}]){
+    const c=capture({active,W,...o}).reloadCheck();assert.equal(c.safe,true);assert.equal(c.keeps.meetingId,'m2');
+  }
+  // Still blocks: mic lent to the orb, page-memory audio, a non-surviving (browser) recorder.
+  assert.equal(capture({active:{...active,borrow:{}},W,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({active,W,recoveryError:new Error('x'),memoryTakes:new Map([['t',{session:{row}}]])}).reloadCheck().safe,false);
+  assert.equal(capture({active,W:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
+});

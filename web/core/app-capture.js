@@ -1206,6 +1206,15 @@
     yieldRecovery(); return true;
   }
   function reloadCheck() {
+    // A steady Android meeting (MeetingRecorderService) that records and uploads on its own through a reload.
+    function steadyLiveMeeting() {
+      const s = active;
+      if (!s || attachedMeetingBridge || W.wizardNative?.meetings || !W.wizardMizelPort) return false;
+      const isMeeting = r => r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
+      if (!isMeeting(s.row) || !s.engine || !['recording', 'paused'].includes(s.phase) || s.borrow || s.borrowWork ||
+        s.finishPromise || s.error || s.engineDetached || s.interrupted || s.discard) return false;
+      return ![...recoveryLive].map(id => ownedRows.get(id)).some(r => r && r.id !== s.row.id && !isMeeting(r));
+    }
     const no = reason => {
       const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
       return { safe: false, reason, keeps: null, appId: row?.appId || null, startedAt: row?.startedAt || null, recheck: !active && preparations.size === 0 };
@@ -1216,7 +1225,7 @@
     if (memoryTakes.size) return no('capture'); // this page still owns audio until the app acknowledges handoff
     let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
     if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
-    if (uncertain && !pageHoldsNoAudio) return no(uncertain);
+    if (uncertain && !pageHoldsNoAudio && !(uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())) return no(uncertain);
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
@@ -1225,6 +1234,12 @@
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
     if (!uncertain && [...ownedRows.values()].some(r => r.status !== 'pending' && !(active && r.id === active.row.id) && !recoveryLive.has(r.id))) uncertain = 'capture_custody_uncertain';
+    // A steady Android meeting records and uploads on its own through a reload, and anything stored on the
+    // phone survives a reload by definition. Phone-storage doubt (a broken/slow backup store, an older take
+    // still waiting for Retry save) is therefore no reason to make the owner stop the meeting to reload
+    // (James, 6 Nov 2026: "make reloads work live"). Page-memory audio (memoryTakes) still blocks above.
+    if (uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())
+      return { safe: true, reason: null, keeps: keep(active.row), recheck: true, durable: false, uncertain };
     if (uncertain && !pageHoldsNoAudio) return no(uncertain);
     if (active) {
       const s = active;
