@@ -20,6 +20,25 @@ function load() {
 }
 const L = load();
 
+test('desktop custom backdrop syncs across devices independently of skin and phone view', async () => {
+  const doc={version:1,skin:{id:'nebula',at:9},tweaks:{'miguel/layout':{on:true,at:9}},views:{phone:{id:'',at:9}}};
+  const box=pagesBox(doc), a=device(box), b=device(box);
+  await a.sync.sync(); await b.sync.sync();
+  a.pickBackdrop({id:'custom',wide:'wide-id',tall:'tall-id'}); await a.flush(); await b.sync.sync();
+  assert.deepEqual(b.backdrop,{id:'custom',wide:'wide-id',tall:'tall-id'});
+  assert.deepEqual(box.doc().skin,doc.skin); assert.deepEqual(box.doc().tweaks,doc.tweaks); assert.deepEqual(box.doc().views,doc.views);
+  const fresh=device(box); await fresh.sync.sync(); assert.deepEqual(fresh.backdrop,b.backdrop);
+  // An idle stale-device edit loses to a newer remote revision, like every other Look field.
+  a.pickBackdrop({id:'lake',wide:'wide-id',tall:'tall-id'});
+  const changed=box.doc(); changed.desktopBackdrop={id:'sea',at:Date.now()+10000}; box.text=JSON.stringify(changed);
+  await a.flush(); assert.equal(box.doc().desktopBackdrop.id,'sea'); assert.equal(a.backdrop.id,'sea');
+});
+test('malformed custom references cannot inject arbitrary URL schemes or paths', () => {
+  for(const wide of ['https://elsewhere/image','data:image/png,x','../secret','blob:abc']) {
+    assert.equal(L.parse({version:1,tweaks:{},desktopBackdrop:{id:'custom',wide,at:8}}).desktopBackdrop,undefined);
+  }
+});
+
 // The Pages file API as the Agent Service answers it (server/pages.mjs save/read).
 function pagesBox(doc = null, { routes = true } = {}) {
   const ver = t => createHash('sha1').update(t).digest('hex');
@@ -57,11 +76,14 @@ function device(box, { mix = {}, skin = null, views = [], meta = null, clock, kn
   if (shells) Object.defineProperty(exp, 'views', { get: () => clone(d.views) });
   const S = {
     get chosen() { return d.skin; }, get current() { return d.skin || 'nebula'; },
+    get desktopBackdrop() { return d.backdrop || {id:'living'}; },
+    adoptDesktopBackdrop(bg) { d.backdrop = clone(bg); sync.backdropChoice(bg); },
     has: id => ['nebula', 'obsidian', 'obsidian-light', 'landscapes'].includes(id),
     set(id) { d.skin = id; sync.skinChoice(id); }, // the real WosSkin.set raises wos:skin, which reaches skinChoice
   };
   sync = L.create({ req: box.req, store: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) }, exp, skin: S,
     now: clock || (() => Date.now()), later: (f, ms) => { const t = { f, ms }; timers.push(t); return t; }, cancel: t => { const i = timers.indexOf(t); if (i >= 0) timers.splice(i, 1); } });
+  d.pickBackdrop = bg => { d.backdrop = clone(bg); sync.backdropChoice(bg); };
   d.sync = sync;
   d.saved = () => JSON.parse(store.get('wos.look-sync.v1') || 'null');
   d.flush = async () => { while (timers.length) { const t = timers.shift(); await t.f(); await tick(); } };
