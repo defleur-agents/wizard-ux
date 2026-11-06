@@ -10,8 +10,6 @@
     ".dchats",
     ".win .dchats .pane-main",
     ".win .dchats .pane-main",
-    ".win .dchats .pane-main .ch-nstack .ch-ncard",
-    ".win .dchats .pane-main [data-chact=\"done\"], .win .dchats .pane-main [data-chact=\"resolve\"]",
     "#dsettings .st-close",
     ".win .dchats .pane-main [data-notify-menu]",
     ".win .dchats .pane-main [data-chact=\"${act}\"]",
