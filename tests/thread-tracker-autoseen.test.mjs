@@ -21,6 +21,9 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
       if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(() => {}); }
       reads.push(p); return { ok: true, json: async () => ({ items }) };
     } });
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
+  win.WizChatsListModel = ctx.WizChatsListModel;
   vm.runInContext(source, ctx);
   const T = win.WosThreadTracker;
   return { T, win, doc, nb, node, writes, reads,
