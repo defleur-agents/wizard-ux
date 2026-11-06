@@ -1,0 +1,37 @@
+{
+  "desktop.js": [
+    "#stage > .wsp:not([hidden])",
+    ".win .dchats .pane-main .ch-compose",
+    ":scope > .win:not(.gone)",
+    "#stage > .wsp",
+    ":scope > .win:not(.gone)",
+    "#stage > .wsp:not([hidden]) > .win:not(.gone) iframe",
+    ".win iframe",
+    ".win.gone",
+    ".win .dchats .pane-main .ch-compose",
+    ".win .dchats .pane-main .ch-compose",
+    ".win",
+    "#stage > .wsp",
+    ".dchats",
+    ".dchats",
+    ":scope > .win",
+    ":scope > .win:not(.gone) > .wbar > .wtools",
+    ".win .dchats .pane-main",
+    ".win .dchats .pane-main",
+    ".dchats",
+    ".win .dchats .pane-main .ch-nstack .ch-ncard",
+    ".win .dchats .pane-main [data-chact=\"done\"], .win .dchats .pane-main [data-chact=\"resolve\"]",
+    "#dsettings .st-close",
+    ".win .dchats .pane-main [data-notify-menu]",
+    ".win .dchats .pane-main [data-chact=\"${act}\"]",
+    "dsettings",
+    "#dsettings .st-close",
+    ".win .dchats .pane-main"
+  ],
+  "layout.js": [
+    ".win.app-chats .ch-compose",
+    ".win.app-chats .ch-compose",
+    ".win.app-chats",
+    ".win.app-chats"
+  ]
+}

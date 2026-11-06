@@ -1,0 +1,44 @@
+# Desktop lifecycle host
+
+`core/desktop-host.js` loads only in desktop.html, before desktop/desktop.js.
+The shell attaches once; `window.WizDesktop.host` is null before attachment.
+It is a frozen contract over the existing lifecycle, not a second window store.
+
+- `windows()` returns a frozen array of frozen records: `id`, `kind`, `appId`,
+  `desk` (current index, -1 for non-desk panels), `deskId` (stable identity or
+  null), `title`, `thread`, `focused`, `visible`. Read again after changes;
+  never save these snapshots as window state. No Classic element or mutable W
+  record is exposed.
+- `frame(id)` returns the existing app iframe, or null for unmounted, closed or
+  non-frame windows. The shell still owns bridge/load/focus hooks and custody.
+  A layout must not replace or destroy that document to change placement.
+- `openApp(appId)` uses the current registered-app opener and routing/admission.
+  Returns whether the request was handled, not a network-ready promise.
+- `focus(id, {scroll=true})` invokes the original synchronous focus path; false
+  means absent/refused/not focused. First pointerdown uses `scroll:false`, so
+  the app control receives that same click without shell focus stealing.
+- `close(id)` uses the original leave/recording checks, cleanup and panel logic.
+  Returns true only if the window was removed synchronously; a refused or
+  confirmation-pending close returns false. It does not bypass a custody check.
+- `onChange(fn)` returns an idempotent unsubscribe. State saves, render and host
+  focus coalesce into a microtask with the latest immutable windows snapshot,
+  after synchronous paint. Unsubscribing cancels pending delivery to that
+  subscriber. A failing listener cannot abort shell work. Consumers render an
+  initial snapshot themselves; subscription does not invoke immediately.
+- `panes` is the existing `WizCore.panes`, not a copy of its geometry/state.
+
+Slice 1 routes Classic pointer focus, iframe focus, close and the existing skin
+adapter's app opener through this boundary. AI apps has **not** migrated yet:
+its Classic selector sites are pinned in
+`tests/fixtures/ai-apps-classic-selectors.json` and guarded by
+`tests/ai-apps-classic-boundary.test.mjs`. Reduce that list, never expand it to
+hide a new dependency. Four layout.js entries belong to phone-only markup;
+those must not be confused with the desktop migration's remaining 27 sites on
+live (25 on slice 1's main baseline). The two additional sites are inherited
+unchanged from the serving companion-pane fix: `paneWins` counts direct windows
+and `watchPaneWins` observes direct children. Both migrate in slice 2.
+
+Still pending: app/group surface mounting, minimize/presentation lifecycle,
+Chats/composer/Settings mounts, layout selection before rendering, separate
+Classic/AI apps renderers, removal of boot veil and obsolete override CSS.
+No claim of independent layout rendering is made by this foundation.

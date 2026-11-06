@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
-const source = readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
+const source = readFileSync(process.env.TRACKER_SOURCE || new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
   let now = 100, active = true, focus = true, open = false, hit = true, inView = true, io, check;
-  let items = states.map((state, id) => ({ id: String(id), state, message_id: timestampOnly ? null : 'm', at: 10000, title: String(id), updated_at: 1, seen: false }));
+  let items = states.map((state, id) => ({ id: String(id), state, message_id: timestampOnly ? null : 'm', at: 10000, title: String(id), updated_at: 1, seen: false, ...(typeof state === 'object' ? state : {}) }));
   const writes = [], reads = [], events = {};
   const strip = { getClientRects: () => [1], getBoundingClientRect: () => ({ bottom: 160 }), classList: { contains: () => open } };
   const node = { dataset: timestampOnly ? { mat: '10000' } : { mid: 'm', mat: '10000' }, isConnected: true, getBoundingClientRect: () => ({ top: 176, bottom: 676, height: 500, left: 0, width: 400 }), contains: n => n === node };
@@ -86,4 +86,25 @@ test('shared reading-position rule uses tracker eye-line; jumps retain unchanged
 test('expanded header and opaque panel have a continuous seam', () => {
   const css = readFileSync(new URL('../web/core/thread-tracker.css', import.meta.url), 'utf8');
   assert.match(css, /top: calc\(100% - 1px\)/); assert.match(css, /border-radius: 0 0 14px 14px/);
+});
+test('all acknowledged replies render no strip, including a ready-to-try acknowledgement', async () => {
+  const h = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }]); await h.start();
+  assert.equal(h.T.stripHtml('t'), '');
+});
+test('running-only replies render no strip but retain Chats running dots', async () => {
+  const h = harness(['running']); await h.start();
+  assert.equal(h.T.stripHtml('t'), ''); assert.match(h.T.dots('t'), /running/);
+});
+for (const state of ['done', 'needs_you', 'blocked']) test(`${state} addressable reply renders the strip`, async () => {
+  const h = harness([state]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+});
+for (const state of ['done', 'needs_you']) test(`last ${state} Seen removes the strip optimistically, with running and ack rows retained`, async () => {
+  const h = harness([{ state, try: true }, { state: 'running', message_id: 'run' }, { state: 'done', seen: true, message_id: 'ack' }]); await h.start();
+  assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
+  assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1); assert.match(h.T.dots('t'), /running/);
+});
+test('auto-Seen of last green removes strip in the same synchronous local update', async () => {
+  const h = harness(['done']); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.step(); h.step(1000); assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1);
 });
