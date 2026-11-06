@@ -184,6 +184,14 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
 .steps.live summary { color: var(--cyan); }
 /* Reply summary (--wos-reply-summary: on): the short answer is one tappable block; tapping it shows the full reply in
  * its place, and Show less folds it back. */
+/* A tweak a reply carries (WIZARD_TWEAK_V1, core/settings.js tweakCard): Settings › Look's own switch row on an opaque card. */
+.msg.a .ch-tweak { max-width: 520px; margin: 10px 0 4px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px);
+  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--wz-text); }
+.msg.a .ch-tweak > .st-row:last-child { border-bottom: 0; }
+.msg.a .ch-tweak .st-row { min-height: 56px; padding: 10px 0; }
+.msg.a .ch-tweak .st-row:not(:disabled):not(.static) { cursor: pointer; }
+.msg.a .ch-tweak .st-row:focus-visible { outline: 2px solid var(--wz-accent); outline-offset: 2px; border-radius: 8px; }
+.msg.a .ch-tweak .tw-gone small { color: var(--wz-text-muted); }
 .msg.a .rsum { display: flex; align-items: flex-start; gap: 8px; width: 100%; margin: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px;
   background: var(--glass, transparent); color: var(--ink); font: inherit; font-weight: 600; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent; }
 .msg.a .rsum:hover { border-color: var(--line-2); }
