@@ -772,7 +772,7 @@ body > .mviewer { position: fixed; z-index: 200; }
    The action is not a pill: no fill or border, the quiet violet text of "Show all" (.ch-more); its 44px touch target
    comes from padding, pulled back by a negative block margin so the row itself stays 32px. */
 .ch-sync:has(.ch-sync-act) { justify-content: flex-start; gap: 7px; min-height: 32px; padding: 0 6px 0 16px; }
-.ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber, #ffbe55)); }
+.ch-sync-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--wz-warning, var(--amber)); }
 .ch-sync.stale .ch-sync-dot { background: var(--wz-text-muted, var(--ink-3)); }
 .ch-sync .ch-sync-act { flex: none; margin: -6px 0 -6px auto; height: 44px; padding: 0 10px; border: 0; border-radius: 0; background: none; box-shadow: none;
   font: inherit; font-weight: 650; white-space: nowrap; color: var(--violet-2, var(--wz-accent, var(--ink))); cursor: pointer; }
