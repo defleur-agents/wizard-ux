@@ -622,6 +622,7 @@ export default function desktop(api) {
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
+    if (s.workingAsk) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${s.workingAsk.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${s.workingAsk.ask}${s.background ? ', Helper still working' : ''}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);

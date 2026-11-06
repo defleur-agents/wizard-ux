@@ -36,6 +36,10 @@ const check = (label, ok) => { if (!ok) throw Error(label); console.log('PASS ' 
       check(tag + ': helper thread is visible in Working', await mainRow.isVisible());
       check(tag + ': retained amber ask is visible', /Needs you:.*Messenger chats won't open/.test(await mainRow.innerText()));
       check(tag + ': retained helper badge is visible', await mainRow.getByText('Helper still working', { exact: true }).isVisible());
+      if (shell === 'desktop') {
+        check(tag + ': accessible name retains ask and helper state', /Needs you:.*Messenger chats won't open.*Helper still working/.test(await mainRow.locator('button.aad-row').getAttribute('aria-label')));
+        check(tag + ': expanded ask and badge fit the clickable row', await mainRow.evaluate(el => { const button = el.querySelector('.aad-row').getBoundingClientRect(), title = el.querySelector('.aad-row-t').getBoundingClientRect(); return title.top >= button.top && title.bottom <= button.bottom && button.height > 36; }));
+      }
       const before = await page.evaluate(() => {
         const L = window.WizLive, s = L.session('tt-main'), g = L.workGroups(L.unified());
         return { working: g.working.some(x => x.id === s.id), ready: g.ready.some(x => x.id === s.id),
