@@ -8,9 +8,12 @@ const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'h
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'archive-next-evidence');
 fs.mkdirSync(out, { recursive: true });
 const report = { origin, web, cases: [] }, now = Date.now();
-// The phone "After actions" setting (Stay on this chat / Back to chats list, #1068) never changes Archive: run phone on both.
-const profiles = [ ['phone', 'classic', 'stay'], ['phone', 'classic', 'list'], ['desktop', 'classic', 'stay'], ['desktop', 'ai-apps', 'stay'] ];
-const EXPECTED_CASES = 42;
+// Desktop only (James, 7 Nov 2026): the phone returns to the chats list (tests/phone-archive-to-list.test.mjs).
+// Default: the middle open thread on desktop Classic and AI apps, Nebula and Grove = 4 cases. QA_SCENARIOS widens it.
+const profiles = [ ['desktop', 'classic', 'stay'], ['desktop', 'ai-apps', 'stay'] ], SKINS = ['nebula', 'grove'];
+const WANT = (process.env.QA_SCENARIOS || 'middle').split(',').filter(Boolean);
+const scenariosFor = layout => ['middle', 'last', 'only', 'nonopen', ...(layout === 'classic' ? ['filter', 'space'] : ['keyboard'])].filter(s => WANT.includes(s));
+const EXPECTED_CASES = profiles.reduce((n, [, layout]) => n + SKINS.length * scenariosFor(layout).length, 0);
 const snapshot = () => {
   const h = window.__wux || window.__wos;
   return { threads: Object.values(h.wins).filter(w => w.app === 'chats' && w.thread).map(w => w.thread), titles: [...document.querySelectorAll('.ch-thread .ti')].filter(n => n.getClientRects().length).map(n => n.textContent) };
@@ -18,9 +21,9 @@ const snapshot = () => {
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const [shell, layout, after] of profiles) for (const skin of ['nebula', 'sepia']) {
+    for (const [shell, layout, after] of profiles) for (const skin of SKINS) {
       const phone = shell === 'phone';
-      const scenarios = after === 'list' ? ['middle', 'last', 'only', 'nonopen'] : ['middle', 'last', 'only', 'nonopen', ...(layout === 'classic' ? ['filter', 'space'] : ['keyboard'])];
+      const scenarios = scenariosFor(layout);
       for (const scenario of scenarios) {
         const stem = `${shell}-${layout}${phone ? '-' + after : ''}-${skin}-${scenario}`, entry = { stem, errors: [], refused: [], writes: [], checks: [] };
         report.cases.push(entry);
@@ -98,7 +101,6 @@ const snapshot = () => {
           await row.click();
           await page.getByText('Answer for ' + sid, { exact: true }).filter({ visible: true }).waitFor();
           await page.locator('.ch-thread [data-chact="done"]').filter({ visible: true }).waitFor();
-          if (scenario === 'middle') { await page.evaluate(() => document.fonts.ready); await page.screenshot({ path: path.join(out, stem + '-before.png') }); }
           await page.evaluate(snapshot => {
             window.archiveReceipt = null;
             const archiveTap = e => e.type === 'keydown' ? e.altKey && e.code === 'KeyE' : !!e.target.closest('[data-chact="done"], [data-rsact="done"], [data-act="done"]');
@@ -131,6 +133,7 @@ const snapshot = () => {
           if (scenario === 'middle') {
             assert.equal(archiveSettled, false, 'archive request still pending');
             await page.getByText('Answer for ' + next, { exact: true }).filter({ visible: true }).waitFor();
+            await page.evaluate(() => document.fonts.ready);
             await page.screenshot({ path: path.join(out, stem + '-after.png') });
             await page.getByText('Couldn’t archive · thread restored', { exact: true }).filter({ visible: true }).waitFor({ timeout: 8000 });
             assert.deepEqual((await page.evaluate(snapshot)).threads, [next], 'failure never yanks back');

@@ -39,16 +39,16 @@ test('Classic desktop keeps the same open thread through Ready → Working → R
     f.row.status = status; f.listeners.live(); assert.equal(f.w.thread, 'same', status);
   }
 });
-// Archive is the exception (James, 6 Nov 2026): archiving the open thread moves on to the next one in the list
-// on desktop and phone, whatever the phone "After actions" setting says; with no other thread left it goes back
-// to the list. tests/archive-next-thread.test.mjs covers the order. Every other action keeps the setting (#1068).
-for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const a of ['file', 'unread', 'restore']) test(`${desktopHost ? 'desktop' : 'phone'} ${a}, preference ${after}`, async () => {
+// Desktop Archive is the exception (James, 7 Nov 2026): archiving the open thread opens the next one in the drawn
+// list (tests/archive-next-thread.test.mjs covers the order); with no other thread left it goes back to the list.
+// Phone Archive always returns to the list; every other action keeps the phone setting (#1068).
+for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const a of ['done', 'file', 'unread', 'restore']) if (!(desktopHost && a === 'done')) test(`${desktopHost ? 'desktop' : 'phone'} ${a}, preference ${after}`, async () => {
   const f = fixture(desktopHost, after); await f.context.threadAct('chat', 'same', a);
   // Phone Archive always returns to the list (James, 7 Nov 2026); the other actions follow the setting.
   assert.equal(f.w.thread, desktopHost || ((after === 'stay' && a !== 'done') || a === 'restore') ? 'same' : null);
 });
-for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) test(`${desktopHost ? 'desktop' : 'phone'} archiving the only open thread leaves it, preference ${after}`, async () => {
-  const f = fixture(desktopHost, after), opened = [];
+for (const after of ['stay', 'list']) test(`desktop archiving the only open thread goes back to the list, preference ${after}`, async () => {
+  const f = fixture(true, after), opened = [];
   Object.assign(f.context, { elOf: () => null, openChat: (_w, id) => opened.push(id), chatsBack: x => { x.thread = null; } });
   vm.runInContext(cut(core, '  function archiveListOrder(', '\n  async function threadAct('), f.context);
   await f.context.threadAct('chat', 'same', 'done');

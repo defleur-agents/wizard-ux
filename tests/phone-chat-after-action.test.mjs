@@ -88,8 +88,3 @@ for (const opts of [{ reject: true }, { mismatch: true }]) test(`unconfirmed sha
 test('setting rejects invalid tokens without writing', async () => {
   const f = configFixture(); await assert.rejects(f.C.setChatAfterAction('back')); assert.equal(f.storage.has('wos.chats.afterAction.v1'), false);
 });
-test('the setting helper text says Archive always opens the next chat (James, 6 Nov 2026)', () => {
-  const settings = read('web/core/settings.js');
-  assert.match(settings, /After sending, snoozing or marking unread\. Archive always opens the next chat\. Desktop chats stay open\./);
-  assert.doesNotMatch(settings, /After sending, archiving/);
-});

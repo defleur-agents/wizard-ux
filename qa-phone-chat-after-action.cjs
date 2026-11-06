@@ -26,12 +26,13 @@ const results = [], captures = [];
      if (action === 'unread') await p.evaluate(({ phone, id }) => (phone ? __wos.chats : __wux.chats).threadAct(id, 'badge-read-ready', 'unread'), { phone, id });
      if (action === 'typed') { await root.locator('.ch-compose textarea').fill('Synthetic phone action reply'); await root.locator('.ch-send')[phone ? 'tap' : 'click'](); }
      if (action === 'voice') await p.evaluate(({ phone, id }) => (phone ? __wos.chats : __wux.chats).sendVoiceTo(id, 'badge-read-ready', new Blob([new Uint8Array(4000)], { type: 'audio/webm' })), { phone, id });
-     // Archive always leaves the archived chat for the next one in the list, whatever this setting (James, 6 Nov 2026).
+     // Archive (James, 7 Nov 2026): the phone returns to the chats list; desktop opens the next chat in the list.
      let expected = phone && after === 'list' ? null : 'badge-read-ready';
-     if (action === 'archive') {
-      await p.waitForFunction(({ phone, id }) => ((phone ? __wos : __wux).wins[id]?.thread ?? null) !== 'badge-read-ready', { phone, id });
-      expected = await p.evaluate(({ phone, id }) => (phone ? __wos : __wux).wins[id]?.thread ?? null, { phone, id });
-      assert(expected === 'badge-other-ready' || expected === null, 'archive opens the other chat or the list, never stays: ' + expected);
+     if (action === 'archive' && phone) expected = null;
+     if (action === 'archive' && !phone) {
+      await p.waitForFunction(({ id }) => (__wux.wins[id]?.thread ?? null) !== 'badge-read-ready', { id });
+      expected = await p.evaluate(({ id }) => __wux.wins[id]?.thread ?? null, { id });
+      assert(expected !== 'badge-read-ready', 'desktop archive opens the next chat or the list, never stays: ' + expected);
      }
      await p.waitForFunction(({ phone, id, expected }) => ((phone ? __wos : __wux).wins[id]?.thread ?? null) === expected, { phone, id, expected });
      if (action === 'unread' && expected) assert(await p.evaluate(() => WizLive.isNew(WizLive.session('badge-read-ready'))), 'explicit unread survives its synchronous repaint');
