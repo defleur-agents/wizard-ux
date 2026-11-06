@@ -1718,8 +1718,12 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     if (a === 'unread') {
       closeRowSheet();
-      // Like an inbox: marking an open thread unread steps out of it first, or the open pane reads it straight back.
-      if (!H.keepThreadOpen) for (const id of Object.keys(CH)) { const x = W[id]; if (x && x.thread === sid) threadBack(x); }
+      // Hold the desktop's explicit unread marker until navigation; otherwise its live repaint reads it back.
+      for (const id of Object.keys(CH)) {
+        const x = W[id]; if (!x || x.thread !== sid) continue;
+        if (H.keepThreadOpen) ch(id).unreadHold = { sid, nav: ch(id).readNav };
+        else threadBack(x);
+      }
       const ok = await LIVE.markUnread(sid);
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -3085,6 +3089,7 @@ window.WizCore.chats = function createChats(H) {
     if (!LIVE?.ok || !attended()) return;
     for (const id of desks[idx].wins) {
       const w = W[id]; if ((w?.app !== 'chats' && !isHosted(id)) || !w.thread || w.thread === '__new__') continue;
+      const hold = ch(id).unreadHold; if (hold?.sid === w.thread && hold.nav === ch(id).readNav) continue;
       const s = LIVE.session(w.thread); if (s && LIVE.isNew(s)) LIVE.markSeen(w.thread);
     }
   }
