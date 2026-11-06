@@ -10,7 +10,7 @@ for (const accepted of [true, false]) test(`Ready Done paints immediately but ${
     req: async (path, init) => { writes.push({path, body: JSON.parse(init.body)}); }, aq: () => '', J: {},
     Date, setTimeout() {}, encodeURIComponent };
   const methods = vm.runInNewContext('({' + live.slice(live.indexOf('    busy(id)'), live.indexOf('    // Stop exactly the watcher')) + '})', ctx);
-  const L = { ...methods, session: () => row, emit() {}, refresh() {} };
+  const L = { ...methods, session: () => row, seenOf: () => null, emit() {}, refresh() {} };
   let confirm; const confirmed = new Promise(r => { confirm = r; });
   const result = L.archive('t', { confirmed });
   assert.equal(row.archived, true, 'same-frame Done projection');

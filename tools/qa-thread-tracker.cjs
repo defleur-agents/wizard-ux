@@ -212,7 +212,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip] .tt-h');
       check(`${tag}: three asks on one reply count as 1 ask`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()));
       await strip(page).locator('.tt-h').click();
-      check(`${tag}: one synthesized row with member count`, await strip(page).locator('.tt-row').count() === 1 && /Nightly maintenance helper · Messenger sign-in code · Nightly checks/.test(await strip(page).innerText()) && /3 asks in one reply · Ready to try/.test(await strip(page).innerText()));
+      check(`${tag}: one synthesized row with member count`, await strip(page).locator('.tt-row').count() === 1 && /Nightly maintenance helper · Messenger sign-in code · Nightly checks/.test(await strip(page).innerText()) && /3 asks in one reply · Review this polish round/.test(await strip(page).innerText()));
       await page.evaluate(() => document.fonts.ready);
       await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
       const geometry = await page.evaluate(() => { const s = document.querySelector('[data-tt-strip] .tt-panel'), n = s?.querySelector('.tt-t'), r = s?.getBoundingClientRect(); return { skin: document.documentElement.dataset.skin, shell: document.documentElement.dataset.shell, ellipsis: n && getComputedStyle(n).textOverflow, whiteSpace: n && getComputedStyle(n).whiteSpace, visible: r && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight && s.contains(document.elementFromPoint(r.left + 8, r.top + 8)) }; });
@@ -558,7 +558,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForSelector('.tt-panel:not([hidden])');
       const groups = await strip(page).locator('.tt-gh').allInnerTexts();
       check(`${tag}: expanded rows are grouped Your move / Running / Finished not seen`, JSON.stringify(groups.map(g => g.toLowerCase())) === JSON.stringify(['your move', 'running', 'finished · not seen']), groups);
-      check(`${tag}: one action per row (Looks good / Open / ✓ Seen)`, JSON.stringify(await strip(page).locator('.tt-btn').allInnerTexts()) === JSON.stringify(['Looks good', 'Open', '✓ Seen', '✓ Seen']), await strip(page).locator('.tt-btn').allInnerTexts());
+      check(`${tag}: amber actions are Open plus Dismiss; finished rows use Seen`, JSON.stringify(await strip(page).locator('.tt-btn').allInnerTexts()) === JSON.stringify(['Open', 'Dismiss', 'Open', 'Dismiss', '✓ Seen', '✓ Seen']), await strip(page).locator('.tt-btn').allInnerTexts());
       check(`${tag}: the 'N acknowledged' fold is there`, /1 acknowledged · show/.test(await strip(page).innerText()));
       check(`${tag}: panel is fully opaque`, await page.evaluate(() => { const c = getComputedStyle(document.querySelector('.tt-panel')); return !/rgba\([^)]*,\s*0(\.\d+)?\)|transparent/.test(c.backgroundColor) && c.backgroundImage !== 'none' || !/rgba?\(0, 0, 0, 0\)/.test(c.backgroundColor); }));
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-expanded.png`) });
