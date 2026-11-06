@@ -385,7 +385,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       // The ledger can arrive before the final streamed bubble gets its stable message anchor.
       await page.evaluate(mid => {
         Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
-        if(document.documentElement.dataset.shell==='phone')Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});
+        if(document.documentElement.dataset.shell==='phone'){Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});Object.defineProperty(navigator,'userAgent',{configurable:true,value:navigator.userAgent+' WizardNative'});}
         window.__lateReply=document.querySelector(`.msg[data-mid="${mid}"]`); window.__lateReply.remove();
       },String(latest.id));
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()}];svc.seen.clear();

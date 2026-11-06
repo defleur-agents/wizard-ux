@@ -3002,7 +3002,7 @@ window.WizCore.chats = function createChats(H) {
     const instructions = opts.instructions || (opts.away ? '' : viewContext(wid, how));
     // Hold before navigation can paint a list (also covers desktop / hosted replies).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
-    const trackerSeen = !isNew ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
+    const trackerSeen = !isNew && here && !opts.away ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
