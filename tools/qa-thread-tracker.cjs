@@ -279,7 +279,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       if (shell === 'desktop') await off.page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
       await openThread(off.page, 'tt-main'); await off.page.waitForTimeout(600);
       const original = await off.page.evaluate(mid => {
-        const n = document.querySelector(`.msg[data-mid="${mid}"]`), nb = n.closest('.ch-msgs');
+        const all = document.querySelectorAll('.ch-msgs .msg.a'), n = all[all.length - 1], nb = n.closest('.ch-msgs');
         const base = document.documentElement.classList.contains('wos-doc-scroll') ? nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom : nb.getBoundingClientRect().top;
         return { top: n.getBoundingClientRect().top, base, gap: n.getBoundingClientRect().top - base, strip: !!document.querySelector('[data-tt-strip]') };
       }, String(latest.id));
