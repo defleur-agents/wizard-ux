@@ -1074,7 +1074,7 @@
       await req('/wizard/hermes/api/sessions' + aq(id), { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id, ...(agent ? { agent } : {}) }) });
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -1095,14 +1095,14 @@
           if (!M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
-          if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
+          if (opts.fileIds?.length) steer.wizard_file_ids = [...new Set(opts.fileIds)];
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (e.code === 'dispatch_already_attempted' || ![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
