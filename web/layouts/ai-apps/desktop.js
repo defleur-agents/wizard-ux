@@ -355,7 +355,10 @@ export default function desktop(api) {
     const appHi = Math.min(SIZE_LIMITS.app[1], W - sideNow - tabsNow - 320);
     // an app shown with its companion pane (Video Editor's video + Feedback) needs room for both columns: wider by
     // default until the owner sizes the panel himself (James, 6 Nov 2026)
-    const app = clampTo(sized.app ?? Math.round(paneWins() > 1 ? Math.max(900, W * .62) : Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
+    // An app with its companion (Video Editor + Feedback) needs room for two columns: the panel opens at least
+    // 900px / 62% wide while the companion shows, even over a narrower width the owner chose for single apps,
+    // and returns to that chosen width when the companion closes (James, 6 Nov 2026).
+    const app = clampTo(Math.round(paneWins() > 1 ? Math.max(sized.app ?? 0, 900, W * .62) : sized.app ?? Math.min(720, Math.max(420, W * .4))), SIZE_LIMITS.app[0], appHi);
     return { side: [side, SIZE_LIMITS.side[0], hi], tabs: [tabs, SIZE_LIMITS.tabs[0], Math.min(SIZE_LIMITS.tabs[1], W * .25)], app: [app, SIZE_LIMITS.app[0], appHi] };
   }
   /* round 10 (Miguel: dragging felt laggy): a drag writes only what changed, once a frame. While a grip is held
@@ -1207,11 +1210,17 @@ export default function desktop(api) {
   }
 
   /* a window joining or leaving the shown app's desk (a companion pane) re-sizes the panel once */
-  let winsMo = null, winsEl = null, winsN = 0;
+  let winsMo = null, winsEl = null, winsN = 0, wideAuto = false;
+  // An app showing its companion (Video Editor's video + Feedback) takes the full width, as if Wider were
+  // pressed, and goes back to the side when the companion closes. Pressing Wider/Back yourself wins (James, 6 Nov 2026).
+  function autoWide(n) {
+    if (n > 1 && !wide) { wideAuto = true; setWide(true); }
+    else if (n <= 1 && wideAuto) { wideAuto = false; setWide(false); }
+  }
   function watchPaneWins() {
     const host = pane?.el || null; if (host === winsEl) return;
     winsMo?.disconnect(); winsMo = null; winsEl = host; winsN = paneWins();
-    if (host && globalThis.MutationObserver) winsMo = new MutationObserver(() => { const n = paneWins(); if (n !== winsN) { winsN = n; applySizes(); retileSoon(); } });
+    if (host && globalThis.MutationObserver) winsMo = new MutationObserver(() => { const n = paneWins(); if (n !== winsN) { winsN = n; autoWide(n); applySizes(); retileSoon(); } });
     // direct children only: a window added or removed, or one marked gone
     winsMo?.observe(host, { childList: true });
     for (const w of host?.querySelectorAll?.(':scope > .win') || []) winsMo?.observe(w, { attributes: true, attributeFilter: ['class'] });
@@ -1325,7 +1334,7 @@ export default function desktop(api) {
   api.listen(pTop, 'mousedown', e => e.preventDefault());
   api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { focusWant = pane.id; focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
-  api.listen(pW, 'click', () => setWide(!wide));
+  api.listen(pW, 'click', () => { wideAuto = false; setWide(!wide); });
   // a slow app: its placeholder in the panel's place at once (faded in after a beat), gone once its frame has loaded
   let loadId = '', loadOff = null, loadWait = null;
   function loading(id) {
@@ -1546,7 +1555,7 @@ export default function desktop(api) {
     if ((code === 'Minus' || code === 'Equal') && !sh) { if (pane && !wide) setSize('app', sizes().app[0] + (code === 'Equal' ? 64 : -64), true); return true; }
     if (code === 'KeyW' && !sh && pane) { if (!e.repeat) { const d = desks().find(x => x.desk === pane.desk); if (d && !pins.includes(d.id)) closeDesk(d); else hidePanel(); } return true; }
     if (code === 'KeyW' && !sh && docked) { if (!e.repeat) closeChat(); return true; }
-    if (code === 'KeyF' && !sh && pane) { if (!e.repeat) setWide(!wide); return true; }
+    if (code === 'KeyF' && !sh && pane) { if (!e.repeat) { wideAuto = false; setWide(!wide); } return true; }
     // the open item's own buttons, clicked (Archive / Resolve then open the next Ready item: nextAfterAct, on the click)
     // Keep the existing letters: ⌥E Archive, ⌥Z Snooze. A and S already open All apps and Settings.
     const act = !sh && docked && !typing() && { KeyZ: 'snooze', KeyE: 'done', KeyX: 'resolve' }[code];

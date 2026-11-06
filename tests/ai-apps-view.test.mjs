@@ -2562,8 +2562,12 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.match(desk[1], /display: flex !important/, 'columns come from CSS, not from a shell re-tile that is skipped while another desk is current');
   const multi = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) > \.win:not\(\.gone\) \{([^}]*)\}/);
   assert.match(multi[1], /position: relative !important; inset: auto !important/, 'the shell\'s pixel boxes cannot stack the two windows');
-  assert.match(css, /> \.win:not\(\.gone\):not\(\.win:not\(\.gone\) ~ \.win\) \{ flex-grow: 46 !important; \}/, 'the app gets the widest column');
+  assert.match(css, /> \.win:not\(\.gone\):not\(\.win:not\(\.gone\) ~ \.win\) \{ flex: 1 1 0 !important; \}/, 'the app takes all the room the companion leaves');
+  assert.match(multi[1], /flex: 0 0 clamp\(300px, 30%, 380px\) !important/, 'a companion is a narrow side column, not a third of the panel');
   assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
-  assert.match(js, /paneWins\(\) > 1 \? Math\.max\(900, W \* \.62\)/, 'the panel widens for two columns until the owner sizes it');
+  assert.match(js, /paneWins\(\) > 1 \? Math\.max\(sized\.app \?\? 0, 900, W \* \.62\) : sized\.app \?\?/, 'the panel widens for two columns even over a narrow saved width, and returns to it after');
   assert.match(js, /winsMo = new MutationObserver/, 'a companion opening or closing re-sizes the panel');
+  assert.match(js, /if \(n > 1 && !wide\) \{ wideAuto = true; setWide\(true\); \}/, 'an app with its companion opens full width');
+  assert.match(js, /else if \(n <= 1 && wideAuto\) \{ wideAuto = false; setWide\(false\); \}/, 'and goes back to the side when the companion closes');
+  assert.match(js, /api\.listen\(pW, 'click', \(\) => \{ wideAuto = false; setWide\(!wide\); \}\)/, 'the owner\'s own Wider/Back press wins');
 });
