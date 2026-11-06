@@ -9,6 +9,7 @@ const fs = require('node:fs'), path = require('node:path');
 const fx = require('./qa-proof-fixture.cjs');
 const OUT = path.resolve(process.argv[2] || '/tmp/qa-thread-tracker'); fs.mkdirSync(OUT, { recursive: true });
 const SKINS = (process.argv[3] || 'nebula,grove').split(',');
+const expandWorking = page => page.evaluate(() => { const h = document.querySelector('.aad-sec[data-sec="working"]'); if (h && h.getAttribute('aria-expanded') === 'false') h.click(); }).catch(() => {});
 const WEB = path.resolve(__dirname, '../web');
 const ORIGIN = fx.ORIGIN, ID = 'wizard/thread-tracker';
 let pass = 0, fail = 0;
@@ -191,6 +192,7 @@ if (require.main === module) (async () => {
       if (appeared) check(`${tag}: draft survives the Look change`, await page.locator('.ch-compose textarea').inputValue() === 'Keep my draft');
       await page.evaluate(async id => { const x = window.WosExperience; await x.adopt({ ...x.mix, [id]: true }, x.views); }, ID);
       if (shell === 'phone') await page.locator('[data-chback]').first().click();
+      await expandWorking(page);
       const dots = await page.waitForSelector('[data-tt-dots="hermes/tt-main"]', { timeout: 5000 }).then(() => true, () => false);
       check(`${tag}: Chats list dots appear without reopening the thread`, dots);
       check(`${tag}: no agent runs or steers`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)));
@@ -577,6 +579,7 @@ if (require.main === module) (async () => {
       check(`${tag}: tweak on`, (await tt(page)).on);
       if (shell === 'desktop') { await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 }).catch(() => {}); const lay = await page.evaluate(() => ({ view: window.WosExperience.desktopView, layout: document.documentElement.dataset.layout })); check(`${tag}: AI apps layout active`, lay.view === 'ai-apps' && lay.layout === 'ai-apps', lay); }
       // Chats list dots match the counts
+      await expandWorking(page); // the fixture thread has a helper still running, so it lists under Working (collapsed by default)
       await page.waitForSelector('[data-tt-dots]', { timeout: 20000 }).catch(() => {});
       const dots = await page.evaluate(() => [...document.querySelectorAll('[data-tt-dots]')].map(d => ({ key: d.dataset.ttDots, text: d.textContent.replace(/\s+/g, ''), n: d.querySelectorAll('.tt-dot').length })));
       const c = svc.counts();
