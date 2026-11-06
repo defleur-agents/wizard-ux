@@ -2586,3 +2586,16 @@ test('launcher-link Video Editor remains searchable while open, Pin paints/persi
   tab.dispatchEvent(new FakePointerEvent('contextmenu')); reloaded.w.q('.aad-appmenu [data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
   assert.ok(!reloaded.store.pins.includes('video-editor')); assert.equal(reloaded.w.q('.aad-vtab[data-app="video-editor"]').dataset.group, 'open');
 });
+
+test('desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)', () => {
+  const css = read('web/layouts/ai-apps/desktop.css').replace(/\/\*[\s\S]*?\*\//g, ''), js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  const desk = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) \{([^}]*)\}/);
+  assert.ok(desk, 'a desk with two shown windows has its own rule');
+  assert.match(desk[1], /display: flex !important/, 'columns come from CSS, not from a shell re-tile that is skipped while another desk is current');
+  const multi = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) > \.win:not\(\.gone\) \{([^}]*)\}/);
+  assert.match(multi[1], /position: relative !important; inset: auto !important/, 'the shell\'s pixel boxes cannot stack the two windows');
+  assert.match(css, /> \.win:not\(\.gone\):not\(\.win:not\(\.gone\) ~ \.win\) \{ flex-grow: 46 !important; \}/, 'the app gets the widest column');
+  assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
+  assert.match(js, /paneWins\(\) > 1 \? Math\.max\(900, W \* \.62\)/, 'the panel widens for two columns until the owner sizes it');
+  assert.match(js, /winsMo = new MutationObserver/, 'a companion opening or closing re-sizes the panel');
+});
