@@ -64,7 +64,10 @@ window.WosChatPower = function chatPower(A) {
   const latestId = turns => { for (let i = turns.length - 1; i >= 0; i--) if (turns[i].a) return `${i}:${turns[i].a.at ?? ''}`; return ''; };
   const lastReply = nb => { const a = nb.querySelectorAll('.msg.a'); return a.length ? a[a.length - 1] : null; };
   const onScreen = A.threadOnScreen;
-  const relTop = (nb, el) => el.getBoundingClientRect().top - (scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom);
+  const relTop = (nb, el) => {
+    const base = scrollBox(nb) === nb ? nb.getBoundingClientRect().top : nb.closest('.ch-thread').querySelector('.ch-head').getBoundingClientRect().bottom;
+    return el.getBoundingClientRect().top - (A.threadViewportTop ? A.threadViewportTop(nb, base) : base);
+  };
   const bottomGap = nb => { const s = scrollBox(nb); return s.scrollHeight - s.scrollTop - s.clientHeight; };
   function anchorOf(nb) {
     if (!onScreen(nb)) return null;
