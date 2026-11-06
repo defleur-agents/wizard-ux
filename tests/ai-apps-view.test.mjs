@@ -824,7 +824,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /chrome\.open\(\{ exclude: \(\) => refreshPins\(\), people: 'For people' \}\);/, 'round 16 item 7: the + is the shared picker (no All apps grid)');
+  assert.match(dj, /chrome\.open\(\{ includeOpen: true, people: 'For people' \}\);/, 'round 16 item 7: the + remains the shared picker (no All apps grid), now including open and pinned apps');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -928,7 +928,7 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
   // every other ⌥ key is consumed (nothing acts unseen on a hidden desk): no ⌥G letters, no ⌥/ pinned guide, no ⌥←/→
-  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \} \}\);/);
+  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \}, up: e => \{ if \(e\.code === 'AltLeft' \|\| !e\.altKey\) leftOption = false; \} \}\);/, 'unclaimed Alt keys remain consumed; keyup only clears physical-left-Option tracking');
   // the hints: a keycap on each target, only the view's (the shell draws nothing of its own then)
   for (const k of ["'Space'", "'D'", "'H'", "'O'", "'L'", "'K'", "'N'", "'S'", "'R'", "'A'", "'T'", "'W'", "'F'", "'− ='", "'↓'", "'↑'", "']'", "'['", "'B'"]) assert.ok(js.includes(`, ${k}`), `chip ${k}`);
   assert.match(js, /rows\.forEach\(\(b, k\) => \{ if \(k < 10\) put\(tile\(b\), String\(\(k \+ 1\) % 10\)\); \}\);/, 'the first ten rows wear 1–9 and 0');
