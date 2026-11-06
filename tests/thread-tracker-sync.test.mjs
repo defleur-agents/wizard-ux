@@ -11,9 +11,15 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     documentElement: { dataset: { tweaks: enabled ? 'wizard/thread-tracker' : '' }, },
     querySelectorAll: () => [], addEventListener() {}, hidden: false,
   };
-  const win = { addEventListener(t, f) { (listeners[t] ||= []).push(f); }, dispatchEvent(e) { for (const f of listeners[e.type] || []) f(e); return true; } };
+  const win = { addEventListener(t, f) { (listeners[t] ||= []).push(f); }, dispatchEvent(e) { for (const f of listeners[e.type] || []) f(e); return true; },
+    // This fixture models live work; stopped/absent sessions have separate regressions.
+    WizLive: { sessionFor: () => ({ status: 'running' }) },
+    WizChatsListModel: { isListWorking: s => s?.status === 'running' } };
   const fetchImpl = async (path, init = {}) => box(path, init);
   const ctx = vm.createContext({ window: win, document: doc, fetch: fetchImpl, setInterval() {}, setTimeout, CustomEvent: class { constructor(t, init) { this.type = t; this.detail = init?.detail; } }, MutationObserver: class { constructor(f) { mutation = f; } observe() {} }, Date, JSON, Math, Set, Map, Object, String, Promise, console });
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
+  win.WizChatsListModel = ctx.WizChatsListModel;
   vm.runInContext(readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8'), ctx);
   if (windows) {
     // Exercise the actual shared Chats subscriber, not a test copy of the activation behavior.
@@ -60,7 +66,7 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   });
   await T.load('t'); await T.loadCounts(true); await tick();
   let html = T.stripHtml('t');
-  assert.match(html, /1 ask</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
+  assert.match(html, /1 open</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
   assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Ready to try/);
   assert.match(T.dots('t'), /1 need you/); assert.doesNotMatch(T.dots('t'), /finished, not seen/);
   assert.equal(T.itemFor('t', '', { message_id: 'm' }).id, 'a');
@@ -72,7 +78,7 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   release(); await tick();
   items = items.map(i => i.id === 'a' ? { ...i, state: 'blocked', seen: false, message_id: 'new', updated_at: 30 } : i);
   await T.loadCounts(true); await tick();
-  html = T.stripHtml('t'); assert.match(html, /2 asks</); assert.match(T.dots('t'), /1 stuck/);
+  html = T.stripHtml('t'); assert.match(html, /1 open</); assert.match(T.dots('t'), /1 stuck/);
   assert.equal(T.itemFor('t', '', { message_id: 'm', at: 10 }).id, 'b', 'a nearby timestamp cannot pull a member from a different known reply');
 });
 
@@ -104,7 +110,7 @@ test('late Look activation hydrates every open thread and counts without reopeni
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=t'), 'loads the already-open main-agent thread');
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=private-thread&agent=synthetic-agent'), 'preserves the open thread agent');
   assert.equal(calls.filter(p => p.endsWith('/counts')).length, 1);
-  assert.equal(T.stripHtml('t'), '', 'running-only replies load dots but no owner-inbox strip');
+  assert.match(T.stripHtml('t'), /data-tt-strip/, 'running-only replies hydrate the visible strip');
   assert.match(T.dots('t'), /1 running/);
   assert.ok(renders.includes('a') && renders.includes('fresh'), 'also updates Reply in existing and new threads');
   const count = calls.length;
@@ -126,7 +132,7 @@ test('a fresh count poll replaces the tally of a thread already opened', async (
   threads = { 'hermes/t': { needs_you: 1, running: 1, done_unseen: 0, blocked: 0, acknowledged: 0, total: 2 } };
   await T.loadCounts(true); await tick();
   assert.match(T.dots('t'), /1 need you/, 'the new ask shows on the row without reopening the thread');
-  assert.match(T.stripHtml('t'), /2 asks/, 'and the open thread re-reads its list');
+  assert.match(T.stripHtml('t'), /2 open/, 'and the open thread re-reads its list');
 });
 
 test('a Seen write the box refuses is rolled back and the thread re-read', async () => {
@@ -141,4 +147,23 @@ test('a Seen write the box refuses is rolled back and the thread re-read', async
   T.click({ target: { closest: s => (s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: '' } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: 'd' } } : null) } });
   await tick(); await tick();
   assert.match(T.stripHtml('t'), /Mark seen/, 'still unseen: this device does not hide what the box never took');
+});
+
+test('send Seen refusal restores green locally even while the reconciliation GET is stalled', async () => {
+ let reads=0, writes=0;
+ const {T}=boot((path,init)=> {
+  if(init.method==='POST'){writes++;return {ok:false,status:503};}
+  if(++reads>1)return new Promise(()=>{});
+  return reply({items:[item('d','done',{message_id:'m',at:10})]});
+ });
+ await T.load('t'); T.beforeSend('t','',20); assert.equal(T.stripHtml('t'),'');
+ await tick(); assert.match(T.stripHtml('t'),/Mark seen/); assert.equal(writes,1,'no immediate refusal loop');
+});
+test('send before ledger ingestion reconciles old green only, not work finished after the send', async () => {
+ const writes=[]; const {T}=boot((path,init)=>{
+  if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
+  return reply({items:[item('old','done',{message_id:'m',at:10}),item('new','done',{message_id:'n',at:10,updated_at:30})]});
+ });
+ T.beforeSend('t','',20); await tick();
+ assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old']}]); assert.match(T.dots('t'),/1 finished, not seen/);
 });

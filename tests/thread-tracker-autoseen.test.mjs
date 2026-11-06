@@ -4,15 +4,18 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 const source = readFileSync(process.env.TRACKER_SOURCE || new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8');
 function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
-  let now = 100, active = true, focus = true, open = false, hit = true, inView = true, io, check;
+  let now = 100, active = true, focus = true, open = false, hit = true, inView = true, present = true, io, check;
   let items = states.map((state, id) => ({ id: String(id), state, message_id: timestampOnly ? null : 'm', at: 10000, title: String(id), updated_at: 1, seen: false, ...(typeof state === 'object' ? state : {}) }));
   const writes = [], reads = [], events = {};
   const strip = { getClientRects: () => [1], getBoundingClientRect: () => ({ bottom: 160 }), classList: { contains: () => open } };
   const node = { dataset: timestampOnly ? { mat: '10000' } : { mid: 'm', mat: '10000' }, isConnected: true, getBoundingClientRect: () => ({ top: 176, bottom: 676, height: 500, left: 0, width: 400 }), contains: n => n === node };
-  const nb = { isConnected: true, closest: () => ({ querySelector: () => strip }), querySelectorAll: () => [node], getBoundingClientRect: () => ({ top: 100, bottom: 800, left: 0, width: 400 }) };
+  const nb = { isConnected: true, closest: () => ({ querySelector: () => strip }), querySelectorAll: () => present ? [node] : [], getBoundingClientRect: () => ({ top: 100, bottom: 800, left: 0, width: 400 }) };
   const doc = { documentElement: { dataset: { tweaks: 'wizard/thread-tracker' } }, visibilityState: 'visible', hasFocus: () => focus,
     querySelectorAll: () => [], addEventListener: (t, f) => { events[t] = f; }, elementFromPoint: () => hit ? node : null };
-  const win = { addEventListener: (t, f) => { events[t] = f; }, dispatchEvent() {} };
+  const win = { addEventListener: (t, f) => { events[t] = f; }, dispatchEvent() {},
+    // Running tracker items animate only while the session census also says working.
+    WizLive: { sessionFor: () => ({ status: 'running' }) },
+    WizChatsListModel: { isListWorking: s => s?.status === 'running' } };
   const ctx = vm.createContext({ window: win, document: doc, innerHeight: 860, clearTimeout, setTimeout,
     setInterval(f, ms) { if (ms === 200) check = f; }, CustomEvent: class {}, Date: class extends Date { static now() { return now; } },
     MutationObserver: class { observe() {} }, IntersectionObserver: class {
@@ -21,14 +24,18 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
       if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(() => {}); }
       reads.push(p); return { ok: true, json: async () => ({ items }) };
     } });
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
+  win.WizChatsListModel = ctx.WizChatsListModel;
   vm.runInContext(source, ctx);
   const T = win.WosThreadTracker;
-  return { T, doc, nb, node, writes, reads,
+  return { T, win, doc, nb, node, writes, reads,
     async start() { await T.load('t', agent); T.watch(nb, { sid: 't', agent, active: () => active }); },
     step(ms = 200) { now += ms; check(); },
-    active(v) { active = v; }, focus(v) { focus = v; events[v ? 'focus' : 'blur']?.(); }, open(v) { open = v; }, hit(v) { hit = v; },
+    present(v) { present = v; }, active(v) { active = v; }, focus(v) { focus = v; events[v ? 'focus' : 'blur']?.(); }, open(v) { open = v; }, hit(v) { hit = v; },
     visibility(v) { doc.visibilityState = v; events.visibilitychange(); },
     intersect(v) { inView = v; io([{ target: node, isIntersecting: v }]); },
+    async replace(next) { items = next; now += 3000; await T.load('t', agent); },
     async update() { items = items.map(i => ({ ...i, updated_at: 2 })); now += 3000; await T.load('t', agent); T.watch(nb, { sid: 't', agent, active: () => active }); }
   };
 }
@@ -38,6 +45,19 @@ test('green reply group auto-Seen after continuous visible dwell; paints all ids
   await h.update(); h.step(); h.step(1000); assert.equal(h.writes.length, 2, 'a later unseen update re-arms the anchor');
 });
 for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa']]) {
+  test(`running strip main-versus-routed scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
+    const h = harness(['running'], agent); await h.start(); h.step(); h.step(2000);
+    assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
+    assert.match(h.T.stripHtml('t', agent), /data-tt-strip/); assert.match(h.T.dots('t', agent), /running/);
+    assert.equal(h.writes.length, 0, 'running work is never auto-Seen');
+    if (agent) assert.equal(h.T.stripHtml('t'), '', 'routed work does not leak to the main thread');
+    const mixed = harness(['done', { state: 'running', message_id: 'run' }], agent); await mixed.start();
+    mixed.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: agent } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
+    assert.deepEqual(mixed.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0'] }]);
+    assert.match(mixed.T.stripHtml('t', agent), /data-tt-strip/); assert.match(mixed.T.dots('t', agent), /running/);
+    const ack = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }], agent); await ack.start();
+    assert.equal(ack.T.stripHtml('t', agent), '', 'acknowledged-only is hidden in every scope');
+  });
   test(`main-versus-routed auto-Seen scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
     const h = harness(['done', 'done'], agent); await h.start(); h.step(); h.step(1000);
     assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
@@ -91,20 +111,75 @@ test('all acknowledged replies render no strip, including a ready-to-try acknowl
   const h = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }]); await h.start();
   assert.equal(h.T.stripHtml('t'), '');
 });
-test('running-only replies render no strip but retain Chats running dots', async () => {
+test('running-only replies keep the strip and Chats running dots', async () => {
   const h = harness(['running']); await h.start();
-  assert.equal(h.T.stripHtml('t'), ''); assert.match(h.T.dots('t'), /running/);
+  assert.match(h.T.stripHtml('t'), /data-tt-strip/); assert.match(h.T.dots('t'), /running/);
+  h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-toggle') ? {} : null } });
+  assert.equal(h.T.isOpen(), true, 'running-only dropdown stays open through repaint');
+  assert.match(h.T.stripHtml('t'), /Running/);
 });
 for (const state of ['done', 'needs_you', 'blocked']) test(`${state} addressable reply renders the strip`, async () => {
   const h = harness([state]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
 });
-for (const state of ['done', 'needs_you']) test(`last ${state} Seen removes the strip optimistically, with running and ack rows retained`, async () => {
-  const h = harness([{ state, try: true }, { state: 'running', message_id: 'run' }, { state: 'done', seen: true, message_id: 'ack' }]); await h.start();
+for (const state of ['done', 'needs_you']) for (const running of [false, true]) test(`last ${state} Seen ${running ? 'keeps strip for running' : 'removes acknowledged-only strip'} optimistically`, async () => {
+  const h = harness([{ state, try: true }, ...(running ? [{ state: 'running', message_id: 'run' }] : []), { state: 'done', seen: true, message_id: 'ack' }]); await h.start();
   assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-toggle') ? {} : null } });
   h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
-  assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1); assert.match(h.T.dots('t'), /running/);
+  assert.equal(!!h.T.stripHtml('t'), running); assert.equal(h.writes.length, 1);
+  assert.equal(h.T.isOpen(), running, 'only acknowledged-only dropdown is cleared');
+  assert.equal(/running/.test(h.T.dots('t')), running);
 });
-test('auto-Seen of last green removes strip in the same synchronous local update', async () => {
-  const h = harness(['done']); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
-  h.step(); h.step(1000); assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1);
+for (const running of [false, true]) test(`auto-Seen of last green ${running ? 'keeps strip for running' : 'removes acknowledged-only strip'} in same synchronous update`, async () => {
+  const h = harness(['done', ...(running ? [{ state: 'running', message_id: 'run' }] : [])]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.step(); h.step(1000); assert.equal(!!h.T.stripHtml('t'), running); assert.equal(h.writes.length, 1);
+});
+
+test('reply inserted after item ingestion is discovered without another full render', async () => {
+  const h = harness(); h.present(false); await h.start(); h.step(2000); assert.equal(h.writes.length, 0);
+  h.present(true); h.step(); h.step(1000); assert.equal(h.writes.length, 1);
+});
+test('phone WebView can read a front visible reply even when hasFocus is false', async () => {
+  const h = harness(); h.doc.documentElement.dataset.shell = 'phone'; h.win.WizardOSNative = {}; h.focus(false); await h.start();
+  h.step(); h.step(1000); assert.equal(h.writes.length, 1);
+});
+test('a long reply tail visible for a second is read, not required to fill 40 percent of the viewport', async () => {
+  const h = harness(); h.node.getBoundingClientRect = () => ({ top: -3740, bottom: 260, height: 4000, left: 0, width: 400 });
+  await h.start(); h.step(); h.step(1000); assert.equal(h.writes.length, 1);
+});
+for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`send/steer acknowledges only older all-green groups in ${agent || 'main'} immediately`, async () => {
+  const h = harness([
+    { id: 'green-a', state: 'done', message_id: 'old', at: 10000 },
+    { id: 'green-b', state: 'done', message_id: 'old', at: 10000 },
+    { id: 'amber', state: 'needs_you', message_id: 'amber', at: 10000 },
+    { id: 'red', state: 'blocked', message_id: 'red', at: 10000 },
+    { id: 'run', state: 'running', message_id: 'run', at: 10000 },
+    { id: 'mixed-green', state: 'done', message_id: 'mixed', at: 10000 },
+    { id: 'mixed-run', state: 'running', message_id: 'mixed', at: 10000 },
+    { id: 'future', state: 'done', message_id: 'future', at: 30000 },
+    { id: 'unknown', state: 'done', message_id: 'unknown', at: 0 },
+  ], agent); await h.start(); h.active(false); h.focus(false);
+  h.T.beforeSend('t', agent, 20000);
+  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['green-a','green-b'] }]);
+  const dots = h.T.dots('t', agent); assert.match(dots, /need you/); assert.match(dots, /stuck/); assert.match(dots, /running/); assert.match(dots, /finished, not seen/);
+  h.T.beforeSend('t', agent, 20000); assert.equal(h.writes.length, 1, 'not duplicated while Seen is in flight');
+  h.doc.documentElement.dataset.tweaks = ''; h.T.beforeSend('t', agent, 40000); assert.equal(h.writes.length, 1, 'off means no write');
+});
+
+test('header counts only active reply groups as open, not acknowledged history', async () => {
+ const h = harness([{state:'needs_you', message_id:'amber'}, ...['a','b','c'].map(message_id => ({state:'done',seen:true,message_id}))]); await h.start();
+ assert.match(h.T.stripHtml('t'), /class="tt-tot">1 open</); assert.match(h.T.stripHtml('t'), /3 acknowledged · show/);
+ assert.doesNotMatch(h.T.stripHtml('t'), /4 asks/);
+});
+
+for(const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa'])for(const commit of [false,true])test(`staged send Seen ${commit?'commits':'cancels'} in ${agent||'main'} without premature synchronization`,async()=>{
+ const h=harness(['done'],agent);await h.start();
+ const lease=h.T.beforeSend('t',agent,20000,{defer:true});
+ assert.equal(h.T.stripHtml('t',agent),'','same-frame optimistic paint');assert.equal(h.writes.length,0,'not durable yet');
+ if(commit){lease.commit();assert.equal(h.writes.length,1);lease.commit();assert.equal(h.writes.length,1);}
+ else{lease.cancel();assert.match(h.T.stripHtml('t',agent),/data-tt-strip/);assert.equal(h.writes.length,0);}
+});
+test('ordinary phone browser still requires document focus',async()=>{
+ const h=harness();h.doc.documentElement.dataset.shell='phone';h.focus(false);await h.start();
+ h.step();h.step(1400);assert.equal(h.writes.length,0);h.focus(true);h.step();h.step(1000);assert.equal(h.writes.length,1);
 });
