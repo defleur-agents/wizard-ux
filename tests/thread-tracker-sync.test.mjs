@@ -23,7 +23,7 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
     vm.runInContext(source.slice(source.indexOf("  window.addEventListener('wos:thread-tracker'"), source.indexOf('  // Changed elsewhere (Settings')), ctx);
   }
-  return { T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
+  return { win, T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
     choice(value) { win.dispatchEvent(new ctx.CustomEvent('wos:tweak-choice', { detail: { id: 'wizard/thread-tracker', on: value } })); } };
 }
 test('Chats row renders badge, tracker dots, then timestamp, including tracker-off rows', () => {
@@ -47,10 +47,54 @@ const reply = body => ({ ok: true, status: 200, json: async () => body });
 const item = (id, state, extra = {}) => ({ id, title: id, state, updated_at: 10, seen: false, ...extra });
 const tick = () => new Promise(r => setTimeout(r, 15));
 
+test('amber shows the action, Dismiss clears group ids instantly; stale and newer versions return', async () => {
+  let items = [item('a', 'needs_you', { ask: 'Reply resend to send it', message_id: 'm' }), item('b', 'done', { message_id: 'm' })];
+  let release; const writes = [];
+  const { T, win } = boot((path, init) => {
+    if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(r => { release = () => r(reply({ items, results: writes[0].ids.map(id => ({ id, status: 'stale' })) })); }); }
+    return reply({ items });
+  });
+  win.WizLive = { session: () => ({ attention: { ask: 'Fallback action' } }) };
+  await T.load('t');
+  assert.match(T.stripHtml('t'), /Reply resend to send it/); assert.match(T.stripHtml('t'), /data-tt-dismiss/);
+  tap(T, 'a', 'data-tt-dismiss'); assert.equal(T.stripHtml('t'), '', 'same frame');
+  assert.deepEqual(writes[0].items, [{ id: 'a', updated_at: 10 }, { id: 'b', updated_at: 10 }]);
+  items = [item('a', 'needs_you', { ask: 'Approve the next send', updated_at: 20 })]; release(); await tick();
+  assert.match(T.stripHtml('t'), /Approve the next send/); assert.match(T.dots('t'), /need you/);
+});
+test('amber uses thread ask fallback, no Dismiss for red or running', async () => {
+  const { T, win } = boot(() => reply({ items: [item('a','needs_you'), item('red','blocked'), item('run','running')] }));
+  win.WizLive = { session: () => ({ attention: { ask: 'Reply resend to send it' } }) };
+  await T.load('t'); const html = T.stripHtml('t');
+  assert.match(html, /Reply resend to send it/); assert.equal((html.match(/data-tt-dismiss/g) || []).length, 1);
+});
+
+for (const mode of ['manual', 'group', 'send-clear']) test(`${mode} sends exact loaded versions and rejects a newer unseen server version`, async () => {
+  let release, items = [item('a', 'done', { message_id: 'm' }), ...(mode === 'group' ? [item('b', 'done', { message_id: 'm', updated_at: 11 })] : [])];
+  const writes = [];
+  const { T } = boot((path, init) => {
+    if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(r => { release = () => r(reply({ items, results: writes[0].ids.map(id => ({ id, status: 'stale' })) })); }); }
+    return reply(path.endsWith('/counts') ? { threads: {} } : { items });
+  });
+  await T.load('t');
+  if (mode === 'send-clear') { const lease = T.beforeSend('t', '', Date.now(), { defer: true }); items = items.map(i => ({ ...i, updated_at: i.updated_at + 10 })); lease.commit(); }
+  else { tap(T, 'a'); items = items.map(i => ({ ...i, updated_at: i.updated_at + 10 })); }
+  assert.deepEqual(writes[0].items, mode === 'group' ? [{ id: 'a', updated_at: 10 }, { id: 'b', updated_at: 11 }] : [{ id: 'a', updated_at: 10 }]);
+  release(); await tick();
+  assert.match(T.dots('t'), /finished, not seen/);
+  assert.match(T.stripHtml('t'), /Mark seen/);
+});
+test('stale result retires the optimistic pin even if response repeats the requested version', async () => {
+  const items = [item('a', 'done')];
+  const { T } = boot((path, init) => reply(init.method === 'POST' ? { items, results: [{ id: 'a', status: 'stale' }] } : { items }));
+  await T.load('t'); tap(T, 'a'); assert.equal(T.stripHtml('t'), ''); await tick();
+  assert.match(T.dots('t'), /finished, not seen/);
+});
+
 const tap = (T, id, action = 'data-tt-seen', jump) => T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: '' } } : s.includes(action) ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: id } } : null } }, { jump });
 
 test('same reply is one synthesized row/count/dot, Seen includes every ask and a newer anchor splits the group', async () => {
-  let items = [item('a', 'needs_you', { try: true, message_id: 'm', title: 'Nightly helper' }), item('b', 'done', { message_id: 'm', title: 'Messenger sign-in' }), item('c', 'done', { message_id: 'm', seen: true })];
+  let items = [item('a', 'needs_you', { try: true, ask: 'Reply resend to send it', message_id: 'm', title: 'Nightly helper' }), item('b', 'done', { message_id: 'm', title: 'Messenger sign-in' }), item('c', 'done', { message_id: 'm', seen: true })];
   const writes = []; let release;
   const { T } = boot((path, init) => {
     // Intentionally old per-item counts: client must not repaint three dots over the loaded reply group.
@@ -60,8 +104,8 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   });
   await T.load('t'); await T.loadCounts(true); await tick();
   let html = T.stripHtml('t');
-  assert.match(html, /1 ask</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
-  assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Ready to try/);
+  assert.match(html, /1 open</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
+  assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Reply resend to send it/);
   assert.match(T.dots('t'), /1 need you/); assert.doesNotMatch(T.dots('t'), /finished, not seen/);
   assert.equal(T.itemFor('t', '', { message_id: 'm' }).id, 'a');
   let target;
@@ -72,7 +116,7 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   release(); await tick();
   items = items.map(i => i.id === 'a' ? { ...i, state: 'blocked', seen: false, message_id: 'new', updated_at: 30 } : i);
   await T.loadCounts(true); await tick();
-  html = T.stripHtml('t'); assert.match(html, /2 asks</); assert.match(T.dots('t'), /1 stuck/);
+  html = T.stripHtml('t'); assert.match(html, /1 open</); assert.match(T.dots('t'), /1 stuck/);
   assert.equal(T.itemFor('t', '', { message_id: 'm', at: 10 }).id, 'b', 'a nearby timestamp cannot pull a member from a different known reply');
 });
 
@@ -104,7 +148,7 @@ test('late Look activation hydrates every open thread and counts without reopeni
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=t'), 'loads the already-open main-agent thread');
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=private-thread&agent=synthetic-agent'), 'preserves the open thread agent');
   assert.equal(calls.filter(p => p.endsWith('/counts')).length, 1);
-  assert.equal(T.stripHtml('t'), '', 'running-only replies load dots but no owner-inbox strip');
+  assert.match(T.stripHtml('t'), /data-tt-strip/, 'running-only replies hydrate the visible strip');
   assert.match(T.dots('t'), /1 running/);
   assert.ok(renders.includes('a') && renders.includes('fresh'), 'also updates Reply in existing and new threads');
   const count = calls.length;
@@ -126,7 +170,7 @@ test('a fresh count poll replaces the tally of a thread already opened', async (
   threads = { 'hermes/t': { needs_you: 1, running: 1, done_unseen: 0, blocked: 0, acknowledged: 0, total: 2 } };
   await T.loadCounts(true); await tick();
   assert.match(T.dots('t'), /1 need you/, 'the new ask shows on the row without reopening the thread');
-  assert.match(T.stripHtml('t'), /2 asks/, 'and the open thread re-reads its list');
+  assert.match(T.stripHtml('t'), /2 open/, 'and the open thread re-reads its list');
 });
 
 test('a Seen write the box refuses is rolled back and the thread re-read', async () => {
@@ -141,4 +185,66 @@ test('a Seen write the box refuses is rolled back and the thread re-read', async
   T.click({ target: { closest: s => (s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: '' } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: 'd' } } : null) } });
   await tick(); await tick();
   assert.match(T.stripHtml('t'), /Mark seen/, 'still unseen: this device does not hide what the box never took');
+});
+
+test('send Seen refusal restores green locally even while the reconciliation GET is stalled', async () => {
+ let reads=0, writes=0;
+ const {T}=boot((path,init)=> {
+  if(init.method==='POST'){writes++;return {ok:false,status:503};}
+  if(++reads>1)return new Promise(()=>{});
+  return reply({items:[item('d','done',{message_id:'m',at:10})]});
+ });
+ await T.load('t'); T.beforeSend('t','',20); assert.equal(T.stripHtml('t'),'');
+ await tick(); assert.match(T.stripHtml('t'),/Mark seen/); assert.equal(writes,1,'no immediate refusal loop');
+});
+test('send before first ledger ingestion cannot acknowledge versions never loaded at the send tap', async () => {
+ const writes=[]; const {T}=boot((path,init)=>{
+  if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
+  return reply({items:[item('old','done',{message_id:'m',at:10}),item('new','done',{message_id:'n',at:10,updated_at:30})]});
+ });
+ T.beforeSend('t','',20); await tick();
+ assert.deepEqual(writes,[]); assert.match(T.dots('t'),/2 finished, not seen/);
+});
+test('late ledger reload preserves pinned versions but never expands the snapshot to newly ingested work', async () => {
+ let items=[item('old','done',{message_id:'m',at:10})]; const writes=[];
+ const {T}=boot((path,init)=>{
+  if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
+  return reply(path.includes('/counts')?{threads:{}}:{items});
+ });
+ await T.load('t'); const lease=T.beforeSend('t','',20,{defer:true});
+ items=[...items,item('new','done',{message_id:'new',at:10,updated_at:30})];
+ // An ordinary late ledger poll while custody is pending must not add ids.
+ await T.loadCounts(true); await tick(); lease.commit(); await tick();
+ assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old'],items:[{id:'old',updated_at:10}]}]); assert.match(T.dots('t'),/1 finished, not seen/);
+});
+
+// Owner reply = answered: amber/red groups on older replies stop counting and spin while the run works (no clock, no backend ack).
+test('a send answers older amber and red groups: no red, count drops, spinner while working, re-tag brings it back', async () => {
+  let items = [item('shots', 'blocked', { message_id: 'm', title: 'Marker screenshots' }), item('redact', 'needs_you', { message_id: 'm', ask: 'Reply redact to retry', title: 'Redact marker' }),
+    item('other', 'needs_you', { message_id: 'n', ask: 'Approve the logo', title: 'Logo' })];
+  const writes = []; let status = 'completed';
+  const { T, win } = boot((path, init) => { if (init.method === 'POST') writes.push(JSON.parse(init.body)); return reply(path.endsWith('/counts') ? { threads: {} } : { items }); });
+  win.WizLive = { session: () => ({ status }) };
+  await T.load('t');
+  assert.match(T.stripHtml('t'), /2 open/); assert.match(T.stripHtml('t'), /tt-dot bad/);
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true });
+  status = 'running'; lease.commit(); await tick();
+  const html = T.stripHtml('t');
+  assert.doesNotMatch(html, /tt-dot bad|tt-dot you/, 'no red or amber while the run works');
+  assert.match(html, /Working on your reply/); assert.doesNotMatch(html, /\d open/); assert.match(html, /tt-dot run/); assert.doesNotMatch(T.dots('t'), /need you|stuck/); assert.match(T.dots('t'), /running/);
+  assert.equal(writes.filter(w => w.items).length, 0, 'never acknowledged in the backend');
+  // The run ends without mentioning the item: it stays answered and uncounted.
+  status = 'completed'; assert.equal(T.stripHtml('t'), ''); assert.equal(T.dots('t'), '');
+  // The next reply re-tags it (a new server version): it returns as amber/red on the new reply.
+  items = [item('shots', 'blocked', { message_id: 'p', updated_at: 30, title: 'Marker screenshots' }), items[1], items[2]];
+  await new Promise(r => setTimeout(r, 2600)); await T.load('t'); await tick();
+  const back = T.stripHtml('t'); assert.match(back, /tt-dot bad/); assert.match(back, /1 open/);
+});
+test('a cancelled send does not answer anything; answered survives reload only for the same versions', async () => {
+  const items = [item('a', 'blocked', { message_id: 'm' })];
+  const { T, win } = boot((path) => reply(path.endsWith('/counts') ? { threads: {} } : { items }));
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  await T.load('t');
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true }); lease.cancel();
+  assert.match(T.stripHtml('t'), /tt-dot bad/);
 });

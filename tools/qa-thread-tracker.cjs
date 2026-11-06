@@ -9,6 +9,7 @@ const fs = require('node:fs'), path = require('node:path');
 const fx = require('./qa-proof-fixture.cjs');
 const OUT = path.resolve(process.argv[2] || '/tmp/qa-thread-tracker'); fs.mkdirSync(OUT, { recursive: true });
 const SKINS = (process.argv[3] || 'nebula,grove').split(',');
+const expandWorking = page => page.evaluate(() => { const h = document.querySelector('.aad-sec[data-sec="working"]'); if (h && h.getAttribute('aria-expanded') === 'false') h.click(); }).catch(() => {});
 const WEB = path.resolve(__dirname, '../web');
 const ORIGIN = fx.ORIGIN, ID = 'wizard/thread-tracker';
 let pass = 0, fail = 0;
@@ -85,11 +86,20 @@ async function mount(browser, svc, { shell, skin, tweaks, storage, docScroll = f
     if (p === '/wizard/v1/thread-items/counts') return json({ threads: { 'hermes/tt-main': svc.counts() } });
     if (p === '/wizard/v1/thread-items/seen' && m === 'POST') {
       const b = JSON.parse(q.postData() || '{}'); svc.writes.push({ m, p, b });
+      svc.beforeSeen?.();
+      if (!svc.legacySeen && Array.isArray(b.items)) {
+        const results = b.items.map(({id,updated_at}) => {
+          const matches = svc.items.find(i => i.id === id)?.updated_at === updated_at;
+          if (matches) svc.seen.add(id);
+          return {id,status:matches?'acknowledged':'stale'};
+        });
+        return json({ thread: b.thread, items: svc.view(), counts: svc.counts(), results });
+      }
       for (const id of b.ids || []) svc.seen.add(id);
       return json({ thread: b.thread, items: svc.view(), counts: svc.counts() });
     }
     if (p === '/wizard/v1/thread-items') return json({ thread: url.searchParams.get('thread'), items: url.searchParams.get('thread') === 'tt-main' ? svc.view() : [], counts: svc.counts() });
-    if (p === '/wizard/hermes/api/sessions' && m === 'GET') return json({ data: [session('tt-main', 'Wizard polish round', svc.rows.length), session('tt-other', 'Plain old thread', 2)], has_more: false });
+    if (p === '/wizard/hermes/api/sessions' && m === 'GET') return json({ data: svc.sessionRows ? svc.sessionRows() : [session('tt-main', 'Wizard polish round', svc.rows.length), session('tt-other', 'Plain old thread', 2)], has_more: false });
     const one = p.match(/^\/wizard\/hermes\/api\/sessions\/(tt-[a-z]+)(\/messages)?$/);
     if (one && m === 'GET') {
       if (!one[2]) return json({ session: session(one[1], one[1] === 'tt-main' ? 'Wizard polish round' : 'Plain old thread', one[1] === 'tt-main' ? svc.rows.length : 2) });
@@ -133,7 +143,9 @@ const strip = page => page.locator('[data-tt-strip]').first();
 const msgText = (page, mid) => page.evaluate(m => document.querySelector(`.msg[data-mid="${m}"]`)?.textContent.trim().slice(0, 60) || null, mid);
 const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = document.querySelector(s); if (!n) return false; const r = n.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight + 2; }, sel);
 
-(async () => {
+module.exports = { mount, service };
+
+if (require.main === module) (async () => {
   const browser = await chromium.launch({ headless: true, ...(process.env.QA_CHROME ? { executablePath: process.env.QA_CHROME } : {}) });
   try {
     /* ---- 1. fresh profile: off, and offered in Settings ---- */
@@ -151,7 +163,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check('off: no page errors', ctx.errors.length === 0, ctx.errors); await ctx.close();
     }
     /* ---- late Look: the thread is already open before the host mounts the tweak ---- */
-    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+    if (!process.env.QA_STATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `late/${shell}/${skin}`, svc = service();
       const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [] });
       await page.waitForFunction(() => window.WosExperience && !window.WosExperience.state.busy);
@@ -180,6 +192,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       if (appeared) check(`${tag}: draft survives the Look change`, await page.locator('.ch-compose textarea').inputValue() === 'Keep my draft');
       await page.evaluate(async id => { const x = window.WosExperience; await x.adopt({ ...x.mix, [id]: true }, x.views); }, ID);
       if (shell === 'phone') await page.locator('[data-chback]').first().click();
+      await expandWorking(page);
       const dots = await page.waitForSelector('[data-tt-dots="hermes/tt-main"]', { timeout: 5000 }).then(() => true, () => false);
       check(`${tag}: Chats list dots appear without reopening the thread`, dots);
       check(`${tag}: no agent runs or steers`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)));
@@ -187,8 +200,8 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await ctx.close();
     }
     /* ---- reply synthesis: old per-ask API counts deliberately retained for rolling-upgrade proof ---- */
-    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
-      const tag = `grouped/${shell}/${skin}`, svc = service();
+    if (!process.env.QA_STATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+      const tag = `grouped/${shell}/${skin}`, svc = service(); svc.legacySeen = true;
       const anchor = svc.items.find(i => i.id === 'tap-lag');
       svc.items = [
         { ...anchor, id: 'nightly', title: 'Nightly maintenance helper', state: 'needs_you', try: true },
@@ -201,9 +214,9 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForFunction(() => /1 need you/.test(window.WosThreadTracker.dots('tt-main')) && !/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
       check(`${tag}: unopened Chats dots count replies even with old backend counts`, await page.evaluate(() => { const d = window.WosThreadTracker.dots('tt-main'); return /1 need you/.test(d) && !/finished, not seen|<b>/.test(d); }));
       await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip] .tt-h');
-      check(`${tag}: three asks on one reply count as 1 ask`, /^1 ask/.test(await strip(page).locator('.tt-h').innerText()));
+      check(`${tag}: three asks on one reply count as 1 ask`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()));
       await strip(page).locator('.tt-h').click();
-      check(`${tag}: one synthesized row with member count`, await strip(page).locator('.tt-row').count() === 1 && /Nightly maintenance helper · Messenger sign-in code · Nightly checks/.test(await strip(page).innerText()) && /3 asks in one reply · Ready to try/.test(await strip(page).innerText()));
+      check(`${tag}: one synthesized row with member count`, await strip(page).locator('.tt-row').count() === 1 && /Nightly maintenance helper · Messenger sign-in code · Nightly checks/.test(await strip(page).innerText()) && /3 asks in one reply · Review this polish round/.test(await strip(page).innerText()));
       await page.evaluate(() => document.fonts.ready);
       await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
       const geometry = await page.evaluate(() => { const s = document.querySelector('[data-tt-strip] .tt-panel'), n = s?.querySelector('.tt-t'), r = s?.getBoundingClientRect(); return { skin: document.documentElement.dataset.skin, shell: document.documentElement.dataset.shell, ellipsis: n && getComputedStyle(n).textOverflow, whiteSpace: n && getComputedStyle(n).whiteSpace, visible: r && r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight && s.contains(document.elementFromPoint(r.left + 8, r.top + 8)) }; });
@@ -214,8 +227,8 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForSelector(`.msg[data-mid="${anchor.message_id}"].tt-flash`);
       check(`${tag}: group Open jumps to its one reply`, await page.locator(`.msg[data-mid="${anchor.message_id}"].tt-flash`).count() === 1);
       await strip(page).locator('.tt-h').click();
-      await strip(page).locator('[data-tt-seen]').click();
-      check(`${tag}: group Seen clears all local dots immediately`, await page.evaluate(() => window.WosThreadTracker.dots('tt-main') === ''));
+      await strip(page).locator('[data-tt-dismiss]').click();
+      check(`${tag}: group Dismiss clears all local dots immediately`, await page.evaluate(() => window.WosThreadTracker.dots('tt-main') === ''));
       await page.waitForFunction(() => !document.querySelector('[data-tt-strip]'));
       check(`${tag}: last addressable Seen removes the entire strip`, await strip(page).count() === 0);
       check(`${tag}: Seen sends every member id and service readback agrees`, svc.writes.some(w => w.p.endsWith('/thread-items/seen') && JSON.stringify([...w.b.ids].sort()) === JSON.stringify(['messenger', 'nightly', 'old'])) && svc.view().every(i => i.seen));
@@ -223,7 +236,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items[0] = { ...svc.items[0], message_id: svc.items[0].message_id + '-new', updated_at: Date.now(), state: 'blocked' };
       svc.seen.delete('nightly');
       await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
-      await page.waitForFunction(() => /^2 asks/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
+      await page.waitForFunction(() => /^1 open/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
       await strip(page).locator('.tt-h').click();
       await strip(page).locator('[data-tt-ack]').click();
       check(`${tag}: asks on two current replies produce two rows`, await strip(page).locator('.tt-row').count() === 2);
@@ -232,7 +245,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
       await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
     }
-    /* ---- owner-inbox visibility: no strip or reserved space for ack/running ---- */
+    /* ---- visibility: only acknowledged history has no strip or reserved space ---- */
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `hide/${shell}/${skin}`, svc = service(), anchor = svc.items.find(i => i.id === 'tap-lag');
       svc.items = [{ ...anchor, state: 'done' }]; svc.seen = new Set([anchor.id]);
@@ -242,8 +255,10 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: all acknowledged has no strip`, await strip(page).count() === 0);
       await page.screenshot({ path: path.join(OUT, `hide-acknowledged-${shell}-${skin}.png`) });
       await page.evaluate(() => {
-        window.__hideReply = document.querySelector('.ch-msgs .msg.a');
-        window.__hideComposer = document.querySelector('.ch-compose textarea');
+        window.addEventListener('wos:thread-tracker', () => {
+          window.__hideReply = document.querySelector('.ch-msgs .msg.a');
+          window.__hideComposer = document.querySelector('.ch-compose textarea');
+        }, true); // Capture each event's pre-paint nodes, not nodes from earlier background polls.
         window.__hideFrames = [];
         window.addEventListener('wos:thread-tracker', () => window.__hideFrames.push({
           strip: !!document.querySelector('[data-tt-strip]'), expected: !!window.WosThreadTracker.stripHtml('tt-main'),
@@ -257,23 +272,168 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
         await page.waitForFunction(state => window.WosThreadTracker.dots('tt-main').includes(state), state === 'running' ? 'running' : state === 'done' ? 'finished, not seen' : 'need you');
       };
       await update('running');
-      check(`${tag}: running-only has no strip and retains running dots`, await strip(page).count() === 0 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main'))));
-      await page.screenshot({ path: path.join(OUT, `hide-running-${shell}-${skin}.png`) });
+      check(`${tag}: running-only shows strip and retains running dots`, await strip(page).count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main'))));
+      await strip(page).locator('.tt-h').click();
+      check(`${tag}: running-only dropdown stays open with a Working row`, await strip(page).locator('.tt-panel').isVisible() && /Working/.test(await strip(page).innerText()) && await strip(page).locator('.tt-row.run').count() === 1);
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
+      await page.screenshot({ path: path.join(OUT, `running-only-${shell}-${skin}.png`) });
+      await strip(page).locator('.tt-h').click();
       await update('done');
       check(`${tag}: one unseen green shows strip`, await strip(page).count() === 1);
       await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
       check(`${tag}: last Seen removes strip before next frame`, await strip(page).count() === 0);
       await update('needs_you');
-      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
-      check(`${tag}: last Looks good removes strip before next frame`, await strip(page).count() === 0);
+      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-dismiss]').click();
+      check(`${tag}: last Dismiss removes strip before next frame`, await strip(page).count() === 0);
+      for (const state of ['done', 'needs_you']) {
+        svc.items = [{ ...anchor, state, try: true, updated_at: Date.now() }, { ...anchor, id: 'still-running', state: 'running', message_id: anchor.message_id + '-running' }]; svc.seen.clear();
+        await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+        await page.waitForFunction(() => /^2 open/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
+        await strip(page).locator('.tt-h').click(); await strip(page).locator(state === 'needs_you' ? '[data-tt-dismiss]' : '[data-tt-seen]').click();
+        check(`${tag}: last ${state} acknowledgement keeps running strip and open dropdown`, await strip(page).count() === 1 && await strip(page).locator('.tt-panel').isVisible() && await strip(page).locator('.tt-row.run').count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main')) && !/need you|finished, not seen/.test(window.WosThreadTracker.dots('tt-main'))));
+        if (state === 'needs_you') await page.screenshot({ path: path.join(OUT, `running-after-seen-${shell}-${skin}.png`) });
+        await strip(page).locator('.tt-h').click();
+      }
       const frames = await page.evaluate(() => window.__hideFrames);
       check(`${tag}: every update paints presence synchronously without replacing messages or composer`, frames.length >= 4 && frames.every(f => f.strip === f.expected && f.replySame && f.composerSame), frames);
       check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
-      await page.screenshot({ path: path.join(OUT, `hide-cleared-${shell}-${skin}.png`) });
+      await page.screenshot({ path: path.join(OUT, `running-collapsed-${shell}-${skin}.png`) });
+      svc.items = [{ ...anchor, state: 'needs_you' }, ...['ack-a','ack-b','ack-c'].map(id => ({...anchor, id, message_id:id, state:'done'}))];
+      svc.seen = new Set(['ack-a','ack-b','ack-c']);
+      await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(() => document.querySelector('.tt-tot')?.textContent === '1 open');
+      await strip(page).locator('.tt-h').click();
+      check(`${tag}: 1 amber plus 3 acknowledged reads 1 open and keeps history footer`, await strip(page).locator('.tt-tot').innerText() === '1 open' && await strip(page).locator('.tt-more').innerText() === '3 acknowledged · show');
+      await page.screenshot({ path: path.join(OUT, `running-open-count-${shell}-${skin}.png`) });
       await ctx.close();
     }
+    /* ---- amber Dismiss: exact versions, Ready's existing Done action, newer asks return ---- */
+    for (const skin of SKINS) for (const shell of ['phone','desktop']) {
+      const tag=`dismiss/${shell}/${skin}`,svc=service(),anchor=svc.items[1];
+      svc.items=[{...anchor,id:'a',state:'needs_you',ask:'Reply resend to send it'}];svc.seen.clear();
+      const {ctx,page}=await mount(browser,svc,{shell,skin,tweaks:[ID]});
+      if(shell==='desktop')await page.evaluate(()=>window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page,'tt-main');await page.waitForSelector('[data-tt-strip]');await strip(page).locator('.tt-h').click();
+      check(`${tag}: second line names the action`,/Reply resend to send it/.test(await strip(page).locator('.tt-s').innerText()));
+      await page.screenshot({path:path.join(OUT,`dismiss-before-${shell}-${skin}.png`)});
+      svc.beforeSeen=()=>{svc.items=svc.items.map(i=>({...i,ask:'Approve the newer send',updated_at:Date.now()}));};
+      await strip(page).locator('[data-tt-dismiss]').click();
+      await page.waitForFunction(()=>/need you/.test(window.WosThreadTracker.dots('tt-main')));
+      await page.waitForFunction(()=>window.WizLive.session('tt-main')?.archived!==true);
+      check(`${tag}: stale stays unseen and Ready Done rolls back`,!svc.view()[0].seen&&!svc.writes.some(w=>w.m==='PATCH'));
+      svc.beforeSeen=null;
+      const frame=await page.evaluate(()=>{document.querySelector('[data-tt-dismiss]').click();return {cleared:window.WosThreadTracker.stripHtml('tt-main')==='',readyCleared:window.WizLive.session('tt-main')?.archived===true};});
+      check(`${tag}: last amber and Ready clear in the tap frame`,frame.cleared&&frame.readyCleared,frame);
+      await page.waitForFunction(()=>!window.WizLive.busy('tt-main'));
+      check(`${tag}: Done persists only after matching per-id Seen`,svc.view()[0].seen&&svc.writes.some(w=>w.p.endsWith('/thread-items/seen')&&w.b.items?.[0].id==='a')&&svc.writes.some(w=>w.m==='PATCH'&&/tt-main/.test(w.p)));
+      svc.items=svc.items.map(i=>({...i,ask:'Try the changed reply',updated_at:Date.now()+1}));svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/need you/.test(window.WosThreadTracker.dots('tt-main')));
+      check(`${tag}: newer ask returns unseen`,!svc.view()[0].seen&&await strip(page).count()===1);
+      await strip(page).locator('.tt-h').click();await page.screenshot({path:path.join(OUT,`dismiss-newer-${shell}-${skin}.png`)});
+      check(`${tag}: no page errors`,ctx.errors.length===0,ctx.errors);await ctx.close();
+    }
+    /* ---- the owner's reply answers older amber and red asks (James, 6 Nov): no red, count drops, a re-tag returns ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+      const tag = `answered/${shell}/${skin}`, svc = service(), anchor = svc.items[1], at = anchor.at;
+      svc.items = [{ ...anchor, id: 'airlock-marker-screenshots', title: 'Marker screenshots', state: 'blocked', message_id: 'm-air', ask: '' },
+        { ...anchor, id: 'airlock-redact-marker', title: 'Redact the marker', state: 'needs_you', message_id: 'm-air', ask: 'Reply redact to retry' }];
+      svc.seen.clear();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      check(`${tag}: before the reply the strip reads 1 open with a red count`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1);
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `answered-before-${shell}-${skin}.png`) });
+      await page.locator('.ch-compose textarea').fill('Reply redact: yes please retry');
+      const frame = await page.evaluate(() => { document.querySelector('[data-chform]').requestSubmit(); const h = window.WosThreadTracker.stripHtml('tt-main'), d = window.WosThreadTracker.dots('tt-main');
+        return { red: /tt-dot bad|tt-dot you/.test(h) || /stuck|need you/.test(d), open: /\d+ open/.test(h), working: /Working on your reply/.test(h), spinner: /tt-dot run/.test(h) }; });
+      check(`${tag}: in the send frame no red or amber, the count drops, a spinner shows`, !frame.red && !frame.open && frame.working && frame.spinner, frame);
+      for (let n = 0; n < 50 && !svc.writes.some(w => /\/v1\/runs$|\/steer$/.test(w.p)); n++) await page.waitForTimeout(100);
+      await page.waitForTimeout(400);
+      check(`${tag}: answered asks are never acknowledged in the box`, !svc.writes.some(w => w.p.endsWith('/thread-items/seen')) && svc.seen.size === 0, svc.writes.map(w => w.p));
+      await page.screenshot({ path: path.join(OUT, `answered-working-${shell}-${skin}.png`) });
+      // The agent's next reply re-lists the red ask: a new server version on a new reply.
+      svc.items = svc.items.map(i => i.id === 'airlock-marker-screenshots' ? { ...i, message_id: 'm-next', updated_at: Date.now() + 5, ask: 'Reply screenshots to continue' } : i);
+      await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(() => /stuck/.test(window.WosThreadTracker.dots('tt-main')));
+      if (!(await page.locator('[data-tt-strip]').count())) await openThread(page, 'tt-main'); // phone send-and-go left the thread
+      await page.waitForSelector('[data-tt-strip] .tt-h', { timeout: 8000 }).catch(() => {});
+      const back = await page.evaluate(() => ({ html: window.WosThreadTracker.stripHtml('tt-main').slice(0, 600), dots: window.WosThreadTracker.dots('tt-main'), st: window.WizLive.session('tt-main')?.status }));
+      check(`${tag}: the agent's re-tag brings the ask back; the untouched one stays answered`, /^1 open/.test((await strip(page).locator('.tt-h').innerText({ timeout: 3000 }).catch(() => ''))) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1, back);
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `answered-retag-${shell}-${skin}.png`) });
+      check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors); await ctx.close();
+    }
+    /* ---- running work keeps the strip (James's live repro: Shell split 12 running + 1 unseen done, Thread tracker 6 running) ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const shape of ['mixed', 'running-only']) {
+      const tag = `running-strip/${shape}/${shell}/${skin}`, svc = service(), anchor = svc.items[1];
+      const mk = (id, state, mid, extra = {}) => ({ ...anchor, id, title: id, state, message_id: mid, ...extra });
+      let expected;
+      if (shape === 'mixed') {
+        // One reply mixes 4 running members with 1 unseen finished member; 8 more running replies; 5 finished and seen.
+        svc.items = [...[1, 2, 3, 4].map(n => mk(`split-run-${n}`, 'running', 'r-0')), mk('split-done', 'done', 'r-0'),
+          ...Array.from({ length: 8 }, (_, n) => mk(`split-run-${n + 5}`, 'running', `r-${n + 1}`)),
+          ...Array.from({ length: 5 }, (_, n) => mk(`split-old-${n}`, 'done', `d-${n}`))];
+        svc.seen = new Set(svc.items.filter(i => i.id.startsWith('split-old')).map(i => i.id)); expected = 9;
+      } else {
+        svc.items = [...Array.from({ length: 6 }, (_, n) => mk(`tracker-run-${n}`, 'running', `r-${n}`)), ...Array.from({ length: 9 }, (_, n) => mk(`tracker-old-${n}`, 'done', `d-${n}`))];
+        svc.seen = new Set(svc.items.filter(i => i.id.startsWith('tracker-old')).map(i => i.id)); expected = 6;
+      }
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      check(`${tag}: the strip shows, with ${expected} open`, new RegExp(`^${expected} open`).test(await strip(page).locator('.tt-h').innerText()), await strip(page).locator('.tt-h').innerText());
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `running-strip-${shape}-${shell}-${skin}.png`) });
+      check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors); await ctx.close();
+    }
+    if (process.env.QA_ONLY_NEW) { console.log(`\n${pass} passed, ${fail} failed`); await browser.close(); process.exit(fail ? 1 : 0); }
+    /* ---- explicit owner sends acknowledge old green before phone send-and-go ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const working of [false, true]) {
+      WORKING = working;
+      const tag = `send-seen/${shell}/${skin}/${working ? 'steer' : 'send'}`, svc = service();
+      svc.items = svc.items.filter(i => ['voice-notes','icons','tap-lag','export','dark-mode'].includes(i.id)).map(i => ({...i,state:['voice-notes','icons'].includes(i.id)?'done':i.id==='tap-lag'?'needs_you':i.id==='export'?'blocked':'running',try:false})); svc.seen.clear();
+      const {ctx,page}=await mount(browser,svc,{shell,skin,tweaks:[ID]});
+      if(shell==='desktop')await page.evaluate(()=>window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page,'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      if(!working){
+        await page.locator('.ch-compose textarea').fill('Synthetic failed save keeps my unread green rows');
+        const refused=await page.evaluate(async()=>{
+          const ob=window.WosOutbox,original=ob.enqueue;ob.enqueue=()=>Promise.reject(Error('Synthetic storage refusal'));
+          try{document.querySelector('[data-chform]').requestSubmit();await new Promise(r=>setTimeout(r,0));return {green:/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')),draft:document.querySelector('.ch-compose textarea')?.value};}finally{ob.enqueue=original;}
+        });
+        check(`${tag}: failed durable save restores green without synchronizing Seen`,refused.green && !svc.writes.some(w=>w.p.endsWith('/thread-items/seen')),refused);
+        await page.screenshot({path:path.join(OUT,`running-save-refused-${shell}-${skin}.png`)});
+      }
+      await page.locator('.ch-compose textarea').fill('Synthetic follow-up after reading the earlier replies');
+      const immediate=await page.evaluate(()=>{document.querySelector('[data-chform]').requestSubmit();const d=window.WosThreadTracker.dots('tt-main');return {green:/finished, not seen/.test(d),amber:/need you/.test(d),red:/stuck/.test(d),running:/running/.test(d)};});
+      check(`${tag}: green clears and the reply answers amber and red in the send frame; running stays`, !immediate.green && !immediate.amber && !immediate.red && immediate.running,immediate);
+      for(let n=0;n<50&&!svc.writes.some(w=>/\/v1\/runs$|\/steer$/.test(w.p));n++)await page.waitForTimeout(100);
+      check(`${tag}: shared Seen path sends both older green ids and no action-needed ids`,svc.writes.some(w=>w.p.endsWith('/thread-items/seen')&&JSON.stringify([...w.b.ids].sort())===JSON.stringify(['icons','voice-notes'])));
+      check(`${tag}: actual ${working?'steer':'send'} is intercepted`,svc.writes.some(w=>working?/\/steer$/.test(w.p):/\/v1\/runs$/.test(w.p)));
+      check(`${tag}: no page errors`,ctx.errors.length===0,ctx.errors);
+      await page.screenshot({path:path.join(OUT,`running-send-seen-${shell}-${skin}-${working?'steer':'send'}.png`)});
+      await ctx.unrouteAll({behavior:'wait'});await ctx.close();
+    }
+    WORKING=false;
+    /* ---- sender clock never admits a completion after the send ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const skew of [-60000, 0, 60000]) {
+      const svc = service(), at = Date.now(), anchor = svc.items[0];
+      svc.items = [{ ...anchor, id: 'old', state: 'done', message_id: 'old', at: at - 10000, updated_at: at - 10000 },
+        { ...anchor, id: 'job', state: 'running', message_id: 'job', at: at - 10000, updated_at: at - 10000 }]; svc.seen.clear();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      await page.evaluate(skew => { const now = Date.now.bind(Date); Date.now = () => now() + skew; Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); }, skew);
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      await page.evaluate(() => { window.__sendLease = window.WosThreadTracker.beforeSend('tt-main', '', Date.now(), { defer: true }); });
+      svc.items = svc.items.map(i => i.id === 'job' ? { ...i, state: 'done', updated_at: at + 10000 } : i);
+      await page.evaluate(() => window.__sendLease.commit());
+      await page.waitForFunction(() => /finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      const seen = svc.writes.filter(w => w.p.endsWith('/thread-items/seen'));
+      check(`clock/${shell}/${skin}/${skew}: only pinned old version acknowledged; later completion stays unseen`, seen.length === 1 && JSON.stringify(seen[0].b.ids) === '["old"]' && !svc.seen.has('job') && ctx.errors.length === 0, seen);
+      await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
+    }
     /* ---- visible reply dwell and measured tracker inset ---- */
-    for (const skin of SKINS) for (const profile of ['phone', 'phone-doc', 'desktop']) {
+    if (!process.env.QA_STATE_ONLY) for (const skin of SKINS) for (const profile of ['phone', 'phone-doc', 'desktop']) {
       const shell = profile === 'desktop' ? 'desktop' : 'phone', svc = service();
       const latest = svc.rows.at(-1), anchor = svc.items[0];
       latest.content = 'First line of the latest reply must be fully visible.\n\n' + 'Detailed explanation with enough text to exceed a phone viewport.\n\n'.repeat(60);
@@ -331,6 +491,72 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-row] .tt-t').first().click(); await page.waitForTimeout(900);
       check(`autoseen/${profile}/${skin}: tracker jump target fully below strip`, (await geometry()).visible);
       check(`autoseen/${profile}/${skin}: no real sends or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
+      // The ledger can arrive before the final streamed bubble gets its stable message anchor.
+      await page.evaluate(mid => {
+        Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});
+        if(document.documentElement.dataset.shell==='phone'){Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});Object.defineProperty(navigator,'userAgent',{configurable:true,value:navigator.userAgent+' WizardNative'});}
+        window.__lateReply=document.querySelector(`.msg[data-mid="${mid}"]`); window.__lateReply.remove();
+      },String(latest.id));
+      svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()}];svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      await page.evaluate(()=>{const nb=document.querySelector('.ch-msgs'),n=window.__lateReply;nb.append(n);const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().top-top-16;if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      await page.waitForFunction(()=>!/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      check(`autoseen/${profile}/${skin}: late streamed anchor re-arms without a render, including phone hasFocus false`,svc.view().every(i=>i.seen));
+      // A small tail of an ordinary reply is not evidence of reading it.
+      await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'}));
+      svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      await page.waitForTimeout(700); // let the already queued ledger bubble render settle while hidden
+      // Keep the geometry fixture stable through the app's queued bubble repaint.
+      // Inline node styles alone disappear when the pending ledger render replaces it.
+      const shortStyle=await page.addStyleTag({content:`.ch-msgs .msg[data-mid="${latest.id}"]{height:300px!important;min-height:300px!important;max-height:300px!important;box-sizing:border-box!important;overflow:hidden!important}`});
+      const shortTail=await page.evaluate(mid=>{
+        // The real reader restores its opening position after a bubble repaint.
+        // Keep this negative oracle at exactly 50px through that restoration;
+        // do not change product geometry or pause the product's dwell watcher.
+        const pin=()=>{
+          const nb=document.querySelector('.ch-msgs'),n=nb?.querySelector(`.msg[data-mid="${mid}"]`);if(!n)return;
+          let spacer=nb.querySelector('[data-short-tail-spacer]');
+          if(!spacer){spacer=document.createElement('div');spacer.dataset.shortTailSpacer='';spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);}
+          const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+50);
+          if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
+        };
+        const loop=()=>{pin();window.__shortTailFrame=requestAnimationFrame(loop);};loop();
+        const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`),r=n.getBoundingClientRect(),b=nb.getBoundingClientRect(),top=window.WosThreadTracker.viewportTop(nb,b.top);
+        return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top)};
+      },String(latest.id));
+      const writesBeforeShort=svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length;
+      const shortSamples=[];
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      for(let sample=0;sample<7;sample++){await page.waitForTimeout(200);shortSamples.push(await page.evaluate(mid=>{const n=document.querySelector(`.msg[data-mid="${mid}"]`),nb=n.closest('.ch-msgs'),r=n.getBoundingClientRect(),b=nb.getBoundingClientRect(),top=window.WosThreadTracker.viewportTop(nb,b.top);return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top),top:r.top,viewport:Math.min(b.bottom,innerHeight)-top,dots:window.WosThreadTracker.dots('tt-main')};},String(latest.id)));}
+      check(`autoseen/${profile}/${skin}: 300px reply with 50px tail is not read`,shortSamples.every(s=>s.height===300 && Math.abs(s.visible-50)<=2) && svc.view().every(i=>!i.seen) && svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length===writesBeforeShort,{shortTail,shortSamples,seen:svc.view(),writesBeforeShort,writesAfter:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen'))});
+      fs.writeFileSync(path.join(OUT,`short-tail-${profile}-${skin}.json`),JSON.stringify({shortTail,shortSamples,seen:svc.view(),writesBeforeShort,writesAfter:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen'))},null,2));
+      await page.screenshot({path:path.join(OUT,`running-short-unread-${profile}-${skin}.png`)});
+      // Keep just the tail of a genuinely viewport-tall reply on screen for a full second.
+      await page.evaluate(()=>{cancelAnimationFrame(window.__shortTailFrame);Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});});
+      await shortStyle.evaluate(n=>n.remove());
+      svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      // The reload that follows the count change must land first: Seen carries the loaded server version, and a version the
+      // client has not loaded yet is correctly refused as stale.
+      await page.waitForTimeout(1500);
+      const tail=await page.evaluate(mid=>{
+        const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
+        n.style.height='4000px';n.style.minHeight='4000px';n.style.display='flex';n.style.flexDirection='column';n.style.justifyContent='flex-end';n.textContent='The end of a long reply, read before the next message.';
+        const spacer=document.createElement('div');spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);
+        const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+110);
+        if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
+        const r=n.getBoundingClientRect(),b=nb.getBoundingClientRect();return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top),viewport:Math.min(b.bottom,innerHeight)-top};
+      },String(latest.id));
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      await page.waitForFunction(()=>!/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      // A stale refusal merges the fresh versions and re-arms; the box reaches read within a few dwell cycles.
+      for(let n=0;n<60&&!svc.view().every(i=>i.seen);n++)await page.waitForTimeout(250);
+      check(`autoseen/${profile}/${skin}: reading long tail acknowledges below old 40-percent threshold`,tail.height>tail.viewport && tail.visible>=40 && tail.visible<.4*tail.viewport && svc.view().every(i=>i.seen),{tail,view:svc.view().map(i=>[i.id,i.seen,i.updated_at]),seenWrites:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).map(w=>w.b.items)});
+      await page.screenshot({path:path.join(OUT,`running-long-read-${profile}-${skin}.png`)});
       await ctx.close();
       const off = await mount(browser, svc, { shell, skin, tweaks: [], docScroll: profile === 'phone-doc' });
       if (shell === 'desktop') await off.page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
@@ -353,6 +579,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: tweak on`, (await tt(page)).on);
       if (shell === 'desktop') { await page.waitForFunction(() => document.documentElement.dataset.layout === 'ai-apps', null, { timeout: 15000 }).catch(() => {}); const lay = await page.evaluate(() => ({ view: window.WosExperience.desktopView, layout: document.documentElement.dataset.layout })); check(`${tag}: AI apps layout active`, lay.view === 'ai-apps' && lay.layout === 'ai-apps', lay); }
       // Chats list dots match the counts
+      await expandWorking(page); // the fixture thread has a helper still running, so it lists under Working (collapsed by default)
       await page.waitForSelector('[data-tt-dots]', { timeout: 20000 }).catch(() => {});
       const dots = await page.evaluate(() => [...document.querySelectorAll('[data-tt-dots]')].map(d => ({ key: d.dataset.ttDots, text: d.textContent.replace(/\s+/g, ''), n: d.querySelectorAll('.tt-dot').length })));
       const c = svc.counts();
@@ -386,7 +613,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await openThread(page, 'tt-main');
       await page.waitForSelector('[data-tt-strip] .tt-h', { timeout: 15000 });
       const head = (await strip(page).locator('.tt-h').innerText()).replace(/\s+/g, ' ');
-      check(`${tag}: collapsed strip reads "7 asks" with the three tallies`, /^7 asks/.test(head), head);
+      check(`${tag}: collapsed strip reads "6 open" with the three tallies`, /^6 open/.test(head), head);
       check(`${tag}: strip is directly under the title, before the messages`, await page.evaluate(() => { const s = document.querySelector('[data-tt-strip]'), m = document.querySelector('.ch-msgs'); return !!s && !!m && !!(s.compareDocumentPosition(m) & Node.DOCUMENT_POSITION_FOLLOWING); }));
       check(`${tag}: panel hidden while collapsed`, !(await strip(page).locator('.tt-panel').isVisible()));
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-collapsed.png`) });
@@ -394,7 +621,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForSelector('.tt-panel:not([hidden])');
       const groups = await strip(page).locator('.tt-gh').allInnerTexts();
       check(`${tag}: expanded rows are grouped Your move / Running / Finished not seen`, JSON.stringify(groups.map(g => g.toLowerCase())) === JSON.stringify(['your move', 'running', 'finished · not seen']), groups);
-      check(`${tag}: one action per row (Looks good / Open / ✓ Seen)`, JSON.stringify(await strip(page).locator('.tt-btn').allInnerTexts()) === JSON.stringify(['Looks good', 'Open', '✓ Seen', '✓ Seen']), await strip(page).locator('.tt-btn').allInnerTexts());
+      check(`${tag}: amber actions are Open plus Dismiss; finished rows use Seen`, JSON.stringify(await strip(page).locator('.tt-btn').allInnerTexts()) === JSON.stringify(['Open', 'Dismiss', 'Open', 'Dismiss', '✓ Seen', '✓ Seen']), await strip(page).locator('.tt-btn').allInnerTexts());
       check(`${tag}: the 'N acknowledged' fold is there`, /1 acknowledged · show/.test(await strip(page).innerText()));
       check(`${tag}: panel is fully opaque`, await page.evaluate(() => { const c = getComputedStyle(document.querySelector('.tt-panel')); return !/rgba\([^)]*,\s*0(\.\d+)?\)|transparent/.test(c.backgroundColor) && c.backgroundImage !== 'none' || !/rgba?\(0, 0, 0, 0\)/.test(c.backgroundColor); }));
       await page.screenshot({ path: path.join(OUT, `${shell}-${skin}-expanded.png`) });
