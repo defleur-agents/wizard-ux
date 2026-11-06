@@ -1412,12 +1412,20 @@ window.WizCore.chats = function createChats(H) {
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
     const lastAt = LST.at || LST.cachedAt || 0, age = lastAt ? Date.now() - lastAt : 0, since = lastAt ? `last updated ${agoText(lastAt)}` : '';
     const spin = '<i class="ch-spin" aria-hidden="true"></i>';
-    const syncBar = (cls, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${inner}${extra}</div>`;
-    const sync = c.ptrState === 'busy' ? syncBar('', `${spin}<span>Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}</span>`)
-      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reachLabel('read'))}</span>`, troubleshoot)
-      : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
-      : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
-      : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
+    // One quiet row, never a pill pushing the list down (James, 7 Nov 2026): a status dot, the line (ellipsis when long;
+    // the whole line stays in the row's title) and a compact "Troubleshoot" text action at its right end, which opens
+    // the Troubleshooter exactly like every other data-chtroubleshoot control.
+    const dot = '<i class="ch-sync-dot" aria-hidden="true"></i>';
+    const act = '<button type="button" class="ch-sync-act" data-chtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button>';
+    // The text's title carries the whole line as plain text (its parts are already escaped); the visible labels stay
+    // literal markup so app-parity-gate sees them.
+    const syncBar = (cls, lead, inner, extra = '', title = inner) => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${title}">${inner}</span>${extra}</div>`;
+    const notUp = (cls, lead, rest) => syncBar(cls, lead, `<b>Not up to date</b>${rest}`, act, `Not up to date${rest}`);
+    const sync = c.ptrState === 'busy' ? syncBar('', spin, `Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}`)
+      : LST.error ? notUp('off', dot, ` · ${esc(reachLabel('read'))}${since ? ` · ${esc(since)}` : ''}`)
+      : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
+      : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
+      : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
     const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
