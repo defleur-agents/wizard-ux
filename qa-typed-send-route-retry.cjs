@@ -7,8 +7,8 @@ module.exports = async ({ boot, ok, sleep, sid, out }) => {
   const sessions = [{ id: sid, title: 'Synthetic typed-send recovery', source: 'wizard-mobile',
     model, provider: null, status: 'completed', message_count: 2,
     messages: [{ role: 'user', content: 'Synthetic prior question' }, { role: 'assistant', content: 'Synthetic prior answer' }] }];
-  const fixture = { // orb enables the existing completed-onboarding/thread-open setup, not a voice send.
-    orb: true, skin: 'nebula', sessions,
+  const fixture = { // Reuse the completed-onboarding/thread-open harness setup.
+    typedRoute: true, skin: 'nebula', sessions,
     agents: [{ id: 'hermes', label: 'Wizard', is_default: true, status: 'running', model: { model, provider } }],
     modelOptions: { model, provider, providers: [{ slug: provider, authenticated: true, is_current: true, models: [model, 'gpt-6-astra'] }] }
   };

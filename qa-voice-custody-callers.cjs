@@ -33,7 +33,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
     const body=JSON.parse(q.postData());state.calls ||= [];state.calls.push({key:q.headers()['idempotency-key'],body:q.postData()});state.posts.push(body);if(state.down)return json({error:'offline'},503);
     const key=q.headers()['idempotency-key'];if(!state.runs.has(key))state.runs.set(key,{run_id:'run-fixture-'+state.runs.size,status:'queued'});if(state.dropReceipt){state.dropReceipt=false;return r.abort('connectionreset');}return json(state.runs.get(key),202);
    }
-   if(fixture?.orb&&p==='/wizard/v1/setup')return json({first_run:false});
+   if((fixture?.orb||fixture?.typedRoute)&&p==='/wizard/v1/setup')return json({first_run:false});
    if(fixture?.orb&&p==='/wizard/hermes/v1/runs/orb-original-active-run'&&q.method()==='GET')return json({run_id:'orb-original-active-run',status:'running',runtime:{model,provider,model_lock:'accepted'}});
    if(fixture?.orb&&p.endsWith('/steer')&&q.method()==='POST'){
     state.steers||=[];state.steers.push({path:p,query:u.search,body:JSON.parse(q.postData())});
@@ -61,7 +61,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await ctx.addInitScript(({allFail,model,provider,fixture})=>{
    localStorage.setItem('wos.coached','true');localStorage.setItem('wos.voiceTipSeen','true');localStorage.setItem('wos.model.pref.v1',JSON.stringify({model,provider}));
    if(fixture&&!sessionStorage.getItem('dismissFixture')){sessionStorage.setItem('dismissFixture','1');localStorage.setItem('wos.skin',fixture.skin);}
-   if(fixture?.orb){localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.welcome.v1','done');}
+   if(fixture?.orb||fixture?.typedRoute){localStorage.setItem('wos.tour.v1','true');localStorage.setItem('wos.welcome.v1','done');}
    if(fixture?.orb&&fixture.layout)localStorage.setItem('wos.desktop-view.v1',fixture.layout);
    window.__fault={all:allFail};const put=IDBObjectStore.prototype.put,open=indexedDB.open.bind(indexedDB),set=Storage.prototype.setItem;
    IDBObjectStore.prototype.put=function(...args){if(__fault.all||__fault.idb)throw new DOMException('Injected device save failure','QuotaExceededError');return put.apply(this,args);};
@@ -72,10 +72,10 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
-  if(fixture?.orb)await p.evaluate(async()=>{await WosExperience.whenReady();await WosSkinHost.whenLayoutReady();await WosAgents.load();await WizLive.refreshAgents();});
+  if(fixture?.orb||fixture?.typedRoute)await p.evaluate(async()=>{await WosExperience.whenReady();await WosSkinHost.whenLayoutReady();await WosAgents.load();await WizLive.refreshAgents();});
   const wid=await p.evaluate(({sid,fixture})=>{const A=window.__wos||window.__wux;const existing=fixture&&Object.values(A.wins).find(w=>w.app==='chats');const w=existing||(A.openWin?A.openWin({app:'chats'}):null);const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');if(!fixture)A.chats.openChat(id,sid);if(window.__wos)A.goDesk(A.desks.findIndex(d=>d.wins.includes(id)));A.focusWin?.(id);return id;},{sid,fixture:!!fixture});
-  if(fixture?.orb){await p.evaluate(({wid,sid})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sid);A.focusWin?.(wid);}, {wid,sid});}
-  try{await p.waitForSelector(fixture&&!fixture.orb?`[data-chats="${wid}${desktop?'::list':''}"] .ch-focus-strip`:`[data-chats="${wid}"] textarea`);}catch(e){if(fixture){await p.screenshot({path:path.join(out,'boot-failure.png')});fs.writeFileSync(path.join(out,'boot-failure.json'),JSON.stringify(await p.evaluate(wid=>({wid,agents:WosAgents.list,ready:WosAgents.ready,wins:(window.__wos||window.__wux).wins,html:document.querySelector(`[data-chats="${wid}"]`)?.outerHTML}),wid),null,2));}throw e;}
+  if(fixture?.orb||fixture?.typedRoute){await p.evaluate(({wid,sid})=>{const A=window.__wos||window.__wux;A.chats.openChat(wid,sid);A.focusWin?.(wid);}, {wid,sid});}
+  try{await p.waitForSelector(fixture&&!fixture.orb&&!fixture.typedRoute?`[data-chats="${wid}${desktop?'::list':''}"] .ch-focus-strip`:`[data-chats="${wid}"] textarea`);}catch(e){if(fixture){await p.screenshot({path:path.join(out,'boot-failure.png')});fs.writeFileSync(path.join(out,'boot-failure.json'),JSON.stringify(await p.evaluate(wid=>({wid,agents:WosAgents.list,ready:WosAgents.ready,wins:(window.__wos||window.__wux).wins,html:document.querySelector(`[data-chats="${wid}"]`)?.outerHTML}),wid),null,2));}throw e;}
   const take=async()=>{await p.evaluate(()=>document.activeElement?.blur());await p.evaluate(()=>__wos.startVoice('auto'));await p.waitForFunction(()=>__wos.voice==='listen');await sleep(1100);await p.evaluate(()=>__wos.finishVoice());};
   const rows=()=>p.evaluate(()=>[...WosOutbox._items.values()].map(x=>({id:x.id,state:x.state,kind:x.kind,text:x.text,typed:x.typed,sealKey:x.sealKey,blob:x.audio?.size,files:x.files,sessionId:x.sessionId,model:x.model,provider:x.provider,durable:x.durable,steered:x.steered,runId:x.runId,steerRunId:x.steerRunId,storageError:x.storageError,nativeId:x.nativeId})));
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
