@@ -8,12 +8,12 @@ const cut = (source, from, to) => {
   const a = source.indexOf(from), b = source.indexOf(to, a);
   assert.ok(a >= 0 && b > a, from); return source.slice(a, b);
 };
-function fixture(desktopHost = true) {
+function fixture(desktopHost = true, afterAction = 'stay') {
   const w = { id: 'chat', app: 'chats', thread: 'same' }, state = { trail: [], readNav: 0 };
   const row = { id: 'same', status: 'ready', title: 'Synthetic conversation' }, listeners = {}, backs = [];
   const H = { keepThreadOpen: desktopHost, changed() {} };
   const context = { H, W: { chat: w }, CH: { chat: state }, CHATS: { isHosted: () => false, markVisibleThreadsSeen() {}, holdList: () => false, renderChatList() {}, loadThread() {} },
-    window: { addEventListener: (name, fn) => { listeners[name] = fn; } },
+    window: { WizConfig: { chatAfterAction: () => afterAction }, addEventListener: (name, fn) => { listeners[name] = fn; } },
     LIVE: { onChange: fn => { listeners.live = fn; }, markUnread: async () => true, archive: async () => true, restore: async () => true },
     PHONE: () => !desktopHost, hosted: new Map(), ch: () => state, owner: id => id, rowOf: () => row,
     ACT: { done: {}, file: {}, restore: {}, unread: {} }, vib() {}, closeRowSheet() {}, followUpActive: () => false,
@@ -23,6 +23,7 @@ function fixture(desktopHost = true) {
     ws: [{ wins: ['chat'] }], cur: 0, homeOpen: false, hudPaint() {}, document: { activeElement: null },
   };
   vm.createContext(context);
+  vm.runInContext(cut(core, '  const keepThreadOpen =', "  window.addEventListener('wos:boomerang-set'"), context);
   vm.runInContext(cut(core, '  function leaveAfterSend(', '\n  function ',), context);
   vm.runInContext(cut(core, '  async function threadAct(', '\n  /* Threads and alerts'), context);
   vm.runInContext(cut(core, "  window.addEventListener('wos:boomerang-set'", '  // A scheduled Snooze'), context);
@@ -38,28 +39,24 @@ test('Classic desktop keeps the same open thread through Ready → Working → R
     f.row.status = status; f.listeners.live(); assert.equal(f.w.thread, 'same', status);
   }
 });
-for (const a of ['done', 'file', 'unread', 'restore']) test(`desktop ${a} changes state without leaving the thread; phone retains its behaviour`, async () => {
-  for (const desktopHost of [true, false]) {
-    const f = fixture(desktopHost); await f.context.threadAct('chat', 'same', a);
-    assert.equal(f.w.thread, desktopHost || a === 'restore' ? 'same' : null);
-  }
+for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const a of ['done', 'file', 'unread', 'restore']) test(`${desktopHost ? 'desktop' : 'phone'} ${a}, preference ${after}`, async () => {
+  const f = fixture(desktopHost, after); await f.context.threadAct('chat', 'same', a);
+  assert.equal(f.w.thread, desktopHost || after === 'stay' || a === 'restore' ? 'same' : null);
 });
-for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${name} leaves desktop open but still closes phone`, () => {
-  for (const desktopHost of [true, false]) {
-    const f = fixture(desktopHost); f.listeners[name]({ detail: { session: 'same', label: 'Later' } });
-    assert.equal(f.w.thread, desktopHost ? 'same' : null);
-  }
+for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${desktopHost ? 'desktop' : 'phone'} ${name}, preference ${after}`, () => {
+  const f = fixture(desktopHost, after); f.listeners[name]({ detail: { session: 'same', label: 'Later' } });
+  assert.equal(f.w.thread, desktopHost || after === 'stay' ? 'same' : null);
 });
-test('phone reply still returns to the list and desktop hosted reply stays in place', () => {
-  const phone = fixture(false); phone.context.leaveAfterSend('chat', 'same', false);
+test('phone opt-in reply returns to the list and desktop hosted reply stays in place', () => {
+  const phone = fixture(false, 'list'); phone.context.leaveAfterSend('chat', 'same', false);
   assert.equal(phone.w.thread, null);
   const desktop = fixture(); desktop.context.hosted.set('chat', {});
   assert.equal(desktop.context.leaveAfterSend('chat', 'same', false), false);
   assert.equal(desktop.w.thread, 'same'); assert.equal(desktop.context.hosted.has('chat'), true);
 });
 
-for (const agent of ['', 'philosopher']) test(`desktop explicit unread survives real synchronous live emits (${agent || 'main'}) until navigation`, async () => {
-  const f = fixture(), c = f.context, storage = new Map(), puts = [];
+for (const desktopHost of [true, false]) for (const agent of ['', 'philosopher']) test(`${desktopHost ? 'desktop' : 'phone'} explicit unread survives real synchronous live emits (${agent || 'main'}) until navigation`, async () => {
+  const f = fixture(desktopHost), c = f.context, storage = new Map(), puts = [];
   Object.assign(c, { AbortSignal, navigator: {}, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k,v) => storage.set(k,v) },
     setInterval() {}, setTimeout() {}, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
     fetch: async (_url, init = {}) => { const state = init.body ? JSON.parse(init.body) : {}; puts.push(state); return {ok:true,json:async()=>({state})}; },

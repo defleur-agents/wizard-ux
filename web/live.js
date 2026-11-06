@@ -342,6 +342,7 @@
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
     workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.

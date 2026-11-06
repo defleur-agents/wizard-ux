@@ -207,6 +207,27 @@
       return true;
     }
   });
+  let savingChatAction = false;
+  register({ id: 'chat-after-action', page: 'chats', aliases: ['chat-after-action'],
+    html() {
+      const value = window.WizConfig?.chatAfterAction?.() || 'stay';
+      return `<div class="st-group"><h4>After actions on your phone</h4><p class="st-hint">After sending, archiving, snoozing or marking unread. Desktop chats stay open.</p><div role="radiogroup" aria-label="After actions on your phone">${[['stay', 'Stay on this chat'], ['list', 'Back to chats list']].map(([id, label]) => `<button type="button" class="st-row wz-row" data-chat-after="${id}" role="radio" aria-checked="${value === id}" tabindex="${value === id ? 0 : -1}"${savingChatAction ? ' disabled' : ''}><span class="st-tx"><b>${label}</b></span><span aria-hidden="true">${value === id ? '●' : '○'}</span></button>`).join('')}</div></div>`;
+    },
+    act(ctx, el) {
+      const button = el.closest('[data-chat-after]'); if (!button) return false;
+      if (savingChatAction) return true;
+      const value = button.dataset.chatAfter, hadFocus = document.activeElement === button;
+      savingChatAction = true;
+      const done = window.WizConfig.setChatAfterAction(value);
+      ctx.changed?.();
+      done.then(scope => ctx.toast?.('✓', scope === 'owner' ? 'Saved on your Wizard' : 'Saved on this device', 2200), e => ctx.toast?.('!', e.message, 3200)).finally(() => {
+        savingChatAction = false; ctx.changed?.();
+        if (hadFocus && document.activeElement === document.body) ctx.root?.querySelector(`[data-chat-after="${value}"]`)?.focus({ preventScroll: true });
+      });
+      return true;
+    },
+  });
+  window.addEventListener('wos:prefs', () => { for (const m of mounts) m.render(); });
   // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
     html() {
@@ -825,6 +846,13 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const choice = e.target.closest?.('[data-chat-after]');
+      if (choice && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        const choices = [...choice.closest('[role="radiogroup"]').querySelectorAll('[data-chat-after]')];
+        const at = choices.indexOf(choice), next = e.key === 'Home' ? 0 : e.key === 'End' ? choices.length - 1 : (at + (['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1) + choices.length) % choices.length;
+        choices[next].focus(); choices[next].click(); return;
+      }
       const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
       if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
