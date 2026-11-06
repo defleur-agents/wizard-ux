@@ -94,7 +94,7 @@ public final class Updater {
 
     private static JSONObject stateOf(String s) {
         JSONObject o = new JSONObject();
-        try { o.put("state", s).put("installed", BuildConfig.VERSION_NAME).put("installedCode", BuildConfig.VERSION_CODE); } catch (JSONException ignored) { }
+        try { o.put("state", s).put("installed", BuildConfig.VERSION_NAME).put("installedCode", BuildConfig.VERSION_CODE).put("meetingResumeAfterUpdate", true); } catch (JSONException ignored) { }
         return o;
     }
 
@@ -202,6 +202,10 @@ public final class Updater {
         boolean bad = r.sha256.equals(prefs(app).getString("rejected", ""));
         if (bad && !tapped && !ok) { set("error", "message", prefs(app).getString("rejectedWhy", "Update refused")); return; }
         boolean silent = silentPossible(app);
+        // Only an explicit install tap can interrupt a meeting; flush and journal it, never end it.
+        if (tapped && ok && app.getPackageManager().canRequestPackageInstalls()
+                && ai.wizards.os.mizel.MeetingRecorderService.live() != null)
+            ai.wizards.os.mizel.MeetingRecorderService.prepareForUpdate();
         UpdatePolicy.Hold hold = hold(app);
         UpdatePolicy.Step step = UpdatePolicy.next(newer, ok, unmetered(app), AppState.front(), hold, silent, tapped);
         Log.i(TAG, "step " + step + " (verified=" + ok + " front=" + AppState.front() + " silent=" + silent + " tapped=" + tapped + ")");
@@ -281,7 +285,8 @@ public final class Updater {
         else if (ai.wizards.os.MicOwner.SIDE.equals(holder)) alive = ai.wizards.os.assist.TakeRecovery.captureAlive();
         boolean take = ai.wizards.os.recording.RecorderService.active() != null
                 || ai.wizards.os.everywhere.EverywhereService.appIsRecording()
-                || ai.wizards.os.mizel.MeetingRecorderService.live() != null;
+                || (ai.wizards.os.mizel.MeetingRecorderService.live() != null
+                    && !ai.wizards.os.mizel.MeetingRecorderService.updatePending(c));
         // Debug-only deterministic emulator holds. No override can hide an actual take.
         if (BuildConfig.DEBUG) {
             File fixture = new File(c.getFilesDir(), "qa_update_hold.txt");

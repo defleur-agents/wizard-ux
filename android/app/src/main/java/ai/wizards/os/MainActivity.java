@@ -58,9 +58,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     /** The floating orb's Screen button (voice typing / screenshots not set up yet) opens the setup dialog. */
     public static final String ACTION_ACCESSIBILITY = "ai.wizards.os.action.ACCESSIBILITY";
     public static final String EXTRA_THREAD = "ai.wizards.os.extra.THREAD";
-    /** Food hands back to its canonical app id; the former intent action remains accepted. */
-    public static final String ACTION_FOOD = "ai.wizards.os.action.FOOD";
-    public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS"; // migration alias for installed callers
+    /** Usuals (re-ordering Grab food) hands back to Wizard OS on its panel after teaching or cancelling. */
+    public static final String ACTION_USUALS = "ai.wizards.os.action.USUALS";
     private static final int REQ_EVERYWHERE = 44;
     private static java.lang.ref.WeakReference<MainActivity> current = new java.lang.ref.WeakReference<>(null);
     private boolean everywhereSetup; // James is on Android's "Display over other apps" page
@@ -331,7 +330,27 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         handleBack(); // API < 33; never calls super, so Back can never finish the activity
     }
 
+    private volatile String incomingShareId;
+    public void beginIncomingShare(String id) {
+        incomingShareId = id;
+        web.setAlpha(0); // no Home flash on cold or warm incoming-share entry
+    }
+    public boolean ownsIncomingShare(String id) { return id != null && id.equals(incomingShareId); }
+    public void presentIncomingShare(String id) { if (ownsIncomingShare(id)) web.setAlpha(1); }
+    public void finishIncomingShare(String id) {
+        if (!ownsIncomingShare(id)) return;
+        incomingShareId = null;
+        device.cancelShareDelivery();
+        web.setAlpha(1);
+        moveTaskToBack(true); // return to the sending app; never finish/exit Wizard's root
+    }
+
     void handleBack() {
+        if (incomingShareId != null && web.getAlpha() == 0) {
+            String id = incomingShareId;
+            ai.wizards.os.share.ShareStore.get(this).delete(id);
+            finishIncomingShare(id); return;
+        }
         if (reach != null && reach.isOffline()) { retryReach(); return; } // Back on the connection screen: try again, stay
         web.evaluateJavascript("(window.__wosNativeBack ? window.__wosNativeBack() : 'nojs')", result -> {
             String r = result == null ? "" : result.replace("\"", "");
@@ -384,7 +403,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         String json = ACTION_SIDE_BUTTON.equals(act) ? "{\"action\":\"side-button\"}"
                 : ACTION_SETTINGS.equals(act) ? Handoff.settings(intent.getStringExtra(EXTRA_SETTINGS_FOCUS))
                 : ACTION_UNSENT.equals(act) ? "{\"action\":\"unsent\"}"
-                : (ACTION_FOOD.equals(act) || ACTION_USUALS.equals(act)) ? "{\"action\":\"food\"}"
+                : ACTION_USUALS.equals(act) ? "{\"action\":\"usuals\"}"
                 : ACTION_THREAD.equals(act) && intent.getStringExtra(EXTRA_THREAD) != null
                     ? "{\"action\":\"thread\",\"id\":" + Handoff.quote(intent.getStringExtra(EXTRA_THREAD)) + "}"
                 : Handoff.json(act, intent.getStringExtra(Intent.EXTRA_TEXT));
@@ -729,6 +748,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (web == null) return; // Connect owns the screen until an origin is set
         ScrollCaptureDiagnostics.resumed(this);
         web.onResume();
+        ai.wizards.os.mizel.MeetingRecorderService.resumeUpdateFromActivity(this);
         ai.wizards.os.share.ShareService.resumeIfPending(this); // shares left queued (force-stop, reboot) carry on
         ai.wizards.os.mizel.MeetingEventSync.kick(this); // meeting markers from the floating orb / side button still unsent
         resumed = true;
