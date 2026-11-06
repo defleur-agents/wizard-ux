@@ -167,6 +167,21 @@ test('repeated words: two places stay two, one place read twice stays one, a con
   assert.match(h.pill(), /1 not placed/);
 });
 
+test('James: three distinct captions close together all get placed, not just the first (synthetic text, not a real screenshot)', async () => {
+  const lines = ['สวัสดีครับ', 'วันนี้อากาศดี', 'ไปเดินเล่นกันไหม'], en = ['Hello', 'The weather is nice today', 'Shall we go for a walk?'];
+  // three boxes with moderate, imprecise overlap against the first (50 % and 75 %), as a loose model box or tight
+  // line spacing would give; none is the same claimed spot (that case stays covered by the test above).
+  const h = await harness();
+  h.identity();
+  h.pictured({ lines, boxes: [[0.10, 0.30, 0.70, 0.34], [0.10, 0.32, 0.70, 0.36], [0.10, 0.31, 0.70, 0.35]] });
+  h.translated({ items: en, from: 'Thai' });
+  assert.deepEqual(Array.from(h.st.picRows, q => q.bi >= 0), [true, true, true], 'no line is dropped just for sitting close to another');
+  assert.equal(h.painted().length, 3, 'all three are painted, none left to "not placed"');
+  assert.doesNotMatch(h.pill(), /not placed/);
+  const rects = h.painted().sort((a, b) => a.top - b.top).map(p => ({ top: p.top, bottom: p.top + p.height }));
+  for (let i = 1; i < rects.length; i++) assert.ok(rects[i - 1].bottom <= rects[i].top + 0.01, 'placed lines never cover each other: ' + JSON.stringify(rects));
+});
+
 test('either reply may land first: native English chrome later cannot corrupt Thai → English', async () => {
   const h = await harness();
   const nativeCall = h.next('translate');

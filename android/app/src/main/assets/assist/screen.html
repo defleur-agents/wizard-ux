@@ -926,7 +926,9 @@
   /**
    * The picture's lines that the app's own text doesn't already hold (same words, or the same place on screen), each
    * with its place or none; then translate them. Repeated words in two places stay two lines; read twice in one place,
-   * one. Two different readings claiming one place: the first keeps it.
+   * one. Two different readings claiming the very same place: the first keeps it. Two different lines whose boxes
+   * merely overlap (close line spacing, an imprecise model box) are never both dropped: each keeps its place and
+   * unstack() (called once every picture block is in, below) splits them apart, same as any other placed blocks.
    */
   function pictureTranslate(read) {
     const key = s => String(s).normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
@@ -939,7 +941,10 @@
       if (box && covered(box, own) >= .5) return; // the app's own text, translated above
       const same = (a, c) => covered(a, [c]) >= .5 || covered(c, [a]) >= .5;
       if (rows.some(q => q.k === k && (!q.box || !box || same(q.box, box)))) return;
-      if (box && rows.some(q => q.box && same(q.box, box))) box = null;
+      // a different line only loses its place when the two boxes are effectively the same single spot (one of them
+      // almost entirely inside the other): that is one place claimed twice, not two real neighbouring lines.
+      const samePlace = (a, c) => covered(a, [c]) >= .9 || covered(c, [a]) >= .9;
+      if (box && rows.some(q => q.box && samePlace(q.box, box))) box = null;
       rows.push({ t, k, box });
     });
     if (!rows.length) { st.pictureState = 'done'; st.picRows = []; st.tr = st.tr || {}; pillDone(); syncSheet(); return; }
