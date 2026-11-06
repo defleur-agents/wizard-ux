@@ -17,6 +17,7 @@ async function run(){
    const {c}=await closed.boot(phone,async c=>{
     c.on('page',p=>{p.on('pageerror',e=>report.errors.push({phone,type:'pageerror',message:e.message}));p.on('console',m=>{if(m.type()==='error')report.errors.push({phone,type:'console',message:m.text()});});p.on('framenavigated',f=>{if(f===p.mainFrame())(report.navigations??=[]).push({phone,url:f.url()});});});
     await c.addInitScript(phone=>{if(window!==top)return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
+    await c.route('http://wizard-qa.invalid/wizard/v1/apps',r=>r.fulfill({json:{apps:[{id:'messenger',name:'Messenger',url:'/titlebar-fixture/',source:'apps.json',type:'view',status:'running'}]}}));
     await c.route('http://wizard-qa.invalid/titlebar-fixture/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:fixture}));
     await c.route('http://wizard-qa.invalid/titlebar-fixture.js',r=>r.fulfill({contentType:'text/javascript; charset=utf-8',body:appJS}));
     await c.route('http://wizard-qa.invalid/wizard-os-home/store-data/router/v1/needs/messenger',r=>r.fulfill({json:{app_id:'messenger',models:[],services:[],ready_to_open:true}}));
@@ -27,7 +28,8 @@ async function run(){
     report.phase='fixture-boot-'+(phone?'phone':'desktop');
     await p.waitForFunction(()=>window.WosExperience && document.documentElement.dataset.aiApps==='on');
     await p.evaluate(()=>WosExperience.whenReady());
-    const opened=await p.evaluate(phone=>{const reg=WizCore.apps(phone?'mobile':'desktop');const app={id:'messenger',name:'Messenger',kind:'wizard',url:'/titlebar-fixture/'};const old=reg.APPS.find(a=>a.id===app.id);if(old)Object.assign(old,app);else reg.APPS.push(app);return phone?!!__wos.openApp(reg.APPS.find(a=>a.id===app.id)):__wux.openApp(app.id);},phone);
+    await p.waitForFunction(phone=>WizCore.apps(phone?'mobile':'desktop').APPS.some(a=>a.id==='messenger'&&a.url==='/titlebar-fixture/'),phone);
+    const opened=await p.evaluate(phone=>{const app=WizCore.apps(phone?'mobile':'desktop').APPS.find(a=>a.id==='messenger');return phone?!!__wos.openApp(app):__wux.openApp(app.id);},phone);
     assert.equal(opened,true,'real shell openApp admitted synthetic Messenger (desktop takes ID; phone takes app object)');
     await p.waitForFunction(()=>document.querySelector('iframe[src*="/titlebar-fixture/"]'));
     const f=await (async()=>{await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.releaseTools));return p.frames().find(f=>f.url().includes('/titlebar-fixture/'));})();assert(f);
