@@ -498,8 +498,8 @@
     }
     if (a.url) {
       const ex = !opts.fresh && findWin(w => w.app === 'frame' && w.appId === a.id);
-      if (ex) { focusWin(ex.id); return true; }
-      newWin({ app: 'frame', appId: a.id }, opts); return true;
+      if (ex) { if (opts.routeUrl) { ex.url = opts.routeUrl; save(); const frame = winEl(ex.id)?.querySelector('iframe'); if (frame) frame.src = opts.routeUrl; } focusWin(ex.id); return true; }
+      newWin({ app: 'frame', appId: a.id, ...(opts.routeUrl ? { url: opts.routeUrl } : {}) }, opts); return true;
     }
     if (a.href) { window.open(a.href, '_blank', 'noopener'); return true; }
     return false;

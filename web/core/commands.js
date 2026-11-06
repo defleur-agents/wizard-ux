@@ -43,6 +43,22 @@
     { const cv = chatsVoice(t, snap || sendSnap(), kind); if (cv) return cv; }
     { const c=window.WosAppVoice?.parse('beforeNames',t,context); if(c) return c; }
     if (/^(show |open )?(my )?(inbox|notifications)$/.test(explicit)) return { action: 'open_view', view: 'chats' };
+    // A declared first word opens an app route. No app gets to hear or claim speech.
+    // Preserve strong shared spells above (notably "music search …"). Registry order
+    // resolves duplicate words, just like app-name aliases.
+    if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') {
+      const spoken = String(window.WizConfig.stripAddress(t) || '').trim().match(/^([^\s.,!?;:]+)[.,!?;:]?(?:\s+([\s\S]*))?$/u);
+      if (spoken) for (const app of Object.values(APP)) for (const route of app.voice_routes || []) {
+        if (!Array.isArray(route.words) || !route.words.some(w => typeof w === 'string' && w.toLowerCase() === spoken[1].toLowerCase())) continue;
+        try {
+          if (typeof route.open !== 'string' || !/^(?:\?|\/(?!\/))/.test(route.open) || /[\x00-\x1f\x7f\\]/.test(route.open)) continue;
+          const base = new URL(app.url, location.origin), url = new URL(route.open, base);
+          if (base.origin !== location.origin || url.origin !== base.origin || !url.pathname.startsWith(base.pathname.endsWith('/') ? base.pathname : base.pathname + '/')) continue;
+          if (spoken[2] && /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(route.rest_param)) url.searchParams.set(route.rest_param, spoken[2].trim());
+          return { action: 'open_app_route', app: app.id, url: url.pathname + url.search + url.hash };
+        } catch (_) {}
+      }
+    }
     // A bare app name opens that app, no "open" needed (James, 12 Oct: "If I say the name of an app, it should just
     // open that app"). Held: anywhere, even over an app or a thread. Taps never enter this grammar.
     // Exact names and aliases only (appByName), never a fuzzy guess.
@@ -78,6 +94,7 @@
    const a = c.action;
    const appResult=window.WosAppVoice?.execute(c,text,H);
    if (appResult != null) return appResult;
+   if (a === 'open_app_route') { const app = H.findApp(c.app); return app ? !!H.openApp(app, { routeUrl: c.url }) : false; }
    if (a === 'search' && c.query) return H.search(c.query, c.tab);
    if (a === 'quick_search') return H.search(c.query, c.tab);
    if (a === 'chats_focus' || a === 'chats_filter' || a === 'chats_search') {
@@ -98,7 +115,7 @@
  // These handlers finish synchronous shell navigation before returning. Music,
  // purchases, searches and app voice handoffs may only acknowledge acceptance.
  function completedLocally(c, ok) {
-   return !!ok && !c?.then_agent && ['open_app','open','launch','app','open_view','view','show',
+   return !!ok && !c?.then_agent && ['open_app_route','open_app','open','launch','app','open_view','view','show',
      'chats_focus','chats_filter','chats_search','desk','clear_desk','close_window','fullscreen','move_window'].includes(c?.action);
  }
  window.WosCommands = { create, execute, completedLocally, isMessageTake };

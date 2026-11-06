@@ -1239,7 +1239,7 @@
       placeApp(w => w.app === 'frame' && w.appId === a.id && w.from, { app: 'frame', appId: a.id, from: opts.from }, {}, w => { w.from = opts.from; });
       return true;
     }
-    if (a.kind === 'wizard' && a.url) { placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id }, opts); return true; }
+    if (a.kind === 'wizard' && a.url) { placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id, ...(extra.routeUrl ? { url: extra.routeUrl } : {}) }, opts, extra.routeUrl ? (w, t) => { w.url = extra.routeUrl; renderDesk(t); } : null); return true; }
     const q = extra.query || '';
     placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
@@ -3404,7 +3404,7 @@
     return window.WosCommands.execute(c, text, {
       search: openSearch, settings: openSettings,
       focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, chatList: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
-      findApp, openApp: app => openApp(app, {}, opts), musicDone: opts.musicDone, layout: c => {
+      findApp, openApp: (app, extra) => openApp(app, extra || {}, opts), musicDone: opts.musicDone, layout: c => {
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'desk') {
       const to = c.to; closeSheets();
