@@ -37,7 +37,7 @@
   const LAYOUT_KEY = 'wos.layout';
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
-  const escapeSurfaces = new Set(), chatListOwners = new Set();
+  const escapeSurfaces = new Set(), chatListOwners = new Set(), chatArchiveOrders = new Map();
   let layoutId = 'classic', layoutRec = null, layoutSeq = 0, layoutHolder = null; // layoutHolder: the tweak wearing it
   let layoutFailed = null;          // a chat-owning layout whose code could not load: Classic's list comes back (never a blank desktop)
   /* Who draws the chat list. True from the first frame for a layout that owns chats (decided synchronously at boot, before
@@ -903,6 +903,14 @@
           const off = () => { chatListOwners.delete(a); a.offs.delete(off); shell.ownsChatList(chatsClaimed()); };
           a.offs.add(off); return off;
         },
+        // Archive alone advances within the section the layout actually drew. Return its ordered
+        // chat IDs for this row (empty = no neighbour), not a separately sorted session list.
+        archiveOrder(fn) {
+          if (!live() || typeof fn !== 'function') return () => {};
+          chatArchiveOrders.set(a, guard(a, 'sessions.archiveOrder', fn));
+          const off = () => { chatArchiveOrders.delete(a); a.offs.delete(off); };
+          a.offs.add(off); return off;
+        },
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
@@ -1704,6 +1712,13 @@
     setStandardLayout(id) { standardLayout = layoutOf(id) ? id : 'classic'; if (layoutId !== standardLayout) setLayout(standardLayout, false); return standardLayout; },
     get layout() { return layoutId; },
     chatsClaimed,
+    chatArchiveOrder(sid) {
+      for (const [a, fn] of chatArchiveOrders) if (!a.dead && chatListOwners.has(a)) {
+        const ids = fn(sid);
+        if (Array.isArray(ids)) return ids.filter(id => typeof id === 'string' && !id.startsWith(NOTE_ID));
+      }
+      return null;
+    },
     /* desktop.js closeWin: a layout without desk numbers wants Home when the last window of a desk closes. */
     get emptyHome() { return [...emptyHomes].some(l => !l.dead); },
     /* app.js / desktop.js / bound-view.js: an open the shell starts by itself (apps.routeOpens). A holder that placed it
