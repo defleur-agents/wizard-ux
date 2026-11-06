@@ -549,7 +549,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       },String(latest.id));
       await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
       await page.waitForFunction(()=>!/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
-      check(`autoseen/${profile}/${skin}: reading long tail acknowledges below old 40-percent threshold`,tail.height>tail.viewport && tail.visible>=40 && tail.visible<.4*tail.viewport && svc.view().every(i=>i.seen),tail);
+      check(`autoseen/${profile}/${skin}: reading long tail acknowledges below old 40-percent threshold`,tail.height>tail.viewport && tail.visible>=40 && tail.visible<.4*tail.viewport && svc.view().every(i=>i.seen),{tail,view:svc.view().map(i=>[i.id,i.seen,i.updated_at]),seenWrites:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).map(w=>w.b.items)});
       await page.screenshot({path:path.join(OUT,`running-long-read-${profile}-${skin}.png`)});
       await ctx.close();
       const off = await mount(browser, svc, { shell, skin, tweaks: [], docScroll: profile === 'phone-doc' });
