@@ -64,7 +64,7 @@ const LINES = [
       window.ScreenNative = {
         close: () => rec('close'), copy: t => rec('copy', t), search: (q, f) => rec('search', q), sheet: f => rec('sheet', f),
         closeSearch: () => rec('closeSearch'), ask: t => rec('ask', t), shot: () => jpeg, log: s => rec('log', s),
-        picture: id => rec('picture', id),
+        picture: id => { rec('picture', id); setTimeout(() => window.S.pictured(id, { lines: ['ผัดกะเพราหมูสับไข่ดาว', 'ส่งฟรีเมื่อสั่งครบ 200 บาท', 'Order number 4471 ready at counter', 'Fermé le lundi'] }), 25); },
         translate: (id, items, to) => {
           rec('translate', JSON.parse(items), to);
           const its = JSON.parse(items);
