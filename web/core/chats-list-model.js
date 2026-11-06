@@ -104,7 +104,15 @@ function executionStatus(status, runId, runStatus) {
 /** List lifecycle only: real run/queue or background helper, never tracker items.
  * Runtime controls must still use their own run predicate, not helper liveness. */
 function isListWorking(s) {
-  return !!s && !s.archived && (!!s.background || (['submitting', 'queued', 'running', 'stopping'].includes(s.status) && !(s.status === 'queued' && s.queueReason === 'provider_access')));
+  if (!s || s.archived) return false;
+  if (s.background) return true;
+  const working = ['submitting', 'queued', 'running', 'stopping'];
+  const liveRun = !!s.runId && working.includes(s.lastRunStatus);
+  const helper = s.helperStatus;
+  // A helper-wait status is not execution evidence once every helper has stopped.
+  if (s.waitingOn === 'helper' && !liveRun && helper?.pending === 0 && helper.phase !== 'running'
+      && (helper.phase === 'stalled' || helper.failed === true)) return false;
+  return working.includes(s.status) && !(s.status === 'queued' && s.queueReason === 'provider_access');
 }
 /** Project raw sessions once, with the shell's read/actions/attention facts. */
 function sessionRow(s, kind, { live, chats, pins } = {}) {
