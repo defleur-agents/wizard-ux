@@ -38,10 +38,22 @@ test('Classic desktop keeps the same open thread through Ready → Working → R
     f.row.status = status; f.listeners.live(); assert.equal(f.w.thread, 'same', status);
   }
 });
-for (const a of ['done', 'file', 'unread', 'restore']) test(`desktop ${a} changes state without leaving the thread; phone retains its behaviour`, async () => {
+// Archive is the exception (James, 6 Nov 2026): archiving the open thread moves on to the next one in the list,
+// on desktop too; with no other thread left it goes back to the list. tests/archive-next-thread.test.mjs covers order.
+for (const a of ['file', 'unread', 'restore']) test(`desktop ${a} changes state without leaving the thread; phone retains its behaviour`, async () => {
   for (const desktopHost of [true, false]) {
     const f = fixture(desktopHost); await f.context.threadAct('chat', 'same', a);
     assert.equal(f.w.thread, desktopHost || a === 'restore' ? 'same' : null);
+  }
+});
+test('archiving the only open thread leaves it on desktop and phone (no thread stays open after Archive)', async () => {
+  for (const desktopHost of [true, false]) {
+    const f = fixture(desktopHost), opened = [];
+    Object.assign(f.context, { elOf: () => null, openChat: (_w, id) => opened.push(id), chatsBack: x => { x.thread = null; } });
+    vm.runInContext(cut(core, '  function archiveListOrder(', '\n  async function threadAct('), f.context);
+    await f.context.threadAct('chat', 'same', 'done');
+    assert.equal(f.w.thread, null, desktopHost ? 'desktop' : 'phone');
+    assert.deepEqual(opened, []);
   }
 });
 for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${name} leaves desktop open but still closes phone`, () => {
