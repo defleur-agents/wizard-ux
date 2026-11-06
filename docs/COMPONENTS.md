@@ -1,6 +1,6 @@
 # Shared components
 
-Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push share recency. `WosSkinHost` boots default AI apps (`wos.desktop-view.v1`, `html[data-layout]`, `data-chats-owner`, `chatsClaimed()`), retains owner layouts after callback faults with independent render hooks, and requests shared Chats recovery on import/setup failure; sessions.ownList excludes legacy lists. `WizAppServices.back` retains root apps; unowned frames yield Back.
+Back: `WizEscapeBack`/`WosBack`, `WizChatsHost.registerBack`/layout back.push (recency), `WizAppServices.back` (retain root; unowned yield). `WosSkinHost`: default AI apps; guarded render parts; shared Chats recovery, never Classic. sessions.ownList excludes legacy.
 
 [Contracts](component-contract-details.md).
 
