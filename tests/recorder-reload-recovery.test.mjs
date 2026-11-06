@@ -453,3 +453,22 @@ test('steady Android meeting reloads live despite phone-storage custody doubt',(
   assert.equal(capture({active,W,recoveryError:new Error('x'),memoryTakes:new Map([['t',{session:{row}}]])}).reloadCheck().safe,false);
   assert.equal(capture({active,W:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
 });
+
+// James, 6 Nov 2026 (second report): after a reload the meeting keeps recording natively but this page may not own
+// it (phone storage broken, stale device flag). Reload must still be allowed; page-held audio still blocks.
+test('Android meeting port: reload allowed when only stored-take doubt blocks',()=>{
+  const W={wizardMizelPort:{}};
+  for(const o of [{recoveryError:new Error('storage timed out')},{ownershipLoaded:false},{unknownMeetingActive:true},{recoveryLease:{},recoveryError:new Error('storage timed out')}]){
+    const c=capture({W,configuredNative:null,...o}).reloadCheck();assert.equal(c.safe,true);
+  }
+  assert.equal(capture({W,configuredNative:null,memoryTakes:new Map([['t',{session:{row:{}}}]])}).reloadCheck().safe,false);
+  assert.equal(capture({W,configuredNative:null,preparations:new Map([['p',{}]])}).reloadCheck().safe,false);
+  assert.equal(capture({W,configuredNative:null,active:{row:{id:'b',appId:'x',kind:'voice'},phase:'recording',engine:{}}}).reloadCheck().safe,false);
+  assert.equal(capture({W:{},configuredNative:null,recoveryLease:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({configuredNative:null,W:{...W,WizardOSDevice:{recActive:()=>'{"id":"v"}'}}}).reloadCheck().reason,'device_recording');
+});
+test('native-meeting plan keeps the recording app frame even without a stored row',()=>{
+  const f=service({safe:true,keeps:null,nativeMeeting:true});f.facade.update.hold('Mizel recording');
+  const p=f.plan();assert.equal(p.ok,true);assert.equal(p.keeps.appId,'mizel');
+  const g=service({safe:true,keeps:null});g.facade.update.hold('Mizel recording');assert.equal(g.plan().ok,false);
+});

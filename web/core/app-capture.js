@@ -1275,7 +1275,20 @@
         s.finishPromise || s.error || s.engineDetached || s.interrupted || s.discard) return false;
       return ![...recoveryLive].map(id => ownedRows.get(id)).some(r => r && r.id !== s.row.id && !isMeeting(r));
     }
+    // James, 6 Nov 2026 ("make reloads work live"): with the Android meeting port, the meeting service records
+    // and uploads on its own through a reload, and phone storage / native takes survive a reload by definition.
+    // Only audio held by this page (a starting take, page-memory takes, a browser engine, a mic loan) can be lost,
+    // so custody doubt about stored takes never forces the owner to stop a meeting.
+    const androidLive = () => {
+      if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !W.wizardMizelPort || preparations.size || memoryTakes.size) return null;
+      if (active && !steadyLiveMeeting()) return null;
+      const r = active?.row?.native === 'wizard-meetings' ? active.row :
+        [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
+      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : null,
+        recheck: true, durable: false, nativeMeeting: true };
+    };
     const no = reason => {
+      if (['capture_custody_uncertain', 'native_owner_uncertain'].includes(reason)) { const ok = androidLive(); if (ok) return ok; }
       const row = active?.row || [...memoryTakes.values()][0]?.session?.row || [...recoveryLive].map(id => ownedRows.get(id)).find(Boolean) || [...ownedRows.values()].find(r => r.status !== 'pending');
       return { safe: false, reason, keeps: null, appId: row?.appId || null, startedAt: row?.startedAt || null, recheck: !active && preparations.size === 0 };
     };
