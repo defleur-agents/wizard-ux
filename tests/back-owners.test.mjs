@@ -57,6 +57,7 @@ function appFocusFixture({paneOn=false,appFocused=true,docked=false}={}) {
  f.c.docked=docked;f.c.closeChat=()=>f.hits.push('close-chat');
  f.c.api={back:{surface:fn=>{f.w.WosSkinHost={escapeSurface:fn};}},apps:{back:id=>f.hits.push('layout-app:'+id)}};
  f.c.escStep=()=>{f.hits.push('focused-app-fallback');return 'hosted';};
+ f.c.panes={get:()=>({mode:'tiled',focus:appFocused?'app':'chats'}),set(){}};f.c.windowMode=()=>f.hits.push('window-mode');
  const layout=read('layouts/ai-apps/desktop.js'),start=layout.indexOf('  api.back.surface?.(() => {');
  vm.runInContext(layout.slice(start,layout.indexOf('  /* round 18 item 3b',start)),f.c);return f;
 }
