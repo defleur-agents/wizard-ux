@@ -95,7 +95,9 @@ jobs:
         if: always()
         with:
           name: desktop-escape-back-evidence
-          path: escape-back-evidence/
+          path: |
+            escape-back-evidence/
+            archive-flash-evidence/
   opaque-overlays:
     runs-on: ubuntu-latest
     timeout-minutes: 10
