@@ -809,7 +809,8 @@
       e.style.whiteSpace = 'nowrap';
       if (e.scrollWidth > e.clientWidth + 1) e.style.width = Math.min(maxW, e.scrollWidth + 6) + 'px';
       e.style.whiteSpace = '';
-      const floor = Math.max(8, a.f * .8);
+      // A picture line has the next picture line right under it: it stays inside its own letters' box, smaller if it must.
+      const floor = b.pic ? 8 : Math.max(8, a.f * .8);
       while (f > floor && (e.scrollHeight > e.clientHeight + 1 || e.scrollWidth > e.clientWidth + 1)) { f -= .5; e.style.fontSize = f + 'px'; }
       if (e.scrollHeight > e.clientHeight + 1) { e.style.height = 'auto'; e.style.minHeight = a.h + 'px'; }
     }
@@ -880,6 +881,19 @@
     const unit = b => Array.isArray(b) && b.length === 4 && b.every(v => typeof v === 'number' && isFinite(v) && v >= 0 && v <= 1) && b[2] > b[0] && b[3] > b[1] ? b : null;
     const ok = Array.isArray(r.boxes) && r.boxes.length === r.lines.length; // a list that doesn't match line for line says nothing
     return { lines: r.lines, boxes: r.lines.map((_, i) => ok ? unit(r.boxes[i]) : null) };
+  }
+  /**
+   * Placed picture lines never cover each other: two boxes closer than textArea's 1 px paint margins (or overlapping)
+   * are split in the middle, so each painted line keeps its own area.
+   */
+  function unstack(bs) {
+    const s = [...bs].sort((p, q) => p.y - q.y);
+    for (let i = 0; i < s.length; i++) for (let j = i + 1; j < s.length; j++) {
+      const u = s[i], d = s[j], gap = d.y - (u.y + u.h);
+      if (gap >= 2 || Math.min(u.x + u.w, d.x + d.w) <= Math.max(u.x, d.x)) continue;
+      const mid = (u.y + u.h + d.y) / 2, bottom = d.y + d.h;
+      u.h = Math.max(4, mid - 1 - u.y); d.y = mid + 1; d.h = Math.max(4, bottom - d.y);
+    }
   }
   /** How much of box b the rects cover, 0..1. */
   function covered(b, rs) {
@@ -1066,6 +1080,7 @@
           if (q.box) { bi = st.blocks.length; st.blocks.push({ i: bi, pic: true, t: q.t, ...q.box, wi: [] }); st.tr[bi] = t; }
           st.picRows.push({ t: q.t, tr: t, bi });
         }
+        unstack(st.blocks.filter(b => b.pic));
         st.pictureState = 'done'; st.picFrom = st.picRows.length ? r.from || '' : ''; st.trFrom = sourceLangs();
         paint();
         $('#orig').hidden = !Object.keys(st.tr).length;
