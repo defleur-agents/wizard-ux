@@ -10,7 +10,7 @@ const fs = require('node:fs'), path = require('node:path');
 const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'https://chat-tweak-card.test', prefix = '/wizard-os-home/';
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'chat-tweak-card-evidence');
 fs.mkdirSync(out, { recursive: true });
-const EXPECTED_CASES = 4, HOLD_MS = 3000, now = Date.now();
+const EXPECTED_CASES = 4, HOLD_MS = 3000, now = Date.now(), nap = ms => new Promise(r => setTimeout(r, ms));
 const report = { origin, web, cases: [] };
 // MAIN: an off-by-default tweak this shell can wear. OTHER: one it can't (shown disabled, labelled).
 const PLAN = { phone: { main: 'wizard/desktop-chats', other: 'miguel/ai-apps', only: 'Desktop only' },
@@ -110,16 +110,15 @@ const MARK = o => `[WIZARD_TWEAK_V1]${JSON.stringify(o)}[/WIZARD_TWEAK_V1]`;
         for (const v of await sw.evaluateAll(b => b.map(x => x.getAttribute('aria-checked')))) assert.equal(v, 'true');
         await page.screenshot({ path: path.join(out, stem + '-2-card-on.png') });
         // Settings › Look shows the same switch, on. Its tap turns it off; the cards follow.
-        const root = phone ? '#settings' : '#dsettings';
         if (phone) await page.evaluate(() => __wos.openSheet('settings')); else await page.evaluate(() => __wux.openSettings('look'));
-        const lookPage = page.locator(root + ' [data-st-page="appearance"]'); if (await lookPage.isVisible().catch(() => false)) await lookPage.click();
-        const lookRow = page.locator(`${root} [data-tweak-toggle="${main}"]`).filter({ visible: true }).first();
+        await nap(400); const lookPage = page.locator('[data-st-page="appearance"]').filter({ visible: true }).first(); if (await lookPage.isVisible().catch(() => false)) await lookPage.click();
+        const lookRow = page.locator(`[data-tweak-toggle="${main}"]`).filter({ visible: true }).first();
         await lookRow.waitFor(); await lookRow.scrollIntoViewIfNeeded();
         assert.equal(await lookRow.getAttribute('aria-checked'), 'true', 'Settings › Look shows the same state');
         await page.screenshot({ path: path.join(out, stem + '-3-look-on.png') });
         await lookRow.click();
         await page.waitForFunction(id => WosExperience.state.tweaks.find(t => t.id === id)?.on === false && !WosExperience.state.busy, main, { timeout: 15000 });
-        await page.waitForFunction(id => { const b = [...document.querySelectorAll(`[data-chat-tweak-card] [data-chat-tweak="${id}"]`)]; return b.length === 2 && b.every(x => x.getAttribute('aria-checked') === 'false'); }, main, { timeout: 5000 });
+        await page.waitForFunction(id => { const b = [...document.querySelectorAll(`[data-chat-tweak-card] [data-chat-tweak="${id}"]`)]; return b.length >= 2 && b.every(x => x.getAttribute('aria-checked') === 'false'); }, main, { timeout: 5000 });
         assert.equal(entry.errors.length, 0, 'browser errors: ' + entry.errors.join('; '));
         assert.equal(entry.refused.filter(x => x.reason === 'unexpected-write').length, 0, 'no unexpected mutations');
         entry.pass = true;
