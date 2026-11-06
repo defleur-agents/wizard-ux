@@ -38,10 +38,33 @@ function blk(t, x, y, w, h, extra = {}) {
 }
 const CHROME = [blk('Saved Messages', 90, 40, 160, 20), blk('today at 17:57', 250, 700, 90, 14)];
 
-async function harness({ blocks = CHROME, shot = true, few = false, mode = 'translate' } = {}) {
+/**
+ * A DOM element with a crude text layout (NOT a browser): about 0.55 em per character, greedy word wrap, line-height
+ * 1.12, the .pt 2 px side padding; height 'auto' grows to the content. Enough to see whether text fits its box.
+ */
+function laidOut() {
+  const e = element(), st = e.style, f = () => parseFloat(st.fontSize) || 16, n = v => parseFloat(v) || 0;
+  const words = () => String(e.textContent).split(' '), wpx = w => w.length * 0.55 * f() + 4;
+  const lines = () => {
+    if (st.whiteSpace === 'nowrap') return 1;
+    let k = 1, cur = 0; const room = n(st.width) - 4;
+    for (const w of words()) { const ww = w.length * 0.55 * f(), add = cur ? 0.55 * f() + ww : ww; if (cur && cur + add > room) { k++; cur = ww; } else cur += add; }
+    return k;
+  };
+  Object.defineProperties(e, {
+    clientWidth: { get: () => n(st.width) },
+    scrollWidth: { get: () => st.whiteSpace === 'nowrap' ? wpx(e.textContent) : Math.max(n(st.width), ...words().map(wpx)) },
+    scrollHeight: { get: () => lines() * 1.12 * f() },
+    clientHeight: { get: () => st.height === 'auto' ? Math.max(n(st.minHeight), lines() * 1.12 * f()) : n(st.height) },
+  });
+  e.getBoundingClientRect = () => ({ left: n(st.left), top: n(st.top), right: n(st.left) + e.clientWidth, bottom: n(st.top) + e.clientHeight, width: e.clientWidth, height: e.clientHeight });
+  return e;
+}
+
+async function harness({ blocks = CHROME, shot = true, few = false, mode = 'translate', make = element } = {}) {
   const nodes = new Map(), calls = [];
   const node = s => { if (!nodes.has(s)) nodes.set(s, element()); return nodes.get(s); };
-  const context = { document: { querySelector: node, querySelectorAll: () => [], createElement: element, body: element(), documentElement: element(), addEventListener() {} },
+  const context = { document: { querySelector: node, querySelectorAll: () => [], createElement: make, body: element(), documentElement: element(), addEventListener() {} },
     localStorage: { getItem() { return null; }, setItem() {} }, setTimeout: () => 1, clearTimeout() {}, innerWidth: 360, innerHeight: 780, devicePixelRatio: DPR,
     getSelection: () => '', performance: { now: () => 0 }, Image: function () {},
     ScreenNative: { translate: (id, items, to) => calls.push({ kind: 'translate', id, items: JSON.parse(items), to }), picture: id => calls.push({ kind: 'picture', id }),
@@ -331,6 +354,24 @@ test('sparse combining marks above and below a picture line (like ้ and ู) s
     if (cx < p.left || cx > p.left + p.width || cy < p.top || cy > p.top + p.height) uncovered.push([x, y]);
   }
   assert.equal(uncovered.length, 0, 'uncovered ink px (first): ' + JSON.stringify(uncovered.slice(0, 4)) + ' painted ' + JSON.stringify(p));
+});
+
+test('two tight caption lines: each wrapped translation stays inside its own box, neither covers the other', async () => {
+  // Two picture lines a few px apart (the second even overlapping the first), on the right of a 360 px screen, so a
+  // longer English line can only take the room to the screen edge and must wrap.
+  const h = await harness({ make: laidOut });
+  h.identity();
+  const lines = ['โอเค แล้วที่นั่น', 'มีสาวๆ ไหม?'], en = ['Okay, and over there?', 'Are there any girls?'];
+  h.pictured({ lines, boxes: [[0.55, 0.47, 0.9, 0.506], [0.55, 0.503, 0.9, 0.54]] });
+  h.translated({ items: en, from: 'Thai' });
+  const els = h.node('#paint').children;
+  assert.deepEqual(els.map(e => e.textContent), en);
+  for (const e of els) {
+    assert.ok(e.scrollHeight <= e.clientHeight + 1, 'text fits its own box: ' + JSON.stringify({ t: e.textContent, sh: e.scrollHeight, ch: e.clientHeight, f: e.style.fontSize, height: e.style.height }));
+    assert.notEqual(e.style.height, 'auto', 'the box does not grow over the next line');
+  }
+  const [a, b] = els.map(e => e.getBoundingClientRect());
+  assert.ok(a.bottom <= b.top + 0.01, 'painted lines do not overlap: ' + JSON.stringify([a, b]));
 });
 
 test('Appearance v1 roles with dark standalone fallbacks; text overlays are opaque', () => {
