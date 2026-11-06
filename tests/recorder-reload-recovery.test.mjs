@@ -480,7 +480,7 @@ test('broken phone storage: pending hands Recorder the live Android meeting so i
   const c={validate(){},memoryTakes:new Map(),active:null,ready:Promise.resolve(),
     recover:async()=>{throw Object.assign(Error('storage timed out'),{code:'recovery_timeout'});},rows:async()=>{throw Error('broken');},
     recoveryError:null,unknownMeetingActive:false,ownershipLoaded:false,ownedRows:new Map(),recoveryLive:new Set(),changed(){},
-    meetingBridge:()=>({status:async()=>st}),bounded:p=>p,Blob,Date,
+    meetingBridge:()=>({status:async()=>st}),bounded:p=>p,Blob,Date,MEETING_APP:'mizel',
     fail:(code,message)=>Object.assign(Error(message),{code})};
   extract('  async function nativeLiveTake(appId)', '  async function ack(',c);
   const [take]=await c.pending('mizel');

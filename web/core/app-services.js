@@ -694,7 +694,7 @@
     if (!cap) { const s = window.WizAppCapture?.getState?.(); cap = s && (s.hold || s.active || s.recording) ? { safe: false, reason: 'capture' } : { safe: true, keeps: null }; }
     let keeps = cap.safe ? cap.keeps || null : null; const blocking = [];
     // A live Android meeting with no stored row (phone storage broken): keep the app frame that holds the recording.
-    if (cap.safe && !keeps && (cap.nativeMeeting || window.wizardMizelPort)) {
+    if (cap.safe && !keeps && cap.nativeMeeting) {
       const st = [...frames.values()].find(f => [...f.holds.values()].some(r => CAPTURE_HOLD.test(r)));
       if (st) keeps = { appId: st.appId };
     }
