@@ -18,6 +18,7 @@ async function run(){
     await c.addInitScript(phone=>{if(window!==top)return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
     await c.route('http://wizard-qa.invalid/titlebar-fixture/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:fixture}));
     await c.route('http://wizard-qa.invalid/titlebar-fixture.js',r=>r.fulfill({contentType:'text/javascript; charset=utf-8',body:appJS}));
+    await c.route('http://wizard-qa.invalid/wizard-os-home/store-data/router/v1/needs/messenger',r=>r.fulfill({json:{app_id:'messenger',models:[],services:[],ready_to_open:true}}));
     if(process.env.QA_BASELINE_LAYOUT) await c.route('http://wizard-qa.invalid/wizard-os-home/layouts/ai-apps/desktop.js',r=>r.fulfill({contentType:'text/javascript; charset=utf-8',body:fs.readFileSync(process.env.QA_BASELINE_LAYOUT)}));
    });
    const p=closed.getPage();
