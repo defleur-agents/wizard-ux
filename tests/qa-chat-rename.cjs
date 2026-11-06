@@ -52,8 +52,10 @@ const origin='https://rename.test',prefix='/wizard-os-home/',id='synthetic-renam
   await page.getByRole('textbox',{name:'Thread name'}).fill('Owner title');
   await page.getByRole('button',{name:'Save',exact:true}).click();
   assert.equal(await page.evaluate(id=>WizLive.session(id).title,id),'Owner title','same-frame pending title');
+  assert.ok((await page.locator(selector).first().innerText()).includes('Owner title'),'pending title visibly painted before PATCH response');
   await page.evaluate(()=>WizLive.refresh());
   assert.equal(await page.evaluate(id=>WizLive.session(id).title,id),'Owner title','stale poll during five-second PATCH');
+  assert.ok((await page.locator(selector).first().innerText()).includes('Owner title'),'stale pending poll preserves visible title');
   await page.waitForTimeout(5200);
   for(let i=0;i<4;i++)await page.evaluate(()=>WizLive.refresh());
   if(detailRelease)detailRelease();await page.evaluate(()=>window.renameOldDetail);
