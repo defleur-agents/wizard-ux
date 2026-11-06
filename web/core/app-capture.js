@@ -75,7 +75,9 @@
         settled = true; clearTimeout(timer);
         if (error) reject(storageFailure(error)); else resolve(db);
       };
-      const timer = setTimeout(() => finish({ detail: 'timeout' }), 1500);
+      // Phone storage shares disk/CPU with native recording and voice capture. This is
+      // an I/O budget, not the instant Send/start budget (bounded() keeps that separate).
+      const timer = setTimeout(() => finish({ detail: 'timeout' }), 5000);
       try { req = indexedDB.open(DB_NAME, 1); } catch (e) { finish(e); return; }
       req.onupgradeneeded = () => {
         if (settled) { req.transaction?.abort(); return; }
@@ -84,7 +86,9 @@
       };
       req.onsuccess = () => {
         const db = req.result;
-        db.onversionchange = () => { db.close(); dbPromise = null; };
+        const forget = () => { db.close(); if (dbPromise === opening) dbPromise = null; };
+        db.onversionchange = forget;
+        db.onclose = forget; // unexpected WebView/backend closure must not poison later takes
         finish(null, db);
       };
       req.onerror = () => finish(req.error);
@@ -94,15 +98,38 @@
     opening.catch(() => { if (dbPromise === opening) dbPromise = null; });
     return opening;
   }
-  async function transaction(stores, mode, work) {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(stores, mode); let result;
-      const timer = setTimeout(() => { try { tx.abort(); } catch (_) {} reject(fail('storage_failed', 'On-device audio storage timed out (timeout).')); }, 1500);
-      tx.oncomplete = () => { clearTimeout(timer); resolve(result); };
-      tx.onerror = tx.onabort = () => { clearTimeout(timer); reject(tx.error || fail('storage_failed', 'Capture could not be saved.')); };
-      try { result = work(tx); } catch (e) { tx.abort(); reject(e); }
-    });
+  async function transaction(stores, mode, work, retry = true) {
+    const opening = openDB(), db = await opening;
+    try {
+      return await new Promise((resolve, reject) => {
+        let tx, timer, result, settled = false;
+        const finish = error => {
+          if (settled) return;
+          settled = true; clearTimeout(timer);
+          if (error) reject(error); else resolve(result);
+        };
+        try { tx = db.transaction(stores, mode); } catch (e) { finish(e); return; }
+        timer = setTimeout(() => {
+          // Abort before retry: writes and their session metadata are atomic, with
+          // stable keys. A late completion must never acknowledge an aborted save.
+          try { tx.abort(); } catch (_) {}
+          finish(fail('storage_failed', 'On-device audio storage timed out (timeout).', { detail: 'timeout' }));
+        }, 5000);
+        tx.oncomplete = () => finish();
+        tx.onabort = () => finish(tx.error || fail('storage_failed', 'Capture could not be saved.', { detail: 'AbortError' }));
+        tx.onerror = () => {}; // default IDB error handling aborts; wait for that terminal event
+        try { result = work(tx); } catch (e) { try { tx.abort(); } catch (_) {} finish(e); }
+      });
+    } catch (e) {
+      // A cached connection can be closed/stalled after WebView reload or an abort.
+      // Forget only THIS connection; an older failure must not clear a newer open.
+      if (dbPromise === opening) dbPromise = null;
+      db.close();
+      const detail = e?.detail || e?.name;
+      if (retry && ['timeout', 'UnknownError', 'InvalidStateError', 'AbortError'].includes(detail))
+        return transaction(stores, mode, work, false);
+      throw e; // quota/security failures remain strict; keep the queued audio for Retry
+    }
   }
   async function rows() {
     let values;
@@ -140,7 +167,7 @@
     if (JSON.stringify(meta).length > 16384) throw fail('invalid_options', 'Capture metadata is too large.');
     return meta;
   }
-  async function acquire(wait = false) {
+  async function acquire(wait = false, retry = true) {
     if (!navigator.locks) throw fail('capture_lock_unavailable', 'This browser cannot safely arbitrate the microphone.');
     let release;
     const held = new Promise(resolve => { release = resolve; });
@@ -160,6 +187,11 @@
         if (e.name === 'AbortError') { const owner = [...ownedRows.values()].find(r => ['recording', 'starting', 'recoverable'].includes(r.status)); reject(fail('busy', 'Microphone held by ' + (owner?.appId || 'another capture window'), { appId: owner?.appId || null })); }
         else reject(e);
       });
+    }).catch(e => {
+      // A transient Web Locks backend failure is not corrupt audio storage. Never
+      // retry a genuine busy/abort or steal an unavailable lock from another page.
+      if (retry && e?.name === 'UnknownError') return acquire(wait, false);
+      throw e;
     });
   }
   function wav(chunks, bytes) {
@@ -823,7 +855,7 @@
   async function recoverLocked(lease) {
     const check = () => { if (lease?.cancelled) throw fail('recovery_yielded', 'Recovery yielded to microphone start.'); };
     check();
-    let all = await rows(); check(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
+    let all = await rows(); check(); recoveryError = null; ownedRows.clear(); for (const r of all) ownedRows.set(r.id, r); ownershipLoaded = true; changed();
     const meeting = meetingBridge(); let meetingStatus = null;
     const readMeetingStatus = async () => {
       let st;
@@ -898,11 +930,14 @@
     finally { expired = true; }
   }
   async function recover() {
+    // The active capture already owns this page's microphone lease. Re-requesting
+    // it only manufactures busy errors (and repeated full session scans).
+    if (active) return;
     let unlock, lease;
     try { unlock = await acquireBounded();
-      if (active?.instant) return;
+      if (active) return;
       lease = { unlock, cancelled: false }; recoveryLease = lease;
-      recoveryError = null; await bounded(recoverLocked(lease), 4500, 'recovery_timeout'); }
+      recoveryError = null; await bounded(recoverLocked(lease), 20000, 'recovery_timeout'); }
     catch (e) { if (e.code === 'recovery_yielded') return; if (e.code !== 'busy') { recoveryError = e; throw e; }
       const all = await rows(); ownedRows.clear(); for (const r of all) ownedRows.set(r.id,r); ownershipLoaded = true; changed(); }
     finally { if (lease) lease.cancelled = true; if (recoveryLease === lease) recoveryLease = null; unlock?.(); changed(); }
