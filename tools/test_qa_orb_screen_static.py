@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from typing import Any
 
 SRC = Path(__file__).with_name('qa_orb_screen.py').read_text()
 TREE = ast.parse(SRC)
@@ -289,12 +290,13 @@ class Startup(unittest.TestCase):
         ns = {'FAKE': 18779, 'PKG': 'ai.wizards.os.qa', 'DEVTOOLS': 9347, 'STATE': {'log': ['GET /wizard-os-home/']},
               'json': json, 're': re, 'time': type('T', (), {'sleep': staticmethod(lambda s: None)}), 'urllib': __import__('urllib.request'),
               'job': Path(tempfile.mkdtemp()), 'top': lambda: 'topResumedActivity=ai.wizards.os.qa/ai.wizards.os.MainActivity',
-              'ui': lambda: '<hierarchy/>', 'shot': lambda n: None, **stubs}
+              'ui': lambda: '<hierarchy/>', 'shot': lambda n: None, 'require_device': lambda: None,
+              'device_snapshot': lambda: {'serial': 'emulator-5554', 'target_device': True}, **stubs}
         exec(compile(ast.Module(body=body, type_ignores=[]), 'qa_orb_screen.py', 'exec'), ns)
         return ns
 
     def test_fixture_is_the_root_origin_the_app_accepts_and_the_page_is_its_home_url(self):
-        ns = self.lift(sx=lambda c: '')
+        ns = self.lift(sx=lambda c, **kw: '')
         java_re = re.search(r'o\.matches\("([^"]+)"\)', self.APPSTATE).group(1).replace('\\\\', '\\')
         self.assertEqual(ns['QA_ORIGIN_RE'], java_re, 'same rule as AppState.isQaOrigin')
         self.assertIn('return origin(c) + "/wizard-os-home/"', self.APPSTATE)
@@ -318,7 +320,7 @@ class Startup(unittest.TestCase):
 
     def test_success_selects_the_exact_home_page_of_the_one_app_process_and_needs_the_bridge(self):
         Page, seen = self.page()
-        ns = self.lift(sx=lambda c: '4321' if c.startswith('pidof') else '', Page=Page)
+        ns = self.lift(sx=lambda c, **kw: '4321' if c.startswith('pidof') else '', Page=Page)
         ns['shell_page']()
         self.assertEqual(seen['match'], 'http://localhost:18779/wizard-os-home/')
         self.assertEqual(seen['sock'], 'webview_devtools_remote_4321')
@@ -326,9 +328,9 @@ class Startup(unittest.TestCase):
         self.assertFalse((ns['job'] / 'startup-diagnostics.json').exists())
 
     def test_every_startup_failure_records_diagnostics_before_raising(self):
-        for case, sx, kw in (('no page', lambda c: '4321' if c.startswith('pidof') else 'x', {'fail': 'no page'}),
-                             ('no process', lambda c: '', {}), ('two processes', lambda c: '4321 4322' if c.startswith('pidof') else '', {}),
-                             ('no bridge', lambda c: '4321' if c.startswith('pidof') else '', {'ready': False})):
+        for case, sx, kw in (('no page', lambda c, **kw: '4321' if c.startswith('pidof') else 'x', {'fail': 'no page'}),
+                             ('no process', lambda c, **kw: '', {}), ('two processes', lambda c, **kw: '4321 4322' if c.startswith('pidof') else '', {}),
+                             ('no bridge', lambda c, **kw: '4321' if c.startswith('pidof') else '', {'ready': False})):
             Page, seen = self.page(**kw)
             ns = self.lift(sx=sx, Page=Page)
             with self.assertRaises(RuntimeError, msg=case):
@@ -338,6 +340,59 @@ class Startup(unittest.TestCase):
             for key in ('why', 'top', 'pidof', 'qa_home', 'qa_origin', 'devtools_sockets', 'fake_server_log', 'targets'):
                 self.assertIn(key, d, case)
             self.assertTrue((ns['job'] / 'startup-ui.xml').exists() and (ns['job'] / 'startup-logcat.txt').exists(), case)
+
+
+class CommandEvidence(unittest.TestCase):
+    def lift(self, directory, **stubs):
+        names = {'sh', 'sx', 'shot', 'device_snapshot', 'require_device'}
+        ns: dict[str, Any] = dict(subprocess=subprocess, json=json, re=re, time=__import__('time'), job=Path(directory), OUT=Path(directory),
+                  env=os.environ.copy(), S='emulator-5554', ADB='adb', em=None)
+        ns.update(stubs)
+        exec(compile(ast.Module(body=[n for n in TREE.body if getattr(n, 'name', None) in names], type_ignores=[]), 'qa_orb_screen.py', 'exec'), ns)
+        return ns
+
+    def test_real_subprocess_failure_is_not_blank_success_and_stderr_is_retained(self):
+        import sys
+        with tempfile.TemporaryDirectory() as d:
+            ns = self.lift(d)
+            args = (sys.executable, '-c', 'import sys;sys.stderr.write("adb: device not found");sys.exit(7)')
+            with self.assertRaisesRegex(RuntimeError, 'device not found'): ns['sh'](*args)
+            self.assertEqual(ns['sh'](*args, check=False), '')
+            entries = [json.loads(l) for l in (Path(d)/'commands.jsonl').read_text().splitlines()]
+            self.assertEqual(len(entries), 2)
+            for e in entries:
+                self.assertEqual(e['argv'], list(args)); self.assertEqual(e['returncode'], 7)
+                self.assertEqual(e['stderr'], 'adb: device not found'); self.assertEqual(e['serial'], 'emulator-5554')
+                self.assertEqual(e['timeout_seconds'], 30)
+
+    def test_real_timeout_is_bounded_recorded_and_binary_capture_rejects_empty(self):
+        import sys
+        with tempfile.TemporaryDirectory() as d:
+            ns = self.lift(d)
+            with self.assertRaises(subprocess.TimeoutExpired):
+                ns['sh'](sys.executable, '-c', 'import time;time.sleep(5)', timeout=.05)
+            entry = json.loads((Path(d)/'commands.jsonl').read_text().splitlines()[-1])
+            self.assertTrue(entry['timed_out']); self.assertIsNone(entry['returncode'])
+            ns['sh'] = lambda *a, **kw: b''
+            with self.assertRaisesRegex(RuntimeError, 'no PNG'): ns['shot']('bad')
+            self.assertFalse((Path(d)/'bad.png').exists())
+
+    def test_serial_and_emulator_process_must_both_be_alive_before_startup(self):
+        for rc, devices, good in [(None, 'emulator-5554\tdevice\n', True), (1, 'emulator-5554\tdevice\n', False),
+                                   (None, 'emulator-5556\tdevice\n', False), (None, 'emulator-5554\toffline\n', False)]:
+            with tempfile.TemporaryDirectory() as d:
+                diagnostics = []
+                ns = self.lift(d, em=type('Em', (), dict(pid=123, poll=lambda self: rc))(),
+                               startup_diagnostics=lambda why: diagnostics.append(why))
+                ns['sh'] = lambda *a, **kw: devices
+                if good: ns['require_device']()
+                else:
+                    with self.assertRaisesRegex(RuntimeError, 'not a live ADB target'): ns['require_device']()
+                    self.assertTrue(diagnostics)
+                state = json.loads((Path(d)/'device-ready.json').read_text())
+                self.assertEqual(state['emulator_returncode'], rc); self.assertEqual(state['devices'], devices)
+                self.assertIn('ADB_SERVER_SOCKET', state['environment'])
+        self.assertIn('    require_device()\n    pid =', SRC)
 
 
 if __name__ == '__main__':

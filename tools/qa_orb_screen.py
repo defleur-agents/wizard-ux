@@ -65,11 +65,44 @@ res, CHECKS = [], []
 def check(n, ok, d=''):
     res.append(bool(ok)); CHECKS.append({'name': n, 'passed': bool(ok), 'detail': str(d)[:400] if d not in ('', None) else ''})
     print(('PASS ' if ok else 'FAIL ') + n + (' — ' + str(d)[:400] if d not in ('', None) else ''), flush=True)
-def sh(*a, stdin=None, binary=False):
-    return subprocess.run([str(x) for x in a], env=env, capture_output=True, input=stdin, text=not binary).stdout
-def sx(c): return sh(ADB, '-s', S, 'shell', c)
+def sh(*a, stdin=None, binary=False, check=True, timeout=30):
+    """Never turn ADB failure into empty success. Retain bounded stderr for *every* invocation, even polls/cleanup."""
+    argv = [str(x) for x in a]; started = time.monotonic()
+    entry = {'argv': argv, 'serial': S, 'timeout_seconds': timeout}
+    result = None
+    try:
+        result = subprocess.run(argv, env=env, capture_output=True, input=stdin, text=not binary, timeout=timeout)
+        stderr = result.stderr.decode(errors='replace') if isinstance(result.stderr, bytes) else result.stderr
+        entry.update(returncode=result.returncode, stderr=stderr[-8192:], stdout_bytes=len(result.stdout),
+                     stdout=None if binary else result.stdout[-4096:])
+        if check and result.returncode:
+            raise RuntimeError('command failed: ' + json.dumps(entry))
+        return result.stdout
+    except subprocess.TimeoutExpired as error:
+        stderr = error.stderr or b''
+        entry.update(returncode=None, timed_out=True, stderr=(stderr.decode(errors='replace') if isinstance(stderr, bytes) else stderr)[-8192:])
+        raise
+    except OSError as error:
+        entry.update(returncode=None, error=repr(error)); raise
+    finally:
+        entry['seconds'] = round(time.monotonic() - started, 3)
+        with (job / 'commands.jsonl').open('a') as log: log.write(json.dumps(entry) + '\n')
+def sx(c, **kw): return sh(ADB, '-s', S, 'shell', c, **kw)
 def top(): return next((l.strip() for l in sx('dumpsys activity activities').splitlines() if 'topResumedActivity' in l), '')
-def shot(name): (OUT / (name + '.png')).write_bytes(sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True))
+def shot(name):
+    data = sh(ADB, '-s', S, 'exec-out', 'screencap', '-p', binary=True)
+    if not data.startswith(b'\x89PNG\r\n\x1a\n'): raise RuntimeError('screencap returned no PNG: ' + name)
+    (OUT / (name + '.png')).write_bytes(data)
+def device_snapshot():
+    devices = sh(ADB, 'devices', '-l')
+    return {'emulator_pid': em.pid if em else None, 'emulator_returncode': em.poll() if em else None,
+            'serial': S, 'devices': devices, 'target_device': bool(re.search(r'^' + re.escape(S or '<none>') + r'\s+device\b', devices, re.M)),
+            'adb': ADB, 'environment': {k: env.get(k) for k in ('ANDROID_SERIAL', 'ADB_SERVER_SOCKET', 'ANDROID_ADB_SERVER_PORT', 'ADB_SERVER_PORT', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'ANDROID_AVD_HOME')}}
+def require_device():
+    state = device_snapshot(); (job / 'device-ready.json').write_text(json.dumps(state, indent=2))
+    if state['emulator_returncode'] is not None or not state['target_device']:
+        startup_diagnostics('emulator/ADB target not alive: ' + json.dumps(state))
+        raise RuntimeError('owned emulator is not a live ADB target')
 def ui(): sx('uiautomator dump /sdcard/ui.xml >/dev/null'); return sx('cat /sdcard/ui.xml')
 def tap_text(pattern, xml=None):
     xml = xml or ui()
@@ -82,7 +115,7 @@ def tap_text(pattern, xml=None):
                 if b:
                     x1, y1, x2, y2 = map(int, b.groups()); sx(f'input tap {(x1 + x2) // 2} {(y1 + y2) // 2}'); return label
     return None
-def logs(pat): return sx(f'logcat -d -s WizardEverywhere:* | grep -iE "{pat}" | tail -5').strip()
+def logs(pat): return sx(f'logcat -d -s WizardEverywhere:* | grep -iE "{pat}" | tail -5', check=False).strip()
 def wait_log(pat, secs=20):
     t0 = time.time()
     while time.time() - t0 < secs:
@@ -248,7 +281,7 @@ QA_ORIGIN_RE = r'http://(localhost|10\.0\.2\.2):\d{2,5}'
 def startup_diagnostics(why):
     # Everything needed to explain a startup failure, kept before the guest is cleaned up.
     d = {'why': why, 'expected_url': EXPECTED_HOME}
-    for key, fn in (('top', top), ('pidof', lambda: sx(f'pidof {PKG}').strip()),
+    for key, fn in (('device', device_snapshot), ('top', top), ('pidof', lambda: sx(f'pidof {PKG}', check=False).strip()),
                     ('qa_home', lambda: sx(f'run-as {PKG} cat files/qa_home.txt').strip()),
                     ('qa_origin', lambda: sx(f'run-as {PKG} cat files/qa_origin.txt').strip()),
                     ('devtools_sockets', lambda: [l for l in sx('cat /proc/net/unix').split() if 'webview_devtools_remote' in l]),
@@ -258,16 +291,17 @@ def startup_diagnostics(why):
         except Exception as e: d[key] = 'unavailable: ' + repr(e)[:200]
     for name, fn in (('startup-ui.xml', ui), ('startup-logcat.txt', lambda: sx('logcat -d -t 600'))):
         try: (job / name).write_text(fn())
-        except Exception: pass
+        except Exception as error: d[name + '_error'] = repr(error)
     try: shot('zz-startup')
-    except Exception: pass
+    except Exception as error: d['screenshot_error'] = repr(error)
     (job / 'startup-diagnostics.json').write_text(json.dumps(d, indent=2, ensure_ascii=False))
     return d
 def shell_page():
     # one app process, its DevTools socket, the exact shell page the fake served, then the real native bridge
+    require_device()
     pid = ''
     for _ in range(40):
-        pid = sx(f'pidof {PKG}').strip()
+        pid = sx(f'pidof {PKG}', check=False).strip()
         if pid and ' ' not in pid: break
         time.sleep(0.5)
     else:
@@ -421,14 +455,15 @@ with _lockfile as lock:
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
         for _ in range(120):
             if em.poll() is not None: raise RuntimeError('emulator exited before boot: ' + str(em.returncode))
-            if sx('getprop sys.boot_completed').strip() == '1': break
+            if sx('getprop sys.boot_completed', check=False, timeout=8).strip() == '1': break
             time.sleep(3)
         else: raise RuntimeError('emulator boot timeout')
+        require_device()
         check('fresh API35 google_apis ' + ABI + ' guest', sx('getprop ro.build.version.sdk').strip() == '35' and ABI in sx('getprop ro.product.cpu.abi'), sx('getprop ro.product.cpu.abi').strip())
         time.sleep(10)
         for k in ('window_animation_scale', 'transition_animation_scale', 'animator_duration_scale'): sx(f'settings put global {k} 0')
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard')
-        out = sh(ADB, '-s', S, 'install', '-r', apk).strip().splitlines()[-1]
+        out = sh(ADB, '-s', S, 'install', '-r', apk, timeout=120).strip().splitlines()[-1]
         check('QA build installs', out == 'Success', out + ' ' + (re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')) or [''])[0])
         sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt; echo {QA_HOME} > files/qa_home.txt'")
         sh(ADB, '-s', S, 'reverse', f'tcp:{FAKE}', f'tcp:{FAKE}')
@@ -624,28 +659,35 @@ with _lockfile as lock:
         crashed = sx('logcat -d -b crash')
         # Only Wizard OS counts: a uiautomator dump racing the emulator ("FATAL EXCEPTION: UiAutomation") is the harness.
         mine = [b for b in crashed.split('FATAL EXCEPTION')[1:] if 'UiAutomation' not in b.split('\n', 1)[0]]
-        pids = sx(f'pidof {PKG}').split()
+        pids = sx(f'pidof {PKG}', check=False).split()
         check('no Wizard OS crashes', not mine and f'Process: {PKG}' not in crashed, (crashed[:400], pids))
         COMPLETED = True  # the whole selected flow ran; only now can the receipt be ok
     except Exception as e:
         import traceback; traceback.print_exc()
-        check('script ran to the end', False, repr(e)); shot('zz-error')
-        print(sx("logcat -d | grep -E 'AndroidRuntime|WizardEverywhere|chromium' | tail -40"))
+        check('script ran to the end', False, repr(e))
+        startup_diagnostics('harness exception: ' + repr(e))
     finally:
         # only what this run created: its CDP forward, its reverse, its emulator (own session), its fixture server
         if em:
-            sh(ADB, '-s', S, 'forward', '--remove', f'tcp:{DEVTOOLS}'); sh(ADB, '-s', S, 'reverse', '--remove', f'tcp:{FAKE}')
-            sh(ADB, '-s', S, 'emu', 'kill')
+            # Best effort ADB cleanup must not skip killing this run's actual emulator process or the receipt.
+            for args in [('forward', '--remove', f'tcp:{DEVTOOLS}'), ('reverse', '--remove', f'tcp:{FAKE}'), ('emu', 'kill')]:
+                try: sh(ADB, '-s', S, *args, check=False, timeout=8)
+                except (OSError, subprocess.TimeoutExpired): pass  # exact error retained in commands.jsonl
             try: em.wait(40)
             except subprocess.TimeoutExpired:
                 os.killpg(em.pid, signal.SIGTERM)
                 try: em.wait(20)
                 except subprocess.TimeoutExpired: os.killpg(em.pid, signal.SIGKILL); em.wait(10)
+            devices = None
             for _ in range(30):
-                if S not in sh(ADB, 'devices'): break
+                try:
+                    devices = sh(ADB, 'devices', timeout=8)
+                    if S not in devices: break
+                except (OSError, RuntimeError, subprocess.TimeoutExpired): devices = None
                 time.sleep(1)
-            check('owned emulator serial is gone', S not in sh(ADB, 'devices'))
-            if S not in sh(ADB, 'devices'):
+            gone = devices is not None and S not in devices and em.poll() is not None
+            check('owned emulator serial is gone', gone)
+            if gone:
                 for d in (job / 'dev', job / 'avd'): shutil.rmtree(d, ignore_errors=True)  # guest disk, not evidence
         srv.shutdown(); srv.server_close()
         (job / 'receipt.json').write_text(json.dumps({
@@ -655,6 +697,7 @@ with _lockfile as lock:
             'serial': S, 'console_port': PORT, 'adb_port': PORT + 1 if PORT else None, 'inherited_lease': bool(_inherited),
             'free_bytes_before_boot': FREE, 'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(), 'package': PKG,
             'read_image_paths': STATE['read_paths'],
+            'command_log': str(job / 'commands.jsonl'), 'device_ready': str(job / 'device-ready.json'),
             'search': 'synthetic HTTP fixtures served by this script (lines-only and one geometry fixture); NOT live inference',
             'physical_device': False, 'published': False}, indent=2, ensure_ascii=False))
 print(f'{sum(res)}/{len(res)} passed · {job}')
