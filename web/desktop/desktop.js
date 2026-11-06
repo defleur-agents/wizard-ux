@@ -569,7 +569,16 @@
     frame: id => winEl(id)?.querySelector('iframe') || null,
     renderTools: (frame, slot) => window.WizAppServices?.titlebar.render(frame, slot) === true,
     openApp: id => Object.hasOwn(APP, id) && openApp(APP[id]) !== false,
-    focus: (id, opts) => { focusWin(id, opts); return focused()?.id === id; },
+    focus: (id, opts) => {
+      // A layout already chose the visible panes. Keyboard focus is not a
+      // second Classic navigation (cur/save/goWs/route) behind that renderer.
+      if (globalThis.WosSkinHost?.layoutState?.active && !WosSkinHost.panelMode) {
+        if (!desktopHost.windows().some(w => w.id === id && w.visible)) return false;
+        if (opts.scroll) focusInside(id);
+        return true;
+      }
+      focusWin(id, opts); return focused()?.id === id;
+    },
     close: id => { closeWin(id); return !W[id]; },
     panes: C.panes,
   });

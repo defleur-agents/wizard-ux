@@ -491,7 +491,7 @@ export default function desktop(api) {
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
   const goApp = (id, desk = null, then = null, place = null) => {
-    unpeek(); closeAll(); focusWant = id === CHATS ? '' : id;
+    unpeek(); closeAll(); wantAppFocus(id === CHATS ? '' : id);
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
@@ -505,16 +505,22 @@ export default function desktop(api) {
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
    * takes the keyboard once it is the panel (its own typing, its own plain keys); its ⌥ keys (data-wz-key) the view
    * presses for it (App keys, at the key handler). */
-  let focusWant = '', focusing = false;
+  let focusWant = '', focusing = false, focusGeneration = 0, focusHosted = null;
+  function wantAppFocus(id) { focusWant = id; focusing = false; focusHosted = null; focusGeneration++; }
   const paneFrame = () => host?.frame(panelWindow()?.id) || null;
-  function focusFrame(tries = 0) {
+  function focusFrame(tries = 0, generation = focusGeneration) {
+    if (generation !== focusGeneration) return; // an old timer cannot consume a newer request
     if (!focusWant) { focusing = false; return; }
     const f = pane && pane.id === focusWant ? paneFrame() : null;
-    if (!f || !frameReady()) { if (tries < 60) api.after(150, () => focusFrame(tries + 1)); else { focusWant = ''; focusing = false; } return; }
-    host?.focus(panelWindow()?.id, { scroll: false });
+    if (!f || !frameReady()) { if (tries < 60) api.after(150, () => focusFrame(tries + 1, generation)); else { focusWant = ''; focusing = false; } return; }
+    // One host lifecycle focus per request, not once per iframe-focus retry.
+    // Some documents refuse browser focus; that must never re-enter routing.
+    const id = panelWindow()?.id;
+    if (id && focusHosted !== id) { focusHosted = id; host?.focus(id, { scroll: false }); }
+    if (generation !== focusGeneration) return;
     try { f.focus?.({ preventScroll: true }); f.contentWindow?.focus?.(); } catch (_) {}
     // (the shell can still focus the window itself right after the desk switch: once more, then it is the app's)
-    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1)); return; }
+    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1, generation)); return; }
     focusWant = ''; focusing = false;
   }
   function appCell(a) {
@@ -1244,7 +1250,7 @@ export default function desktop(api) {
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
-    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
+    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
     const chat = pane || chatOn ? chatsEl() : null; dockEl = chat;
@@ -1323,7 +1329,7 @@ export default function desktop(api) {
   api.listen(pX, 'click', () => hidePanel());
   // a click anywhere on the app panel's bar hands the keyboard back to the app (its buttons never keep it)
   api.listen(pTop, 'mousedown', e => e.preventDefault());
-  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { focusWant = pane.id; focusing = true; focusFrame(); } });
+  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { wantAppFocus(pane.id); focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
   api.listen(pW, 'click', () => setWide(!wide));
   // a slow app: its placeholder in the panel's place at once (faded in after a beat), gone once its frame has loaded

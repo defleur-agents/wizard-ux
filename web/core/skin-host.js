@@ -119,12 +119,27 @@
   }
 
   /* ---------- error fallback ---------- */
+  // Device-local diagnostic only; never change the owner's chosen view or send
+  // telemetry. Keep the last failure even if a later ordinary switch disposes.
+  function layoutDiagnostic(id, reason, where, e) {
+    if (!String(id).startsWith('layout:') || id === 'layout:classic') return;
+    const entry = { layout: String(id).slice(7), reason, where, at: new Date().toISOString(),
+      release: releaseToken(), message: String(e?.message || reason).slice(0, 1000),
+      stack: String(e?.stack || new Error('Layout ' + reason + ': ' + where).stack || '').slice(0, 12000) };
+    try {
+      const key = 'wos.layout-fault.v1', old = JSON.parse(localStorage.getItem(key) || 'null');
+      const failure = reason !== 'switch' ? entry : old?.lastFault || null;
+      localStorage.setItem(key, JSON.stringify({ version: 1, ...entry, lastFault: failure }));
+    } catch (_) {} // storage may be blocked/full; fallback must still work
+    try { console.error('[layout] ' + reason + ':', entry); } catch (_) {}
+  }
   function fault(a, where, e) {
     if (!a || a.dead) return;
+    layoutDiagnostic(a.id, 'callback-error', where, e);
     try { console.warn(`[skin ${a.id}] ${where}:`, e); } catch (_) {}
     const now = Date.now(); a.errs = a.errs.filter(t => now - t < ERR_WINDOW); a.errs.push(now);
     if (a.errs.length >= ERR_LIMIT) {
-      const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error'); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
+      const wasTweak = tweaks.has(a.id); disabled.add(a.id); dispose(a, 'error', e, where); if (wasTweak) { paintTweaks(); window.dispatchEvent?.(new Event('wos:experience')); }
       try { shell && shell.toast(`${a.label || nameOf(a.id)} gestures turned off after an error`); } catch (_) {}
       if (a.id === 'my-skin') personalFailed(a.label, e, false); // the toast above already named the file
     }
@@ -272,8 +287,9 @@
     dispose(active, reason);
   }
   // Both layers share the API, guards and cleanup. Unloading one leaves the other alive.
-  function dispose(a, reason) {
+  function dispose(a, reason, error, where = 'dispose') {
     if (!a) return;
+    layoutDiagnostic(a.id, reason, where, error);
     if (active === a) active = null;
     if (personal === a) personal = null;
     if (builtins.get(a.id) === a) builtins.delete(a.id);
@@ -350,8 +366,9 @@
   // data-layout-booting: first frames of a refresh that wears a layout. The layout's own stylesheet keeps the page clear
   // (opacity) until the layout removes it; failure, a switch or this timer always do, so a refresh never sticks on blank.
   function endBoot() { if (isDoc) delete document.documentElement.dataset.layoutBooting; }
-  function layoutLoadFailed(id) {
+  function layoutLoadFailed(id, reason = 'unavailable', error) {
     if (layoutId !== id) return false;
+    layoutDiagnostic('layout:' + id, 'load-failed', reason, error);
     layoutFailed = id; endBoot(); paintChatsOwner();
     try { shell?.ownsChatList?.(chatsClaimed()); } catch (_) {}
     return false;
@@ -382,9 +399,9 @@
     if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
     const href = layoutUrl(id, 'layout.js'); requested.push(href);
     let mod;
-    try { mod = await importer(href); } catch (e) { try { console.warn('[layout] import failed:', id, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id) : false; }
+    try { mod = await importer(href); } catch (e) { try { console.warn('[layout] import failed:', id, e); } catch (_) {} return seq === layoutSeq ? layoutLoadFailed(id, 'import', e) : false; }
     if (seq !== layoutSeq || layoutId !== id) return false;
-    if (typeof mod?.default !== 'function') return layoutLoadFailed(id);
+    if (typeof mod?.default !== 'function') return layoutLoadFailed(id, 'missing setup');
     const a = record(key, L.name + ' layout'); layoutRec = a;
     try { const base = makeApi(a); a.teardown = mod.default(Object.freeze({ ...base, ...shellApi(a, base) })); } catch (e) { fault(a, 'setup', e); if (a.dead) return layoutLoadFailed(id); }
     lastRoute = ''; emitRoute();

@@ -10,16 +10,26 @@
       if (typeof adapter?.[key] !== 'function') throw new TypeError('Desktop host needs ' + key);
     }
     const listeners = new Set();
-    let queued = false;
+    let queued = false, focusing = false;
     const changed = () => {
       if (!listeners.size || queued) return;
       queued = true;
       queueMicrotask(() => {
-        queued = false;
-        if (!listeners.size) return;
+        // Hold the latch THROUGH delivery: a projection may synchronously emit
+        // app-tools/focus again. An unchanged echo must not spin microtasks.
         const state = windows();
-        for (const fn of [...listeners]) {
-          try { fn(state); } catch (e) { console.error('Desktop host listener failed', e); }
+        try {
+          for (const fn of [...listeners]) {
+            if (!listeners.has(fn)) continue;
+            try { fn(state); } catch (e) { console.error('Desktop host listener failed', e); }
+          }
+        } finally {
+          queued = false;
+          // A genuine lifecycle mutation during delivery still gets a new turn,
+          // never recursive delivery or a microtask chain that starves paint.
+          if (listeners.size && JSON.stringify(windows()) !== JSON.stringify(state)) {
+            (globalThis.requestAnimationFrame || (fn => setTimeout(fn, 0)))(changed);
+          }
         }
       });
     };
@@ -44,8 +54,14 @@
       },
       openApp: id => typeof id === 'string' && !!id ? adapter.openApp(id) !== false : false,
       focus: (id, { scroll = true } = {}) => {
-        if (!has(id)) return false;
-        const ok = adapter.focus(id, { scroll: scroll !== false }) === true; changed(); return ok;
+        if (!has(id) || focusing) return false;
+        const before = JSON.stringify(windows());
+        focusing = true;
+        try {
+          const ok = adapter.focus(id, { scroll: scroll !== false }) === true;
+          if (ok && JSON.stringify(windows()) !== before) changed();
+          return ok;
+        } finally { focusing = false; }
       },
       close: id => has(id) ? adapter.close(id) === true : false,
       panes: adapter.panes,

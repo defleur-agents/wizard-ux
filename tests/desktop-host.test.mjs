@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const read = file => readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 function fixture() {
-  const jobs = [], calls = [], errors = [];
+  const jobs = [], framesQueue = [], calls = [], errors = [];
   const window = {};
-  vm.runInNewContext(read('web/core/desktop-host.js'), { window, queueMicrotask: fn => jobs.push(fn), console: { error: (...args) => errors.push(args) } });
+  vm.runInNewContext(read('web/core/desktop-host.js'), { window, queueMicrotask: fn => jobs.push(fn), requestAnimationFrame: fn => framesQueue.push(fn), console: { error: (...args) => errors.push(args) } });
   const frames = new Map([['app', { identity: 'retained iframe' }]]);
   const state = [{ id:'app', kind:'frame', appId:'recorder', desk:1, title:'Recorder', focused:false, visible:true, privateState:{ secret:true } }, { id:'chat', kind:'chats', desk:0, title:'Chats', thread:'thread', visible:false }];
   let refusal = false;
@@ -15,7 +15,7 @@ function fixture() {
     focus(id, opts) { calls.push(['focus', id, opts]); if (refusal) return false; for (const w of state) w.focused = w.id === id; return true; },
     close(id) { calls.push(['close', id]); if (refusal) return false; state.splice(state.findIndex(w => w.id === id), 1); controller.changed(); return true; } };
   const controller = window.WizDesktop.attach(adapter), host = controller.host;
-  return { host, controller, api:window.WizDesktop, adapter, state, calls, errors, refuse:() => { refusal = true; }, flush:() => { while (jobs.length) jobs.shift()(); } };
+  return { host, controller, api:window.WizDesktop, adapter, state, calls, errors, jobs, framesQueue, refuse:() => { refusal = true; }, flush:() => { let n = 0; while (jobs.length) { assert.ok(++n < 100, 'bounded microtasks'); jobs.shift()(); } } };
 }
 test('one explicit frozen host; immutable snapshots never expose mutable shell state', () => {
   const f = fixture(); assert.equal(f.api.host, f.host); assert.equal(f.host.panes, f.adapter.panes);
@@ -61,6 +61,32 @@ test('tools use retained app frames; closed and non-app surfaces clear the proje
   f.host.close('app'); assert.equal(f.host.renderTools('app', slot), false); assert.equal(seen.at(-1)[0], null);
   assert.equal(f.host.renderTools('app', null), false);
 });
+test('unchanged render-tools/focus echoes cannot re-enter or starve the host queue', () => {
+  const f = fixture(); let count = 0;
+  f.host.onChange(() => { count++; f.controller.changed(); f.host.focus('app', { scroll: false }); });
+  f.controller.changed(); f.flush();
+  assert.equal(count, 1); assert.equal(f.jobs.length, 0);
+  assert.equal(f.framesQueue.length, 1); f.framesQueue.shift()(); f.flush();
+  assert.equal(count, 2); assert.equal(f.framesQueue.length, 0);
+});
+test('focus adapter recursion is refused and no-op/failed focus never emits a new lifecycle change', () => {
+  const f = fixture(); let updates = 0, nested;
+  f.host.onChange(() => updates++);
+  f.adapter.focus = () => { nested = f.host.focus('app'); return true; };
+  assert.equal(f.host.focus('app'), true); assert.equal(nested, false);
+  f.flush(); assert.equal(updates, 0);
+  f.adapter.focus = () => { throw new Error('focus broke'); };
+  assert.throws(() => f.host.focus('app'), /focus broke/);
+  f.adapter.focus = () => false; assert.equal(f.host.focus('app'), false);
+  f.flush(); assert.equal(updates, 0, 'focus latch is released even after an exception');
+});
+test('real mutation while delivering is deferred to a paint turn, not lost', () => {
+  const f = fixture(); let n = 0;
+  f.host.onChange(() => { if (++n === 1) { f.state[0].title = 'New'; f.controller.changed(); } });
+  f.controller.changed(); f.flush(); assert.equal(n, 1); assert.equal(f.framesQueue.length, 1);
+  f.framesQueue.shift()(); f.flush(); assert.equal(n, 2);
+});
+
 test('companion membership follows host group identity/count, ignores inactive windows and settles once', () => {
   const source = read('web/layouts/ai-apps/desktop.js'), calls = [];
   const state = [{id:'video',desk:2,tiled:true},{id:'feedback',desk:2,tiled:false},{id:'other',desk:3,tiled:true}];
