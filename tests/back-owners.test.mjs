@@ -72,6 +72,13 @@ test('recording and shared overlays keep priority over the focused app fallback'
  const f=appFocusFixture();f.state.voice=true;f.state.open='viewer';f.press();f.press();f.press();
  assert.deepEqual(f.hits,['voice-cancel','viewer','focused-app-fallback']);
 });
+test('full screen: an open layer inside the focused app closes first, then Esc returns to tiled',()=>{
+ const f=appFocusFixture({paneOn:true});let mode='full',layer=true;
+ f.c.panes={get:()=>({mode,focus:'app'}),set(){}};f.c.windowMode=m=>{mode=m;f.hits.push('mode:'+m);};
+ f.c.pane.el.querySelector=()=>'frame';f.c.WizAppServices={back:fr=>{if(fr==='frame'&&layer){layer=false;f.hits.push('app-layer');return 'handled';}return 'atRoot';}};
+ f.press();f.press();f.press();
+ assert.deepEqual(f.hits,['app-layer','mode:tiled','layout-app:browser']);
+});
 test('a modeled app pane receives one Back per press, including root; chat focus does not navigate it',()=>{
  const f=appFocusFixture({paneOn:true});f.press();f.press();
  assert.deepEqual(f.hits,['layout-app:browser','layout-app:browser']);

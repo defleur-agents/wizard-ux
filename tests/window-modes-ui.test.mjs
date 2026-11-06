@@ -23,7 +23,7 @@ test('full mode is a last-priority surface, after recording and transient overla
  const start=ui.indexOf('  api.back.surface?.(() => {'), end=ui.indexOf('    const a = doc.activeElement;',start);
  assert.ok(start>0 && end>start);
  const prefix=ui.slice(start,end).replace('  api.back.surface?.(() => {','');
- const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode});
+ const surface=vm.runInNewContext('(function(){'+prefix+'return false;})',{panes,windowMode,doc:{activeElement:null},pane:null,lastSurface:'chat',chatsEl:()=>null});
  registry.push(()=>{closes++;});registry.run({recording:()=>true,surface});assert.equal(mode,'full');assert.equal(closes,0);
  registry.run({surface});assert.equal(closes,1);assert.equal(mode,'full');registry.run({surface});assert.equal(mode,'tiled');
 });
