@@ -864,6 +864,9 @@
     return {
       // The orb's recorder plus a local command take (the held orb / ⌥C); call command() again to finish it.
       voice: Object.freeze({ ...base.voice, command: () => live() ? shell.command?.() : undefined,
+        // Layout-only: a layout-docked composer owns its mic even while a companion app has keyboard focus.
+        reply: (wid, sid) => live() && typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
+          ? shell.recordReply?.(wid, sid) : false,
         /* The layout draws the command take itself (its own orb state and caption): while held, a command take's
          * result comes to fn({ result: 'done' | 'miss' | 'silent' | 'kept', text, action, app, music }) instead of the
          * shell's toast, and the desktop's voice pill steps aside (html.voice-cmd). Released on teardown. */
