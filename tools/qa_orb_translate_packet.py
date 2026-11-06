@@ -37,8 +37,9 @@ def verify(root, seal, digest):
     cfg = json.loads((job / 'job.json').read_text())
     assert cfg['host'] == 'forum' and cfg['revision'] == seal['revision'] and cfg['tasks'] == TASKS
     assert cfg['expected_signer'] == SIGNER
-    assert cfg['signing_env'] == '/home/james/.wizard-secure/wizard-os/signing.env'
-    assert cfg['owner_config'] == '/home/james/.wizard-secure/wizard-os/wizard-address.gradle.properties'
+    secure = Path.home() / '.wizard-secure/wizard-os'
+    assert Path(cfg['signing_env']) == secure / 'signing.env'
+    assert Path(cfg['owner_config']) == secure / 'wizard-address.gradle.properties'
     assert sha(root / 'baseline87.apk') == BASELINE
     assert shutil.disk_usage('/srv/work').free >= 220 * 1024**3
     return job
