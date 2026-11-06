@@ -1737,7 +1737,13 @@ test('round 18 phone: the tidy line under + opens the sentence sheet; the tidy t
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   const ready = () => w.qa('#aa-sec-ready [data-sid]').map(n => n.dataset.sid);
   assert.deepEqual(ready(), ['notif:x', 'r2', 'r1'], 'Newest');
-  const sort = w.q('.aa-sort[aria-label="Order Ready"]'); assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
+  // This fixture's selector parser splits on whitespace, even inside attribute values.
+  const sort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Order Ready');
+  assert.ok(sort, 'Ready keeps its own control beside Working');
+  const workingSort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Sort Working');
+  assert.ok(workingSort, 'Working has its separate control');
+  assert.equal(workingSort.value, 'alphabetical');
+  assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
   sort.value = 'oldest'; sort.dispatchEvent(new FakePointerEvent('change'));
   assert.deepEqual(sets, ['oldest']); assert.deepEqual(ready(), ['r1', 'r2', 'notif:x'], 'Oldest');
 });

@@ -35,7 +35,7 @@ test('stock renderer uses the same Working comparator and raw session cardAt', (
   assert.deepEqual(ids(c.sort(rows.filter(r => !r.pinned))), ['a-new', 'a-old', 'b', 'untitled', 'z']);
 });
 test('Working time sort falls back for sessions without request clocks, without changing Ready', () => {
-  const live = { cardAt: s => s.requestAt || '' }, facts = { live, chats: {} };
+  const live = { cardAt: s => s.requestAt || '' }, facts = { live, chats: { threadActions: () => [] } };
   const sessions = [{ id: 'z', title: 'Zulu', updatedAt: at(9) }, { id: 'a', title: 'alpha', updatedAt: at(1) }, { id: 'b', title: 'Beta', createdAt: at(8) }];
   const projected = sessions.map(s => M.sessionRow(s, 'working', facts));
   assert.deepEqual(ids(M.workingSort(projected, 'newest')), ['z', 'b', 'a']);

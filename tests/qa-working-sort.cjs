@@ -10,7 +10,7 @@ const now = Date.now();
 const rows = [['z', 'Zulu', 1000], ['a', 'alpha', 3000], ['b', 'Beta', 2000]].map(([id, title, age]) => ({ id, title, runtime: 'direct', status: 'running', updated_at: new Date(now - age).toISOString(), updatedAt: new Date(now - age).toISOString(), message_count: 2, messageCount: 2 }));
 const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? 'text/css' : f.endsWith('.svg') ? 'image/svg+xml' : f.endsWith('.json') ? 'application/json' : 'text/html';
 (async () => {
- const browser = await chromium.launch(); const report = { cases: [], screenshots: [] }, failures = [];
+ const browser = await chromium.launch(); const report = { cases: [], screenshots: [], controlInventory: [] }, failures = [];
  try {
   for (const skin of ['nebula', 'sepia']) {
    const prefs = { migrations: { 'launcher-seed-v1': true }, readyOrder: 'oldest', chatLayout: 'status' };
@@ -82,12 +82,27 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     assert.equal(prefs.workingOrder,'alphabetical');
     await shot(p,'desktop-settings'); await c.close();
     const { c: pc, p: phone } = await pageFor('phone');
-    await phone.evaluate(() => __wos.openWin({ app: 'chats', title: 'Chats' }));
-    const select = phone.locator('[data-working-order]'); await select.waitFor(); assert.equal(await select.inputValue(),'alphabetical');
-    const hd = phone.locator('section[data-sec="working"] [data-sectoggle="working"]');
+    // freshLayout already mounts Chats. openWin creates a second legitimate desk,
+    // not a duplicate repaint: use the original window and scope its retained DOM.
+    const phoneWin = await phone.evaluate(() => {
+     const chats = Object.values(__wos.wins).filter(w => w.app === 'chats');
+     if (chats.length !== 1) throw Error(`Expected the initial Chats window, found ${chats.length}`);
+     const id = chats[0].id, desk = __wos.desks.findIndex(d => d.wins.includes(id));
+     __wos.goDesk(desk, true); __wos.focusWin(id); return id;
+    });
+    const phoneWindow = phone.locator(`.win[data-win="${phoneWin}"]`);
+    const select = phoneWindow.locator('[data-working-order]'); await select.waitFor();
+    const controls = await phone.locator('[data-working-order]').evaluateAll(ns => ns.map(n => ({ win: n.closest('.win')?.dataset.win, section: n.closest('section')?.dataset.sec })));
+    assert.deepEqual(controls, [{ win: phoneWin, section: 'working' }], 'one Working control in the initial Chats window');
+    report.controlInventory.push({ skin, surface: 'phone-working-controls', controls });
+    assert.equal(await select.inputValue(),'alphabetical');
+    const hd = phoneWindow.locator('section[data-sec="working"] [data-sectoggle="working"]');
     if (await hd.count() && await hd.getAttribute('aria-expanded') !== 'true') await hd.click();
-    await phone.waitForFunction(() => document.querySelectorAll('section[data-sec="working"] .ch-row').length===3);
-    const phoneIds = () => phone.locator('section[data-sec="working"] [data-chopen]').evaluateAll(ns=>ns.map(n=>n.dataset.chopen));
+    await phoneWindow.locator('section[data-sec="working"] .ch-row').nth(2).waitFor();
+    const phoneIds = async () => {
+     assert.equal(await select.count(), 1, 'repaint must not duplicate Working controls');
+     return phoneWindow.locator('section[data-sec="working"] [data-chopen]').evaluateAll(ns=>ns.map(n=>n.dataset.chopen));
+    };
     assert.deepEqual(await phoneIds(),['a','b','z']);
     await persist(phone, () => select.selectOption('newest')); assert.deepEqual(await phoneIds(),['z','b','a']);
     await persist(phone, () => select.selectOption('oldest')); assert.deepEqual(await phoneIds(),['a','b','z']);
