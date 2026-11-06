@@ -2428,6 +2428,9 @@
   // placeholder (WizUploads.pending) that the outbox swaps for its receipt before delivery.
   const PEND = window.WizUploads?.pending;
   const takeFiles = () => V.files.map(f => PEND ? PEND.ref(f) : (f.id && !f.uploading ? { id: f.id, name: f.name, mime: f.mime, bytes: f.bytes } : null)).filter(f => f && f.id);
+  // The take's own files plus the thread composer's (seal), each file once. Never a count cap (James, 6 Nov 2026):
+  // only real size limits (upload, inline image budget) apply.
+  const withSealFiles = (files, seal) => [...(files || []), ...(seal ? seal.files || [] : [])].filter((f, i, a) => f && f.id && a.findIndex(x => x.id === f.id) === i);
   function txShow(text, label, cls, icon) {
     tx.className = 'transcript ' + (cls || '');
     window.WizBrand.paint($('#txRouteIcon'), icon || '✦');
@@ -3111,7 +3114,7 @@
         if (aim == null && sv?.review) return sendReview(sv, '', part, fl, snap.route, snap.custodyId);
         if (aim == null && sv?.kind === 'chat thread' && W[sv.id]) return sendChat(sv.id, '', 'voice, aimed at this thread', part, { custodyId: snap.custodyId, sid: sv.thread, route: snap.route, files: fl, seal: i === 0 ? snap.seal || false : false, instructions: viewContext(sv.id, 'voice, aimed at this thread', snap) });
         const sl = i === 0 ? snap.seal : null; // the window is gone: the taken composer still rides with it
-        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: [...fl, ...(sl ? sl.files : [])].slice(0, 8), typed: sl?.text || '', snap })
+        return toAgent('', 'Waiting to send · recording kept', { audio: part, desk: aim, source: 'orb', files: withSealFiles(fl, sl), typed: sl?.text || '', snap })
           .then(item => sl?.done(item));
       });
       await Promise.all(queued.map(q => Promise.resolve(q).catch(e => OUTBOX.transition(snap.custodyId, 'failed', String(e.message || e)))));
@@ -3316,7 +3319,7 @@
       const with_ = [seal?.text.trim() ? 'your text' : '', nf ? (nf === 1 ? '1 file' : `${nf} files`) : '', seal?.reply ? 'the notification' : ''].filter(Boolean).join(' + ');
       if (target == null && v?.review) { setVoice('idle'); txPill('✦', 'Feedback waiting to send with ' + (files.length === 1 ? '1 file' : `${files.length} files`), 'agent'); txHide(1400); return sendReview(v, text, snap.audio || null, files, snap.route, snap.custodyId); }
       if (target == null && v?.kind === 'chat thread' && W[v.id]) { setVoice('idle'); txPill('✦', 'Waiting to send with ' + with_, 'agent'); txHide(1400); return sendChat(v.id, text, 'voice, aimed at this thread', snap.audio || null, { custodyId: snap.custodyId, sid: v.thread, route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, 'voice, aimed at this thread', snap) }); }
-      const all = [...files, ...(seal ? seal.files : [])].filter((f, i, a) => a.findIndex(x => x.id === f.id) === i).slice(0, 8);
+      const all = withSealFiles(files, seal);
       return toAgent(CHATS.joinWords(seal?.text, text), `To ${window.WizConfig.agent()} · with ${with_}` + sttNote, { ...opts, files: all, reply: seal?.reply || null }).then(item => { seal?.done(item); return item; });
     }
     // Registered app delivery and composer custody above are not commands. All other tap takes
