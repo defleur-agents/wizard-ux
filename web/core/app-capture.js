@@ -870,6 +870,7 @@
     return null;
   }
   function meetingBridge() { return attachedMeetingBridge || W.wizardNative?.meetings || (W.wizardMizelPort ? nativeMeetingPort() : null); }
+  const MEETING_APP = 'mizel'; // the app that owns native Android meetings
   let recoveryLease = null;
   function yieldRecovery() {
     if (!recoveryLease) return;
@@ -895,7 +896,7 @@
       const unknown = !!(st?.recording && !st.meetingId);
       if (unknown !== unknownMeetingActive) { unknownMeetingActive = unknown; changed(); }
       if (st?.recording && st.meetingId && !all.some(r=>r.native==='wizard-meetings' && r.nativeId===st.meetingId)) {
-        const row={id:crypto.randomUUID(),appId:'mizel',kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
+        const row={id:crypto.randomUUID(),appId:MEETING_APP,kind:'meeting',native:'wizard-meetings',nativeId:st.meetingId,
           status:'recoverable',partial:true,startedAt:Date.now()-(st.mediaMs||0),durationMs:st.mediaMs||0,seq:0,bytes:0,pcm:true,mime:'audio/wav',meta:{meetingId:st.meetingId}};
         recoveryLive.add(row.id);await put(row);all=await rows();
       }
@@ -1193,7 +1194,7 @@
   // app a resumable in-memory take so it reattaches after a reload instead of asking the owner to Resume here
   // (James, 6 Nov 2026: reload must be seamless mid-meeting). Nothing is invented: the service names the meeting.
   async function nativeLiveTake(appId) {
-    if (active || appId !== 'mizel') return null;
+    if (active || appId !== MEETING_APP) return null;
     const b = meetingBridge(); if (!b?.status) return null;
     let st; try { st = await bounded(Promise.resolve(b.status()), 3000, 'native_timeout'); } catch (_) { return null; }
     if (st?.recording !== true || typeof st.meetingId !== 'string' || !st.meetingId || active) return null;
@@ -1290,10 +1291,12 @@
     yieldRecovery(); return true;
   }
   function reloadCheck() {
+    // The Android app's meeting port (MeetingRecorderService) records and uploads on its own through a page reload.
+    const androidMeetingPort = () => !!W.wizardMizelPort;
     // A steady Android meeting (MeetingRecorderService) that records and uploads on its own through a reload.
     function steadyLiveMeeting() {
       const s = active;
-      if (!s || attachedMeetingBridge || W.wizardNative?.meetings || !W.wizardMizelPort) return false;
+      if (!s || attachedMeetingBridge || W.wizardNative?.meetings || !androidMeetingPort()) return false;
       const isMeeting = r => r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
       if (!isMeeting(s.row) || !s.engine || !['recording', 'paused'].includes(s.phase) || s.borrow || s.borrowWork ||
         s.finishPromise || s.error || s.engineDetached || s.interrupted || s.discard) return false;
@@ -1304,11 +1307,13 @@
     // Only audio held by this page (a starting take, page-memory takes, a browser engine, a mic loan) can be lost,
     // so custody doubt about stored takes never forces the owner to stop a meeting.
     const androidLive = () => {
-      if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !W.wizardMizelPort || preparations.size || memoryTakes.size) return null;
+      if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !androidMeetingPort() || preparations.size || memoryTakes.size) return null;
       if (active && !steadyLiveMeeting()) return null;
+      // Only meetings survive a reload: an active or unreadable device recorder (orb note) keeps blocking.
+      try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return null; } catch (_) { return null; }
       const r = active?.row?.native === 'wizard-meetings' ? active.row :
         [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
-      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : null,
+      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : { appId: MEETING_APP },
         recheck: true, durable: false, nativeMeeting: true };
     };
     const no = reason => {
@@ -1326,7 +1331,7 @@
     try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
-    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && !!W.wizardMizelPort;
+    const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && androidMeetingPort();
     const isMeeting = r => survives && r?.native === 'wizard-meetings' && !!r.nativeId && r.kind === 'meeting';
     const keep = r => ({ appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId });
     const live = [...recoveryLive].map(id => ownedRows.get(id)).filter(Boolean);
@@ -1355,11 +1360,14 @@
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
     // IndexedDB rows and Android services survive reload. Unknown custody is not page-held audio;
     // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
+    // The meeting service may record with no stored row (phone storage broken); the shell keeps that app's frame
+    // only if it is the one holding a recording.
+    const port = survives ? { nativeMeeting: true, meetingApp: MEETING_APP } : {};
     if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
-      recheck: true, durable: false, uncertain };
+      recheck: true, durable: false, uncertain, ...port };
     return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
       recheck: true, durable: ownershipLoaded && !recoveryError && live.length === 0 &&
-        [...ownedRows.values()].every(r => r.status === 'pending') };
+        [...ownedRows.values()].every(r => r.status === 'pending'), ...port };
   }
   /* Host-only rescue. Metadata exposed to notices is app + date only, never a title/content.
    * A stored browser row belongs to a previous page unless it is the active session. Native
