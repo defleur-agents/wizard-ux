@@ -309,7 +309,7 @@ test('unknown native status cannot become an empty app-custody proof, but repair
   const row={id:'browser',appId:'fixture',status:'pending',bytes:32000};let data=[];
   const c={validate(){},memoryTakes:new Map(),ready:Promise.resolve(),recover:async()=>{},rows:async()=>data,result:async r=>r,
     recoveryError:Object.assign(Error('native unknown'),{code:'native_owner_uncertain'}),unknownMeetingActive:false,ownershipLoaded:true,ownedRows:new Map(),
-    fail:(code,message)=>Object.assign(Error(message),{code})};
+    fail:(code,message)=>Object.assign(Error(message),{code}),bounded:p=>p,nativeLiveTake:async()=>null};
   extract('  async function pending(appId)', '  async function ack(',c);
   await assert.rejects(c.pending('fixture'),e=>e.code==='native_owner_uncertain');
   data=[row];c.ownedRows.set(row.id,row);assert.equal((await c.pending('fixture'))[0],row);
@@ -471,4 +471,24 @@ test('native-meeting plan keeps the recording app frame even without a stored ro
   const f=service({safe:true,keeps:null,nativeMeeting:true});f.facade.update.hold('Mizel recording');
   const p=f.plan();assert.equal(p.ok,true);assert.equal(p.keeps.appId,'mizel');
   const g=service({safe:true,keeps:null});g.facade.update.hold('Mizel recording');assert.equal(g.plan().ok,false);
+});
+
+// James, 6 Nov 2026 ("I need to go back into the recorder and resume it manually"): with phone storage broken,
+// the Android meeting service still names its live meeting, so Recorder reattaches by itself after a reload.
+test('broken phone storage: pending hands Recorder the live Android meeting so it reattaches without Resume here',async()=>{
+  let st={recording:true,meetingId:'mt_live',mediaMs:60000};
+  const c={validate(){},memoryTakes:new Map(),active:null,ready:Promise.resolve(),
+    recover:async()=>{throw Object.assign(Error('storage timed out'),{code:'recovery_timeout'});},rows:async()=>{throw Error('broken');},
+    recoveryError:null,unknownMeetingActive:false,ownershipLoaded:false,ownedRows:new Map(),recoveryLive:new Set(),changed(){},
+    meetingBridge:()=>({status:async()=>st}),bounded:p=>p,Blob,Date,
+    fail:(code,message)=>Object.assign(Error(message),{code})};
+  extract('  async function nativeLiveTake(appId)', '  async function ack(',c);
+  const [take]=await c.pending('mizel');
+  assert.equal(take.meta.meetingId,'mt_live');assert.equal(take.meta.captureRecovery.resumable,true);
+  assert.equal(c.ownedRows.get(take.id).memoryOnly,true);assert(c.recoveryLive.has(take.id));
+  // Only the meeting service's own named meeting, only for Recorder, never invented.
+  await assert.rejects(c.pending('messenger'),e=>e.code==='recovery_timeout');
+  st={recording:false};c.ownedRows.clear();c.recoveryLive.clear();
+  await assert.rejects(c.pending('mizel'),e=>e.code==='recovery_timeout');
+  st={recording:true};await assert.rejects(c.pending('mizel'),e=>e.code==='recovery_timeout');
 });

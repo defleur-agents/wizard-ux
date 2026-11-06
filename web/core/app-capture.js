@@ -1070,7 +1070,9 @@
       const recoverable = (live(await softStore(s, rows)) || []).find(r => r.appId === appId && r.status === 'recoverable');
       if (recoverable && !opts.resumeId) throw fail('resume_required', 'Resume the existing native capture before starting another.', { id: recoverable.id, appId });
       if (opts.resumeId) {
-        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable');
+        const mem = ownedRows.get(opts.resumeId);
+        const row = (live(await softStore(s, rows)) || []).find(r => r.id === opts.resumeId && r.appId === appId && r.status === 'recoverable') ||
+          (mem?.memoryOnly && mem.appId === appId && mem.status === 'recoverable' ? mem : null);
         if (!row) throw fail('not_recoverable', 'No native recording is available to resume.');
         s.row = row; recoveryLive.delete(row.id); s.partial = false; s.opts = { ...row.delivery, ...s.opts }; native = adapter({ ...opts, kind: row.kind }, row); s.meetingNative = native?.name === 'wizard-meetings';
         if (!native) throw fail('native_unavailable', 'Restore the native bridge before resuming this take.');
@@ -1187,12 +1189,34 @@
     // Busy/yielded recovery is not a settled take. Never offer a live orphan for upload/ack.
     return Promise.all((await rows()).filter(r => r.appId === appId && r.status === 'pending').map(result));
   }
+  // Phone storage broken, but the Android meeting service is still recording (it uploads by itself): hand the
+  // app a resumable in-memory take so it reattaches after a reload instead of asking the owner to Resume here
+  // (James, 6 Nov 2026: reload must be seamless mid-meeting). Nothing is invented: the service names the meeting.
+  async function nativeLiveTake(appId) {
+    if (active || appId !== 'mizel') return null;
+    const b = meetingBridge(); if (!b?.status) return null;
+    let st; try { st = await bounded(Promise.resolve(b.status()), 3000, 'native_timeout'); } catch (_) { return null; }
+    if (st?.recording !== true || typeof st.meetingId !== 'string' || !st.meetingId || active) return null;
+    let row = [...ownedRows.values()].find(r => r.native === 'wizard-meetings' && r.nativeId === st.meetingId && r.status === 'recoverable');
+    if (!row) {
+      row = { id: 'live-' + st.meetingId, appId, kind: 'meeting', native: 'wizard-meetings', nativeId: st.meetingId, status: 'recoverable',
+        partial: true, startedAt: Date.now() - (st.mediaMs || 0), durationMs: st.mediaMs || 0, seq: 0, bytes: 0, pcm: true, mime: 'audio/wav',
+        meta: { meetingId: st.meetingId }, memoryOnly: true };
+      ownedRows.set(row.id, row);
+    }
+    recoveryLive.add(row.id); ownershipLoaded = true; changed();
+    return { id: row.id, blob: new Blob([], { type: 'audio/wav' }), mime: 'audio/wav', startedAt: row.startedAt, durationMs: row.durationMs || 0,
+      meta: { ...row.meta, captureRecovery: { resumable: true, error: null } }, streamChunks: [], partial: true };
+  }
   async function pending(appId) {
     validate(appId, {});
     const memory = [...memoryTakes.values()].filter(t => t.session.row.appId === appId).map(t => t.result);
     if (memory.length) return memory; // keep a retry usable even while the store is unavailable
-    await ready; await recover();
-    const selected = (await rows()).filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    let all;
+    try { await bounded(ready, 3000, 'storage_failed'); await recover(); all = await bounded(rows(), 3000, 'storage_failed'); }
+    catch (e) { const t = await nativeLiveTake(appId); if (t) return [t]; throw e; }
+    const selected = all.filter(r => r.appId === appId && ['pending', 'recoverable'].includes(r.status));
+    if (!selected.length) { const t = recoveryError && await nativeLiveTake(appId); if (t) return [t]; }
     // Expose safely repaired browser takes even if an unrelated native bridge is indeterminate.
     // But [] is used by app owners as positive empty-custody proof: never forge that proof from unknown truth.
     if (!selected.length && (recoveryError || unknownMeetingActive || !ownershipLoaded ||
