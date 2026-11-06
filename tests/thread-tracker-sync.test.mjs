@@ -17,6 +17,9 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     WizChatsListModel: { isListWorking: s => s?.status === 'running' } };
   const fetchImpl = async (path, init = {}) => box(path, init);
   const ctx = vm.createContext({ window: win, document: doc, fetch: fetchImpl, setInterval() {}, setTimeout, CustomEvent: class { constructor(t, init) { this.type = t; this.detail = init?.detail; } }, MutationObserver: class { constructor(f) { mutation = f; } observe() {} }, Date, JSON, Math, Set, Map, Object, String, Promise, console });
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  vm.runInContext(readFileSync(new URL('../web/core/chats-list-model.js', import.meta.url), 'utf8'), ctx);
+  win.WizChatsListModel = ctx.WizChatsListModel;
   vm.runInContext(readFileSync(new URL('../web/core/thread-tracker.js', import.meta.url), 'utf8'), ctx);
   if (windows) {
     // Exercise the actual shared Chats subscriber, not a test copy of the activation behavior.
