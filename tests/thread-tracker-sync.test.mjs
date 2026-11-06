@@ -68,7 +68,7 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   tap(T, 'a', 'data-tt-open', anchor => { target = anchor; }); assert.equal(target.message_id, 'm');
   tap(T, 'a');
   assert.deepEqual(writes[0].ids, ['a', 'b', 'c']); assert.equal(T.dots('t'), '', 'optimistic group Seen clears every dot before I/O settles');
-  assert.match(T.stripHtml('t'), /1 acknowledged/);
+  assert.equal(T.stripHtml('t'), '', 'acknowledged-only replies leave no owner-inbox strip');
   release(); await tick();
   items = items.map(i => i.id === 'a' ? { ...i, state: 'blocked', seen: false, message_id: 'new', updated_at: 30 } : i);
   await T.loadCounts(true); await tick();
@@ -104,7 +104,7 @@ test('late Look activation hydrates every open thread and counts without reopeni
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=t'), 'loads the already-open main-agent thread');
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=private-thread&agent=synthetic-agent'), 'preserves the open thread agent');
   assert.equal(calls.filter(p => p.endsWith('/counts')).length, 1);
-  assert.match(T.stripHtml('t'), /1 ask/);
+  assert.equal(T.stripHtml('t'), '', 'running-only replies load dots but no owner-inbox strip');
   assert.match(T.dots('t'), /1 running/);
   assert.ok(renders.includes('a') && renders.includes('fresh'), 'also updates Reply in existing and new threads');
   const count = calls.length;
