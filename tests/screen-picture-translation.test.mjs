@@ -182,6 +182,68 @@ test('James: three distinct captions close together all get placed, not just the
   for (let i = 1; i < rects.length; i++) assert.ok(rects[i - 1].bottom <= rects[i].top + 0.01, 'placed lines never cover each other: ' + JSON.stringify(rects));
 });
 
+test('PR #1114 review: two captions side by side on the same baseline, overlapping horizontally (not stacked), never paint one over the other', async () => {
+  const lines = ['เราไปกินข้าวกันไหม', 'ฉันอยากไปเดินเล่น'], en = ['Shall we go eat?', 'I want to go for a walk'];
+  // same t/b fraction as BOX[0] (0.30..0.34) on both, so each box alone would paint at top ~233, height ~33.2
+  // (see the first test's comment). They sit side by side, not one above the other: A spans x .10-.52, B .30-.72,
+  // a 52 % horizontal overlap of A's width — a loose/imprecise model box, same shape of overlap the first test
+  // already keeps for vertically offset boxes. Neither box is offset in y at all.
+  const A = [0.10, 0.30, 0.52, 0.34], B = [0.30, 0.30, 0.72, 0.34];
+  const h = await harness();
+  h.identity();
+  h.pictured({ lines, boxes: [A, B] });
+  h.translated({ items: en, from: 'Thai' });
+  assert.deepEqual(Array.from(h.st.picRows, q => q.bi >= 0), [true, true], 'neither is dropped');
+  const ps = h.painted();
+  assert.equal(ps.length, 2, 'both painted');
+  for (const p of ps) assert.ok(near(p.top, 233) && near(p.height, 33.2), 'side-by-side boxes keep their own full height, not halved as if stacked: ' + JSON.stringify(ps));
+  // same row, so a plain top/bottom check can't see the defect: the two full-height boxes must not also overlap in x,
+  // or their opaque translation panels paint on top of each other over the shared region.
+  const [p0, p1] = ps.sort((a, b) => a.left - b.left);
+  assert.ok(p0.left + p0.width <= p1.left + 0.01, 'placed lines never cover each other, even side by side: ' + JSON.stringify(ps));
+});
+
+test('PR #1114 review: the reverse x order (second box further left) is split the same way', async () => {
+  const lines = ['เราไปกินข้าวกันไหม', 'ฉันอยากไปเดินเล่น'], en = ['Shall we go eat?', 'I want to go for a walk'];
+  const A = [0.30, 0.30, 0.72, 0.34], B = [0.10, 0.30, 0.52, 0.34]; // same pair, boxes given in the other order
+  const h = await harness();
+  h.identity();
+  h.pictured({ lines, boxes: [A, B] });
+  h.translated({ items: en, from: 'Thai' });
+  const ps = h.painted();
+  assert.equal(ps.length, 2, 'both painted');
+  const [p0, p1] = ps.sort((a, b) => a.left - b.left);
+  assert.ok(p0.left + p0.width <= p1.left + 0.01, 'placed lines never cover each other regardless of input order: ' + JSON.stringify(ps));
+});
+
+test('diagonal overlap (neither a column stack nor a shared row) still never paints one caption over the other', async () => {
+  const lines = ['เราไปกินข้าวกันไหม', 'ฉันอยากไปเดินเล่น'], en = ['Shall we go eat?', 'I want to go for a walk'];
+  // same x positions as the side-by-side case above, but offset in y too: too little vertical overlap to be a
+  // column stack, too little horizontal overlap (52 %) to be a shared row, so unstack() must still keep them apart.
+  const A = [0.10, 0.30, 0.52, 0.34], B = [0.30, 0.315, 0.72, 0.355];
+  const h = await harness();
+  h.identity();
+  h.pictured({ lines, boxes: [A, B] });
+  h.translated({ items: en, from: 'Thai' });
+  const ps = h.painted();
+  assert.equal(ps.length, 2, 'both painted');
+  const [p0, p1] = ps.sort((a, b) => a.top - b.top);
+  const xOverlap = Math.min(p0.left + p0.width, p1.left + p1.width) - Math.max(p0.left, p1.left);
+  const yOverlap = Math.min(p0.top + p0.height, p1.top + p1.height) - Math.max(p0.top, p1.top);
+  assert.ok(xOverlap <= 0 || yOverlap <= 0.01, 'diagonal boxes must not paint over each other: ' + JSON.stringify(ps));
+});
+
+test('James: three distinct captions close together still split vertically (same-column stack unaffected by the side-by-side fix)', async () => {
+  const lines = ['สวัสดีครับ', 'วันนี้อากาศดี', 'ไปเดินเล่นกันไหม'], en = ['Hello', 'The weather is nice today', 'Shall we go for a walk?'];
+  const h = await harness();
+  h.identity();
+  h.pictured({ lines, boxes: [[0.10, 0.30, 0.70, 0.34], [0.10, 0.32, 0.70, 0.36], [0.10, 0.31, 0.70, 0.35]] });
+  h.translated({ items: en, from: 'Thai' });
+  assert.equal(h.painted().length, 3, 'all three are painted, none left to "not placed"');
+  const rects = h.painted().sort((a, b) => a.top - b.top).map(p => ({ top: p.top, bottom: p.top + p.height }));
+  for (let i = 1; i < rects.length; i++) assert.ok(rects[i - 1].bottom <= rects[i].top + 0.01, 'placed lines never cover each other: ' + JSON.stringify(rects));
+});
+
 test('either reply may land first: native English chrome later cannot corrupt Thai → English', async () => {
   const h = await harness();
   const nativeCall = h.next('translate');
