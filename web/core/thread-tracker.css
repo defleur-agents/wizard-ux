@@ -23,7 +23,8 @@ html.wos-doc-scroll .wos-doc-thread .tt-strip { position: sticky; top: calc(var(
 .tt-caret { margin-left: auto; display: grid; place-items: center; color: var(--wz-text-muted); transition: transform .18s ease; }
 .tt-caret svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .tt-strip.open .tt-caret { transform: rotate(180deg); }
-.tt-panel { position: absolute; left: 0; right: 0; top: calc(100% + 4px); max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain; border-radius: 16px; border: 1px solid var(--wz-border);
+.tt-strip.open .tt-h { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.tt-panel { position: absolute; left: 0; right: 0; top: calc(100% - 1px); max-height: min(60vh, 440px); overflow-y: auto; overscroll-behavior: contain; border-radius: 0 0 14px 14px; border: 1px solid var(--wz-border);
   background-color: var(--wz-base); background-image: linear-gradient(var(--wz-surface), var(--wz-surface)); box-shadow: 0 14px 34px color-mix(in srgb, black 45%, transparent); }
 .tt-panel[hidden] { display: none; }
 .tt-gh { padding: 9px 12px 3px; font-size: 0.6875rem; letter-spacing: .04em; text-transform: uppercase; color: var(--wz-text-muted); }
