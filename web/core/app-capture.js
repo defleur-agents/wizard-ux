@@ -1249,9 +1249,11 @@
     const androidLive = () => {
       if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !androidMeetingPort() || preparations.size || memoryTakes.size) return null;
       if (active && !steadyLiveMeeting()) return null;
+      // Only meetings survive a reload: an active or unreadable device recorder (orb note) keeps blocking.
+      try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return null; } catch (_) { return null; }
       const r = active?.row?.native === 'wizard-meetings' ? active.row :
         [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
-      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : null,
+      return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : { appId: MEETING_APP },
         recheck: true, durable: false, nativeMeeting: true };
     };
     const no = reason => {
@@ -1298,7 +1300,9 @@
     if (live.length > 1 || live.some(r => !isMeeting(r))) return no('capture');
     // IndexedDB rows and Android services survive reload. Unknown custody is not page-held audio;
     // retain the uncertainty (never a durable/empty-custody proof) and leave recovery to the next boot.
-    const port = survives ? { nativeMeeting: true } : {};
+    // The meeting service may record with no stored row (phone storage broken); the shell keeps that app's frame
+    // only if it is the one holding a recording.
+    const port = survives ? { nativeMeeting: true, meetingApp: MEETING_APP } : {};
     if (uncertain && pageHoldsNoAudio) return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,
       recheck: true, durable: false, uncertain, ...port };
     return { safe: true, reason: null, keeps: live[0] ? keep(live[0]) : null,

@@ -15,7 +15,7 @@ function extract(from,to,ctx) {
 }
 function capture(overrides={}) {
   const ctx={active:null,memoryTakes:new Map(),preparations:new Map(),ownedRows:new Map(),recoveryLive:new Set(),unknownMeetingActive:false,
-    ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},...overrides};
+    ownershipLoaded:true,recoveryError:null,recoveryLease:null,configuredNative:{},attachedMeetingBridge:null,W:{},MEETING_APP:'mizel',...overrides};
   // This fail-closed matrix models an in-page adapter; the Android/no-page-audio
   // matrix lives in reload-page-audio-custody.test.mjs with configuredNative:null.
   extract('  function reloadCheck()', '  // Last moment before the shell reloads',ctx);
@@ -467,10 +467,18 @@ test('Android meeting port: reload allowed when only stored-take doubt blocks',(
   assert.equal(capture({W:{},configuredNative:null,recoveryLease:{},recoveryError:new Error('x')}).reloadCheck().safe,false);
   assert.equal(capture({configuredNative:null,W:{...W,WizardOSDevice:{recActive:()=>'{"id":"v"}'}}}).reloadCheck().reason,'device_recording');
 });
-test('native-meeting plan keeps the recording app frame even without a stored row',()=>{
-  const f=service({safe:true,keeps:null,nativeMeeting:true});f.facade.update.hold('Mizel recording');
-  const p=f.plan();assert.equal(p.ok,true);assert.equal(p.keeps.appId,'mizel');
-  const g=service({safe:true,keeps:null});g.facade.update.hold('Mizel recording');assert.equal(g.plan().ok,false);
+test('rowless Android meeting keeps only the Recorder frame; other apps and device notes still block',()=>{
+  const W={wizardMizelPort:{}};
+  const c=capture({W,configuredNative:null,recoveryError:new Error('storage timed out')}).reloadCheck();
+  assert.equal(c.safe,true);assert.equal(c.keeps?.id,undefined);assert.equal(c.keeps?.appId ?? c.meetingApp,'mizel');
+  // Codex review: an active or unreadable device recorder is not a surviving meeting.
+  assert.equal(capture({W:{...W,WizardOSDevice:{recActive:()=>'{"id":"note"}'}},configuredNative:null,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  assert.equal(capture({W:{...W,WizardOSDevice:{recActive:()=>{throw Error('x')}}},configuredNative:null,recoveryError:new Error('x')}).reloadCheck().safe,false);
+  // Another app's capture hold is never waived by the meeting exemption.
+  const f=service({safe:true,keeps:null,nativeMeeting:true,meetingApp:'mizel'},'messenger');f.facade.update.hold('Messenger recording upload');
+  assert.equal(f.plan().ok,false);
+  const g=service({safe:true,keeps:null,nativeMeeting:true,meetingApp:'mizel'});g.facade.update.hold('Mizel recording');
+  const p=g.plan();assert.equal(p.ok,true);assert.equal(p.keeps.appId,'mizel');
 });
 
 // James, 6 Nov 2026 ("I need to go back into the recorder and resume it manually"): with phone storage broken,
