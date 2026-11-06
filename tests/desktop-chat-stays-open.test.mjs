@@ -41,7 +41,8 @@ test('Classic desktop keeps the same open thread through Ready → Working → R
 });
 for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const a of ['done', 'file', 'unread', 'restore']) test(`${desktopHost ? 'desktop' : 'phone'} ${a}, preference ${after}`, async () => {
   const f = fixture(desktopHost, after); await f.context.threadAct('chat', 'same', a);
-  assert.equal(f.w.thread, desktopHost || after === 'stay' || a === 'restore' ? 'same' : null);
+  // Phone Archive always returns to the list (James, 7 Nov 2026); the other actions follow the setting.
+  assert.equal(f.w.thread, desktopHost || ((after === 'stay' && a !== 'done') || a === 'restore') ? 'same' : null);
 });
 for (const after of ['stay', 'list']) for (const desktopHost of [true, false]) for (const name of ['wos:boomerang-set', 'wos:snooze-someday']) test(`${desktopHost ? 'desktop' : 'phone'} ${name}, preference ${after}`, () => {
   const f = fixture(desktopHost, after); f.listeners[name]({ detail: { session: 'same', label: 'Later' } });
