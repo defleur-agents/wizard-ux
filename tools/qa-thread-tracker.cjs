@@ -330,6 +330,56 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await strip(page).locator('.tt-h').click();await page.screenshot({path:path.join(OUT,`dismiss-newer-${shell}-${skin}.png`)});
       check(`${tag}: no page errors`,ctx.errors.length===0,ctx.errors);await ctx.close();
     }
+    /* ---- the owner's reply answers older amber and red asks (James, 6 Nov): no red, count drops, a re-tag returns ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
+      const tag = `answered/${shell}/${skin}`, svc = service(), anchor = svc.items[1], at = anchor.at;
+      svc.items = [{ ...anchor, id: 'airlock-marker-screenshots', title: 'Marker screenshots', state: 'blocked', message_id: 'm-air', ask: '' },
+        { ...anchor, id: 'airlock-redact-marker', title: 'Redact the marker', state: 'needs_you', message_id: 'm-air', ask: 'Reply redact to retry' }];
+      svc.seen.clear();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      check(`${tag}: before the reply the strip reads 1 open with a red count`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1);
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `answered-before-${shell}-${skin}.png`) });
+      await page.locator('.ch-compose textarea').fill('Reply redact: yes please retry');
+      const frame = await page.evaluate(() => { document.querySelector('[data-chform]').requestSubmit(); const h = window.WosThreadTracker.stripHtml('tt-main'), d = window.WosThreadTracker.dots('tt-main');
+        return { red: /tt-dot bad|tt-dot you/.test(h) || /stuck|need you/.test(d), open: /\d+ open/.test(h), working: /Working on your reply/.test(h), spinner: /tt-dot run/.test(h) }; });
+      check(`${tag}: in the send frame no red or amber, the count drops, a spinner shows`, !frame.red && !frame.open && frame.working && frame.spinner, frame);
+      for (let n = 0; n < 50 && !svc.writes.some(w => /\/v1\/runs$|\/steer$/.test(w.p)); n++) await page.waitForTimeout(100);
+      await page.waitForTimeout(400);
+      check(`${tag}: answered asks are never acknowledged in the box`, !svc.writes.some(w => w.p.endsWith('/thread-items/seen')) && svc.seen.size === 0, svc.writes.map(w => w.p));
+      await page.screenshot({ path: path.join(OUT, `answered-working-${shell}-${skin}.png`) });
+      // The agent's next reply re-lists the red ask: a new server version on a new reply.
+      svc.items = svc.items.map(i => i.id === 'airlock-marker-screenshots' ? { ...i, message_id: 'm-next', updated_at: Date.now() + 5, ask: 'Reply screenshots to continue' } : i);
+      await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(() => /stuck/.test(window.WosThreadTracker.dots('tt-main')));
+      check(`${tag}: the agent's re-tag brings the ask back; the untouched one stays answered`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1);
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `answered-retag-${shell}-${skin}.png`) });
+      check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors); await ctx.close();
+    }
+    /* ---- running work keeps the strip (James's live repro: Shell split 12 running + 1 unseen done, Thread tracker 6 running) ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const shape of ['mixed', 'running-only']) {
+      const tag = `running-strip/${shape}/${shell}/${skin}`, svc = service(), anchor = svc.items[1];
+      const mk = (id, state, mid, extra = {}) => ({ ...anchor, id, title: id, state, message_id: mid, ...extra });
+      let expected;
+      if (shape === 'mixed') {
+        // One reply mixes 4 running members with 1 unseen finished member; 8 more running replies; 5 finished and seen.
+        svc.items = [...[1, 2, 3, 4].map(n => mk(`split-run-${n}`, 'running', 'r-0')), mk('split-done', 'done', 'r-0'),
+          ...Array.from({ length: 8 }, (_, n) => mk(`split-run-${n + 5}`, 'running', `r-${n + 1}`)),
+          ...Array.from({ length: 5 }, (_, n) => mk(`split-old-${n}`, 'done', `d-${n}`))];
+        svc.seen = new Set(svc.items.filter(i => i.id.startsWith('split-old')).map(i => i.id)); expected = 9;
+      } else {
+        svc.items = [...Array.from({ length: 6 }, (_, n) => mk(`tracker-run-${n}`, 'running', `r-${n}`)), ...Array.from({ length: 9 }, (_, n) => mk(`tracker-old-${n}`, 'done', `d-${n}`))];
+        svc.seen = new Set(svc.items.filter(i => i.id.startsWith('tracker-old')).map(i => i.id)); expected = 6;
+      }
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      check(`${tag}: the strip shows, with ${expected} open`, new RegExp(`^${expected} open`).test(await strip(page).locator('.tt-h').innerText()), await strip(page).locator('.tt-h').innerText());
+      await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `running-strip-${shape}-${shell}-${skin}.png`) });
+      check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors); await ctx.close();
+    }
+    if (process.env.QA_ONLY_NEW) { console.log(`\n${pass} passed, ${fail} failed`); await browser.close(); process.exit(fail ? 1 : 0); }
     /* ---- explicit owner sends acknowledge old green before phone send-and-go ---- */
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const working of [false, true]) {
       WORKING = working;
@@ -349,7 +399,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       }
       await page.locator('.ch-compose textarea').fill('Synthetic follow-up after reading the earlier replies');
       const immediate=await page.evaluate(()=>{document.querySelector('[data-chform]').requestSubmit();const d=window.WosThreadTracker.dots('tt-main');return {green:/finished, not seen/.test(d),amber:/need you/.test(d),red:/stuck/.test(d),running:/running/.test(d)};});
-      check(`${tag}: green clears in the send frame; amber red and running stay`, !immediate.green && immediate.amber && immediate.red && immediate.running,immediate);
+      check(`${tag}: green clears and the reply answers amber and red in the send frame; running stays`, !immediate.green && !immediate.amber && !immediate.red && immediate.running,immediate);
       for(let n=0;n<50&&!svc.writes.some(w=>/\/v1\/runs$|\/steer$/.test(w.p));n++)await page.waitForTimeout(100);
       check(`${tag}: shared Seen path sends both older green ids and no action-needed ids`,svc.writes.some(w=>w.p.endsWith('/thread-items/seen')&&JSON.stringify([...w.b.ids].sort())===JSON.stringify(['icons','voice-notes'])));
       check(`${tag}: actual ${working?'steer':'send'} is intercepted`,svc.writes.some(w=>working?/\/steer$/.test(w.p):/\/v1\/runs$/.test(w.p)));
