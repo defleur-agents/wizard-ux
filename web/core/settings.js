@@ -227,7 +227,7 @@
       return true;
     },
   });
-  window.addEventListener('wos:prefs', () => { for (const m of mounts) m.render(); });
+  window.addEventListener?.('wos:prefs', () => { for (const m of mounts) m.render(); });
   // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
     html() {
