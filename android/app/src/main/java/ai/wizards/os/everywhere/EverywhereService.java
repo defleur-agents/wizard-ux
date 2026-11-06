@@ -101,6 +101,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
 
     private static volatile EverywhereService liveService;
     public static boolean serviceAlive() { return liveService != null; }
+    /** Includes paused takes/startup; an idle foreground orb service is not recording. */
+    public static boolean captureActive() { EverywhereService s = liveService; return s != null && s.listening; }
     private static boolean appInFront;
     /** The side-button surface is showing: it has its own orb, so the floating one steps aside. */
     private static boolean surfaceInFront;
@@ -132,7 +134,8 @@ public class EverywhereService extends Service implements EverywhereOutbox.Liste
     private EverywhereOutbox outbox;
     private NoteRecorder.Take recorder;
     private boolean stagedAudio;
-    private boolean listening, paused, dictating;
+    private volatile boolean listening;
+    private boolean paused, dictating;
     private long startedAt;
     private int size, ctl, fan, margin;
     private float density;
