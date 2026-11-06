@@ -35,6 +35,25 @@ test('unrecorded input and different target still refuse', () => {
   assert.throws(() => h.translate('1', '["unrecorded"]', 'English'), /No recorded inference/);
   assert.throws(() => h.translate('1', '["Copy translation"]', 'French'), /No recorded inference/);
 });
+test('capture waits for a stable, fully onscreen sheet after its transform finishes', () => {
+  const start = text.indexOf('function sheetCaptureReady()');
+  const end = text.indexOf('\n}',start) + 2;
+  let bounds = {left:8,top:585,right:352,bottom:950,width:344,height:365}, transform = 'matrix(1, 0, 0, 1, 0, 200)';
+  const context = {window:{},innerWidth:360,innerHeight:780,
+    document:{querySelector:()=>({getBoundingClientRect:()=>bounds,classList:{contains:()=>true}})},
+    getComputedStyle:()=>({transform})};
+  const ready = vm.runInNewContext('(' + text.slice(start,end) + ')',context);
+  for(let i=0;i<5;i++) assert.equal(ready(),false,'transitional clipped frame must fail');
+  transform = 'none';
+  assert.equal(ready(),false,'stable but offscreen sheet must fail');
+  bounds = {...bounds,top:383,bottom:748};
+  assert.equal(ready(),false,'first final frame is insufficient');
+  assert.equal(ready(),false);
+  assert.equal(ready(),false);
+  assert.equal(ready(),true,'three unchanged frame intervals after settling');
+  bounds = {...bounds,top:382,bottom:747};
+  assert.equal(ready(),false,'movement resets stability');
+});
 test('historical bridge rejects the exact synthetic English control', () => {
   const old = install.replace(' && !chromeLabels.includes(t)', '').replace('mapping[t] ?? t', 'mapping[t]');
   const context = {window: {}, setTimeout() {}};

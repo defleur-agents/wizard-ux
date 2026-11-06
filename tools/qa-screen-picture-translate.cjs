@@ -18,6 +18,17 @@ const chromeLabels = ['Copy translation', 'Select text', 'Ask Wizard'];
 const baseline = path.join(fixture, 'baseline-screen.html');
 const record = {mode: 'recorded-installed-private-inference-replay, NOT new inference or native device proof', checks: [], screenshots: []};
 const check = (name, ok) => { record.checks.push({name, ok:!!ok}); console.log((ok ? 'PASS ' : 'FAIL ') + name); };
+// State completion precedes the sheet's 200ms entrance transition.
+function sheetCaptureReady() {
+  const sheet = document.querySelector('#sheet'), r = sheet.getBoundingClientRect();
+  const bounds = [r.left, r.top, r.right, r.bottom];
+  const previous = window.__qaSheetBounds;
+  const stable = previous && bounds.every((v,i) => Math.abs(v - previous.bounds[i]) < 0.1);
+  window.__qaSheetBounds = {bounds, frames: stable ? previous.frames + 1 : 0};
+  return sheet.classList.contains('show') && getComputedStyle(sheet).transform === 'none'
+    && r.width > 0 && r.height > 0 && r.left >= 0 && r.top >= 0
+    && r.right <= innerWidth && r.bottom <= innerHeight && window.__qaSheetBounds.frames >= 3;
+}
 (async () => {
   const browser = await chromium.launch({headless:true});
   try {
@@ -73,6 +84,41 @@ const check = (name, ok) => { record.checks.push({name, ok:!!ok}); console.log((
           const bg=await page.locator('#sheet').evaluate(e=>getComputedStyle(e).backgroundColor);
           check('candidate '+skin+': text panel fully opaque',!bg.startsWith('rgba'));
           await page.evaluate(skin => document.documentElement.style.setProperty('--wz-panel',skin==='grove'?'#f5f2e8':'#120e24'),skin);
+          await page.waitForFunction(sheetCaptureReady, null, {polling:'raf',timeout:10000});
+          await page.screenshot({path:path.join(out,version+'-'+skin+'-originals.png')});
+          record.screenshots.push(version+'-'+skin+'-originals.png');
+          // Originals precede English in the existing scrollable sheet; capture both positions.
+          await page.locator('#sel').evaluate(async sel => {
+            sel.scrollTop = sel.scrollHeight;
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          });
+          const geometry = await page.evaluate(() => {
+            const sel = document.querySelector('#sel'), clip = sel.getBoundingClientRect();
+            const rect = r => ({left:r.left,top:r.top,right:r.right,bottom:r.bottom,width:r.width,height:r.height});
+            const within = (r,c) => r.width > 0 && r.height > 0 && r.left >= Math.max(0,c.left) - 0.5
+              && r.top >= Math.max(0,c.top) - 0.5 && r.right <= Math.min(innerWidth,c.right) + 0.5
+              && r.bottom <= Math.min(innerHeight,c.bottom) + 0.5;
+            const english = ["I'm heading to battle", 'Okay, and over there', 'Are there any girls?'].map(text => {
+              const walker = document.createTreeWalker(sel,NodeFilter.SHOW_TEXT);
+              let node; while ((node = walker.nextNode()) && !node.data.includes(text)) {}
+              if (!node) return {text,visible:false,rects:[]};
+              const range = document.createRange(), start = node.data.indexOf(text);
+              range.setStart(node,start); range.setEnd(node,start + text.length);
+              const rects = [...range.getClientRects()];
+              return {text,rects:rects.map(rect),visible:rects.length > 0 && rects.every(r =>
+                within(r,clip) && sel.contains(document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2)))};
+            });
+            const buttons = ['aCopy','aSearch','aTrans','aAsk'].map(id => {
+              const el = document.getElementById(id), r = el.getBoundingClientRect();
+              return {id,rect:rect(r),reachable:!el.disabled && within(r,{left:0,top:0,right:innerWidth,bottom:innerHeight})
+                && el.contains(document.elementFromPoint((r.left+r.right)/2,(r.top+r.bottom)/2))};
+            });
+            return {sheet:rect(document.querySelector('#sheet').getBoundingClientRect()),clip:rect(clip),scrollTop:sel.scrollTop,english,buttons};
+          });
+          fs.writeFileSync(path.join(out,version+'-'+skin+'-capture.json'),JSON.stringify(geometry,null,2));
+          check('candidate '+skin+': captured English is visibly inside scroll viewport',geometry.english.every(item=>item.visible));
+          check('candidate '+skin+': sheet actions are in viewport and hit-testable',geometry.buttons.every(item=>item.reachable));
+          assert.ok(geometry.english.every(item=>item.visible) && geometry.buttons.every(item=>item.reachable),'capture geometry must pass before screenshot');
           await page.screenshot({path:path.join(out,version+'-'+skin+'.png')});
           record.screenshots.push(version+'-'+skin+'.png');
           // An outside touch dismisses the sheet, never the app; translation stays copyable.
