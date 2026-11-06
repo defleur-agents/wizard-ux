@@ -206,6 +206,7 @@
   const LIST_DEADLINE = 30000;
   const listSignal = () => typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(LIST_DEADLINE) } : {};
   async function fetchSessions(full, agent = '', onFirst = null) {
+    const read = ++titleRead;
     const out = []; let snapshot = '', meta = null, resets = 0;
     const overrides = JSON.stringify(listOverrides(agent));
     for (let offset = 0; offset < 100000; ) {
@@ -227,10 +228,10 @@
       out.push(...rows.map(normalize).filter(Boolean));
       offset += rows.length;
       const more = typeof p.has_more === 'boolean' ? p.has_more : typeof p.pagination?.has_more === 'boolean' ? p.pagination.has_more : rows.length >= 100;
-      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta }; }
+      if (!more) { setTimeout(()=>{void fetchTitleIndex(agent)},0); return { sessions:out, complete:true, meta, titleRead:read }; }
       if (!rows.length) throw new Error('Incomplete session window');
-      if (!full) return { sessions:out, complete:false, meta };
-      if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta });
+      if (!full) return { sessions:out, complete:false, meta, titleRead:read };
+      if (onFirst && offset === rows.length) await onFirst({ sessions:out.slice(), complete:false, meta, titleRead:read });
     }
     throw new Error('Session window limit reached');
   }
@@ -242,13 +243,14 @@
     try { for(const k of Object.keys(localStorage)) if(k.startsWith(TITLE_PREFIX)) localStorage.removeItem(k); } catch {}
     window.WizCore?.chatSearch?.reset?.();
   }
-  window.addEventListener('wizard-account-change',clearTitleIndex);
+  window.addEventListener('wizard-account-change',()=>{ RENAMES.clear(); clearTitleIndex(); });
   function indexRow(raw,scope) {
     if(!raw?.id || (raw.agent || 'hermes')!==(scope || 'hermes')) return null;
     return normalize({...raw,listVersion:1,agent:scope||'',agent_id:scope||'hermes',updatedAt:raw.cardTime||raw.updatedAt,activityAt:raw.cardTime||raw.activityAt,previewAt:raw.cardTime||raw.previewAt});
   }
   async function fetchTitleIndex(scope='') {
     if(TITLE_LOADING.has(scope)) return TITLE_LOADING.get(scope);
+    const read = ++titleRead;
     const task=(async()=>{
       let cursor='', snapshot='', offset=0, build='', rows=[], epoch=titleEpoch;
       const overrides=JSON.stringify(listOverrides(scope));
@@ -279,6 +281,7 @@
         if(rows.length>10000) throw new Error('Title index limit reached');
         if(value.has_more && !cursor) { offset+=value.data.length; continue; }
         if(value.archive_cursor) { cursor=value.archive_cursor; offset=0; continue; }
+        rows.forEach(s=>applyTitle(s,read));
         const entry={build,rows}; TITLE_INDEX.set(scope,entry);
         if(!scope && titleAccount) try { const data=JSON.stringify(entry); if(data.length<2000000) localStorage.setItem(key,data); } catch {}
         store.emit(); return;
@@ -544,9 +547,44 @@
    * the thread back. Restoring an archived thread remembers when, in the key Wizard uses, so it lands in Ready. */
   const RESTORED_KEY = 'wizard.mobile.restored-threads.v1';
   const OVER = new Map(); // id -> { archived?, deferred?, restoredAt? } while a write is in flight
+  // A title write has its own reconciliation fence: disposition actions settle on
+  // time alone, but a cached list/detail can still carry the old title after PATCH.
+  const RENAMES = new Map();
+  let titleRead = 0;
+  const titleScope = s => `${s.agent || 'hermes'}:${s.id}`;
+  function applyTitle(s, read = 0, authoritative = false) {
+    const o = RENAMES.get(titleScope(s)); if (!o) return s;
+    if (o.settled && read > o.settled) {
+      if (authoritative && read > o.confirmed) { o.title = s.title; o.confirmed = read; o.dirty = false; }
+      // A differing snapshot may be stale OR another owner's newer edit. Only
+      // a fresh canonical detail read can distinguish them; never pin forever.
+      else if (!authoritative && s.title !== o.title && read > o.confirmed) o.dirty = true;
+    }
+    s.title = o.title; return s;
+  }
+  function confirmTitle(store, id, entry) {
+    if (entry.reading || (entry.confirmed && !entry.dirty)) return;
+    // Lists/indexes are cached snapshots; a new detail GET goes to canonical
+    // session storage. Another owner's rename may win before ours is observed.
+    entry.reading = store.sessionInfo(id).then(s => {
+      if (s && RENAMES.get(titleScope(s)) === entry) {
+        paintTitle(store, s, entry.title); writeSnap(store); store.emit();
+      }
+    }).catch(() => {}).finally(() => { entry.reading = null; });
+  }
+  function paintTitle(store, session, title) {
+    const key = titleScope(session);
+    const rows = [...store.sessions, ...Object.values(store.agentSessions).flat(), ...DETAIL.values(),
+      ...[...SPACE_ROWS.values()].map(e => e.row), ...[...TITLE_INDEX.values()].flatMap(e => e.rows)];
+    for (const row of rows) if (row && titleScope(row) === key) row.title = title;
+    session.title = title;
+  }
   const readRestored = () => { try { const v = JSON.parse(localStorage.getItem(RESTORED_KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; } };
   const writeRestored = v => { try { localStorage.setItem(RESTORED_KEY, JSON.stringify(v)); } catch (e) {} };
-  function applyLocal(s) {
+  function applyLocal(s, read = 0) {
+    applyTitle(s, read);
+    const rename = RENAMES.get(titleScope(s));
+    if (rename?.settled && (!rename.confirmed || rename.dirty)) confirmTitle(L, s.id, rename);
     const r = readRestored()[s.id];
     if (r && !s.deferred) {
       const latest = Math.max(...[s.lastUserAt, s.lastAssistantAt, s.activityAt].map(v => Date.parse(v ?? '')).filter(isFinite));
@@ -704,6 +742,7 @@
       const [id, entry] = SPACE_QUEUE.shift(); spaceReads++;
       (async () => {
         const agent = L.agentOf(id);
+        const read = ++titleRead;
         try {
           const p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${agent ? `&agent=${encodeURIComponent(agent)}` : ''}`, listSignal())).json();
           const s = normalize(p.session || p);
@@ -715,6 +754,7 @@
             AGENT_OF.set(id, s.agent);
           }
           if (agent) s.agent = agent;
+          applyTitle(s, read);
           entry.row = s.hidden ? null : s;
           entry.failed = false;
         } catch (_) { entry.row = null; entry.failed = true; }
@@ -814,7 +854,7 @@
             const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s);
+            applyLocal(s, got.titleRead);
           }
           // A settled action stays applied until a list read that started after it lands.
           for (const [k, o] of OVER) if (o.settled && o.settled < started) OVER.delete(k);
@@ -869,7 +909,7 @@
             const d = deferred[seenKeyOf(s)];
             delete s.deferred; delete s.deferredAt; delete s.restoredAt;
             if (d) { if (d.deferred) { s.deferred = true; s.deferredAt = d.updatedAt; } else s.restoredAt = d.updatedAt; }
-            applyLocal(s);
+            applyLocal(s, got.titleRead);
           }
           addSynthetic(list, id);
           window.WosModels?.reconcile(list);
@@ -1069,6 +1109,7 @@
       return rows;
     },
     async searchSessions(q, agent = '', signal, onBatch) {
+      const read = ++titleRead;
       const scopes=otherAgent(agent)?[agent]:['',...(AG()?.others()||[]).filter(a=>a.privacy!=='private').map(a=>a.id)];
       const settled=await Promise.allSettled(scopes.map(async scope=>{
         const found=[]; let snapshot='', resets=0, legacy=false;
@@ -1091,6 +1132,7 @@
             if((raw.agent||'hermes')!==(scope||'hermes')) continue;
             const s=body ? {...(available.find(s=>s.id===raw.id)||indexRow({id:raw.id,agent:raw.agent,title:'Chat'},scope)),searchSnippet:raw.snippet} : normalize(raw);
             if(!s) continue;
+            applyTitle(s, read);
             if(signal?.aborted) throw new DOMException('Aborted','AbortError');
             if(scope) AGENT_OF.set(s.id,scope);
             found.push(s);
@@ -1117,10 +1159,11 @@
         for(const s of TITLE_INDEX.get(scope)?.rows||[]) rows.set(`${scope}:${s.id}`,s);
         for(const s of (scope?this.agentSessions[scope]||[]:this.sessions)) rows.set(`${scope}:${s.id}`,s);
       }
-      return [...rows.values()];
+      return [...rows.values()].map(s=>applyTitle(s));
     },
     rememberSearch(s) { if(s?.id) { if(otherAgent(s.agent)) AGENT_OF.set(s.id,s.agent); DETAIL.set(s.id,s); while(DETAIL.size>300) DETAIL.delete(DETAIL.keys().next().value); } },
     async sessionInfo(id) {
+      const read = ++titleRead;
       let agent = this.agentOf(id);
       let p;
       try { p = await (await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}?view=detail${aq(id,'&')}`)).json(); }
@@ -1147,6 +1190,7 @@
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
+      applyTitle(s, read, true);
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
       // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
@@ -1225,14 +1269,25 @@
     async rename(id, title) {
       const s = this.session(id), t = String(title || '').replace(/\s+/g, ' ').trim().slice(0, 60);
       if (!s || !t || this.busy(id)) return false;
+      const key = titleScope(s), previous = RENAMES.get(key);
+      if (previous && !previous.settled) return false;
       if (t === s.title) return true;
-      const before = { title: s.title };
-      Object.assign(s, { title: t }); this.emit();
+      const before = s.title, entry = { title:t, settled:0, confirmed:0 };
+      RENAMES.set(key, entry); paintTitle(this, s, t); this.emit();
       try {
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
         if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
+        entry.settled = ++titleRead;
+        confirmTitle(this, id, entry);
+        writeSnap(this);
         setTimeout(() => this.refresh(), 50); return true;
-      } catch (e) { const c = this.session(id); if (c) Object.assign(c, before); this.emit(); return /already in use/i.test(e.message) ? 'taken' : false; }
+      } catch (e) {
+        if (RENAMES.get(key) === entry) {
+          if (previous) RENAMES.set(key, previous); else RENAMES.delete(key);
+          paintTitle(this, s, before);
+        }
+        this.emit(); return /already in use/i.test(e.message) ? 'taken' : false;
+      }
     },
     // Restore: a deferred thread comes back to Work; an archived (or aged-out) one is un-archived and lands in Ready.
     restore(id) {

@@ -1839,11 +1839,17 @@ window.WizCore.chats = function createChats(H) {
     const { wid, sid } = rowSheet, t = form.querySelector('input').value.replace(/\s+/g, ' ').trim();
     if (!t) { form.querySelector('input').focus(); return; }
     closeRowSheet();
-    const r = await LIVE.rename(sid, t);
+    const paint = () => {
+      for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
+      const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
+    };
+    // This action owns its paint: a focused rename field/list hold must not wait
+    // for the PATCH or the next poll to notify the phone and AI apps sidebar.
+    const saving = LIVE.rename(sid, t); paint();
+    const r = await saving;
     if (r === true) toast('✎', 'Renamed', 1400);
     else toast('!', r === 'taken' ? 'Another thread already has that name' : 'Couldn’t rename · kept the old name', 2600);
-    for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
-    const w = W[wid]; if (w && w.thread === sid) renderThreadNow(w);
+    paint();
   }
   /* Live repaints rebuild the chat pane; an open sheet (rename, thread actions) and its focused field survive them,
    * or Rename closed itself before a new name could be typed (Novaire, 21 Oct 2026). */

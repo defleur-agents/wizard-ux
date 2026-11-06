@@ -8,7 +8,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 
 [Reuse gate](app-reuse-gate.md).
 
-| Search | `WizCore.chatSearch` (`web/core/chat-search.js`); coverage, relevance × recency; flat paged hits |
+| Search | `WizCore.chatSearch` (`web/core/chat-search.js`); ranked paged hits |
 
 | QA | `tools/qa-synthetic-fence.cjs` +startup/census |
 
@@ -56,7 +56,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`web/core/desktop-host.js`): snapshots, retained frame, open/focus/close, onChange, panes. Classic first; AI apps migration pending. |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
-| Chats disposal | `WizCore.chats`: fence reads, cancel timers |
+| Chat state | `WizLive` (`web/live.js`): rename/read fences; `WizCore.chats`: dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |
 | Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`); `replyRecorder`; draft admission; single-app host; pills: `workspaceNav.chatsCount/refreshChats` (canonical unread + routed notes); subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
