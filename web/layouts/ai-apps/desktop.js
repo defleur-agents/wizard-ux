@@ -271,6 +271,14 @@ export default function desktop(api) {
   const orbBtn = el('button', 'aad-orbbtn', { type: 'button', 'aria-label': 'Wizard orb (the microphone). Click to talk, hold for a command, drag up for a new chat to type in.' });
   // round 6: the orb IS the microphone, so it wears a small one (in the composer, where the mic was, and on its own spot)
   const micG = el('span', 'aad-mic', { 'aria-hidden': 'true' }); micG.append(svgIcon(doc, 'mic', 'aad-mic-i'));
+  const micMarkup = micG.innerHTML; let orbIdentityHtml = micMarkup;
+  function paintOrbIdentity(appId) {
+    const a = appId && api.apps.list().find(a => a.id === appId), S = doc.defaultView?.WizSigil;
+    const html = a && S ? (a.sgh || S.html(a.sigil || a)) : micMarkup;
+    if (html === orbIdentityHtml) return;
+    orbIdentityHtml = html; micG.innerHTML = html;
+    if (a && S) { S.orb(micG); for (const glyph of micG.children) { glyph.style.width = '40%'; glyph.style.height = '40%'; } }
+  }
   orbBox.append(cv, fb, micG, orbBtn);
 
 
@@ -1691,6 +1699,7 @@ export default function desktop(api) {
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || !onMainChats(r)) draftWant = false;
     noteRouteIntoActions(doc, '.win .dchats .pane-main');
     const h = here(r);
+    paintOrbIdentity(h.app);
     // an app coming to the front closes the picker; a repaint with the same app in front does not (round 21: ⌥A / + with
     // an app open flashed shut on the next render)
     if (h.app && h.app !== frontApp) closeAll();

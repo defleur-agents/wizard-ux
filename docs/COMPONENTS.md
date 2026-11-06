@@ -77,7 +77,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Agent identity, glyph, hue; which agents an app joins (`appAgents`: privacy, needs_private_agent) | `WosAgents` (`agents.js`) |
 | Store | `storeKind,sourceLabel,parseInstallLink,removeInstalledApp` (`web/store/`) |
 | App agent routing, private-app note + setup (incl. Store) | `WosAppRoute` (`app-route.js`) |
-| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; named registry glyphs and HOUSE masks beat cached package pictures; unbranded apps keep package/catalog fallback; pin raster masks contain-fit. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` |
+| App icons, logos | `WizSigil` (`sigils.js`, `sigils.css`); id aliases; named registry glyphs and HOUSE masks beat cached package pictures; unbranded apps keep package/catalog fallback; `orb(node)` white glyphs, no package tiles; contain-fit pins. Tests: `app-icon-consumers.test.mjs`, `app-icon-harness.test.mjs` |
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
