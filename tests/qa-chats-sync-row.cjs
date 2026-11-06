@@ -64,7 +64,7 @@ const rows = () => [
         assert.equal(await page.evaluate(() => document.documentElement.dataset.shell), shell);
         await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
         const list = '.ch-list:visible';
-        await page.locator(list).getByText('Synthetic ready', { exact: true }).first().waitFor({ timeout: 10000 });
+        await page.locator(list + ' .ch-sec .ch-sec-h').first().waitFor({ timeout: 10000 });
         await page.waitForFunction(() => !WizLive.loading, null, { timeout: 10000 });
         await page.evaluate(() => document.fonts.ready);
         await page.waitForTimeout(400);
@@ -72,7 +72,7 @@ const rows = () => [
           const L = [...document.querySelectorAll('.ch-list')].find(n => n.getClientRects().length), r = n => n && n.getBoundingClientRect();
           const sync = L.querySelector('.ch-sync'), sec = L.querySelector('.ch-sec .ch-sec-h'), act = sync?.querySelector('[data-chtroubleshoot]'), span = sync?.querySelector(':scope > span');
           const cs = n => n && getComputedStyle(n);
-          return { firstSecTop: r(sec)?.top, secH: r(sec)?.height, sync: sync && { cls: sync.className, text: sync.innerText, h: r(sync).height, top: r(sync).top, bottom: r(sync).bottom, left: r(sync).left, right: r(sync).right,
+          return { firstSecTop: r(sec)?.top - r(L).top, secH: r(sec)?.height, sync: sync && { cls: sync.className, text: sync.innerText, h: r(sync).height, top: r(sync).top, bottom: r(sync).bottom, left: r(sync).left, right: r(sync).right,
             pbtn: sync.querySelectorAll('.pbtn').length, buttons: sync.querySelectorAll('button').length, spanTitle: span?.getAttribute('title'), spanLines: span ? Math.round(span.getBoundingClientRect().height / parseFloat(cs(span).lineHeight || 16)) : 0,
             spanH: r(span)?.height, ws: cs(span)?.whiteSpace, color: cs(sync).color, opacity: cs(sync).opacity },
             act: act && { text: act.innerText, label: act.getAttribute('aria-label'), top: r(act).top, bottom: r(act).bottom, left: r(act).left, right: r(act).right, h: r(act).height, w: r(act).width,
@@ -81,7 +81,8 @@ const rows = () => [
         const healthy = await geo(); entry.healthy = healthy;
         assert.equal(healthy.sync, null, stem + ': no notice while the list is up to date');
         await page.screenshot({ path: path.join(out, stem + '-no-notice.png') });
-        // A failed read: Wizard unreachable.
+        // A failed read: Wizard unreachable. Offsets are measured inside the list, so the separate global connection pill
+        // (unchanged, appears later) never counts as this notice's height.
         down = true;
         await page.evaluate(() => WizLive.refresh());
         await page.locator(list + ' .ch-sync.off').waitFor({ timeout: 15000 });
