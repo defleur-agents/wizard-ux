@@ -121,7 +121,8 @@
     // transparent glyph keeps its alpha; an opaque tile loses its background.
     const at = (x, y) => (y * width + x) * 4;
     const edge = [[.5,.06],[.5,.94],[.06,.5],[.94,.5]].map(([x,y]) => at(Math.min(width-1,Math.floor(x*width)),Math.min(height-1,Math.floor(y*height))));
-    const opaque = edge.filter(i => data[i+3] > 240);
+    let transparent = 0; for (let i = 3; i < data.length; i += 4) if (data[i] < 16) transparent++;
+    const opaque = transparent > width*height*.1 ? [] : edge.filter(i => data[i+3] > 240);
     const bg = [0,1,2].map(c => opaque.map(i => data[i+c]).sort((a,b)=>a-b)[Math.floor(opaque.length/2)] || 0);
     for (let i = 0; i < data.length; i += 4) {
       const distance = Math.hypot(data[i]-bg[0],data[i+1]-bg[1],data[i+2]-bg[2]);
@@ -134,7 +135,7 @@
     if (!node) return;
     const paint = (el, raster = false) => {
       el.dataset.orbGlyph = '';
-      for (const [key,value] of Object.entries({background:raster?'none':'#fff',filter:'none',color:'#fff','border-radius':'0','box-shadow':'none'})) el.style.setProperty(key,value,'important');
+      for (const [key,value] of Object.entries({background:raster?'none':'white',filter:'none',color:'white','border-radius':'0','box-shadow':'none'})) el.style.setProperty(key,value,'important');
       if (raster) for (const key of ['mask','-webkit-mask']) el.style.setProperty(key,'none','important');
     };
     node.querySelectorAll('.sgi,.sglogo').forEach(el => {

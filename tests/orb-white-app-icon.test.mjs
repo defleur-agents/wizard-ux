@@ -30,6 +30,13 @@ for(const [name,bg,fg,transparent] of [
     assert.deepEqual([...output.slice(i,i+3)],[255,255,255],'only white, never source colour');
   }
 });
+test('transparent round glyph touching all four edges keeps its foreground',()=>{
+  const data=new Uint8ClampedArray(32*32*4);
+  for(let y=0;y<32;y++)for(let x=0;x<32;x++)if(Math.hypot(x-15.5,y-15.5)<16)data.set([70,200,160,255],(y*32+x)*4);
+  const output=load().whitePixels(data,32,32);
+  assert.equal(output[(16*32+16)*4+3],255);
+  for(let i=3;i<data.length;i+=4)assert.equal(output[i],data[i]);
+});
 test('ordinary launcher/logo icons retain their exact colour markup',()=>{
   const {WizSigil:S}=load();
   assert.match(S.html({id:'airlock'}),/class="sglogo"/);
