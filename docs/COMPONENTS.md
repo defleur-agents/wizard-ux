@@ -88,6 +88,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); mono voice (`voice.js`); mic choice `WosMic` (`mic.js`) |
 | Local commands | `WosCommands` (`commands.js`) |
 | Screen capture | `WosScreenCapture`(`screen-capture.js`),`WosCaptureTools`; `ScreenMode`/`screen.html` |
+| Android Everywhere screenshot translation | `everywhere/ScreenMode.java` + `assets/assist/screen.html` (one renderer: `paint`/`textArea`/`colors` over `st.blocks`+`st.tr`; picture lines join as `pic` blocks); private Search `read-image?geometry=1` (same model) + `translate`. Never: a picture-text panel in Translate; guessed/hard-coded placement; second OCR/provider route; treating native chrome as image coverage. Tests: `screen-picture-translation.test.mjs`, `qa-screen-page.cjs`, `qa-screen-picture-translate.cjs`. |
 | Reload notices/keep | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`); `WizAppCapture.rescueTake` / `pageAudioFree` |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) |
 | Now playing | `WosMediaWatch` (`web/core/media-watch.js`), `WosSkinHost` `api.media`: same-origin media only, inert until watched |

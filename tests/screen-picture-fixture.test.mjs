@@ -15,7 +15,7 @@ function bridge() {
 }
 test('verdict matchers accept the real multiline pill and reject unrelated verdicts', () => {
   const patterns = [...text.matchAll(/\/(Already[^/]+)\//g)].map(m => new RegExp(m[1]));
-  assert.equal(patterns.length, 2, 'baseline and candidate use the same whitespace-tolerant verdict');
+  assert.equal(patterns.length, 1, 'only the installed87 baseline is expected to give the false verdict');
   for (const pattern of patterns) {
     assert.ok(pattern.test('Already in\nEnglish\n▾'));
     assert.ok(pattern.test('Already in English'));
@@ -59,4 +59,12 @@ test('historical bridge rejects the exact synthetic English control', () => {
   const context = {window: {}, setTimeout() {}};
   vm.runInNewContext('(' + old + ')', context)({jpeg:'',read:{lines:[]},mapping:{},chromeLabels:['Copy translation']});
   assert.throws(() => context.window.ScreenNative.translate('1','["Copy translation"]','English'), /No recorded inference/);
+});
+test('replay contract is the overlay: no panel expectation, geometry required, no invented place', () => {
+  assert.doesNotMatch(text, /trans\?\.text|state\.pic\.some|scrollTop = sel\.scrollHeight/, 'the old panel contract is gone');
+  assert.match(text, /hasGeometry = Array\.isArray\(live\.read\.boxes\)/);
+  assert.match(text, /\{boxes: _drop, \.\.\.linesOnly\} = live\.read/, 'lines-only phase replays the same recording without boxes');
+  assert.match(text, /geometry recording present \(overlay acceptance requires it\)', false/);
+  assert.match(text, /no place invented/);
+  assert.match(text, /'--wz-text'/); assert.doesNotMatch(text, /--wz-ink/);
 });
