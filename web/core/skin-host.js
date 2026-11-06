@@ -222,6 +222,9 @@
       voice: Object.freeze({
         state: () => shell?.voiceState ? Object.freeze({ ...shell.voiceState() }) : { state: 'idle' },
         talk: id => need().talk(typeof id === 'string' ? id : ''),
+        // A layout-docked composer owns its mic even while a companion app has keyboard focus.
+        reply: (wid, sid) => typeof wid === 'string' && typeof sid === 'string' && sid && sid !== '__new__'
+          ? need().recordReply?.(wid, sid) : false,
         tap: () => need().voiceTap(),
         dictate: () => !!need().dictate(),
         cancel: () => need().voiceCancel?.(),
