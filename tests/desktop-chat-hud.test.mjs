@@ -10,7 +10,9 @@ const js = read('web/desktop/desktop.js'), html = read('web/desktop.html'), css 
 test('Chats windows get a float button beside ✕; other windows do not', () => {
   assert.match(js, /w\.app === 'chats' \? `<button data-wact="hud" title="Float over every desk \(\$\{MOD\}P\)"/);
   assert.match(js, /if \(act === 'hud'\) return hudOn\(id\);/);
-  assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\);\s*\n\s*if \(act === 'close'\) return closeWin\(id\);/);
+  assert.match(js, /if \(act === 'close' && hud\?\.id === id\) return canLeave\(id\) && hudClose\(\);\s*\n\s*if \(act === 'close'\) return desktopHost\.close\(id\);/);
+  // The new boundary must still use the original leave/custody-aware close.
+  assert.match(js, /close: id => \{ closeWin\(id\); return !W\[id\]; \}/);
   // Borderless frames hide title-bar buttons except ✕: the float button is re-shown next to it.
   assert.match(css, /html\[data-skin-frame="borderless"\] \.wbar > \[data-wact\^="hud"\] \{[^}]*display: grid/);
 });

@@ -64,6 +64,11 @@ async function load(shell, { mode = true, unread = 2, liveOK = true } = {}) {
     vm.runInContext(between(phone, '  function renderMoons() {', '  function paintOrbBadge() {'), context);
     vm.runInContext(phone.split('\n').find(line => line.includes("window.addEventListener('wizard:notifications'")), context);
   } else {
+    // render now publishes lifecycle changes. Load the real boundary rather
+    // than stubbing its changed() callback; windows are empty in this fixture.
+    vm.runInContext(read('web/core/desktop-host.js'), context);
+    context.desktop = window.WizDesktop.attach({ has: () => false, windows: () => [], frame: () => null,
+      openApp: () => false, focus: () => false, close: () => false, panes: context.C.panes });
     vm.runInContext(between(desktop, '  function paintBar() {', '  function tickClock()'), context);
     vm.runInContext(between(desktop, '  function render() {', '  let afterRender ='), context);
     vm.runInContext(desktop.split('\n').filter(line => line.includes("addEventListener('wizard:notifications'") || line.includes("addEventListener('wizard:app-counts'")).join('\n'), context);
