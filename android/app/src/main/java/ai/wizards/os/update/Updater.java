@@ -277,7 +277,7 @@ public final class Updater {
     }
 
     /** Fresh recording facts for both the commit fence and the web banner; no microphone claim inference. */
-    public static boolean recording(Context c) {
+    public static boolean takeActive(Context c) {
         return ai.wizards.os.recording.RecorderService.active() != null
                 || ai.wizards.os.everywhere.EverywhereService.appIsRecording()
                 || ai.wizards.os.everywhere.EverywhereService.captureActive()
@@ -293,7 +293,7 @@ public final class Updater {
         else if (ai.wizards.os.MicOwner.EVERYWHERE.equals(holder)) alive = ai.wizards.os.everywhere.EverywhereService.serviceAlive();
         else if (ai.wizards.os.MicOwner.MEETING.equals(holder)) alive = ai.wizards.os.mizel.MeetingRecorderService.serviceAlive();
         else if (ai.wizards.os.MicOwner.SIDE.equals(holder)) alive = ai.wizards.os.assist.TakeRecovery.captureAlive();
-        boolean take = recording(c);
+        boolean take = takeActive(c);
         Log.i(TAG, "hold holder=" + holder + " serviceAlive=" + alive + " recording=" + take);
         // Debug-only deterministic emulator holds. No override can hide an actual take.
         if (BuildConfig.DEBUG) {

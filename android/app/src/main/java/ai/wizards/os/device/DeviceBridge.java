@@ -382,7 +382,7 @@ public final class DeviceBridge implements RecorderService.Listener {
     public String updateState() { return Updater.state(); }
 
     @JavascriptInterface
-    public boolean updateRecording() { return Updater.recording(activity); }
+    public boolean updateRecording() { return Updater.takeActive(activity); }
 
     /* ------------------------------------------------------------------ helpers */
 
