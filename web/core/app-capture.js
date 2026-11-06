@@ -1293,6 +1293,7 @@
   function reloadCheck() {
     // The Android app's meeting port (MeetingRecorderService) records and uploads on its own through a page reload.
     const androidMeetingPort = () => !!W.wizardMizelPort;
+    const deviceTake = () => JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null');
     // A steady Android meeting (MeetingRecorderService) that records and uploads on its own through a reload.
     function steadyLiveMeeting() {
       const s = active;
@@ -1310,7 +1311,7 @@
       if (attachedMeetingBridge || W.wizardNative?.meetings || configuredNative || !androidMeetingPort() || preparations.size || memoryTakes.size) return null;
       if (active && !steadyLiveMeeting()) return null;
       // Only meetings survive a reload: an active or unreadable device recorder (orb note) keeps blocking.
-      try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return null; } catch (_) { return null; }
+      try { if (deviceTake()?.id) return null; } catch (_) { return null; }
       const r = active?.row?.native === 'wizard-meetings' ? active.row :
         [...ownedRows.values()].filter(x => x.native === 'wizard-meetings').sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))[0];
       return { safe: true, reason: null, keeps: r ? { appId: r.appId, id: r.id, meetingId: r.meta?.meetingId || r.nativeId } : { appId: MEETING_APP },
@@ -1328,7 +1329,7 @@
     let uncertain = !ownershipLoaded || recoveryError ? 'capture_custody_uncertain' : null;
     if (!uncertain && (unknownMeetingActive || [...ownedRows.values()].some(r => r.native && !r.nativeId && ['starting', 'recording', 'recoverable'].includes(r.status)))) uncertain = 'native_owner_uncertain';
     if (uncertain && !pageHoldsNoAudio && !(uncertain === 'capture_custody_uncertain' && steadyLiveMeeting())) return no(uncertain);
-    try { if (JSON.parse((W.WizardOSDevice || W.WosDeviceRecording?.device())?.recActive?.() || 'null')?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
+    try { if (deviceTake()?.id) return no('device_recording'); } catch (_) { return no('device_recording'); }
     // Only the Android app's meeting port (MeetingRecorderService) is known to record and upload on its own
     // through a page reload. The Mac app's recorder and any bridge attached in-page wait for the end instead.
     const survives = !attachedMeetingBridge && !W.wizardNative?.meetings && androidMeetingPort();
