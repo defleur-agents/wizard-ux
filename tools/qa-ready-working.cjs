@@ -44,7 +44,7 @@ const check = (label, ok) => { if (!ok) throw Error(label); console.log('PASS ' 
         const L = window.WizLive, s = L.session('tt-main'), g = L.workGroups(L.unified());
         return { working: g.working.some(x => x.id === s.id), ready: g.ready.some(x => x.id === s.id),
           unread: L.visibleUnread(L.unified()).map(x => x.id), orb: window.WizCore.workspaceNav.chatsCount(L),
-          needs: window.WizCore.chats.FILTERS.needs.test(s), ask: s.attention.ask };
+          needs: (window.__wux || window.__wos).chats.FILTERS.needs.test(s), ask: s.attention.ask };
       });
       check(tag + ': not in Ready, Needs-you or orb count', before.working && !before.ready && !before.needs && !before.unread.includes('tt-main') && before.orb === before.unread.length);
       check(tag + ': plain idle ask still Ready', await page.evaluate(() => window.WizLive.workGroups(window.WizLive.unified()).ready.some(x => x.id === 'tt-other')));
@@ -61,7 +61,7 @@ const check = (label, ok) => { if (!ok) throw Error(label); console.log('PASS ' 
       await page.screenshot({ path: path.join(OUT, `working-helper-${shell}-${skin}.png`) });
       helper = false; await page.evaluate(() => window.WizLive.refresh());
       await page.waitForFunction(() => !window.WizLive.session('tt-main').background);
-      check(tag + ': helper completion moves the same thread to Ready', await page.evaluate(() => { const L = window.WizLive, g = L.workGroups(L.unified()); return !g.working.some(x => x.id === 'tt-main') && g.ready.some(x => x.id === 'tt-main') && window.WizCore.chats.FILTERS.needs.test(L.session('tt-main')); }));
+      check(tag + ': helper completion moves the same thread to Ready', await page.evaluate(() => { const L = window.WizLive, g = L.workGroups(L.unified()); return !g.working.some(x => x.id === 'tt-main') && g.ready.some(x => x.id === 'tt-main') && (window.__wux || window.__wos).chats.FILTERS.needs.test(L.session('tt-main')); }));
       check(tag + ': no page errors or real-service requests', ctx.errors.length === 0 && svc.reqs.every(r => !/https?:/.test(r)));
       await ctx.close();
     }
