@@ -56,9 +56,15 @@ export function svgIcon(doc, name, cls) {
 /** The first letter of a name, for a workspace disc. */
 export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
 /* The chats in Wizard's own sections (round 5, Miguel: in place of Recents and View all), in the stock Chats order
- * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. Round 13
- * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready). */
-export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready']];
+ * (Working, then Ready, Archive last: James, 6 Nov 2026), each header like their Recents label. Round 13
+ * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready).
+ * Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put Archive first: sectionsFor(root). */
+export const SECTIONS = [['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready'], ['archive', 'Archive']];
+const ARCHIVE_TOP = [SECTIONS[3], ...SECTIONS.slice(0, 3)];
+/** True when the owner wears Miguel's "Archive on top" tweak (the host lists worn tweaks in <html data-tweaks>). */
+export const archiveTop = root => String(root?.dataset?.tweaks || root?.getAttribute?.('data-tweaks') || '').split(/\s+/).includes('miguel/archive-top');
+/** The section order to draw: stock (Archive last), or Archive first under the archive-top tweak. */
+export const sectionsFor = root => archiveTop(root) ? ARCHIVE_TOP : SECTIONS;
 /** Every list the sidebar / drawer shows, for searches and signatures. */
 export const KINDS = ['working', 'snoozed', 'ready', 'archive'];
 /** What an open section with no rows says. */
