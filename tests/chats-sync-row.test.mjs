@@ -77,6 +77,7 @@ test('CSS: one line, ellipsis, a text action (no pill) with a 44px touch target 
   const row = rule('.ch-sync:has(.ch-sync-act)');
   assert.match(row, /min-height: 32px/); assert.doesNotMatch(row, /flex-wrap/);
   const act = rule('.ch-sync .ch-sync-act');
+  assert.match(act, /position: relative; z-index: 1;/, 'the 44px action paints above the .ch-scroll list it overhangs, so edge taps reach it');
   for (const d of ['height: 44px', 'margin: -6px 0 -6px auto', 'background: none', 'border: 0', 'border-radius: 0', 'white-space: nowrap']) assert.ok(act.includes(d), d);
   assert.match(act, /color: var\(--violet-2, var\(--wz-accent/);
   assert.match(rule('.ch-sync-dot'), /var\(--wz-warning/);
