@@ -560,18 +560,30 @@
         const at = wsOf(w.id), d = ws[at];
         return { id: w.id, kind: w.app, appId: w.appId || '', desk: at, deskId: d?.id || null,
           title: winTitle(w), thread: w.thread || null, focused: front === w.id,
+          tiled: !!d && (!d.mono || d.focus === w.id) && hud?.id !== w.id && !(globalThis.WosSkinHost?.panelMode && panelHas(w.id)),
           visible: !!(hud?.open && hud.id === w.id) || !!(globalThis.WosSkinHost?.panelMode && panelHas(w.id))
             || !homeOpen && (at === cur || beside.has(w.id)) && (!d?.mono || d.focus === w.id),
         };
       });
     },
     frame: id => winEl(id)?.querySelector('iframe') || null,
+    renderTools: (frame, slot) => window.WizAppServices?.titlebar.render(frame, slot) === true,
     openApp: id => Object.hasOwn(APP, id) && openApp(APP[id]) !== false,
-    focus: (id, opts) => { focusWin(id, opts); return focused()?.id === id; },
+    focus: (id, opts) => {
+      // A layout already chose the visible panes. Keyboard focus is not a
+      // second Classic navigation (cur/save/goWs/route) behind that renderer.
+      if (globalThis.WosSkinHost?.layoutState?.active && !WosSkinHost.panelMode) {
+        if (!desktopHost.windows().some(w => w.id === id && w.visible)) return false;
+        if (opts.scroll) focusInside(id);
+        return true;
+      }
+      focusWin(id, opts); return focused()?.id === id;
+    },
     close: id => { closeWin(id); return !W[id]; },
     panes: C.panes,
   });
   const desktopHost = desktop.host;
+  window.addEventListener('wizard:app-tools', desktop.changed);
   function wsEl(i) {
     const d = ws[i]; if (!d) return null;
     let el = stage.querySelector(`.wsp[data-desk="${d.id}"]`);
