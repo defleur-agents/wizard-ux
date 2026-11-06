@@ -37,6 +37,7 @@ import fcntl, hashlib, http.server, json, os, pathlib, re, shlex, shutil, signal
 from qa_paths import work_root
 from qa_paths import android_sdk, java_home
 from qa_android_connect import choose_emulator_port  # recommended 5554..5584 console / 5555..5585 ADB, both sockets free
+from qa_android_connect import EMULATOR_GRAPHICS, emulator_exit  # shared graphics runtime and exit diagnostic
 P = pathlib.Path
 def parse_args(argv):
     """APK PKG [WEB_DIR] [--picture-only] → (apk, pkg, web, picture_only). Anything else is refused."""
@@ -95,7 +96,7 @@ def shot(name):
     (OUT / (name + '.png')).write_bytes(data)
 def device_snapshot():
     devices = sh(ADB, 'devices', '-l')
-    return {'emulator_pid': em.pid if em else None, 'emulator_returncode': em.poll() if em else None,
+    return {'emulator_pid': em.pid if em else None, 'emulator_returncode': em.poll() if em else None, 'emulator': emulator_exit(em, EM_ARGV),
             'serial': S, 'devices': devices, 'target_device': bool(re.search(r'^' + re.escape(S or '<none>') + r'\s+device\b', devices, re.M)),
             'adb': ADB, 'environment': {k: env.get(k) for k in ('ANDROID_SERIAL', 'ADB_SERVER_SOCKET', 'ANDROID_ADB_SERVER_PORT', 'ADB_SERVER_PORT', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'ANDROID_AVD_HOME')}}
 def require_device():
@@ -420,7 +421,7 @@ def picture_scene():
             if not window('WizScreen'): break
             sx('input keyevent KEYCODE_BACK'); time.sleep(1)
 
-em = None; FREE = None
+em = EM_ARGV = None; FREE = None
 COMPLETED, INTERRUPTED = False, None
 def _interrupted(signum, frame):
     """The controller's timeout or cancel (SIGTERM/SIGINT): leave through the finally below, which removes this run's
@@ -451,10 +452,11 @@ with _lockfile as lock:
         PORT = choose_emulator_port(sh(ADB, 'devices')); S = f'emulator-{PORT}'  # never a fixed, non-recommended port
         if S in sh(ADB, 'devices'): raise SystemExit(S + ' is already running; not ours to reuse or kill')
         sh(SDK / 'cmdline-tools/latest/bin/avdmanager', 'create', 'avd', '-n', 'q', '-k', 'system-images;android-35;google_apis;' + ABI, '-d', 'pixel_7', '-p', job / 'dev', stdin='no\n')
-        em = subprocess.Popen([str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', '-gpu', 'swiftshader_indirect'] + (['-accel', 'on'] if FORUM else []),
+        EM_ARGV = [str(SDK / 'emulator/emulator'), '-avd', 'q', '-port', str(PORT), '-no-window', '-no-snapshot', '-no-audio', *EMULATOR_GRAPHICS] + (['-accel', 'on'] if FORUM else [])
+        em = subprocess.Popen(EM_ARGV,
                               env=env, stdout=open(job / 'em.log', 'w'), stderr=subprocess.STDOUT, start_new_session=True)
         for _ in range(120):
-            if em.poll() is not None: raise RuntimeError('emulator exited before boot: ' + str(em.returncode))
+            if em.poll() is not None: raise RuntimeError('emulator exited before boot: ' + json.dumps(emulator_exit(em, EM_ARGV)))
             if sx('getprop sys.boot_completed', check=False, timeout=8).strip() == '1': break
             time.sleep(3)
         else: raise RuntimeError('emulator boot timeout')
@@ -668,6 +670,7 @@ with _lockfile as lock:
         startup_diagnostics('harness exception: ' + repr(e))
     finally:
         # only what this run created: its CDP forward, its reverse, its emulator (own session), its fixture server
+        EM_EXIT = emulator_exit(em, EM_ARGV)  # before our own kill, so a host crash (e.g. -11 SIGSEGV) stays visible
         if em:
             # Best effort ADB cleanup must not skip killing this run's actual emulator process or the receipt.
             for args in [('forward', '--remove', f'tcp:{DEVTOOLS}'), ('reverse', '--remove', f'tcp:{FAKE}'), ('emu', 'kill')]:
@@ -694,7 +697,7 @@ with _lockfile as lock:
             'ok': COMPLETED and bool(res) and all(res), 'completed': COMPLETED, 'interrupted': INTERRUPTED,
             'passed': sum(res), 'total': len(res), 'checks': CHECKS,
             'mode': 'picture-only' if PICTURE_ONLY else 'full', 'host': os.uname().nodename, 'abi': ABI,
-            'serial': S, 'console_port': PORT, 'adb_port': PORT + 1 if PORT else None, 'inherited_lease': bool(_inherited),
+            'serial': S, 'emulator_before_cleanup': EM_EXIT, 'console_port': PORT, 'adb_port': PORT + 1 if PORT else None, 'inherited_lease': bool(_inherited),
             'free_bytes_before_boot': FREE, 'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(), 'package': PKG,
             'read_image_paths': STATE['read_paths'],
             'command_log': str(job / 'commands.jsonl'), 'device_ready': str(job / 'device-ready.json'),

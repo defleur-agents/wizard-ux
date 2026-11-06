@@ -19,11 +19,25 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import re
 import urllib.request
+from urllib.parse import urlsplit
 
 
 def inside_git(p: Path) -> bool:
     return subprocess.run(['git', '-C', str(p), 'rev-parse', '--is-inside-work-tree'], capture_output=True).returncode == 0
+
+
+def validate_origin(origin: str) -> str:
+    """Exact loopback origin only: http://127.0.0.1:PORT or http://localhost:PORT; no userinfo, path, query or fragment."""
+    if not isinstance(origin, str) or not re.fullmatch(r'http://(127\.0\.0\.1|localhost):([1-9][0-9]{0,4})', origin):
+        raise ValueError('origin must be exactly http://127.0.0.1:PORT or http://localhost:PORT')
+    u = urlsplit(origin)
+    if (u.scheme != 'http' or u.username is not None or u.password is not None or '@' in u.netloc
+            or u.hostname not in ('127.0.0.1', 'localhost') or u.netloc != f'{u.hostname}:{u.port}'
+            or u.path or u.query or u.fragment or not 1 <= u.port <= 65535):
+        raise ValueError('origin must be exactly http://127.0.0.1:PORT or http://localhost:PORT')
+    return origin
 
 
 def post(url: str, body: bytes, mime: str) -> dict:
@@ -46,7 +60,10 @@ def main():
     ap.add_argument('--sha256')
     ap.add_argument('--mime', default='image/jpeg', choices=['image/jpeg', 'image/png', 'image/webp'])
     a = ap.parse_args()
-    assert a.origin.startswith(('http://127.0.0.1:', 'http://localhost:')), 'loopback private Search only'
+    try:  # before any filesystem, image or network access
+        a.origin = validate_origin(a.origin)
+    except ValueError as error:
+        raise SystemExit(f'loopback private Search only: {error}')
     out = a.out.resolve()
     near = next(p for p in (out, *out.parents) if p.exists())
     assert not inside_git(near), 'refusing to write private model output inside a git checkout'
