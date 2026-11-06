@@ -1824,7 +1824,7 @@ window.WizCore.chats = function createChats(H) {
     el.insertAdjacentHTML('beforeend', `<div class="ch-sheet" role="dialog" aria-label="Rename thread"><form class="ch-sheet-b ch-rename" data-rnform>
       <div class="ch-sheet-t">Rename thread</div>
       <input type="text" name="t" maxlength="60" value="${esc(s.title)}" autocomplete="off" enterkeyhint="done" aria-label="Thread name">
-      <p class="ch-sheet-n">Short is best: project · feature. Your name sticks; ${esc(window.WizConfig.agent())} won’t rename it.</p>
+      <p class="ch-sheet-n">Use a short project name, such as Messenger. Your name sticks; ${esc(window.WizConfig.agent())} won’t rename it.</p>
       <div class="ch-rename-b"><button type="button" data-rncancel>Cancel</button><button type="submit" class="go">Save</button></div></form></div>`);
     rowSheet = { wid, sid, rename: true };
     const inp = el.querySelector('.ch-rename input'); if (inp) { inp.focus(); inp.select(); }
