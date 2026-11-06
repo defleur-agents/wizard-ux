@@ -242,8 +242,10 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: all acknowledged has no strip`, await strip(page).count() === 0);
       await page.screenshot({ path: path.join(OUT, `hide-acknowledged-${shell}-${skin}.png`) });
       await page.evaluate(() => {
-        window.__hideReply = document.querySelector('.ch-msgs .msg.a');
-        window.__hideComposer = document.querySelector('.ch-compose textarea');
+        window.addEventListener('wos:thread-tracker', () => {
+          window.__hideReply = document.querySelector('.ch-msgs .msg.a');
+          window.__hideComposer = document.querySelector('.ch-compose textarea');
+        }, true); // Capture each event's pre-paint nodes, not nodes from earlier background polls.
         window.__hideFrames = [];
         window.addEventListener('wos:thread-tracker', () => window.__hideFrames.push({
           strip: !!document.querySelector('[data-tt-strip]'), expected: !!window.WosThreadTracker.stripHtml('tt-main'),
@@ -259,7 +261,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await update('running');
       check(`${tag}: running-only shows strip and retains running dots`, await strip(page).count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main'))));
       await strip(page).locator('.tt-h').click();
-      check(`${tag}: running-only dropdown stays open with a Working row`, await strip(page).locator('.tt-panel').isVisible() && /Running/.test(await strip(page).innerText()) && await strip(page).locator('.tt-row.run').count() === 1);
+      check(`${tag}: running-only dropdown stays open with a Working row`, await strip(page).locator('.tt-panel').isVisible() && /Working/.test(await strip(page).innerText()) && await strip(page).locator('.tt-row.run').count() === 1);
       await page.evaluate(() => document.fonts.ready);
       await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
       await page.screenshot({ path: path.join(OUT, `running-only-${shell}-${skin}.png`) });
