@@ -232,8 +232,9 @@ const LINES = [
   k = await peek(p);
   const dish = k.painted.find(e => e.pic);
   const truth = scr.boxes[0].map((v, i) => v * (i % 2 ? 914 : 411) * DPR);
-  check('picture-only Thai is painted by the same renderer over its own letters',
-    dish && dish.t === 'Stir-fried basil pork with fried egg' && Math.abs(dish.r[0] - truth[0]) <= 6 * DPR && Math.abs(dish.r[1] - truth[1]) <= 6 * DPR && dish.r[3] >= truth[3] - 6 * DPR, [dish, truth]);
+  // the drawn line's full height (Thai marks above and below included) must be covered, within 3 css px
+  check('picture-only Thai is painted by the same renderer over its own letters, marks included',
+    dish && dish.t === 'Stir-fried basil pork with fried egg' && Math.abs(dish.r[0] - truth[0]) <= 6 * DPR && dish.r[1] <= truth[1] + 3 * DPR && dish.r[3] >= truth[3] - 3 * DPR, [dish, truth]);
   check('it takes the colours of the picture under it (white menu)', dish && rgb(dish.bg)[0] > 220 && rgb(dish.fg)[0] < 80, dish && [dish.bg, dish.fg]);
   check('the app text and the picture text are painted together, no panel', k.painted.length === 3 && !k.sheet && k.tbar && k.panel === 'sel', [k.painted.length, k.sheet, k.panel]);
   check('the pill names Thai → English, never English → English', /Thai/.test(k.pill) && /English/.test(k.pill) && !/English\s*→/.test(k.pill) && !/not placed/.test(k.pill), k.pill);

@@ -905,8 +905,9 @@
     const on = (textPieces({ x: b.x - mx, y: b.y - my, w: b.w + mx * 2, h: b.h + my * 2 }) || [])
       .filter(q => Math.min(q.y1, b.y + b.h) - Math.max(q.y0, b.y) >= (q.y1 - q.y0) * .5);
     if (!on.length) return null; // no letters where the model said: leave the picture alone
-    const X0 = Math.min(...on.map(q => q.x0)), Y0 = Math.min(...on.map(q => q.y0));
-    return { x: X0, y: Y0, w: Math.max(...on.map(q => q.x1)) - X0, h: Math.max(...on.map(q => q.y1)) - Y0 };
+    const X0 = Math.min(...on.map(q => q.x0)), Y0 = Math.min(...on.map(q => q.y0)), H = Math.max(...on.map(q => q.y1)) - Y0;
+    // padded like alignWords pads a placed word: sparse marks above and below the line (Thai ุ ู ่ ้) stay covered
+    return { x: X0, y: Y0 - H * .22, w: Math.max(...on.map(q => q.x1)) - X0, h: H * 1.44 };
   }
   /**
    * The picture's lines that the app's own text doesn't already hold (same words, or the same place on screen), each
