@@ -20,12 +20,17 @@
   const BASE = '/wizard/v1/thread-items';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const on = () => { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes(ID); } catch (_) { return false; } };
+  const listWorking = (sid, agent = '') => {
+    const session = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    return !!window.WizChatsListModel?.isListWorking(session);
+  };
   const key = (sid, agent) => `${agent || 'hermes'}/${sid}`;
   const threads = new Map(); // key → { items, at, loading }
   let counts = {}, countsAt = 0, countsLoading = false;
   const openKeys = new Set(), ackKeys = new Set();
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
   const pendingSeen = new Map(); // key → seen writes in flight
+  const sendCutoffs = new Map(); // explicit send/steer, scoped to this thread and visit
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
@@ -85,7 +90,9 @@
       const items = merge(k, j.items);
       const changed = JSON.stringify(items) !== JSON.stringify(cur?.items || []);
       threads.set(k, { items, at: Date.now(), loading: false });
-      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(items))) { counts[k] = tally(items); changedEvent(); }
+      applySendSeen(sid, agent); // a send may beat ledger ingestion or navigation
+      const projected = threads.get(k).items;
+      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(projected))) { counts[k] = tally(projected); changedEvent(); }
     } catch (_) { threads.set(k, { items: cur?.items || [], at: Date.now(), loading: false }); }
   }
   async function loadCounts(force = false) {
@@ -125,6 +132,7 @@
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
   const kindOf = i => i.kind || memberKind(i);
   const subOf = i => {
+    if (kindOf(i) === 'stopped') return 'Stopped · nothing running';
     const when = ago(i.updated_at || i.at || Date.now());
     if (kindOf(i) === 'ack') return `Seen · ${when}`;
     if (i.state === 'done') return `Finished · ${when}`;
@@ -134,26 +142,27 @@
   };
   function rowHtml(i) {
     const kind = kindOf(i);
-    const act = kind === 'ack' || kind === 'run' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
+    const act = kind === 'ack' || kind === 'run' || kind === 'stopped' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
       : i.try ? '<button type="button" class="tt-btn" data-tt-seen aria-label="Looks good">Looks good</button>' : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
     return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
-    const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
+    const k = key(sid, agent), raw = threads.get(k)?.items || [], working = listWorking(sid, agent);
+    const items = groupsOf(raw).map(i => i.kind === 'run' && !working ? { ...i, kind: 'stopped' } : i);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
-    // The strip is an owner inbox, not a running/acknowledged history counter.
+    // Keep work in progress visible; only acknowledged history has no strip.
     // Use the same reply grouping as its rows and Chats dots.
-    if (!(c.needs_you || c.blocked || c.done_unseen)) return '';
+    if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
     const run = live.filter(i => i.state === 'running');
     const fin = live.filter(i => i.state === 'done');
     const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(rowHtml).join('')}</div>` : '';
-    const tl = (n, kind) => n ? `<span class="tt-tally">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Asks in this thread"><span class="tt-tot">${c.total} ${c.total === 1 ? 'ask' : 'asks'}</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
-    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Finished · not seen', fin)}`
+    const tl = (n, kind) => n ? `<span class="tt-tally" title="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}" aria-label="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}">${dot(kind)}${n}</span>` : '';
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, working ? 'run' : 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group(working ? 'Running' : 'Stopped', run)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
     return head + body;
@@ -171,7 +180,7 @@
     const c = loaded?.items.length ? tally(loaded.items) : counts[k];
     if (!c) return '';
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
-    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, 'run', 'running') + n(c.done_unseen, 'done', 'finished, not seen');
+    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, listWorking(sid, agent) ? 'run' : 'stopped', listWorking(sid, agent) ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
     return html ? `<span class="tt-dots" data-tt-dots="${esc(key(sid, agent))}">${html}</span>` : '';
   }
   // The same dots as a node, for a list that builds its rows with the DOM (the AI apps sidebar).
@@ -185,7 +194,7 @@
     if (typeof document === 'undefined') return;
     for (const k of openKeys) {
       const c = tally(threads.get(k)?.items || []);
-      if (!(c.needs_you || c.blocked || c.done_unseen)) { openKeys.delete(k); if (opened === k) opened = null; }
+      if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) { openKeys.delete(k); if (opened === k) opened = null; }
     }
     for (const el of document.querySelectorAll('[data-tt-strip]')) {
       const sid = el.dataset.ttStrip, agent = el.dataset.ttAgent || '', k = key(sid, agent), html = innerHtml(sid, agent);
@@ -237,7 +246,11 @@
   function checkViews() {
     for (const [nb, v] of views) {
       if (!nb.isConnected || !on()) { v.io.disconnect(); views.delete(nb); continue; }
-      const front = document.visibilityState === 'visible' && document.hasFocus() && v.active?.();
+      // Streamed/final bubbles may acquire their anchor after the last render or ledger read.
+      watch(nb, v);
+      // Phone WebViews can report no document focus while the front thread is being read.
+      const nativePhone = document.documentElement.dataset.shell === 'phone' && (window.WizardNative || window.WizardOSNative || /; wv\)|WizardNative|WizardOS-DocScroll/.test(globalThis.navigator?.userAgent || ''));
+      const front = document.visibilityState === 'visible' && (nativePhone || document.hasFocus()) && v.active?.();
       const strip = nb.closest('.ch-thread')?.querySelector('[data-tt-strip]');
       const box = nb.getBoundingClientRect(), rstrip = strip?.getBoundingClientRect();
       const top = viewportTop(nb, Math.max(0, box.top)), bottom = Math.min(innerHeight, box.bottom);
@@ -247,7 +260,7 @@
         const y = Math.max(r.top, top) + Math.min(20, h / 2);
         const hit = h > 0 && document.elementFromPoint(x, y);
         const visible = front && !strip?.classList.contains('open') && n.intersects && node.isConnected
-          && bottom > top && h >= Math.min(40, r.height) && (r.top >= top && r.top < bottom - 20 || h >= .4 * Math.min(r.height, bottom - top))
+          && bottom > top && h >= Math.min(40, r.height)
           && node.contains(hit) && (!rstrip || y > rstrip.bottom);
         if (!visible) { n.since = 0; n.attempted = false; continue; }
         if (!n.since) n.since = Date.now();
@@ -266,20 +279,63 @@
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
-  function markSeen(sid, agent, ids) {
+  function markSeen(sid, agent, ids, defer = false) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
+    const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
     counts[k] = tally(t.items);
     changedEvent(); // painted before the box hears about it
     pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
-    const settle = () => pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1));
+    let phase = 'staged';
+    const settle = () => { if (phase === 'settled') return; phase = 'settled'; pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1)); };
     // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
-    const undo = () => { settle(); const set = seenLocally.get(k); for (const i of ids) for (const tok of [...(set || [])]) if (tok.startsWith(`${i}@`)) set.delete(tok); const cur = threads.get(k); if (cur) cur.at = 0; load(sid, agent); };
+    const undo = () => {
+      settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
+      const cur = threads.get(k);
+      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(cur.items); changedEvent(); }
+      load(sid, agent);
+    };
+    const commit = () => {
+      if (phase !== 'staged') return; phase = 'committed';
     req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
       .catch(undo);
+    };
+    if (!defer) commit();
+    return { commit, cancel() { if (phase === 'staged') undo(); } };
+  }
+  // Sending is explicit evidence that the owner has moved on from older finished replies.
+  // Do not consume mixed/amber/red/running groups, unknown dates, or work completed after the send.
+  function applySendSeen(sid, agent, defer = false) {
+    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send || (!send.committed && !defer)) return;
+    const ids = [];
+    for (const g of groupsOf(threads.get(k)?.items || [])) {
+      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && i.at > 0 && i.at < send.at && (i.updated_at || i.at) <= send.at)) continue;
+      const tokens = g.members.map(i => `${i.id}@${i.updated_at}`);
+      if (tokens.some(t => send.attempted.has(t))) continue;
+      tokens.forEach(t => send.attempted.add(t)); ids.push(...g.ids);
+    }
+    if (ids.length) return markSeen(sid, agent, ids, defer);
+  }
+  function beforeSend(sid, agent = '', at = Date.now(), { defer = false } = {}) {
+    if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
+    const k = key(sid, agent), prior = sendCutoffs.get(k);
+    const send = prior && at <= prior.at ? prior : { at, attempted: new Set(), committed: !defer };
+    sendCutoffs.set(k, send);
+    const staged = applySendSeen(sid, agent, defer); // same-frame paint before navigation
+    const commit = () => {
+      send.committed = true; staged?.commit();
+      const t = threads.get(k); if (t && !t.loading) t.at = 0;
+      load(sid, agent); // late ledger ingestion still belongs to the original send cutoff
+    };
+    if (!defer) commit();
+    return { commit, cancel() {
+      if (send.committed) return;
+      if (sendCutoffs.get(k) === send) { if (prior) sendCutoffs.set(k, prior); else sendCutoffs.delete(k); }
+      staged?.cancel();
+    } };
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
@@ -315,14 +371,16 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
+  // Reuse the session list's lifecycle notifications; never add a liveness poll.
+  window.WizLive?.onChange?.(repaint);
   let wasOn = on();
   function syncEnabled() {
     const enabled = on(); if (enabled === wasOn) return;
     wasOn = enabled;
     if (enabled) { countsAt = 0; loadCounts(true); }
-    else { openKeys.clear(); opened = null; }
+    else { openKeys.clear(); opened = null; sendCutoffs.clear(); }
     changedEvent({ enabled }); // Chats hydrates every currently open thread and refreshes Reply on both edges.
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) syncEnabled(); });
