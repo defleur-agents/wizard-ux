@@ -27,7 +27,7 @@
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: '', js: 'phone.js' }) }) }),
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: 'phone-boot.css', js: 'phone.js' }) }) }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
