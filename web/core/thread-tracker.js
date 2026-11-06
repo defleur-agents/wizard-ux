@@ -142,9 +142,9 @@
     const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
-    // The strip is an owner inbox, not a running/acknowledged history counter.
+    // Keep work in progress visible; only acknowledged history has no strip.
     // Use the same reply grouping as its rows and Chats dots.
-    if (!(c.needs_you || c.blocked || c.done_unseen)) return '';
+    if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
@@ -185,7 +185,7 @@
     if (typeof document === 'undefined') return;
     for (const k of openKeys) {
       const c = tally(threads.get(k)?.items || []);
-      if (!(c.needs_you || c.blocked || c.done_unseen)) { openKeys.delete(k); if (opened === k) opened = null; }
+      if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) { openKeys.delete(k); if (opened === k) opened = null; }
     }
     for (const el of document.querySelectorAll('[data-tt-strip]')) {
       const sid = el.dataset.ttStrip, agent = el.dataset.ttAgent || '', k = key(sid, agent), html = innerHtml(sid, agent);

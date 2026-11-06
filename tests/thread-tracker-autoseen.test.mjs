@@ -91,20 +91,26 @@ test('all acknowledged replies render no strip, including a ready-to-try acknowl
   const h = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }]); await h.start();
   assert.equal(h.T.stripHtml('t'), '');
 });
-test('running-only replies render no strip but retain Chats running dots', async () => {
+test('running-only replies keep the strip and Chats running dots', async () => {
   const h = harness(['running']); await h.start();
-  assert.equal(h.T.stripHtml('t'), ''); assert.match(h.T.dots('t'), /running/);
+  assert.match(h.T.stripHtml('t'), /data-tt-strip/); assert.match(h.T.dots('t'), /running/);
+  h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-toggle') ? {} : null } });
+  assert.equal(h.T.isOpen(), true, 'running-only dropdown stays open through repaint');
+  assert.match(h.T.stripHtml('t'), /Running/);
 });
 for (const state of ['done', 'needs_you', 'blocked']) test(`${state} addressable reply renders the strip`, async () => {
   const h = harness([state]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
 });
-for (const state of ['done', 'needs_you']) test(`last ${state} Seen removes the strip optimistically, with running and ack rows retained`, async () => {
-  const h = harness([{ state, try: true }, { state: 'running', message_id: 'run' }, { state: 'done', seen: true, message_id: 'ack' }]); await h.start();
+for (const state of ['done', 'needs_you']) for (const running of [false, true]) test(`last ${state} Seen ${running ? 'keeps strip for running' : 'removes acknowledged-only strip'} optimistically`, async () => {
+  const h = harness([{ state, try: true }, ...(running ? [{ state: 'running', message_id: 'run' }] : []), { state: 'done', seen: true, message_id: 'ack' }]); await h.start();
   assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-toggle') ? {} : null } });
   h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
-  assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1); assert.match(h.T.dots('t'), /running/);
+  assert.equal(!!h.T.stripHtml('t'), running); assert.equal(h.writes.length, 1);
+  assert.equal(h.T.isOpen(), running, 'only acknowledged-only dropdown is cleared');
+  assert.equal(/running/.test(h.T.dots('t')), running);
 });
-test('auto-Seen of last green removes strip in the same synchronous local update', async () => {
-  const h = harness(['done']); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
-  h.step(); h.step(1000); assert.equal(h.T.stripHtml('t'), ''); assert.equal(h.writes.length, 1);
+for (const running of [false, true]) test(`auto-Seen of last green ${running ? 'keeps strip for running' : 'removes acknowledged-only strip'} in same synchronous update`, async () => {
+  const h = harness(['done', ...(running ? [{ state: 'running', message_id: 'run' }] : [])]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
+  h.step(); h.step(1000); assert.equal(!!h.T.stripHtml('t'), running); assert.equal(h.writes.length, 1);
 });

@@ -232,7 +232,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
       await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
     }
-    /* ---- owner-inbox visibility: no strip or reserved space for ack/running ---- */
+    /* ---- visibility: only acknowledged history has no strip or reserved space ---- */
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
       const tag = `hide/${shell}/${skin}`, svc = service(), anchor = svc.items.find(i => i.id === 'tap-lag');
       svc.items = [{ ...anchor, state: 'done' }]; svc.seen = new Set([anchor.id]);
@@ -257,8 +257,13 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
         await page.waitForFunction(state => window.WosThreadTracker.dots('tt-main').includes(state), state === 'running' ? 'running' : state === 'done' ? 'finished, not seen' : 'need you');
       };
       await update('running');
-      check(`${tag}: running-only has no strip and retains running dots`, await strip(page).count() === 0 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main'))));
-      await page.screenshot({ path: path.join(OUT, `hide-running-${shell}-${skin}.png`) });
+      check(`${tag}: running-only shows strip and retains running dots`, await strip(page).count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main'))));
+      await strip(page).locator('.tt-h').click();
+      check(`${tag}: running-only dropdown stays open with a Working row`, await strip(page).locator('.tt-panel').isVisible() && /Running/.test(await strip(page).innerText()) && await strip(page).locator('.tt-row.run').count() === 1);
+      await page.evaluate(() => document.fonts.ready);
+      await page.waitForFunction(() => document.getAnimations().every(a => a.effect?.getComputedTiming().iterations === Infinity || a.playState !== 'running'));
+      await page.screenshot({ path: path.join(OUT, `running-only-${shell}-${skin}.png`) });
+      await strip(page).locator('.tt-h').click();
       await update('done');
       check(`${tag}: one unseen green shows strip`, await strip(page).count() === 1);
       await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
@@ -266,10 +271,19 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await update('needs_you');
       await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
       check(`${tag}: last Looks good removes strip before next frame`, await strip(page).count() === 0);
+      for (const state of ['done', 'needs_you']) {
+        svc.items = [{ ...anchor, state, try: true, updated_at: Date.now() }, { ...anchor, id: 'still-running', state: 'running', message_id: anchor.message_id + '-running' }]; svc.seen.clear();
+        await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
+        await page.waitForFunction(() => /^2 asks/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
+        await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
+        check(`${tag}: last ${state} acknowledgement keeps running strip and open dropdown`, await strip(page).count() === 1 && await strip(page).locator('.tt-panel').isVisible() && await strip(page).locator('.tt-row.run').count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main')) && !/need you|finished, not seen/.test(window.WosThreadTracker.dots('tt-main'))));
+        if (state === 'needs_you') await page.screenshot({ path: path.join(OUT, `running-after-seen-${shell}-${skin}.png`) });
+        await strip(page).locator('.tt-h').click();
+      }
       const frames = await page.evaluate(() => window.__hideFrames);
       check(`${tag}: every update paints presence synchronously without replacing messages or composer`, frames.length >= 4 && frames.every(f => f.strip === f.expected && f.replySame && f.composerSame), frames);
       check(`${tag}: no runs, steers or page errors`, !svc.writes.some(w => /\/v1\/runs|\/steer$/.test(w.p)) && ctx.errors.length === 0, ctx.errors);
-      await page.screenshot({ path: path.join(OUT, `hide-cleared-${shell}-${skin}.png`) });
+      await page.screenshot({ path: path.join(OUT, `running-collapsed-${shell}-${skin}.png`) });
       await ctx.close();
     }
     /* ---- visible reply dwell and measured tracker inset ---- */
