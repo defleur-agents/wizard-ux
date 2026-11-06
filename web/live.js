@@ -341,6 +341,8 @@
     archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+    workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
@@ -813,6 +815,14 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    workingOrder: () => { try { return window.WizChatsListModel.workingOrderOf(localStorage.getItem('wos.chats.workingOrder.v1')); } catch (_) { return 'alphabetical'; } },
+    setWorkingOrder: o => {
+      if (!window.WizChatsListModel.WORKING_SORTS.some(([v]) => v === o)) return false;
+      try { if (localStorage.getItem('wos.chats.workingOrder.v1') === o) return true; localStorage.setItem('wos.chats.workingOrder.v1', o); } catch (_) {}
+      // Paint now, reconcile the shared preference afterwards, just like Ready.
+      window.dispatchEvent(new Event('wos:prefs'));
+      putPrefs({ workingOrder: o }); return true;
+    },
     prefOps,
     cardAt,
     groups(agent = '') {

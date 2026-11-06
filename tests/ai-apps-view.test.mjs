@@ -52,7 +52,9 @@ class El {
   get value() { return this.attrs.value || ''; } set value(v) { this.attrs.value = String(v); }
   setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; } removeAttribute(k) { delete this.attrs[k]; }
   hasAttribute(k) { return k in this.attrs; }
+  toggleAttribute(k, on) { const v = on === undefined ? !(k in this.attrs) : !!on; if (v) this.attrs[k] = ''; else delete this.attrs[k]; return v; }
   append(...n) { for (const c of n) { if (c == null) continue; if (typeof c === 'string') { this._text += c; continue; } c.remove(); c.parentNode = this; this.children.push(c); } }
+  insertBefore(n, ref) { n.remove(); n.parentNode = this; const i = this.children.indexOf(ref); this.children.splice(i < 0 ? this.children.length : i, 0, n); return n; }
   replaceChildren(...n) { for (const c of this.children) c.parentNode = null; this.children = []; this._text = ''; this.append(...n); }
   remove() { if (this.parentNode) { this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1); this.parentNode = null; } }
   get childElementCount() { return this.children.length; }
@@ -63,6 +65,7 @@ class El {
   querySelector(sel) { return this.querySelectorAll(sel)[0] || null; }
   closest(sel) { for (let n = this; n && n.tagName; n = n.parentNode) if (matchesSel(n, sel)) return n; return null; }
   getBoundingClientRect() { return { x: 0, y: 0, left: 0, top: 0, width: 300, height: 44, right: 300, bottom: 44 }; }
+  getClientRects() { return [this.getBoundingClientRect()]; } // visibility overrides are supplied by individual geometry fixtures
   focus() {} decode() { return Promise.resolve(); }
   addEventListener(t, fn) { (this.listeners[t] ||= []).push(fn); } removeEventListener(t, fn) { this.listeners[t] = (this.listeners[t] || []).filter(f => f !== fn); }
   dispatchEvent(e) { e.target ||= this; for (let n = this; n; n = n.parentNode) for (const fn of [...(n.listeners?.[e.type] || [])]) fn(e); return true; }
@@ -124,12 +127,22 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
       for (const win of wins.length ? wins : [group]) {
         const id = win.dataset.win ||= 'fixture-' + rows.length, frame = win.querySelector('iframe');
         hostFrames.set(id, frame);
-        rows.push({ id, desk, deskId: 'group-' + desk, kind: isChat ? 'chats' : frame ? 'frame' : 'settings', appId, tiled: !win.classList.contains('gone'), visible: !group.hidden, focused: false });
+        const chatBody = isChat && (win.querySelector('.pane-main') || win.querySelector('.dchats'));
+        if (chatBody) chatBody.dataset.chats = id;
+        rows.push({ id, desk, deskId: 'group-' + desk, kind: isChat ? 'chats' : frame ? 'frame' : 'settings', appId, thread: isChat ? win.querySelector('.dchats')?.dataset.thread : null, tiled: !win.classList.contains('gone'), visible: !group.hidden, focused: false });
       }
     }
     return rows;
   };
+  const chatsWindow = { WizCore: { chats: () => ({ forget() {} }) } };
+  vm.runInNewContext(read('web/core/chats-view.js'), { window: chatsWindow, document: doc, URL, URLSearchParams, console });
+  globalThis.WizChatsHost = chatsWindow.WizChatsHost;
+  const sharedChats = chatsWindow.WizChatsHost.create({ win: id => windows().find(w => w.id === id), root: () => html });
   const hostController = hostWindow.WizDesktop.attach({ windows, has: id => windows().some(w => w.id === id), frame: id => hostFrames.get(id), openApp: () => true, close: () => false,
+    chats: id => sharedChats.surface(id),
+    settings: () => { const n = doc.querySelector('#dsettings'); return { isOpen: !!n && !n.hidden && n.parentNode === body, closePart: n?.querySelector('.st-close') }; },
+    closeSettings: () => { const b = doc.querySelector('#dsettings .st-close'); b?.click?.(); return !!b; },
+    settingsOverlay: () => { html.dataset.settingsOver = ''; return () => { delete html.dataset.settingsOver; }; },
     focus: id => { (st.hostFocus ||= []).push(id); return true; }, renderTools: (_, slot) => { slot.replaceChildren(); return false; } });
   globalThis.WizDesktop = hostWindow.WizDesktop;
   st.hostChanged = hostController.changed;
@@ -367,7 +380,7 @@ test('top bar: ☰ (the unread badge) · Home · the workspace switcher (Home on
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.aaDrawer, 'open'); assert.equal(w.st.backs.length, 1, 'Back closes it');
   const rows = w.q('.aa-scroll').children.map(n => n.className.split(' ').find(c => /^aa-(grid|app|more|all|div|sec|sec-b|chat|viewall|empty)$/.test(c)));
-  assert.deepEqual(rows.map(c => c || 'aa-sech'), ['aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
+  assert.deepEqual(rows.map(c => c || 'aa-sech'), ['aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b', 'aa-sec', 'aa-sec-b', 'aa-sech', 'aa-sec-b'], 'the drawer = the chat list only (Miguel: apps live on Home), no Recents, no View all');
   assert.equal(w.q('.aa-scroll .aa-grid'), null, 'no app grid and no All apps in the drawer');
   assert.deepEqual(w.qa('.aa-chat').map(b => `${b.dataset.sid}:${b.dataset.kind}`), ['r1:ready', 'r2:ready'], 'Ready open; Working and Archive folded at first');
   assert.ok(w.q('.aa-chat[data-sid="r1"] .aa-st').classList.contains('is-new') && w.q('.aa-chat[data-sid="r1"] .aa-pin'), 'new dot, pin mark');
@@ -1782,7 +1795,13 @@ test('round 18 phone: the tidy line under + opens the sentence sheet; the tidy t
   w.q('.aa-menu').dispatchEvent(new FakePointerEvent('click'));
   const ready = () => w.qa('#aa-sec-ready [data-sid]').map(n => n.dataset.sid);
   assert.deepEqual(ready(), ['notif:x', 'r2', 'r1'], 'Newest');
-  const sort = w.q('.aa-sort'); assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
+  // This fixture's selector parser splits on whitespace, even inside attribute values.
+  const sort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Order Ready');
+  assert.ok(sort, 'Ready keeps its own control beside Working');
+  const workingSort = w.qa('.aa-sort').find(n => n.getAttribute('aria-label') === 'Sort Working');
+  assert.ok(workingSort, 'Working has its separate control');
+  assert.equal(workingSort.value, 'alphabetical');
+  assert.equal(sort.value, 'newest'); assert.match(sort.getAttribute('title'), /^Priority: needs approval first/);
   sort.value = 'oldest'; sort.dispatchEvent(new FakePointerEvent('change'));
   assert.deepEqual(sets, ['oldest']); assert.deepEqual(ready(), ['r1', 'r2', 'notif:x'], 'Oldest');
 });
@@ -1939,7 +1958,7 @@ test('round 19 item 2 / round 22 desktop: Sort (Newest / Oldest, the stock key) 
   assert.equal(node.querySelector('[data-aad-sortshown]'), null, 'round 22: no "Show sort control" switch any more'); assert.equal(w.q('.aad-sort'), null, 'no native select anywhere');
   const b = w.q('.aad-sech .aad-orderb'); assert.ok(b, 'shown on Ready\'s header from the start'); assert.equal(b.querySelector('.aad-sortb-w').textContent, 'Newest');
   const g = w.q('.aad-sech .aad-groupb'); assert.ok(g, 'round 25: grouping is its own drop-down'); assert.equal(g.querySelector('.aad-sortb-w').textContent, 'One list');
-  assert.deepEqual(w.qa('.aad-sech .aad-sortb').map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
+  assert.deepEqual(w.qa('.aad-sech .aad-sortb').filter(n => !n.classList.contains('aad-working-orderb')).map(n => n.classList.contains('aad-groupb') ? 'group' : 'sort'), ['group', 'sort'], 'Group, then Sort');
   b.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-h').map(n => n.textContent), ['Sort'], 'round 25: the sort menu holds only the order');
   assert.deepEqual(w.qa('.aad-sortmenu .aad-pop-i').map(n => n.textContent + ':' + n.getAttribute('aria-checked')), ['Newest first:true', 'Oldest first:false']);
@@ -2135,7 +2154,7 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   }
   const js = noComments(read('web/layouts/ai-apps/desktop.js'));
   assert.match(js, /if \(code === 'KeyB' && !sh\) \{ if \(!e\.repeat && docked && frontNote\(\)\) routeBtn\(\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
-  assert.match(js, /const routeBtn = \(\) => \[\.\.\.doc\.querySelectorAll\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\]\.find\(onScreen\) \|\| null;/, 'the routing line on screen (live: after ⌥X a hidden Chats window held the first one)');
+  assert.match(js, /const routeBtn = \(\) => chatParts\('routeButton'\)\[0\] \|\| null;/, 'the shared routing line on screen (hidden Chats windows are excluded by geometry)');
   assert.match(js, /if \(act\) \{ if \(!e\.repeat\) chatBtn\(act\)\?\.click\?\.\(\); return true; \}/, 'round 21: ⌥Z / ⌥E / ⌥X click the open item\'s own Snooze / Archive / Resolve');
   assert.doesNotMatch(js, /nextAfterAct/, 'Archive / Resolve never auto-advance the desktop chat');
   assert.ok(!read('web/layouts/ai-apps/home.js').match(/APP_LETTERS = \[\.\.\.'[^']*B/), 'B is no app letter any more');
@@ -2150,7 +2169,7 @@ test('round 21: a modal in front (the app picker, Settings) takes only its own �
   assert.match(js, /if \(allOpenNow\(\)\) return code === 'KeyA' && !sh \? once\(closeAll\) : KEY_LIKE\.test\(code\);/, 'the picker: ⌥A closes it, every other ⌥ key is taken');
   assert.match(js, /if \(settingsOpen\(\)\) return code === 'KeyS' && !sh \? once\(closeSettings\) : KEY_LIKE\.test\(code\);/, 'Settings: ⌥S closes it');
   assert.match(js, /if \(allOpenNow\(\)\) \{ put\(doc\.querySelector\('\.vc-sheet \.vc-x'\), 'A'\); return out; \}/);
-  assert.match(js, /if \(settingsOpen\(\)\) \{ put\(doc\.querySelector\('#dsettings \.st-close'\), 'S'\); return out; \}/);
+  assert.match(js, /if \(settingsOpen\(\)\) \{ put\(host\?\.settings.closePart\(\), 'S'\); return out; \}/);
   // the picker open: ⌥V (voice) is taken too; ⌥A again closes it
   assert.equal(keys[1].down({ altKey: true, code: 'KeyA' }), true); assert.equal(w.html.dataset.vcSheet, 'open');
   assert.equal(keys[1].down({ altKey: true, code: 'KeyV' }), true, 'voice waits until the picker is closed');
@@ -2283,6 +2302,41 @@ test('a reload with an app in front: the thread the Chats desk holds docks besid
   const dj = noComments(read('web/desktop/desktop.js'));
   assert.match(dj, /const shownBeside = \(\) => \{[^\n]*H0\.routeShows\(i\)[^\n]*\};/);
   assert.match(dj, /visible: \(\) => \[\.\.\.\(homeOpen \? \[\] : ws\[cur\]\.wins\),[^\n]*\.\.\.\(homeOpen \? \[\] : shownBeside\(\)\)\],/);
+});
+
+/* James, 6 Nov 2026 ("Messenger became unclickable"): an app panel beside the docked chat, a reply sent in the chat (its
+ * desk current), then the app tab or the app itself clicked. The tab hid the panel out from under the pointer, and the
+ * panel's iframe (a [hidden], unfocused desk to the shell) took no pointer events at all. */
+test('after a reply in the docked chat, the app panel beside it stays clickable: its tab brings it forward, never hides it', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const chatDesk = new El('div'); chatDesk.className = 'wsp'; chatDesk.dataset.ws = '1'; const dchats = new El('div'); dchats.className = 'dchats'; dchats.dataset.thread = 'r1'; chatDesk.append(dchats);
+  const appDesk = new El('div'); appDesk.className = 'wsp'; appDesk.dataset.ws = '4'; stage.append(chatDesk, appDesk); w.html.children[0].append(stage);
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 };
+  (await layout()).default(w.api);
+  w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app'); assert.equal(w.html.dataset.aadChat, 'on'); assert.equal(w.html.dataset.aadSplit, 'on');
+  // the chat docked beside it takes the keyboard (its row clicked, a reply typed and sent): the Chats desk is current
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 }; w.emit('route', w.st.route); w.emit('render'); w.run();
+  assert.equal(w.html.dataset.aiFront, 'chat'); assert.equal(w.html.dataset.aadChat, 'on', 'the chat stays open in its column');
+  assert.equal(appDesk.dataset.aadRole, 'app', 'the app stays beside it'); assert.equal(w.html.dataset.aadSplit, 'on');
+  const tab = w.q('.aad-vtab[data-desk="4"]'); assert.ok(tab.classList.contains('is-on'), 'its tab still lit (the panel)');
+  const gone0 = w.st.gone.length, news0 = w.st.newChats;
+  tab.dispatchEvent(new FakePointerEvent('click')); w.run();
+  assert.deepEqual(w.st.gone.slice(gone0), [4], 'the tab takes its app forward (its desk), not Home');
+  assert.equal(w.st.newChats, news0, 'no new chat in place of the reply');
+  w.st.route = { home: false, view: 'desk', thread: null, desk: 4 }; w.emit('route', w.st.route); w.run();
+  assert.equal(appDesk.dataset.aadRole, 'app', 'the panel is still there'); assert.equal(w.html.dataset.aadSplit, 'on');
+  assert.equal(w.html.dataset.aadChat, 'on', 'and the chat still open beside it'); assert.equal(w.html.dataset.aiFront, 'app');
+  // in front now: the same tab again hides it, as before (round 15)
+  const g1 = w.st.gone.length, n1 = w.st.newChats; w.q('.aad-vtab[data-desk="4"]').dispatchEvent(new FakePointerEvent('click')); w.run();
+  console.log('QA second', JSON.stringify({ gone: w.st.gone.slice(g1), news: w.st.newChats - n1, role: appDesk.dataset.aadRole, split: w.html.dataset.aadSplit }));
+  assert.ok(!w.st.gone.slice(g1).includes(4), 'the tab in front again: hidden (never re-opened)');
+  // the panel's iframe is a pointer target while its desk is [hidden] to the shell and its window unfocused
+  const css = noComments(read('web/layouts/ai-apps/desktop.css')), P = 'html[data-shell="desktop"][data-layout="ai-apps"]';
+  assert.ok(css.includes(`${P} #stage > .wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe { pointer-events: auto; }`), 'a role pane\'s iframe takes the click');
+  assert.ok(css.indexOf('.wsp[data-aad-role]:not([data-aad-omitted]) > .win:not(.gone):not(.drag) .wbody iframe') < css.indexOf('[data-aad-resizing] iframe { pointer-events: none !important; }'), 'the resize guard still wins');
+  assert.match(read('web/desktop/desktop.css'), /\.win:not\(\.focus\) \.wbody iframe \{ pointer-events: none; \}/, 'the Classic rule this overrides (no !important)');
 });
 
 test('round 21 phone: an app (or its link) opens full screen on its own desk, taken to the page; an app\'s Reply opens the chat and Back returns to the app; other links stay stock', async () => {

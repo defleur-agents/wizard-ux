@@ -81,6 +81,7 @@
     // Declared by the installed app itself (wizard.md home_screen); sanitized, never keyed by app id.
     homeScreen: a.source === 'apps.json' ? window.WizHomeScreenCapabilities?.sanitize(a.home_screen ?? a.homeScreen) || null : null,
     receives_voice_input: trusted === true && a.receives_voice_input === true,
+    voice_routes: Array.isArray(a.voice_routes) ? a.voice_routes : [],
     voice_names: Array.isArray(a.voice_names) ? a.voice_names.filter(n => typeof n === 'string') : [],
     provides: trusted && Array.isArray(a.provides) ? a.provides.filter(n => typeof n === 'string') : [],
     // Declared kind (wizard.md type) and store shelf, as the Agent Service projects them from apps.json. Not sensitive,

@@ -207,11 +207,39 @@
       return true;
     }
   });
+  let savingChatAction = false;
+  register({ id: 'chat-after-action', page: 'chats', aliases: ['chat-after-action'],
+    html() {
+      const value = window.WizConfig?.chatAfterAction?.() || 'stay';
+      return `<div class="st-group"><h4>After actions on your phone</h4><p class="st-hint">After sending, archiving, snoozing or marking unread. Desktop chats stay open.</p><div role="radiogroup" aria-label="After actions on your phone">${[['stay', 'Stay on this chat'], ['list', 'Back to chats list']].map(([id, label]) => `<button type="button" class="st-row wz-row" data-chat-after="${id}" role="radio" aria-checked="${value === id}" tabindex="${value === id ? 0 : -1}"${savingChatAction ? ' disabled' : ''}><span class="st-tx"><b>${label}</b></span><span aria-hidden="true">${value === id ? '●' : '○'}</span></button>`).join('')}</div></div>`;
+    },
+    act(ctx, el) {
+      const button = el.closest('[data-chat-after]'); if (!button) return false;
+      if (savingChatAction) return true;
+      const value = button.dataset.chatAfter, hadFocus = document.activeElement === button;
+      savingChatAction = true;
+      const done = window.WizConfig.setChatAfterAction(value);
+      ctx.changed?.();
+      done.then(scope => ctx.toast?.('✓', scope === 'owner' ? 'Saved on your Wizard' : 'Saved on this device', 2200), e => ctx.toast?.('!', e.message, 3200)).finally(() => {
+        savingChatAction = false; ctx.changed?.();
+        if (hadFocus && document.activeElement === document.body) ctx.root?.querySelector(`[data-chat-after="${value}"]`)?.focus({ preventScroll: true });
+      });
+      return true;
+    },
+  });
+  window.addEventListener('wos:prefs', () => { for (const m of mounts) m.render(); });
   // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
     html() {
       return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
     },
+  });
+  register({ id: 'working-order', page: 'chats', aliases: ['working-order'], available: () => !!window.WizChatsListModel,
+    html() {
+      const M = window.WizChatsListModel, current = window.WizLive?.workingOrder?.() || 'alphabetical';
+      return `<div class="st-group"><h4>Working threads</h4><label class="st-row wz-row"><span class="st-tx"><b>Sort Working</b><small>The same order on your phone and desktop.</small></span><select data-settings-working-order aria-label="Sort Working">${M.WORKING_SORTS.map(([v, word]) => `<option value="${v}"${v === current ? ' selected' : ''}>${word}</option>`).join('')}</select></label></div>`;
+    },
+    input(ctx, el) { if (el.matches('[data-settings-working-order]')) window.WizLive?.setWorkingOrder?.(el.value); },
   });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
@@ -344,7 +372,7 @@
       return `<button type="button" class="skp-card" data-skinfamily="${esc(f.id)}" aria-pressed="${!own && f.id === worn}" aria-label="${esc(f.name)}">${k ? mini(k) : ''}<span class="skp-nm">${esc(f.name)}</span></button>`;
     }).join('');
     const grid = `<div class="skp skp-families" role="group" aria-label="Skins">${tiles}${ownTiles(S, ctx.skinRemoving)}${newTile()}</div>`;
-    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur) : '');
+    const colours = `<div class="skp-colours"><h4>Colors</h4><div class="skp" role="group" aria-label="${esc(own?.name || family?.name || 'Skin')} colors">${(family?.palettes || []).map(id => S.list.find(k => k.id === id)).filter(Boolean).map(k => skinCard(k, cur)).join('')}</div></div>` + (!own && (S.wizardBackgrounds || twinned(S, family)) ? backgroundHtml(S, family, cur, ctx) : '');
     const confirm = ctx.skinRemove ? `<div class="st-confirm-scrim"><section class="st-confirm" role="alertdialog" aria-modal="true" aria-labelledby="skin-remove-title"><h3 id="skin-remove-title">Remove ${esc(ctx.skinRemove.name)}?</h3><p>You can undo this removal. Your Wizard keeps the folder in trash for seven days.</p><div class="st-actions"><button data-skin-remove-cancel>Cancel</button><button data-skin-remove-confirm>Remove skin</button></div></section></div>` : '';
     const undo = ctx.skinUndo ? `<div class="st-skin-toast" role="status">Skin removed<button data-skin-undo>Undo</button><button data-skin-undo-dismiss aria-label="Dismiss">×</button></div>` : '';
     return `<div class="st-group" data-stgroup="look"><h4>Skin</h4><div class="skp-all${facesReady ? '' : ' skp-wait'}">${grid}${colours}</div>${deviceSkinRecovery()}${tweakRows(S)}${own ? mySkinRow(own) : ''}${confirm}${undo}</div>`;
@@ -354,24 +382,41 @@
   // independent Colors control too (the shared Look contract). Background and Mode never disappear into a palette name.
   const twinned = (S, family) => typeof S.setWallpaper === 'function' && typeof S.twin === 'function' && (family?.palettes || []).length > 1 && family.palettes.every(id => S.twin(id));
   const isLight = id => /-light$/.test(id);
-  function backgroundHtml(S, family, cur) {
+  function backgroundHtml(S, family, cur, ctx = {}) {
     const light = isLight(cur), plain = family.palettes.find(id => !/^landscapes/.test(id) && isLight(id) === light);
     const scenic = family.palettes.find(id => /^landscapes/.test(id) && isLight(id) === light);
     const wizard = !!S.wizardBackgrounds, onScene = wizard || /^landscapes/.test(cur), chosen = onScene ? S.wallpaper : 'plain';
     const card = (id, name, k, img) => `<button type="button" class="skp-card" data-bgpick="${esc(id)}" aria-pressed="${id === chosen}" aria-label="${esc(name)}"><span class="skp-mini" data-skp="${esc(k.id)}" style="${pvars(k)}${img ? `;background:linear-gradient(180deg, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 35%, transparent), transparent 34%, transparent 66%, color-mix(in srgb, var(--p-bg, var(--wz-bg)) 45%, transparent)),url('${img}') center / cover` : ''}" aria-hidden="true"><i class="skp-a"></i><i class="skp-a skp-a2"></i><i class="skp-u"></i><i class="skp-dock"><i class="skp-orb"></i></i></span><span class="skp-nm">${esc(name)}</span></button>`;
     const pk = S.list.find(k => k.id === plain), lk = S.list.find(k => k.id === (wizard ? cur : scenic));
-    const cards = [wizard ? card('living', 'Living canvas', lk) : pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, S.wallpaperThumb(w.id))) : [])].join('');
-    const note = wizard && chosen === 'living' ? 'The living canvas for this color.' : onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
+    const cards = [wizard ? card('living', 'Living canvas', lk) : pk ? card('plain', 'Plain', pk) : '', ...(lk ? S.wallpapers.map(w => card(w.id, w.name, lk, S.wallpaperThumb(w.id))) : []), wizard && lk ? card('custom', 'Custom', lk, S.wallpaperThumb('custom')) : ''].join('');
+    const note = wizard && chosen === 'custom' ? 'Your image, shared with your other desktops.' : wizard && chosen === 'living' ? 'The living canvas for this color.' : onScene ? (S.wallpapers.find(w => w.id === S.wallpaper)?.who || '') : 'Plain black or white, no picture.';
     const mode = `<div class="st-seg" role="radiogroup" aria-label="Mode">${[['dark', 'Dark'], ['light', 'Light']].map(([m, n]) => `<button type="button" role="radio" aria-checked="${(m === 'light') === light}" data-skinmode="${m}">${n}</button>`).join('')}</div>`;
-    return `<div class="skp-colours">${wizard ? '' : `<h4>Mode</h4>${mode}`}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p></div>`;
+    return `<div class="skp-colours">${wizard ? '' : `<h4>Mode</h4>${mode}`}<h4>Background</h4><div class="skp" role="radiogroup" aria-label="Background">${cards}</div><p class="st-hint" data-wp-note>${esc(note)}</p>${wizard ? `<div class="st-actions"><button type="button" data-background-upload ${ctx.backgroundUploading ? 'disabled' : ''}>${S.desktopBackdrop?.wide ? 'Replace image' : 'Choose image'}</button>${S.desktopBackdrop?.wide ? `<button type="button" data-background-portrait ${ctx.backgroundUploading ? 'disabled' : ''}>${S.desktopBackdrop.tall ? 'Replace portrait image' : 'Add portrait image'}</button>` : ''}</div><p class="st-hint" role="status" data-background-status>${esc(ctx.backgroundUploading || 'PNG, JPEG, WebP, AVIF or GIF · up to 20 MB. Optional portrait image for tall desktop windows.')}</p>` : ''}</div>`;
+  }
+  function chooseBackgroundImage(ctx, portrait = false) {
+    if (ctx.backgroundUploading) return;
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg,image/webp,image/avif,image/gif';
+    input.addEventListener('change', () => {
+      const file = input.files?.[0]; if (!file) return;
+      ctx.backgroundUploading = 'Uploading image…'; ctx.render();
+      void window.WosSkin.uploadWallpaper(file, { portrait, onProgress(sent, total) {
+        ctx.backgroundUploading = `Uploading image… ${Math.round(sent / total * 100)}%`;
+        const status = ctx.root.querySelector('[data-background-status]'); if (status) status.textContent = ctx.backgroundUploading;
+      } }).then(() => { ctx.backgroundUploading = ''; for (const m of mounts) m.render(); }, e => {
+        ctx.backgroundUploading = ''; ctx.render(); ctx.toast?.('!', e.message || 'Could not upload image. Try again.', 4000);
+      });
+    }, { once: true });
+    input.click();
   }
   function backgroundAct(ctx, el, pick) {
     const S = window.WosSkin, cur = S.current, light = isLight(cur);
+    if (el.closest('[data-background-upload]')) { chooseBackgroundImage(ctx); return true; }
+    if (el.closest('[data-background-portrait]')) { chooseBackgroundImage(ctx, true); return true; }
     const m = el.closest('[data-skinmode]');
     if (m) { const want = m.dataset.skinmode === 'light'; if (want !== light) { const t = S.twin(cur); if (t) pick(t.id); } return true; }
     const b = el.closest('[data-bgpick]'); if (!b) return false;
     const fam = S.families.find(f => f.id === S.familyOf(cur)), id = b.dataset.bgpick;
-    if (S.wizardBackgrounds) { S.setWallpaper(id); ctx.render(); ctx.haptic?.(8); return true; }
+    if (S.wizardBackgrounds) { if (id === 'custom' && !S.desktopBackdrop?.wide) { chooseBackgroundImage(ctx); return true; } S.setWallpaper(id); ctx.render(); ctx.haptic?.(8); return true; }
     const target = fam.palettes.find(p => isLight(p) === light && (id === 'plain' ? !/^landscapes/.test(p) : /^landscapes/.test(p)));
     if (id !== 'plain') S.setWallpaper(id);
     if (target && target !== cur) pick(target); else { ctx.render(); ctx.haptic?.(8); }
@@ -801,6 +846,13 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const choice = e.target.closest?.('[data-chat-after]');
+      if (choice && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        const choices = [...choice.closest('[role="radiogroup"]').querySelectorAll('[data-chat-after]')];
+        const at = choices.indexOf(choice), next = e.key === 'Home' ? 0 : e.key === 'End' ? choices.length - 1 : (at + (['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1) + choices.length) % choices.length;
+        choices[next].focus(); choices[next].click(); return;
+      }
       const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
       if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
@@ -823,8 +875,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wos:prefs', appsChanged); window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.

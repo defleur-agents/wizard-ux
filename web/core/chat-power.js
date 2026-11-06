@@ -526,6 +526,7 @@ window.WosChatPower = function chatPower(A) {
     // Send and go: a voice reply steps back one level like a typed send (chats.js), on
     // the tap, not after the recording has been written to the phone's storage (a blob commit can take seconds).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
+    const navAtSend = c.readNav;
     const left = w && A.leaveAfterSend?.(wid, sid, isNew, 'voice reply in this thread');
     if (w) A.renderChats(w);
     let it;
@@ -541,6 +542,7 @@ window.WosChatPower = function chatPower(A) {
       throw e;
     }
     sealed.done(it);
+    if (isNew && !left && it?.sessionId && H.win(wid) === w && w.thread === sid && c.readNav === navAtSend) { A.openChat(wid, it.sessionId); A.renderChats(w); }
     return it;
   }
   function paintMic(on, sid) {

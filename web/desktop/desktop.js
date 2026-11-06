@@ -170,7 +170,7 @@
   function commandSnapshot() { const w=focused(); return {id:w?.id,thread:w?.thread,view:{appId:w?.appId,kind:w?.app==='chats' ? w.thread ? 'chat thread' : 'thread list' : 'app'}}; }
   const LOCAL_COMMANDS = window.WosCommands.create({CHATS,APP,findApp,appByName,quickSearch,sendSnap:commandSnapshot});
   function executeCommand(c,text,snap,musicDone) {
-    return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,musicDone,
+    return window.WosCommands.execute(c,text,{search:openSearch,settings:openSettings,focused:()=>snap?.id?W[snap.id]:focused(),chats:CHATS,chatList:openChatsList,launcher:openPalette,findApp,openApp,openAppRoute:(id,url)=>window.WizOpenApp(id,url),musicDone,
       layout(c) { const f=snap?.id?W[snap.id]:focused();
         if(c.action==='desk') { if(c.to==='home') goHome(); else c.to==='next'?stepDesk(1):c.to==='prev'?stepDesk(-1):goWs(+c.to-1); return true; }
         if(c.action==='close_window') { if(!f)return false;closeWin(f.id);return true; }
@@ -581,6 +581,19 @@
       focusWin(id, opts); return focused()?.id === id;
     },
     close: id => { closeWin(id); return !W[id]; },
+    chats: id => CHATS.surface(id),
+    settings: () => ({ isOpen: !setEl.hidden && setEl.parentNode === document.body, closePart: setEl.querySelector('.st-close') }),
+    closeSettings: () => { const open = !setEl.hidden; if (open) closeSettings(); return open && setEl.hidden; },
+    settingsOverlay: () => {
+      const had = document.documentElement.hasAttribute('data-settings-over');
+      document.documentElement.setAttribute('data-settings-over', ''); hostSettings();
+      let released = false;
+      return () => {
+        if (released) return; released = true;
+        if (!had) document.documentElement.removeAttribute('data-settings-over');
+        hostSettings();
+      };
+    },
     panes: C.panes,
   });
   const desktopHost = desktop.host;
@@ -725,6 +738,9 @@
     el.className = 'win'; el.dataset.win = w.id; el.tabIndex = -1; el.setAttribute('aria-label', winTitle(w));
     el.innerHTML = winHtml(w); host.appendChild(el);
     if (w.app === 'chats') {
+      const surface = CHATS.surface(w.id);
+      surface.mount(el.querySelector('.pane-main'));
+      CHATS.surface(w.id + '::list').mount(el.querySelector('.pane-list'));
       CHATS.renderChatList(listWin(w.id), el.querySelector(`[data-chats="${w.id}::list"]`));
       if (w.thread) CHATS.renderChats(w);
       syncChatsPane(w.id);
@@ -2987,6 +3003,12 @@
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
     voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
+    recordReply: (wid, sid) => {
+      // Layouts may name only a genuine Chats composer, never an app's thread-like metadata.
+      const w = W[wid];
+      if (!w || !(w.app === 'chats' || CHATS.isHosted(wid)) || w.thread !== sid) return 'busy';
+      return recordReply(wid, sid);
+    },
     // Only an open Chats thread changes the ordinary orb's idle action: talk() pins
     // its reply target before capture. Lists, New chat, Home and other apps retain
     // the general new-chat action; an in-flight take retains its stop-only action.

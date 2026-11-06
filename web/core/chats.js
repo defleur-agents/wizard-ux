@@ -503,14 +503,16 @@ window.WizCore.chats = function createChats(H) {
   }
   // A pin changed here, on another tab, or on another device (pulled through the shared preferences).
   window.addEventListener('wos:chat-pins', () => { for (const id of Object.keys(CH)) { const w = W[id]; if (w && !w.thread && !holdList(id)) renderChats(w); } });
-  // Phone Snooze steps back like Done; desktop keeps its reader open (James, 6 Nov 2026).
+  // Phone Snooze follows the action setting; desktop keeps its reader open.
   // The toast carries the return time.
+  // One action policy for every phone host; desktop keeps the already-visible reader pane.
+  const keepThreadOpen = () => H.keepThreadOpen || window.WizConfig?.chatAfterAction?.() !== 'list';
   window.addEventListener('wos:boomerang-set', e => {
     toast('◷', e.detail.label, 3200);
-    if (!H.keepThreadOpen && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
+    if (!keepThreadOpen() && e.detail.session) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); }
   });
   window.addEventListener('wos:snooze-someday', e => {
-    if (!H.keepThreadOpen && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
+    if (!keepThreadOpen() && !e.detail.quiet) for (const id of Object.keys(CH)) { const w = W[id]; if (w?.thread === e.detail.session) threadBack(w); } // a timed Snooze already left the thread on wos:boomerang-set
     if (!e.detail.quiet) toast('◷', snoozeLast() ? 'Snoozed · bottom of Ready' : 'Snoozed · out of your list', 2400); H.changed?.();
   });
   // A scheduled Snooze was set, changed or came back: list markers, the thread banner and the Ready place follow.
@@ -527,6 +529,8 @@ window.WizCore.chats = function createChats(H) {
   const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
   const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
   // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
+  const workingOrdered = list => window.WizChatsListModel.workingSort((list || []).map(s => ({ title: s.title || 'New chat', at: window.WizChatsListModel.workingAt(s, LIVE), value: s })), LIVE.workingOrder?.()).map(r => r.value);
+  const workingSortControl = () => `<label class="ch-working-sort">Sort Working <select data-working-order aria-label="Sort Working">${window.WizChatsListModel.WORKING_SORTS.map(([v, word]) => `<option value="${v}"${v === (LIVE.workingOrder?.() || 'alphabetical') ? ' selected' : ''}>${word}</option>`).join('')}</select></label>`;
   const readyOrdered = list => window.WizChatsListModel.orderSessions(list, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank });
   // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.
   window.addEventListener('wos:prefs', () => { if (notesOff && !window.WosSkinHost?.inboxList) { notesOff(); notesOff = null; } });
@@ -823,6 +827,7 @@ window.WizCore.chats = function createChats(H) {
     window.WosSkinHost.inboxAct(a, n.id);
     if (a === 'resolve') return true; // the package sends the ask from this chat; sending moves on as usual
     if (a === 'app') return true; // the app opens on top; the item stays until the app (or Archive) clears it
+    if (PHONE() && keepThreadOpen()) { renderChats(w); H.changed?.(); return true; }
     // A stack stays open until it is all handled (Miguel, 4 Nov 2026): Archive / Snooze on one of several moves to the
     // next one in place (the older neighbour, else the newer); only the last one closes the chat.
     const stay = (a === 'done' || a === 'snooze') && noteQuiet() && n.item ? [n.item, ...noteSiblings(n.item)].sort((x, y) => noteAt(y) - noteAt(x)) : [];
@@ -882,9 +887,11 @@ window.WizCore.chats = function createChats(H) {
     const w = W[owner(wid)], n = notifOf(w); if (!n || n.id !== nid || !n.item) return false;
     const ids = [n.id, ...noteSiblings(n.item).map(i => i.id)];
     vib(8);
-    const d = KIT.drafts.get('new');
-    if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
-    ch(w.id).draft = ''; chatsBack(w);
+    if (!PHONE() || !keepThreadOpen()) {
+      const d = KIT.drafts.get('new');
+      if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
+      ch(w.id).draft = ''; chatsBack(w);
+    }
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
     const ok = await window.WosBell?.mark?.(ids, { read: true, archived: true });
     toast(ok ? '✓' : '!', ok ? `${ids.length} done` : 'Couldn’t save · restored', ok ? 1600 : 3200);
@@ -907,7 +914,7 @@ window.WizCore.chats = function createChats(H) {
     // Anywhere but Chats (stock: Badge) takes it out of Chats at once.
     if (to !== 'chats') {
       const n = notifOf(w);
-      if (n && noteRoute(n) === app) {
+      if (n && noteRoute(n) === app && (!PHONE() || !keepThreadOpen())) {
         const d = KIT.drafts.get('new');
         if (!String(ch(w.id).draft || d.text || '').trim() && !(d.files || []).length) KIT.drafts.clear('new'); else KIT.drafts.setReply('new', null);
         ch(w.id).draft = ''; chatsBack(w);
@@ -1365,7 +1372,7 @@ window.WizCore.chats = function createChats(H) {
       const list0 = PW && k === 'errors' ? PW.errorsFilter(groups[k]) : groups[k];
       // Ready's order is chosen before paging, so Priority never pages a needs-you row out of the first page.
       const dayOrdered = !n && (k === 'ready' || (!byStatus() && (k === 'yesterday' || k === 'pastWeek')));
-      const list = dayOrdered ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
+      const list = k === 'working' ? workingOrdered(list0) : dayOrdered ? readyOrdered(list0) : k === 'archive' && !n && !filtered && Object.keys(LIVE.windows || {}).length ? list0.slice(0,50) : list0;
       // Errors also holds failed background work and voice notes that didn't send (chat-power.js #12).
       const extra = PW && k === 'errors' && !n ? PW.errorsExtra() : { n: 0, html: '' };
       const nt = k === 'ready' ? listNotes : null, notesN = nt ? nt.awake.length + nt.later.length : 0;
@@ -1378,7 +1385,7 @@ window.WizCore.chats = function createChats(H) {
       const archiveNote = k === 'archive' && !n && !filtered && windowMeta ? `<span class="ch-none">Newest ${list.length} of ${windowMeta.archiveTotal} · search to find older chats</span>` : '';
       const shown = c.more[k] ? list : list.slice(0, SEC_PAGE);
       return `<section class="ch-sec${open ? ' open' : ''}" data-sec="${k}"><button class="ch-sec-h" data-sectoggle="${k}" aria-expanded="${open}"><span>${label}</span><small>${list.length + extra.n + notesN}</small>${waitN ? `<b class="wait">${waitN} need you</b>` : ''}${newN ? `<b>${newN} new</b>` : ''}<i aria-hidden="true"></i></button>
-        ${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + (window.WizAppExtensions?.html() || '') : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
+        ${k === 'working' ? workingSortControl() : ''}${open ? `<div class="ch-sec-b">${k === 'archive' && !n && !filtered && !AGID ? '<div data-slot="archive-top"></div>' : ''}${k === 'archive' && !n && !filtered ? archSel() : ''}${archiveNote}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-top"></div>' + (window.WizAppExtensions?.html() || '') : ''}${list.length || extra.n || notesN ? (k === 'errors' && PW ? shown.map(s => PW.errorRow(s, chatRow(s, n ? snips.get(s.id) : null))).join('') + extra.html : dayOrdered ? readyBody(shown, s => chatRow(s, null), nt, k) : shown.map(s => chatRow(s, n ? snips.get(s.id) : null)).join('')) : '<span class="ch-none">None</span>'}${list.length > shown.length ? `<button class="ch-more" data-secmore="${k}">Show all ${list.length}</button>` : ''}${k === 'ready' && !n && !filtered && !AGID ? '<div data-slot="ready-end"></div>' : ''}</div>` : ''}</section>`;
     }).join('');
     // Progress sits above the results (James, 25 Oct 2026: it was hidden below a long Archive); the final line stays under them.
     if (bs && LST.ok) body = BS.scanning(bs) || bs.busy ? BS.footer(bs) + body : body + BS.footer(bs);
@@ -1415,6 +1422,7 @@ window.WizCore.chats = function createChats(H) {
       const box = root.querySelector('[data-chsearch]'); if (box && !c.q && box.value) box.value = '';
       // The auto-archive picker is a saved setting, not a draft: show the saved value after every repaint, or a
       // window painted before the choice changed (another desk, another device, first paint) keeps saying "1 week".
+      const working = root.querySelector('[data-working-order]'); if (working) working.value = LIVE.workingOrder?.() || 'alphabetical';
       const arch = root.querySelector('[data-archafter]'); if (arch && arch.value !== String(LIVE.archiveAfterDays)) arch.value = String(LIVE.archiveAfterDays);
       if (c.listPending) { if (restoreListPlace(el.querySelector('.ch-scroll'), place)) c.listPending = null; }
       else anchorListPlace(el.querySelector('.ch-scroll'), place);
@@ -1718,10 +1726,10 @@ window.WizCore.chats = function createChats(H) {
     vib(8);
     if (a === 'unread') {
       closeRowSheet();
-      // Hold the desktop's explicit unread marker until navigation; otherwise its live repaint reads it back.
+      // Hold an open reader's explicit unread marker until navigation; its live repaint must not consume it.
       for (const id of Object.keys(CH)) {
         const x = W[id]; if (!x || x.thread !== sid) continue;
-        if (H.keepThreadOpen) ch(id).unreadHold = { sid, nav: ch(id).readNav };
+        if (keepThreadOpen()) ch(id).unreadHold = { sid, nav: ch(id).readNav };
         else threadBack(x);
       }
       const ok = await LIVE.markUnread(sid);
@@ -1738,7 +1746,7 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    if (!H.keepThreadOpen && a !== 'restore' && w && w.thread === sid) threadBack(w);
+    if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2833,7 +2841,7 @@ window.WizCore.chats = function createChats(H) {
     if (prev && prev !== w.thread && LIVE.session(prev)) { openChat(w.id, prev, { keepTrail: true }); return 'trail'; }
     chatsBack(w); return 'thread';
   }
-  /* Send steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
+  /* Opt-in Send and go steps back one level on the phone: linked parent, otherwise the list. Desktop keeps its thread
    * pane. The pinned send target is independent of this navigation; later callbacks cannot pop the parent.
    * Return an owned recovery receipt so a failed local save can restore the composer without stealing a
    * newer navigation (including an A → B → A round trip). */
@@ -2861,7 +2869,7 @@ window.WizCore.chats = function createChats(H) {
     }).catch(() => toast('!', 'Couldn’t stop · try again', 2600)).finally(() => { if (W[w.id]) renderThreadNow(w); });
   }
   function leaveAfterSend(wid, sid, isNew, how = '') {
-    if (H.keepThreadOpen && !isNew) return false;
+    if (keepThreadOpen() && (!isNew || PHONE())) return false;
     const w = W[wid];
     if (w && sid && w.thread === sid && hosted.has(wid)) {
       const entry = hosted.get(wid); closeHosted(wid);
@@ -3009,6 +3017,7 @@ window.WizCore.chats = function createChats(H) {
     // Hold before navigation can paint a list (also covers desktop / hosted replies).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
     const trackerSeen = !isNew && here && !opts.away ? globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '', Date.now(), { defer: true }) : null;
+    const navAtSend = c.readNav;
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.
@@ -3033,6 +3042,8 @@ window.WizCore.chats = function createChats(H) {
     // The durable outbox allocates the final thread id before dispatch; retain that
     // membership even if delivery retries or this window navigates away.
     if (spaceKey && it?.sessionId) spaceMember(spaceKey, it.sessionId, true);
+    // Follow only this New chat's allocated id, never a different chat opened during the disk save.
+    if (isNew && !left && !opts.away && it?.sessionId && W[wid] === w && w.thread === sid && c.readNav === navAtSend) openChat(wid, it.sessionId);
     sealed?.done(it);
     if (!left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     window.WosSkinHost?.emit?.('sent', { thread: sid, wid, isNew, reply: reply?.key || '' });
@@ -3156,7 +3167,7 @@ window.WizCore.chats = function createChats(H) {
       const sid = w.thread, nav = ch(id).readNav;
       Promise.resolve(OUTBOX.remove(item.id)).then(ok => {
         if (!ok) { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); return; }
-        if (H.win(id) === w && w.thread === sid && ch(id).readNav === nav && sid) threadBack(w);
+        if ((!PHONE() || !keepThreadOpen()) && H.win(id) === w && w.thread === sid && ch(id).readNav === nav && sid) threadBack(w);
       }).catch(() => { discard.disabled = false; H.toast('!', 'Could not save discard · original kept', 2400); });
       return true;
     }
@@ -3326,6 +3337,7 @@ window.WizCore.chats = function createChats(H) {
       if (e.target.matches('.ch-compose textarea')) { growTa(e.target); const id = idOf(e.target); ch(id).draft = e.target.value; saveDraft(id); syncSend(e.target.form, ch(id)); }
     });
     root.addEventListener('change', e => {
+      if (e.target.matches('[data-working-order]')) LIVE.setWorkingOrder?.(e.target.value);
       if (e.target.matches('[data-archafter]')) { LIVE.archiveAfterDays = +e.target.value; for (const x of Object.keys(CH)) { const ww = W[x]; if (ww) renderChats(ww); } }
     });
     root.addEventListener('keydown', e => {
