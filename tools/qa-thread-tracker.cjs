@@ -425,8 +425,11 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
         const r=n.getBoundingClientRect(),b=nb.getBoundingClientRect();return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top)};
       },String(latest.id));
       const writesBeforeShort=svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length;
-      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});await page.waitForTimeout(1400);
-      check(`autoseen/${profile}/${skin}: 300px reply with 50px tail is not read`,shortTail.height===300 && Math.abs(shortTail.visible-50)<=2 && svc.view().every(i=>!i.seen) && svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length===writesBeforeShort,shortTail);
+      const shortSamples=[];
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
+      for(let sample=0;sample<7;sample++){await page.waitForTimeout(200);shortSamples.push(await page.evaluate(mid=>{const n=document.querySelector(`.msg[data-mid="${mid}"]`),nb=n.closest('.ch-msgs'),r=n.getBoundingClientRect(),b=nb.getBoundingClientRect(),top=window.WosThreadTracker.viewportTop(nb,b.top);return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top),top:r.top,viewport:Math.min(b.bottom,innerHeight)-top,dots:window.WosThreadTracker.dots('tt-main')};},String(latest.id)));}
+      check(`autoseen/${profile}/${skin}: 300px reply with 50px tail is not read`,shortTail.height===300 && Math.abs(shortTail.visible-50)<=2 && svc.view().every(i=>!i.seen) && svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length===writesBeforeShort,{shortTail,shortSamples,seen:svc.view(),writesBeforeShort,writesAfter:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen'))});
+      fs.writeFileSync(path.join(OUT,`short-tail-${profile}-${skin}.json`),JSON.stringify({shortTail,shortSamples,seen:svc.view(),writesBeforeShort,writesAfter:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen'))},null,2));
       await page.screenshot({path:path.join(OUT,`running-short-unread-${profile}-${skin}.png`)});
       // Keep just the tail of a genuinely viewport-tall reply on screen for a full second.
       await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'}));
