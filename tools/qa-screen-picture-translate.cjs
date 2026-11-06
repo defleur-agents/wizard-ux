@@ -2,13 +2,14 @@
 // No provider substitute. Private fixture directory is supplied out of tree; never publish its outputs.
 // Usage: node tools/qa-screen-picture-translate.cjs PRIVATE_FIXTURE OUT
 //
-// Fixture: exact-image.jpg, baseline-screen.html (installed87 page), live-read-image.json + live-translate.json: one
-// recorded private read through read-image?geometry=1 (lines + boxes; tools/qa_picture_geometry_probe.py) and its
-// aligned translation. Contract: Translate paints the picture's Thai over the picture with the original renderer; no
-// text panel opens by itself; a line without a usable box is never placed (checked by replaying the same recording
-// with its boxes removed, as an older Search answers). A recording without boxes fails the run: overlay acceptance
-// cannot be claimed without geometry.
+// Fixture: exact-image.jpg, baseline-screen.html (installed87 page) and two separate recorded pairs from the private
+// route: live-read-image.json + live-translate.json (the historical lines-only read, exactly as an older Search
+// answers) and live-read-image-geometry.json + live-translate-geometry.json (read-image with geometry: lines + boxes,
+// e.g. tools/qa_picture_geometry_probe.py output renamed). Contract: Translate paints the picture's Thai over the
+// picture with the original renderer; no text panel opens by itself; a line without a usable box is never placed.
+// A missing or box-less geometry recording fails the run: overlay acceptance cannot be claimed without geometry.
 const {chromium} = require('./qa-playwright.cjs');
+const {outsideTarget, sheetSettled, hitTarget} = require('./qa-screen-hit.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict'), crypto = require('crypto');
 const fixture = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
 fs.mkdirSync(out, {recursive:true});
@@ -21,12 +22,12 @@ const recorded = (readName, translateName) => {
   assert.equal(read.lines.length, translation.items.length);
   return {read, mapping: Object.fromEntries(read.lines.map((s,i) => [s, translation.items[i]]))};
 };
-const live = recorded('live-read-image.json', 'live-translate.json');
-const hasGeometry = Array.isArray(live.read.boxes);
-if (hasGeometry) assert.equal(live.read.boxes.length, live.read.lines.length, 'geometry recording has one box (or null) per line');
-const geometry = hasGeometry ? live : null;
-const {boxes: _drop, ...linesOnly} = live.read; // the same recorded lines, as an older Search sends them
-const plain = {read: linesOnly, mapping: live.mapping};
+const plain = recorded('live-read-image.json', 'live-translate.json');
+assert.ok(!('boxes' in plain.read), 'the historical plain recording is lines-only; geometry belongs in the -geometry pair');
+const geometryFile = path.join(fixture, 'live-read-image-geometry.json');
+const geometry = fs.existsSync(geometryFile) ? recorded('live-read-image-geometry.json', 'live-translate-geometry.json') : null;
+const hasGeometry = !!geometry && Array.isArray(geometry.read.boxes) && geometry.read.boxes.some(Boolean);
+if (geometry) assert.ok(Array.isArray(geometry.read.boxes) && geometry.read.boxes.length === geometry.read.lines.length, 'geometry recording has one box (or null) per line');
 const current = path.resolve(process.env.SCREEN_PAGE_SOURCE || path.join(__dirname, '../android/app/src/main/assets/assist/screen.html'));
 // Accessibility chrome is a synthetic English control, not part of the recorded Thai inference.
 const chromeLabels = ['Copy translation', 'Select text', 'Ask Wizard'];
@@ -50,7 +51,7 @@ function sheetCaptureReady() {
   try {
     for (const skin of ['nebula','grove']) {
       const context = await browser.newContext({viewport:{width:360,height:780},deviceScaleFactor:3,hasTouch:true,isMobile:true});
-      const runs = [['baseline', plain], ['lines-only', plain], ...(geometry ? [['candidate', geometry]] : [])];
+      const runs = [['baseline', plain], ['lines-only', plain], ...(hasGeometry ? [['candidate', geometry]] : [])];
       for (const [version, rec] of runs) {
         const page = await context.newPage(), errors=[];
         page.on('pageerror', e => errors.push(e.message));
@@ -92,7 +93,7 @@ function sheetCaptureReady() {
           check('baseline '+skin+': false English verdict bypasses vision',!(await calls()).some(c=>c.kind==='picture'));
           await shot('');
         } else if (version === 'lines-only') {
-          // The recorded read predates geometry: every line must stay unplaced, honestly reported.
+          // The historical recording has no geometry: every line must stay unplaced, honestly reported.
           await waitFor(settled);
           const state = await peek(), thai = state.picRows.filter(q => THAI.test(q.t));
           check('lines-only '+skin+': Thai recovered and translated',thai.length > 0 && thai.every(q => q.tr && !THAI.test(q.tr)));
@@ -118,6 +119,7 @@ function sheetCaptureReady() {
           await shot('-original');
           await page.locator('#orig').click();
           const first = pics[0];
+          if (!first) throw new Error('nothing painted for the picture; interactive checks cannot run');
           await page.touchscreen.tap(first.c[0], first.c[1]);
           await page.waitForFunction(sheetCaptureReady, null, {polling:'raf',timeout:10000});
           state = await peek();
@@ -129,14 +131,25 @@ function sheetCaptureReady() {
           check('candidate '+skin+': live role change keeps the pick',(await peek()).sheetText === state.sheetText);
           await page.evaluate(skin => document.documentElement.style.setProperty('--wz-panel',skin==='grove'?'#f5f2e8':'#120e24'),skin);
           await shot('-picked');
-          // An outside touch dismisses the sheet, never the app or the overlay
-          await page.touchscreen.tap(345,100);
+          // An outside touch dismisses the sheet, never the app or the overlay: a real tap on the touch layer, clear of
+          // the picked sheet (wherever docked), chrome and painted lines; settle-waits fail closed with their errors.
+          const settle = (id, want) => page.waitForFunction(sheetSettled, [id, want], {polling:'raf', timeout:5000}).then(() => null, e => String(e).slice(0, 200));
+          const diag = {outside: await page.evaluate(outsideTarget), before: {sheets: state.sheets, painted: state.painted.map(e => e.r)}};
+          const pt = diag.outside.point;
+          if (pt) await page.touchscreen.tap(pt.x, pt.y);
+          diag.dismissSettle = pt ? await settle('sheet', false) : 'no clear outside point';
+          diag.tbarSettle = pt ? await settle('tbar', true) : 'no clear outside point';
           state = await peek();
-          check('candidate '+skin+': outside dismiss keeps the overlay',!state.sheet && state.painted.filter(e => e.pic).length === pics.length);
-          await page.locator('#tCopy').click();
+          diag.after = {sheets: state.sheets, sheet: state.sheet, tbar: state.tbar, painted: state.painted.map(e => e.r)};
+          await shot('-dismissed');
+          check('candidate '+skin+': real outside tap dismisses and keeps the overlay',pt && diag.outside.hit === 'layer' && !diag.dismissSettle && !diag.tbarSettle
+            && !state.sheet && state.tbar && state.painted.filter(e => e.pic).length === pics.length);
+          diag.copyTarget = await page.evaluate(hitTarget, 'tCopy');
+          if (diag.copyTarget.ok) await page.touchscreen.tap(diag.copyTarget.x, diag.copyTarget.y);
+          fs.writeFileSync(path.join(out,tag+'-touch-diagnostics.json'),JSON.stringify(diag,null,2));
           const copied = (await calls()).filter(c => c.kind === 'copy').pop();
-          check('candidate '+skin+': Copy translation has each recovered line exactly once',
-            copied && thai.every(q => copied.text.split('\n').filter(l => l === q.tr).length === state.picRows.filter(r => r.tr === q.tr).length));
+          check('candidate '+skin+': Copy translation (hit-tested) has each recovered line exactly once',
+            diag.copyTarget.ok && copied && thai.every(q => copied.text.split('\n').filter(l => l === q.tr).length === state.picRows.filter(r => r.tr === q.tr).length));
         }
         check(version+' '+skin+': no runtime errors',errors.length===0);
         await page.close();

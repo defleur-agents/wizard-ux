@@ -62,14 +62,18 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
   synthetic pixels; Appearance roles. It fails 16/18 against the release89 panel page and 18/18 against installed87.
 - `tools/qa-screen-page.cjs` (browser, synthetic canvas): the existing Lens checks plus a scenario where the Thai dish
   exists only in the picture. The dish is painted over its own letters in sampled colours, with no panel and a Thai →
-  English pill; Original, tap, outside tap and Copy are checked. Screenshots `08-picture-overlay.png` and
-  `08b-picture-original.png` need human visual review.
+  English pill; Original, tap, outside tap and Copy are checked. The outside tap is a real touch at a point that
+  `tools/qa-screen-hit.cjs` hit-tests on the touch layer, clear of sheets, chrome and paint, after the sheet settles.
+  Copy is tapped only once its button hit-tests. Screenshots `08`, `08b`, `08c` (picked) and `08d` (dismissed) need
+  human visual review; `08-picture-touch-diagnostics.json` keeps the bounds, the chosen point and where r1's blind
+  (200,760) tap lands.
 - `tools/qa-screen-picture-translate.cjs PRIVATE_FIXTURE OUT` (private exact-image replay, two Appearance role sets):
-  baseline87 still shows its false verdict. `live-read-image.json` (with `boxes`) + `live-translate.json` must paint
-  the recovered English over the photo, with no panel, Original, tap/outside, opaque sheet and Copy each line once.
-  Replaying the same recording with its boxes removed (as an older Search sends it) must paint nothing for the picture
-  and report “not placed”. A recording without boxes fails the run on purpose. Recorded inference is not new
-  inference, and a browser replay is not native-device proof. The parent recorded the current fixture by running
+  baseline87 still shows its false verdict. Two separate recordings are read: the historical lines-only
+  `live-read-image.json` + `live-translate.json` (asserted box-less) must paint nothing for the picture and report “not
+  placed”. The geometry pair `live-read-image-geometry.json` + `live-translate-geometry.json` must paint the recovered
+  English over the photo, with no panel, Original, a hit-tested outside tap, opaque sheet and Copy each line once. A
+  missing or box-less geometry pair fails the run on purpose. Recorded inference is not new inference, and a browser
+  replay is not native-device proof. The parent recorded the geometry pair by running
   `read_image(geometry=True)` from Search source `cb5e8888…` in the installed Search container with its unchanged
   configuration: 9 lines, 8 boxes, all three Thai captions boxed, 5494 ms. `tools/qa_picture_geometry_probe.py`
   re-records the same files over live HTTP once the extension is deployed.
@@ -82,6 +86,14 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
 `--wz-border`) with the standalone dark fallbacks. Release89 used `--wz-ink`/`--wz-line`, which aren't roles. The hint
 and the selected chip are opaque now. Painted text uses opaque sampled colours. `ScreenMode` doesn't inject the worn
 skin, so on the phone the page shows the dark fallback. Native skin transport isn't claimed.
+
+## Open finding (not fixed, not acceptance-complete)
+
+Minor visual: in the synthetic r1 capture `08-picture-overlay.png`, a Thai below-vowel (from หมู) stays visible just
+under the painted picture-only line. The painted rect ends at 371 screen px, but the line is drawn to 384.8 px. The
+existing tolerance-6 check still passes. Cause: the stroke tightening in `pictureBox` misses sparse marks above/below
+the line. An optional one-line product patch (pad like `alignWords`, with a tightened check) is kept out of Git for the
+parent's separate decision. It is not applied: this QA-only follow-on inherits the r1 debug build unchanged.
 
 ## Release custody
 
