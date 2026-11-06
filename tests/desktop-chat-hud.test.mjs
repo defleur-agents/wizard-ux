@@ -51,7 +51,7 @@ test('keys, voice and chat actions follow the keyboard into the HUD; desk routes
   assert.match(js, /function closeWin\(id, internal = false\) \{\n(?:\s*if \(!internal && !canLeave\(id\)\) return;\n)?\s*if \(hud\?\.id === id\) \{ hudClose\(\); return; \}/);
   assert.match(js, /function focusWin\(id, \{ scroll = true \} = \{\}\) \{\n\s*if \(hud\?\.id === id\) \{ hudFocus\(\); return; \}/);
   assert.match(js, /return Object\.values\(W\)\.find\(w => w\.id !== hud\?\.id && fn\(w\)\) \|\| null;/);
-  assert.match(js, /function toNewChat\(wid, why\) \{\n\s*const w = W\[wid\]; if \(hud\?\.id === wid \|\|/);
+  assert.doesNotMatch(js, /function toNewChat/);
 });
 
 test('the heads-up chat is fully opaque (James: floating text panels are solid)', () => {
