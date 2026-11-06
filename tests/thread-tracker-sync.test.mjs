@@ -104,7 +104,7 @@ test('late Look activation hydrates every open thread and counts without reopeni
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=t'), 'loads the already-open main-agent thread');
   assert.ok(calls.includes('/wizard/v1/thread-items?thread=private-thread&agent=synthetic-agent'), 'preserves the open thread agent');
   assert.equal(calls.filter(p => p.endsWith('/counts')).length, 1);
-  assert.equal(T.stripHtml('t'), '', 'running-only replies load dots but no owner-inbox strip');
+  assert.match(T.stripHtml('t'), /data-tt-strip/, 'running-only replies hydrate the visible strip');
   assert.match(T.dots('t'), /1 running/);
   assert.ok(renders.includes('a') && renders.includes('fresh'), 'also updates Reply in existing and new threads');
   const count = calls.length;
