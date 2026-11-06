@@ -20,7 +20,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(q.method()==='GET'&&p.startsWith('/wizard-os-home/')){if(process.env.QA_LIVE_ORIGIN)return r.continue();let f=p.slice('/wizard-os-home/'.length)||'index.html';if(f==='outbox.js'&&legacyOutbox?.source)return r.fulfill({body:legacyOutbox.source,contentType:'application/javascript'});f=path.join(root,'web',f);if(fs.existsSync(f)&&fs.statSync(f).isFile())return r.fulfill({body:fs.readFileSync(f),contentType:f.endsWith('.js')?'application/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'image/svg+xml'});}
    if(p==='/fixture-capture')return r.fulfill({contentType:'text/html',body:'<meta name="wizard-os-voice" content="capture"><p>Local capture fixture</p>'});
    if(p.endsWith('/bootstrap'))return json({bootstrap:1,display:{agent_name:'Wizard',owner_name:'Tester'},endpoints:{transcribe:'/wizard/v1/transcribe',route:'/wizard/v1/route',apps:'/wizard/v1/apps'},files:{upload_url:'/wizard/files/upload'},capabilities:{voice:true,router:true,files:true,steer:true}});
-   if(p==='/wizard/v1/apps'&&process.env.QA_LOCAL_ONLY==='1')return json({apps:[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
+   if(p==='/wizard/v1/apps'&&process.env.QA_LOCAL_ONLY==='1')return json({apps:fixture?.apps||[{id:'wisdom',name:'Wisdom',url:'/fixture-wisdom/'},{id:'mizel',name:'Mizel.ai',url:'/fixture-mizel/'}]});
    if(p.endsWith('/transcribe')){await sleep(state.sttDelay);return json({text:state.text,ms:5}).catch(()=>{});}
    if(p.endsWith('/route'))return json({cmd:state.cmd,ms:5});
    if(p==='/wizard/files/upload'){
@@ -68,6 +68,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    indexedDB.open=function(...args){return open(...args);};
    Storage.prototype.setItem=function(k,v){if(__fault.all&&(k.startsWith('wos.outbox.fallback')))throw new DOMException('Injected full storage','QuotaExceededError');return set.call(this,k,v);};
   },{allFail,model,provider,fixture});
+  if(process.env.QA_LAUNCHER_ONLY==='1')await ctx.addInitScript(()=>{ window.__launcherMediaStarts=0; const original=navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices); navigator.mediaDevices.getUserMedia=(...a)=>{window.__launcherMediaStarts++;return original(...a);}; });
   const p=await ctx.newPage();if(fixture)p.setDefaultTimeout(12000);p.on('pageerror',e=>state.errors.push(String(e)));
   await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
@@ -87,6 +88,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
+ if(process.env.QA_LAUNCHER_ONLY==='1'){await require('./qa-launcher-shortcut-pin.cjs')({boot,ok,sleep,sid,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,synthetic:true,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_TYPED_ROUTE_ONLY==='1'){await require('./qa-typed-send-route-retry.cjs')({boot,ok,sleep,sid,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,synthetic:true,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_ORB_ONLY==='1'){await require('./qa-desktop-orb-thread-pin.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_DISMISS_ONLY==='1'){await require('./qa-failed-send-dismiss.cjs')({boot,ok,sleep,sid,model,provider,out,browser});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,smoke:process.env.QA_DISMISS_SMOKE==='1',results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}

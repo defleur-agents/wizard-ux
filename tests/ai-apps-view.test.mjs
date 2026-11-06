@@ -190,7 +190,7 @@ test('desktop: a sidebar (open apps, All apps, the Archive / Working / Ready sec
   assert.equal(w.q('.aad-strip'), null, 'round 15: no tab strip'); assert.equal(w.q('.aad-tplus'), null, 'no New tab +');
   w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
   assert.equal(w.html.dataset.vcSheet, 'open', 'the picker'); assert.ok(w.q('.vc-sheet.vc-pick')); assert.equal(w.st.newChats, 0, 'no new chat for it');
-  assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['movies'], 'only installed apps neither pinned (Music, Mail, Money) nor open (Notes, Maps)');
+  assert.deepEqual(w.qa('.vc-pick .vc-app[data-app]').map(b => b.dataset.app), ['mail', 'music', 'money', 'notes', 'maps', 'movies'], 'desktop app search includes installed, open and pinned apps');
   assert.equal(w.q('.vc-pick .vc-fold'), null, 'no Already open row');
   assert.ok(w.q('.vc-pick .vc-more'), '+ Get more last');
   assert.deepEqual(w.qa('.aad-sec').map(h => `${h.dataset.sec}:${h.getAttribute('aria-expanded')}`), ['archive:false', 'working:false', 'ready:true'], 'round 18 item 4: Snoozed only when it holds chats (as on the rail)');
@@ -824,7 +824,7 @@ test('round 6: the drawer grid lists real apps only (the sheet\'s Apps), never a
   const { realApps } = await import(new URL('web/layouts/apps/chrome.js', root).href);
   assert.deepEqual(realApps([{ id: 'a' }, { id: 'b', connector: true }, { id: 'c', dev: true }, { id: 'd', system: true }], null).map(a => a.id), ['a'], 'without kinds: the flags');
   const dj = noComments(read('web/layouts/ai-apps/desktop.js'));
-  assert.match(dj, /chrome\.open\(\{ exclude: \(\) => refreshPins\(\), people: 'For people' \}\);/, 'round 16 item 7: the + is the shared picker (no All apps grid)');
+  assert.match(dj, /chrome\.open\(\{ includeOpen: true, people: 'For people' \}\);/, 'round 16 item 7: the + remains the shared picker (no All apps grid), now including open and pinned apps');
   const css = read('web/layouts/ai-apps/layout.css'), dcss = read('web/layouts/ai-apps/desktop.css');
   assert.match(css, /\.aa-tile\.is-logo \{ background: none; box-shadow: 0 1px 3px/, 'a logo fills its tile: no plate');
   assert.match(css, /\.aa-logo \{ width: 100%; height: 100%; object-fit: cover;/);
@@ -928,7 +928,7 @@ test('desktop ⌥ keys in the AI apps view (round 21): mnemonic letters, every k
   assert.ok(!/isAppsKey|toggleApps/.test(js), 'round 10: no apps sidebar key');
   assert.ok(!/hold: true/.test(js), 'the shell\'s own hold-⌥ overlay draws the hints (not a layout overlay)');
   // every other ⌥ key is consumed (nothing acts unseen on a hidden desk): no ⌥G letters, no ⌥/ pinned guide, no ⌥←/→
-  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \} \}\);/);
+  assert.match(js, /return KEY_LIKE\.test\(code\);\n  \}, up: e => \{ if \(e\.code === 'AltLeft' \|\| !e\.altKey\) leftOption = false; \} \}\);/, 'unclaimed Alt keys remain consumed; keyup only clears physical-left-Option tracking');
   // the hints: a keycap on each target, only the view's (the shell draws nothing of its own then)
   for (const k of ["'Space'", "'D'", "'H'", "'O'", "'L'", "'K'", "'N'", "'S'", "'R'", "'A'", "'T'", "'W'", "'F'", "'− ='", "'↓'", "'↑'", "']'", "'['", "'B'"]) assert.ok(js.includes(`, ${k}`), `chip ${k}`);
   assert.match(js, /rows\.forEach\(\(b, k\) => \{ if \(k < 10\) put\(tile\(b\), String\(\(k \+ 1\) % 10\)\); \}\);/, 'the first ten rows wear 1–9 and 0');
@@ -1288,8 +1288,8 @@ test('round 16 item 7: layer membership (pinned / open / picker disjoint; a pinn
   }
   assert.deepEqual(w.qa('.vc-pick .vc-fold').map(b => b.className), ['vc-fold vc-fold-agents'], 'no Already open row');
   assert.deepEqual(w.qa('.vc-pick .vc-sec-h > span').map(n => n.textContent), ['For people'], 'one For people section, open');
-  assert.deepEqual(w.qa('.vc-pick .vc-list[data-kind="apps"] .vc-app').map(b => b.dataset.app), ['movies', 'paper'], 'installed apps neither open (Mail, Music, Money, Notes, Maps) nor pinned');
-  const fold = w.q('.vc-pick .vc-fold-agents'); assert.equal(fold.getAttribute('aria-expanded'), 'false', 'For agents folded'); assert.equal(fold.querySelector('.vc-count').textContent, '3', 'Bot, Helper, Bank (Notes is open)');
+  assert.deepEqual(w.qa('.vc-pick .vc-list[data-kind="apps"] .vc-app').map(b => b.dataset.app), ['mail', 'maps', 'money', 'movies', 'music', 'paper'], 'desktop search includes open and pinned apps and launcher links');
+  const fold = w.q('.vc-pick .vc-fold-agents'); assert.equal(fold.getAttribute('aria-expanded'), 'false', 'For agents folded'); assert.equal(fold.querySelector('.vc-count').textContent, '4', 'Bot, Notes, Helper, Bank, whether open or not');
   fold.dispatchEvent(new FakePointerEvent('click'));
   assert.deepEqual(w.qa('.vc-pick .vc-sub-h > span').map(n => n.textContent), ['Agent apps', 'Agents', 'Connectors']);
   assert.ok(w.q('.vc-pick .vc-list-more .vc-more'), '+ Get more, last'); assert.equal(w.q('.vc-pick .vc-store'), null, 'no store text button');
@@ -2553,6 +2553,38 @@ test('desktop AI apps sidebar and rail flyout keep phone hours across midnight w
   w.q('.aad-rk[data-k="ready"]').dispatchEvent(new FakePointerEvent('pointerenter'));
   w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
   assert.equal(w.q('.aad-fly-i[data-sid="midnight"] .aad-fly-at').textContent, '15h');
+});
+
+test('left Option Space opens one existing picker without voice; release and unrelated modifiers preserve ownership', async () => {
+  const { w, keys } = deskWorld(); let voices = 0; w.api.voice.talk = () => voices++;
+  (await layout()).default(w.api); const h = keys[1];
+  h.down({ code: 'AltLeft', altKey: true });
+  assert.equal(h.down({ code: 'Space', altKey: true }), true);
+  const sheet = w.q('.vc-sheet'); assert.ok(sheet);
+  h.down({ code: 'Space', altKey: true, repeat: true }); h.up({ code: 'AltLeft', altKey: false });
+  assert.equal(w.q('.vc-sheet'), sheet); assert.equal(voices, 0);
+  w.escape(); h.down({ code: 'AltRight', altKey: true }); h.down({ code: 'Space', altKey: true });
+  assert.equal(voices, 1, 'Right Option chord retains its prior web meaning');
+  h.up({ code: 'AltRight', altKey: false });
+  h.down({ code: 'AltLeft', altKey: true }); h.down({ code: 'Space', altKey: true, ctrlKey: true });
+  assert.equal(w.q('.vc-sheet'), null); assert.equal(voices, 1);
+});
+
+test('launcher-link Video Editor remains searchable while open, Pin paints/persists and remount keeps Unpin', async () => {
+  const mount = async saved => {
+    const d = deskWorld(); Object.assign(d.store, saved || {});
+    d.w.api.apps.kinds = () => ({ apps: d.w.api.apps.list(), dev: [{ id: 'video-editor', name: 'Video Editor' }] });
+    d.w.st.desks.push({ id: 'video-editor', name: 'Video Editor', desk: 9 });
+    (await layout()).default(d.w.api); return d;
+  };
+  const { w, store } = await mount(); w.q('.aad-vall').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(w.q('.vc-app[data-app="video-editor"]'), 'open launcher links still appear in installed search'); w.escape();
+  w.q('.aad-vtab[data-app="video-editor"]').dispatchEvent(new FakePointerEvent('contextmenu'));
+  w.q('.aad-appmenu [data-act="pin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(store.pins.includes('video-editor')); assert.equal(w.q('.aad-vtab[data-app="video-editor"]').dataset.group, 'pin');
+  const reloaded = await mount(store); const tab = reloaded.w.q('.aad-vtab[data-app="video-editor"]'); assert.equal(tab.dataset.group, 'pin');
+  tab.dispatchEvent(new FakePointerEvent('contextmenu')); reloaded.w.q('.aad-appmenu [data-act="unpin"]').dispatchEvent(new FakePointerEvent('click'));
+  assert.ok(!reloaded.store.pins.includes('video-editor')); assert.equal(reloaded.w.q('.aad-vtab[data-app="video-editor"]').dataset.group, 'open');
 });
 
 test('desktop app panel: an app with its companion pane (Video Editor video + Feedback) shows side-by-side CSS columns and a wider panel, never two windows stacked in one box, even when the shell has not re-tiled that desk (James, 6 Nov 2026)', () => {
