@@ -139,7 +139,7 @@ window.WizCore.chats = function createChats(H) {
   function watchTracker(w, nb) {
     if (!w?.thread || !globalThis.WosThreadTracker?.on()) return;
     globalThis.WosThreadTracker.watch(nb, { sid: w.thread, agent: LIVE.agentOf?.(w.thread) || '',
-      active: () => W[w.id]?.thread === w.thread && threadOnScreen(nb) && H.front() === w.id });
+      active: () => W[w.id]?.thread === w.thread && threadOnScreen(nb) && (typeof H.front === 'function' ? H.front() === w.id : H.visible().length === 1 && H.visible()[0] === w.id) });
   }
   function sizeDocumentChrome() {
     if (!docOwner) return;
