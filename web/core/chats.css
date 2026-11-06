@@ -704,10 +704,11 @@ body > .mviewer { position: fixed; z-index: 200; }
 .ch-list.compact .ch-row .pv { display: none; }
 /* Archive reads as a different place: a light tinted panel. */
 .ch-list.by-status .ch-sec[data-sec="archive"].open { background: color-mix(in srgb, var(--ink) 6%, transparent); border-radius: 12px; }
-/* Archive on top, then Working, then Ready uninterrupted at the bottom, on desktop and phone alike (By status layout;
-   James, 31 Oct 2026). Skins that arrange the phone list themselves (obsidian, landscapes) outrank these rules. */
+/* Working first, then Ready uninterrupted, Archive last, on desktop and phone alike (By status layout). Archive went
+   back to the bottom (James, 6 Nov 2026); Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put
+   it first, and its higher-specificity rule outranks this one. */
 .ch-list.by-status .ch-scroll { display: flex; flex-direction: column; }
-.ch-list.by-status .ch-sec[data-sec="archive"] { order: -2; }
+.ch-list.by-status .ch-sec[data-sec="archive"] { order: 1; }
 .ch-list.by-status .ch-sec[data-sec="working"] { order: -1; }
 .ch-list.by-status .ch-sec[data-sec="ready"] { order: 0; }
 
