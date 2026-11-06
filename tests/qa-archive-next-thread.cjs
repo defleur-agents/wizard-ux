@@ -66,12 +66,22 @@ const snapshot = () => {
           else await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
           const rowSelector = layout === 'ai-apps' ? '.aad-rw[data-sid]' : '.ch-list [data-chopen]';
           await page.locator(rowSelector + (layout === 'ai-apps' ? '[data-sid="qa-middle"]' : '[data-chopen="qa-middle"]')).filter({ visible: true }).first().waitFor();
+          if (scenario === 'filter') {
+            // Type into the real search box, as the owner does.
+            await page.locator('[data-chsearch]').filter({ visible: true }).first().fill('middle');
+          }
+          if (scenario === 'space') {
+            await page.evaluate(() => {
+              const h = window.__wux || window.__wos, w = Object.values(h.wins).find(w => w.app === 'chats' && !w.thread);
+              h.chats.setFocus(w, { kind: 'space', key: 'qa-space' });
+            });
+          }
           if (scenario === 'filter' || scenario === 'space') {
-            await page.evaluate(({ scenario }) => {
-              const h = window.__wux || window.__wos, w = Object.values(h.wins).find(w => w.app === 'chats' && !w.thread), id = document.querySelector(`[data-chats="${w.id}::list"]`) ? w.id + '::list' : w.id;
-              if (scenario === 'filter') h.chats.setQuery({ ...w, id, thread: null }, 'Synthetic middle');
-              else h.chats.setFocus(w, { kind: 'space', key: 'qa-space' });
-            }, { scenario });
+            // The list repaints on its own frame; wait for the narrowed rows instead of reading them at once.
+            await page.waitForFunction(({ sel, want }) => {
+              const ids = [...document.querySelectorAll(sel)].filter(r => r.getClientRects().length && getComputedStyle(r).visibility !== 'hidden').map(r => r.dataset.sid || r.dataset.chopen);
+              return JSON.stringify(ids) === JSON.stringify(want);
+            }, { sel: rowSelector, want: scenario === 'filter' ? ['qa-middle'] : ['qa-middle', 'qa-south'] }, { timeout: 8000 });
           }
           const visibleRows = await page.locator(rowSelector).filter({ visible: true }).evaluateAll(rs => rs.map(r => r.dataset.sid || r.dataset.chopen));
           entry.visibleRows = visibleRows;
