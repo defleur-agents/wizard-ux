@@ -8,7 +8,7 @@ const source = readFileSync(new URL('../web/device.js', import.meta.url), 'utf8'
 const block = source.slice(source.indexOf('  let upd = null, updHidden = 0;'), source.indexOf('  /* ================= #22 web hot-reload'));
 function fixture(state = 'deferred', reason = 'take') {
   const f = {voice:'idle', capture:false, native:false, active:null, calls:[], timers:[], elements:new Map()};
-  const el = () => ({dataset:{}, hidden:false, innerHTML:'', addEventListener(n, fn) { this.click = fn; }});
+  const el = () => ({dataset:{}, hidden:false, innerHTML:'', setAttribute(){}, addEventListener(n, fn) { this.click = fn; }});
   const document = {createElement:el, body:{appendChild(e){f.elements.set(e.id,e);}}};
   const device = {recActive:()=>JSON.stringify(f.active), updateRecording:()=>f.native, updateState:()=>JSON.stringify(f.upd), updateInstall(){f.calls.push('install'); f.paintAtInstall = f.html();}};
   const window = {WizAppCapture:{getState:()=>({recording:f.capture})}};
