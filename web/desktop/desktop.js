@@ -2987,6 +2987,12 @@
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
     voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
+    recordReply: (wid, sid) => {
+      // Layouts may name only a genuine Chats composer, never an app's thread-like metadata.
+      const w = W[wid];
+      if (!w || !(w.app === 'chats' || CHATS.isHosted(wid)) || w.thread !== sid) return 'busy';
+      return recordReply(wid, sid);
+    },
     // Only an open Chats thread changes the ordinary orb's idle action: talk() pins
     // its reply target before capture. Lists, New chat, Home and other apps retain
     // the general new-chat action; an in-flight take retains its stop-only action.
