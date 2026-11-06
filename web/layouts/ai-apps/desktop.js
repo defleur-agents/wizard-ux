@@ -98,7 +98,12 @@ export const isSideKey = e => !!e && (e.ctrlKey || e.metaKey) && e.shiftKey && !
 
 export default function desktop(api) {
   const doc = document, root = doc.documentElement;
+  const host = globalThis.WizDesktop?.host;
   const panes = globalThis.WizCore.panes;
+  const appWindows = desk => (host?.windows() || []).filter(w => w.desk === desk && w.tiled);
+  const panelWindow = () => appWindows(pane?.desk).find(w => w.appId === pane?.id) || appWindows(pane?.desk)[0] || null;
+  const paneWins = () => appWindows(pane?.desk).length;
+  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   let paneGeometry = null, secondEl = null;
   const paneVars = new Set();
   function placePanes(s) {
@@ -345,8 +350,6 @@ export default function desktop(api) {
   const clampTo = (v, lo, hi) => Math.round(Math.min(Math.max(v, lo), Math.max(lo, hi)));
   /** each panel's width now (the owner's, else the default) within its limits: [now, lo, hi]; the app panel always
    * leaves the middle 320 px (the composer and the orb) */
-  // (sizes() first runs while the view is still being built, before `pane` below exists)
-  const paneWins = () => { try { return pane?.el?.querySelectorAll?.(':scope > .win:not(.gone)').length || 0; } catch (_) { return 0; } };
   function sizes() {
     const W = vw(), hi = Math.round(Math.min(SIZE_LIMITS.side[1], W * .32));
     const side = clampTo(sized.side ?? SIDE, SIZE_LIMITS.side[0], hi);
@@ -383,7 +386,7 @@ export default function desktop(api) {
   /* round 14 (Miguel: the fold must feel instant): a shown desk's lone window follows it by CSS and the desks out of
    * sight keep the open sidebar's geometry (desktop.css), so a fold needs no re-tile; only a desk tiling two or more
    * windows side by side does. The shell's re-tile re-laid out every desk's app (~100 layouts) right after each fold. */
-  const needsTile = () => [...doc.querySelectorAll('#stage > .wsp')].some(w => w.querySelectorAll(':scope > .win:not(.gone)').length > 1);
+  const needsTile = () => { const groups = new Map(); for (const w of host?.windows() || []) if (w.tiled) { const n = (groups.get(w.deskId) || 0) + 1; if (n > 1) return true; groups.set(w.deskId, n); } return false; };
   function retileSoon(ms = FLIP_MS + 20) { retileOff?.(); retileOff = api.after(ms, () => { retileOff = null; if (needsTile()) globalThis.dispatchEvent?.(new Event('resize')); syncOrb(); }); }
   const relayoutSoon = () => retileSoon();
   function setSize(id, w, keep) {
@@ -396,7 +399,7 @@ export default function desktop(api) {
    * page's thread: while a grip is held their frames keep a fixed width (the window clips or shows its own background
    * at the moving edge), refitted a few times a second, and once more on release. */
   const FRAME_FIT_MS = 120;
-  const shownFrames = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden]) > .win:not(.gone) iframe')];
+  const shownFrames = () => (host?.windows() || []).filter(w => w.visible && w.tiled).map(w => host.frame(w.id)).filter(Boolean);
   function fitFrames(list) {
     for (const f of list) f.style.removeProperty('width');
     const ws = list.map(f => f.getBoundingClientRect().width);
@@ -490,7 +493,7 @@ export default function desktop(api) {
   // round 12: a Home icon is a desk (desk = its number): that desk; round 13: it opens as a tab (the New tab page goes)
   // round 15: an app opens as the panel (its desk, or a new desk for it); the All apps sheet goes
   const goApp = (id, desk = null, then = null, place = null) => {
-    unpeek(); closeAll(); focusWant = id === CHATS ? '' : id;
+    unpeek(); closeAll(); wantAppFocus(id === CHATS ? '' : id);
     if (id === CHATS && (desk == null || desk === mainChats()?.desk)) { goHome(); return; }
     const d = (desk != null && desks().find(x => x.desk === desk && x.id === id)) || desks().find(x => x.id === id);
     want = id; if (!d) loading(id);
@@ -504,15 +507,22 @@ export default function desktop(api) {
   /* App keys (Miguel, 4 Nov 2026: drive every app from the keyboard): the app picked by key (⌥1–⌥0, ⌥[ ]) or by click
    * takes the keyboard once it is the panel (its own typing, its own plain keys); its ⌥ keys (data-wz-key) the view
    * presses for it (App keys, at the key handler). */
-  let focusWant = '', focusing = false;
-  const paneFrame = () => [...(pane?.el?.querySelectorAll?.('.win iframe') || [])].find(f => !f.closest('.win.gone')) || null;
-  function focusFrame(tries = 0) {
+  let focusWant = '', focusing = false, focusGeneration = 0, focusHosted = null;
+  function wantAppFocus(id) { focusWant = id; focusing = false; focusHosted = null; focusGeneration++; }
+  const paneFrame = () => host?.frame(panelWindow()?.id) || null;
+  function focusFrame(tries = 0, generation = focusGeneration) {
+    if (generation !== focusGeneration) return; // an old timer cannot consume a newer request
     if (!focusWant) { focusing = false; return; }
     const f = pane && pane.id === focusWant ? paneFrame() : null;
-    if (!f || !frameReady(pane.el)) { if (tries < 60) api.after(150, () => focusFrame(tries + 1)); else { focusWant = ''; focusing = false; } return; }
+    if (!f || !frameReady()) { if (tries < 60) api.after(150, () => focusFrame(tries + 1, generation)); else { focusWant = ''; focusing = false; } return; }
+    // One host lifecycle focus per request, not once per iframe-focus retry.
+    // Some documents refuse browser focus; that must never re-enter routing.
+    const id = panelWindow()?.id;
+    if (id && focusHosted !== id) { focusHosted = id; host?.focus(id, { scroll: false }); }
+    if (generation !== focusGeneration) return;
     try { f.focus?.({ preventScroll: true }); f.contentWindow?.focus?.(); } catch (_) {}
     // (the shell can still focus the window itself right after the desk switch: once more, then it is the app's)
-    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1)); return; }
+    if (tries < 60 && doc.activeElement !== f) { api.after(150, () => focusFrame(tries + 1, generation)); return; }
     focusWant = ''; focusing = false;
   }
 
@@ -1031,7 +1041,6 @@ export default function desktop(api) {
   const chatsEl = () => { const m = mainChats(), all = wsps().filter(w => w.querySelector('.dchats')); return (m && all.find(w => Number(w.dataset.ws) === m.desk)) || all[0] || null; };
   /** the real thread the main Chats desk holds (the shell mirrors it on .dchats[data-thread]); null for a new chat or its list */
   const behindThread = () => { const t = chatsEl()?.querySelector('.dchats')?.dataset?.thread || ''; return t && t !== '__new__' ? t : null; };
-  let pane = null, dockEl = null, want = null, docked = false, wide = false, chatThread = null, splitTries = 0, fixingBehind = false;
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
    * other open desks (Home's own Chats desk aside), badged first, then desk order */
   function vtTabs() {
@@ -1209,41 +1218,16 @@ export default function desktop(api) {
     api.after(120, () => { paintVt(true); paintTop(); });
   }
 
-  /* a window joining or leaving the shown app's desk (a companion pane) re-sizes the panel once */
-  let winsMo = null, winsEl = null, winsN = 0;
-  function watchPaneWins() {
-    const host = pane?.el || null; if (host === winsEl) return;
-    winsMo?.disconnect(); winsMo = null; winsEl = host; winsN = paneWins();
-    if (host && globalThis.MutationObserver) winsMo = new MutationObserver(() => { const n = paneWins(); if (n !== winsN) { winsN = n; applySizes(); retileSoon(); } });
-    // direct children only: a window added or removed, or one marked gone
-    winsMo?.observe(host, { childList: true });
-    for (const w of host?.querySelectorAll?.(':scope > .win') || []) winsMo?.observe(w, { attributes: true, attributeFilter: ['class'] });
-  }
-  /* the app's title-bar tools in the panel's header (round 7's), following the app's changes */
-  let toolsMo = null, toolsSrc = null, toolsHost = null;
-  const srcTools = () => pane?.el?.querySelector(':scope > .win:not(.gone) > .wbar > .wtools') || null;
+  /* App surfaces are host-owned; late tools and companion windows use its
+   * coalesced lifecycle subscription, never Classic markup mutations. */
   function paintTools() {
-    const host = pane?.el || null, src = srcTools();
-    if (host !== toolsHost) {
-      toolsMo?.disconnect(); toolsMo = null; toolsHost = host;
-      // Watch the stable app pane even before its tools exist. Watching only
-      // .wtools missed late registration and replacement of the window bar.
-      // Ignore our mirrored header: it lives in the same pane, and observing
-      // its clones as source changes would create a repaint feedback loop.
-      if (host && globalThis.MutationObserver) {
-        toolsMo = new MutationObserver(records => {
-          if (srcTools() !== toolsSrc || records.some(r => toolsSrc?.contains(r.target))) api.frame(paintTools);
-        });
-        toolsMo.observe(host, { childList: true, subtree: true, attributes: true });
-      }
-    }
-    toolsSrc = src;
-    pTools.replaceChildren(...(src ? [...src.children].map(c => { const n = c.cloneNode(true); if (c.tagName === 'SELECT') n.value = c.value; return n; }) : []));
-    pTools.hidden = !pTools.children.length;
+    pTools.hidden = !host?.renderTools(panelWindow()?.id, pTools);
   }
-  const srcTool = n => { const id = n?.dataset?.tool; return id && /^[a-z0-9-]{1,32}$/.test(id) ? srcTools()?.querySelector(`[data-tool="${id}"]`) || null : null; };
-  api.listen(pTools, 'click', e => { const n = e.target?.closest?.('button[data-tool]'); if (n && !n.disabled) srcTool(n)?.click(); });
-  api.listen(pTools, 'change', e => { const n = e.target?.closest?.('select[data-tool]'), o = srcTool(n); if (!o) return; o.value = n.value; o.dispatchEvent(new Event('change', { bubbles: true })); });
+  let winsDesk = null, winsN = 0;
+  function watchPaneWins() {
+    const desk = pane?.desk ?? null, n = paneWins();
+    if (desk !== winsDesk || n !== winsN) { winsDesk = desk; winsN = n; applySizes(); retileSoon(); }
+  }
   const NOTE = '__note__', DRAFT = '__draft__';
   const noteOn = () => !!noteThread(doc, '.win .dchats .pane-main');
   const noteTitle = () => noteThread(doc, '.win .dchats .pane-main')?.querySelector('.ch-head .ti b')?.textContent || 'Notification';
@@ -1253,11 +1237,12 @@ export default function desktop(api) {
     if (dropped && (want === h.app || h.app !== dropped.id || Number(h.r.desk) !== dropped.desk)) dropped = null;
     if (h.app && !dropped && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
-      const el0 = wsps().find(w => !w.hidden && !w.querySelector('.dchats'));
+      const app = (host?.windows() || []).find(w => w.visible && w.desk === h.r.desk && w.kind !== 'chats');
+      const el0 = app && wsps().find(w => Number(w.dataset.ws) === app.desk);
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
-    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; api.after(60, () => focusFrame()); }
+    if (focusWant && pane?.id === focusWant && !focusing) { focusing = true; const generation = focusGeneration; api.after(60, () => focusFrame(0, generation)); }
     if (pane && (!pane.el.isConnected || !desks().some(d => d.desk === pane.desk && d.id === pane.id))) pane = null;
     if (!pane && wide) setWide(false);
     const chat = pane || chatOn ? chatsEl() : null; dockEl = chat;
@@ -1295,7 +1280,7 @@ export default function desktop(api) {
     pTop.hidden = !pane || !model.slots.includes('app'); cX.hidden = !docked;
     if (pane) { pName.textContent = appName(pane.id); pIcon.replaceChildren(appTile(pane.id, 'aad-tile is-xs')); pX.setAttribute('aria-label', `Hide ${appName(pane.id)} (Esc), it keeps running`); }
     paintTools();
-    if (loadId && pane?.id === loadId) waitLoaded(pane.el); else if (loadId && !want) doneLoading();
+    if (loadId && pane?.id === loadId) waitLoaded(); else if (loadId && !want) doneLoading();
   }
   // the panel hides (the app keeps running on its desk): back to the chat (docked) or Home
   let closing = null, exitMotion = null;
@@ -1336,7 +1321,7 @@ export default function desktop(api) {
   api.listen(pX, 'click', () => hidePanel());
   // a click anywhere on the app panel's bar hands the keyboard back to the app (its buttons never keep it)
   api.listen(pTop, 'mousedown', e => e.preventDefault());
-  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { focusWant = pane.id; focusing = true; focusFrame(); } });
+  api.listen(pTop, 'click', e => { if (pane && !e.target?.closest?.('.aad-px') && !focusing) { wantAppFocus(pane.id); focusing = true; focusFrame(); } });
   api.listen(cX, 'click', closeChat);
   api.listen(pW, 'click', () => setWide(!wide));
   // a slow app: its placeholder in the panel's place at once (faded in after a beat), gone once its frame has loaded
@@ -1348,14 +1333,11 @@ export default function desktop(api) {
     loadOff?.(); loadOff = api.after(15000, doneLoading);
   }
   function doneLoading() { loadOff?.(); loadOff = null; loadWait?.(); loadWait = null; loadId = ''; pLoad.hidden = true; delete root.dataset.aadLoading; }
-  function frameReady(w) {
-    const f = w?.querySelector?.('iframe'); if (!f) return !!w;
-    try { const d = f.contentDocument; return !d || (d.readyState === 'complete' && d.URL !== 'about:blank'); } catch (_) { return true; }
-  }
-  function waitLoaded(w) {
-    if (frameReady(w)) return doneLoading();
+  function frameReady() { return !!panelWindow() && host.frameReady(panelWindow().id); }
+  function waitLoaded() {
+    if (frameReady()) return doneLoading();
     if (loadWait) return;
-    const f = w.querySelector('iframe'); loadWait = api.listen(f, 'load', () => { if (frameReady(w)) doneLoading(); });
+    const f = paneFrame(); if (f) loadWait = api.listen(f, 'load', () => { if (frameReady()) doneLoading(); });
   }
   let animOff = null, animOn = [];
   function anim(kind) {
@@ -1765,6 +1747,7 @@ export default function desktop(api) {
   root.dataset.settingsOver = '';
   { const r = api.route(); chatsFresh = !!r.home || (r.desk === mainChats()?.desk && r.view === 'thread' && r.thread === '__new__'); }
   readSessions(); paintSide(false); paintVt(true); paintTop(); paintBadges();
+  const offHost = host?.onChange(() => { paintTop(); watchPaneWins(); });
   const offPanes = panes.subscribe(() => { paintTop(); applySizes(); retileSoon(); });
   globalThis.dispatchEvent?.(new Event('resize'));
   if (api.route().home) soon(() => { if (api.route().home) api.sessions.newChat(); });
@@ -1777,8 +1760,7 @@ export default function desktop(api) {
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove();
-    winsMo?.disconnect();
-    toolsMo?.disconnect();
+    offHost?.();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'settingsOver', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
     for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
