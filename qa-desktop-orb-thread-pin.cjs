@@ -6,7 +6,7 @@ const fs=require('fs'),path=require('path');
 module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
  const agent='research',other='orb-other-thread',typed='Pinned typed context',image='drop_orb_fixture';
  const matrix=process.env.QA_ORB_SMOKE==='1'?[{desktop:true,layout:'ai-apps',skin:'nebula',scenario:'reply'}]:[
-  ...['ai-apps','classic'].flatMap(layout=>['nebula','signal'].flatMap(skin=>['reply','capture-nav','stt-nav','steer','list','explicit-new',...(layout==='ai-apps'?['held']:[])].map(scenario=>({desktop:true,layout,skin,scenario})))),
+  ...['ai-apps','classic'].flatMap(layout=>['nebula','signal'].flatMap(skin=>['reply','capture-nav','stt-nav','steer','list','explicit-new',...(layout==='ai-apps'?['held','dictate']:[])].map(scenario=>({desktop:true,layout,skin,scenario})))),
   ...['nebula','signal'].flatMap(skin=>['reply','stt-nav'].map(scenario=>({desktop:false,layout:'classic',skin,scenario})))
  ];
  for(const c of matrix){
@@ -30,7 +30,8 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
    await p.evaluate(({wid,image})=>{const A=window.__wos||window.__wux;A.chats.ch(wid).files=[{id:image,name:'synthetic.png',mime:'image/png',bytes:7}];A.chats.saveDraft(wid);},{wid,image});
    if(scenario==='list')await p.evaluate(wid=>{const A=window.__wos||window.__wux;A.chats.chatsBack(A.wins[wid]);},wid);
    const before=await p.evaluate(({wid})=>{const A=window.__wos||window.__wux,w=A.wins[wid];return {thread:w.thread||'',route:A.chats.modelRoute(wid,w.thread||'__new__')};},{wid});detail.before=before;
-   if(scenario==='explicit-new')await p.keyboard.press('Alt+v');
+   if(scenario==='dictate')await p.keyboard.press('Alt+d');
+   else if(scenario==='explicit-new')await p.keyboard.press('Alt+v');
    else if(scenario==='held'){
     state.text='go home';state.cmd={route:'command',action:'home'};
     await control.hover();await p.mouse.down();
@@ -39,10 +40,15 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
    await sleep(1150);
    if(scenario==='reply')await p.screenshot({path:path.join(out,label+'-listening.png'),animations:'disabled'});
    if(scenario==='capture-nav')await navigate();
-   if(scenario==='explicit-new')await p.keyboard.press('Alt+v');
+   if(scenario==='dictate')await p.keyboard.press('Alt+d');
+   else if(scenario==='explicit-new')await p.keyboard.press('Alt+v');
    else if(scenario==='held')await p.mouse.up();
    else await control[desktop?'click':'tap']();
-   if(scenario==='held'){
+   if(scenario==='dictate'){
+    await p.waitForFunction(()=>!!window.__wuxLastDictation);
+    record(state.posts.length===0&&!(state.steers||[]).length,'dictation never submits to an agent');
+    record((await root.locator('textarea').inputValue()).includes('only synthetic STT words'),'dictation inserts into the focused field');
+   }else if(scenario==='held'){
     await p.waitForFunction(()=>[...WosOutbox._items.values()].some(x=>x.completion==='local'));
     record(state.posts.length===0&&!(state.steers||[]).length,'real held orb command stays local');
     record(await p.evaluate(()=>!WosOutbox.unsent().some(x=>x.intent==='command')),'successful local command does not masquerade as unsent');
@@ -79,6 +85,7 @@ module.exports=async({boot,ok,sleep,sid,model,provider,out})=>{
      await p.evaluate(s=>WosSkin.set(s),skin2);await p.waitForFunction(s=>document.documentElement.dataset.skin===s,skin2);
      await p.evaluate(s=>WosSkin.set(s),skin);await p.waitForFunction(s=>document.documentElement.dataset.skin===s,skin);
      record(await p.evaluate(s=>document.documentElement.dataset.skin===s,skin)&&!!oldInk.trim(),'live skin changes preserve shell and Appearance tokens');
+     await p.evaluate(()=>document.fonts.ready);await sleep(180);
      await p.screenshot({path:path.join(out,label+'-after.png'),animations:'disabled'});
     }
    }
