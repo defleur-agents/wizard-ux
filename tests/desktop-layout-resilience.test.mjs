@@ -52,7 +52,8 @@ test('tweak disposal never writes the layout diagnostic', async () => {
 
 test('iframe focus refusal retries the browser only, not host focus (61 attempts)', () => {
   const src = read('web/layouts/ai-apps/desktop.js');
-  const body = src.slice(src.indexOf('  function focusFrame('), src.indexOf('  function appCell('));
+  const start = src.indexOf('  function focusFrame(');
+  const body = src.slice(start, src.indexOf('\n  }', start) + 4);
   const queue = []; let hosted = 0, browser = 0;
   const ctx = { focusWant: 'app', focusing: true, focusGeneration: 0, focusHosted: null, pane: { id: 'app' }, paneFrame: () => frame,
     frameReady: () => true, panelWindow: () => ({ id: 'win' }), doc: { activeElement: null },
