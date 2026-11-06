@@ -353,7 +353,9 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items = svc.items.map(i => i.id === 'airlock-marker-screenshots' ? { ...i, message_id: 'm-next', updated_at: Date.now() + 5, ask: 'Reply screenshots to continue' } : i);
       await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
       await page.waitForFunction(() => /stuck/.test(window.WosThreadTracker.dots('tt-main')));
-      check(`${tag}: the agent's re-tag brings the ask back; the untouched one stays answered`, /^1 open/.test(await strip(page).locator('.tt-h').innerText()) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1);
+      await page.waitForSelector('[data-tt-strip] .tt-h', { timeout: 5000 }).catch(() => {});
+      const back = await page.evaluate(() => ({ html: window.WosThreadTracker.stripHtml('tt-main').slice(0, 600), dots: window.WosThreadTracker.dots('tt-main'), st: window.WizLive.session('tt-main')?.status }));
+      check(`${tag}: the agent's re-tag brings the ask back; the untouched one stays answered`, /^1 open/.test((await strip(page).locator('.tt-h').innerText({ timeout: 3000 }).catch(() => ''))) && await strip(page).locator('.tt-h .tt-dot.bad').count() === 1, back);
       await strip(page).locator('.tt-h').click(); await page.screenshot({ path: path.join(OUT, `answered-retag-${shell}-${skin}.png`) });
       check(`${tag}: no page errors`, ctx.errors.length === 0, ctx.errors); await ctx.close();
     }
