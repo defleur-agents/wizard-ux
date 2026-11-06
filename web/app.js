@@ -4250,6 +4250,7 @@
       const u = new URL(S.url, location.origin); u.searchParams.set('app', id); u.searchParams.set('open', '1'); return !!openWin({ app: 'frame', appId: 'app-store', url: u.pathname + u.search }); },
     homeHost: () => secOf(HOME),
     orbHost: () => orbWrap,
+    chatsSurfaces: () => Object.keys(W).filter(id => W[id]?.app === 'chats').map(id => CHATS.surface(id)).filter(Boolean),
     // The Apps view's Home grid: one entry per desk (each desk is one app), in desk order, with the app it shows.
     // A layout placing the shell's opens (apps.routeOpens): the app's own window at one of its own pages
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
