@@ -74,7 +74,7 @@ test('full and slim list projection retain the Working ask and badge in every ru
     const h = harness([s]);
     assert.equal(h.group([s], now).working.length, 1);
     assert.equal(h.orbCount(h.L), 0);
-    const projected = c.window.WizChatsListModel.sessionList(h.group([s], now), { live: { isNew: () => true }, chats: { threadActions: () => [] } });
+    const projected = c.WizChatsListModel.sessionList(h.group([s], now), { live: { isNew: () => true }, chats: { threadActions: () => [] } });
     assert.equal(projected.working[0].workingAsk.ask, row({}).attention.ask);
     assert.equal(projected.working[0].background, 'helper');
     assert.equal(projected.ready.length, 0);
