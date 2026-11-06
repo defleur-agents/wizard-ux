@@ -34,7 +34,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
 | Mic, camera, screen capture | `WizardApp.capture.start / settle / pending / ack`, `WizardApp.voiceInput.register` |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) |
-| Tools | `WizardApp.titlebar.set(tools)`; lifecycle |
+| Tools | `WizardApp.titlebar.set(tools)`; `WizAppServices.titlebar.render` shares validated controls/dispatch across hosts |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) |
 | Draft holds/keep (1.5s) | `WizardApp.update.hold` |
@@ -54,7 +54,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); sent timeline reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; opt-in `--wos-note-quiet` stack uses shared notification routing/actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
 | Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows, Sort/Group, notes, ID walk, `executionStatus`; all shells |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns, AI apps geometry; slots, ratios, side, dock, device-local state |
-| Desktop lifecycle | `WizDesktop.host` (`web/core/desktop-host.js`): snapshots, retained frame, open/focus/close, onChange, panes. Classic first; AI apps migration pending. |
+| Desktop lifecycle | `WizDesktop.host` (`web/core/desktop-host.js`): snapshots, retained frame/readiness, tools, open/focus/close, onChange, panes. AI apps app surfaces; Chats migration pending. |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chats disposal | `WizCore.chats`: fence reads, cancel timers |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |
