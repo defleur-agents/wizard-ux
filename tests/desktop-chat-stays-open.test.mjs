@@ -57,3 +57,27 @@ test('phone reply still returns to the list and desktop hosted reply stays in pl
   assert.equal(desktop.context.leaveAfterSend('chat', 'same', false), false);
   assert.equal(desktop.w.thread, 'same'); assert.equal(desktop.context.hosted.has('chat'), true);
 });
+
+for (const agent of ['', 'philosopher']) test(`desktop explicit unread survives real synchronous live emits (${agent || 'main'}) until navigation`, async () => {
+  const f = fixture(), c = f.context, storage = new Map(), puts = [];
+  Object.assign(c, { AbortSignal, navigator: {}, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k,v) => storage.set(k,v) },
+    setInterval() {}, setTimeout() {}, addEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
+    fetch: async (_url, init = {}) => { const state = init.body ? JSON.parse(init.body) : {}; puts.push(state); return {ok:true,json:async()=>({state})}; },
+    WizConfig: { dayStart:n=>n-n%864e5 }, WosAgents: { isOther:id=>id!=='hermes',get:id=>({id,privacy:'standard'}) } });
+  c.window = c; c.document = { readyState:'loading',hidden:false,documentElement:{dataset:{}}, addEventListener(){} };
+  vm.runInContext(read('web/core/chats-list-model.js'), c);
+  vm.runInContext(read('web/live.js'), c);
+  const L = c.LIVE = c.WizLive; L.ok = true; L.seen = {initializedAt:1,threads:{}};
+  const row = {id:'same',runtime:'direct',title:'Synthetic',status:'completed',updatedAt:'2026-11-06T00:00:00Z',lastAssistantAt:'2026-11-06T00:00:00Z',messageCount:2};
+  if (agent) { L.agentSessions[agent] = [row]; L.pinAgent('same',agent); } else L.sessions = [row];
+  c.rowOf = () => row; c.desks = [{wins:['chat']}]; c.idx = 0; c.isHosted = () => false; c.attended = () => true;
+  vm.runInContext(cut(core, '  function markVisibleThreadsSeen(', '\n  const elOf'), c);
+  c.CHATS.markVisibleThreadsSeen = () => c.markVisibleThreadsSeen();
+  L.markSeen('same'); await Promise.resolve();
+  L.onChange(() => { c.markVisibleThreadsSeen(); });
+  await c.threadAct('chat','same','unread');
+  assert.equal(f.w.thread,'same'); assert.equal(L.isNew(row),true,'explicit unread was not consumed by its own emit');
+  c.markVisibleThreadsSeen(); assert.equal(L.isNew(row),true,'poll/repaint preserves marker');
+  c.ch('chat').readNav++; c.markVisibleThreadsSeen();
+  assert.equal(L.isNew(row),false,'navigating/reopening permits normal automatic read again');
+});
