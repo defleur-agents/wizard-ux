@@ -54,7 +54,7 @@ test('main and routed-agent New chats docked beside an app follow the same post-
 test('desktop host keeps the New chat open only where a layout shows its desk beside an app', () => {
   assert.match(desk, /keepNewOpen: id => !homeOpen && !!globalThis\.WosSkinHost\?\.routeShows\?\.\(wsOf\(id\)\),/);
   // routeShows is the AI apps layout's "this desk is on screen beside the app panel" (docked chat + app panel)
-  assert.match(aad, /shows: desk => .*\(docked && !!pane && !!dockEl && Number\(dockEl\.dataset\.ws\) === desk\)/);
+  assert.match(aad, /shows: desk => .*\(docked && !!pane && !!dockEl && deskOfNode\(dockEl\) === desk\)/);
 });
 
 test('Resolve this on the notification the window shows sends in place (no list hop)', () => {

@@ -1082,6 +1082,9 @@
       phone: Object.freeze({
         home: () => live() ? shell.homeHost?.() || null : null,
         orb: () => live() ? shell.orbHost?.() || null : null,
+        // The shared Chats surfaces of the phone's Chats windows (WizChatsHost: composer, notification, parts), so a
+        // layout reaches them without the shell's window markup.
+        chats: () => { const l = live() ? shell.chatsSurfaces?.() : null; return Object.freeze(Array.isArray(l) ? l.filter(Boolean) : []); },
         // The desks in order, one app each: [{ desk, id, name }] (Home and empty desks left out). nav.goDesk(desk) opens one.
         desks: () => { const l = live() ? shell.phoneDesks?.() : null; return Array.isArray(l) ? l.map(d => Object.freeze({ desk: d.desk | 0, id: String(d.id || ''), name: String(d.name || '') })) : []; },
         // An app's mark as the dock draws it (logo or sigil, colour; 'wizard' = Chats), as a fresh element the layout

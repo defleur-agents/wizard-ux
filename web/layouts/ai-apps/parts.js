@@ -92,21 +92,6 @@ export function stateIcon(doc, state, cls) {
   for (const [tag, attrs] of STATE_ICON[state] || STATE_ICON.none) { const p = doc.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v); s.append(p); }
   return s;
 }
-/** The notification Chats shows in place of a thread (a New chat holding the note: .ch-notif-thread), if one is on
- * screen; the AI apps view treats it exactly like a chat (never Home). */
-export function noteThread(doc, scope = '') {
-  for (const n of doc.querySelectorAll(`${scope} .ch-thread.ch-notif-thread`.trim())) {
-    if (typeof n.getClientRects === 'function' && !n.getClientRects().length) continue;
-    return n;
-  }
-  return null;
-}
-/** A notification's Badge | Chats choice joins its actions (round 7): moved into the thread's own sticky action row
- * (.ch-tacts), first, so the note reads like a chat with one action row. Chats' click handler finds it there too
- * (.ch-notif-route [data-notify-route]); a repaint puts it back above the message, so call again on renders. */
-export function noteRouteIntoActions(doc, scope = '') {
-  return globalThis.WizChatsHost.placeNotificationRoute(noteThread(doc, scope));
-}
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)
  * and opens Settings › AI. Returns the copy's signature so callers repaint only on change. */

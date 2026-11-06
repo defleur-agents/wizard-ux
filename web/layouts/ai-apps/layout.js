@@ -37,7 +37,7 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, noteThread, noteRouteIntoActions, gaugeInto, fuelOf,
+import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, gaugeInto, fuelOf,
   pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
@@ -552,11 +552,15 @@ export default function setup(api) {
    * dock orb moves into it at that size (chrome.orbIn), so tap talks / dictates and hold gives a command, as everywhere.
    * Off a chat, during a take (the stock voice controls around the orb's own spot) or with no composer on screen: back
    * to its own spot. */
+  // The Chats windows' shared surfaces come from the shell (api.phone.chats: WizChatsHost surfaces), never its markup.
+  const chatSurfaces = () => api.phone.chats?.() || [];
+  const onScreenComposer = W => chatSurfaces().map(s => s.composer).find(n => { if (!n) return false; const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; }) || null;
+  const shownNote = () => chatSurfaces().map(s => s.notification).find(n => n && (typeof n.getClientRects !== 'function' || n.getClientRects().length)) || null;
   function orbSlot() {
     if (root.dataset.aiFront !== 'chat') return null;
     if ((api.voice?.state?.()?.state || 'idle') !== 'idle') return null;
     const W = globalThis.innerWidth || 0;
-    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const c = onScreenComposer(W);
     const row = c?.querySelector('.ch-row2'); if (!row) return null;
     return gridSlot(row, 3);
   }
@@ -564,7 +568,7 @@ export default function setup(api) {
   // Home's apps end where the composer starts (it grows with words)
   function homeRoom() {
     const W = globalThis.innerWidth || 0, H = globalThis.innerHeight || 0;
-    const c = [...doc.querySelectorAll('.win.app-chats .ch-compose')].find(n => { const r = n.getBoundingClientRect(); return r.width > 0 && r.left > -4 && r.right < W + 4; });
+    const c = onScreenComposer(W);
     const top = c ? c.getBoundingClientRect().top : 0;
     if (H && top > 0) root.style.setProperty('--ah-bottom', Math.round(H - top) + 'px');
   }
@@ -591,12 +595,12 @@ export default function setup(api) {
   }
   function paintTop(r = api.route()) {
     if (r.home || r.view !== 'thread' || r.thread !== '__new__' || (r.app && r.app !== 'chats')) draftWant = false;
-    noteRouteIntoActions(doc, '.win.app-chats');
+    globalThis.WizChatsHost.placeNotificationRoute(shownNote());
     const app = r.app && r.app !== 'chats' ? r.app : '';
     root.dataset.aiFront = r.home ? 'chat' : app ? 'app' : r.view === 'list' ? 'list' : 'chat';
     // Home = a New chat: nothing but the skin's background, the composer and the orb
     // a notification opened from the list is a New chat holding the note: a chat, never Home (round 7)
-    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !noteThread(doc, '.win.app-chats') && !draftWant;
+    const home = !app && r.view !== 'list' && (r.home || !r.thread || r.thread === '__new__') && !shownNote() && !draftWant;
     if (home) root.dataset.aiNew = 'on'; else delete root.dataset.aiNew;
     homeShow(home);
     if (!home && app) closeSheet();

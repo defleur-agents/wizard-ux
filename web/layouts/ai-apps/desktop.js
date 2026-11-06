@@ -103,6 +103,10 @@ export default function desktop(api) {
   const mainChatWindow = () => chatWindows().find(w => w.desk === mainChats()?.desk) || chatWindows()[0] || null;
   const chatParts = part => chatWindows().map(w => host.chats(w.id)?.[part]).filter(n => n && n.getClientRects().length && n.getBoundingClientRect().width > 0);
   const chatAction = act => chatWindows().map(w => host.chats(w.id)?.action(act)).find(onScreen) || null;
+  // the desks' placement containers come from the host (WizDesktop.host.placements), keyed by desk; never Classic markup
+  const placements = () => host?.placements?.() || [];
+  const placementOf = (desk, not = null) => placements().find(p => p.desk === desk && p.node !== not)?.node || null;
+  const deskOfNode = n => placements().find(p => p.node === n)?.desk ?? null;
   const panes = globalThis.WizCore.panes;
   const appWindows = desk => (host?.windows() || []).filter(w => w.desk === desk && w.tiled);
   const panelWindow = () => appWindows(pane?.desk).find(w => w.appId === pane?.id) || appWindows(pane?.desk)[0] || null;
@@ -156,7 +160,7 @@ export default function desktop(api) {
       glideUntil = Date.now() + FLIP_MS + 10;
     });
   }
-  const shownDesks = () => [...doc.querySelectorAll('#stage > .wsp:not([hidden])')];
+  const shownDesks = () => placements().filter(p => p.shown).map(p => p.node);
   const homeComposer = () => chatParts('composer')[0] || null;
   root.dataset.aiApps = 'desktop';
   api.sessions.ownList?.(); // core does not mount/paint the legacy list beneath this sidebar
@@ -1055,10 +1059,10 @@ export default function desktop(api) {
    * Built on the desks as they are (round 7's thirds): the Chats desk and the app's desk are both shown (desktop.css,
    * data-aad-role on their desks), the chat between the sidebar and the panel, the app docked left of the open-apps
    * column; hiding the panel leaves its app running on its desk. */
-  const wsps = () => [...doc.querySelectorAll('#stage > .wsp')];
+  const wsps = () => placements().map(p => p.node);
   const mainChats = () => desks().find(d => d.id === CHATS) || null;
   /** The remaining renderer adapter maps the host's Chats desk to its placement container. */
-  const chatsEl = () => { const w = mainChatWindow(); return w ? wsps().find(n => Number(n.dataset.ws) === w.desk) || null : null; };
+  const chatsEl = () => { const w = mainChatWindow(); return w ? placementOf(w.desk) : null; };
   /** Retained thread identity comes from the host, not mirrored renderer attributes. */
   const behindThread = () => { const t = mainChatWindow()?.thread || ''; return t && t !== '__new__' ? t : null; };
   /** the right column's rows (round 16): every pin, open or not (its desk, else { desk: null }), in pin order; then the
@@ -1269,7 +1273,7 @@ export default function desktop(api) {
     if (h.app && !dropped && (want === h.app || !pane || pane.id !== h.app || Number(pane.desk) !== h.r.desk)) {
       // the app now in front becomes the panel (its desk is the one not hidden)
       const app = (host?.windows() || []).find(w => w.visible && w.desk === h.r.desk && w.kind !== 'chats');
-      const el0 = app && wsps().find(w => Number(w.dataset.ws) === app.desk);
+      const el0 = app && placementOf(app.desk);
       if (el0) { const fresh = pane?.el !== el0; pane = { id: h.app, el: el0, desk: h.r.desk }; if (fresh) anim('app'); markUsed(h.app); }
       want = null;
     }
@@ -1288,7 +1292,7 @@ export default function desktop(api) {
     }
     const model = panes.get();
     const second = model.slots.includes('app2') && model.app2 && desks().find(d => d.id === model.app2 && d.id !== pane?.id && d.id !== CHATS);
-    secondEl = second ? wsps().find(w => Number(w.dataset.ws) === second.desk && w !== chat) || null : null;
+    secondEl = second ? placementOf(second.desk, chat) : null;
     for (const w of wsps()) {
       const r = w === pane?.el ? 'app' : w === chat ? 'chat' : w === secondEl ? 'app2' : '';
       if ((w.dataset.aadRole || '') !== r) { if (r) w.dataset.aadRole = r; else delete w.dataset.aadRole; }
@@ -1773,7 +1777,7 @@ export default function desktop(api) {
       return false;
     },
     // the app panel's desk, and the Chats desk while its chat is docked beside an app: both on screen
-    shows: desk => (!!secondEl && Number(secondEl.dataset.ws) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && Number(dockEl.dataset.ws) === desk),
+    shows: desk => (!!secondEl && deskOfNode(secondEl) === desk) || (panes.get().slots.includes('app') && !!pane && Number(pane.desk) === desk) || (docked && !!pane && !!dockEl && deskOfNode(dockEl) === desk),
   });
   api.on('route', r => { onRoute(r); api.after(260, syncOrb); });
   api.on('render', () => { readSessions(); paintTop(); });
