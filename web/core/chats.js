@@ -1711,6 +1711,27 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
+  // Read the drawn list, not workGroups(): filters, Space Focus, sort, folded sections and
+  // Show more have already decided what is here. Keep that order while a phone shows its thread.
+  function archiveListOrder(wid, sid) {
+    const own = window.WosSkinHost?.chatArchiveOrder?.(sid);
+    if (own != null) return own;
+    const el = elOf(wid + '::list') || elOf(wid);
+    const rows = [...(el?.querySelectorAll('.ch-list [data-chopen]') || [])];
+    const row = rows.find(r => r.dataset.chopen === sid);
+    if (!row) return ch(wid).archiveOrder || [];
+    const section = row.closest('.ch-sec, .ch-search-results') || row.closest('.ch-list');
+    return rows.filter(r => (r.closest('.ch-sec, .ch-search-results') || r.closest('.ch-list')) === section).map(r => r.dataset.chopen);
+  }
+  function archiveAdvance(w, sid) {
+    const ids = archiveListOrder(w.id, sid).filter(id => id === sid || (rowOf(w.id, id) && !rowOf(w.id, id).archived));
+    const at = ids.indexOf(sid), nx = at < 0 ? null : ids[at + 1] || ids[at - 1];
+    ch(w.id).archiveOrder = ids;
+    // Reuse the ordinary opener: it saves the draft and clears the link trail. Back goes to
+    // the list, never the archived thread. No neighbour also discards that trail explicitly.
+    if (nx) openChat(w.id, nx);
+    else { ch(w.id).trail = []; chatsBack(w); }
+  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1738,7 +1759,8 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    if (!H.keepThreadOpen && a !== 'restore' && w && w.thread === sid) threadBack(w);
+    if (a === 'done' && w?.thread === sid) archiveAdvance(w, sid);
+    else if (!H.keepThreadOpen && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2784,9 +2806,10 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid]; if (!w) return;
     if (INC?.active(wid) && !INC.close(wid)) return;
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
+    const listOrder = archiveListOrder(wid, sid);
     if (w.thread) saveDraft(wid);
     closeRowSheet();
-    const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
+    const c = ch(wid); c.archiveOrder = listOrder; c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
     c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads
