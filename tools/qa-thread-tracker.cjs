@@ -281,6 +281,9 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.seen.clear();
       const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID], docScroll: profile === 'phone-doc' });
       if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      // Freeze only the synthetic visibility guard while inspecting the initial strip/panel;
+      // screenshot latency must not consume the green dwell before the assertion starts.
+      await page.evaluate(() => Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }));
       await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip] .tt-h');
       await page.waitForTimeout(500);
       const geometry = () => page.evaluate(mid => {
@@ -295,6 +298,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`autoseen/${profile}/${skin}: expanded panel continuous and opaque`, seam.gap <= 0 && seam.gap >= -2 && seam.radius === '0px' && !/rgba\([^)]*, 0\)/.test(seam.base), seam);
       await page.screenshot({ path: path.join(OUT, `autoseen-panel-${profile}-${skin}.png`) });
       await strip(page).locator('.tt-h').click();
+      await page.evaluate(() => { delete document.visibilityState; document.dispatchEvent(new Event('visibilitychange')); });
       await page.waitForFunction(() => window.WosThreadTracker.dots('tt-main') === '', null, { timeout: 6000 });
       check(`autoseen/${profile}/${skin}: green group acknowledged and Chats dots cleared`, svc.view().every(i => i.seen) && svc.writes.some(w => w.b?.ids?.length === 2));
       const cleared = await page.evaluate(mid => {
