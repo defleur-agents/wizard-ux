@@ -272,7 +272,7 @@
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
-  function markSeen(sid, agent, ids) {
+  function markSeen(sid, agent, ids, defer = false) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
     const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
@@ -281,7 +281,8 @@
     counts[k] = tally(t.items);
     changedEvent(); // painted before the box hears about it
     pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
-    const settle = () => pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1));
+    let phase = 'staged';
+    const settle = () => { if (phase === 'settled') return; phase = 'settled'; pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1)); };
     // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
     const undo = () => {
       settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
@@ -289,14 +290,19 @@
       if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(cur.items); changedEvent(); }
       load(sid, agent);
     };
+    const commit = () => {
+      if (phase !== 'staged') return; phase = 'committed';
     req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
       .catch(undo);
+    };
+    if (!defer) commit();
+    return { commit, cancel() { if (phase === 'staged') undo(); } };
   }
   // Sending is explicit evidence that the owner has moved on from older finished replies.
   // Do not consume mixed/amber/red/running groups, unknown dates, or work completed after the send.
-  function applySendSeen(sid, agent) {
-    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send) return;
+  function applySendSeen(sid, agent, defer = false) {
+    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send || (!send.committed && !defer)) return;
     const ids = [];
     for (const g of groupsOf(threads.get(k)?.items || [])) {
       if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && i.at > 0 && i.at < send.at && (i.updated_at || i.at) <= send.at)) continue;
@@ -304,15 +310,25 @@
       if (tokens.some(t => send.attempted.has(t))) continue;
       tokens.forEach(t => send.attempted.add(t)); ids.push(...g.ids);
     }
-    if (ids.length) markSeen(sid, agent, ids);
+    if (ids.length) return markSeen(sid, agent, ids, defer);
   }
-  function beforeSend(sid, agent = '', at = Date.now()) {
+  function beforeSend(sid, agent = '', at = Date.now(), { defer = false } = {}) {
     if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
     const k = key(sid, agent), prior = sendCutoffs.get(k);
-    if (!prior || at > prior.at) sendCutoffs.set(k, { at, attempted: new Set() });
-    applySendSeen(sid, agent); // same-frame paint, before send-and-go can leave the thread
-    const t = threads.get(k); if (t && !t.loading) t.at = 0;
-    load(sid, agent); // also catch a ledger read that was still in flight at the send tap
+    const send = prior && at <= prior.at ? prior : { at, attempted: new Set(), committed: !defer };
+    sendCutoffs.set(k, send);
+    const staged = applySendSeen(sid, agent, defer); // same-frame paint before navigation
+    const commit = () => {
+      send.committed = true; staged?.commit();
+      const t = threads.get(k); if (t && !t.loading) t.at = 0;
+      load(sid, agent); // late ledger ingestion still belongs to the original send cutoff
+    };
+    if (!defer) commit();
+    return { commit, cancel() {
+      if (send.committed) return;
+      if (sendCutoffs.get(k) === send) { if (prior) sendCutoffs.set(k, prior); else sendCutoffs.delete(k); }
+      staged?.cancel();
+    } };
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
