@@ -70,7 +70,7 @@
 import { viewChrome, openApps, realApps, matches, CHATS, MIC } from '../apps/chrome.js';
 import { glyphOf, colourOf } from '../orb/shared.js';
 import { HOLD_MS } from '../orb/keys.js';
-import { ACTS, svgIcon, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
+import { ACTS, svgIcon, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, STATES, stateOf, stateGroups, gaugeInto, fuelOf,
   pinsFrom, togglePin, RAIL_WORDS, vtMove, relMoves, appLayers, shownIds, TIDY, TIDY_WORDS, TIDY_DEFAULT, tidyPlan, seedUsed, tidyWords,
   TIDY_SHORT, tidySentence, readyGroups, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep, GROUP_ORDERS, groupOrder, railRows, railActive, railNext, shortTime, titleInProject } from './parts.js';
 import { homeView } from './home.js';
@@ -733,7 +733,7 @@ export default function desktop(api) {
     if (root.dataset.aadSide === 'rail') return;
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
-    const sig = JSON.stringify([q,
+    const sig = JSON.stringify([q, archiveTop(root),
       secOpen, readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
@@ -744,8 +744,8 @@ export default function desktop(api) {
       if (!hitsC.length) out.push(el('p', 'aad-empty', { text: 'No chats by that name.' }));
     } else {
       // The sidebar and its search are Chats only; app search belongs to the global launcher.
-      // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
-      for (const [k, word0] of SECTIONS) {
+      // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
+      for (const [k, word0] of sectionsFor(root)) {
         const rows = s[k] || [], on = !!secOpen[k];
         // round 18 item 4 (Miguel: the open sidebar built on the folded rail): Snoozed only when it holds chats, as on the rail
         if (k === 'snoozed' && !rows.length) continue;
