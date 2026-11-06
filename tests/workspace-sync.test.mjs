@@ -258,3 +258,30 @@ test('Android phone names include the model or a stable per-device short name', 
   const two = client(store, box, 'phone', [], { ua });
   assert.match(name, /^Android [a-z0-9]{6}$/); assert.equal(two.api.name, name); two.api.stop();
 });
+
+// James, 6 Nov 2026: "things keep popping open, particularly the Topics app". A fresh phone-shell browser (a new
+// device, a cleared WebView, a test browser) seeded the launcher's starter apps (autoOpen: Topics, Mizel) and its first
+// join pushed them to the box as "desks this device has that the box lacks", so they opened on his phone.
+test('starter apps a fresh device opened by itself never reach the box or the other devices', async () => {
+  const box = fakeBox(); box.rev = 7;
+  box.state = { desks: [D('chats', chats('c1')), D('msgr', app('m1', 'messenger'))] };
+  const fresh = [D('starter-chats', chats('c9')), D('t', { ...app('t1', 'topics'), seed: true }), D('z', { ...app('z1', 'mizel'), seed: true })];
+  const phone = client(new Map(), box, 'phone', fresh);
+  try {
+    await tick(120);
+    const apps = box.state.desks.flatMap(d => d.wins.map(w => w.appId || w.app));
+    assert.ok(!apps.includes('topics') && !apps.includes('mizel'), 'auto-opened apps stay off the shared workspaces: ' + apps);
+    assert.deepEqual(plain(box.state.desks.map(d => d.id)), ['chats', 'msgr'], 'the owner\'s open apps are untouched');
+  } finally { phone.api.stop(); }
+  // Once the owner opens it himself (the shell drops `seed`), it is one of his open apps and syncs like any other.
+  assert.deepEqual(plain(S.norm({ desks: [D('t', { ...app('t1', 'topics'), seed: true })] })).desks, []);
+  assert.deepEqual(plain(S.norm({ desks: [D('t', app('t1', 'topics'))] })).desks, [D('t', app('t1', 'topics'))]);
+});
+
+test('the phone shell seeds starter apps only into a layout it just created, marked device-only', () => {
+  const app = fs.readFileSync(new URL('../web/app.js', import.meta.url), 'utf8');
+  assert.match(app, /if \(!freshBoot \|\| joinedWorkspaces\(\)\) return;/, 'no seeding into an existing or already-synced layout');
+  assert.match(app, /W\[id\] = \{ id, app: 'frame', appId, seed: true \}/, 'seeded windows are marked');
+  assert.match(app, /W = \{\}; desks = \[blank\(\{ id: 'home', home: true \}\)\]; freshBoot = true;/);
+  assert.match(app, /if \(!here\) \{ const w = openWin\(obj, opts\); openingEnd\(\); return w; \}\n\s*delete W\[here\]\.seed;/, 'an explicit open adopts a starter app');
+});

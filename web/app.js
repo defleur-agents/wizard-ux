@@ -63,11 +63,17 @@
   // A fresh layout must not persist auto-open desks from compatibility defaults or a stale cache: the shell
   // may paint before synced preferences arrive (waitForShell), so seed only once the first load has settled.
   const launcherSettled = () => window.WizLauncher?.settled !== false;
+  // Starter apps are a brand-new device's first look, never the owner's open apps (James, 6 Nov 2026: "things keep
+  // popping open, particularly the Topics app"). They are marked `seed` (device-only: workspace sync never sends them),
+  // seed only into the layout this boot created, and never on a device that has already joined the shared workspaces.
+  let freshBoot = false;
+  const joinedWorkspaces = () => !!store.get('wsync.v2.phone', null)?.base;
   function seedApps() {
-    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId }; desks.push(blank({ wins: [id], focus: id })); }
+    if (!freshBoot || joinedWorkspaces()) return;
+    for (const appId of (window.WizLauncher?.get('autoOpen') || [])) if (APP[appId] && !Object.values(W).some(w => w.app === 'frame' && w.appId === appId)) { const id = newId(); W[id] = { id, app: 'frame', appId, seed: true }; desks.push(blank({ wins: [id], focus: id })); }
   }
   function freshLayout() {
-    W = {}; desks = [blank({ id: 'home', home: true })];
+    W = {}; desks = [blank({ id: 'home', home: true })]; freshBoot = true;
     const c = { id: newId(), app: 'chats', thread: null }; W[c.id] = c; desks.push(blank({ wins: [c.id], focus: c.id }));
     if (launcherSettled()) seedApps();
   }
@@ -1154,6 +1160,7 @@
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
     openingReady();
     if (!here) { const w = openWin(obj, opts); openingEnd(); return w; }
+    delete W[here].seed; // the owner opened it himself: a starter app becomes one of his open apps (and syncs)
     if (W[here].app !== 'chats') bringBeside(here);
     const t = deskOf(here);
     if (refresh) refresh(W[here], t);
