@@ -1412,12 +1412,20 @@ window.WizCore.chats = function createChats(H) {
     // minute, says when it was last updated; a pull-to-refresh shows its own progress and an "Up to date" flash.
     const lastAt = LST.at || LST.cachedAt || 0, age = lastAt ? Date.now() - lastAt : 0, since = lastAt ? `last updated ${agoText(lastAt)}` : '';
     const spin = '<i class="ch-spin" aria-hidden="true"></i>';
-    const syncBar = (cls, inner, extra = '') => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${inner}${extra}</div>`;
-    const sync = c.ptrState === 'busy' ? syncBar('', `${spin}<span>Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}</span>`)
-      : LST.error ? syncBar('off', `<span><b>Not up to date</b>${since ? ` · ${esc(since)}` : ''} · ${esc(reachLabel('read'))}</span>`, troubleshoot)
-      : LST.cached ? syncBar('', `${spin}<span>Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}</span>`)
-      : LST.ok && age > STALE_LIST ? syncBar('stale', `${LST.loading ? spin : ''}<span><b>Not up to date</b> · ${esc(since)}${LST.loading ? ' · updating…' : ''}</span>`)
-      : c.ptrState === 'done' ? syncBar('ok', '<span>Up to date</span>') : '';
+    // One quiet row, never a pill pushing the list down (James, 7 Nov 2026): a status dot, the line (ellipsis when long;
+    // the whole line stays in the row's title) and a compact "Troubleshoot" text action at its right end, which opens
+    // the Troubleshooter exactly like every other data-chtroubleshoot control.
+    const dot = '<i class="ch-sync-dot" aria-hidden="true"></i>';
+    const act = '<button type="button" class="ch-sync-act" data-chtroubleshoot aria-label="Open Troubleshooter">Troubleshoot</button>';
+    // The text's title carries the whole line as plain text (its parts are already escaped); the visible labels stay
+    // literal markup so app-parity-gate sees them.
+    const syncBar = (cls, lead, inner, extra = '', title = inner) => `<div class="ch-sync${cls ? ' ' + cls : ''}" role="status">${lead}<span title="${title}">${inner}</span>${extra}</div>`;
+    const notUp = (cls, lead, rest) => syncBar(cls, lead, `<b>Not up to date</b>${rest}`, act, `Not up to date${rest}`);
+    const sync = c.ptrState === 'busy' ? syncBar('', spin, `Refreshing…${LST.error || age > STALE_LIST ? ` · ${esc(since)}` : ''}`)
+      : LST.error ? notUp('off', dot, ` · ${esc(reachLabel('read'))}${since ? ` · ${esc(since)}` : ''}`)
+      : LST.cached ? syncBar('', spin, `Updating…${LST.cachedAt && Date.now() - LST.cachedAt > 120000 ? ` · from ${esc(agoText(LST.cachedAt))}` : ''}`)
+      : LST.ok && age > STALE_LIST ? notUp('stale', LST.loading ? spin : dot, ` · ${esc(since)}${LST.loading ? ' · updating…' : ''}`)
+      : c.ptrState === 'done' ? syncBar('ok', '', '<span>Up to date</span>', '', 'Up to date') : '';
     const html = `<div data-part="list" class="ch-list${AGID ? ' agent' : ''}${compactOn() ? ' compact' : ''}${byStatus() ? ' by-status' : ''}"${focusedAgent(focus) ? ` style="--agc:${AGS()?.colour(agentRec(focusedAgent(focus))) || ''};--ch-agent-hue:${AGS()?.distinctHues().get(focusedAgent(focus)) ?? AGS()?.hue(agentRec(focusedAgent(focus)))}"` : ''}><div data-slot="list-top"></div>${head}${sync}<div class="ch-ptr" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg><span>Pull to refresh</span></div><div class="ch-scroll">${sugHtml}${unsentRow}${body}</div>${pill}${fab}${focusStrip(w)}${c.sheet ? filterSheet(w, c) : ''}</div>`;
     // Unchanged list reads keep the same nodes, caret, scroll and text selection.
     // A thread/list remount invalidates the identity guard even when its HTML matches.
@@ -1742,6 +1750,27 @@ window.WizCore.chats = function createChats(H) {
   }
   // The agent name used in composer hints and receipts: the open agent's label, else the main agent's name.
   const agentName = id => id ? agentRec(id).label : window.WizConfig.agent();
+  // Read the drawn list, not workGroups(): filters, Space Focus, sort, folded sections and
+  // Show more have already decided what is here. Keep that order while a phone shows its thread.
+  function archiveListOrder(wid, sid) {
+    const own = window.WosSkinHost?.chatArchiveOrder?.(sid);
+    if (own != null) return own;
+    const el = elOf(wid + '::list') || elOf(wid);
+    const rows = [...(el?.querySelectorAll('.ch-list [data-chopen]') || [])];
+    const row = rows.find(r => r.dataset.chopen === sid);
+    if (!row) return ch(wid).archiveOrder || [];
+    const section = row.closest('.ch-sec, .ch-search-results') || row.closest('.ch-list');
+    return rows.filter(r => (r.closest('.ch-sec, .ch-search-results') || r.closest('.ch-list')) === section).map(r => r.dataset.chopen);
+  }
+  function archiveAdvance(w, sid) {
+    const ids = archiveListOrder(w.id, sid).filter(id => id === sid || (rowOf(w.id, id) && !rowOf(w.id, id).archived));
+    const at = ids.indexOf(sid), nx = at < 0 ? null : ids[at + 1] || ids[at - 1];
+    ch(w.id).archiveOrder = ids;
+    // Reuse the ordinary opener: it saves the draft and clears the link trail. Back goes to
+    // the list, never the archived thread. No neighbour also discards that trail explicitly.
+    if (nx) openChat(w.id, nx);
+    else { ch(w.id).trail = []; chatsBack(w); }
+  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1769,7 +1798,12 @@ window.WizCore.chats = function createChats(H) {
     }
     if (a === 'snooze' && window.WosSkinHost?.action('snooze', { sessionId: sid })) return;
     if (a === 'snooze') { const B = BOOM(); if (B) B.open({ sessionId: sid, targetKind: 'thread', title: s.title, context: s.title }, B.nextFor(sid)); else toast('!', 'Snooze is still loading', 1600); return; }
-    if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
+    // Desktop (Classic and AI apps): archiving the open thread opens the next chat in the drawn list (James, 7 Nov 2026).
+    if (a === 'done' && !PHONE() && w?.thread === sid) archiveAdvance(w, sid);
+    // Archive on the phone always returns to the chats list (James, 7 Nov 2026), whatever the After-actions setting,
+    // straight to the list even when the thread was opened from another one (no step up the link trail).
+    else if (a === 'done' && PHONE() && w?.thread === sid) { ch(w.id).trail = []; chatsBack(w); }
+    else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
     const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
@@ -2816,9 +2850,10 @@ window.WizCore.chats = function createChats(H) {
     const w = W[wid]; if (!w) return;
     if (INC?.active(wid) && !INC.close(wid)) return;
     if (!w.thread) { const c0 = ch(wid), place = c0.listPending || listPlace(elOf(wid)); c0.listPending = null; if (place) c0.listPlace = place; }
+    const listOrder = archiveListOrder(wid, sid);
     if (w.thread) saveDraft(wid);
     closeRowSheet();
-    const c = ch(wid); c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
+    const c = ch(wid); c.archiveOrder = listOrder; c.approval = null; c.cachedFor = ''; // a cached paint belongs to one open only
     c.err = ''; c.failN = 0; clearTimeout(c.retryT); // a read error belongs to the thread that failed, never the next one opened
     c.readNav = (c.readNav || 0) + 1;
     if (w.thread !== sid) H.threadShown?.(wid, null); // close the old preview immediately, even while the new thread loads

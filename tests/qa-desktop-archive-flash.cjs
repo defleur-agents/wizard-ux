@@ -123,11 +123,14 @@ const refCache = new Map();
           await p.waitForTimeout(16);
         }
         const frames = await p.evaluate(() => { archiveSampling = false; return archiveFrames; });
+        // Desktop Archive opens the next chat, or the list when none is left (James, 7 Nov 2026). This fixture has one
+        // thread, so the pane may close on the action's own frame: then there is no chat pane left to sample.
+        const leftForList = await p.evaluate(() => !Object.values(__wux.wins).some(w => w.thread === 'qa-thread'));
         const invalid = frames.flatMap((f, frame) => f.panes.flatMap((pane, index) => pane.paneVisible && !(pane.messagesVisible && pane.answerPresent && pane.answerVisible && pane.composerVisible) ? [{ frame, index, ...pane }] : []));
         const checks = [];
         const check = (ok, message) => { if (!ok) checks.push(stem + ': ' + message); };
         check(frames.length > 0, 'no animation frames sampled');
-        check(frames.some(f => f.panes.some(p => p.paneVisible)), 'no visible chat pane sampled');
+        check(leftForList || frames.some(f => f.panes.some(p => p.paneVisible)), 'no visible chat pane sampled and the thread is still open');
         check(invalid.length === 0, `header-only/empty chat pane in ${invalid.length} sampled frames; first=${JSON.stringify(invalid[0])}`);
         check(writes.some(w => w.method === 'PATCH' && w.path === '/wizard/hermes/api/sessions/qa-thread' && JSON.parse(w.body).archived === true), 'Archive action was not dispatched');
         check(writes.every(w => (w.method === 'PUT' && w.path === '/wizard/thread-seen') || (w.method === 'PATCH' && w.path === '/wizard/hermes/api/sessions/qa-thread' && JSON.parse(w.body).archived === true)), 'unexpected synthetic mutation (send/preferences/upload)');

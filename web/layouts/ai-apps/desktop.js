@@ -1568,6 +1568,20 @@ export default function desktop(api) {
   /** the rails come back as they are now (a side opened by hand, a chat or an app opened): the stash stays for ⌥. */
   function focusLeave() { if (!focusOn()) return; delete root.dataset.aadFocus; }
   let stepAt = null;
+  api.sessions.archiveOrder?.(sid => {
+    if (root.dataset.aadSide === 'rail') {
+      const key = railNow()?.key;
+      return key ? railRows(sessions || readSessions(), key, readyOrder(), groupBy()).map(r => r.id) : [];
+    }
+    const rows = [...scroll.querySelectorAll('.aad-rw[data-sid]')], row = rows.find(r => r.dataset.sid === sid);
+    if (!row) return [];
+    const group = r => {
+      for (let n = r.previousElementSibling; n; n = n.previousElementSibling) if (n.classList.contains('aad-grp')) return n;
+      return r.parentElement;
+    };
+    const section = group(row);
+    return rows.filter(r => r.parentElement === row.parentElement && group(r) === section).map(r => r.dataset.sid);
+  });
   const readyIds = () => readyFlat((sessions || readSessions()).ready || [], readyOrder(), groupBy()).map(r => r.id);
   function stepReady(dir) {
     readSessions();
