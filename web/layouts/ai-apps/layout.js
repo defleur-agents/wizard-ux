@@ -37,7 +37,7 @@ import { viewChrome, openApps, realApps, matches, CHATS } from '../apps/chrome.j
 import { glyphOf, colourOf } from '../orb/shared.js';
 
 // one icon set and one row-menu order with the desktop sidebar (parts.js); the desktop has its own screen (desktop.js)
-import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlot, gaugeInto, fuelOf,
+import { ICON, ACTS, SVG, initial, sectionsFor, archiveTop, KINDS, EMPTY, sectionsOpen, gridSlot, gaugeInto, fuelOf,
   pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
@@ -333,7 +333,7 @@ export default function setup(api) {
     const here = api.route().thread, out = [], s = sessions || readSessions();
     const apps = api.apps.list(), dk = desks();
     // repaint only when what it lists changed (renders come often while a chat is working; a row under a finger stays)
-    const sig = JSON.stringify([q, here, secOpen, api.sessions.workingOrder?.(), readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
+    const sig = JSON.stringify([q, archiveTop(root), here, secOpen, api.sessions.workingOrder?.(), readyOrder(), dk.map(d => d.id + d.desk + (lit(d.id) ? '*' : '')), apps.length, KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.actions.join()]))]);
     if (!force && sig === drawn && scroll.childElementCount) return;
     drawn = sig;
     if (q) {
@@ -344,8 +344,8 @@ export default function setup(api) {
       if (!hitsA.length && !hitsC.length) out.push(el('p', 'aa-empty', { text: 'No chat or app by that name.' }));
     } else {
       // the drawer is the chat list only (Miguel, 2 Nov 2026: the apps live on Home now; a search still finds them)
-      // Wizard's own sections in place of Recents (round 5): Archive, Working, Ready, each folding under its header
-      for (const [k, word0] of SECTIONS) {
+      // Wizard's own sections in place of Recents (round 5): Working, Ready, Archive last (archive-top: first), each folding under its header
+      for (const [k, word0] of sectionsFor(root)) {
         // round 18 item 3a: Ready in the stock Chats Filter's order (Priority / Newest / Oldest), notifications among it
         const rows = k === 'working' ? globalThis.WizChatsListModel.workingSort(s[k], api.sessions.workingOrder?.()) : k === 'ready' ? readySort(s[k] || [], readyOrder()) : s[k] || [], on = !!secOpen[k];
         const h = el('button', 'aa-lab aa-sec', { type: 'button', 'data-sec': k, 'aria-expanded': String(on), 'aria-controls': 'aa-sec-' + k });
