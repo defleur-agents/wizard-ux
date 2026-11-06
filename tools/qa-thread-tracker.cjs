@@ -85,6 +85,15 @@ async function mount(browser, svc, { shell, skin, tweaks, storage, docScroll = f
     if (p === '/wizard/v1/thread-items/counts') return json({ threads: { 'hermes/tt-main': svc.counts() } });
     if (p === '/wizard/v1/thread-items/seen' && m === 'POST') {
       const b = JSON.parse(q.postData() || '{}'); svc.writes.push({ m, p, b });
+      svc.beforeSeen?.();
+      if (!svc.legacySeen && Array.isArray(b.items)) {
+        const results = b.items.map(({id,updated_at}) => {
+          const matches = svc.items.find(i => i.id === id)?.updated_at === updated_at;
+          if (matches) svc.seen.add(id);
+          return {id,status:matches?'acknowledged':'stale'};
+        });
+        return json({ thread: b.thread, items: svc.view(), counts: svc.counts(), results });
+      }
       for (const id of b.ids || []) svc.seen.add(id);
       return json({ thread: b.thread, items: svc.view(), counts: svc.counts() });
     }
@@ -188,7 +197,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
     }
     /* ---- reply synthesis: old per-ask API counts deliberately retained for rolling-upgrade proof ---- */
     if (!process.env.QA_STATE_ONLY) for (const skin of SKINS) for (const shell of ['phone', 'desktop']) {
-      const tag = `grouped/${shell}/${skin}`, svc = service();
+      const tag = `grouped/${shell}/${skin}`, svc = service(); svc.legacySeen = true;
       const anchor = svc.items.find(i => i.id === 'tap-lag');
       svc.items = [
         { ...anchor, id: 'nightly', title: 'Nightly maintenance helper', state: 'needs_you', try: true },
@@ -214,8 +223,8 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForSelector(`.msg[data-mid="${anchor.message_id}"].tt-flash`);
       check(`${tag}: group Open jumps to its one reply`, await page.locator(`.msg[data-mid="${anchor.message_id}"].tt-flash`).count() === 1);
       await strip(page).locator('.tt-h').click();
-      await strip(page).locator('[data-tt-seen]').click();
-      check(`${tag}: group Seen clears all local dots immediately`, await page.evaluate(() => window.WosThreadTracker.dots('tt-main') === ''));
+      await strip(page).locator('[data-tt-dismiss]').click();
+      check(`${tag}: group Dismiss clears all local dots immediately`, await page.evaluate(() => window.WosThreadTracker.dots('tt-main') === ''));
       await page.waitForFunction(() => !document.querySelector('[data-tt-strip]'));
       check(`${tag}: last addressable Seen removes the entire strip`, await strip(page).count() === 0);
       check(`${tag}: Seen sends every member id and service readback agrees`, svc.writes.some(w => w.p.endsWith('/thread-items/seen') && JSON.stringify([...w.b.ids].sort()) === JSON.stringify(['messenger', 'nightly', 'old'])) && svc.view().every(i => i.seen));
@@ -271,13 +280,13 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
       check(`${tag}: last Seen removes strip before next frame`, await strip(page).count() === 0);
       await update('needs_you');
-      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
-      check(`${tag}: last Looks good removes strip before next frame`, await strip(page).count() === 0);
+      await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-dismiss]').click();
+      check(`${tag}: last Dismiss removes strip before next frame`, await strip(page).count() === 0);
       for (const state of ['done', 'needs_you']) {
         svc.items = [{ ...anchor, state, try: true, updated_at: Date.now() }, { ...anchor, id: 'still-running', state: 'running', message_id: anchor.message_id + '-running' }]; svc.seen.clear();
         await page.waitForTimeout(2600); await page.evaluate(() => window.WosThreadTracker.loadCounts(true));
         await page.waitForFunction(() => /^2 open/.test(document.querySelector('[data-tt-strip] .tt-h')?.innerText));
-        await strip(page).locator('.tt-h').click(); await strip(page).locator('[data-tt-seen]').click();
+        await strip(page).locator('.tt-h').click(); await strip(page).locator(state === 'needs_you' ? '[data-tt-dismiss]' : '[data-tt-seen]').click();
         check(`${tag}: last ${state} acknowledgement keeps running strip and open dropdown`, await strip(page).count() === 1 && await strip(page).locator('.tt-panel').isVisible() && await strip(page).locator('.tt-row.run').count() === 1 && await page.evaluate(() => /running/.test(window.WosThreadTracker.dots('tt-main')) && !/need you|finished, not seen/.test(window.WosThreadTracker.dots('tt-main'))));
         if (state === 'needs_you') await page.screenshot({ path: path.join(OUT, `running-after-seen-${shell}-${skin}.png`) });
         await strip(page).locator('.tt-h').click();
@@ -294,6 +303,32 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       check(`${tag}: 1 amber plus 3 acknowledged reads 1 open and keeps history footer`, await strip(page).locator('.tt-tot').innerText() === '1 open' && await strip(page).locator('.tt-more').innerText() === '3 acknowledged · show');
       await page.screenshot({ path: path.join(OUT, `running-open-count-${shell}-${skin}.png`) });
       await ctx.close();
+    }
+    /* ---- amber Dismiss: exact versions, Ready's existing Done action, newer asks return ---- */
+    for (const skin of SKINS) for (const shell of ['phone','desktop']) {
+      const tag=`dismiss/${shell}/${skin}`,svc=service(),anchor=svc.items[1];
+      svc.items=[{...anchor,id:'a',state:'needs_you',ask:'Reply resend to send it'}];svc.seen.clear();
+      const {ctx,page}=await mount(browser,svc,{shell,skin,tweaks:[ID]});
+      if(shell==='desktop')await page.evaluate(()=>window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page,'tt-main');await page.waitForSelector('[data-tt-strip]');await strip(page).locator('.tt-h').click();
+      check(`${tag}: second line names the action`,/Reply resend to send it/.test(await strip(page).locator('.tt-s').innerText()));
+      await page.screenshot({path:path.join(OUT,`dismiss-before-${shell}-${skin}.png`)});
+      svc.beforeSeen=()=>{svc.items=svc.items.map(i=>({...i,ask:'Approve the newer send',updated_at:Date.now()}));};
+      await strip(page).locator('[data-tt-dismiss]').click();
+      await page.waitForFunction(()=>/need you/.test(window.WosThreadTracker.dots('tt-main')));
+      await page.waitForFunction(()=>window.WizLive.session('tt-main')?.archived!==true);
+      check(`${tag}: stale stays unseen and Ready Done rolls back`,!svc.view()[0].seen&&!svc.writes.some(w=>w.m==='PATCH'));
+      svc.beforeSeen=null;
+      const frame=await page.evaluate(()=>{document.querySelector('[data-tt-dismiss]').click();return {cleared:window.WosThreadTracker.stripHtml('tt-main')==='',readyCleared:window.WizLive.session('tt-main')?.archived===true};});
+      check(`${tag}: last amber and Ready clear in the tap frame`,frame.cleared&&frame.readyCleared,frame);
+      await page.waitForFunction(()=>!window.WizLive.busy('tt-main'));
+      check(`${tag}: Done persists only after matching per-id Seen`,svc.view()[0].seen&&svc.writes.some(w=>w.p.endsWith('/thread-items/seen')&&w.b.items?.[0].id==='a')&&svc.writes.some(w=>w.m==='PATCH'&&/tt-main/.test(w.p)));
+      svc.items=svc.items.map(i=>({...i,ask:'Try the changed reply',updated_at:Date.now()+1}));svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/need you/.test(window.WosThreadTracker.dots('tt-main')));
+      check(`${tag}: newer ask returns unseen`,!svc.view()[0].seen&&await strip(page).count()===1);
+      await strip(page).locator('.tt-h').click();await page.screenshot({path:path.join(OUT,`dismiss-newer-${shell}-${skin}.png`)});
+      check(`${tag}: no page errors`,ctx.errors.length===0,ctx.errors);await ctx.close();
     }
     /* ---- explicit owner sends acknowledge old green before phone send-and-go ---- */
     for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const working of [false, true]) {
@@ -421,13 +456,19 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       // Inline node styles alone disappear when the pending ledger render replaces it.
       const shortStyle=await page.addStyleTag({content:`.ch-msgs .msg[data-mid="${latest.id}"]{height:300px!important;min-height:300px!important;max-height:300px!important;box-sizing:border-box!important;overflow:hidden!important}`});
       const shortTail=await page.evaluate(mid=>{
-        const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
-        n.style.height='300px';n.style.minHeight='300px';n.style.boxSizing='border-box';n.textContent='Only the tail of an ordinary reply.';
-        nb.dispatchEvent(new WheelEvent('wheel',{bubbles:true,deltaY:250})); // a reader scroll cancels opening-position settling
-        const spacer=document.createElement('div');spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);
-        const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+50);
-        if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
-        const r=n.getBoundingClientRect(),b=nb.getBoundingClientRect();return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top)};
+        // The real reader restores its opening position after a bubble repaint.
+        // Keep this negative oracle at exactly 50px through that restoration;
+        // do not change product geometry or pause the product's dwell watcher.
+        const pin=()=>{
+          const nb=document.querySelector('.ch-msgs'),n=nb?.querySelector(`.msg[data-mid="${mid}"]`);if(!n)return;
+          let spacer=nb.querySelector('[data-short-tail-spacer]');
+          if(!spacer){spacer=document.createElement('div');spacer.dataset.shortTailSpacer='';spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);}
+          const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+50);
+          if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
+        };
+        const loop=()=>{pin();window.__shortTailFrame=requestAnimationFrame(loop);};loop();
+        const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`),r=n.getBoundingClientRect(),b=nb.getBoundingClientRect(),top=window.WosThreadTracker.viewportTop(nb,b.top);
+        return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top)};
       },String(latest.id));
       const writesBeforeShort=svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length;
       const shortSamples=[];
@@ -437,7 +478,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       fs.writeFileSync(path.join(OUT,`short-tail-${profile}-${skin}.json`),JSON.stringify({shortTail,shortSamples,seen:svc.view(),writesBeforeShort,writesAfter:svc.writes.filter(w=>w.p.endsWith('/thread-items/seen'))},null,2));
       await page.screenshot({path:path.join(OUT,`running-short-unread-${profile}-${skin}.png`)});
       // Keep just the tail of a genuinely viewport-tall reply on screen for a full second.
-      await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'}));
+      await page.evaluate(()=>{cancelAnimationFrame(window.__shortTailFrame);Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'});});
       await shortStyle.evaluate(n=>n.remove());
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
       await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
