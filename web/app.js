@@ -3946,7 +3946,7 @@
       if (!state) { const i = posOf(o.focus); if (i > 0) { closeSheets(true); goDesk(i); } return; }
       const here = desks[idx]?.id, at = idx;
       // Joining the owner's shared workspaces: his open apps replace this device's starter apps (seed), so a phone
-      // whose storage was reset never shows Topics or Mizel he did not open (James, 6 Nov 2026).
+      // whose storage was reset never shows starter apps he did not open (James, 6 Nov 2026).
       if (o.join && state.desks.length) desks = desks.filter(d => {
         if (d.home || !d.wins.some(id => W[id]?.seed)) return true;
         d.wins = d.wins.filter(id => { if (!W[id]?.seed) return true; winEl(id)?.remove(); delete W[id]; return false; });
