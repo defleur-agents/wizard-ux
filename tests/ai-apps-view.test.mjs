@@ -108,6 +108,31 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
   orbWrap.addEventListener('pointerdown', e => st.orbDown.push(e.pointerId));
   const fire = (type, target, extra = {}) => { const e = new FakePointerEvent(type, { target, isPrimary: true, pointerId: 7, clientX: 100, clientY: 400, button: 0, ...extra }); for (const fn of docListeners[type] || []) fn(e); if (!e.stopped) target?.dispatchEvent?.(e); return e; };
   const emit = (t, v) => { for (const fn of st.on[t] || []) fn(v); };
+  // Adapt this legacy DOM fixture at the same host boundary as the real shell.
+  // Layout code itself must not infer app identity from Classic markup.
+  const hostWindow = {}; vm.runInNewContext(read('web/core/desktop-host.js'), { window: hostWindow, queueMicrotask, console });
+  const hostFrames = new Map(), inferredGroups = new WeakSet();
+  const windows = () => {
+    hostFrames.clear(); const rows = [];
+    for (const group of html.querySelectorAll('#stage > .wsp')) {
+      const isChat = !!group.querySelector('.dchats');
+      if (group.dataset.ws == null) inferredGroups.add(group);
+      const desk = inferredGroups.has(group) ? (isChat ? st.desks.find(d => d.id === 'wizard')?.desk : st.route.desk) : Number(group.dataset.ws);
+      if (inferredGroups.has(group)) group.dataset.ws = desk;
+      const appId = isChat ? 'wizard' : st.desks.find(d => d.desk === desk)?.id || st.route.app;
+      const wins = group.querySelectorAll('.win');
+      for (const win of wins.length ? wins : [group]) {
+        const id = win.dataset.win ||= 'fixture-' + rows.length, frame = win.querySelector('iframe');
+        hostFrames.set(id, frame);
+        rows.push({ id, desk, deskId: 'group-' + desk, kind: isChat ? 'chats' : frame ? 'frame' : 'settings', appId, tiled: !win.classList.contains('gone'), visible: !group.hidden, focused: false });
+      }
+    }
+    return rows;
+  };
+  const hostController = hostWindow.WizDesktop.attach({ windows, has: id => windows().some(w => w.id === id), frame: id => hostFrames.get(id), openApp: () => true, close: () => false,
+    focus: id => { (st.hostFocus ||= []).push(id); return true; }, renderTools: (_, slot) => { slot.replaceChildren(); return false; } });
+  globalThis.WizDesktop = hostWindow.WizDesktop;
+  st.hostChanged = hostController.changed;
   const run = () => { const t = st.timers.splice(0); for (const h of t) if (!h.dead) h.fn(); };
   const q = s => html.querySelector(s), qa = s => html.querySelectorAll(s);
   return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc, escape: () => !!dispatcher.run({surface:st.surface}) };
@@ -1095,10 +1120,10 @@ test('desktop app panel: an app\'s title-bar tools (Morning Report\'s â€¹ date â
   assert.ok(!/> \.wbar \{ display: none; \}/.test(css), 'never display: none (an app would think its tools are gone, or never see them)');
   assert.match(css, /> \.wbar \{ display: flex; position: absolute;[^}]*visibility: hidden; pointer-events: none; \}/);
   assert.match(js, /pTop\.append\(pIcon, pName, pTools, pW, pX\);/, 'round 15: the tools in the app panel\'s header');
-  assert.match(js, /querySelector\(':scope > \.win:not\(\.gone\) > \.wbar > \.wtools'\)/, 'mirrored from the window\'s own tools');
-  assert.match(js, /srcTool\(n\)\?\.click\(\)/, 'a tap goes to the window\'s own tool (the app\'s channel)');
-  assert.match(js, /o\.dispatchEvent\(new Event\('change', \{ bubbles: true \}\)\)/, 'a pick too');
-  assert.match(js, /toolsMo\?\.disconnect\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
+  assert.match(js, /host\?\.renderTools\(panelWindow\(\)\?\.id, pTools\)/, 'shared validated tools renderer, not cloned Classic controls');
+  assert.match(js, /host\?\.onChange\(/, 'late registration and replacements follow lifecycle changes');
+  assert.doesNotMatch(js, /srcTools|srcTool|toolsMo|cloneNode/, 'no mirrored tools or DOM observers');
+  assert.match(js, /offHost\?\.\(\);\n\s*for \(const k of \['aiApps'/, 'released on teardown');
 });
 
 test('round 9 desktop: no veil over the skin\'s background (Home, beside a panel); only panels and the composer have surfaces', () => {

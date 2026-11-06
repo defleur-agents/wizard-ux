@@ -25,7 +25,7 @@
     };
     const windows = () => Object.freeze(adapter.windows().map(w => Object.freeze({
       id: w.id, kind: w.kind, appId: w.appId, desk: w.desk, deskId: w.deskId, title: w.title,
-      thread: w.thread, focused: !!w.focused, visible: !!w.visible,
+      thread: w.thread, focused: !!w.focused, visible: !!w.visible, tiled: !!w.tiled,
     })));
     const find = id => typeof id === 'string' && id ? windows().find(w => w.id === id) : null;
     const has = id => typeof id === 'string' && !!id && adapter.has(id);
@@ -33,6 +33,15 @@
       windows,
       // A frame handle is the retained iframe, never a Classic window/container.
       frame: id => find(id)?.kind === 'frame' ? adapter.frame(id) || null : null,
+      frameReady: id => {
+        const w = find(id); if (!w) return false;
+        const f = w.kind === 'frame' ? adapter.frame(id) : null; if (!f) return w.kind !== 'frame';
+        try { const d = f.contentDocument; return !d || (d.readyState === 'complete' && d.URL !== 'about:blank'); } catch (_) { return true; }
+      },
+      renderTools: (id, slot) => {
+        if (!slot?.replaceChildren) return false;
+        return adapter.renderTools?.(find(id)?.kind === 'frame' ? adapter.frame(id) : null, slot) === true;
+      },
       openApp: id => typeof id === 'string' && !!id ? adapter.openApp(id) !== false : false,
       focus: (id, { scroll = true } = {}) => {
         if (!has(id)) return false;

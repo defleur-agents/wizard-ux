@@ -44,6 +44,23 @@ test('changes coalesce after synchronous paint; teardown and broken listeners do
 test('invalid subscriptions and idle changes are no-ops', () => {
   const f = fixture(); f.host.onChange(null)(); f.controller.changed(); f.flush(); assert.equal(f.errors.length, 0);
 });
+test('readiness follows the retained frame document and handles non-app surfaces', () => {
+  const f = fixture(), frame = f.host.frame('app');
+  assert.equal(f.host.frameReady('missing'), false); assert.equal(f.host.frameReady('chat'), true);
+  frame.contentDocument = { readyState:'complete', URL:'about:blank' }; assert.equal(f.host.frameReady('app'), false);
+  frame.contentDocument = { readyState:'loading', URL:'https://wizard.test/recorder/' }; assert.equal(f.host.frameReady('app'), false);
+  frame.contentDocument.readyState = 'complete'; assert.equal(f.host.frameReady('app'), true);
+  Object.defineProperty(frame, 'contentDocument', { get() { throw Error('cross-origin'); } }); assert.equal(f.host.frameReady('app'), true);
+  f.adapter.frame = () => null; assert.equal(f.host.frameReady('app'), false);
+});
+test('tools use retained app frames; closed and non-app surfaces clear the projection', () => {
+  const f = fixture(), seen = [], slot = { replaceChildren() {} }, frame = f.host.frame('app');
+  f.adapter.renderTools = (frame, slot) => { seen.push([frame, slot]); return !!frame; };
+  assert.equal(f.host.renderTools('app', slot), true); assert.equal(seen[0][0], frame); assert.equal(seen[0][1], slot);
+  assert.equal(f.host.renderTools('chat', slot), false); assert.equal(seen.at(-1)[0], null);
+  f.host.close('app'); assert.equal(f.host.renderTools('app', slot), false); assert.equal(seen.at(-1)[0], null);
+  assert.equal(f.host.renderTools('app', null), false);
+});
 test('desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle', () => {
   const html = read('web/desktop.html'), desktop = read('web/desktop/desktop.js');
   assert.ok(html.indexOf('core/desktop-host.js') < html.indexOf('desktop/desktop.js'));
