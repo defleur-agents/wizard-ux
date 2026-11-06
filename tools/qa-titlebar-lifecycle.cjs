@@ -6,7 +6,10 @@ const closed=require('./qa-closed-shell.cjs');
 const OUT=process.env.QA_OUT; assert(OUT);fs.mkdirSync(OUT,{recursive:true});
 const report={synthetic:true,source:process.env.QA_SOURCE_SHA,cases:[],captures:[],errors:[]};
 const fixture='<!doctype html><html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>html{color-scheme:dark}body{margin:0;padding:24px;background:var(--wz-base,#12121a);color:var(--wz-text,#eee);font:16px system-ui}section{background:var(--wz-panel,var(--wz-base,#12121a));padding:20px;border:1px solid var(--wz-border,#555)}button{font:inherit;padding:12px}</style><body><section><h1>Synthetic Messenger</h1><p>No accounts or messages. Initialization is held until the test releases it.</p><input aria-label="Unsent draft" value="Retained synthetic draft"><p id="result">Waiting for header</p></section><script src="/wizard-os-home/core/app-client.js"></script><script src="/titlebar-fixture.js"></script></body></html>';
-const appJS=`window.calls=[]; window.releaseTools=async()=>{await WizardApp.ready(); return WizardApp.titlebar.set([{id:'qr',kind:'button',icon:'qr',label:'My QR codes'},{id:'search',kind:'button',icon:'search',label:'Search'},{id:'settings',kind:'button',icon:'settings',label:'Settings'}],({id})=>{calls.push(id);document.querySelector('#result').textContent='Opened '+id;});}; WizardApp.ready();`;
+const messengerSource=fs.readFileSync(path.join(process.env.MESSENGER_TREE,'static/unified.js'),'utf8');
+const settingsSource=messengerSource.slice(messengerSource.indexOf('  const LEVEL_TEXT ='),messengerSource.indexOf('  // Support only, no visible row:'));
+const settingsJS=`const node=(tag,cls='',text='')=>{const e=document.createElement(tag);e.className=cls;e.textContent=text;return e;}; const button=(text,fn,cls)=>{const e=node('button',cls,text);e.onclick=fn;return e;}; const action=fn=>fn(); const toast=()=>{}; const error=e=>{throw e;}; const call=async()=>({suggestions:[]}); const notificationSettings=async()=>{}; window.permissionWrites=[]; const api=async(path,opts)=>{if(opts){permissionWrites.push({path,opts});throw Error('No permission writes allowed in this fixture');}return {gateway_connected:false,wizard_agents:[{id:'synthetic-wizard',label:'Synthetic Wizard',level:'no_access'}],wizard_levels:[{id:'no_access',label:'No access'},{id:'read_only',label:'Read-only'},{id:'draft_only',label:'Draft-only',recommended:true}]};}; ${settingsSource} window.showSettings=()=>{let section=document.querySelector('#synthetic-settings');if(section)section.remove();section=node('div');section.id='synthetic-settings';document.querySelector('section').append(section);moreSettings(section);};`;
+const appJS=`${settingsJS}\nwindow.calls=[]; window.releaseTools=async()=>{await WizardApp.ready(); return WizardApp.titlebar.set([{id:'qr',kind:'button',icon:'qr',label:'My QR codes'},{id:'search',kind:'button',icon:'search',label:'Search'},{id:'settings',kind:'button',icon:'settings',label:'Settings'}],({id})=>{calls.push(id);document.querySelector('#result').textContent='Opened '+id;if(id==='settings')showSettings();});}; WizardApp.ready();`;
 async function run(){
  const browser=await chromium.launch({headless:true});closed.setBrowser(browser);
  try{
@@ -29,6 +32,11 @@ async function run(){
     await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().waitFor({state:'visible',timeout:5000});
     await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().click();
     await f.waitForFunction(()=>calls.length===1);assert.deepEqual(await f.evaluate(()=>calls),['settings']);
+    await f.locator('#synthetic-settings select').waitFor();
+    assert.equal(await f.locator('#synthetic-settings select').inputValue(),'no_access');
+    assert.doesNotMatch(await f.locator('#synthetic-settings').innerText(),/Your agents can[’']t reach Messenger yet|finish connecting it/);
+    assert.deepEqual(await f.evaluate(()=>permissionWrites),[]);
+    report.cases.push((phone?'phone':'desktop')+' actual settings projection has no gateway notice; no_access and controls retained; zero access writes');
     report.cases.push((phone?'phone':'desktop')+' held-init late registration visible without minimize; exact one handler');
     for(let n=0;n<3;n++){
      await f.evaluate(()=>WizardApp.titlebar.set(null));
