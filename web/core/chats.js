@@ -2996,6 +2996,7 @@ window.WizCore.chats = function createChats(H) {
     const instructions = opts.instructions || (opts.away ? '' : viewContext(wid, how));
     // Hold before navigation can paint a list (also covers desktop / hosted replies).
     const hold = !isNew ? LIVE.holdSend?.(sid) || null : null;
+    if (!isNew) globalThis.WosThreadTracker?.beforeSend?.(sid, Object.hasOwn(opts, 'agent') ? opts.agent : LIVE.agentOf?.(sid) || '');
     const left = opts.away ? false : leaveAfterSend(wid, sid, isNew, how);
     if (left) { renderChats(W[wid]); applyLayout(deskOf(wid)); }
     // Saved on the phone; the outbox delivers it (and retries) from here.

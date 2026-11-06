@@ -26,6 +26,7 @@
   const openKeys = new Set(), ackKeys = new Set();
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
   const pendingSeen = new Map(); // key → seen writes in flight
+  const sendCutoffs = new Map(); // explicit send/steer, scoped to this thread and visit
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
@@ -85,7 +86,9 @@
       const items = merge(k, j.items);
       const changed = JSON.stringify(items) !== JSON.stringify(cur?.items || []);
       threads.set(k, { items, at: Date.now(), loading: false });
-      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(items))) { counts[k] = tally(items); changedEvent(); }
+      applySendSeen(sid, agent); // a send may beat ledger ingestion or navigation
+      const projected = threads.get(k).items;
+      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(projected))) { counts[k] = tally(projected); changedEvent(); }
     } catch (_) { threads.set(k, { items: cur?.items || [], at: Date.now(), loading: false }); }
   }
   async function loadCounts(force = false) {
@@ -152,7 +155,7 @@
     const fin = live.filter(i => i.state === 'done');
     const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(rowHtml).join('')}</div>` : '';
     const tl = (n, kind) => n ? `<span class="tt-tally">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Asks in this thread"><span class="tt-tot">${c.total} ${c.total === 1 ? 'ask' : 'asks'}</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
     const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
@@ -237,7 +240,10 @@
   function checkViews() {
     for (const [nb, v] of views) {
       if (!nb.isConnected || !on()) { v.io.disconnect(); views.delete(nb); continue; }
-      const front = document.visibilityState === 'visible' && document.hasFocus() && v.active?.();
+      // Streamed/final bubbles may acquire their anchor after the last render or ledger read.
+      watch(nb, v);
+      // Phone WebViews can report no document focus while the front thread is being read.
+      const front = document.visibilityState === 'visible' && (document.documentElement.dataset.shell === 'phone' || document.hasFocus()) && v.active?.();
       const strip = nb.closest('.ch-thread')?.querySelector('[data-tt-strip]');
       const box = nb.getBoundingClientRect(), rstrip = strip?.getBoundingClientRect();
       const top = viewportTop(nb, Math.max(0, box.top)), bottom = Math.min(innerHeight, box.bottom);
@@ -247,7 +253,7 @@
         const y = Math.max(r.top, top) + Math.min(20, h / 2);
         const hit = h > 0 && document.elementFromPoint(x, y);
         const visible = front && !strip?.classList.contains('open') && n.intersects && node.isConnected
-          && bottom > top && h >= Math.min(40, r.height) && (r.top >= top && r.top < bottom - 20 || h >= .4 * Math.min(r.height, bottom - top))
+          && bottom > top && h >= Math.min(40, r.height)
           && node.contains(hit) && (!rstrip || y > rstrip.bottom);
         if (!visible) { n.since = 0; n.attempted = false; continue; }
         if (!n.since) n.since = Date.now();
@@ -269,6 +275,7 @@
   function markSeen(sid, agent, ids) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
+    const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
     counts[k] = tally(t.items);
@@ -276,10 +283,36 @@
     pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
     const settle = () => pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1));
     // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
-    const undo = () => { settle(); const set = seenLocally.get(k); for (const i of ids) for (const tok of [...(set || [])]) if (tok.startsWith(`${i}@`)) set.delete(tok); const cur = threads.get(k); if (cur) cur.at = 0; load(sid, agent); };
+    const undo = () => {
+      settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
+      const cur = threads.get(k);
+      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(cur.items); changedEvent(); }
+      load(sid, agent);
+    };
     req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
       .catch(undo);
+  }
+  // Sending is explicit evidence that the owner has moved on from older finished replies.
+  // Do not consume mixed/amber/red/running groups, unknown dates, or work completed after the send.
+  function applySendSeen(sid, agent) {
+    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send) return;
+    const ids = [];
+    for (const g of groupsOf(threads.get(k)?.items || [])) {
+      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && i.at > 0 && i.at < send.at && (i.updated_at || i.at) <= send.at)) continue;
+      const tokens = g.members.map(i => `${i.id}@${i.updated_at}`);
+      if (tokens.some(t => send.attempted.has(t))) continue;
+      tokens.forEach(t => send.attempted.add(t)); ids.push(...g.ids);
+    }
+    if (ids.length) markSeen(sid, agent, ids);
+  }
+  function beforeSend(sid, agent = '', at = Date.now()) {
+    if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
+    const k = key(sid, agent), prior = sendCutoffs.get(k);
+    if (!prior || at > prior.at) sendCutoffs.set(k, { at, attempted: new Set() });
+    applySendSeen(sid, agent); // same-frame paint, before send-and-go can leave the thread
+    const t = threads.get(k); if (t && !t.loading) t.at = 0;
+    load(sid, agent); // also catch a ledger read that was still in flight at the send tap
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
@@ -315,14 +348,14 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
   let wasOn = on();
   function syncEnabled() {
     const enabled = on(); if (enabled === wasOn) return;
     wasOn = enabled;
     if (enabled) { countsAt = 0; loadCounts(true); }
-    else { openKeys.clear(); opened = null; }
+    else { openKeys.clear(); opened = null; sendCutoffs.clear(); }
     changedEvent({ enabled }); // Chats hydrates every currently open thread and refreshes Reply on both edges.
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) syncEnabled(); });
