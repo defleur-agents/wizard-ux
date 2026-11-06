@@ -1225,7 +1225,10 @@ export default function desktop(api) {
   api.listen(vtTog, 'click', toggleTabs);
   /** a tab: its app as the panel; the one in front again hides the panel (the desk stays open) */
   function pickVt(d) {
-    if (frontDesk() === d.desk) { if (pane) hidePanel(); else goHome(); return; }
+    // The chat docked beside the panel has the keyboard (a reply was just sent there): the panel's tab brings its app
+    // forward, never hides it out from under the pointer (James, 6 Nov 2026: "Messenger became unclickable").
+    const chatHasIt = !!pane && docked && Number(api.route().desk) !== d.desk;
+    if (frontDesk() === d.desk && !chatHasIt) { if (pane) hidePanel(); else goHome(); return; }
     if (d.id === CHATS) { closeAll(); api.nav.goDesk(d.desk); return; }
     goApp(d.id, d.desk);
   }
