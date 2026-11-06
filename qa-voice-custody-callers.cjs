@@ -71,6 +71,12 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const p=await ctx.newPage();if(fixture)p.setDefaultTimeout(12000);p.on('pageerror',e=>state.errors.push(String(e)));
   await p.goto((process.env.QA_LIVE_ORIGIN||'http://localhost:9481')+'/wizard-os-home/'+(desktop?'desktop.html':''));
   await p.waitForFunction(()=>!!(window.__wos||window.__wux)?.chats&&window.WosOutbox?.recoveryComplete);
+  if(fixture?.retainedTyped){
+   // Seed before opening a thread; recovery, not a stage event in a live panel,
+   // owns the retained-row scenario. Never share a context with fresh Send.
+   state.retainedId=await p.evaluate(async ({sid,model,text})=>{const it=await WosOutbox.stage({kind:'reply',sessionId:sid,model,provider:'',text});await WosOutbox.transition(it.id,'failed','No confirmed model route · choose a model before retrying');return it.id;},{sid,model:fixture.retainedTyped.model,text:fixture.retainedTyped.text});
+   await p.reload();await p.waitForFunction(id=>!!(window.__wos||window.__wux)?.chats&&WosOutbox?.recoveryComplete&&WosOutbox.get(id)?.state==='failed',state.retainedId);
+  }
   await p.evaluate(()=>WosModels.load());await p.waitForFunction(()=>window.WosModels?.snapshot()?.model);await sleep(250);
   if(fixture?.orb||fixture?.typedRoute)await p.evaluate(async()=>{await WosExperience.whenReady();await WosSkinHost.whenLayoutReady();await WosAgents.load();await WizLive.refreshAgents();});
   const wid=await p.evaluate(({sid,fixture})=>{const A=window.__wos||window.__wux;const existing=fixture&&Object.values(A.wins).find(w=>w.app==='chats');const w=existing||(A.openWin?A.openWin({app:'chats'}):null);const id=w?.id||Object.keys(A.wins).find(k=>A.wins[k].app==='chats');if(!id)throw Error('No chat window');if(!fixture)A.chats.openChat(id,sid);if(window.__wos)A.goDesk(A.desks.findIndex(d=>d.wins.includes(id)));A.focusWin?.(id);return id;},{sid,fixture:!!fixture});
