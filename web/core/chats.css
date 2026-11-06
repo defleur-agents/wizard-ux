@@ -698,8 +698,6 @@ body > .mviewer { position: fixed; z-index: 200; }
 
 /* Resumable upload progress (core/uploads.js): a thin bar along the chip's foot, a % on photo tiles. */
 /* Opinionated: Archive header selector for the auto-archive age. */
-.ch-working-sort { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px 6px; color: var(--wz-text-secondary, var(--ink-3)); font-size: 12px; }
-.ch-working-sort select { font: inherit; max-width: 55%; color: var(--wz-text, var(--ink)); background: var(--wz-surface, #202432); border: 1px solid var(--wz-border, var(--line-2)); border-radius: 8px; padding: 4px 8px; }
 .ch-arch-sel { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 12px 10px; font-size: 12.5px; color: var(--ink-3); }
 .ch-arch-sel select { font: inherit; color: var(--ink); background: var(--glass); border: 1px solid var(--line-2); border-radius: 10px; padding: 4px 8px; }
 /* Opinionated: Compact list hides previews. */
