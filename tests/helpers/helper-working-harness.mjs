@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs';
 
 // Run the whole serving client, including normalize, refresh, PEND and sessionInfo.
 // Only expose existing closures; no copied lifecycle implementation in the fixture.
-export function helperWorkingHarness({ source, row, detail, agent = '' }) {
+export function helperWorkingHarness({ source, row, detail, agent = '', storage = new Map() }) {
   let now = Date.now(), current = structuredClone(row), detailValue = structuredClone(detail), detailWait = null, more = false;
-  const storage = new Map(), calls = [], timers = [];
+  const calls = [], timers = [];
   const context = {
     console, AbortSignal, URL, URLSearchParams,
     Date: class extends Date { static now() { return now; } },
