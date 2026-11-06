@@ -15,8 +15,8 @@ async function run(){
  try{
   for(const phone of [false,true]){
    const {c}=await closed.boot(phone,async c=>{
-    c.on('page',p=>{p.on('pageerror',e=>report.errors.push({phone,type:'pageerror',message:e.message}));p.on('console',m=>{if(m.type()==='error')report.errors.push({phone,type:'console',message:m.text()});});p.on('framenavigated',f=>{if(f===p.mainFrame())(report.navigations??=[]).push({phone,url:f.url()});});});
-    await c.addInitScript(phone=>{if(window!==top)return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
+    c.on('page',p=>{p.on('pageerror',e=>report.errors.push({phone,type:'pageerror',message:e.message,stack:e.stack,url:p.url(),frameUrls:p.frames().map(f=>f.url())}));p.on('console',m=>{if(m.type()==='error')report.errors.push({phone,type:'console',message:m.text()});});p.on('framenavigated',f=>{if(f===p.mainFrame())(report.navigations??=[]).push({phone,url:f.url()});});});
+    await c.addInitScript(phone=>{if(window!==top||!/^https?:$/.test(location.protocol))return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
     await c.route('http://wizard-qa.invalid/wizard/v1/apps',r=>r.fulfill({json:{apps:[{id:'messenger',name:'Messenger',url:'/titlebar-fixture/',source:'apps.json',type:'view',status:'running'}]}}));
     await c.route('http://wizard-qa.invalid/titlebar-fixture/**',r=>r.fulfill({contentType:'text/html; charset=utf-8',body:fixture}));
     await c.route('http://wizard-qa.invalid/titlebar-fixture.js',r=>r.fulfill({contentType:'text/javascript; charset=utf-8',body:appJS}));
@@ -26,7 +26,7 @@ async function run(){
    const p=closed.getPage();
    try{
     report.phase='fixture-boot-'+(phone?'phone':'desktop');
-    await p.waitForFunction(()=>window.WosExperience && document.documentElement.dataset.aiApps==='on');
+    await closed.waitForAiApps(p,phone);
     await p.evaluate(()=>WosExperience.whenReady());
     await p.waitForFunction(phone=>WizCore.apps(phone?'mobile':'desktop').APPS.some(a=>a.id==='messenger'&&a.url==='/titlebar-fixture/'),phone);
     const opened=await p.evaluate(phone=>{const app=WizCore.apps(phone?'mobile':'desktop').APPS.find(a=>a.id==='messenger');return phone?!!__wos.openApp(app):__wux.openApp(app.id);},phone);
@@ -36,9 +36,22 @@ async function run(){
     await closed.settle(p);
     if(!phone){assert.equal(await p.locator('.aad-ptools [data-tool="settings"]').count(),0,'cold header has no tools before app initialization');}
     report.phase='late-init-projection-'+(phone?'phone':'desktop');
-    await f.evaluate(()=>releaseTools());
+    assert.equal(await f.evaluate(()=>releaseTools()),true,'real SDK admitted late tool registration');
+    await p.waitForFunction(()=>{
+     const frame=document.querySelector('iframe[src*="/titlebar-fixture/"]');
+     return [...(frame?.closest('.win')?.querySelectorAll('.wbar > .wtools [data-tool]')||[])].map(n=>n.dataset.tool).join(',')==='qr,search,settings';
+    },null,{timeout:5000});
     const selector=phone?'.win .wbar > .wtools':'.aad-ptools';
-    await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().waitFor({state:'visible',timeout:5000});
+    try{await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().waitFor({state:'visible',timeout:5000});}
+    catch(e){
+     if(phone||e.name!=='TimeoutError')throw e;
+     const sourceTools=await p.locator('.win .wbar > .wtools [data-tool]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tool));
+     const projectedTools=await p.locator('.aad-ptools [data-tool]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tool));
+     assert.deepEqual(sourceTools,['qr','search','settings'],'SDK source must exist before classifying original defect');
+     if(projectedTools.length===0)report.defect={code:'late-header-tools-missing',sourceTools,projectedTools};
+     assert.deepEqual(projectedTools,['qr','search','settings'],'late header projection must contain registered tools');
+     throw e;
+    }
     await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().click();
     await f.waitForFunction(()=>calls.length===1);assert.deepEqual(await f.evaluate(()=>calls),['settings']);
     await f.locator('#synthetic-settings select').waitFor();
@@ -64,8 +77,9 @@ async function run(){
     assert.equal(await f.evaluate(()=>calls.length),1,'rerenders never invoke app action');
    }finally{await c.close();}
   }
+  assert.deepEqual(closed.report.unknown,[]);assert.deepEqual(closed.report.refusedWrites,[]);assert.deepEqual(closed.report.errors,[]);
   report.pass=true;
- }catch(e){report.error=e.stack;throw e;}
+ }catch(e){report.error=e.stack;report.errorName=e.name;report.errorCode=e.code;throw e;}
  finally{await browser.close();report.transport=closed.report;fs.writeFileSync(path.join(OUT,'titlebar-report.json'),JSON.stringify(report,null,2));}
 }
 run().catch(e=>{console.error(e);process.exitCode=1});

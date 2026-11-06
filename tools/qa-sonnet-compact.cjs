@@ -15,14 +15,14 @@ const report={synthetic:true,source:process.env.QA_SOURCE_SHA,cases:[],captures:
   for(const phone of [false,true]){
    const kind=phone?'phone':'desktop',root=phone?'__wos':'__wux';report.phase=kind+'-boot';
    const {c}=await closed.boot(phone,async c=>{
-    c.on('page',p=>{p.on('pageerror',e=>report.errors.push({kind,error:e.message}));});
-    await c.addInitScript(phone=>{if(window!==top)return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
+    c.on('page',p=>{p.on('pageerror',e=>report.errors.push({kind,error:e.message,stack:e.stack,url:p.url(),frameUrls:p.frames().map(f=>f.url())}));});
+    await c.addInitScript(phone=>{if(window!==top||!/^https?:$/.test(location.protocol))return;localStorage.setItem(phone?'wos.mobile-view.v1':'wos.desktop-view.v1','ai-apps');},phone);
     await c.route('http://wizard-qa.invalid/wizard/hermes/api/model/options',r=>r.fulfill({json:catalog}));
     await c.route('http://wizard-qa.invalid/wizard-claude/api/accounts',r=>r.fulfill({json:{accounts:[{id:'synthetic-native',source:'native',status:'ready'}]}}));
    });
    const p=closed.getPage();
    try{
-    await p.waitForFunction(()=>window.WosExperience && document.documentElement.dataset.aiApps==='on');
+    await closed.waitForAiApps(p,phone);
     await p.evaluate(()=>WosExperience.whenReady());
     const wid=await p.evaluate(({phone,root})=>{const api=window[root];const app=WizCore.apps(phone?'mobile':'desktop').APPS.find(a=>a.id==='wizard');const admitted=phone?api.openApp(app):api.openApp(app.id);if(admitted===false)throw Error('Chats open refused');const w=Object.values(api.wins).find(w=>w.app==='chats'&&!w.agent);if(!w)throw Error('No main Chats window');api.chats.openNewDraft(w.id,'');return w.id;},{phone,root});
     await p.waitForFunction(()=>WosModels.ready&&WosModels.defaultOption()?.value==='gpt-6.1-sol');

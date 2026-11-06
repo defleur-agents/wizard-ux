@@ -22,6 +22,22 @@ async function settle(p) {
   await p.waitForFunction(() => !document.getAnimations().some(a => a.playState === 'running' && Number.isFinite(a.effect?.getComputedTiming().endTime)), null, { timeout: 9000 });
   await p.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
 }
+async function bootDiagnostic(p, phone) {
+  const state = await p.evaluate(() => ({ location: location.href, experience: typeof window.WosExperience,
+    shell: document.documentElement.dataset.shell, aiApps: document.documentElement.dataset.aiApps }));
+  (report.bootDiagnostics ??= []).push({ phone, ...state, frameUrls: p.frames().map(f => f.url()), pageErrors: [...report.errors] });
+}
+async function waitForAiApps(p, phone) {
+  try {
+    await p.waitForFunction(phone => !!window.WosExperience &&
+      document.documentElement.dataset.shell === (phone ? 'phone' : 'desktop') &&
+      document.documentElement.dataset.aiApps === (phone ? 'on' : 'desktop'), phone, { timeout: 10000 });
+    await bootDiagnostic(p, phone);
+  } catch (e) {
+    try { await bootDiagnostic(p, phone); } catch (diagnosticError) { e.diagnosticError = String(diagnosticError); }
+    throw e;
+  }
+}
 async function snap(name, phone) {
   await settle(page); const file = path.join(OUT, name + '.png');
   const state = await page.evaluate(() => ({ shell: document.documentElement.dataset.shell, skin: document.documentElement.dataset.skin,
@@ -47,7 +63,7 @@ async function boot(phone, configure, evidenceSink = null) {
   require('node:vm').runInNewContext(fs.readFileSync(path.join(TREE, 'web/core/launcher-defaults.js'), 'utf8'), launcherContext);
   const launcherDefaults = JSON.parse(JSON.stringify(launcherContext.window.WizLauncherDefaults));
   await c.addInitScript(phone => {
-    if (window !== window.top) return;
+    if (window !== window.top || !/^https?:$/.test(location.protocol)) return;
     for (const [k, v] of Object.entries({ 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': 'nebula', 'wux.shell': phone ? 'phone' : 'desktop' })) localStorage.setItem(k, v);
   }, phone);
   // Exact read contracts from this tree's consumers; no catch-all owner/API fallback.
@@ -57,6 +73,8 @@ async function boot(phone, configure, evidenceSink = null) {
     ['/wizard/v1/app-bindings', { bindings: [] }],
     // notif-bell.js getFeed: synthetic Recorder has no pending inbox items.
     ['/mizel/api/inbox', { inbox: 1, items: [] }],
+    // notif-bell.js getFeed v1; synthetic Messenger has no accounts/messages/items.
+    ['/messenger/api/inbox', { inbox: 1, items: [] }],
     // app-setup/store-router: this synthetic app declares no model/service requirements.
     ['/wizard-os-home/store-data/router/v1/needs/mizel', { app_id: 'mizel', models: [], services: [], ready_to_open: true }],
     ['/wizard/v1/skins', { skins: [], active: null }],
@@ -134,13 +152,18 @@ async function boot(phone, configure, evidenceSink = null) {
     report.unknown.push({ method, path: p + u.search }); return json(r, { error: 'uncatalogued synthetic request' }, 451);
   });
   if (configure) await configure(c);
-  page = await c.newPage(); page.on('pageerror', e => report.errors.push(String(e)));
+  page = await c.newPage(); page.on('pageerror', e => report.errors.push({ message: e.message, stack: e.stack, url: page.url(), frameUrls: page.frames().map(f => f.url()) }));
   await page.clock.install({ time: new Date(FIXTURE_NOW) });
   await page.goto(origin + PREFIX + (phone ? '' : 'desktop.html') + '?shell=' + (phone ? 'phone' : 'desktop') + '&view=chats');
-  await page.waitForFunction(() => window.WizLive?.ok && document.documentElement.dataset.shell &&
-    window.WosWelcome?.log.some(x => x === 'deeplink' || x === 'boot:true:done:false'));
+  try {
+    await page.waitForFunction(() => window.WizLive?.ok && document.documentElement.dataset.shell &&
+      window.WosWelcome?.log.some(x => x === 'deeplink' || x === 'boot:true:done:false'), null, { timeout: 10000 });
+  } catch (e) {
+    try { await bootDiagnostic(page, phone); } catch (diagnosticError) { e.diagnosticError = String(diagnosticError); }
+    throw e;
+  }
   assert.equal(await page.evaluate(() => WosWelcome.active || !!document.getElementById('wosWelcome')), false, 'established owner boot must not show Welcome');
   assert.equal(await page.evaluate(() => WosSkin.current), 'nebula', 'initial real palette applied');
   return { c, s, at };
 }
-module.exports = { boot, settle, report, setBrowser: b => { browser = b; }, getPage: () => page };
+module.exports = { boot, settle, waitForAiApps, bootDiagnostic, report, setBrowser: b => { browser = b; }, getPage: () => page };
