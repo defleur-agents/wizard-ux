@@ -80,3 +80,18 @@ for(const storage of ['QuotaExceededError','UnknownError'])test('native meeting 
   assert.equal(f.s.noLocal,true);assert.equal(f.s.phase,'stopped');assert.equal(f.mic,false);assert.equal(f.lock,false);
   assert.ok(warns.some(w=>/Recording continues/.test(w)));
 });
+// James, 6 Nov 2026: pressing the orb during a Mizel meeting failed with "On-device audio storage timed out".
+// The phone's backup store must not block the orb's microphone loan or its return.
+test('orb borrows and returns a native meeting mic when phone storage fails',async()=>{
+  const f=fixture({instant:false,storage:'UnknownError'});
+  load('  function beginVoiceBorrow(', '  function deviceAdapter(',f.c);
+  const calls=[];
+  f.c.W={WizardOSDevice:{recHandoffVersion:()=>1,recStartBorrowed(){},
+    recHandoffBegin:(id,m)=>{calls.push('begin');return JSON.stringify({status:'paused',open:true,id,meetingId:m});},
+    recHandoffEnd:id=>{calls.push('end');return JSON.stringify({id,open:false,status:'recording',pausedByHandoff:true});}}};
+  Object.assign(f.s.row,{native:'wizard-meetings',pcm:true,meta:{meetingId:'m1'}});f.s.meetingNative=true;f.s.phase='recording';
+  const b=await f.c.beginVoiceBorrow('handoff-0001');
+  assert.equal(b.micReleased,true);assert.equal(f.s.phase,'handoff');assert.equal(f.s.noLocal,true);
+  const m=await f.c.endVoiceBorrow('handoff-0001',{status:'captured'});
+  assert.equal(m.resumeStatus,'recording');assert.equal(f.s.phase,'recording');assert.deepEqual(calls,['begin','end']);
+});
