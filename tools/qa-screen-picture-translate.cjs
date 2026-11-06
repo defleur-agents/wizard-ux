@@ -55,15 +55,17 @@ const check = (name, ok) => { record.checks.push({name, ok:!!ok}); console.log((
           }
         };
         if (version === 'baseline') {
-          await waitFor(() => /Already in English/.test(S.peek().pill || ''));
+          await waitFor(() => /Already\s+in\s+English/.test(S.peek().pill || ''));
           const calls=await page.evaluate(() => window.__calls);
           check('baseline '+skin+': false English verdict bypasses vision',!calls.some(c=>c.kind==='picture'));
+          await page.screenshot({path:path.join(out,version+'-'+skin+'.png')});
+          record.screenshots.push(version+'-'+skin+'.png');
         } else {
           await waitFor(() => S.peek().trans?.text?.includes("I'm heading to battle"));
           let state=await page.evaluate(() => S.peek());
           check('candidate '+skin+': Thai meme extracted',state.pic.some(t=>/[\u0e00-\u0e7f]/.test(t)));
           check('candidate '+skin+': actual recorded English translations visible',state.trans.text.includes('Are there any girls?') && state.sheet && /Thai/.test(state.pill));
-          check('candidate '+skin+': not false English verdict',!/Already in English/.test(state.pill));
+          check('candidate '+skin+': not false English verdict',!/Already\s+in\s+English/.test(state.pill));
           const before=state.trans.text;
           await page.evaluate(() => document.documentElement.style.setProperty('--wz-panel','#203428'));
           state=await page.evaluate(() => S.peek());

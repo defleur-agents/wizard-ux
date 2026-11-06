@@ -13,6 +13,15 @@ function bridge() {
   setup({jpeg: '', read: {lines: []}, mapping: {'ข้าจะไปออกรบ': "I'm heading to battle"}, chromeLabels: ['Copy translation','Select text','Ask Wizard']});
   return {translate: context.window.ScreenNative.translate, replies};
 }
+test('verdict matchers accept the real multiline pill and reject unrelated verdicts', () => {
+  const patterns = [...text.matchAll(/\/(Already[^/]+)\//g)].map(m => new RegExp(m[1]));
+  assert.equal(patterns.length, 2, 'baseline and candidate use the same whitespace-tolerant verdict');
+  for (const pattern of patterns) {
+    assert.ok(pattern.test('Already in\nEnglish\n▾'));
+    assert.ok(pattern.test('Already in English'));
+    assert.ok(!pattern.test('Thai → English'));
+  }
+});
 test('synthetic English chrome returns identity, without inventing inference', () => {
   const h = bridge(); h.translate('1', JSON.stringify(['Copy translation','Select text','Ask Wizard']), 'English');
   assert.equal(JSON.stringify(h.replies[0].items), JSON.stringify(['Copy translation','Select text','Ask Wizard']));
