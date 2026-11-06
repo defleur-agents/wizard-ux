@@ -9,6 +9,7 @@ permissions:
 # Ubuntu hosted images already include Chromium runtime libraries and fonts.
 # Install only the headless shell: --with-deps re-downloads optional fonts from
 # Azure's apt mirror and can exhaust the job timeout before any QA starts.
+# chromium.launch({headless: true}) uses this shell; all QA/artifact steps stay mandatory.
 jobs:
   chat-rename:
     runs-on: ubuntu-24.04
