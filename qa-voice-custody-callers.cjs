@@ -49,7 +49,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
    if(p.endsWith('/api/sessions'))return state.listDown?json({error:'offline'},503):json({sessions:state.emptyList?[]:(fixture?fixture.sessions.filter(s=>(s.agent||'')===(u.searchParams.get('agent')||'')):sessions),has_more:false});
    if(p.endsWith('/api/jobs'))return json({jobs:[]});
    if(p.endsWith('/v1/runs'))return json({runs:[]});
-   if(p.endsWith('/api/model/options'))return json({model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
+   if(p.endsWith('/api/model/options'))return json(fixture?.modelOptions||{model,provider,providers:[{slug:provider,name:'QA provider',authenticated:true,is_current:true,models:[model]}]});
    if(p.endsWith('/agents'))return json({agents:fixture?.agents||[{id:'hermes',label:'Wizard',is_default:true,status:'running',model:{model,provider}},{id:'research',label:'Research',status:'running',model:{model,provider}}]});
    if(p.includes('/thread-seen'))return json({seen:{}});
    if(p.endsWith('/resources'))return json({resources:[]});
@@ -81,6 +81,7 @@ function ok(v,name,detail){results.push({name,pass:!!v,detail});console.log(`${v
   const done=async name=>{ok(!state.errors.length,`${name}: no browser errors`,state.errors);await ctx.close();};
   return {ctx,p,state,wid,take,rows,done};
  }
+ if(process.env.QA_TYPED_ROUTE_ONLY==='1'){await require('./qa-typed-send-route-retry.cjs')({boot,ok,sleep,sid,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,synthetic:true,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_ORB_ONLY==='1'){await require('./qa-desktop-orb-thread-pin.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_DISMISS_ONLY==='1'){await require('./qa-failed-send-dismiss.cjs')({boot,ok,sleep,sid,model,provider,out,browser});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,smoke:process.env.QA_DISMISS_SMOKE==='1',results},null,2));if(results.some(x=>!x.pass))process.exitCode=1;return;}
  if(process.env.QA_PARITY_ONLY==='1'){await require('./qa-responsive-remainder.cjs')({boot,ok,sleep,sid,model,provider,out});await browser.close();fs.writeFileSync(path.join(out,'receipt.json'),JSON.stringify({source:root,results},null,2));console.log(`${results.filter(x=>x.pass).length} passed, ${results.filter(x=>!x.pass).length} failed`);if(results.some(x=>!x.pass))process.exitCode=1;return;}
