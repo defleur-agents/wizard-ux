@@ -989,7 +989,16 @@ export default function desktop(api) {
     const p = press; press = null; if (!p) return; p.cancel?.(); p.target.classList.remove('is-pressed'); if (p.target === orbBtn) eng?.press?.(false);
     if (!run || p.moved) return;
     if (p.held) p.started.then(r => { if (r === 'voice') api.voice.command(); });
-    else api.voice.talk();
+    else talkFromOrb();
+  }
+  // The orb is visually docked in the Chats composer, but lives outside its window.
+  // A companion pane can own keyboard focus: reply to the composer, not that pane.
+  function talkFromOrb() {
+    if ((api.voice.state()?.state || 'idle') !== 'idle') return api.voice.talk();
+    const wid = orbComposer()?.closest('[data-chats]')?.dataset.chats;
+    const w = wid && host?.windows().find(w => w.id === wid && w.kind === 'chats');
+    if (w?.thread && w.thread !== '__new__') return api.voice.reply(w.id, w.thread);
+    return api.voice.talk();
   }
   api.listen(orbBtn, 'pointerdown', e => { if (!e.button) down(e, orbBtn, { drag: true }); });
   api.listen(orbBtn, 'pointermove', move);
@@ -999,14 +1008,17 @@ export default function desktop(api) {
    * orb talks on Enter; on Space only when Tab put it there (:focus-visible). Wizard's voice key stays ⌥Space. */
   api.listen(orbBtn, 'mousedown', e => e.preventDefault());
   const tabbed = n => { try { return n.matches(':focus-visible'); } catch (_) { return false; } };
-  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || (e.key === ' ' && tabbed(orbBtn))) { e.preventDefault(); if (!e.repeat) api.voice.talk(); } });
+  api.listen(orbBtn, 'keydown', e => { if (e.key === 'Enter' || (e.key === ' ' && tabbed(orbBtn))) { e.preventDefault(); if (!e.repeat) talkFromOrb(); } });
   api.listen(orbBtn, 'contextmenu', e => e.preventDefault());
   /* the composer (round 6, Miguel: the orb replaces the microphone): the orb sits INSIDE it, in the slot where the mic
    * was (desktop.css: the grid's 'orb' column, right, before the round Send that shows with words); off a chat, back to
    * its own spot at the bottom centre of the main area (or the end of an app's bottom row: skin-host via chrome) */
-  function orbSlot() {
+  function orbComposer() {
     if (root.dataset.aiFront === 'list') return null;   // (round 13: Home, a chat and an app tab all float the composer)
-    const c = [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0);
+    return [...doc.querySelectorAll('.win .dchats .pane-main .ch-compose')].find(n => n.getClientRects().length && n.getBoundingClientRect().width > 0) || null;
+  }
+  function orbSlot() {
+    const c = orbComposer();
     const row = c?.querySelector('.ch-row2');
     return row ? gridSlot(row, 3) : null;
   }

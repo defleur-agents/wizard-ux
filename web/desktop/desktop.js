@@ -2986,7 +2986,14 @@
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
     voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
-    talk: () => VOICE.state === 'idle' ? talkNew('Click the orb') : talk('send'),
+    recordReply: (wid, sid) => {
+      // Layouts may name only a genuine Chats composer, never an app's thread-like metadata.
+      const w = W[wid];
+      if (!w || !(w.app === 'chats' || CHATS.isHosted(wid)) || w.thread !== sid) return 'busy';
+      return recordReply(wid, sid);
+    },
+    // Existing Chats owns ordinary voice; explicit new-voice keeps its separate action.
+    talk: () => { if (VOICE.state !== 'idle') return talk('send'); const f = focused(); return (f?.app === 'chats' || CHATS.isHosted(f?.id)) && f?.thread && f.thread !== '__new__' ? talk() : talkNew('Click the orb'); },
     voiceTap: () => talk('send'),
     voiceCancel: () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'),
     command: () => commandVoice(),
