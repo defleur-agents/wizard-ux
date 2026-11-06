@@ -316,7 +316,48 @@
     tweakOpts.set(id, node); for (const m of mounts) m.render();
     return () => { if (tweakOpts.get(id) === node) { tweakOpts.delete(id); node.remove?.(); for (const m of mounts) m.render(); } };
   }
-  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
+  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); paintTweakCards(); });
+  /* A chat reply can carry a tweak (marker WIZARD_TWEAK_V1, core/chat-kit.js tweakIds): Look's own switch row above, bound
+   * to WosExperience. A message is history, so the card always shows the tweak's CURRENT state, never the state when it
+   * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
+   * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
+  const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
+  function tweakCardRows(list) {
+    const E = window.WosExperience, s = E?.state;
+    if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
+    const name = who => (authorList || []).find(a => a.id === who)?.name || who;
+    return list.map(id => {
+      const t = s?.tweaks.find(x => x.id === id);
+      if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
+      const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
+      const on = cardPending.has(id) ? cardPending.get(id) : t.on;
+      return tweakSwitches([{ ...t, on, where: here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here, name);
+    }).join('');
+  }
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
+  function tweakCard(ids) {
+    const list = cardIds(ids); if (!list.length) return '';
+    return `<div class="ch-tweak" data-chat-tweak-card="${esc(list.join(' '))}" role="group" aria-label="${list.length > 1 ? 'Tweaks' : 'Tweak'}">${tweakCardRows(list)}</div>`;
+  }
+  function paintTweakCards() {
+    for (const n of document.querySelectorAll?.('[data-chat-tweak-card]') || []) {
+      const rows = tweakCardRows(cardIds(n.dataset.chatTweakCard)); if (n.__wosRows === rows) continue;
+      const focused = n.contains(document.activeElement) ? document.activeElement.dataset?.chatTweak : '';
+      n.innerHTML = rows; n.__wosRows = rows;
+      if (focused) [...n.querySelectorAll('[data-chat-tweak]')].find(x => x.dataset.chatTweak === focused)?.focus({ preventScroll: true });
+    }
+  }
+  function tweakCardTap(btn, toast) {
+    const id = btn.dataset.chatTweak, E = window.WosExperience;
+    if (!id || !E || btn.disabled || cardPending.has(id)) return false;
+    const was = btn.getAttribute('aria-checked') === 'true';
+    cardPending.set(id, !was);
+    btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
+    paintTweakCards(); // every other card naming it, the same frame
+    const done = () => { cardPending.delete(id); paintTweakCards(); };
+    Promise.resolve().then(() => E.toggle(id)).then(done, e => { done(); toast?.('!', e?.message || 'Couldn’t change that tweak'); });
+    return true;
+  }
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
@@ -907,5 +948,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, tweakCard, tweakCardTap, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

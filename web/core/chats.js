@@ -1677,7 +1677,9 @@ window.WizCore.chats = function createChats(H) {
       const open = !!lead && (c.rsum?.get(String(bAt)) ?? summaryStartsOpen());
       const shown = lead ? `<button type="button" class="rsum" data-reply-summary="${rk}" aria-expanded="false"${open ? ' hidden' : ''}><span class="rsum-t">${esc(leadText(lead))}</span>${CHEV_SVG}</button>`
         + `<div class="rdet" data-reply-details="${rk}"${open ? '' : ' hidden'}><div class="rtools"><button type="button" class="rcog" data-reply-length aria-label="Short answer length" title="Short answer length">${COG_SVG}</button><button type="button" class="rless" data-reply-summary="${rk}" aria-expanded="true">Show less${CHEV_SVG}</button></div>${body}</div>` : body;
-      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt)}><div class="bub">${shown}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
+      // A tweak the reply carries (WIZARD_TWEAK_V1): Settings' own switch row, live state (core/settings.js tweakCard).
+      const tweak = tn.a?.tweaks?.length ? window.WosSettings?.tweakCard?.(tn.a.tweaks) || '' : '';
+      h += `<div class="msg a${lead ? ` has-rsum${open ? ' rsum-open' : ''}` : ''}"${isFinite(bAt) ? ` data-boom-at="${bAt}" data-morph-key="a${bAt}"` : ''}${msgIds(tn.a, bAt)}><div class="bub">${shown}${tweak}${mediaBlock(c, tn.media.filter(m => !placed.has(m.id)))}</div>`
         + `<div class="mmeta">${timeTag(tn.a?.at ?? tn.mediaAt)}${k >= 0 ? `<button type="button" data-mcopy="${k}" aria-label="Copy response">${COPY_SVG}Copy</button><button type="button" data-mshare="${k}" aria-label="Share response">${SHARE_SVG}Share</button>` : ''}${quoteBtn()}${k >= 0 && last && !working && regenOn() ? '<button type="button" data-mregen aria-label="Regenerate response">↻ Regenerate</button>' : ''}</div></div>`;
     }
     return h;
@@ -2112,8 +2114,9 @@ window.WizCore.chats = function createChats(H) {
   const assistantStamp = turns => { const a = (turns || []).findLast(t => t.a && t.a.final !== false)?.a; return a ? JSON.stringify([a.at, a.text]) : ''; };
   // Hide protocol trailers even when their opening marker spans token chunks.
   const streamAnswer = value => {
-    let s = String(value || '');
-    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '<helm_attachments>'];
+    // A whole tweak card is mid-reply (its own line): drop it and keep streaming; a half-typed one is cut below.
+    let s = String(value || '').replace(/\n*[ \t]*\[WIZARD_TWEAK_V1\][\s\S]*?\[\/WIZARD_TWEAK_V1\][ \t]*\n*/g, '\n\n');
+    const markers = ['[WIZARD_STATUS_V1]', '[WIZARD_CLOSE_AND_FILE_V1]', '[WIZARD_FILES_V1]', '[WIZARD_FILE_CHIPS_V1]', '[WIZARD_IMAGE_INTENT_V1]', '[WIZARD_TWEAK_V1]', '<helm_attachments>'];
     for (const marker of markers) {
       const at = s.indexOf(marker); if (at >= 0) s = s.slice(0, at);
       for (let n = 1; n < marker.length; n++) if (s.endsWith(marker.slice(0, n))) { s = s.slice(0, -n); break; }
@@ -3150,6 +3153,8 @@ window.WizCore.chats = function createChats(H) {
     if (e.target.closest('[data-incog-start]')) { const w = W[id]; if (!w || w.thread !== '__new__') return true; if (H.captureBusy?.()) { renderChats(w); toast('!', 'Finish recording before starting Incognito', 2600); return true; } const c = ch(id), agentId = winAgent(w) || c.newModel?.agent; const a = AGS()?.get(agentId); if (window.WizCore.incognitoOptIn?.enabled(a)) { saveDraft(id); void INC?.start(id, a); } return true; }
     if (e.target.closest('[data-chtroubleshoot]')) { window.WizReach?.open(); return true; }
     const w = H.win(id); if (!w) return false;
+    // A tweak card's switch: flips on this frame, Settings › Look's toggle underneath (core/settings.js tweakCardTap).
+    const twk = e.target.closest('[data-chat-tweak]'); if (twk) { window.WosSettings?.tweakCardTap?.(twk, (i, t) => toast(i, t, 2400)); return true; }
     // Thread tracker: the strip's own taps, Reply on a message, and the quote header's jump (all inert with the tweak off).
     if (globalThis.WosThreadTracker?.on()) {
       const resume = text => resumeTracked(id, w, text);
