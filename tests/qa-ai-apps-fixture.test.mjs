@@ -7,11 +7,12 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
+import os from 'node:os';
 const require = createRequire(import.meta.url);
 const source = readFileSync(new URL('../tools/qa-closed-shell.cjs', import.meta.url), 'utf8');
 function load() {
   const module = { exports: {} };
-  vm.runInNewContext(source, { module, __dirname: path.resolve('tools'), process: { env: { QA_TREE: process.cwd(), QA_OUT: process.env.TMPDIR } }, console, URL,
+  vm.runInNewContext(source, { module, __dirname: path.resolve('tools'), process: { env: { QA_TREE: process.cwd(), QA_OUT: process.env.TMPDIR || os.tmpdir() } }, console, URL,
     require: name => name === './qa-playwright.cjs' ? { devices: { 'Pixel 7': {} } } : require(name) });
   return module.exports;
 }
