@@ -81,7 +81,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/layout back.push s
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
-| Links: outside → Browser Reader, sheet/window, long-press menu; `data-wizard-browse` = original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
+| Links: outside → Browser Reader (never Wizard's own hosts; Reader-failed hosts open direct), sheet/window, long-press menu; `data-wizard-browse` = original, `="auto"` = Reader hand-off | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |
