@@ -42,7 +42,7 @@ test('Reader route rejects an outside-origin app registration',()=>{const f=fixt
 // James, 7 Nov 2026: Wizard's own pages never go into Reader, and a page Reader cannot read never needs a second tap.
 const tick=()=>new Promise(r=>setTimeout(r,5));
 const READER=href=>['window','/browser/?url='+encodeURIComponent(href)];
-for(const href of ['https://wizard.aiwizards.com/clips-pipeline/#/clip/pod-2026-09-25-03-agency-small-wins','https://wizard.tailc0f369.ts.net/notes/','https://private.wizard001.com/apps/','https://wizard.example:8443/wizard-os-home/','http://192.168.1.20/','http://localhost:3000/','http://nas/'])
+for(const href of ['https://wizard.aiwizards.com/clips-pipeline/#/clip/pod-2026-09-25-03-agency-small-wins','https://wizard.example-tailnet.ts.net/notes/','https://private.wizard001.com/apps/','https://wizard.example:8443/wizard-os-home/','http://192.168.1.20/','http://localhost:3000/','http://nas/'])
  test('Wizard own or private host opens as before Reader, never in Reader: '+new URL(href).host,()=>{const f=fixture();f.click(f.chat,href);assert.deepEqual(f.calls,[['browser',href]]);});
 test('the configured Wizard base URL host never goes into Reader',()=>{const f=fixture({config:{settings:{network:{base_url:'https://box.owner-wizard.example/'}}}});f.click(f.chat,'https://box.owner-wizard.example/clips/');assert.deepEqual(f.calls,[['browser','https://box.owner-wizard.example/clips/']]);});
 test('Wizard own host on the phone uses the native browser bridge, not Reader',()=>{const f=fixture({native:true});f.click(f.chat,'https://wizard.aiwizards.com/clips-pipeline/');assert.deepEqual(f.calls,[['native-browser','https://wizard.aiwizards.com/clips-pipeline/']]);});
