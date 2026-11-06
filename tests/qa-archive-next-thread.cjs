@@ -8,7 +8,9 @@ const repo = path.resolve(__dirname, '..'), origin = process.env.QA_ORIGIN || 'h
 const web = process.env.QA_WEB || path.join(repo, 'web'), out = process.env.QA_OUT || path.join(repo, 'archive-next-evidence');
 fs.mkdirSync(out, { recursive: true });
 const report = { origin, web, cases: [] }, now = Date.now();
-const profiles = [ ['phone', 'classic'], ['desktop', 'classic'], ['desktop', 'ai-apps'] ];
+// The phone "After actions" setting (Stay on this chat / Back to chats list, #1068) never changes Archive: run phone on both.
+const profiles = [ ['phone', 'classic', 'stay'], ['phone', 'classic', 'list'], ['desktop', 'classic', 'stay'], ['desktop', 'ai-apps', 'stay'] ];
+const EXPECTED_CASES = 42;
 const snapshot = () => {
   const h = window.__wux || window.__wos;
   return { threads: Object.values(h.wins).filter(w => w.app === 'chats' && w.thread).map(w => w.thread), titles: [...document.querySelectorAll('.ch-thread .ti')].filter(n => n.getClientRects().length).map(n => n.textContent) };
@@ -16,10 +18,11 @@ const snapshot = () => {
 (async () => {
   const browser = await chromium.launch();
   try {
-    for (const [shell, layout] of profiles) for (const skin of ['nebula', 'sepia']) {
+    for (const [shell, layout, after] of profiles) for (const skin of ['nebula', 'sepia']) {
       const phone = shell === 'phone';
-      for (const scenario of ['middle', 'last', 'only', 'nonopen', ...(layout === 'classic' ? ['filter', 'space'] : ['keyboard'])]) {
-        const stem = `${shell}-${layout}-${skin}-${scenario}`, entry = { stem, errors: [], refused: [], writes: [], checks: [] };
+      const scenarios = after === 'list' ? ['middle', 'last', 'only', 'nonopen'] : ['middle', 'last', 'only', 'nonopen', ...(layout === 'classic' ? ['filter', 'space'] : ['keyboard'])];
+      for (const scenario of scenarios) {
+        const stem = `${shell}-${layout}${phone ? '-' + after : ''}-${skin}-${scenario}`, entry = { stem, errors: [], refused: [], writes: [], checks: [] };
         report.cases.push(entry);
         const context = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1440, height: 960 }, isMobile: phone, hasTouch: phone, serviceWorkers: 'block', ...(phone ? { userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Mobile Safari/537.36' } : {}) });
         const names = scenario === 'only' ? ['middle'] : ['north', 'middle', 'south'];
@@ -27,10 +30,10 @@ const snapshot = () => {
         let archiveSettled = false;
         try {
           await context.routeWebSocket('**/*', w => w.close());
-          await context.addInitScript(({ shell, layout, skin }) => {
+          await context.addInitScript(({ shell, layout, skin, after }) => {
             if (window !== top) return;
-            for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.desktop-view.v1': layout, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin })) localStorage.setItem(k, v);
-          }, { shell, layout, skin });
+            for (const [k, v] of Object.entries({ 'wos.shell': shell, 'wos.desktop-view.v1': layout, 'wos.coached': 'true', 'wos.tour.v1': 'true', 'wos.welcome.v1': 'done', 'wos.skin': skin, 'wos.chats.afterAction.v1': after })) localStorage.setItem(k, v);
+          }, { shell, layout, skin, after });
           await context.route('**/*', async r => {
             const q = r.request(), u = new URL(q.url()), method = q.method(), p = u.pathname;
             if (u.origin !== origin) { entry.refused.push({ method, url: q.url(), reason: 'external' }); return r.abort(); }
@@ -52,7 +55,7 @@ const snapshot = () => {
               if (fs.existsSync(abs) && fs.statSync(abs).isFile()) return r.fulfill({ path: abs });
               return r.fulfill({ status: 404, body: 'No synthetic static asset' });
             }
-            if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true }, spaces: [{ id: 'qa-space', name: 'Synthetic space', threads: ['qa-middle', 'qa-south'] }] } });
+            if (p === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true }, chatAfterAction: after, spaces: [{ id: 'qa-space', name: 'Synthetic space', threads: ['qa-middle', 'qa-south'] }] } });
             if (p === '/wizard/hermes/api/sessions') return r.fulfill({ json: { data: rows, has_more: false } });
             const match = /^\/wizard\/hermes\/api\/sessions\/(qa-(?:north|middle|south))(\/messages)?$/.exec(p);
             if (match) return r.fulfill({ json: match[2] ? { messages: [{ role: 'user', content: 'Synthetic question', timestamp: now / 1000 }, { role: 'assistant', content: 'Answer for ' + match[1], timestamp: now / 1000 + 1 }] } : { session: rows.find(s => s.id === match[1]) } });
@@ -62,6 +65,7 @@ const snapshot = () => {
           await page.goto(origin + prefix + (phone ? 'index.html?phone' : 'desktop.html'));
           await page.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && !window.WosExperience?.state.busy);
           assert.equal(await page.evaluate(() => document.documentElement.dataset.shell), shell);
+          if (phone) assert.equal(await page.evaluate(() => window.WizConfig.chatAfterAction()), after, stem + ': phone After actions setting in force');
           if (layout === 'ai-apps') await page.waitForFunction(() => document.documentElement.dataset.aiApps === 'desktop');
           else await page.evaluate(phone => phone ? __wos.openSheet('inbox') : __wux.openChatsList(), phone);
           const rowSelector = layout === 'ai-apps' ? '.aad-rw[data-sid]' : '.ch-list [data-chopen]';
@@ -144,7 +148,7 @@ const snapshot = () => {
         finally { fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2)); await context.close(); }
       }
     }
-    assert.equal(report.cases.length, 34);
+    assert.equal(report.cases.length, EXPECTED_CASES);
   } finally { await browser.close(); }
   console.log(JSON.stringify({ cases: report.cases.length, passed: report.cases.filter(c => c.pass).length, screenshots: fs.readdirSync(out).filter(f => f.endsWith('.png')) }));
 })().catch(e => { console.error(e); process.exitCode = 1; });
