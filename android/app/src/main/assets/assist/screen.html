@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Wizard Screen</title>
 <style>
-  :root { --top: 24px; --bot: 0px; --acc: #b99bff; --ink: #f4f1ff; --mut: #a79fc4; --card: rgba(18, 14, 36, .97); --line: rgba(205, 190, 255, .16); --sel: rgba(150, 120, 255, .42); }
+  :root { --top: 24px; --bot: 0px; --acc: var(--wz-accent, #b99bff); --ink: var(--wz-ink, #f4f1ff); --mut: var(--wz-ink-secondary, #a79fc4); --card: var(--wz-panel, #120e24); --line: var(--wz-line, rgba(205, 190, 255, .16)); --sel: rgba(150, 120, 255, .42); }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; height: 100%; background: #07060f; color: var(--ink); font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; user-select: none; -webkit-user-select: none; }
   #shot { position: fixed; inset: 0; background: #07060f center / 100% 100% no-repeat; }
@@ -123,6 +123,7 @@
     o: null, mode: 'select', blocks: [], words: [], a: -1, f: -1,
     to: (() => { try { return localStorage.getItem('wizScreenTo') || 'English'; } catch (e) { return 'English'; } })(),
     tr: null, trFrom: '', trBusy: false, trPick: -1, showOrig: false, langsOpen: false,
+    trRun: 0, pictureState: '', pictureTranslation: null, pictureLines: null,
     pic: null, picSel: new Set(), panel: 'sel', trans: null, searching: false, big: false, seq: 0, pending: {},
   };
   if (!LANGS.includes(st.to)) st.to = 'English';
@@ -575,7 +576,7 @@
       if (st.mode === 'translate') {
         const bi = paintedAt(d.x, d.y);
         if (bi >= 0) { pickTranslated(bi); return; }
-        if (st.trPick >= 0) { st.trPick = -1; st.trans = null; markPicked(); syncSheet(); }
+        if (st.trPick >= 0 || st.panel === 'pic') { st.trPick = -1; st.panel = 'sel'; st.trans = null; markPicked(); syncSheet(); }
         return;
       }
       const w = wordAt(d.x, d.y, 24);
@@ -692,18 +693,41 @@
   }
   function setPill(html) { $('#pill').innerHTML = html; }
   function translateScreen() {
-    if (!st.words.length) { picture(true); return; }
+    ++st.trRun;
+    st.pictureTranslation = null; st.pictureState = ''; st.trans = null; st.panel = 'sel';
+    st.tr = null; st.trBusy = true; paint(); syncSheet();
     const idx = st.blocks.filter(b => b.wi.length && !notWords(blockText(b))).map(b => b.i);
-    if (!idx.length) { picture(true); return; }
-    st.tr = null; st.trBusy = true; paint();
-    const rid = id(); st.pending[rid] = { kind: 'screen', idx, to: st.to };
+    if (!idx.length) {
+      st.tr = {}; st.trBusy = false;
+      if (st.o.shot) picture(true);
+      else { st.pictureState = 'unavailable'; pillDone(); }
+      return;
+    }
+    const rid = id(); st.pending[rid] = { kind: 'screen', idx, to: st.to, run: st.trRun };
     setPill('<span class="spin"></span> Detecting language…');
     N.translate(rid, JSON.stringify(idx.map(i => blockText(st.blocks[i]))), st.to);
   }
   function pillDone() {
-    const n = st.tr ? Object.keys(st.tr).length : 0;
-    if (!n) setPill('Already in <b>' + esc(st.to) + '</b> ▾');
+    const n = (st.tr ? Object.keys(st.tr).length : 0) + (st.pictureTranslation ? st.pictureTranslation.count : 0);
+    if (st.pictureState === 'reading' || st.pictureState === 'translating') setPill('<span class="spin"></span> ' + (st.pictureState === 'reading' ? 'Reading picture text…' : 'Translating picture text…'));
+    else if (st.pictureState === 'error') setPill('Picture text failed · tap to retry');
+    else if (!n) setPill((st.o.shot ? 'No other language found' : st.words.length ? 'Readable text is in ' + esc(st.to) : 'No readable text') + ' ▾');
     else setPill(esc(st.trFrom || 'Detected') + ' → <b>' + esc(st.to) + '</b> ▾');
+  }
+  function missingPictureLines(lines) {
+    // Accessibility describes app chrome, not necessarily the pixels of a photo/canvas.
+    // Match only exact normalized lines: an English label cannot stand in for Thai image text.
+    const key = s => String(s).normalize('NFC').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    const known = new Set(st.blocks.flatMap(b => [blockText(b), ...blockText(b).split('\n')]).map(key));
+    const seen = new Set();
+    return lines.filter(t => { const k = key(t); if (!k || known.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+  }
+  function invalidTranslation(r, items) {
+    return r.error || !Array.isArray(r.items) || r.items.length !== items.length
+      || r.items.some(t => typeof t !== 'string' || !t.trim())
+      || ('foreign' in r && (!Array.isArray(r.foreign) || r.foreign.length !== items.length || r.foreign.some(f => typeof f !== 'boolean')))
+      // An unchanged Thai sentence is not evidence that the screen was English.
+      || (st.to === 'English' && r.items.some((t, i) => /[\u0e00-\u0e7f]/.test(items[i]) && t === items[i]));
   }
   /** The screenshot's pixels, to give each translation the background and ink of the text it covers. */
   function loadPixels(b64) {
@@ -791,13 +815,14 @@
     $('#orig').textContent = st.showOrig ? 'Translated' : 'Original';
   });
   $('#tCopy').addEventListener('click', () => {
-    const t = Object.keys(st.tr || {}).map(Number).sort((a, b) => a - b).map(i => st.tr[i]).join('\n');
+    const t = [...Object.keys(st.tr || {}).map(Number).sort((a, b) => a - b).map(i => st.tr[i]), st.pictureTranslation && st.pictureTranslation.text].filter(Boolean).join('\n');
     if (t) { N.copy(t); toast('Translation copied'); }
   });
   $('#tSel').addEventListener('click', () => { setMode('select'); shimmer(); });
   $('#tAsk').addEventListener('click', () => {
     const ks = Object.keys(st.tr || {}).map(Number).sort((a, b) => a - b);
-    const orig = ks.map(i => blockText(st.blocks[i])).join('\n'), en = ks.map(i => st.tr[i]).join('\n');
+    const orig = [...ks.map(i => blockText(st.blocks[i])), st.pictureTranslation && st.pictureTranslation.original].filter(Boolean).join('\n');
+    const en = [...ks.map(i => st.tr[i]), st.pictureTranslation && st.pictureTranslation.text].filter(Boolean).join('\n');
     if (orig) N.ask(orig + '\n\n' + st.to + ':\n' + en);
   });
   // language picker
@@ -807,7 +832,10 @@
     $('#langs').classList.toggle('show', on);
     syncSheet();
   }
-  $('#pill').addEventListener('click', () => openLangs(!st.langsOpen));
+  $('#pill').addEventListener('click', () => {
+    if (st.pictureState === 'error') { translateScreen(); return; }
+    openLangs(!st.langsOpen);
+  });
   $('#langs').addEventListener('click', e => {
     const b = e.target.closest('[data-lang]'); if (!b) return;
     const was = st.to; st.to = b.dataset.lang;
@@ -819,11 +847,14 @@
   /* ================= picture text (no text layer) ================= */
   function picture(thenTranslate) {
     if (!st.o || !st.o.shot) return;
-    st.panel = 'pic'; st.pic = null; st.picSel.clear(); st.trans = null;
+    st.pic = null; st.picSel.clear(); st.trans = null;
+    if (thenTranslate) { st.pictureState = 'reading'; pillDone(); }
+    else st.panel = 'pic';
     $('#pic').classList.add('on');
     syncSheet();
-    const rid = id(); st.pending[rid] = { kind: 'pic', thenTranslate: !!thenTranslate };
-    N.picture(rid);
+    const rid = id(); st.pending[rid] = { kind: 'pic', thenTranslate: !!thenTranslate, to: st.to, run: st.trRun };
+    if (thenTranslate && st.pictureLines !== null) window.S.pictured(rid, { lines: st.pictureLines });
+    else N.picture(rid);
   }
   $('#pic').addEventListener('click', () => {
     if (st.panel === 'pic') { st.panel = 'sel'; $('#pic').classList.remove('on'); st.trans = null; syncSheet(); return; }
@@ -926,25 +957,43 @@
     translated(rid, r) {
       const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
       if (p.kind === 'screen') {
-        if (p.to !== st.to) return; // a newer language was picked
+        if (p.to !== st.to || p.run !== st.trRun) return;
         st.trBusy = false;
-        if (r.error) { setPill('<span style="color:#ff9db3">' + esc(r.error) + '</span>'); return; }
+        if (invalidTranslation(r, p.idx.map(i => blockText(st.blocks[i])))) {
+          st.pictureState = 'error'; setPill('Translation failed · tap to retry'); return;
+        }
         st.tr = {};
         (r.items || []).forEach((t, k) => {
           const i = p.idx[k], foreign = Array.isArray(r.foreign) ? !!r.foreign[k] : t && t !== blockText(st.blocks[i]);
           if (st.blocks[i] && foreign && t) st.tr[i] = t;
         });
         st.trFrom = r.from || '';
-        pillDone(); paint();
+        paint();
         $('#orig').hidden = !Object.keys(st.tr).length;
-        if (!Object.keys(st.tr).length) toast('No foreign text on this screen');
+        // Native text can be only English app chrome while the photo contains Thai.
+        // Check the frozen image through the SAME existing private vision route before concluding.
+        if (st.o.shot) picture(true);
+        else { st.pictureState = 'unavailable'; pillDone(); }
         syncSheet();
         N.log('screen translated items=' + (r.items || []).length + ' foreign=' + Object.keys(st.tr).length + ' from=' + st.trFrom);
         return;
       }
       if (p.kind === 'pictr') {
-        if (r.error || !st.pic || st.pic.error) return;
-        st.pic = (r.items || []).map((t, i) => t || st.pic[i]); syncSheet(); return;
+        if (p.to !== st.to || p.run !== st.trRun) return;
+        if (invalidTranslation(r, p.items)) {
+          st.pictureState = 'error'; st.trans = { error: r.error || 'Could not translate picture text. Tap above to retry.' };
+          pillDone(); syncSheet(); return;
+        }
+        const changed = r.items.map((t, i) => Array.isArray(r.foreign) ? !!r.foreign[i] : t !== p.items[i]);
+        const count = changed.filter(Boolean).length;
+        st.pictureTranslation = { count, original: p.items.filter((_, i) => changed[i]).join('\n'), text: r.items.filter((_, i) => changed[i]).join('\n') };
+        st.pictureState = 'done';
+        if (count) {
+          st.trFrom = [...new Set([st.trFrom, r.from].filter(Boolean))].join(', ');
+          st.panel = 'pic'; st.pic = p.items; st.picSel = new Set(p.items.map((_, i) => i));
+          st.trans = { text: r.items.join('\n'), from: r.from || '' };
+        } else { st.panel = 'sel'; st.trans = null; }
+        pillDone(); syncSheet(); return;
       }
       st.trans = r.error ? { error: r.error } : { text: (r.items || []).join('\n'), from: r.from || '' };
       syncSheet();
@@ -952,13 +1001,20 @@
     },
     pictured(rid, r) {
       const p = st.pending[rid]; delete st.pending[rid]; if (!p) return;
+      if (p.to !== st.to || p.run !== st.trRun) return;
+      if (!r.error && (!Array.isArray(r.lines) || r.lines.some(t => typeof t !== 'string'))) r = { error: 'Could not read picture text.' };
       st.pic = r.error ? { error: r.error } : (r.lines || []);
+      if (!r.error) st.pictureLines = [...st.pic];
       if (!r.error && !st.words.length) { $('#blank').style.display = 'none'; }
       syncSheet();
       N.log('picture lines=' + (r.lines ? r.lines.length : 'error'));
-      if (p.thenTranslate && Array.isArray(st.pic) && st.pic.length) {
-        setPill('Picture text → <b>' + esc(st.to) + '</b>');
-        const t = id(); st.pending[t] = { kind: 'pictr' }; N.translate(t, JSON.stringify(st.pic), st.to);
+      if (p.thenTranslate) {
+        if (r.error) { st.pictureState = 'error'; st.panel = 'pic'; pillDone(); syncSheet(); return; }
+        const items = missingPictureLines(st.pic).filter(t => !notWords(t));
+        if (!items.length) { st.pictureState = 'done'; st.panel = 'sel'; pillDone(); syncSheet(); return; }
+        st.pictureState = 'translating'; pillDone();
+        const t = id(); st.pending[t] = { kind: 'pictr', items, to: st.to, run: st.trRun };
+        N.translate(t, JSON.stringify(items), st.to);
       }
     },
   };

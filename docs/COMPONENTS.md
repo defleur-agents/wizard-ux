@@ -83,6 +83,7 @@ Reuse:
 | Dictation into a focused field | `WizCore` focused field (`focused-field.js`); voice `WizCore` (`voice.js`); mic choice `WosMic` (`mic.js`) | own recorder/transcriber |
 | Local commands | `WosCommands` (`commands.js`) | a second command parser |
 | Screen capture | `WosScreenCapture` (`screen-capture.js`), `WosCaptureTools` (`capture-tools.js`) | — |
+| Android Everywhere screenshot translation | `everywhere/ScreenMode.java` + `assets/assist/screen.html`; existing private Search read-image/translate routes | second OCR/provider route; treating native chrome as image coverage | `screen-picture-translation.test.mjs`, `qa-screen-picture-translate.cjs` |
 | Update banners/card/pop-up | `WizWebUpdate`, `WizAppUpdates` (`web-update.js`), `WizAppVersions` (`app-versions.js`), `WosUpdates` (`os-updates.js`: `card`/`popup`) | own reload timers, a second card |
 | Provider login (Claude, ChatGPT) for agents and apps | the installed login apps (`wizard-claude`, `wizard-chatgpt`; skill `app-owned-codex-connections`) | setup-tokens or bespoke auth flows |
 | Native mic (notes, orb, dictation) | `NoteRecorder` (`audio/NoteRecorder.java`), `MicRoute` (`audio/MicRoute.java`): `MicRoute.start`; `MicRoute.NOTE_SOURCES` notes, `MicRoute.SOURCES` STT | `new MediaRecorder`, `AudioRecord`, `setAudioSource` outside `audio/` | `MicRouteTest`, `NoteRecorderTest` |
