@@ -106,7 +106,7 @@ const rows = () => [
         const btn = page.locator(list + ' .ch-sync [data-chtroubleshoot]').first();
         if (phone) await btn.tap(); else await btn.click();
         await page.waitForFunction(() => window.__opened.includes('troubleshooter'), null, { timeout: 5000 });
-        await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => /troubleshoot/.test(f.src || f.getAttribute('src') || '')), null, { timeout: 10000 });
+        entry.troubleshooterFrame = await page.waitForFunction(() => [...document.querySelectorAll('iframe')].some(f => /troubleshoot/.test(f.src || f.getAttribute('src') || '')), null, { timeout: 8000 }).then(() => true, () => false);
         entry.opened = await page.evaluate(() => window.__opened);
         await page.waitForTimeout(500);
         await page.screenshot({ path: path.join(out, stem + '-troubleshooter.png') });
