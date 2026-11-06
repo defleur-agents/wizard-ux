@@ -174,6 +174,8 @@ html[data-shell="desktop"][data-layout="ai-apps"] .aad-row {
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw:hover .aad-row, html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-cur .aad-row { background: var(--aad-hover); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw.is-held .aad-row { background: var(--aad-held); }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-row-t { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 0.875rem / 1.43 var(--wz-font-ui); }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-working-ask { display: block; overflow: hidden; text-overflow: ellipsis; color: var(--wz-warning, var(--amber, var(--aad-ink))); font-size: 0.75rem; font-weight: 400; }
+html[data-shell="desktop"][data-layout="ai-apps"] .aad-working-helper { display: inline-block; margin-top: 2px; color: var(--wz-text-secondary, var(--aad-ink-2)); background: var(--wz-surface, var(--aad-panel)); font-size: 0.6875rem; font-weight: 400; }
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-rw[data-kind="archive"] .aad-row-t { color: var(--aad-ink-2); }
 /* a notification among the chats (round 5): a small, quiet bell before the title (the secondary ink), the same row */
 html[data-shell="desktop"][data-layout="ai-apps"] .aad-bell { width: 15px; height: 15px; margin-right: -2px; color: var(--aad-ink-2); stroke-width: 1.8; }

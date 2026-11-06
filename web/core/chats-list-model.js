@@ -101,12 +101,18 @@ function executionStatus(status, runId, runStatus) {
   if (['waiting_for_approval', 'unknown', 'stopping'].includes(status)) return status;
   return runId && ['submitting', 'queued', 'running', 'stopping'].includes(runStatus) ? runStatus : status;
 }
+/** List lifecycle only: real run/queue or background helper, never tracker items.
+ * Runtime controls must still use their own run predicate, not helper liveness. */
+function isListWorking(s) {
+  return !!s && !s.archived && (!!s.background || (['submitting', 'queued', 'running', 'stopping'].includes(s.status) && !(s.status === 'queued' && s.queueReason === 'provider_access')));
+}
 /** Project raw sessions once, with the shell's read/actions/attention facts. */
 function sessionRow(s, kind, { live, chats, pins } = {}) {
   const fresh = !!live.isNew?.(s), state = chats.stiKind?.(s) || '';
   return { id: s.id, title: sessionTitle(s), kind, at: live.cardAt?.(s) || '',
     rank: state === 'failed' ? 1 : Number.isFinite(live.readyRank?.(s)) ? live.readyRank(s) : undefined,
     snoozed: !!s.deferred, unread: fresh, pinned: !!pins?.has(s.id),
+    ...(kind === 'working' && ['needs_you', 'check'].includes(s.attention?.state) && s.attention.ask ? { workingAsk: s.attention, background: s.background || '' } : {}),
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
     actions: [...(pins ? ['pin'] : []), 'rename', ...(kind === 'ready' && !fresh ? ['unread'] : []),
       ...chats.threadActions(s, null).filter(a => ['snooze', 'done', 'restore'].includes(a))] };
@@ -162,7 +168,7 @@ function priorityGroups(list, notes, rank) {
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
-root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
+root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus, isListWorking,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
   readyStep, visibleIds, unreadCount, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);
