@@ -3312,6 +3312,12 @@
     // Registered app delivery and composer custody above are not commands. All other tap takes
     // use the normal message destination, without local parsing, cloud routing or no-match cards.
     if (window.WosCommands.isMessageTake(kind, typed)) {
+      // A tapped take whose first word is a declared app route ("music") opens that app, outside threads, before
+      // anything goes to the agent (James, 7 Nov: a tapped "Music" became a new chat instead of song ID).
+      if (target == null && !(v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) {
+        const dr = LOCAL_COMMANDS.declaredRoute?.(text);
+        if (dr) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(dr, text, opts); }
+      }
       if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
       return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
     }

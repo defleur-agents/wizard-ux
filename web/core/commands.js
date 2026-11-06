@@ -26,6 +26,22 @@
     if (m) return { action: 'chats_search', q: m[1] };
     return null;
   }
+  // A declared first word ("music", "shazam") opens that app's route; the rest of the utterance rides along.
+  // Apps declare words as data; no app hears or claims speech (James, 6 Nov 2026).
+  function declaredRoute(t) {
+    const spoken = String(window.WizConfig.stripAddress(t) || '').trim().match(/^([^\s.,!?;:]+)[.,!?;:]?(?:\s+([\s\S]*))?$/u);
+    if (spoken) for (const app of Object.values(APP)) for (const route of app.voice_routes || []) {
+      if (!Array.isArray(route.words) || !route.words.some(w => typeof w === 'string' && w.toLowerCase() === spoken[1].toLowerCase())) continue;
+      try {
+        if (typeof route.open !== 'string' || !/^(?:\?|\/(?!\/))/.test(route.open) || /[\x00-\x1f\x7f\\]/.test(route.open)) continue;
+        const base = new URL(app.url, location.origin), url = new URL(route.open, base);
+        if (base.origin !== location.origin || url.origin !== base.origin || !url.pathname.startsWith(base.pathname.endsWith('/') ? base.pathname : base.pathname + '/')) continue;
+        if (spoken[2] && /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(route.rest_param)) url.searchParams.set(route.rest_param, spoken[2].trim());
+        return { action: 'open_app_route', app: app.id, url: url.pathname + url.search + url.hash };
+      } catch (_) {}
+    }
+    return null;
+  }
   function localParse(t, snap, kind, typed = false) {
     if (isMessageTake(kind, typed)) return null;
     const explicit = norm(window.WizConfig.stripAddress(t)).replace(/ please$/, '');
@@ -46,19 +62,7 @@
     // A declared first word opens an app route. No app gets to hear or claim speech.
     // Preserve strong shared spells above (notably "music search …"). Registry order
     // resolves duplicate words, just like app-name aliases.
-    if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') {
-      const spoken = String(window.WizConfig.stripAddress(t) || '').trim().match(/^([^\s.,!?;:]+)[.,!?;:]?(?:\s+([\s\S]*))?$/u);
-      if (spoken) for (const app of Object.values(APP)) for (const route of app.voice_routes || []) {
-        if (!Array.isArray(route.words) || !route.words.some(w => typeof w === 'string' && w.toLowerCase() === spoken[1].toLowerCase())) continue;
-        try {
-          if (typeof route.open !== 'string' || !/^(?:\?|\/(?!\/))/.test(route.open) || /[\x00-\x1f\x7f\\]/.test(route.open)) continue;
-          const base = new URL(app.url, location.origin), url = new URL(route.open, base);
-          if (base.origin !== location.origin || url.origin !== base.origin || !url.pathname.startsWith(base.pathname.endsWith('/') ? base.pathname : base.pathname + '/')) continue;
-          if (spoken[2] && /^[a-zA-Z][a-zA-Z0-9_]{0,39}$/.test(route.rest_param)) url.searchParams.set(route.rest_param, spoken[2].trim());
-          return { action: 'open_app_route', app: app.id, url: url.pathname + url.search + url.hash };
-        } catch (_) {}
-      }
-    }
+    if (kind === 'command' || (snap || sendSnap()).view?.kind !== 'chat thread') { const dr = declaredRoute(t); if (dr) return dr; }
     // A bare app name opens that app, no "open" needed (James, 12 Oct: "If I say the name of an app, it should just
     // open that app"). Held: anywhere, even over an app or a thread. Taps never enter this grammar.
     // Exact names and aliases only (appByName), never a fuzzy guess.
@@ -88,7 +92,7 @@
     return null;
   }
 
- return {parse:localParse};
+ return {parse:localParse, declaredRoute};
  }
  function execute(c, text, H) {
    const a = c.action;
