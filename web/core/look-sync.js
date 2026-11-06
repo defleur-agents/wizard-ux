@@ -62,7 +62,14 @@
       if (v) (out.views ||= {})[s] = v;
     }
     const a = box?.desktopBackdrop, b = mine?.desktopBackdrop;
-    if (a || b) out.desktopBackdrop = b && (!a || b.at > a.at) ? b : a;
+    if (a || b) {
+      const selected = b && (!a || b.at > a.at) ? b : a;
+      // A built-in choice from a stale device may not know the uploaded files.
+      // Keep those references independently; an explicit replacement wide image
+      // still replaces the pair, including intentionally omitted portrait art.
+      const files = selected.wide ? selected : (a?.wide ? a : b);
+      out.desktopBackdrop = { id: selected.id, ...(files?.wide ? { wide: files.wide, ...(files.tall ? { tall: files.tall } : {}) } : {}), at: selected.at };
+    }
     return out;
   }
   const onIds = doc => Object.keys(doc?.tweaks || {}).filter(id => doc.tweaks[id].on).sort();

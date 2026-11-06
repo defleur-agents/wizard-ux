@@ -33,6 +33,38 @@ test('desktop custom backdrop syncs across devices independently of skin and pho
   const changed=box.doc(); changed.desktopBackdrop={id:'sea',at:Date.now()+10000}; box.text=JSON.stringify(changed);
   await a.flush(); assert.equal(box.doc().desktopBackdrop.id,'sea'); assert.equal(a.backdrop.id,'sea');
 });
+test('stale built-in selection retains uploaded custom references across a two-device CAS race', async () => {
+  const box = pagesBox({ version: 1, skin: { id: 'nebula', at: 9 }, tweaks: {} });
+  const a = device(box), stale = device(box);
+  await a.sync.sync(); await stale.sync.sync();
+  a.pickBackdrop({ id: 'custom', wide: 'wide-id', tall: 'tall-id' });
+  await a.flush();
+  // This device has never seen the upload; its first-read in-flight intent
+  // rebases onto the observed revision without erasing the saved images.
+  stale.pickBackdrop({ id: 'lake' });
+  const original = box.req;
+  let injected = false;
+  const racing = device({ ...box, req: async (url, init) => {
+    const reply = await original(url, init);
+    if (!init?.method && !injected) {
+      injected = true;
+      const doc = box.doc(); doc.updated = 'concurrent-save';
+      box.text = JSON.stringify(doc); // force a genuine 409 on first PUT
+    }
+    return reply;
+  } });
+  racing.pickBackdrop({ id: 'lake' });
+  await racing.flush(); await a.sync.sync(); await stale.sync.sync();
+  const want = { id: 'lake', wide: 'wide-id', tall: 'tall-id' };
+  assert.deepEqual(a.backdrop, want);
+  assert.deepEqual(stale.backdrop, want);
+  assert.deepEqual(racing.backdrop, want);
+  assert.deepEqual(box.doc().desktopBackdrop, { ...want, at: 11 });
+  assert.deepEqual(box.doc().skin, { id: 'nebula', at: 9 });
+  a.pickBackdrop({ ...a.backdrop, id: 'custom' }); await a.flush();
+  assert.equal(box.doc().desktopBackdrop.wide, 'wide-id');
+  assert.equal(box.doc().desktopBackdrop.tall, 'tall-id');
+});
 test('malformed custom references cannot inject arbitrary URL schemes or paths', () => {
   for(const wide of ['https://elsewhere/image','data:image/png,x','../secret','blob:abc']) {
     assert.equal(L.parse({version:1,tweaks:{},desktopBackdrop:{id:'custom',wide,at:8}}).desktopBackdrop,undefined);
