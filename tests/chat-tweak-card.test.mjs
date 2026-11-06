@@ -139,8 +139,8 @@ test('wiring: Chats draws the card inside the reply and routes its tap; WosSetti
   assert.match(settings, /window\.WosSettings = \{[^\n]*\btweakCard, tweakCardTap,/);
   assert.equal((settings.match(/class="st-row tw-row"/g) || []).length, 1, 'one switch-row markup, shared');
   const css = read('web/core/chats.css'), rule = css.slice(css.indexOf('.msg.a .ch-tweak {'), css.indexOf('}', css.indexOf('.msg.a .ch-tweak {')));
-  assert.match(rule, /background: linear-gradient\(var\(--wz-surface\), var\(--wz-surface\)\), var\(--wz-panel, var\(--wz-base, var\(--bg, #05030c\)\)\)/, 'text-bearing card is opaque');
-  assert.doesNotMatch(rule.replace(/var\(--bg, #05030c\)/, ''), /#[0-9a-f]{3,8}\b|rgba?\(/i, '--wz-* tokens only');
+  assert.match(rule, /background: linear-gradient\(var\(--wz-surface\), var\(--wz-surface\)\), var\(--wz-panel, var\(--wz-base, var\(--bg\)\)\)/, 'text-bearing card is opaque (base.css always defines --bg)');
+  assert.doesNotMatch(rule, /#[0-9a-f]{3,8}\b|rgba?\(/i, '--wz-* tokens only');
 });
 
 test('experience state names the shells a non-view tweak declares (so the card can say Phone only)', () => {

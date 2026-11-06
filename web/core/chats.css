@@ -186,7 +186,7 @@ html[data-shell="phone"] .ch-fsheet:has([data-chfocusopt]) { bottom: calc(var(--
  * its place, and Show less folds it back. */
 /* A tweak a reply carries (WIZARD_TWEAK_V1, core/settings.js tweakCard): Settings › Look's own switch row on an opaque card. */
 .msg.a .ch-tweak { max-width: 520px; margin: 10px 0 4px; padding: 0 12px; border: 1px solid var(--wz-border); border-radius: var(--wz-radius, 12px);
-  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg, #05030c))); color: var(--wz-text); }
+  background: linear-gradient(var(--wz-surface), var(--wz-surface)), var(--wz-panel, var(--wz-base, var(--bg))); color: var(--wz-text); }
 .msg.a .ch-tweak > .st-row:last-child { border-bottom: 0; }
 .msg.a .ch-tweak .st-row { min-height: 56px; padding: 10px 0; }
 .msg.a .ch-tweak .st-row:not(:disabled):not(.static) { cursor: pointer; }
