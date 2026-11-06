@@ -118,3 +118,21 @@ test('settle waits need three unchanged frames in the wanted state; copy target 
   const blocked = dom({ tCopy: { r: [16, 790, 140, 850] }, sheet: { r: [8, 701, 403, 858] } }); // a sheet on top
   assert.equal(run(hitTarget, blocked, 'tCopy').ok, false);
 });
+test('--metrics-only is opt-in: only the geometry candidate and the two layout checks; default runs unchanged', () => {
+  assert.match(text, /const METRICS_ONLY = process\.argv\.includes\('--metrics-only'\);/);
+  assert.match(text, /mode: METRICS_ONLY \? 'exact-layout-diagnostic' :/);
+  assert.match(text, /const runs = METRICS_ONLY \? \(hasGeometry \? \[\['candidate', geometry\]\] : \[\]\)\n\s+: \[\['baseline', plain\], \['lines-only', plain\], \.\.\.\(hasGeometry \? \[\['candidate', geometry\]\] : \[\]\)\];/);
+  const cand = text.slice(text.indexOf("} else {\n          await waitFor(settled);"));
+  const stop = cand.indexOf('if (METRICS_ONLY) {'), body = cand.slice(0, stop);
+  assert.ok(stop > 0, 'the diagnosis stops inside the candidate branch');
+  // before the stop: settle, metrics, and exactly the two layout checks; nothing interactive
+  assert.deepEqual([...body.matchAll(/check\('candidate '\+skin\+': ([^']+)'/g)].map(m => m[1]),
+    ['every painted line fits its own box (no clipped wrap)', 'no painted line covers another']);
+  assert.doesNotMatch(body, /touchscreen|\.click\(|locator\(|hitTarget|outsideTarget/);
+  const after = cand.slice(stop, cand.indexOf('}', stop) + 1);
+  assert.match(after, /await shot\('-overlay'\); await page\.close\(\); continue;/);
+  // every interaction and other candidate check still exists after it, for the default run
+  for (const kept of ["locator('#orig').click()", 'outsideTarget', "hitTarget, 'tCopy'", 'Original reveals the untouched picture'])
+    assert.ok(cand.indexOf(kept) > stop, kept);
+  assert.match(text, /fs\.writeFileSync\(path\.join\(out,'receipt\.json'\)/, 'receipt written in finally either way');
+});

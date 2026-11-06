@@ -1,6 +1,9 @@
 // Exact user-image regression using recorded responses from the installed private route.
 // No provider substitute. Private fixture directory is supplied out of tree; never publish its outputs.
-// Usage: node tools/qa-screen-picture-translate.cjs PRIVATE_FIXTURE OUT
+// Usage: node tools/qa-screen-picture-translate.cjs PRIVATE_FIXTURE OUT [--metrics-only]
+// --metrics-only (exact-layout-diagnostic): only the geometry candidate, both skins, the same fixture/bridge/translation;
+// records each painted line's actual browser layout + overlaps and a settled overlay screenshot, and runs only the two
+// fit/overlap checks. No baseline, lines-only, Original, taps, Copy or other checks. The receipt is written either way.
 //
 // Fixture: exact-image.jpg, baseline-screen.html (installed87 page) and two separate recorded pairs from the private
 // route: live-read-image.json + live-translate.json (the historical lines-only read, exactly as an older Search
@@ -11,7 +14,9 @@
 const {chromium} = require('./qa-playwright.cjs');
 const {outsideTarget, sheetSettled, hitTarget} = require('./qa-screen-hit.cjs');
 const fs = require('fs'), path = require('path'), assert = require('assert/strict'), crypto = require('crypto');
-const fixture = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
+const METRICS_ONLY = process.argv.includes('--metrics-only');
+const [fixtureArg, outArg] = process.argv.slice(2).filter(a => a !== '--metrics-only');
+const fixture = path.resolve(fixtureArg), out = path.resolve(outArg);
 fs.mkdirSync(out, {recursive:true});
 const image = fs.readFileSync(path.join(fixture, 'exact-image.jpg'));
 assert.equal(crypto.createHash('sha256').update(image).digest('hex'), 'e25f968b5acec4cbf6fefae8d036c8c9a3a1affa259b12c68181a1c5b68ca6c7');
@@ -32,7 +37,8 @@ const current = path.resolve(process.env.SCREEN_PAGE_SOURCE || path.join(__dirna
 // Accessibility chrome is a synthetic English control, not part of the recorded Thai inference.
 const chromeLabels = ['Copy translation', 'Select text', 'Ask Wizard'];
 const baseline = path.join(fixture, 'baseline-screen.html');
-const record = {mode: 'recorded-installed-private-inference-replay, NOT new inference or native device proof', geometry: hasGeometry, checks: [], screenshots: []};
+const record = {mode: METRICS_ONLY ? 'exact-layout-diagnostic' : 'recorded-installed-private-inference-replay, NOT new inference or native device proof',
+  page_sha256: crypto.createHash('sha256').update(fs.readFileSync(current)).digest('hex'), geometry: hasGeometry, checks: [], screenshots: []};
 const check = (name, ok) => { record.checks.push({name, ok:!!ok}); console.log((ok ? 'PASS ' : 'FAIL ') + name); };
 const THAI = /[\u0e00-\u0e7f]/;
 // A sheet's 200ms entrance transition must finish before a capture counts.
@@ -51,7 +57,8 @@ function sheetCaptureReady() {
   try {
     for (const skin of ['nebula','grove']) {
       const context = await browser.newContext({viewport:{width:360,height:780},deviceScaleFactor:3,hasTouch:true,isMobile:true});
-      const runs = [['baseline', plain], ['lines-only', plain], ...(hasGeometry ? [['candidate', geometry]] : [])];
+      const runs = METRICS_ONLY ? (hasGeometry ? [['candidate', geometry]] : [])
+        : [['baseline', plain], ['lines-only', plain], ...(hasGeometry ? [['candidate', geometry]] : [])];
       for (const [version, rec] of runs) {
         const page = await context.newPage(), errors=[];
         page.on('pageerror', e => errors.push(e.message));
@@ -107,6 +114,27 @@ function sheetCaptureReady() {
           let state = await peek();
           const pics = state.painted.filter(e => e.pic), thai = state.picRows.filter(q => THAI.test(q.t));
           fs.writeFileSync(path.join(out,tag+'-overlay.json'),JSON.stringify({painted:state.painted,picRows:state.picRows,pill:state.pill},null,2));
+          // Per-caption layout as the browser actually laid it out: does each painted line fit its own box, and does
+          // any later painted line cover it?
+          const metrics = await page.evaluate(() => [...document.querySelectorAll('#paint > .pt')].map(e => {
+            const r = e.getBoundingClientRect(), c = getComputedStyle(e);
+            return {b: +e.dataset.b, text: e.textContent, rect: [r.left, r.top, r.right, r.bottom], scrollHeight: e.scrollHeight,
+              clientHeight: e.clientHeight, scrollWidth: e.scrollWidth, clientWidth: e.clientWidth, styleHeight: e.style.height,
+              fontSize: c.fontSize, lineHeight: c.lineHeight, fontFamily: c.fontFamily, padding: c.padding, overflow: c.overflow,
+              whiteSpace: c.whiteSpace};
+          }));
+          const overlaps = [];
+          metrics.forEach((m,i) => metrics.slice(i+1).forEach(n => {
+            const w = Math.min(m.rect[2],n.rect[2]) - Math.max(m.rect[0],n.rect[0]), h = Math.min(m.rect[3],n.rect[3]) - Math.max(m.rect[1],n.rect[1]);
+            if (w > 0.5 && h > 0.5) overlaps.push({under: m.b, over: n.b, w, h});
+          }));
+          fs.writeFileSync(path.join(out,tag+'-overlay-metrics.json'),JSON.stringify({metrics,overlaps},null,2));
+          check('candidate '+skin+': every painted line fits its own box (no clipped wrap)',metrics.length > 0 && metrics.every(m => m.scrollHeight <= m.clientHeight + 1 && m.scrollWidth <= m.clientWidth + 1));
+          check('candidate '+skin+': no painted line covers another',overlaps.length === 0);
+          if (METRICS_ONLY) { // the layout diagnosis ends here: a settled overlay screenshot, nothing touched
+            await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+            await shot('-overlay'); await page.close(); continue;
+          }
           check('candidate '+skin+': Thai picture lines painted over the picture',pics.length > 0 && pics.every(e => !THAI.test(e.t)));
           check('candidate '+skin+': every painted line is a recorded translation',pics.every(e => Object.values(rec.mapping).includes(e.t)));
           check('candidate '+skin+': no automatic panel; translation bar shown',!state.sheet && state.panel === 'sel' && state.tbar);
