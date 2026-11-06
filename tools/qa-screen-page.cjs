@@ -2,6 +2,7 @@
 // text, real touch drags. usage: node tools/qa-screen-page.cjs [screen.html] [outdir]
 const { chromium } = require('./qa-playwright.cjs');
 const fs = require('fs'), path = require('path');
+const { outsideTarget, sheetSettled, hitTarget } = require('./qa-screen-hit.cjs');
 const PAGE = path.resolve(process.argv[2] || path.join(__dirname, '../android/app/src/main/assets/assist/screen.html'));
 const OUT = process.argv[3] || '/tmp/qa-screen-page';
 fs.mkdirSync(OUT, { recursive: true });
@@ -225,7 +226,9 @@ const LINES = [
 
   /* ---------------- Translate screen: text only in the picture (the app doesn't report the Thai dish) ---------------- */
   p = await openScreen('translate', scr.blocks.filter((_, i) => i !== 0));
-  await p.waitForFunction(() => window.S.peek().pictureState === 'done' && window.S.peek().nativeState === 'done', null, { timeout: 5000 }).catch(() => {});
+  // fail closed: a run that never settles is a failed check with its error, not a silent pass
+  const settledErr = await p.waitForFunction(() => window.S.peek().pictureState === 'done' && window.S.peek().nativeState === 'done', null, { timeout: 5000 }).then(() => null, e => String(e).slice(0, 200));
+  check('the app text and the picture both finish', !settledErr, settledErr);
   k = await peek(p);
   const dish = k.painted.find(e => e.pic);
   const truth = scr.boxes[0].map((v, i) => v * (i % 2 ? 914 : 411) * DPR);
@@ -240,16 +243,42 @@ const LINES = [
   await p.screenshot({ path: OUT + '/08b-picture-original.png' });
   await tap(p, css(p, k.btn.orig[0]), css(p, k.btn.orig[1]));
   await tap(p, css(p, dish.c[0]), css(p, dish.c[1]));
-  k = await peek(p);
-  check('tapping the painted picture line shows its Thai and its English', k.sheet && k.sheetText.includes('ผัดกะเพราหมูสับไข่ดาว') && k.sheetText.includes('Stir-fried basil pork'), k.sheetText);
-  await tap(p, 200, 760);
-  k = await peek(p);
-  check('a tap outside dismisses it; the overlay stays', !k.sheet && k.painted.length === 3, [k.sheet, k.painted.length]);
-  await tap(p, css(p, k.btn.tCopy[0]), css(p, k.btn.tCopy[1]));
-  calls = await p.evaluate(() => window.__calls);
   {
+    // Settle every moving part before choosing real touch targets; diagnostics are kept for review either way.
+    const settle = (id, want) => p.waitForFunction(sheetSettled, [id, want], { polling: 'raf', timeout: 5000 }).then(() => null, e => String(e).slice(0, 200));
+    const diag = { dock: (await peek(p)).dock };
+    diag.pickedSettle = await settle('sheet', true);
+    k = await peek(p);
+    check('tapping the painted picture line shows its Thai and its English', !diag.pickedSettle && k.sheet && k.sheetText.includes('ผัดกะเพราหมูสับไข่ดาว') && k.sheetText.includes('Stir-fried basil pork'), [diag.pickedSettle, k.sheetText]);
+    await p.screenshot({ path: OUT + '/08c-picture-picked.png' });
+    // r1 evidence: where the old blind outside tap (200,760) lands in this settled picked state (read-only)
+    diag.blind = await p.evaluate(([x, y]) => {
+      const at = document.elementFromPoint(x, y), r = document.getElementById('sheet').getBoundingClientRect();
+      return { point: [x, y], hit: at ? at.id || at.className || at.tagName : null, inSheet: !!(at && at.closest('#sheet')),
+        sheet: [r.left, r.top, r.right, r.bottom], dock: document.body.classList.contains('dtop') ? 'top' : 'bottom', viewport: [innerWidth, innerHeight] };
+    }, [200, 760]);
+    // outside: hit-tested on the touch layer, clear of the picked sheet (wherever it is docked), chrome and paint
+    diag.outside = await p.evaluate(outsideTarget);
+    diag.before = { sheets: k.sheets, painted: k.painted.map(e => e.r) };
+    const pt = diag.outside.point;
+    if (pt) await tap(p, pt.x, pt.y);
+    diag.dismissSettle = pt ? await settle('sheet', false) : 'no clear outside point';
+    diag.tbarSettle = pt ? await settle('tbar', true) : 'no clear outside point';
+    k = await peek(p);
+    diag.after = { sheets: k.sheets, sheet: k.sheet, tbar: k.tbar, painted: k.painted.map(e => e.r) };
+    await p.screenshot({ path: OUT + '/08d-picture-dismissed.png' });
+    check('a real tap outside (on the touch layer, clear of sheets/chrome/paint) dismisses it; the overlay stays',
+      pt && diag.outside.hit === 'layer' && !diag.dismissSettle && !diag.tbarSettle && !k.sheet && k.tbar && k.painted.length === 3,
+      [pt, diag.outside.hit, diag.dismissSettle, diag.tbarSettle, k.sheet, k.painted.length]);
+    // Copy translation: the real button, hit-tested where the tap will land
+    diag.copyTarget = await p.evaluate(hitTarget, 'tCopy');
+    if (diag.copyTarget.ok) await tap(p, diag.copyTarget.x, diag.copyTarget.y);
+    calls = await p.evaluate(() => window.__calls);
     const copied = (calls.filter(c => c[0] === 'copy').pop() || [])[1] || '';
-    check('Copy translation has every line once, the picture line included', copied.split('\n').length === 3 && copied.split('\n').filter(l => /basil/.test(l)).length === 1, copied);
+    diag.copied = copied;
+    fs.writeFileSync(OUT + '/08-picture-touch-diagnostics.json', JSON.stringify(diag, null, 2));
+    check('Copy translation (hit-tested) has every line once, the picture line included',
+      diag.copyTarget.ok && copied.split('\n').length === 3 && copied.split('\n').filter(l => /basil/.test(l)).length === 1, [diag.copyTarget, copied]);
   }
   await p.close();
   await b.close();
