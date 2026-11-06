@@ -120,7 +120,7 @@ class Fake(http.server.BaseHTTPRequestHandler):
             return self._json(200, {'to': to, 'from': 'Thai' if any(thai) else '', 'ms': 5,
                                     'items': [('EN(' if to == 'English' else to[:2].upper() + '(') + str(i) + ')' if f else str(i) for i, f in zip(items, foreign)],
                                     'langs': ['Thai' if t else 'English' for t in thai], 'foreign': foreign})
-        if self.path == '/wizard-search/api/read-image':
+        if self.path.split('?')[0] == '/wizard-search/api/read-image':  # ?geometry=1; lines only, like older Search
             STATE['read'] += 1
             return self._json(200, {'lines': ['CLOSED ON MONDAY', 'ปิดวันจันทร์'], 'model': 'qa', 'ms': 5})
         self._json(404, {'error': 'nope'})
@@ -340,7 +340,8 @@ with _lockfile as lock:
         tap_text(r'^Translate screen$'); time.sleep(0.5)
         wait_window('WizScreen', True, 8)
         sp = screen_page()
-        p = wait_peek(sp, lambda p: p and p.get('painted'), 10); shot('08-translate-screen')
+        # the app text and the picture are read in parallel: wait for both before judging the pill
+        p = wait_peek(sp, lambda p: p and p.get('painted') and p.get('nativeState') == 'done' and p.get('pictureState') == 'done', 10); shot('08-translate-screen')
         painted = [e['t'] for e in (p or {}).get('painted', [])]
         check('Translate screen detects the foreign text and paints English over it by itself', len(painted) == 2 and all(t.startswith('EN(') for t in painted), painted)
         check('English text on the page is left as it is', not any('Order number' in t for t in painted), painted)

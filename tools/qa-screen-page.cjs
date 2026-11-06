@@ -28,13 +28,14 @@ const LINES = [
     const c = document.getElementById('c').getContext('2d'); c.scale(DPR, DPR);
     c.fillStyle = '#fff'; c.fillRect(0, 0, W, H);
     c.fillStyle = '#eee'; c.fillRect(0, 0, W, 60); c.fillStyle = '#333'; c.font = '16px sans-serif'; c.fillText('Menu', 16, 36);
-    const blocks = [], truth = {};
+    const blocks = [], truth = {}, boxes = [];
     LINES.forEach((L, li) => {
       c.font = L.f + 'px sans-serif';
       const tw = c.measureText(L.t).width;
       c.fillStyle = L.bg; c.fillRect(L.x - 6, L.y - L.f - 4, tw + 12, L.f * 1.5 + 4);
       c.fillStyle = L.fg; c.fillText(L.t, L.x, L.y);
       const top = L.y - L.f * 0.95, h = L.f * 1.25;
+      boxes.push([L.x / W, top / H, (L.x + tw) / W, (top + h) / H]); // what read-image?geometry=1 answers
       // line 1 is reported like a web paragraph: the whole column, not the words (the page must find the ink)
       const blk = li === 1 ? { t: L.t, x: 8 * DPR, y: (top - 6) * DPR, w: (W - 16) * DPR, h: (h + 12) * DPR, l: false }
         : { t: L.t, x: (L.x - 2) * DPR, y: top * DPR, w: (tw + 4) * DPR, h: h * DPR, l: false };
@@ -50,21 +51,21 @@ const LINES = [
       blocks.push(blk);
     });
     blocks.push({ t: 'Menu', x: 10 * DPR, y: 10 * DPR, w: 60 * DPR, h: 40 * DPR, l: true }); // icon label
-    return { blocks, truth, jpeg: document.getElementById('c').toDataURL('image/jpeg', .9).split(',')[1] };
+    return { blocks, truth, boxes, jpeg: document.getElementById('c').toDataURL('image/jpeg', .9).split(',')[1] };
   }, { LINES, DPR, W, H });
   await app.close();
 
-  async function openScreen(mode) {
+  async function openScreen(mode, blocks = scr.blocks) {
     const p = await ctx.newPage();
     p.on('console', m => { if (m.type() === 'error') console.log('  console:', m.text()); });
     p.on('pageerror', e => console.log('  pageerror:', e.message));
-    await p.addInitScript(({ jpeg }) => {
+    await p.addInitScript(({ jpeg, read }) => {
       window.__calls = [];
       const rec = (k, ...a) => window.__calls.push([k, ...a]);
       window.ScreenNative = {
         close: () => rec('close'), copy: t => rec('copy', t), search: (q, f) => rec('search', q), sheet: f => rec('sheet', f),
         closeSearch: () => rec('closeSearch'), ask: t => rec('ask', t), shot: () => jpeg, log: s => rec('log', s),
-        picture: id => { rec('picture', id); setTimeout(() => window.S.pictured(id, { lines: ['ผัดกะเพราหมูสับไข่ดาว', 'ส่งฟรีเมื่อสั่งครบ 200 บาท', 'Order number 4471 ready at counter', 'Fermé le lundi'] }), 25); },
+        picture: id => { rec('picture', id); setTimeout(() => window.S.pictured(id, read), 25); },
         translate: (id, items, to) => {
           rec('translate', JSON.parse(items), to);
           const its = JSON.parse(items);
@@ -74,9 +75,9 @@ const LINES = [
             langs: its.map(lang), foreign: its.map(t => to === 'English' ? lang(t) !== 'English' : true) }), 150);
         },
       };
-    }, { jpeg: scr.jpeg });
+    }, { jpeg: scr.jpeg, read: { lines: LINES.map(L => L.t), boxes: scr.boxes } });
     await p.goto('file://' + PAGE);
-    await p.evaluate(({ blocks, mode, DPR }) => window.S.open({ mode, dpr: DPR, ox: 0, oy: 0, sw: 411 * DPR, sh: 914 * DPR, top: 24, bot: 48, shot: true, few: false, blocks }), { blocks: scr.blocks, mode, DPR });
+    await p.evaluate(({ blocks, mode, DPR }) => window.S.open({ mode, dpr: DPR, ox: 0, oy: 0, sw: 411 * DPR, sh: 914 * DPR, top: 24, bot: 48, shot: true, few: false, blocks }), { blocks, mode, DPR });
     await p.waitForTimeout(500);
     return p;
   }
@@ -159,6 +160,8 @@ const LINES = [
   const sent = (calls.find(c => c[0] === 'translate') || [])[1] || [];
   check('it reads the screen and translates on its own (no tapping)', sent.length >= 3 && k.tr && Object.keys(k.tr).length === 3, sent);
   check('only the foreign text is painted over (English lines stay untouched)', k.painted.length === 3 && !k.painted.some(e => /Order number/.test(e.t)), k.painted.map(e => e.t));
+  check('picture lines the app already reports (same words, same place) are not painted twice', k.pictureState === 'done' && !k.painted.some(e => e.pic)
+    && calls.filter(c => c[0] === 'picture').length === 1 && calls.filter(c => c[0] === 'translate').length === 1, [k.pictureState, k.painted.map(e => e.pic)]);
   check('the pill names the detected languages and the target', /Thai/.test(k.pill) && /English/.test(k.pill), k.pill);
   const frP = k.painted.find(e => e.t === 'Closed on Monday'), thP = k.painted.find(e => /basil/.test(e.t));
   const rgb = s => (s.match(/\d+/g) || []).map(Number);
@@ -218,6 +221,36 @@ const LINES = [
   check('the dock position is remembered next time', (await peek(p)).dock === 'top', (await peek(p)).dock);
   await p.evaluate(() => localStorage.removeItem('wizScreenDock'));
   await p.evaluate(() => localStorage.removeItem('wizScreenTo'));
+  await p.close();
+
+  /* ---------------- Translate screen: text only in the picture (the app doesn't report the Thai dish) ---------------- */
+  p = await openScreen('translate', scr.blocks.filter((_, i) => i !== 0));
+  await p.waitForFunction(() => window.S.peek().pictureState === 'done' && window.S.peek().nativeState === 'done', null, { timeout: 5000 }).catch(() => {});
+  k = await peek(p);
+  const dish = k.painted.find(e => e.pic);
+  const truth = scr.boxes[0].map((v, i) => v * (i % 2 ? 914 : 411) * DPR);
+  check('picture-only Thai is painted by the same renderer over its own letters',
+    dish && dish.t === 'Stir-fried basil pork with fried egg' && Math.abs(dish.r[0] - truth[0]) <= 6 * DPR && Math.abs(dish.r[1] - truth[1]) <= 6 * DPR && dish.r[3] >= truth[3] - 6 * DPR, [dish, truth]);
+  check('it takes the colours of the picture under it (white menu)', dish && rgb(dish.bg)[0] > 220 && rgb(dish.fg)[0] < 80, dish && [dish.bg, dish.fg]);
+  check('the app text and the picture text are painted together, no panel', k.painted.length === 3 && !k.sheet && k.tbar && k.panel === 'sel', [k.painted.length, k.sheet, k.panel]);
+  check('the pill names Thai → English, never English → English', /Thai/.test(k.pill) && /English/.test(k.pill) && !/English\s*→/.test(k.pill) && !/not placed/.test(k.pill), k.pill);
+  await p.screenshot({ path: OUT + '/08-picture-overlay.png' });
+  await tap(p, css(p, k.btn.orig[0]), css(p, k.btn.orig[1]));
+  check('Original shows the picture itself again', await p.evaluate(() => getComputedStyle(document.getElementById('paint')).display === 'none'));
+  await p.screenshot({ path: OUT + '/08b-picture-original.png' });
+  await tap(p, css(p, k.btn.orig[0]), css(p, k.btn.orig[1]));
+  await tap(p, css(p, dish.c[0]), css(p, dish.c[1]));
+  k = await peek(p);
+  check('tapping the painted picture line shows its Thai and its English', k.sheet && k.sheetText.includes('ผัดกะเพราหมูสับไข่ดาว') && k.sheetText.includes('Stir-fried basil pork'), k.sheetText);
+  await tap(p, 200, 760);
+  k = await peek(p);
+  check('a tap outside dismisses it; the overlay stays', !k.sheet && k.painted.length === 3, [k.sheet, k.painted.length]);
+  await tap(p, css(p, k.btn.tCopy[0]), css(p, k.btn.tCopy[1]));
+  calls = await p.evaluate(() => window.__calls);
+  {
+    const copied = (calls.filter(c => c[0] === 'copy').pop() || [])[1] || '';
+    check('Copy translation has every line once, the picture line included', copied.split('\n').length === 3 && copied.split('\n').filter(l => /basil/.test(l)).length === 1, copied);
+  }
   await p.close();
   await b.close();
   console.log(`${pass}/${pass + fail} passed · ${OUT}`);
