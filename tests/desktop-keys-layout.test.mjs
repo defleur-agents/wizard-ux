@@ -50,10 +50,9 @@ test('plain ⌥←/⌥→ never act on a chat; standard ⌥Z stays Back and no h
   assert.match(js, /chip\(next, '↓', 'inside'\)/);
 });
 
-test('after a text or voice reply is sent, the window goes back to a focused New chat', () => {
-  assert.match(js, /stage\.addEventListener\('submit', e => \{[\s\S]*?toNewChat\(wid, 'text'\)/);
-  assert.match(js, /function toNewChat\(wid, why\) \{[\s\S]*?CHATS\.openNewDraft\(wid, ''\)[\s\S]*?focusInside\(wid\)/);
-  assert.match(js, /Voice reply · waiting to send', 1400\); if \(stayOnList\) syncChatsPane\(rp\.wid\); else setTimeout\(\(\) => toNewChat\(rp\.wid, 'voice'\)/);
+test('desktop replies never schedule a new chat after sending', () => {
+  assert.doesNotMatch(js, /toNewChat|keepNewSendList|send:new-chat/);
+  assert.match(js, /keepThreadOpen: true/);
 });
 test('desktop recordings skip echo cancellation (no music ducking) and pick a wired mic explicitly', async () => {
   const { readFileSync: r } = await import('node:fs');

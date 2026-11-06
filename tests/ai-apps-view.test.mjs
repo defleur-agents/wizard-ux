@@ -2081,7 +2081,7 @@ test('notification stack (Miguel, 4 Nov 2026): one stable newest-first list, the
   assert.match(c, /if \(noteQuiet\(\)\) return '';   \/\/ the quiet thread lists them in its own stack/, 'no second More-from list');
   assert.match(c, /if \(stay\.length > 1\) \{/, 'Archive / Snooze in a stack stays and opens the next one');
   assert.match(c, /const at = stay\.findIndex\(i => i\.id === n\.id\), nx = stay\[at \+ 1\] \|\| stay\[at - 1\];/);
-  assert.match(read('web/layouts/ai-apps/desktop.js'), /\.ch-nstack \.ch-ncard'\)\.length \|\| 0\) > 0\) return;/, 'the list does not jump to the next Ready chat while the stack has more');
+  assert.doesNotMatch(read('web/layouts/ai-apps/desktop.js'), /nextAfterAct/, 'no automatic next Ready navigation, with or without a notification stack');
   for (const f of ['desktop.css', 'layout.css']) assert.match(read('web/layouts/ai-apps/' + f), /\.ch-tacts > \.ch-tacts-gap \{ flex: 1 0 0; height: 0; \}/, f + ': Snooze / Archive on the far side, wrapping together');
 });
 
@@ -2112,7 +2112,7 @@ test('round 20 items 7 + 8: a quiet notification thread (source in the header, a
   assert.match(js, /if \(code === 'KeyB' && !sh\) \{ if \(!e\.repeat && docked && frontNote\(\)\) routeBtn\(\)\?\.click\?\.\(\); return true; \}/, '⌥B: where these go');
   assert.match(js, /const routeBtn = \(\) => \[\.\.\.doc\.querySelectorAll\('\.win \.dchats \.pane-main \[data-notify-menu\]'\)\]\.find\(onScreen\) \|\| null;/, 'the routing line on screen (live: after ⌥X a hidden Chats window held the first one)');
   assert.match(js, /if \(act\) \{ if \(!e\.repeat\) chatBtn\(act\)\?\.click\?\.\(\); return true; \}/, 'round 21: ⌥Z / ⌥E / ⌥X click the open item\'s own Snooze / Archive / Resolve');
-  assert.match(js, /\[data-chact="done"\], \.win \.dchats \.pane-main \[data-chact="resolve"\]'\); if \(b && docked\) nextAfterAct\(\);/, 'Archive / Resolve (button or key) then the next Ready one');
+  assert.doesNotMatch(js, /nextAfterAct/, 'Archive / Resolve never auto-advance the desktop chat');
   assert.ok(!read('web/layouts/ai-apps/home.js').match(/APP_LETTERS = \[\.\.\.'[^']*B/), 'B is no app letter any more');
 });
 
@@ -2598,4 +2598,31 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
   assert.match(js, /paneWins\(\) > 1 \? Math\.max\(900, W \* \.62\)/, 'the panel widens for two columns until the owner sizes it');
   assert.match(js, /winsMo = new MutationObserver/, 'a companion opening or closing re-sizes the panel');
+});
+
+test('desktop open chat stays on the same thread through Ready → Working → Ready and Archive', async () => {
+  const { w } = deskWorld();
+  const stage = new El('div'); stage.id = 'stage';
+  const desk = new El('div'); desk.className = 'wsp';
+  const win = new El('div'); win.className = 'win';
+  const chats = new El('div'); chats.className = 'dchats';
+  const pane = new El('div'); pane.className = 'pane-main';
+  const done = new El('button'); done.dataset.chact = 'done';
+  pane.append(done); chats.append(pane); win.append(chats); desk.append(win); stage.append(desk); w.doc.body.append(stage);
+  w.st.route = { home: false, view: 'thread', thread: 'r1', desk: 1 };
+  const off = (await layout()).default(w.api);
+  const original = w.st.sessions.ready.shift(), opens = w.st.opened.length, news = w.st.newChats;
+  const held = () => {
+    w.emit('render'); w.run();
+    assert.equal(w.st.route.thread, 'r1'); assert.equal(w.html.dataset.aadChat, 'on');
+    assert.equal(w.st.opened.length, opens, 'no next Ready selection'); assert.equal(w.st.newChats, news, 'no implicit close');
+  };
+  w.st.sessions.working.push({ ...original, kind: 'working' }); held();
+  w.st.sessions.working = w.st.sessions.working.filter(s => s.id !== 'r1');
+  w.st.sessions.ready.unshift(original); held();
+  w.fire('click', done); w.run(); // previously queued nextAfterAct and selected r2
+  w.st.sessions.ready.shift(); w.st.sessions.archive.push({ ...original, kind: 'archive' }); held();
+  w.q('.aad-cx').dispatchEvent(new FakePointerEvent('click'));
+  assert.equal(w.st.newChats, news + 1, 'manual ✕ still closes');
+  off();
 });
