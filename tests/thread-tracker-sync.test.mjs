@@ -153,11 +153,23 @@ test('send Seen refusal restores green locally even while the reconciliation GET
  await T.load('t'); T.beforeSend('t','',20); assert.equal(T.stripHtml('t'),'');
  await tick(); assert.match(T.stripHtml('t'),/Mark seen/); assert.equal(writes,1,'no immediate refusal loop');
 });
-test('send before ledger ingestion reconciles old green only, not work finished after the send', async () => {
+test('send before first ledger ingestion cannot acknowledge versions never loaded at the send tap', async () => {
  const writes=[]; const {T}=boot((path,init)=>{
   if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
   return reply({items:[item('old','done',{message_id:'m',at:10}),item('new','done',{message_id:'n',at:10,updated_at:30})]});
  });
  T.beforeSend('t','',20); await tick();
+ assert.deepEqual(writes,[]); assert.match(T.dots('t'),/2 finished, not seen/);
+});
+test('late ledger reload preserves pinned versions but never expands the snapshot to newly ingested work', async () => {
+ let items=[item('old','done',{message_id:'m',at:10})]; const writes=[];
+ const {T}=boot((path,init)=>{
+  if(init.method==='POST'){writes.push(JSON.parse(init.body));return new Promise(()=>{});}
+  return reply(path.includes('/counts')?{threads:{}}:{items});
+ });
+ await T.load('t'); const lease=T.beforeSend('t','',20,{defer:true});
+ items=[...items,item('new','done',{message_id:'new',at:10,updated_at:30})];
+ // An ordinary late ledger poll while custody is pending must not add ids.
+ await T.loadCounts(true); await tick(); lease.commit(); await tick();
  assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old']}]); assert.match(T.dots('t'),/1 finished, not seen/);
 });

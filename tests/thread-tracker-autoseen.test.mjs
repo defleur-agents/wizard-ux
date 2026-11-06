@@ -137,6 +137,28 @@ test('phone WebView can read a front visible reply even when hasFocus is false',
   const h = harness(); h.doc.documentElement.dataset.shell = 'phone'; h.win.WizardOSNative = {}; h.focus(false); await h.start();
   h.step(); h.step(1000); assert.equal(h.writes.length, 1);
 });
+test('a 300px reply with only its 50px tail visible is not read', async () => {
+  const h = harness(); h.node.getBoundingClientRect = () => ({ top: -82, bottom: 218, height: 300, left: 0, width: 400 });
+  await h.start(); h.step(); h.step(1000); assert.equal(h.writes.length, 0);
+});
+for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) for (const skew of [-60000, 0, 60000]) test(`send pins server versions with client clock ${skew} in ${agent || 'main'}`, async () => {
+  const at = 1793960000000;
+  const old = { id: 'old', state: 'done', message_id: 'old', at: at - 10000, updated_at: at - 10000 };
+  const running = { id: 'job', state: 'running', message_id: 'job', at: at - 10000, updated_at: at - 10000 };
+  const h = harness([old, running], agent); await h.start(); h.active(false);
+  h.T.beforeSend('t', agent, at + skew);
+  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['old'] }], 'aligned and skewed clocks clear the same loaded old version');
+  await h.replace([{ ...old, updated_at: at + 10000 }, { ...running, state: 'done', updated_at: at + 10000 }]);
+  assert.equal(h.writes.length, 1, 'neither a changed pinned version nor a completion after send is acknowledged');
+  assert.match(h.T.dots('t', agent), /2 finished, not seen/);
+});
+for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`staged send does not POST a newer version after custody delay in ${agent || 'main'}`, async () => {
+  const old = { id: 'old', state: 'done', message_id: 'm', at: 10, updated_at: 10 };
+  const h = harness([old], agent); await h.start(); h.active(false);
+  const lease = h.T.beforeSend('t', agent, 20, { defer: true });
+  await h.replace([{ ...old, updated_at: 30 }]); lease.commit();
+  assert.equal(h.writes.length, 0); assert.match(h.T.dots('t', agent), /finished, not seen/);
+});
 test('a long reply tail visible for a second is read, not required to fill 40 percent of the viewport', async () => {
   const h = harness(); h.node.getBoundingClientRect = () => ({ top: -3740, bottom: 260, height: 4000, left: 0, width: 400 });
   await h.start(); h.step(); h.step(1000); assert.equal(h.writes.length, 1);
@@ -150,12 +172,10 @@ for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`s
     { id: 'run', state: 'running', message_id: 'run', at: 10000 },
     { id: 'mixed-green', state: 'done', message_id: 'mixed', at: 10000 },
     { id: 'mixed-run', state: 'running', message_id: 'mixed', at: 10000 },
-    { id: 'future', state: 'done', message_id: 'future', at: 30000 },
-    { id: 'unknown', state: 'done', message_id: 'unknown', at: 0 },
   ], agent); await h.start(); h.active(false); h.focus(false);
   h.T.beforeSend('t', agent, 20000);
   assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['green-a','green-b'] }]);
-  const dots = h.T.dots('t', agent); assert.match(dots, /need you/); assert.match(dots, /stuck/); assert.match(dots, /running/); assert.match(dots, /finished, not seen/);
+  const dots = h.T.dots('t', agent); assert.match(dots, /need you/); assert.match(dots, /stuck/); assert.match(dots, /running/); assert.doesNotMatch(dots, /finished, not seen/);
   h.T.beforeSend('t', agent, 20000); assert.equal(h.writes.length, 1, 'not duplicated while Seen is in flight');
   h.doc.documentElement.dataset.tweaks = ''; h.T.beforeSend('t', agent, 40000); assert.equal(h.writes.length, 1, 'off means no write');
 });

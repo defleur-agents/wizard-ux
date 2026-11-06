@@ -323,6 +323,23 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await ctx.unrouteAll({behavior:'wait'});await ctx.close();
     }
     WORKING=false;
+    /* ---- sender clock never admits a completion after the send ---- */
+    for (const skin of SKINS) for (const shell of ['phone', 'desktop']) for (const skew of [-60000, 0, 60000]) {
+      const svc = service(), at = Date.now(), anchor = svc.items[0];
+      svc.items = [{ ...anchor, id: 'old', state: 'done', message_id: 'old', at: at - 10000, updated_at: at - 10000 },
+        { ...anchor, id: 'job', state: 'running', message_id: 'job', at: at - 10000, updated_at: at - 10000 }]; svc.seen.clear();
+      const { ctx, page } = await mount(browser, svc, { shell, skin, tweaks: [ID] });
+      await page.evaluate(skew => { const now = Date.now.bind(Date); Date.now = () => now() + skew; Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' }); }, skew);
+      if (shell === 'desktop') await page.evaluate(() => window.WosExperience.chooseDesktopView('ai-apps'));
+      await openThread(page, 'tt-main'); await page.waitForSelector('[data-tt-strip]');
+      await page.evaluate(() => { window.__sendLease = window.WosThreadTracker.beforeSend('tt-main', '', Date.now(), { defer: true }); });
+      svc.items = svc.items.map(i => i.id === 'job' ? { ...i, state: 'done', updated_at: at + 10000 } : i);
+      await page.evaluate(() => window.__sendLease.commit());
+      await page.waitForFunction(() => /finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      const seen = svc.writes.filter(w => w.p.endsWith('/thread-items/seen'));
+      check(`clock/${shell}/${skin}/${skew}: only pinned old version acknowledged; later completion stays unseen`, seen.length === 1 && JSON.stringify(seen[0].b.ids) === '["old"]' && !svc.seen.has('job') && ctx.errors.length === 0, seen);
+      await ctx.unrouteAll({ behavior: 'wait' }); await ctx.close();
+    }
     /* ---- visible reply dwell and measured tracker inset ---- */
     if (!process.env.QA_STATE_ONLY) for (const skin of SKINS) for (const profile of ['phone', 'phone-doc', 'desktop']) {
       const shell = profile === 'desktop' ? 'desktop' : 'phone', svc = service();
@@ -394,6 +411,23 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.evaluate(()=>{const nb=document.querySelector('.ch-msgs'),n=window.__lateReply;nb.append(n);const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().top-top-16;if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});
       await page.waitForFunction(()=>!/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
       check(`autoseen/${profile}/${skin}: late streamed anchor re-arms without a render, including phone hasFocus false`,svc.view().every(i=>i.seen));
+      // A small tail of an ordinary reply is not evidence of reading it.
+      await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'}));
+      svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
+      await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
+      await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      const shortTail=await page.evaluate(mid=>{
+        const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
+        n.style.height='300px';n.style.minHeight='300px';n.style.boxSizing='border-box';n.textContent='Only the tail of an ordinary reply.';
+        const spacer=document.createElement('div');spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);
+        const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+50);
+        if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
+        const r=n.getBoundingClientRect(),b=nb.getBoundingClientRect();return {height:r.height,visible:Math.min(r.bottom,b.bottom,innerHeight)-Math.max(r.top,top)};
+      },String(latest.id));
+      const writesBeforeShort=svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length;
+      await page.evaluate(()=>{Object.defineProperty(document,'visibilityState',{configurable:true,value:'visible'});document.dispatchEvent(new Event('visibilitychange'));});await page.waitForTimeout(1400);
+      check(`autoseen/${profile}/${skin}: 300px reply with 50px tail is not read`,shortTail.height===300 && Math.abs(shortTail.visible-50)<=2 && svc.view().every(i=>!i.seen) && svc.writes.filter(w=>w.p.endsWith('/thread-items/seen')).length===writesBeforeShort,shortTail);
+      await page.screenshot({path:path.join(OUT,`running-short-unread-${profile}-${skin}.png`)});
       // Keep just the tail of a genuinely viewport-tall reply on screen for a full second.
       await page.evaluate(()=>Object.defineProperty(document,'visibilityState',{configurable:true,value:'hidden'}));
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
@@ -401,7 +435,7 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
       const tail=await page.evaluate(mid=>{
         const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
-        n.style.minHeight='4000px';n.style.display='flex';n.style.flexDirection='column';n.style.justifyContent='flex-end';n.textContent='The end of a long reply, read before the next message.';
+        n.style.height='4000px';n.style.minHeight='4000px';n.style.display='flex';n.style.flexDirection='column';n.style.justifyContent='flex-end';n.textContent='The end of a long reply, read before the next message.';
         const spacer=document.createElement('div');spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);
         const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+110);
         if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
