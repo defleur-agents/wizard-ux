@@ -991,7 +991,20 @@ window.WizCore.chats = function createChats(H) {
       if (w.thread) {
         const agent = LIVE.agentOf ? LIVE.agentOf(w.thread) : '';
         if (toggled && e.detail.enabled) globalThis.WosThreadTracker.load(w.thread, agent);
-        if (toggled || (!!el.querySelector('[data-tt-strip]') !== !!globalThis.WosThreadTracker.stripHtml(w.thread, agent))) renderThreadLive(w);
+        const oldStrip = el.querySelector('[data-tt-strip]'), html = globalThis.WosThreadTracker.stripHtml(w.thread, agent);
+        if (!!oldStrip !== !!html) {
+          // Chrome-only paint: never wait on the text-selection/scroll render guard,
+          // and never replace the reply or composer under the owner's finger.
+          const nb = el.querySelector('.ch-msgs'), root = nb?.closest('.ch-thread');
+          if (root) {
+            PW?.capture(nb);
+            if (oldStrip) oldStrip.remove();
+            else root.querySelector('.ch-head')?.insertAdjacentHTML('afterend', html);
+            syncDocumentThread();
+            PW?.resume(nb); // recompute the shared eye-line in this frame
+          }
+        }
+        if (toggled) renderThreadLive(w);
       } else if (!holdList(wid)) renderChatList(w, el);
     }
   });
