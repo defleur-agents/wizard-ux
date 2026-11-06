@@ -35,7 +35,7 @@ function harness(states = ['done', 'done'], agent = '', timestampOnly = false) {
 }
 test('green reply group auto-Seen after continuous visible dwell; paints all ids before I/O', async () => {
   const h = harness(); await h.start(); h.step(); h.step(999); assert.equal(h.writes.length, 0);
-  h.step(1); assert.deepEqual(h.writes[0].ids, ['0', '1']); assert.equal(h.T.dots('t'), '');
+  h.step(1); assert.deepEqual(h.writes[0].ids, ['0', '1']); assert.deepEqual(h.writes[0].items, [{ id: '0', updated_at: 1 }, { id: '1', updated_at: 1 }]); assert.equal(h.T.dots('t'), '');
   await h.update(); h.step(); h.step(1000); assert.equal(h.writes.length, 2, 'a later unseen update re-arms the anchor');
 });
 for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['container', 'container-qa'], ['restricted', 'restricted-qa']]) {
@@ -47,7 +47,7 @@ for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['con
     if (agent) assert.equal(h.T.stripHtml('t'), '', 'routed work does not leak to the main thread');
     const mixed = harness(['done', { state: 'running', message_id: 'run' }], agent); await mixed.start();
     mixed.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: agent } } : s.includes('data-tt-seen') ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: '0' } } : null } });
-    assert.deepEqual(mixed.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0'] }]);
+    assert.deepEqual(mixed.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0'], items: [{ id: '0', updated_at: 1 }] }]);
     assert.match(mixed.T.stripHtml('t', agent), /data-tt-strip/); assert.match(mixed.T.dots('t', agent), /running/);
     const ack = harness([{ state: 'done', seen: true }, { state: 'needs_you', try: true, seen: true }], agent); await ack.start();
     assert.equal(ack.T.stripHtml('t', agent), '', 'acknowledged-only is hidden in every scope');
@@ -55,7 +55,7 @@ for (const [kind, agent] of [['main', ''], ['host-profile', 'profile-qa'], ['con
   test(`main-versus-routed auto-Seen scope: ${kind} (synthetic client, not runtime transport proof)`, async () => {
     const h = harness(['done', 'done'], agent); await h.start(); h.step(); h.step(1000);
     assert.equal(h.reads[0], '/wizard/v1/thread-items?thread=t' + (agent ? '&agent=' + agent : ''));
-    assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0', '1'] }]);
+    assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['0', '1'], items: [{ id: '0', updated_at: 1 }, { id: '1', updated_at: 1 }] }]);
     assert.equal(h.T.dots('t', agent), '');
     const amber = harness(['needs_you'], agent); await amber.start(); amber.step(); amber.step(2000); assert.equal(amber.writes.length, 0);
   });
@@ -147,7 +147,7 @@ for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) for (co
   const running = { id: 'job', state: 'running', message_id: 'job', at: at - 10000, updated_at: at - 10000 };
   const h = harness([old, running], agent); await h.start(); h.active(false);
   h.T.beforeSend('t', agent, at + skew);
-  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['old'] }], 'aligned and skewed clocks clear the same loaded old version');
+  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['old'], items: [{ id: 'old', updated_at: old.updated_at }] }], 'aligned and skewed clocks clear the same loaded old version');
   await h.replace([{ ...old, updated_at: at + 10000 }, { ...running, state: 'done', updated_at: at + 10000 }]);
   assert.equal(h.writes.length, 1, 'neither a changed pinned version nor a completion after send is acknowledged');
   assert.match(h.T.dots('t', agent), /2 finished, not seen/);
@@ -174,7 +174,7 @@ for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`s
     { id: 'mixed-run', state: 'running', message_id: 'mixed', at: 10000 },
   ], agent); await h.start(); h.active(false); h.focus(false);
   h.T.beforeSend('t', agent, 20000);
-  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['green-a','green-b'] }]);
+  assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['green-a','green-b'], items: [{ id: 'green-a', updated_at: 1 }, { id: 'green-b', updated_at: 1 }] }]);
   const dots = h.T.dots('t', agent); assert.match(dots, /need you/); assert.match(dots, /stuck/); assert.match(dots, /running/); assert.doesNotMatch(dots, /finished, not seen/);
   h.T.beforeSend('t', agent, 20000); assert.equal(h.writes.length, 1, 'not duplicated while Seen is in flight');
   h.doc.documentElement.dataset.tweaks = ''; h.T.beforeSend('t', agent, 40000); assert.equal(h.writes.length, 1, 'off means no write');

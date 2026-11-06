@@ -23,7 +23,7 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
     const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
     vm.runInContext(source.slice(source.indexOf("  window.addEventListener('wos:thread-tracker'"), source.indexOf('  // Changed elsewhere (Settings')), ctx);
   }
-  return { T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
+  return { win, T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
     choice(value) { win.dispatchEvent(new ctx.CustomEvent('wos:tweak-choice', { detail: { id: 'wizard/thread-tracker', on: value } })); } };
 }
 test('Chats row renders badge, tracker dots, then timestamp, including tracker-off rows', () => {
@@ -47,10 +47,54 @@ const reply = body => ({ ok: true, status: 200, json: async () => body });
 const item = (id, state, extra = {}) => ({ id, title: id, state, updated_at: 10, seen: false, ...extra });
 const tick = () => new Promise(r => setTimeout(r, 15));
 
+test('amber shows the action, Dismiss clears group ids instantly; stale and newer versions return', async () => {
+  let items = [item('a', 'needs_you', { ask: 'Reply resend to send it', message_id: 'm' }), item('b', 'done', { message_id: 'm' })];
+  let release; const writes = [];
+  const { T, win } = boot((path, init) => {
+    if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(r => { release = () => r(reply({ items, results: writes[0].ids.map(id => ({ id, status: 'stale' })) })); }); }
+    return reply({ items });
+  });
+  win.WizLive = { session: () => ({ attention: { ask: 'Fallback action' } }) };
+  await T.load('t');
+  assert.match(T.stripHtml('t'), /Reply resend to send it/); assert.match(T.stripHtml('t'), /data-tt-dismiss/);
+  tap(T, 'a', 'data-tt-dismiss'); assert.equal(T.stripHtml('t'), '', 'same frame');
+  assert.deepEqual(writes[0].items, [{ id: 'a', updated_at: 10 }, { id: 'b', updated_at: 10 }]);
+  items = [item('a', 'needs_you', { ask: 'Approve the next send', updated_at: 20 })]; release(); await tick();
+  assert.match(T.stripHtml('t'), /Approve the next send/); assert.match(T.dots('t'), /need you/);
+});
+test('amber uses thread ask fallback, no Dismiss for red or running', async () => {
+  const { T, win } = boot(() => reply({ items: [item('a','needs_you'), item('red','blocked'), item('run','running')] }));
+  win.WizLive = { session: () => ({ attention: { ask: 'Reply resend to send it' } }) };
+  await T.load('t'); const html = T.stripHtml('t');
+  assert.match(html, /Reply resend to send it/); assert.equal((html.match(/data-tt-dismiss/g) || []).length, 1);
+});
+
+for (const mode of ['manual', 'group', 'send-clear']) test(`${mode} sends exact loaded versions and rejects a newer unseen server version`, async () => {
+  let release, items = [item('a', 'done', { message_id: 'm' }), ...(mode === 'group' ? [item('b', 'done', { message_id: 'm', updated_at: 11 })] : [])];
+  const writes = [];
+  const { T } = boot((path, init) => {
+    if (init.method === 'POST') { writes.push(JSON.parse(init.body)); return new Promise(r => { release = () => r(reply({ items, results: writes[0].ids.map(id => ({ id, status: 'stale' })) })); }); }
+    return reply(path.endsWith('/counts') ? { threads: {} } : { items });
+  });
+  await T.load('t');
+  if (mode === 'send-clear') { const lease = T.beforeSend('t', '', Date.now(), { defer: true }); items = items.map(i => ({ ...i, updated_at: i.updated_at + 10 })); lease.commit(); }
+  else { tap(T, 'a'); items = items.map(i => ({ ...i, updated_at: i.updated_at + 10 })); }
+  assert.deepEqual(writes[0].items, mode === 'group' ? [{ id: 'a', updated_at: 10 }, { id: 'b', updated_at: 11 }] : [{ id: 'a', updated_at: 10 }]);
+  release(); await tick();
+  assert.match(T.dots('t'), /finished, not seen/);
+  assert.match(T.stripHtml('t'), /Mark seen/);
+});
+test('stale result retires the optimistic pin even if response repeats the requested version', async () => {
+  const items = [item('a', 'done')];
+  const { T } = boot((path, init) => reply(init.method === 'POST' ? { items, results: [{ id: 'a', status: 'stale' }] } : { items }));
+  await T.load('t'); tap(T, 'a'); assert.equal(T.stripHtml('t'), ''); await tick();
+  assert.match(T.dots('t'), /finished, not seen/);
+});
+
 const tap = (T, id, action = 'data-tt-seen', jump) => T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't', ttAgent: '' } } : s.includes(action) ? {} : s.includes('data-tt-row') ? { dataset: { ttRow: id } } : null } }, { jump });
 
 test('same reply is one synthesized row/count/dot, Seen includes every ask and a newer anchor splits the group', async () => {
-  let items = [item('a', 'needs_you', { try: true, message_id: 'm', title: 'Nightly helper' }), item('b', 'done', { message_id: 'm', title: 'Messenger sign-in' }), item('c', 'done', { message_id: 'm', seen: true })];
+  let items = [item('a', 'needs_you', { try: true, ask: 'Reply resend to send it', message_id: 'm', title: 'Nightly helper' }), item('b', 'done', { message_id: 'm', title: 'Messenger sign-in' }), item('c', 'done', { message_id: 'm', seen: true })];
   const writes = []; let release;
   const { T } = boot((path, init) => {
     // Intentionally old per-item counts: client must not repaint three dots over the loaded reply group.
@@ -61,7 +105,7 @@ test('same reply is one synthesized row/count/dot, Seen includes every ask and a
   await T.load('t'); await T.loadCounts(true); await tick();
   let html = T.stripHtml('t');
   assert.match(html, /1 open</); assert.equal((html.match(/data-tt-row=/g) || []).length, 1);
-  assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Ready to try/);
+  assert.match(html, /Nightly helper · Messenger sign-in · c/); assert.match(html, /3 asks in one reply · Reply resend to send it/);
   assert.match(T.dots('t'), /1 need you/); assert.doesNotMatch(T.dots('t'), /finished, not seen/);
   assert.equal(T.itemFor('t', '', { message_id: 'm' }).id, 'a');
   let target;
@@ -171,5 +215,5 @@ test('late ledger reload preserves pinned versions but never expands the snapsho
  items=[...items,item('new','done',{message_id:'new',at:10,updated_at:30})];
  // An ordinary late ledger poll while custody is pending must not add ids.
  await T.loadCounts(true); await tick(); lease.commit(); await tick();
- assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old']}]); assert.match(T.dots('t'),/1 finished, not seen/);
+ assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old'],items:[{id:'old',updated_at:10}]}]); assert.match(T.dots('t'),/1 finished, not seen/);
 });

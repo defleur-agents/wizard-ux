@@ -1219,10 +1219,13 @@
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
-    archive(id, { file = false } = {}) {
+    archive(id, { file = false, confirmed = null } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
       if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
       return this._act(id, { archived: true, deferred: false }, async s => {
+        // Tracker Dismiss reuses Done's same-frame paint and rollback. It may
+        // persist only after every version-validated Seen result confirms it.
+        if (confirmed && !await confirmed) throw new Error('Seen version changed');
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
         const ag = this.agentOf(id);
