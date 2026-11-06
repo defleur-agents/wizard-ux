@@ -26,7 +26,7 @@
   const openKeys = new Set(), ackKeys = new Set();
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
   const pendingSeen = new Map(); // key → seen writes in flight
-  const sendCutoffs = new Map(); // explicit send/steer, scoped to this thread and visit
+  const sendSnapshots = new Map(); // explicit send/steer: exact server versions already loaded in this scope
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
@@ -71,7 +71,7 @@
   function merge(k, items) {
     const mine = seenLocally.get(k);
     const list = (items || []).map(i => (mine?.has(`${i.id}@${i.updated_at}`) ? { ...i, seen: true } : i));
-    for (const i of list) if (i.seen) mine?.delete(`${i.id}@${i.updated_at}`);
+    for (const i of items || []) if (i.seen) mine?.delete(`${i.id}@${i.updated_at}`); // only server confirmation retires the local pin
     return list;
   }
   async function load(sid, agent = '') {
@@ -255,6 +255,7 @@
         const hit = h > 0 && document.elementFromPoint(x, y);
         const visible = front && !strip?.classList.contains('open') && n.intersects && node.isConnected
           && bottom > top && h >= Math.min(40, r.height)
+          && (r.height > bottom - top || r.top >= top && r.top < bottom - 20 || h >= .4 * Math.min(r.height, bottom - top))
           && node.contains(hit) && (!rstrip || y > rstrip.bottom);
         if (!visible) { n.since = 0; n.attempted = false; continue; }
         if (!n.since) n.since = Date.now();
@@ -273,7 +274,7 @@
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
-  function markSeen(sid, agent, ids, defer = false) {
+  function markSeen(sid, agent, ids, defer = false, versions = null) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
     const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
@@ -293,7 +294,18 @@
     };
     const commit = () => {
       if (phase !== 'staged') return; phase = 'committed';
-    req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
+      // Custody may take seconds. Never send a blanket id acknowledgement if the
+      // loaded server version or one of its reply-group members changed meanwhile.
+      let posting = ids;
+      if (versions) {
+        const cur = threads.get(k), allowed = new Set(groupsOf(cur?.items || [])
+          .filter(g => g.members.every(i => i.state === 'done' && versions.has(`${i.id}@${i.updated_at}`))).flatMap(g => g.ids));
+        posting = ids.filter(id => allowed.has(id));
+        for (const [tok, i] of restore) if (!allowed.has(i.id)) mine.delete(tok);
+        if (cur) { cur.items = cur.items.map(i => !allowed.has(i.id) ? restore.get(`${i.id}@${i.updated_at}`) || i : i); counts[k] = tally(cur.items); changedEvent(); }
+        if (!posting.length) { settle(); return; }
+      }
+    req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids: posting }) })
       .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
       .catch(undo);
     };
@@ -301,33 +313,37 @@
     return { commit, cancel() { if (phase === 'staged') undo(); } };
   }
   // Sending is explicit evidence that the owner has moved on from older finished replies.
-  // Do not consume mixed/amber/red/running groups, unknown dates, or work completed after the send.
+  // Pin server versions, never compare the phone clock with server timestamps.
+  // A late reload can only acknowledge versions known all-done at the send tap.
   function applySendSeen(sid, agent, defer = false) {
-    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send || (!send.committed && !defer)) return;
+    const k = key(sid, agent), send = sendSnapshots.get(k); if (!on() || !send || (!send.committed && !defer)) return;
     const ids = [];
     for (const g of groupsOf(threads.get(k)?.items || [])) {
-      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && i.at > 0 && i.at < send.at && (i.updated_at || i.at) <= send.at)) continue;
+      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && send.versions.has(`${i.id}@${i.updated_at}`))) continue;
       const tokens = g.members.map(i => `${i.id}@${i.updated_at}`);
       if (tokens.some(t => send.attempted.has(t))) continue;
       tokens.forEach(t => send.attempted.add(t)); ids.push(...g.ids);
     }
-    if (ids.length) return markSeen(sid, agent, ids, defer);
+    if (ids.length) return markSeen(sid, agent, ids, defer, send.versions);
   }
   function beforeSend(sid, agent = '', at = Date.now(), { defer = false } = {}) {
     if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
-    const k = key(sid, agent), prior = sendCutoffs.get(k);
-    const send = prior && at <= prior.at ? prior : { at, attempted: new Set(), committed: !defer };
-    sendCutoffs.set(k, send);
+    const k = key(sid, agent), prior = sendSnapshots.get(k);
+    const versions = new Set(groupsOf(threads.get(k)?.items || [])
+      .filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done' && Number.isFinite(i.updated_at)))
+      .flatMap(g => g.members.map(i => `${i.id}@${i.updated_at}`)));
+    const send = { versions, attempted: new Set(), committed: !defer };
+    sendSnapshots.set(k, send);
     const staged = applySendSeen(sid, agent, defer); // same-frame paint before navigation
     const commit = () => {
       send.committed = true; staged?.commit();
       const t = threads.get(k); if (t && !t.loading) t.at = 0;
-      load(sid, agent); // late ledger ingestion still belongs to the original send cutoff
+      load(sid, agent); // late ingestion cannot expand the send's pinned server versions
     };
     if (!defer) commit();
     return { commit, cancel() {
       if (send.committed) return;
-      if (sendCutoffs.get(k) === send) { if (prior) sendCutoffs.set(k, prior); else sendCutoffs.delete(k); }
+      if (sendSnapshots.get(k) === send) { if (prior) sendSnapshots.set(k, prior); else sendSnapshots.delete(k); }
       staged?.cancel();
     } };
   }
@@ -372,7 +388,7 @@
     const enabled = on(); if (enabled === wasOn) return;
     wasOn = enabled;
     if (enabled) { countsAt = 0; loadCounts(true); }
-    else { openKeys.clear(); opened = null; sendCutoffs.clear(); }
+    else { openKeys.clear(); opened = null; sendSnapshots.clear(); }
     changedEvent({ enabled }); // Chats hydrates every currently open thread and refreshes Reply on both edges.
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) syncEnabled(); });
