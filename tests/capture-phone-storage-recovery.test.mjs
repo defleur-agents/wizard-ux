@@ -20,7 +20,7 @@ function disk(plans=[]){const time=clock(),connections=[],transactions=[],commit
    else if(!plan.hang)time.setTimeout(()=>{if(aborted)return;for(const [k,v]of staged)committed.set(k,v);tx.oncomplete?.();},plan.delay??1);
    return tx;
  }};connections.push(db);req.result=db;req.onsuccess();});return req;}};
- const c=vm.createContext({DB_NAME:'synthetic',dbPromise:null,W:{indexedDB},indexedDB,queueMicrotask,Promise,Date,fail,...time});
+ const c=vm.createContext({storageDiagnostic(){},DB_NAME:'synthetic',dbPromise:null,W:{indexedDB},indexedDB,queueMicrotask,Promise,Date,fail,...time});
  load('  function storageFailure(', '  async function rows()',c);
  return {c,time,connections,transactions,committed,get opens(){return opens;},get aborts(){return aborts;}};
 }
