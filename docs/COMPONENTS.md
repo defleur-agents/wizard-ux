@@ -34,7 +34,7 @@ Back: `WizEscapeBack` (`core/escape-back.js`), `WosBack`: phone/native/desktop; 
 | Receive shares | `WizardApp.share.receive({accepts, targets, receive}) / targets / check` (`docs/SHARE-SHEET.md`) |
 | Mic, camera, screen capture | `WizardApp.capture.start / settle / pending / ack`, `WizardApp.voiceInput.register` |
 | Duck Music; orb app button | `WizardApp.audio.duck(on)`; `.orb.claim/release` (two-orb) |
-| Title-bar tools | `WizardApp.titlebar.set(tools)` |
+| Title-bar tools | `WizardApp.titlebar.set(tools)`; AI apps header follows late/replaced tools on its pane |
 | Fingerprint app secret | `WizardApp.vault` (`VaultBridge`, `VaultSlots`); `WizAppServices` focus/legacy |
 | Offline replica, durable edits | `WizOffline.create` (`core/offline-kit.js`) |
 | Draft holds/keep (1.5s) | `WizardApp.update.hold` |
