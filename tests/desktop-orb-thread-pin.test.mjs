@@ -18,7 +18,7 @@ for (const state of ['idle', 'listen', 'paused']) {
       talkNew: (...args) => calls.push(['new', ...args]),
     });
     talk();
-    assert.deepEqual(calls, [['context', 'send']]);
+    assert.deepEqual(calls, [['context']], 'toggle starts from idle and sends a running take; send is stop-only');
   });
 }
 
@@ -31,5 +31,5 @@ test('contextual recorder freezes thread, active run and model route before voic
   }
   assert.match(body, /const aimSid = vFeedback\?\.thread \|\| rp\?\.sid/);
   assert.match(body, /CHATS\.sendVoiceTo\(rp\.wid, rp\.sid/);
-  assert.match(body, /OUTBOX\.handOff\(r\.captureId \|\| stagedId, it\)/);
+  assert.match(body, /OUTBOX\.handOff\?\.\(stagedId\)/);
 });
