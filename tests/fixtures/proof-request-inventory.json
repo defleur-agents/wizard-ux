@@ -25,6 +25,12 @@
     "/favicon.ico": "204 empty"
   },
   "paths": {
+    "/wizard-os-home/api/diagnostics/scroll-capture": {
+      "status": "not-exercised",
+      "source": "web/core/app-capture.js",
+      "kind": "write-or-stream",
+      "note": "Android-native storage diagnostics only; these three browser flows have no native bridge. Privacy projection and collector transport are covered by capture-storage-diagnostics.test.mjs and an explicit synthetic private-collector probe. Refuse and collect any unexpected attempt here."
+    },
     "/wizard/v1/agents": {
       "status": "catalogued",
       "source": "web/agents/agents.js",
@@ -919,6 +925,12 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
+    "/wizard-os-home/core/skins/wizard/{}{}-{}.webp": {
+      "status": "not-exercised",
+      "source": "web/core/skins.js",
+      "kind": "read",
+      "note": "Orientation-specific built-in image; exercised in background browser proofs, not these three request proofs. Refused and collected if reached."
+    },
     "/wizard-os-home/core/skins/wizard/{}{}-thumb.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
@@ -931,12 +943,7 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
-    "/wizard-os-home/core/skins/wizard/{}.webp": {
-      "status": "not-exercised",
-      "source": "web/core/skins.js",
-      "kind": "read",
-      "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
-    },
+
     "/wizard-os-home/core/skins/macos/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
