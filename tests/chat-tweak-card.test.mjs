@@ -147,3 +147,14 @@ test('experience state names the shells a non-view tweak declares (so the card c
   const src = read('web/core/experience.js');
   assert.match(src, /: Array\.isArray\(manifests\.get\(t\.id\)\?\.shells\) \? \{ \.\.\.t, shells: shellsOf\(t\.id\) \} : t\) \}\);/);
 });
+
+test('marker: a reply cut off inside an unterminated marker never shows the protocol text (saved text, copy, preview)', () => {
+  const cut = 'Shipped the phone list. It starts off.\n\n[WIZARD_TWEAK_V1]{"id":"wizard/desk';
+  const [tn] = KIT.parseRows(rows(cut));
+  for (const t of [tn.a.text, tn.a.plainText]) { assert.doesNotMatch(t, /WIZARD_TWEAK|wizard\/desk/); assert.match(t, /starts off\./); }
+  assert.equal([...(tn.a.tweaks || [])].length, 0, 'no card from a half marker');
+  const ctx = { chipLabel: () => ' ' };
+  vm.runInNewContext(between(read('web/live.js'), '  const clean = s =>', '\n\n') + '\nglobalThis.clean = clean;', ctx);
+  assert.equal(ctx.clean(cut), 'Shipped the phone list. It starts off.');
+});
+
