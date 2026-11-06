@@ -552,15 +552,25 @@
   const RENAMES = new Map();
   let titleRead = 0;
   const titleScope = s => `${s.agent || 'hermes'}:${s.id}`;
-  function applyTitle(s, read = 0) {
+  function applyTitle(s, read = 0, authoritative = false) {
     const o = RENAMES.get(titleScope(s)); if (!o) return s;
     if (o.settled && read > o.settled) {
-      if (s.title === o.title) o.confirmed = Math.max(o.confirmed || 0, read);
-      // A later, independent read may contain an owner's rename on another
-      // device. Earlier reads remain fenced even after our title was confirmed.
-      else if (o.confirmed && read > o.confirmed) { o.title = s.title; o.confirmed = read; }
+      if (authoritative && read > o.confirmed) { o.title = s.title; o.confirmed = read; o.dirty = false; }
+      // A differing snapshot may be stale OR another owner's newer edit. Only
+      // a fresh canonical detail read can distinguish them; never pin forever.
+      else if (!authoritative && s.title !== o.title && read > o.confirmed) o.dirty = true;
     }
     s.title = o.title; return s;
+  }
+  function confirmTitle(store, id, entry) {
+    if (entry.reading || (entry.confirmed && !entry.dirty)) return;
+    // Lists/indexes are cached snapshots; a new detail GET goes to canonical
+    // session storage. Another owner's rename may win before ours is observed.
+    entry.reading = store.sessionInfo(id).then(s => {
+      if (s && RENAMES.get(titleScope(s)) === entry) {
+        paintTitle(store, s, entry.title); writeSnap(store); store.emit();
+      }
+    }).catch(() => {}).finally(() => { entry.reading = null; });
   }
   function paintTitle(store, session, title) {
     const key = titleScope(session);
@@ -573,6 +583,8 @@
   const writeRestored = v => { try { localStorage.setItem(RESTORED_KEY, JSON.stringify(v)); } catch (e) {} };
   function applyLocal(s, read = 0) {
     applyTitle(s, read);
+    const rename = RENAMES.get(titleScope(s));
+    if (rename?.settled && (!rename.confirmed || rename.dirty)) confirmTitle(L, s.id, rename);
     const r = readRestored()[s.id];
     if (r && !s.deferred) {
       const latest = Math.max(...[s.lastUserAt, s.lastAssistantAt, s.activityAt].map(v => Date.parse(v ?? '')).filter(isFinite));
@@ -1178,7 +1190,7 @@
       if (s.agent && (s.agent || 'hermes') !== (agent || 'hermes')) throw new Error('Thread scope changed');
       if (agent) s.agent = agent;
       const list = agent ? (this.agentSessions[agent] = this.agentSessions[agent] || []) : this.sessions;
-      applyTitle(s, read);
+      applyTitle(s, read, true);
       const i = list.findIndex(x => x.id === id);
       if (s.id !== id || (s.agent && otherAgent(s.agent) && s.agent !== agent)) throw new Error('Thread scope changed');
       // The detail read carries no run state for a live thread (only the list projects runs and helpers), so an
@@ -1266,6 +1278,7 @@
         const r = await fetch(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: t }) });
         if (!r.ok) { let msg = ''; try { msg = (await r.json())?.error?.message || ''; } catch (e) {} throw Object.assign(new Error(msg || 'rename failed'), { status: r.status }); }
         entry.settled = ++titleRead;
+        confirmTitle(this, id, entry);
         writeSnap(this);
         setTimeout(() => this.refresh(), 50); return true;
       } catch (e) {
