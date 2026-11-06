@@ -341,6 +341,7 @@
     archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
     workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
@@ -986,17 +987,24 @@
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
-    markSeen(ids) {
+    // `after` (optional promise<boolean>): record the click-time activity/count now but persist it only if the
+    // promise resolves true; a refused or errored confirmation never marks newer content read.
+    markSeen(ids, { after = null } = {}) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
       const list = all;
       if (!list.length) return;
-      let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
-      const threads = { ...state.threads };
-      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
-      state = { ...state, threads };
-      this.seen = state; writeLocal(state); this.emit();
-      putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      const records = list.map(s => [seenKeyOf(s), recordFor(s, ts)]);
+      const write = deferred => {
+        let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
+        const threads = { ...state.threads };
+        for (const [k, r] of records) threads[k] = deferred ? later(threads[k], r) : r;
+        state = { ...state, threads };
+        this.seen = state; writeLocal(state); this.emit();
+        putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      };
+      if (after) { Promise.resolve(after).then(ok => { if (ok === true) write(true); }, () => {}); return; }
+      write(false);
     },
     async markUnread(ids) {
       const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
@@ -1228,10 +1236,13 @@
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
-    archive(id, { file = false } = {}) {
+    archive(id, { file = false, confirmed = null } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
-      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id, confirmed ? { after: confirmed } : {});
       return this._act(id, { archived: true, deferred: false }, async s => {
+        // Tracker Dismiss reuses Done's same-frame paint and rollback. It may
+        // persist only after every version-validated Seen result confirms it.
+        if (confirmed && !await confirmed) throw new Error('Seen version changed');
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
         const ag = this.agentOf(id);

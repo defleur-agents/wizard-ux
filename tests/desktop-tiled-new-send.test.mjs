@@ -31,7 +31,7 @@ function fixture({ viewport = 1920, count = 2, mono = false, sid = '__new__', na
   });
   const shared = fs.readFileSync(path.join(root, 'web/core/chats.js'), 'utf8');
   const start = shared.indexOf('  function leaveAfterSend('), end = shared.indexOf('\n  }', start) + 4;
-  Object.assign(context, { H: { keepThreadOpen: true }, PHONE: () => false, hosted: new Map(),
+  Object.assign(context, { keepThreadOpen: () => true, H: { keepThreadOpen: true }, PHONE: () => false, hosted: new Map(),
     ch: () => ({trail: [], readNav: 0}), save() {}, threadBack() {}, renderChats() {}, applyLayout() {}, deskOf: () => 0 });
   vm.runInContext(shared.slice(start, end), context);
   return { w, desk, width, get attr() { return attr; },
