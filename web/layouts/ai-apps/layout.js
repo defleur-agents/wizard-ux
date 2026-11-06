@@ -41,13 +41,12 @@ import { ICON, ACTS, SVG, initial, SECTIONS, KINDS, EMPTY, sectionsOpen, gridSlo
   pinsFrom, togglePin, appLayers, orderOpen, homeDrop, tidyPlan, seedUsed, tidyWords, TIDY, TIDY_DEFAULT, tidyLine, tidySentence,
   READY_SORTS, sortOf, PRIORITY_TIP, readySort } from './parts.js';
 import { homeView } from './home.js';
-import desktop from './desktop.js';
 
 const LONG_PRESS = 450;     // ms, a still press on a chat row opens its menu
 const EDGE = 24;            // px from the left edge where a swipe opens the drawer
 
 export default function setup(api) {
-  if (api.env.shell === 'desktop') return desktop(api);
+  // the desktop's entry is desktop.js (core/skin-host.js files.desktop): this file is the phone's only
   if (api.env.shell !== 'phone') return () => {};
   const doc = document, root = doc.documentElement;
   const el = (tag, cls, attrs = {}) => { const n = doc.createElement(tag); if (cls) n.className = cls; for (const [k, v] of Object.entries(attrs)) { if (v == null) continue; if (k === 'text') n.textContent = v; else n.setAttribute(k, v); } return n; };

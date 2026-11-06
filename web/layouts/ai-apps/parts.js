@@ -1,5 +1,7 @@
-import '../../core/chats-list-model.js';
-import '../../core/core.js';
+// The shells already ran these as classic scripts; import them only where they have not (node tests), so the
+// browser never fetches them a second time as modules.
+if (!globalThis.WizChatsListModel) await import('../../core/chats-list-model.js');
+if (!globalThis.WizCore?.ago) await import('../../core/core.js');
 const { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep } = globalThis.WizChatsListModel;
 export { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep };
 /* The AI apps view's shared marks and words (phone layout.js and desktop.js): one icon set, one row-menu order, so the
