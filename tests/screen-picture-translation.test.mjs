@@ -4,7 +4,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-const source = fs.readFileSync(process.env.SCREEN_PAGE_SOURCE || new URL('../android/app/src/main/assets/assist/screen.html', import.meta.url), 'utf8').match(/<script>([\s\S]*?)<\/script>/)[1];
+const page = fs.readFileSync(process.env.SCREEN_PAGE_SOURCE || new URL('../android/app/src/main/assets/assist/screen.html', import.meta.url), 'utf8');
+const scriptStart = page.indexOf('<script>') + '<script>'.length;
+const scriptEnd = page.indexOf('</script>', scriptStart);
+assert.ok(scriptStart >= '<script>'.length && scriptEnd > scriptStart, 'expected the shipped inline script');
+const source = page.slice(scriptStart, scriptEnd);
 const THAI = ['ข้าจะไปออกรบ', 'โอเค แล้วที่นั่น', 'มีสาวๆ ไหม?'];
 const EN = ["I'm heading to battle", 'Okay, and over there', 'Are there any girls?'];
 function harness(texts = ['Menu', 'today at 17:57'], shot = true) {
