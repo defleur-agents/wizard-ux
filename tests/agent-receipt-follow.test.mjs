@@ -10,7 +10,7 @@ test('direct thread detail learns the server agent before the first scoped histo
   const pins = new Map(), detail = new Map();
   const body = src.slice(src.indexOf('    async sessionInfo(id) {'), src.indexOf('    /* ---- thread actions ---- */'));
   const L = { agentSessions: {}, sessions: [], windows: {}, agentOf: id => pins.get(id) || '' };
-  const c = { L, AGENT_OF: pins, DETAIL: detail, otherAgent: id => id && id !== 'hermes', normalize: raw => raw,
+  const c = { L, titleRead:0, applyTitle() {}, AGENT_OF: pins, DETAIL: detail, otherAgent: id => id && id !== 'hermes', normalize: raw => raw,
     aq: () => '', applyLocal: () => {}, req: async () => ({ json: async () => ({ session: { id: 'quick-thread', agent: 'quick', wizard_retry_input: 'hello' } }) }) };
   runWithChatsModel(`L.sessionInfo = ({${body}}).sessionInfo`, c);
   await L.sessionInfo('quick-thread');
