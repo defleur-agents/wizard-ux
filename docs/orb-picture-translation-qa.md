@@ -59,7 +59,7 @@ order. It is never drawn. The pill says “· N not placed” and a short toast 
 
 ## Verification
 
-- `node --test tests/screen-picture-translation.test.mjs` (21 cases, model-free, synthetic geometry) runs the shipped
+- `node --test tests/screen-picture-translation.test.mjs` (25 cases, model-free, synthetic geometry) runs the shipped
   page through `S.open`. It covers: overlay placement and scaling (dpr, offset); malformed, absent and older-Search
   geometry; app/picture overlap dedupe; repeats; replies arriving in either order with no target-as-source; French +
   Thai; Original; tapping a painted line, outside tap and Back; Select text using the one read; target change during a
