@@ -217,3 +217,34 @@ test('late ledger reload preserves pinned versions but never expands the snapsho
  await T.loadCounts(true); await tick(); lease.commit(); await tick();
  assert.deepEqual(writes,[{thread:'t',agent:'hermes',ids:['old'],items:[{id:'old',updated_at:10}]}]); assert.match(T.dots('t'),/1 finished, not seen/);
 });
+
+// Owner reply = answered: amber/red groups on older replies stop counting and spin while the run works (no clock, no backend ack).
+test('a send answers older amber and red groups: no red, count drops, spinner while working, re-tag brings it back', async () => {
+  let items = [item('shots', 'blocked', { message_id: 'm', title: 'Marker screenshots' }), item('redact', 'needs_you', { message_id: 'm', ask: 'Reply redact to retry', title: 'Redact marker' }),
+    item('other', 'needs_you', { message_id: 'n', ask: 'Approve the logo', title: 'Logo' })];
+  const writes = []; let status = 'completed';
+  const { T, win } = boot((path, init) => { if (init.method === 'POST') writes.push(JSON.parse(init.body)); return reply(path.endsWith('/counts') ? { threads: {} } : { items }); });
+  win.WizLive = { session: () => ({ status }) };
+  await T.load('t');
+  assert.match(T.stripHtml('t'), /2 open/); assert.match(T.stripHtml('t'), /tt-dot bad/);
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true });
+  status = 'running'; lease.commit(); await tick();
+  const html = T.stripHtml('t');
+  assert.doesNotMatch(html, /tt-dot bad|tt-dot you/, 'no red or amber while the run works');
+  assert.match(html, /Working on your reply/); assert.doesNotMatch(html, /\d open/); assert.match(html, /tt-dot run/); assert.doesNotMatch(T.dots('t'), /need you|stuck/); assert.match(T.dots('t'), /running/);
+  assert.equal(writes.filter(w => w.items).length, 0, 'never acknowledged in the backend');
+  // The run ends without mentioning the item: it stays answered and uncounted.
+  status = 'completed'; assert.equal(T.stripHtml('t'), ''); assert.equal(T.dots('t'), '');
+  // The next reply re-tags it (a new server version): it returns as amber/red on the new reply.
+  items = [item('shots', 'blocked', { message_id: 'p', updated_at: 30, title: 'Marker screenshots' }), items[1], items[2]];
+  await new Promise(r => setTimeout(r, 2600)); await T.load('t'); await tick();
+  const back = T.stripHtml('t'); assert.match(back, /tt-dot bad/); assert.match(back, /1 open/);
+});
+test('a cancelled send does not answer anything; answered survives reload only for the same versions', async () => {
+  const items = [item('a', 'blocked', { message_id: 'm' })];
+  const { T, win } = boot((path) => reply(path.endsWith('/counts') ? { threads: {} } : { items }));
+  win.WizLive = { session: () => ({ status: 'running' }) };
+  await T.load('t');
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true }); lease.cancel();
+  assert.match(T.stripHtml('t'), /tt-dot bad/);
+});

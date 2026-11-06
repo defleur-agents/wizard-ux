@@ -175,7 +175,7 @@ for (const agent of ['', 'profile-qa', 'container-qa', 'restricted-qa']) test(`s
   ], agent); await h.start(); h.active(false); h.focus(false);
   h.T.beforeSend('t', agent, 20000);
   assert.deepEqual(h.writes, [{ thread: 't', agent: agent || 'hermes', ids: ['green-a','green-b'], items: [{ id: 'green-a', updated_at: 1 }, { id: 'green-b', updated_at: 1 }] }]);
-  const dots = h.T.dots('t', agent); assert.match(dots, /need you/); assert.match(dots, /stuck/); assert.match(dots, /running/); assert.doesNotMatch(dots, /finished, not seen/);
+  const dots = h.T.dots('t', agent); assert.doesNotMatch(dots, /need you|stuck/, 'the owner reply answers older amber and red asks'); assert.match(dots, /running/); assert.doesNotMatch(dots, /finished, not seen/);
   h.T.beforeSend('t', agent, 20000); assert.equal(h.writes.length, 1, 'not duplicated while Seen is in flight');
   h.doc.documentElement.dataset.tweaks = ''; h.T.beforeSend('t', agent, 40000); assert.equal(h.writes.length, 1, 'off means no write');
 });
