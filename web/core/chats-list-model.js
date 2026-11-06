@@ -36,6 +36,9 @@ const compareTime = (a, b, order) => (order === 'oldest' ? atOf(a) - atOf(b) : a
 const WORKING_SORTS = Object.freeze([['alphabetical', 'A to Z'], ['newest', 'Newest first'], ['oldest', 'Oldest first']]);
 const workingOrderOf = o => o === 'newest' || o === 'oldest' ? o : 'alphabetical';
 const workingTitle = r => String(r?.title || 'New chat');
+// Older/imported running sessions may lack request timestamps. Keep Ready's
+// card clock unchanged, but still make Working's time choices meaningful.
+const workingAt = (s, live) => live.cardAt?.(s) || [s.updatedAt, s.createdAt].find(v => Number.isFinite(Date.parse(v ?? ''))) || '';
 const workingCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
 /** Working is independent of Ready: visible titles A to Z by default, newest ties.
  * Pins remain first where a surface includes them; no attention/snooze priority. */
@@ -115,7 +118,7 @@ function executionStatus(status, runId, runStatus) {
 /** Project raw sessions once, with the shell's read/actions/attention facts. */
 function sessionRow(s, kind, { live, chats, pins } = {}) {
   const fresh = !!live.isNew?.(s), state = chats.stiKind?.(s) || '';
-  return { id: s.id, title: sessionTitle(s), kind, at: live.cardAt?.(s) || '',
+  return { id: s.id, title: sessionTitle(s), kind, at: kind === 'working' ? workingAt(s, live) : live.cardAt?.(s) || '',
     rank: state === 'failed' ? 1 : Number.isFinite(live.readyRank?.(s)) ? live.readyRank(s) : undefined,
     snoozed: !!s.deferred, unread: fresh, pinned: !!pins?.has(s.id),
     needs: s.status === 'waiting_for_approval' || s.attention?.state === 'needs_you', state,
@@ -173,7 +176,7 @@ function priorityGroups(list, notes, rank) {
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
-root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
+root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingAt, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
   readyStep, visibleIds, unreadCount, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);

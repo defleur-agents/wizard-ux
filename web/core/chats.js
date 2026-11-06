@@ -527,7 +527,7 @@ window.WizCore.chats = function createChats(H) {
   const ARCH_OPTS = [[1, '1 day'], [3, '3 days'], [7, '1 week'], [14, '2 weeks'], [30, '1 month'], [0, 'Never']];
   const archSel = () => { const cur = LIVE.archiveAfterDays; return `<label class="ch-arch-sel">Auto-archive after <select data-archafter>${ARCH_OPTS.map(([d, l]) => `<option value="${d}"${d === cur ? ' selected' : ''}>${l}</option>`).join('')}</select></label>`; };
   // Opinionated: tapping Newest again flips it to Oldest (same button, no fourth option).
-  const workingOrdered = list => window.WizChatsListModel.workingSort((list || []).map(s => ({ title: s.title || 'New chat', at: LIVE.cardAt(s), value: s })), LIVE.workingOrder?.()).map(r => r.value);
+  const workingOrdered = list => window.WizChatsListModel.workingSort((list || []).map(s => ({ title: s.title || 'New chat', at: window.WizChatsListModel.workingAt(s, LIVE), value: s })), LIVE.workingOrder?.()).map(r => r.value);
   const workingSortControl = () => `<label class="ch-working-sort">Sort Working <select data-working-order aria-label="Sort Working">${window.WizChatsListModel.WORKING_SORTS.map(([v, word]) => `<option value="${v}"${v === (LIVE.workingOrder?.() || 'alphabetical') ? ' selected' : ''}>${word}</option>`).join('')}</select></label>`;
   const readyOrdered = list => window.WizChatsListModel.orderSessions(list, readyOrder, { at: s => LIVE.cardAt(s), rank: sesRank });
   // List mode can end while no list is on screen (a thread, search): let the watcher go on the host's change event too.

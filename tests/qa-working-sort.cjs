@@ -30,7 +30,7 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
      const q = r.request(), u = new URL(q.url());
      if (u.origin !== origin) return r.abort();
      if (!['GET','HEAD'].includes(q.method())) {
-      if (u.pathname === '/wizard/v1/ui-preferences' && q.method() === 'PUT') { const body = q.postDataJSON(); assert.deepEqual(Object.keys(body), ['workingOrder']); Object.assign(prefs, body); writes.push(body); return r.fulfill({ json: { ...prefs } }); }
+      if (u.pathname === '/wizard/v1/ui-preferences' && q.method() === 'PUT') { const body = q.postDataJSON(); assert.deepEqual(Object.keys(body), ['workingOrder']); if (body.workingOrder === 'newest' && !writes.length) await new Promise(resolve => setTimeout(resolve, 5000)); Object.assign(prefs, body); writes.push(body); return r.fulfill({ json: { ...prefs } }); }
       aborted.push({ method: q.method(), path: u.pathname }); return r.abort();
      }
      if (u.pathname.startsWith(prefix)) {
@@ -51,7 +51,8 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     await p.waitForFunction(() => (window.__wux || window.__wos) && !window.WosWelcome?.active && !window.WosExperience?.state?.busy);
     return { c, p };
    }
-   async function shot(p, name) { const file = path.join(out, skin+'-'+name+'.png'); await p.screenshot({ path:file }); report.screenshots.push(file); }
+   async function persist(p, act) { await Promise.all([p.waitForResponse(r => r.url().endsWith('/wizard/v1/ui-preferences') && r.request().method() === 'PUT'), act()]); }
+   async function shot(p, name) { const file = path.join(out, skin+'-'+name+'.png'); await p.screenshot({ path:file, animations:'disabled' }); report.screenshots.push(file); }
    try {
     const { c, p } = await pageFor('desktop');
     await p.locator('.aad-working-orderb').waitFor();
@@ -63,10 +64,13 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     await p.getByRole('menu',{name:'Sort Working',exact:true}).waitFor();
     await shot(p,'desktop-menu');
     await p.getByRole('menuitemradio',{name:'Newest first',exact:true}).click();
-    assert.deepEqual(await ids(), ['z','b','a']); assert.equal(prefs.workingOrder,'newest');
+    assert.deepEqual(await ids(), ['z','b','a'], 're-sorts before the delayed preference write returns');
+    assert.equal(await p.evaluate(() => localStorage.getItem('wos.chats.workingOrder.v1')), 'newest');
+    await p.waitForResponse(r => r.url().endsWith('/wizard/v1/ui-preferences') && r.request().method() === 'PUT');
+    assert.equal(prefs.workingOrder,'newest');
     assert.equal(prefs.readyOrder,'oldest');
     await p.locator('.aad-working-orderb').click();
-    await p.getByRole('menuitemradio',{name:'Oldest first',exact:true}).click();
+    await persist(p, () => p.getByRole('menuitemradio',{name:'Oldest first',exact:true}).click());
     assert.deepEqual(await ids(), ['a','b','z']);
     await p.locator('.aad-working-orderb').click(); await p.mouse.click(1000,600);
     assert.equal(await p.locator('.aad-sortmenu').count(),0);
@@ -74,7 +78,8 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     assert.equal(await p.locator('.aad-sortmenu').count(),0);
     await p.evaluate(() => __wux.openSettings('working-order'));
     const setting = p.locator('[data-settings-working-order]'); await setting.waitFor(); assert.equal(await setting.inputValue(),'oldest');
-    await setting.selectOption('alphabetical'); await p.waitForFunction(() => WizLive.workingOrder()==='alphabetical');
+    await persist(p, () => setting.selectOption('alphabetical')); await p.waitForFunction(() => WizLive.workingOrder()==='alphabetical');
+    assert.equal(prefs.workingOrder,'alphabetical');
     await shot(p,'desktop-settings'); await c.close();
     const { c: pc, p: phone } = await pageFor('phone');
     await phone.evaluate(() => __wos.openWin({ app: 'chats', title: 'Chats' }));
@@ -84,8 +89,8 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     await phone.waitForFunction(() => document.querySelectorAll('section[data-sec="working"] .ch-row').length===3);
     const phoneIds = () => phone.locator('section[data-sec="working"] [data-chopen]').evaluateAll(ns=>ns.map(n=>n.dataset.chopen));
     assert.deepEqual(await phoneIds(),['a','b','z']);
-    await select.selectOption('newest'); assert.deepEqual(await phoneIds(),['z','b','a']);
-    await select.selectOption('oldest'); assert.deepEqual(await phoneIds(),['a','b','z']);
+    await persist(phone, () => select.selectOption('newest')); assert.deepEqual(await phoneIds(),['z','b','a']);
+    await persist(phone, () => select.selectOption('oldest')); assert.deepEqual(await phoneIds(),['a','b','z']);
     await shot(phone,'phone-working');
     await phone.evaluate(() => __wos.openSettings('working-order'));
     await phone.locator('[data-settings-working-order]').waitFor();
@@ -98,7 +103,8 @@ const mime = f => f.endsWith('.js') ? 'text/javascript' : f.endsWith('.css') ? '
     await drawerSort.waitFor(); assert.equal(await drawerSort.inputValue(), 'oldest');
     const drawerHead = drawer.locator('.aa-sec[data-sec="working"]');
     if (await drawerHead.getAttribute('aria-expanded') !== 'true') await drawerHead.click();
-    await drawerSort.selectOption('alphabetical');
+    await persist(drawer, () => drawerSort.selectOption('alphabetical'));
+    assert.deepEqual(await drawer.locator('#aa-sec-working [data-sid]').evaluateAll(ns => ns.map(n => n.dataset.sid)), ['a','b','z']);
     await shot(drawer,'phone-drawer'); await dc.close();
     assert.equal(prefs.readyOrder,'oldest'); assert.ok(writes.length>=5);
     assert.equal(aborted.filter(r=>r.path.includes('/v1/runs')).length,0);

@@ -34,6 +34,15 @@ test('stock renderer uses the same Working comparator and raw session cardAt', (
   vm.runInContext(src.slice(src.indexOf('  const workingOrdered ='), src.indexOf('  const workingSortControl =')) + '\nthis.sort = workingOrdered;', c);
   assert.deepEqual(ids(c.sort(rows.filter(r => !r.pinned))), ['a-new', 'a-old', 'b', 'untitled', 'z']);
 });
+test('Working time sort falls back for sessions without request clocks, without changing Ready', () => {
+  const live = { cardAt: s => s.requestAt || '' }, facts = { live, chats: {} };
+  const sessions = [{ id: 'z', title: 'Zulu', updatedAt: at(9) }, { id: 'a', title: 'alpha', updatedAt: at(1) }, { id: 'b', title: 'Beta', createdAt: at(8) }];
+  const projected = sessions.map(s => M.sessionRow(s, 'working', facts));
+  assert.deepEqual(ids(M.workingSort(projected, 'newest')), ['z', 'b', 'a']);
+  assert.deepEqual(ids(M.workingSort(projected, 'oldest')), ['a', 'b', 'z']);
+  assert.equal(M.sessionRow(sessions[0], 'ready', facts).at, '', 'Ready clock unchanged');
+  assert.equal(M.workingAt({ requestAt: at(2), updatedAt: at(9) }, live), at(2), 'request clock remains authoritative');
+});
 test('every surface has a separate Working control, and Settings uses the shared registry', () => {
   assert.match(read('web/layouts/ai-apps/desktop.js'), /openSortMenu\(sort, 'working-sort'\)/);
   assert.match(read('web/layouts/ai-apps/layout.js'), /'aria-label': 'Sort Working'/);
