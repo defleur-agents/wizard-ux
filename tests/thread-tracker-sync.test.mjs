@@ -237,7 +237,7 @@ test('a send answers older amber and red groups: no red, count drops, spinner wh
   status = 'running'; lease.commit(); await tick();
   const html = T.stripHtml('t');
   assert.doesNotMatch(html, /tt-dot bad|tt-dot you/, 'no red or amber while the run works');
-  assert.match(html, /Working on your reply/); assert.doesNotMatch(html, /\d open/); assert.match(html, /tt-dot run/); assert.doesNotMatch(T.dots('t'), /need you|stuck/); assert.match(T.dots('t'), /running/);
+  assert.match(html, /2 open/); assert.match(html, /Answered · working on it/); assert.match(html, /tt-dot run/); assert.doesNotMatch(T.dots('t'), /need you|stuck/); assert.match(T.dots('t'), /running/);
   assert.equal(writes.filter(w => w.items).length, 0, 'never acknowledged in the backend');
   // The run ends without mentioning the item: it stays answered and uncounted.
   status = 'completed'; assert.equal(T.stripHtml('t'), ''); assert.equal(T.dots('t'), '');
@@ -253,4 +253,19 @@ test('a cancelled send does not answer anything; answered survives reload only f
   await T.load('t');
   const lease = T.beforeSend('t', '', Date.now(), { defer: true }); lease.cancel();
   assert.match(T.stripHtml('t'), /tt-dot bad/);
+});
+// James, 7 Nov 2026: header said "2 open" while the strip listed 7 running rows (5 answered + 2 working) and the tally said 7.
+test('header open count equals the rows listed and the tally, including answered asks still being worked on', async () => {
+  const items = [1, 2, 3, 4, 5].map(n => item('ask' + n, n % 2 ? 'needs_you' : 'blocked', { message_id: 'm' + n, ask: 'Reply ' + n }))
+    .concat([item('w1', 'running', { message_id: 'w1' }), item('w2', 'running', { message_id: 'w2' })]);
+  const { T, win } = boot((path) => reply(path.endsWith('/counts') ? { threads: {} } : { items }));
+  let status = 'completed'; win.WizLive = { session: () => ({ status }) };
+  await T.load('t');
+  const lease = T.beforeSend('t', '', Date.now(), { defer: true }); status = 'running'; lease.commit(); await tick();
+  const html = T.stripHtml('t');
+  assert.equal((html.match(/data-tt-row=/g) || []).length, 7, 'seven rows listed');
+  assert.equal((html.match(/Answered · working on it/g) || []).length, 5);
+  assert.match(html, /<span class="tt-tot">7 open<\/span>/);
+  assert.match(html, /aria-label="7 running"/);
+  assert.match(T.dots('t'), /7 running/);
 });
