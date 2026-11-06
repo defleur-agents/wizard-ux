@@ -284,4 +284,5 @@ test('the phone shell seeds starter apps only into a layout it just created, mar
   assert.match(app, /W\[id\] = \{ id, app: 'frame', appId, seed: true \}/, 'seeded windows are marked');
   assert.match(app, /W = \{\}; desks = \[blank\(\{ id: 'home', home: true \}\)\]; freshBoot = true;/);
   assert.match(app, /if \(!here\) \{ const w = openWin\(obj, opts\); openingEnd\(\); return w; \}\n\s*delete W\[here\]\.seed;/, 'an explicit open adopts a starter app');
+  assert.match(app, /if \(o\.join && state\.desks\.length\) desks = desks\.filter/, 'joining the owner\'s workspaces drops this device\'s starter apps');
 });
