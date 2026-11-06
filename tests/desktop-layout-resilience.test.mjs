@@ -76,6 +76,18 @@ test('tweak disposal never writes the layout diagnostic', async () => {
   assert.equal(f.lsMap.has(key), false);
 });
 
+test('AI apps render parts isolate session refresh from pane tools/chrome', () => {
+  const src = read('web/layouts/ai-apps/desktop.js');
+  const start = src.indexOf("  api.on('render', readSessions);");
+  assert.ok(start >= 0, 'session refresh is an independent guarded render part');
+  const code = src.slice(start, src.indexOf("  api.on('home'", start));
+  const hooks = []; let chrome = 0;
+  vm.runInNewContext(code, { api: { on: (name, fn) => hooks.push(fn) }, readSessions: () => { throw new Error('session refresh fault'); }, paintTop: () => chrome++ });
+  assert.equal(hooks.length, 2);
+  for (let i = 0; i < 12; i++) for (const hook of hooks) { try { hook(); } catch (_) {} }
+  assert.equal(chrome, 12, 'pane chrome still paints while refresh fails persistently');
+});
+
 test('iframe focus refusal retries the browser only, not host focus (61 attempts)', () => {
   const src = read('web/layouts/ai-apps/desktop.js');
   const start = src.indexOf('  function focusFrame(');
