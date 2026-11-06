@@ -118,7 +118,8 @@
     } catch (_) { /* offline: dots stay as they were */ }
     countsLoading = false;
   }
-  const changedEvent = detail => { repaint(); try { window.dispatchEvent(new CustomEvent('wos:thread-tracker', { detail })); } catch (_) { /* no window events */ } };
+  // Let Chats capture its eye-line before repaint can remove the last addressable strip.
+  const changedEvent = detail => { try { window.dispatchEvent(new CustomEvent('wos:thread-tracker', { detail })); } catch (_) { /* no window events */ } repaint(); };
 
   /* ---------- the strip ---------- */
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
@@ -141,6 +142,9 @@
     const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
+    // The strip is an owner inbox, not a running/acknowledged history counter.
+    // Use the same reply grouping as its rows and Chats dots.
+    if (!(c.needs_you || c.blocked || c.done_unseen)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
@@ -179,6 +183,10 @@
   // dots are replaced, so the thread, its scroll and the composer are never touched.
   function repaint() {
     if (typeof document === 'undefined') return;
+    for (const k of openKeys) {
+      const c = tally(threads.get(k)?.items || []);
+      if (!(c.needs_you || c.blocked || c.done_unseen)) { openKeys.delete(k); if (opened === k) opened = null; }
+    }
     for (const el of document.querySelectorAll('[data-tt-strip]')) {
       const sid = el.dataset.ttStrip, agent = el.dataset.ttAgent || '', k = key(sid, agent), html = innerHtml(sid, agent);
       if (!html) { el.remove(); continue; }
