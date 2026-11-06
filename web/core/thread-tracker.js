@@ -27,6 +27,26 @@
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
   const pendingSeen = new Map(); // key → seen writes in flight
   const sendSnapshots = new Map(); // explicit send/steer: exact server versions already loaded in this scope
+  // Owner replies answer older amber/red asks: per-thread server versions (id@updated_at) taken at send time. Never
+  // sent to the box; the agent's next reply re-lists anything still open, which is a new version and so counts again.
+  const ANSWERED_KEY = 'wos:tt-answered';
+  const answered = new Map(); // key → { tokens:Set, at, started }
+  try { for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(ANSWERED_KEY) || '{}'))) answered.set(k, { tokens: new Set(v), at: 0, started: true }); } catch (_) { /* no storage */ }
+  const saveAnswered = () => { try { localStorage.setItem(ANSWERED_KEY, JSON.stringify(Object.fromEntries([...answered].filter(([, a]) => a.tokens.size).map(([k, a]) => [k, [...a.tokens].slice(-200)])))); } catch (_) { /* no storage */ } };
+  const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
+  function workingNow(k, a) {
+    const s = k.indexOf('/'), sid = k.slice(s + 1), agent = k.slice(0, s) === 'hermes' ? '' : k.slice(0, s);
+    const row = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    if (row && WORKING.has(row.status)) { a.started = true; return true; }
+    return !a.started && Date.now() - a.at < 20000; // the run may not have reported yet
+  }
+  // Items as the strip shows them: answered amber/red asks spin while the run works, then stay out of every count.
+  function project(k, items) {
+    const a = answered.get(k); if (!a?.tokens.size) return items;
+    const run = workingNow(k, a);
+    return (items || []).map(i => (i.state === 'needs_you' || i.state === 'blocked') && !i.seen && a.tokens.has(`${i.id}@${i.updated_at}`)
+      ? (run ? { ...i, state: 'running', answered: true } : { ...i, state: 'needs_you', seen: true, answered: true }) : i);
+  }
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
 
   const isSeen = i => i.seen === true;
@@ -88,7 +108,7 @@
       threads.set(k, { items, at: Date.now(), loading: false });
       applySendSeen(sid, agent); // a send may beat ledger ingestion or navigation
       const projected = threads.get(k).items;
-      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(projected))) { counts[k] = tally(projected); changedEvent(); }
+      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(project(k, projected)))) { counts[k] = tally(project(k, projected)); changedEvent(); }
     } catch (_) { threads.set(k, { items: cur?.items || [], at: Date.now(), loading: false }); }
   }
   async function loadCounts(force = false) {
@@ -103,11 +123,11 @@
         // loaded thread whose tally moved is reloaded so its strip follows.
         for (const [k, t] of threads) {
           if (!t.items.length) continue;
-          if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(t.items);
+          if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(project(k, t.items));
           else {
             if (JSON.stringify(next[k] || null) !== JSON.stringify(counts[k] || null) && !t.loading) { t.at = 0; const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)); }
             // Loaded items own the paint, even while an older backend still returns per-ask counts.
-            next[k] = tally(t.items);
+            next[k] = tally(project(k, t.items));
           }
         }
         if (JSON.stringify(next) !== JSON.stringify(counts)) { counts = next; changedEvent(); }
@@ -129,7 +149,8 @@
   const kindOf = i => i.kind || memberKind(i);
   const subOf = (i, fallbackAsk = '') => {
     const when = ago(i.updated_at || i.at || Date.now());
-    if (kindOf(i) === 'ack') return `Seen · ${when}`;
+    if (kindOf(i) === 'ack') return i.answered ? `Answered by your reply · ${when}` : `Seen · ${when}`;
+    if (i.answered) return 'Answered · working on it';
     if (i.state === 'done') return `Finished · ${when}`;
     if (i.state === 'blocked') return `Stuck · ${when}`;
     if (i.state === 'needs_you') return i.ask || i.summary || fallbackAsk || i.title;
@@ -143,7 +164,7 @@
     return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i, fallbackAsk))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
-    const k = key(sid, agent), raw = threads.get(k)?.items || [], items = groupsOf(raw);
+    const k = key(sid, agent), raw = project(k, threads.get(k)?.items || []), items = groupsOf(raw);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
     // Keep work in progress visible; only acknowledged history has no strip.
@@ -151,6 +172,7 @@
     if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
+    const openN = live.filter(i => !i.answered).length;
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
     const run = live.filter(i => i.state === 'running');
     const fin = live.filter(i => i.state === 'done');
@@ -158,7 +180,7 @@
     const fallbackAsk = session?.attention?.ask || '';
     const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(i => rowHtml(i, fallbackAsk)).join('')}</div>` : '';
     const tl = (n, kind) => n ? `<span class="tt-tally">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${openN ? `${openN} open` : 'Working on your reply'}</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, 'run')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
     const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
@@ -174,7 +196,7 @@
   function dots(sid, agent = '') {
     if (!on()) return '';
     const k = key(sid, agent), loaded = threads.get(k);
-    const c = loaded?.items.length ? tally(loaded.items) : counts[k];
+    const c = loaded?.items.length ? tally(project(k, loaded.items)) : counts[k];
     if (!c) return '';
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
     const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, 'run', 'running') + n(c.done_unseen, 'done', 'finished, not seen');
@@ -190,7 +212,7 @@
   function repaint() {
     if (typeof document === 'undefined') return;
     for (const k of openKeys) {
-      const c = tally(threads.get(k)?.items || []);
+      const c = tally(project(k, threads.get(k)?.items || []));
       if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) { openKeys.delete(k); if (opened === k) opened = null; }
     }
     for (const el of document.querySelectorAll('[data-tt-strip]')) {
@@ -284,7 +306,7 @@
     const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
-    counts[k] = tally(t.items);
+    counts[k] = tally(project(k, t.items));
     let readyConfirmed;
     const c = counts[k], L = window.WizLive;
     if (dismiss && !c.needs_you && !c.blocked && !c.running && !c.done_unseen && L?.archive
@@ -303,7 +325,7 @@
       readyConfirmed?.(false);
       settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
       const cur = threads.get(k);
-      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(cur.items); changedEvent(); }
+      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(project(k, cur.items)); changedEvent(); }
       load(sid, agent);
     };
     const commit = () => {
@@ -316,7 +338,7 @@
           .filter(g => g.members.every(i => i.state === 'done' && versions.has(`${i.id}@${i.updated_at}`))).flatMap(g => g.ids));
         posting = ids.filter(id => allowed.has(id));
         for (const [tok, i] of restore) if (!allowed.has(i.id)) mine.delete(tok);
-        if (cur) { cur.items = cur.items.map(i => !allowed.has(i.id) ? restore.get(`${i.id}@${i.updated_at}`) || i : i); counts[k] = tally(cur.items); changedEvent(); }
+        if (cur) { cur.items = cur.items.map(i => !allowed.has(i.id) ? restore.get(`${i.id}@${i.updated_at}`) || i : i); counts[k] = tally(project(k, cur.items)); changedEvent(); }
         if (!posting.length) { settle(); return; }
       }
     // ids keeps old boxes compatible; new boxes prefer exact versions from the
@@ -328,7 +350,7 @@
           const i = expected.get(result.id); if (i) mine.delete(`${i.id}@${i.updated_at}`);
         }
         readyConfirmed?.(!j.results?.some(r => r.status === 'stale') && j.items.every(i => i.seen === true));
-        settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent();
+        settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(project(k, threads.get(k).items)); changedEvent();
       })
       .catch(undo);
     };
@@ -356,6 +378,12 @@
       .filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done' && Number.isFinite(i.updated_at)))
       .flatMap(g => g.members.map(i => `${i.id}@${i.updated_at}`)));
     const send = { versions, attempted: new Set(), committed: !defer };
+    // The owner has now answered every amber/red ask loaded at this tap (exact server versions, no clock).
+    let a = answered.get(k); if (!a) { a = { tokens: new Set(), at: 0, started: false }; answered.set(k, a); }
+    a.at = Date.now(); a.started = false;
+    const added = (threads.get(k)?.items || []).filter(i => (i.state === 'needs_you' || i.state === 'blocked') && !i.seen && Number.isFinite(i.updated_at))
+      .map(i => `${i.id}@${i.updated_at}`).filter(t => !a.tokens.has(t));
+    added.forEach(t => a.tokens.add(t)); if (added.length) { saveAnswered(); changedEvent(); }
     sendSnapshots.set(k, send);
     const staged = applySendSeen(sid, agent, defer); // same-frame paint before navigation
     const commit = () => {
@@ -366,6 +394,7 @@
     if (!defer) commit();
     return { commit, cancel() {
       if (send.committed) return;
+      if (added.length) { for (const t of added) a.tokens.delete(t); saveAnswered(); changedEvent(); }
       if (sendSnapshots.get(k) === send) { if (prior) sendSnapshots.set(k, prior); else sendSnapshots.delete(k); }
       staged?.cancel();
     } };
@@ -384,7 +413,7 @@
     if (t.closest('[data-tt-ack]')) { ackKeys.has(k) ? ackKeys.delete(k) : ackKeys.add(k); repaint(); return true; }
     const row = t.closest('[data-tt-row]');
     if (!row) return true;
-    const item = groupsOf(threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
+    const item = groupsOf(project(k, threads.get(k)?.items || [])).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
     if (t.closest('[data-tt-dismiss]') && item.kind === 'you') { markSeen(s, a, item.ids, false, null, true); return true; }
     if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
