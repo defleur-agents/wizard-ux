@@ -96,3 +96,9 @@ test('Working tap handler writes the shared preference through setWorkingOrder (
   assert.ok(set.indexOf("dispatchEvent(new Event('wos:prefs'))") < set.indexOf('putPrefs({ workingOrder: o })'), 'paint before the preference write');
   assert.match(block('  window.addEventListener(\'wos:prefs\', () => {\n    try { const v = localStorage.getItem(READY_ORDER_KEY)', '  // Switching to or from Novairecito'), /renderChats\(W\[id\]\)/);
 });
+test('collapsing Working hides its order bar too (James, 6 Nov 2026: minimised Working shows no A to Z)', () => {
+  const src = read('web/core/chats.js'), at = src.indexOf('workingOrderBar()', src.indexOf('function workingOrderBar') + 30);
+  const head = src.slice(Math.max(0, at - 400), at);
+  assert.ok(at > 0, 'the list draws the Working order bar');
+  assert.match(head, /\$\{open \? `<div class="ch-sec-b">\$\{k === 'working' && list\.length \? $/, 'drawn only inside the open section body');
+});
