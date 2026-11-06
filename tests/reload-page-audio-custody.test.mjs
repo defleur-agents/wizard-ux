@@ -52,7 +52,8 @@ for(const mode of ['native_claim_pending','unloaded','native_owner_uncertain','r
 for(const [name,patch,reason] of [
   ['active take',{active:{row:{id:'live'},phase:'recording',engine:{}}},'capture_custody_uncertain'],
   ['preparation',{preparations:new Map([['synthetic-warm',{}]])},'capture_starting'],
-  ['recovery lease',{recoveryLease:{}},'capture_custody_uncertain'],
+  // Android's meeting port survives reload and the lease only reads phone storage (James, 6 Nov 2026).
+  ['recovery lease (no Android meeting port)',{recoveryLease:{},W:{}},'capture_custody_uncertain'],
   ['attached in-page meeting bridge',{attachedMeetingBridge:{}},'capture_custody_uncertain'],
   ['Mac meeting bridge',{W:{wizardNative:{meetings:{}}}},'capture_custody_uncertain'],
   ['configured in-page native engine',{configuredNative:{}},'capture_custody_uncertain'],
