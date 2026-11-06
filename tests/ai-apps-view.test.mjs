@@ -2509,3 +2509,13 @@ test('desktop AI apps sidebar and rail flyout keep phone hours across midnight w
   w.st.timers.find(x => x.ms === 300 && !x.dead).fn();
   assert.equal(w.q('.aad-fly-i[data-sid="midnight"] .aad-fly-at').textContent, '15h');
 });
+
+test('desktop app panel: an app with its companion pane (Video Editor video + Feedback) keeps side-by-side columns and a wider panel, never two windows stacked at inset 0 (James, 6 Nov 2026)', () => {
+  const css = read('web/layouts/ai-apps/desktop.css').replace(/\/\*[\s\S]*?\*\//g, ''), js = noComments(read('web/layouts/ai-apps/desktop.js'));
+  const multi = css.match(/\.wsp\[data-aad-role\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) > \.win:not\(\.gone\) \{([^}]*)\}/);
+  assert.ok(multi, 'a desk with two shown windows has its own rule');
+  assert.doesNotMatch(multi[1], /inset: 0|width: auto/, 'left and width stay the shell\'s columns');
+  assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
+  assert.match(js, /paneWins\(\) > 1 \? Math\.max\(900, W \* \.62\)/, 'the panel widens for two columns until the owner sizes it');
+  assert.match(js, /winsMo = new MutationObserver/, 'a companion opening or closing re-sizes the panel');
+});
