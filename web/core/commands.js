@@ -94,7 +94,7 @@
    const a = c.action;
    const appResult=window.WosAppVoice?.execute(c,text,H);
    if (appResult != null) return appResult;
-   if (a === 'open_app_route') { const app = H.appById?.(c.app) || H.findApp(c.app); return app ? !!H.openApp(app, { routeUrl: c.url }) : false; }
+   if (a === 'open_app_route') return !!H.openAppRoute?.(c.app, c.url);
    if (a === 'search' && c.query) return H.search(c.query, c.tab);
    if (a === 'quick_search') return H.search(c.query, c.tab);
    if (a === 'chats_focus' || a === 'chats_filter' || a === 'chats_search') {
