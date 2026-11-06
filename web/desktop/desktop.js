@@ -2969,10 +2969,10 @@
     // actions, the owner's quick apps (Home's app chips), Home and Settings.
     mountHost: () => stage,
     voiceState: () => ({ state: VOICE.state, command: !!commandTake, mode: vMode }),
-    // An ordinary orb tap is contextual, just like the bar mic. talk() pins the focused
-    // window/thread, active run and model route BEFORE capture; talkNew is only the
-    // explicit New voice chat action. Layouts must not turn a reply into a new thread.
-    talk: () => talk(),
+    // Only an open Chats thread changes the ordinary orb's idle action: talk() pins
+    // its reply target before capture. Lists, New chat, Home and other apps retain
+    // the general new-chat action; an in-flight take retains its stop-only action.
+    talk: () => { if (VOICE.state !== 'idle') return talk('send'); const f = focused(); return (f?.app === 'chats' || CHATS.isHosted(f?.id)) && f?.thread && f.thread !== '__new__' ? talk() : talkNew('Click the orb'); },
     voiceTap: () => talk('send'),
     voiceCancel: () => vMode === 'dictate' ? dictate('cancel') : talk('cancel'),
     command: () => commandVoice(),
