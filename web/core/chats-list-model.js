@@ -33,6 +33,17 @@ function rankOf(r) {
 /** Ready in the chosen order (pure). Newest / Oldest: approvals first and snoozed last (stock's pins), time in
  * between; Priority: by rank, newest first inside each. Read notifications last, newest first (Oldest: oldest). */
 const compareTime = (a, b, order) => (order === 'oldest' ? atOf(a) - atOf(b) : atOf(b) - atOf(a)) || String(a.sortTitle ?? a.title ?? '').localeCompare(String(b.sortTitle ?? b.title ?? ''));
+const WORKING_SORTS = Object.freeze([['alphabetical', 'A to Z'], ['newest', 'Newest first'], ['oldest', 'Oldest first']]);
+const workingOrderOf = o => o === 'newest' || o === 'oldest' ? o : 'alphabetical';
+const workingTitle = r => String(r?.title || 'New chat');
+const workingCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
+/** Working is independent of Ready: visible titles A to Z by default, newest ties.
+ * Pins remain first where a surface includes them; no attention/snooze priority. */
+function workingSort(rows, order) {
+  const o = workingOrderOf(order);
+  return (rows || []).slice().sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned)
+    || (o === 'alphabetical' ? workingCollator.compare(workingTitle(a), workingTitle(b)) || atOf(b) - atOf(a) : compareTime(a, b, o)));
+}
 function readySort(rows, order) {
   const o = sortOf(order), list = (rows || []).slice(), later = list.filter(r => r.note && r.snoozed), main = list.filter(r => !(r.note && r.snoozed));
   const t = (a, b) => compareTime(a, b, o);
@@ -162,7 +173,7 @@ function priorityGroups(list, notes, rank) {
 const visibleIds = (rows, order, mode) => readyFlat(rows, order, mode).map(r => r.id);
 /** Subgroup pills count canonical projected unread rows, never the Ready inventory. */
 const unreadCount = rows => new Set((rows || []).filter(r => r.unread).map(r => r.id)).size;
-root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
+root.WizChatsListModel = Object.freeze({ STATES, stateOf, stateGroups, WORKING_SORTS, workingOrderOf, workingSort, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, executionStatus,
   readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat,
   readyStep, visibleIds, unreadCount, compareTime, deferred, sessionRow, sessionList, sessionRank, orderSessions, notificationRow, sortNotes, mixedRows, subjectGroups, priorityGroups });
 })(globalThis);
