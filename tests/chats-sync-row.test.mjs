@@ -20,7 +20,8 @@ function bar({ LST = {}, ptrState = '', label = 'Can’t reach Wizard · retryin
   vm.runInNewContext(SYNC, ctx);
   return ctx.render();
 }
-const text = html => html.replace(/<[^>]*>/g, '').replace(/[<>]/g, '').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+// Visible text of our own fixture markup: drop each tag, then decode the two entities esc() emits here.
+const text = html => html.split(/<[^>]*>/).join('').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 const STATES = {
   off: { LST: { error: 'offline', at: NOW - 5000 } },
   'off never read': { LST: { error: 'offline' } },
