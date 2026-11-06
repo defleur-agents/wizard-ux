@@ -60,12 +60,14 @@ def main():
     result = {'ok': False, 'published': False, 'physical_phone': False, 'native_overlay_acceptance': False,
               'source_revision': seal['revision'], 'phases': {}, 'seal_sha256': args.seal_sha256}
     env = os.environ.copy(); env.update(QA_PLAYWRIGHT=seal['playwright'], PYTHONDONTWRITEBYTECODE='1', WIZARD_WORK_ROOT='/srv/work')
-    def phase(name, argv, cwd=None, timeout=600):
+    def phase(name, argv, cwd=None, timeout=600, collect=False):
         with (out / (name + '.log')).open('w') as log:
             r = subprocess.run([str(x) for x in argv], cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT, pass_fds=(fd,), timeout=timeout)
         result['phases'][name] = {'exit_code': r.returncode, 'log_sha256': sha(out / (name + '.log'))}
         (out / 'receipt.json').write_text(json.dumps(result, indent=2))
-        assert r.returncode == 0, name
+        if not collect:
+            assert r.returncode == 0, name
+        return r.returncode
     try:
         phase('signed-build', [sys.executable, job / 'worker.py', '--worker', job / 'job.json'], timeout=2400)
         receipt = json.loads((job / 'receipt.json').read_text()); assert receipt['status'] == 'ok'
@@ -82,11 +84,14 @@ def main():
             for key in counts: counts[key] += int(xml.attrib.get(key, 0))
         assert counts['tests'] >= 392 and not any(counts[k] for k in ('failures','errors','skipped'))
         result['junit'] = counts
-        phase('focused-node', ['node','--test','tests/screen-picture-translation.test.mjs'],cwd=source,timeout=120)
-        phase('exact-image-browser', ['node','tools/qa-screen-picture-translate.cjs',root / 'fixture',out / 'browser'],cwd=source,timeout=240)
-        browser = json.loads((out / 'browser/receipt.json').read_text()); assert browser['ok'] and browser['checks'] and all(c['ok'] for c in browser['checks'])
-        result['browser_checks'] = len(browser['checks'])
-        phase('existing-screen-browser', ['node','tools/qa-screen-page.cjs',source / 'android/app/src/main/assets/assist/screen.html',out / 'existing-screen'],cwd=source,timeout=240)
+        phase('focused-node', ['node','--test','tests/screen-picture-translation.test.mjs','tests/screen-picture-fixture.test.mjs'],cwd=source,timeout=120)
+        # Preserve a failed browser verdict while still collecting the independent upgrade.
+        phase('exact-image-browser', ['node','tools/qa-screen-picture-translate.cjs',root / 'fixture',out / 'browser'],cwd=source,timeout=240,collect=True)
+        browser_path = out / 'browser/receipt.json'
+        browser = json.loads(browser_path.read_text()) if browser_path.exists() else {}
+        result['browser_checks'] = len(browser.get('checks', []))
+        result['browser_ok'] = bool(browser.get('ok') and browser.get('checks') and all(c['ok'] for c in browser['checks']))
+        phase('existing-screen-browser', ['node','tools/qa-screen-page.cjs',source / 'android/app/src/main/assets/assist/screen.html',out / 'existing-screen'],cwd=source,timeout=240,collect=True)
         sys.path.insert(0, str(source / 'tools'))
         from apk_build_config import apk_build_config
         before, after = apk_build_config(root / 'baseline87.apk'), apk_build_config(apk)
@@ -100,8 +105,11 @@ def main():
         assert upgrade['ok'] and upgrade['new_sha256'] == row['sha256'] and upgrade['old_sha256'] == BASELINE
         assert upgrade['total'] == len(upgrade['checks']) == upgrade['passed'] and all(c['passed'] for c in upgrade['checks'])
         assert len({c['name'] for c in upgrade['checks']}) == upgrade['total'] and any(c['name'] == 'owned emulator serial is absent' for c in upgrade['checks'])
-        result['upgrade_checks'] = upgrade['total']; result['ok'] = True
+        result['upgrade_checks'] = upgrade['total']
+        result['ok'] = result['browser_ok'] and all(p['exit_code'] == 0 for p in result['phases'].values())
     finally:
         (out / 'receipt.json').write_text(json.dumps(result,indent=2)); print(json.dumps(result),flush=True)
+    if not result['ok']:
+        raise SystemExit(1)
 
 if __name__ == '__main__': main()

@@ -552,7 +552,7 @@
   let drag = null;
   const layer = $('#layer');
   layer.addEventListener('pointerdown', e => {
-    if (st.panel === 'pic' || st.searching || st.langsOpen) return;
+    if (st.searching || st.langsOpen) return;
     drag = { x: e.clientX, y: e.clientY, moved: false, w0: wordAt(e.clientX, e.clientY, 26) };
     layer.setPointerCapture(e.pointerId);
   });

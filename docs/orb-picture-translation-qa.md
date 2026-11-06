@@ -16,7 +16,7 @@ A real request with the authorized exact attached JPEG to the installed `/wizard
 ## Behaviour and guards
 
 - Always check available screenshot pixels, including screens whose native blocks are all English or already include a different foreign language.
-- Keep original picture lines separately from translations; include recovered translations in Copy/Ask after dismissing the sheet.
+- Keep original picture lines separately from translations; include recovered translations in Copy/Ask after dismissing the sheet. Outside pointer taps must reach the existing dismissal handler while the automatic picture panel is open; dismiss the sheet without clearing recovered text.
 - Report read/translation failures honestly and make the pill retry. Invalid response shape/count is an error, never a successful English verdict.
 - Fence callbacks by run and target language; reuse successful screenshot reading for a retry/language change rather than re-uploading pixels.
 - With no screenshot, qualify the result as readable text only.
@@ -29,3 +29,7 @@ A real request with the authorized exact attached JPEG to the installed `/wizard
 `tools/qa-screen-picture-translate.cjs PRIVATE_FIXTURE OUT` is a private recorded-live-inference replay against baseline and candidate with the exact attached image. It must prove baseline bypasses vision with the false English verdict; candidate extracts/translates Thai, retains Copy and outside-dismiss, and passes two role sets/live role change. It is not fresh model inference or native-device proof. Existing `qa-screen-page.cjs` continues checking Latin/native text overlays and gestures with synthetic model replies.
 
 The admitted forum packet builds a correctly signed owner-origin release with unit/lint tasks and runs focused page gates. It does not publish. Native exact-byte upgrade and live phone receipt remain explicit follow-on gates if not present in that packet's receipt. The only delivery destination is the normal owner in-app update feed; no alternate APK is sent to the owner.
+
+The shared-main port is source integration, not the phone release source: its inherited code85 must not be installed or offered as an upgrade over87. The separate release branch `fix/orb-picture-translation-20261106` declares89 / 0.10.25; the signing/upgrade controller refuses any other candidate version and checks the production signer, baked origin and exact baseline87. Do not bump unrelated shared-main packaging just to make that review port appear deliverable.
+
+The outside-touch regression executes a real pointerdown/pointerup pair against the shipped inline script: it fails with the old picture-panel early return and passes after removing that one guard. Copy and original picture translations stay intact. An APK built before this asset repair does not contain it; preserve that artifact as historical evidence and sign the changed release source separately. The existing packet collects browser failures without suppressing independent upgrade checks, and keeps the aggregate failed if any collected phase fails.
