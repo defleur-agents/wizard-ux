@@ -279,5 +279,66 @@ class Interruption(unittest.TestCase):
         self.assertIn('if not COMPLETED or not res or not all(res): sys.exit(1)', SRC)
 
 
+class Startup(unittest.TestCase):
+    APPSTATE = (Path(__file__).resolve().parents[1] / 'android/app/src/main/java/ai/wizards/os/device/AppState.java').read_text()
+
+    def lift(self, **stubs):
+        names = ('QA_HOME', 'EXPECTED_HOME', 'QA_ORIGIN_RE', 'startup_diagnostics', 'shell_page')
+        body = [n for n in TREE.body if getattr(n, 'name', None) in names
+                or any(isinstance(t, ast.Name) and t.id in names for t in getattr(n, 'targets', []))]
+        ns = {'FAKE': 18779, 'PKG': 'ai.wizards.os.qa', 'DEVTOOLS': 9347, 'STATE': {'log': ['GET /wizard-os-home/']},
+              'json': json, 're': re, 'time': type('T', (), {'sleep': staticmethod(lambda s: None)}), 'urllib': __import__('urllib.request'),
+              'job': Path(tempfile.mkdtemp()), 'top': lambda: 'topResumedActivity=ai.wizards.os.qa/ai.wizards.os.MainActivity',
+              'ui': lambda: '<hierarchy/>', 'shot': lambda n: None, **stubs}
+        exec(compile(ast.Module(body=body, type_ignores=[]), 'qa_orb_screen.py', 'exec'), ns)
+        return ns
+
+    def test_fixture_is_the_root_origin_the_app_accepts_and_the_page_is_its_home_url(self):
+        ns = self.lift(sx=lambda c: '')
+        java_re = re.search(r'o\.matches\("([^"]+)"\)', self.APPSTATE).group(1).replace('\\\\', '\\')
+        self.assertEqual(ns['QA_ORIGIN_RE'], java_re, 'same rule as AppState.isQaOrigin')
+        self.assertIn('return origin(c) + "/wizard-os-home/"', self.APPSTATE)
+        self.assertRegex(ns['QA_HOME'], '^' + java_re + '$')
+        self.assertEqual(ns['EXPECTED_HOME'], 'http://localhost:18779/wizard-os-home/')
+        for wrong in (ns['EXPECTED_HOME'], 'http://127.0.0.1:18779', 'https://localhost:18779', 'http://localhost:18779/'):
+            self.assertIsNone(re.fullmatch(java_re, wrong), wrong + ' would be ignored by the app: it falls back to the real origin')
+        self.assertIn("echo {QA_HOME} > files/qa_home.txt", SRC)
+        self.assertIn('pg = shell_page()', SRC)
+        self.assertNotIn("Page('wizard-os-home')\n        pg.ev(", SRC)
+
+    def page(self, ready=True, fail=None):
+        seen = {}
+        class Page:
+            def __init__(self, match, sock):
+                seen['match'], seen['sock'] = match, sock
+                if fail: raise RuntimeError(fail)
+            def ev(self, expr): seen['bridge'] = 'WizardOSNative' in expr; return ready
+            def close(self): seen['closed'] = True
+        return Page, seen
+
+    def test_success_selects_the_exact_home_page_of_the_one_app_process_and_needs_the_bridge(self):
+        Page, seen = self.page()
+        ns = self.lift(sx=lambda c: '4321' if c.startswith('pidof') else '', Page=Page)
+        ns['shell_page']()
+        self.assertEqual(seen['match'], 'http://localhost:18779/wizard-os-home/')
+        self.assertEqual(seen['sock'], 'webview_devtools_remote_4321')
+        self.assertTrue(seen['bridge'])
+        self.assertFalse((ns['job'] / 'startup-diagnostics.json').exists())
+
+    def test_every_startup_failure_records_diagnostics_before_raising(self):
+        for case, sx, kw in (('no page', lambda c: '4321' if c.startswith('pidof') else 'x', {'fail': 'no page'}),
+                             ('no process', lambda c: '', {}), ('two processes', lambda c: '4321 4322' if c.startswith('pidof') else '', {}),
+                             ('no bridge', lambda c: '4321' if c.startswith('pidof') else '', {'ready': False})):
+            Page, seen = self.page(**kw)
+            ns = self.lift(sx=sx, Page=Page)
+            with self.assertRaises(RuntimeError, msg=case):
+                ns['shell_page']()
+            d = json.loads((ns['job'] / 'startup-diagnostics.json').read_text())
+            self.assertEqual(d['expected_url'], 'http://localhost:18779/wizard-os-home/', case)
+            for key in ('why', 'top', 'pidof', 'qa_home', 'qa_origin', 'devtools_sockets', 'fake_server_log', 'targets'):
+                self.assertIn(key, d, case)
+            self.assertTrue((ns['job'] / 'startup-ui.xml').exists() and (ns['job'] / 'startup-logcat.txt').exists(), case)
+
+
 if __name__ == '__main__':
     unittest.main()

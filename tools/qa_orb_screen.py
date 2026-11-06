@@ -240,6 +240,48 @@ def chrome(html):
         if not tap_text(r'^(No thanks|No Thanks|Use without an account|Accept & continue|Got it|Continue)$'): break
         time.sleep(1.5)
 
+# The shell the QA build opens: files/qa_home.txt holds an origin (AppState.isQaOrigin), and AppState.homeUrl loads
+# that origin + "/wizard-os-home/". Selecting the page by that exact URL, not a loose substring.
+QA_HOME = f'http://localhost:{FAKE}'
+EXPECTED_HOME = QA_HOME + '/wizard-os-home/'
+QA_ORIGIN_RE = r'http://(localhost|10\.0\.2\.2):\d{2,5}'
+def startup_diagnostics(why):
+    # Everything needed to explain a startup failure, kept before the guest is cleaned up.
+    d = {'why': why, 'expected_url': EXPECTED_HOME}
+    for key, fn in (('top', top), ('pidof', lambda: sx(f'pidof {PKG}').strip()),
+                    ('qa_home', lambda: sx(f'run-as {PKG} cat files/qa_home.txt').strip()),
+                    ('qa_origin', lambda: sx(f'run-as {PKG} cat files/qa_origin.txt').strip()),
+                    ('devtools_sockets', lambda: [l for l in sx('cat /proc/net/unix').split() if 'webview_devtools_remote' in l]),
+                    ('fake_server_log', lambda: STATE['log'][-30:]),
+                    ('targets', lambda: [{k: t.get(k) for k in ('type', 'url', 'title')} for t in json.load(urllib.request.urlopen(f'http://127.0.0.1:{DEVTOOLS}/json/list', timeout=3))])):
+        try: d[key] = fn()
+        except Exception as e: d[key] = 'unavailable: ' + repr(e)[:200]
+    for name, fn in (('startup-ui.xml', ui), ('startup-logcat.txt', lambda: sx('logcat -d -t 600'))):
+        try: (job / name).write_text(fn())
+        except Exception: pass
+    try: shot('zz-startup')
+    except Exception: pass
+    (job / 'startup-diagnostics.json').write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    return d
+def shell_page():
+    # one app process, its DevTools socket, the exact shell page the fake served, then the real native bridge
+    pid = ''
+    for _ in range(40):
+        pid = sx(f'pidof {PKG}').strip()
+        if pid and ' ' not in pid: break
+        time.sleep(0.5)
+    else:
+        startup_diagnostics('no single app process: ' + repr(pid)); raise RuntimeError('no app process for ' + PKG)
+    try: pg = Page(EXPECTED_HOME, 'webview_devtools_remote_' + pid)
+    except Exception as e:
+        startup_diagnostics('no page ' + EXPECTED_HOME + ': ' + repr(e)); raise RuntimeError('no page ' + EXPECTED_HOME) from e
+    ready = pg.ev("new Promise(r => { const t0 = Date.now(), t = () => (window.__wos && window.WizardOSNative) || Date.now() - t0 > 20000"
+                  " ? r(!!(window.__wos && window.WizardOSNative)) : setTimeout(t, 200); t(); })")
+    if not ready:
+        startup_diagnostics('shell page without the native bridge (window.WizardOSNative) or __wos'); pg.close()
+        raise RuntimeError('shell page not ready: ' + EXPECTED_HOME)
+    return pg
+
 def open_menu():
     b = wait_window('WizardEverywhere', True, 10)
     if not b: return None, None
@@ -388,15 +430,14 @@ with _lockfile as lock:
         sx('input keyevent KEYCODE_WAKEUP'); sx('wm dismiss-keyguard')
         out = sh(ADB, '-s', S, 'install', '-r', apk).strip().splitlines()[-1]
         check('QA build installs', out == 'Success', out + ' ' + (re.search(r'versionName=\S+', sx(f'dumpsys package {PKG}')) or [''])[0])
-        sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt; echo http://localhost:{FAKE} > files/qa_home.txt'")
+        sx(f'run-as {PKG} mkdir -p files'); sx(f"run-as {PKG} sh -c 'echo http://10.0.2.2:{FAKE} > files/qa_origin.txt; echo {QA_HOME} > files/qa_home.txt'")
         sh(ADB, '-s', S, 'reverse', f'tcp:{FAKE}', f'tcp:{FAKE}')
         sx(f'pm grant {PKG} android.permission.RECORD_AUDIO'); sx(f'pm grant {PKG} android.permission.POST_NOTIFICATIONS')
         sx(f'appops set {PKG} SYSTEM_ALERT_WINDOW allow'); sx(f'appops set {PKG} ACCESS_RESTRICTED_SETTINGS allow')
         sx(f'settings put secure enabled_accessibility_services {PKG}/ai.wizards.os.everywhere.WizardKeyboardService'); sx('settings put secure accessibility_enabled 1')
         sx('logcat -c')
         sx(f'am start -W -n {PKG}/ai.wizards.os.MainActivity'); time.sleep(9)
-        pg = Page('wizard-os-home')
-        pg.ev("new Promise(r => { const t0 = Date.now(), t = () => window.__wos || Date.now() - t0 > 20000 ? r() : setTimeout(t, 200); t(); })")
+        pg = shell_page()
         # Fresh-install coaching captures outside taps, so finish it before exercising the real orb.
         pg.ev("(() => { localStorage.setItem('wos.tour.v1', 'true'); window.WosTour?.finish('qa'); return true; })()")
         pg.ev("window.WizardOSNative.setEverywhere(true)"); time.sleep(2)
