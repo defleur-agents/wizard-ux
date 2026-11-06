@@ -247,7 +247,7 @@ export default function desktop(api) {
   const vtFoot = el('div', 'aad-vtf');
   // All apps: the list's last row, kept in view under it (the grid as a sheet, ⌥T)
   // round 16 item 7: + at the column's end (in place of All apps): the picker of installed apps neither pinned nor open
-  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Add an app: installed apps not pinned or open, and Get more', title: 'Add an app (⌥A)' });
+  const vtAll = el('button', 'aad-vall', { type: 'button', 'aria-label': 'Open another app: search all installed apps, including open and pinned apps', title: 'Open another app (Left ⌥Space · ⌥A)' });
   const vtAllI = el('span', 'aad-vti'); vtAllI.append(icon('plus', 'aad-ico aad-vall-i'));
   vtAll.append(vtAllI, el('span', 'aad-vtn', { text: 'Add an app' }));
   const tidyBtn = el('button', 'aad-tidy', { type: 'button', 'aria-expanded': 'false' });
@@ -523,17 +523,20 @@ export default function desktop(api) {
   /* the picker (round 16 item 7; the shared sheet, chrome.js): installed apps neither open nor pinned, For people open,
    * For agents folded, + Get more last (the App Store as it is); ⌥T or the column's + */
   const allOpenNow = () => !!chrome.isOpen;
-  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ exclude: () => refreshPins(), people: 'For people' }); }
+  function openAll() { if (chrome.isOpen) return; unpeek(); closeMenu(); closeWs(); if (q) setSearch(false); chrome.open({ includeOpen: true, people: 'For people' }); }
   function closeAll() { chrome.close(); }
   api.listen(vtAll, 'click', openAll);
 
   /* ---------- round 15: the pinned apps (round 16: the right column's top) ---------- */
-  const installedIds = () => api.apps.list().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
+  // Launcher links (e.g. Video Editor) live in kinds.dev, not the quick-app list.
+  // Validate pins against the installed catalog, never just that quick projection.
+  const pinApps = () => { const K = api.apps.kinds?.() || {}; return [...api.apps.list(), ...(K.apps || []), ...(K.dev || [])]; };
+  const installedIds = () => pinApps().filter(a => a && a.id && a.id !== CHATS).map(a => a.id);
   // (until he pins or unpins, the defaults follow the installed list: it can still be empty on the first paint)
   let pinsStored = api.storage.get('pins'), pins = pinsFrom(pinsStored, installedIds());
   const refreshPins = () => { pins = pinsFrom(Array.isArray(pinsStored) ? pinsStored : null, installedIds()); return pins; };
   const setPins = list => { pinsStored = list; pins = list; api.storage.set('pins', list); paintVt(true); };
-  const pinApp = id => setPins(togglePin(pins, id));
+  const pinApp = id => setPins(togglePin(refreshPins(), id));
 
   /* the quick actions (round 10): Open; Add to Home Screen (the Desks' own sheet, apps it would offer); the App Store
    * page (its own Update / Remove, behind the Store's own confirmations); Close for an open app (it stays installed) */
@@ -1031,7 +1034,7 @@ export default function desktop(api) {
     refreshPins();
     // (round 16 item 7: parts.js appLayers, the phone's Home too; badged first until he orders them by hand: then his
     // order, i.e. the desks' order; the badge stays on the row)
-    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, appName(id) || id])), chats: CHATS });
+    const L = appLayers(desks(), pins, { main: mainChats()?.desk ?? null, lit, manual, names: Object.fromEntries(pins.map(id => [id, pinApps().find(a => a.id === id)?.name || appName(id) || id])), chats: CHATS });
     return { pinned: L.pinned, others: L.open };
   }
   let manual = api.storage.get('vtManual') === true;
@@ -1490,9 +1493,16 @@ export default function desktop(api) {
   // (the one on screen: a second Chats window, e.g. the chat ⌥X starts, can hold another hidden one)
   const routeBtn = () => [...doc.querySelectorAll('.win .dchats .pane-main [data-notify-menu]')].find(onScreen) || null;
   const chatBtn = act => [...doc.querySelectorAll(`.win .dchats .pane-main [data-chact="${act}"]`)].find(onScreen) || null;
+  let leftOption = false;
+  api.listen(globalThis, 'blur', () => { leftOption = false; });
   api.keys.on({ down: e => {
+    if (e.code === 'AltLeft') leftOption = true;
+    else if (!e.altKey) leftOption = false;
     if (!e.altKey || e.ctrlKey || e.metaKey) return false;
     const code = e.code || '', sh = !!e.shiftKey, once = fn => { if (!e.repeat) fn(); return true; };
+    // Physical LEFT Option + Space is the existing app picker, never voice.
+    // Before modal/app key dispatch: repeats are consumed without reopening it.
+    if (code === 'Space' && !sh && leftOption) return once(openAll);
     // Native word jumps are never a view action, including with a modal or snooze sheet in front.
     if (!sh && (code === 'ArrowLeft' || code === 'ArrowRight')) return false;
     if (allOpenNow()) return code === 'KeyA' && !sh ? once(closeAll) : KEY_LIKE.test(code);
@@ -1540,7 +1550,7 @@ export default function desktop(api) {
     if (code === 'KeyB' && !sh) { if (!e.repeat && docked && frontNote()) routeBtn()?.click?.(); return true; }
     if (typing() && sh && /^Arrow/.test(code)) return false;   // ⌥⇧← / → select words
     return KEY_LIKE.test(code);
-  } });
+  }, up: e => { if (e.code === 'AltLeft' || !e.altKey) leftOption = false; } });
   const vtRows = () => [...vtList.querySelectorAll('.aad-vtab')];
   /* Now playing (4 Nov 2026, minimal): a playing app's row wears data-media="playing" | "paused" and its icon small
    * bars (.aad-np, drawn by the miguel/now-playing tweak's css). Hovering the bars turns them into pause; a click
