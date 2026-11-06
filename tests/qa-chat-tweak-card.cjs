@@ -90,7 +90,6 @@ const MARK = o => `[WIZARD_TWEAK_V1]${JSON.stringify(o)}[/WIZARD_TWEAK_V1]`;
         assert.match(await thread.innerText(), /This tweak isn’t installed on this Wizard/);
         await sw.first().scrollIntoViewIfNeeded();
         await page.evaluate(() => document.fonts.ready);
-        await page.screenshot({ path: path.join(out, stem + '-1-card-off.png') });
         // Tap: the switch flips on the tap's own frame, both cards, while the tweak's files are still held.
         hold = true;
         await page.evaluate(id => {
@@ -108,14 +107,13 @@ const MARK = o => `[WIZARD_TWEAK_V1]${JSON.stringify(o)}[/WIZARD_TWEAK_V1]`;
         // a shell may have them cached from boot). The rAF receipt above is the same-frame proof either way.
         entry.heldProof = entry.held.length > 0 && entry.settledMs >= HOLD_MS - 200;
         for (const v of await sw.evaluateAll(b => b.map(x => x.getAttribute('aria-checked')))) assert.equal(v, 'true');
-        await page.screenshot({ path: path.join(out, stem + '-2-card-on.png') });
+        await page.screenshot({ path: path.join(out, stem + '.png') });  // one shot per shell x skin: both cards on, the other-shell and not-installed rows below
         // Settings › Look shows the same switch, on. Its tap turns it off; the cards follow.
         if (phone) await page.evaluate(() => __wos.openSheet('settings')); else await page.evaluate(() => __wux.openSettings('look'));
         await nap(400); const lookPage = page.locator('[data-st-page="appearance"]').filter({ visible: true }).first(); if (await lookPage.isVisible().catch(() => false)) await lookPage.click();
         const lookRow = page.locator(`[data-tweak-toggle="${main}"]`).filter({ visible: true }).first();
         await lookRow.waitFor(); await lookRow.scrollIntoViewIfNeeded();
         assert.equal(await lookRow.getAttribute('aria-checked'), 'true', 'Settings › Look shows the same state');
-        await page.screenshot({ path: path.join(out, stem + '-3-look-on.png') });
         await lookRow.click();
         await page.waitForFunction(id => WosExperience.state.tweaks.find(t => t.id === id)?.on === false && !WosExperience.state.busy, main, { timeout: 15000 });
         await page.waitForFunction(id => { const b = [...document.querySelectorAll(`[data-chat-tweak-card] [data-chat-tweak="${id}"]`)]; return b.length >= 2 && b.every(x => x.getAttribute('aria-checked') === 'false'); }, main, { timeout: 5000 });
