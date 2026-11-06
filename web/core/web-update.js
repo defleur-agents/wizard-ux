@@ -7,8 +7,9 @@
  * thread(s) that made it (ux-changes.json), the banner with Thread / Threads ▾ beside Reload, Back/Esc folding
  * the list, and the guarded reload. A shell supplies only the host: where the banner mounts, how to open a
  * thread, when a reload is unsafe, what to save first. Layout lives in each shell's CSS (#dvWeb):
- * phone = glass strip under the status bar, desktop = pill in the top bar. Reloads only when tapped; a tap
- * made while a recording would be lost waits for that recording to end (see reload()). */
+ * phone = glass strip under the status bar, desktop = pill in the top bar. Reloads when tapped; a tap
+ * made while a recording would be lost waits for that recording to end (see reload()). The desktop also reloads by
+ * itself once its window is hidden or quiet (see quietReady()). */
 (() => {
   'use strict';
   const BASE = new URL('../', document.currentScript.src);
@@ -102,7 +103,7 @@
    * and recorders are in play. A native meeting (Android foreground service) keeps recording through a reload
    * and Mizel reattaches to it, so it no longer blocks. A recording that lives in this page (browser mic) or a
    * save in progress turns Reload into "Reload when recording ends": the reload then happens by itself, once,
-   * right after the recording stops and saves. Nothing else ever reloads on its own. */
+   * right after the recording stops and saves. Otherwise only a quiet desktop (quietReady) reloads on its own. */
   function hostBusy() { try { return !!H?.busy?.(); } catch (_) { return true; } }
   function plan() {
     const svc = window.WizAppServices?.update;
@@ -122,6 +123,7 @@
   }
   const reloadAllowed = p => !p.host && (p.ok || audioFreeReload(p));
   let armed = null, going = false, checking = false, armTimer = 0, notice = '', rescuing = false, discardId = '';
+  let noticeWhileBlocked = false, reasonTimer = 0, reasonSnapshot = '';
   let appCatalog = null;
   function appName(id) {
     // Cache before constructing registries: construction emits wizard:apps. Never recurse from a render.
@@ -134,6 +136,11 @@
   function reloadStatus() {
     const p = plan(), takes = window.WizAppCapture?.staleTakes?.() || [];
     const take = !p.ok ? takes.find(t => p.blocking?.some(b => b.kind === 'capture' && (!b.appId || b.appId === t.appId))) : null;
+    // A past blocked tap must not outlive its blocker. Keep genuine navigation errors
+    // and active rescue/check feedback, but retire stale recording/save explanations.
+    if (noticeWhileBlocked && reloadAllowed(p) && !rescuing && !checking) {
+      notice = ''; noticeWhileBlocked = false; discardId = '';
+    }
     let reason = notice;
 
     if (!reason && take) {
@@ -149,8 +156,22 @@
         b?.kind === 'work' && !/voice|audio/i.test(b.reason || '') ? appName(b.appId) + ' has unsaved work.' :
         appName(b?.appId || p.capture?.appId) + ' has a voice note that isn’t sent yet.';
     }
-    return { reason, take, rescuing, discardId, checking, going, armed: !!armed };
+    return { reason, take, hostWaiting: p.host && !take && !notice, rescuing, discardId, checking, going, armed: !!armed };
   }
+  // Host uploads, finishing voice work and hand-off flags do not all emit events.
+  // Watch only a displayed reason, repaint only changes, and stop as soon as it clears.
+  const reasonKey = s => JSON.stringify([s.reason, s.take?.id, s.hostWaiting, s.rescuing, s.discardId, s.checking, s.going, s.armed]);
+  function watchReason(s) {
+    reasonSnapshot = reasonKey(s);
+    if (!pending || !s.reason || going) {
+      clearInterval(reasonTimer); reasonTimer = 0; return;
+    }
+    if (!reasonTimer) reasonTimer = setInterval(() => {
+      if (armed) maybeFire();
+      if (reasonKey(reloadStatus()) !== reasonSnapshot) repaint();
+    }, 1000);
+  }
+  function refreshReason() { if (pending) repaint(); }
   function rescueHtml(namespace = 'web') {
     const s = reloadStatus(); if (!s.take) return '';
     const attr = namespace === 'osu' ? 'data-osu' : 'data-web-rescue';
@@ -158,7 +179,11 @@
     return `<div class="wos-reload-rescue"><button type="button" ${attr}="${prefix}save" ${s.rescuing ? 'disabled' : ''}>Save to Files and clear</button><button type="button" ${attr}="${prefix}discard" ${s.rescuing ? 'disabled' : ''}>${s.discardId === s.take.id ? 'Confirm discard' : 'Discard'}</button></div>`;
   }
   function repaint() { render(); try { window.WosUpdates?.popup?.(); window.WosSettings?.refresh?.(); } catch (_) {} }
-  function blocked(message) { notice = message || ''; repaint(); }
+  function blocked(message) {
+    notice = message || '';
+    const p = plan(); noticeWhileBlocked = !!notice && (p.host || !p.ok);
+    repaint();
+  }
   async function rescue(action) {
     if (rescuing || going || checking) return;
     const take = reloadStatus().take; if (!take) return;
@@ -202,8 +227,62 @@
     if (p.host || !p.ok) { if (!!p.recording !== armed.recording) { armed.recording = !!p.recording; render(); } return; }
     disarm('ready'); void go('deferred', p);
   }
+  /* Quiet update (James, 7 Nov 2026: his desktop sat on a build from the afternoon through ten releases because
+   * Reload only happens on a tap). A host that opts in (autoApply: the desktop) reloads by itself into a pending
+   * update, but only when nobody is using it: the window is hidden, or nothing was typed, clicked or moved for
+   * QUIET_IDLE_MS. Never while typing into a field with text, and never past any hold a tap would wait on (voice,
+   * sending, a recording, unsaved app work, a kept meeting). Drafts, windows and desks are saved as for a tap.
+   * Once per build: a reload that lands on the same build again does not retry for QUIET_RETRY_MS. */
+  const QUIET_IDLE_MS = 10 * 60e3, QUIET_RETRY_MS = 15 * 60e3, QUIET_KEY = 'wos.web.quiet';
+  let lastInput = Date.now();
+  const touched = () => { lastInput = Date.now(); };
+  // An installed app's frame keeps its input to itself: a same-origin frame's focused field is looked into; a visible
+  // window whose focus is inside any app frame is never quiet (its clicks and keys never reach this document).
+  function focused() {
+    let a = document.activeElement;
+    for (let depth = 0; a && a.tagName === 'IFRAME' && depth < 4; depth++) {
+      let inner = null; try { inner = a.contentDocument?.activeElement || null; } catch (_) {}
+      if (!inner) break; a = inner;
+    }
+    return a;
+  }
+  function typing() {
+    const a = focused();
+    if (!a || !(a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName || ''))) return false;
+    return !!String((a.isContentEditable ? a.textContent : a.value) || '').trim();
+  }
+  const inAppFrame = () => document.activeElement?.tagName === 'IFRAME';
+  function quietReady() {
+    if (!pending || !H?.autoApply || going || checking || rescuing || armed || !printNow) return false;
+    if (!document.hidden && (Date.now() - lastInput < QUIET_IDLE_MS || typing() || inAppFrame())) return false;
+    const p = plan(); if (p.host || !p.ok || p.keeps) return false;
+    try { if (H.quietHold?.()) return false; } catch (_) { return false; }
+    try { const last = JSON.parse(sessionStorage.getItem(QUIET_KEY) || 'null'); if (last?.v === printNow && Date.now() - last.at < QUIET_RETRY_MS) return false; } catch (_) {}
+    return true;
+  }
+  function maybeQuiet() {
+    if (!quietReady()) return false;
+    log('web:quiet', document.hidden ? 'hidden' : 'idle'); void go('quiet', plan()); return true;
+  }
   async function go(why, p) {
     if (going) return false; going = true; notice = '';
+    // A quiet reload that meets a hold just stands down: no toast, no notice; the banner stays as it was.
+    if (why === 'quiet') {
+      const ok = q => !q.host && q.ok && !q.keeps;
+      try {
+        if (!ok(plan())) { going = false; render(); return false; }
+        try { H?.beforeReload?.(); } catch (_) {}
+        window.WizAppReadingPosition?.flush();
+        const committed = plan();
+        if (!ok(committed) || typing() || (!document.hidden && inAppFrame())) { going = false; render(); return false; }
+        // The once-per-build cooldown starts only when the reload is committed: a stand-down above retries later.
+        try { sessionStorage.setItem(QUIET_KEY, JSON.stringify({ v: printNow, at: Date.now() })); } catch (_) {}
+        window.WizAppServices?.update.commitReload?.(committed);
+        log('web:reload', why); window.__wosReloading = why; location.reload();
+        setTimeout(() => { going = false; render(); }, 4500);
+        return true;
+      } catch (_) { going = false; render(); return false; }
+    }
     try {
     // A tapped reload bursts across the screen and says "Reloading..." until the new build paints, so the
     // tap visibly worked instead of the banner looking frozen (every skin).
@@ -295,6 +374,7 @@
    * short list; Back/Esc closes the list. Nothing known (no change list): "Interface updated". */
   function render() {
     if (!pending || !H) return;
+    const status = reloadStatus(); watchReason(status);
     // The Home update pop-up (core/os-updates.js) carries this reload while it shows, and after its ×: one, not two.
     if (window.WosUpdates?.ownsReload?.()) { document.getElementById('dvWeb')?.remove(); listOpen = false; return; }
     let el = document.getElementById('dvWeb');
@@ -312,7 +392,7 @@
     const linked = changes.filter(c => c.thread), names = changes.map(rowName);
     // Desktop has no toast near the card: say it in place. Armed = Reload was tapped and waits for the end.
     const wait = armed ? (armed.recording ? 'Interface update · reloads after the recording' : 'Interface update · reloads once saved')
-      : H.shell === 'desktop' && busy() ? 'Interface update · finish recording first' : '';
+      : '';
     const held = !!wait && (H.shell === 'desktop' || !!armed);
     const head = held ? wait : 'Interface update';
     // Two lines so the thread name gets the width: "Interface update" small, the thread it came from bold.
@@ -326,7 +406,7 @@
       : `<div class="dv-wr static" role="listitem"><b>${esc(rowName(c))}</b><small>No thread</small></div>`).join('')}</div>` : '';
     el.classList.toggle('open', !!list);
     const mark = changes.length ? '' : `<span class="dv-ui">${window.WizBrand?.html || '✦'}</span>`;
-    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Getting ready…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${reloadStatus().reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${esc(reloadStatus().reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
+    el.innerHTML = `<div class="dv-wtop">${mark}<span class="dv-um${changes.length ? ' two' : ''}">${changes.length ? msg : esc(msg)}</span>${sec}${checking ? '<button data-web="go" disabled aria-busy="true">Getting ready…</button>' : armed ? `<button data-web="go" class="armed" aria-pressed="true" title="Tap to cancel the waiting reload">${armed.recording ? 'Reload when recording ends' : 'Reload when saved'}</button>` : '<button data-web="go" title="Reload into the new interface">Reload</button>'}</div>${status.reason ? `<div class="wos-reload-detail"><p class="wos-reload-reason">${status.hostWaiting ? '<span class="wos-reload-dot" aria-hidden="true"></span>' : ''}${esc(status.reason)}</p>${rescueHtml()}</div>` : ''}${list}`;
   }
   // Back (phone) / Esc (desktop): fold an open thread list first. Returns true when it took the press.
   function back() { if (listOpen && pending) { listOpen = false; render(); return true; } return false; }
@@ -339,8 +419,17 @@
     polling = true;
     setTimeout(() => check(true), 1500);
     setInterval(() => { if (!document.hidden) check(false); }, 60e3); // one tiny text file a minute
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) check(false); });
-    addEventListener('wos-native-resume', () => check(false));
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { check(false); refreshReason(); } else maybeQuiet(); });
+    if (H.autoApply) {
+      for (const n of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'input', 'compositionstart'])
+        document.addEventListener(n, touched, { capture: true, passive: true });
+      // A hidden window keeps noticing releases (the same tiny file, at most once a minute) so it is current before anyone
+      // comes back to it; a visible one is looked at every 30 s for having gone quiet.
+      setInterval(() => { if (document.hidden) check(false).then(maybeQuiet, () => {}); else maybeQuiet(); }, 30e3);
+    }
+    addEventListener('wos-native-resume', () => { check(false); refreshReason(); });
+    addEventListener('wizard-voice-state', refreshReason);
+    window.WosOutbox?.onChange?.(() => { Promise.resolve().then(refreshReason); });
     addEventListener('wizard:app-holds', () => { if (armed) maybeFire(); if (pending) render(); });
     addEventListener('wizard-app-capture-state', () => { if (armed) maybeFire(); if (pending) repaint(); });
   }
