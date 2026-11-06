@@ -150,7 +150,11 @@ function world({ shell = 'phone', route = { home: false, view: 'thread', thread:
   const q = s => html.querySelector(s), qa = s => html.querySelectorAll(s);
   return { api, st, html, device, orbWrap, fire, emit, run, q, qa, doc, escape: () => !!dispatcher.run({surface:st.surface}) };
 }
-const layout = () => import(new URL('web/layouts/ai-apps/layout.js', root).href);
+// The host picks each shell's own entry (core/skin-host.js files: desktop -> desktop.js; the phone -> layout.js).
+const layout = async () => {
+  const [phone, desk] = await Promise.all([import(new URL('web/layouts/ai-apps/layout.js', root).href), import(new URL('web/layouts/ai-apps/desktop.js', root).href)]);
+  return { default: api => (api.env.shell === 'desktop' ? desk : phone).default(api) };
+};
 
 test('packaging: an ordinary Miguel view tweak, off by default; the desktop wears AI apps, the phone keeps its stock view', async () => {
   const man = JSON.parse(read('web/tweaks/miguel/ai-apps/manifest.json'));

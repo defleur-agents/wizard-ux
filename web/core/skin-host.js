@@ -20,21 +20,23 @@
   const EVENTS = ['route', 'render', 'voice', 'sent', 'beside', 'home'];
   /* Layouts (James, 22 Oct 2026): a third, opt-in layer for UX changes (gestures, orbs, controls) that any
    * colour skin can wear. Classic is the shell as everyone has it and loads nothing. A layout lives in
-   * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. */
+   * web/layouts/<id>/{layout.css,layout.js}; its css applies only under html[data-layout="<id>"]. files: { <shell>: { css, js } }
+   * names that shell's own entry instead (css '' = none), so a shell never downloads another shell's layout code. */
   const LAYOUTS = Object.freeze([
     Object.freeze({ id: 'classic', name: 'Classic', desc: 'One orb: tap to talk, hold for a command' }),
     Object.freeze({ id: 'two-orb', name: 'Two orbs', desc: 'Agent orb bottom right · white orb types and runs commands', css: true, js: true }),
     // Miguel's miguel/orb-shell tweak wears it: desktop = the orb in the middle, apps around it, threads beside it;
     // phone = the same orb scene on Home only (layouts/orb/phone.js).
-    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true }),
+    Object.freeze({ id: 'orb', name: 'Orb', desc: 'The orb in the middle, apps around it (desktop: your threads beside it; phone: on Home)', css: true, js: true, files: Object.freeze({ phone: Object.freeze({ css: '', js: 'phone.js' }) }) }),
     // Miguel's miguel/apps-home tweak wears it: Home as a standard home screen / launchpad, one app icon per desk.
     Object.freeze({ id: 'apps', name: 'Apps', desc: 'Home as an app grid: one icon per desk, Chats first (phone and desktop)', css: true, js: true }),
     // Miguel's miguel/ai-apps tweak wears it on desktop only: apps/threads around the chat.
     // Keep this synchronous support metadata aligned with its manifest; boot cannot wait for the catalog.
-    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
+    Object.freeze({ id: 'ai-apps', name: 'AI apps', desc: 'Apps and chats around the main chat (desktop only)', shells: Object.freeze(['desktop']), css: true, js: true, ownsChats: true, files: Object.freeze({ desktop: Object.freeze({ css: 'desktop-boot.css', js: 'desktop.js' }) }) }),   // ownsChats: it draws every chat list itself (api.sessions.ownList), so Classic's never mounts
   ]);
   const VIEW_LAYOUTS = new Set(['orb', 'apps', 'ai-apps']);   // worn only by a view tweak: a stale stored one goes back to Classic
   const LAYOUT_KEY = 'wos.layout';
+  const layoutFile = (L, kind) => { const f = L.files?.[env().shell]; return f ? f[kind] || '' : kind === 'css' ? 'layout.css' : 'layout.js'; };
   const layoutOf = id => LAYOUTS.find(l => l.id === id && l.id !== 'classic' && (!l.shells || l.shells.includes(env().shell))) || null;
   let standardLayout = null; // built-in desktop renderer, independent of personal tweak lifetimes
   const escapeSurfaces = new Set(), chatListOwners = new Set();
@@ -387,8 +389,8 @@
     if (L) document.documentElement.dataset.layout = id; else delete document.documentElement.dataset.layout;
     paintChatsOwner();
     if (layoutCss && (!L || layoutCss.dataset.layoutPkg !== id)) { layoutCss.remove(); layoutCss = null; }
-    if (L && L.css && !layoutCss) {
-      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, 'layout.css'); l.dataset.layoutPkg = id;
+    if (L && L.css && !layoutCss && layoutFile(L, 'css')) {
+      const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = layoutUrl(id, layoutFile(L, 'css')); l.dataset.layoutPkg = id;
       l.setAttribute('blocking', 'render'); document.head.appendChild(l); layoutCss = l; requested.push(l.href);
     }
   }
@@ -406,7 +408,7 @@
     layoutFailed = null; paintChatsOwner();
     const L = layoutOf(id); const key = 'layout:' + id;
     if (!L || !L.js || !shell || disabled.has(key)) return layoutLoadFailed(id);
-    const href = layoutUrl(id, 'layout.js'); requested.push(href);
+    const href = layoutUrl(id, layoutFile(L, 'js')); requested.push(href);
     let mod;
     // Three retries after the first failure. A distinct URL avoids a cached
     // rejected module entry; a superseded selection must never mount late.
