@@ -61,6 +61,21 @@ test('tools use retained app frames; closed and non-app surfaces clear the proje
   f.host.close('app'); assert.equal(f.host.renderTools('app', slot), false); assert.equal(seen.at(-1)[0], null);
   assert.equal(f.host.renderTools('app', null), false);
 });
+test('companion membership follows host group identity/count, ignores inactive windows and settles once', () => {
+  const source = read('web/layouts/ai-apps/desktop.js'), calls = [];
+  const state = [{id:'video',desk:2,tiled:true},{id:'feedback',desk:2,tiled:false},{id:'other',desk:3,tiled:true}];
+  const context = vm.createContext({ host:{windows:()=>state}, pane:{desk:2,id:'video'}, applySizes:()=>calls.push('size'), retileSoon:()=>calls.push('tile') });
+  const membership = source.slice(source.indexOf('  const appWindows ='), source.indexOf('  let pane ='));
+  const watcher = source.slice(source.indexOf('  let winsDesk ='), source.indexOf('  const NOTE ='));
+  vm.runInContext(membership + watcher + '\nglobalThis.watch = watchPaneWins;', context);
+  context.watch(); assert.deepEqual(calls, ['size','tile']); calls.length=0;
+  context.watch(); assert.equal(calls.length,0,'unrelated render does not resize');
+  state[1].tiled=true; context.watch(); assert.deepEqual(calls,['size','tile'],'late companion resizes once'); calls.length=0;
+  context.watch(); assert.equal(calls.length,0);
+  state[1].tiled=false; context.watch(); assert.deepEqual(calls,['size','tile'],'closing or monocle-hiding companion resizes'); calls.length=0;
+  context.pane={desk:3,id:'other'}; context.watch(); assert.deepEqual(calls,['size','tile'],'same count on a new group is still a change'); calls.length=0;
+  context.pane=null; context.watch(); assert.deepEqual(calls,['size','tile'],'minimize releases the group');
+});
 test('desktop loads the adapter before boot; Classic controls and skin adapter reuse host lifecycle', () => {
   const html = read('web/desktop.html'), desktop = read('web/desktop/desktop.js');
   assert.ok(html.indexOf('core/desktop-host.js') < html.indexOf('desktop/desktop.js'));
