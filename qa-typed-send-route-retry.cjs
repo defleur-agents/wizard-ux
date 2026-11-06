@@ -29,7 +29,7 @@ module.exports = async ({ boot, ok, sleep, sid, out }) => {
         await p.evaluate(skin => WosSkin.set(skin), skin);
         await p.waitForFunction(skin => WosSkin.current === skin && document.documentElement.dataset.skin === skin, skin);
         await reopen(); await sleep(250);
-        const chip = await chat.locator('[data-chmodel]').innerText();
+        const chip = await chat.locator('[data-chmodel]:visible').first().innerText();
         record(/Sol/.test(chip), 'model-only thread displays the original Sol chip', chip);
         const freshText = `Synthetic fresh typed reply ${label}`, beforeFresh = f.state.posts.length;
         await chat.locator('.ch-compose textarea').fill(freshText);
