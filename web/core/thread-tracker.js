@@ -178,7 +178,8 @@
     if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
-    const openN = live.filter(i => !i.answered).length;
+    // Header = rows listed = sum of the visible tally: answered asks still working on it count as open.
+    const openN = live.length;
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
     const run = live.filter(i => i.state === 'running');
     const fin = live.filter(i => i.state === 'done');
