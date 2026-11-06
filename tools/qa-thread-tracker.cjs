@@ -416,12 +416,14 @@ const isVisibleInScroller = (page, sel) => page.evaluate(s => { const n = docume
       svc.items=[{...anchor,state:'done',message_id:String(latest.id),at:latest.timestamp*1000,updated_at:Date.now()+1}];svc.seen.clear();
       await page.waitForTimeout(2600);await page.evaluate(()=>window.WosThreadTracker.loadCounts(true));
       await page.waitForFunction(()=>/finished, not seen/.test(window.WosThreadTracker.dots('tt-main')));
+      await page.waitForTimeout(700); // let the already queued ledger bubble render settle while hidden
       // Keep the geometry fixture stable through the app's queued bubble repaint.
       // Inline node styles alone disappear when the pending ledger render replaces it.
       const shortStyle=await page.addStyleTag({content:`.ch-msgs .msg[data-mid="${latest.id}"]{height:300px!important;min-height:300px!important;max-height:300px!important;box-sizing:border-box!important;overflow:hidden!important}`});
       const shortTail=await page.evaluate(mid=>{
         const nb=document.querySelector('.ch-msgs'),n=nb.querySelector(`.msg[data-mid="${mid}"]`);
         n.style.height='300px';n.style.minHeight='300px';n.style.boxSizing='border-box';n.textContent='Only the tail of an ordinary reply.';
+        nb.dispatchEvent(new WheelEvent('wheel',{bubbles:true,deltaY:250})); // a reader scroll cancels opening-position settling
         const spacer=document.createElement('div');spacer.style.height='1200px';spacer.style.flexShrink='0';nb.append(spacer);
         const top=window.WosThreadTracker.viewportTop(nb,nb.getBoundingClientRect().top),delta=n.getBoundingClientRect().bottom-(top+50);
         if(document.documentElement.classList.contains('wos-doc-scroll'))window.scrollBy(0,delta);else nb.scrollTop+=delta;
