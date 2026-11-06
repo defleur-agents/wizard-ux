@@ -903,7 +903,7 @@
         // Ready also holds the notifications Chats shows (round 5, Miguel: the unified inbox's items, an app set to Chats
         // in Settings › Notifications included), as rows of their own (id 'notif:<id>', note: true) in Chats' own order:
         // the new ones among the chats by time, the snoozed ones (read) at the end; acted on through the inbox's handler.
-        list: () => { const l = live() ? shell.sessionList?.() : null; if (!l) return null; const o = structuredClone(l); o.ready = withNoteRows(o.ready || []); return o; },
+        list: () => { const l = live() ? shell.sessionList?.() : null; if (!l) return null; const o = structuredClone(l); o.ready = withNoteRows(o.ready || []); o.working = window.WizChatsListModel.workingSort(o.working, readWorkingOrder()); return o; },
         open: id => { if (!live() || typeof id !== 'string' || !id) return; if (id.startsWith(NOTE_ID)) inboxAct(NOTE_ID_OPEN, id.slice(NOTE_ID.length)); else shell.openThread(id); },
         // The thread's own actions, through Chats' own paths (the same as its row sheet): Snooze, Done (archive), Mark
         // unread, Restore, Pin (the Pins toggle) and Rename (Chats' rename sheet). list() rows say which apply.
@@ -913,6 +913,10 @@
         openList: kind => { if (live() && (kind === 'working' || kind === 'ready')) shell.openSessions?.(kind); },
         // Ready's order (the AI apps view, round 18): the stock Chats Filter's own saved choice (wos.chats.readyOrder.v1,
         // shared across devices through the box preferences, like Chats' own buttons), so both views always agree.
+        workingOrder: () => readWorkingOrder(),
+        setWorkingOrder: o => {
+          return live() ? !!window.WizLive?.setWorkingOrder?.(o) : false;
+        },
         order: () => readReadyOrder(),
         setOrder: o => {
           if (!live() || !['newest', 'oldest', 'priority'].includes(o)) return false;
@@ -1169,6 +1173,7 @@
     return true;
   }
   const READY_ORDER_KEY = 'wos.chats.readyOrder.v1', READY_ORDERS = ['newest', 'oldest', 'priority', 'subject'];   // core/chats.js's
+  function readWorkingOrder() { return window.WizLive?.workingOrder?.() || 'alphabetical'; }
   function readReadyOrder() { try { const v = localStorage.getItem(READY_ORDER_KEY); return READY_ORDERS.includes(v) ? v : 'newest'; } catch (_) { return 'newest'; } }
   function withNoteRows(ready) {
     return window.WizChatsListModel.readySort([...ready, ...noteRows()], readReadyOrder());
