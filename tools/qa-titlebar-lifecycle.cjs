@@ -27,6 +27,7 @@ async function run(){
     const f=await (async()=>{await p.waitForFunction(()=>[...document.querySelectorAll('iframe')].some(f=>f.contentWindow?.releaseTools));return p.frames().find(f=>f.url().includes('/titlebar-fixture/'));})();assert(f);
     await closed.settle(p);
     if(!phone){assert.equal(await p.locator('.aad-ptools [data-tool="settings"]').count(),0,'cold header has no tools before app initialization');}
+    report.phase='late-init-projection-'+(phone?'phone':'desktop');
     await f.evaluate(()=>releaseTools());
     const selector=phone?'.win .wbar > .wtools':'.aad-ptools';
     await p.locator(selector+' [data-tool="settings"]').filter({visible:true}).first().waitFor({state:'visible',timeout:5000});
