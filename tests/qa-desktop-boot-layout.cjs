@@ -5,6 +5,9 @@
 const { chromium } = require('../tools/qa-playwright.cjs');
 const { ownerRead } = require('../tools/qa-desktop-frame-fixture.cjs');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
+const missing = process.env.QA_LAYOUT_BUNDLE_MISSING === '1';
+const faults = process.env.QA_LAYOUT_FAULTS === '1';
+const source = path.resolve(process.env.QA_SOURCE || path.join(__dirname, '..'));
 const origin = 'https://boot.test', prefix = '/wizard-os-home/';
 const out = process.env.QA_OUT || 'boot-layout-evidence'; fs.mkdirSync(out, { recursive: true });
 const apps = ['editor', 'notes', 'calendar', 'music'].map(id => ({
@@ -90,8 +93,12 @@ async function interaction(p, row) {
    const realistic = mode.startsWith('restored-apps-');
    const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, serviceWorkers: 'block' });
    await context.routeWebSocket('**/*', ws => ws.close());
-   await context.addInitScript(({ mode, apps }) => {
+   await context.addInitScript(({ mode, apps, faults }) => {
     if (window !== top) return; // child documents must never reseed the owner workspace
+    if (faults) {
+     localStorage.setItem('wos.skin.wallpaper.wizard.desktop', 'custom');
+     localStorage.setItem('wos.skin.wallpaper.wizard.custom', JSON.stringify({ wide: 'qa-custom-wide', tall: 'qa-custom-tall' }));
+    }
     if (sessionStorage.getItem('qa.seeded') !== '1') {
      sessionStorage.setItem('qa.seeded', '1');
      localStorage.setItem('wos.shell', 'desktop');
@@ -135,7 +142,7 @@ async function interaction(p, row) {
     new MutationObserver(() => sample('mutation')).observe(document, { subtree: true, childList: true, attributes: true });
     const frame = () => { sample('frame'); requestAnimationFrame(frame); }; requestAnimationFrame(frame);
     document.addEventListener('DOMContentLoaded', () => sample('DOMContentLoaded'));
-   }, { mode, apps });
+   }, { mode, apps, faults });
    const errors = [], logs = [], writes = [], seenWrites = [], runs = [], pending = new Set();
    await context.route('**/*', async r => {
     const q = r.request(), u = new URL(q.url());
@@ -144,6 +151,7 @@ async function interaction(p, row) {
     // The restored thread auto-marks seen; allow ONLY the exact product route.
     if (q.method() === 'PUT' && u.pathname === '/wizard/thread-seen') { seenWrites.push(q.method() + ' ' + u.pathname); return r.fulfill({ json: { ok: true } }); }
     if (!['GET', 'HEAD'].includes(q.method())) { writes.push(q.method() + ' ' + u.pathname); return r.fulfill({ status: 403, json: { error: 'No writes in QA' } }); }
+    if (missing && u.pathname.endsWith('/layouts/ai-apps/layout.js')) return r.fulfill({ status: 503, body: 'QA synthetic missing layout bundle' });
     if (u.pathname === '/qa-boot-apps/fixture.js') return r.fulfill({ contentType: 'text/javascript', body: appJS });
     if (u.pathname.startsWith('/qa-boot-apps/')) return r.fulfill({ contentType: 'text/html', body: appHTML });
     if (u.pathname === '/wizard/hermes/api/sessions') return r.fulfill({ json: { object: 'list', data: [thread], has_more: false, total: 1 } });
@@ -151,10 +159,19 @@ async function interaction(p, row) {
     if (u.pathname === '/wizard/hermes/api/sessions/qa-thread/messages') return r.fulfill({ json: { data: [{ id: 'qa-user', role: 'user', content: 'Synthetic request.' }, { id: 'qa-assistant', role: 'assistant', content: 'Synthetic completed reply.' }], has_more: false } });
     if (u.pathname === '/wizard/v1/apps') return r.fulfill({ json: { apps: realistic ? apps : [] } });
     if (u.pathname === '/wizard/v1/ui-preferences') return r.fulfill({ json: { migrations: { 'launcher-seed-v1': true } } });
+    if (faults && /^\/wizard\/files\/qa-custom-(wide|tall)\/content$/.test(u.pathname)) return r.fulfill({ contentType: 'image/png', path: path.join(source, 'web/brand/wizard-mark-white.png') });
     if (u.pathname.startsWith('/wizard/')) return r.fulfill({ json: ownerRead(u.pathname) });
     if (u.pathname.startsWith(prefix)) {
-     const root = path.resolve(__dirname, '../web'), file = path.resolve(root, u.pathname.slice(prefix.length) || 'index.html');
-     if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return r.fulfill({ path: file });
+      const root = path.resolve(source, 'web'), file = path.resolve(root, u.pathname.slice(prefix.length) || 'index.html');
+      if (faults && u.pathname.endsWith('/layouts/ai-apps/desktop.js')) {
+       // Inject an explicitly labelled callback fault into the REAL layout module,
+       // not a mock layout. Old host loses the real sidebar at the third fault.
+       const body = fs.readFileSync(file, 'utf8').replace('export function setupDesktop(api) {', `export function setupDesktop(api) {
+        api.on('render', () => { if (globalThis.__qaLayoutFault) throw new Error('QA synthetic layout callback fault'); });`);
+       assert.ok(body.includes('QA synthetic layout callback fault'));
+       return r.fulfill({ contentType: 'text/javascript', body });
+      }
+      if (file.startsWith(root + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) return r.fulfill({ path: file });
     }
     return r.fulfill({ json: { apps: [], agents: [], sessions: [], connected: false } });
    });
@@ -173,11 +190,20 @@ async function interaction(p, row) {
      await p.waitForFunction(() => localStorage.getItem('wos.desktop-view.v1') === 'ai-apps' && document.documentElement.dataset.aiApps === 'desktop');
      await p.reload();
     }
-    for (const pass of realistic ? ['fresh', 'reload'] : ['fresh']) {
-     if (pass === 'reload') await p.reload(); // never reapply the seed; restore what production saved
+    for (const pass of realistic ? (faults ? ['fresh', 'reload', 'reload2', 'reload3'] : ['fresh', 'reload']) : ['fresh']) {
+     if (pass.startsWith('reload')) await p.reload(); // never reapply the seed; restore what production saved
      const row = { mode, phase: pass, checks: [], errors, logs, writes, seenWrites, runs }; report.cases.push(row);
      try {
-      if (mode === 'classic' || mode === 'stale-classic') {
+      if (missing && realistic) {
+       await p.waitForFunction(() => document.documentElement.dataset.layoutRecovery === 'chats' && document.querySelector('[data-layout-recovery-chat] .ch-row'), null, { timeout: 20000 });
+       assert.equal(await p.locator('#wsList').isVisible(), false, 'no Classic menubar in shared Chats recovery');
+       assert.equal(await p.locator('[data-layout-recovery-chat] .pane-list').isVisible(), true);
+       await p.locator('[data-layout-recovery-chat] .ch-row[data-chopen]').first().click();
+       await p.locator('[data-layout-recovery-chat] .ch-compose textarea').waitFor({ state: 'visible' });
+       row.recovery = await p.evaluate(() => ({ layout: WosSkinHost.layout, choice: localStorage.getItem('wos.desktop-view.v1'), dataset: { ...document.documentElement.dataset }, state: WosSkinHost.layoutState }));
+       assert.equal(row.recovery.layout, 'ai-apps'); assert.equal(row.recovery.choice, 'ai-apps');
+       row.checks.push('missing bundle: shared live Chats sidebar + thread opening; no Classic or saved choice change');
+      } else if (mode === 'classic' || mode === 'stale-classic') {
        await p.waitForFunction(() => window.__wux && !WosExperience.state.busy);
        await p.waitForFunction(() => { const n = document.querySelector('.pane-list'); return n && getComputedStyle(n).display !== 'none' && n.getBoundingClientRect().width > 0; }, null, { timeout: 15000 });
        const root = await p.evaluate(() => ({ layout: document.documentElement.dataset.layout || null, owner: document.documentElement.dataset.chatsOwner || null, booting: document.documentElement.dataset.layoutBooting ?? null }));
@@ -214,7 +240,28 @@ async function interaction(p, row) {
       }
       assert.deepEqual([writes, runs], [[], []], 'no writes, no sends');
       assert.deepEqual(errors, [], 'no uncaught browser errors');
-      assert.equal(logs.some(m => /\[skin layout:ai-apps\]|\[layout\].*(failed|error)/.test(m.text)), false, 'no caught layout fallback errors');
+      if (!faults && !missing) assert.equal(logs.some(m => /\[skin layout:ai-apps\]|\[layout\].*(failed|error)/.test(m.text)), false, 'no caught layout fallback errors');
+      if (faults && realistic) {
+       const skin = pass === 'fresh' || pass === 'reload2' ? 'nebula' : 'sepia';
+       await p.evaluate(id => WosSkin.set(id), skin);
+       await p.waitForFunction(() => !WosExperience.state.busy && WosSkinHost.layoutState.active);
+       row.fault = await p.evaluate(() => {
+        const scene = document.querySelector('.aad'); const before = WosSkinHost.layoutState;
+        globalThis.__qaLayoutFault = true;
+        for (let i = 0; i < 12; i++) WosSkinHost.rendered('thread', 'qa-thread');
+        globalThis.__qaLayoutFault = false;
+        return { before, after: WosSkinHost.layoutState, sameScene: scene === document.querySelector('.aad'), choice: localStorage.getItem('wos.desktop-view.v1'), diagnostic: JSON.parse(localStorage.getItem('wos.layout-fault.v1')), backdrop: WosSkin.desktopBackdrop };
+       });
+       assert.equal(row.fault.after.active, true, 'callback threshold never unloads the owner layout');
+       assert.equal(row.fault.after.disabled, false); assert.equal(row.fault.sameScene, true);
+       assert.equal(row.fault.choice, 'ai-apps'); assert.equal(row.fault.backdrop.id, 'custom');
+       assert.match(row.fault.diagnostic.stack, /QA synthetic layout callback fault/);
+       await p.locator('.aad-scroll .aad-row').first().click();
+       await p.locator('.ch-compose textarea').first().fill('Synthetic retained draft after callback failures');
+       assert.equal(await p.locator('#wsList').isVisible(), false);
+       assert.equal(await p.locator('.aad-side').isVisible(), true);
+       row.checks.push('12 real layout callback errors; exact scene retained; working Chats; custom backdrop; live skin ' + skin);
+      }
       row.pass = true;
      } catch (e) {
       row.pass = false; row.error = e.stack; report.failures.push({ mode, pass, error: e.stack });
