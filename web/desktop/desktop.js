@@ -76,7 +76,8 @@
   Object.keys(W).forEach(id => { if (id !== hud?.id && !ws.some(d => d.wins.includes(id))) delete W[id]; });
   if (!(cur >= 0 && cur < ws.length)) cur = 0;
   function uid() { return 'w' + Math.random().toString(36).slice(2, 9); }
-  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); };
+  let desktop = null;
+  const save = () => { store.set('wins', W); store.set('ws', ws); store.set('cur', cur); store.set('hud', hud); window.WosWorkspaceSync?.current?.changed(); desktop?.changed(); };
   const wsOf = id => ws.findIndex(d => d.wins.includes(id));
   /* No desks (a layout holds the panel, e.g. the Orb desktop): whatever opens shows in ONE panel on the right over
    * Home instead of on a desk. A chat panel's window lives outside the desks (never tiled, never synced); an app is a
@@ -549,6 +550,28 @@
 
   /* ---------------- rendering ---------------- */
   const winEl = id => stage.querySelector(`.win[data-win="${id}"]`);
+  // One lifecycle implementation, shared by Classic's controls and future native
+  // layouts. Do not expose W/ws or Classic container elements to consumers.
+  desktop = window.WizDesktop.attach({
+    has: id => Object.hasOwn(W, id),
+    windows: () => {
+      const front = focused()?.id, beside = new Set(homeOpen ? [] : shownBeside());
+      return Object.values(W).map(w => {
+        const at = wsOf(w.id), d = ws[at];
+        return { id: w.id, kind: w.app, appId: w.appId || '', desk: at, deskId: d?.id || null,
+          title: winTitle(w), thread: w.thread || null, focused: front === w.id,
+          visible: !!(hud?.open && hud.id === w.id) || !!(globalThis.WosSkinHost?.panelMode && panelHas(w.id))
+            || !homeOpen && (at === cur || beside.has(w.id)) && (!d?.mono || d.focus === w.id),
+        };
+      });
+    },
+    frame: id => winEl(id)?.querySelector('iframe') || null,
+    openApp: id => Object.hasOwn(APP, id) && openApp(APP[id]) !== false,
+    focus: (id, opts) => { focusWin(id, opts); return focused()?.id === id; },
+    close: id => { closeWin(id); return !W[id]; },
+    panes: C.panes,
+  });
+  const desktopHost = desktop.host;
   function wsEl(i) {
     const d = ws[i]; if (!d) return null;
     let el = stage.querySelector(`.wsp[data-desk="${d.id}"]`);
@@ -731,7 +754,7 @@
       try {
         const doc = f.contentDocument; if (!doc || doc.__wuxHooked) return; doc.__wuxHooked = true;
         fields().bind(doc);
-        doc.addEventListener('pointerdown', () => focusWin(el.dataset.win, { scroll: false }), true);
+        doc.addEventListener('pointerdown', () => desktopHost.focus(el.dataset.win, { scroll: false }), true);
         // Keyboard events never bubble out of an iframe. Use its window's capture phase,
         // just like the shell: an app's window-level stopPropagation (e.g. an editor/modal)
         // otherwise prevents the document hook from ever seeing desktop chords. Forward
@@ -771,6 +794,7 @@
     window.WosSkinHost?.changed(); // a layout hears Home come and go (route().home)
     queueMicrotask(() => window.WosResources?.sync());
     afterRender?.();
+    desktop.changed();
   }
   let afterRender = null; // Settings' window hosts the one Settings panel (set below, once it exists)
   /* Tiling: capped windows form a centered group; 2 split; 3+ = master + stack.
@@ -1429,7 +1453,7 @@
   });
 
   /* ---------------- window interactions ---------------- */
-  stage.addEventListener('pointerdown', e => { const el = e.target.closest('.win'); if (el) focusWin(el.dataset.win, { scroll: false }); }, true);
+  stage.addEventListener('pointerdown', e => { const el = e.target.closest('.win'); if (el) desktopHost.focus(el.dataset.win, { scroll: false }); }, true);
   stage.addEventListener('click', e => {
     const el = e.target.closest('.win'); if (!el) return;
     const id = el.dataset.win, w = W[id];
@@ -1438,7 +1462,7 @@
     if (act === 'hud-home') return hudDock({ to: 0 });
     if (act === 'panel-back') return panelBack(id);
     if (act === 'close' && hud?.id === id) return canLeave(id) && hudClose();
-    if (act === 'close') return closeWin(id);
+    if (act === 'close') return desktopHost.close(id);
     if (act === 'reload') return reloadWin(id);
     if (act === 'mono') return toggleMono();
     if (act === 'pop') { const a = appOf(w); let href = a.url; try { href = el.querySelector('iframe').contentWindow.location.href; } catch (err) {} return window.open(href, '_blank', 'noopener'); }
@@ -2993,7 +3017,7 @@
     // The picker's Apps (no agents, connectors or test copies): the owner's quick apps first, then by name, system apps last.
     apps: () => { const AK = window.WosAppKinds, quick = window.WizLauncher?.get('desktopQuick') || [], rank = a => quick.includes(a.id) ? quick.indexOf(a.id) : AK?.isSystem?.(a) ? 2000 : 1000;
       return (AK ? AK.kinds(APPS, APP).apps : APPS.filter(a => a.url && !a.agent)).slice().sort((x, y) => rank(x) - rank(y) || x.name.localeCompare(y.name)).map(a => ({ id: a.id, name: a.name, icon: ico('span', 'ic', a), system: !!AK?.isSystem?.(a), dev: !!AK?.inDev?.(a), connector: !!AK?.isConnector?.(a), agent: !!a.agent || a.kind === 'chats' })); },
-    openApp: id => !!APP[id] && openApp(APP[id]) !== false,
+    openApp: id => desktopHost.openApp(id),
     // The Orb and Apps views' app sheet: every app by kind (core/app-kinds.js rows) and opening any of them
     appKinds: () => window.WosAppKinds?.rows ? window.WosAppKinds.rows(APPS, APP, a => ico('span', 'ic', a)) : null,
     openAnyApp: (id, open) => !!window.WosAppKinds?.openRow?.(APPS, APP, id, globalThis.WosSkinHost?.panelMode ? x => openApp(APP[x]) !== false : open),   // the Orb: in its panel
