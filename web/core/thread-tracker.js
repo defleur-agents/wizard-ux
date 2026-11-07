@@ -93,7 +93,7 @@
   }
   function repliedBefore(k) {
     const [sid, agent] = splitKey(k);
-    const s = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    const s = window.WizLive?.sessionFor ? window.WizLive.sessionFor(sid, agent) : agent ? null : window.WizLive?.session?.(sid); // never another agent's row
     let rows;
     const stored = () => (rows ??= window.WizLive?.cachedMessages?.(sid) || window.WizLive?.savedMessages?.(sid)?.rows || []);
     const listed = Date.parse(String(s?.lastUserAt ?? ''));
