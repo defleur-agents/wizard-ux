@@ -72,7 +72,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
     private String pendingHandoff; // JSON handed to window.__wosHandoff once the shell is ready
     private int handoffTries;
-    /** In-app Downloads (ai.wizards.os.downloads): events waiting for the shell to take them via window.__wosDownloads. */
+    /** In-app Downloads (ai.wizards.os.downloads): events waiting for the shell to take them on the private downloads port. */
     private final java.util.ArrayDeque<String> pendingDownloads = new java.util.ArrayDeque<>();
     private int downloadsTries;
     private final ai.wizards.os.downloads.Downloads.Listener downloadsListener = json -> main.post(() -> queueDownloadPush(json));

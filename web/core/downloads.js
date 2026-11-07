@@ -289,7 +289,7 @@
   }
   // Events arrive ONLY on the private port ({v:1, event}); there is no global to call. An earlier version exposed
   // window.__wosDownloads, and a hosted app could use it to make the shell read the native list and paint the real name of any
-  // id it guessed (PR #1143 review). The event is still only a nudge: what is shown comes from the native list.
+  // id it guessed (PR review). The event is still only a nudge: what is shown comes from the native list.
   function onNativeEvent(ev) {
     if (!ev || typeof ev !== 'object') return true;
     if (!native()) return true;
