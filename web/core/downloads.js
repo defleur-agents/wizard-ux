@@ -35,8 +35,8 @@
   const STATUS = new Set(['pending', 'running', 'paused', 'done', 'failed', 'gone']);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // The shell takes the port into this closure and removes it from window. Hosted apps run in same-origin iframes and
-  // can reach parent.*; with the property gone (and postMessage / addEventListener bound now) they have nothing to call.
-  // Native still admits only the main frame on the shell origin; this closes the parent.wizardDownloadsPort path.
+  // can reach parent.*; with the property gone (and postMessage / addEventListener bound now) parent.wizardDownloadsPort is
+  // not there for them. Defence in depth only: a same-origin app still shares the shell's authority (docs/android-downloads-port.md).
   let held = null;
   function takePort() {
     if (held) return held;

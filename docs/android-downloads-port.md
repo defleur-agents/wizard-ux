@@ -45,16 +45,23 @@ anything else never reaches native. Native pushes (`start | done | failed | sync
   native security.
 * Not covered by either: a real WebView with a hosted iframe. That needs a device/emulator check.
 
-## Same-origin hosted frames
+## Same-origin hosted frames (honest limit)
 
 `addWebMessageListener` places the port object on every frame whose origin matches, and a call made through
-`parent.wizardDownloadsPort.postMessage(...)` is attributed to the parent's frame (so `isMainFrame` alone cannot
-tell it from the shell). Native therefore cannot close this by itself. `web/core/downloads.js` takes the port into
-its own closure at startup (before any hosted frame exists), binds `postMessage` / `addEventListener`, and removes
-`window.wizardDownloadsPort`; a hosted app has nothing left to reach through `parent.*`. A frame's own copy of the
-port is refused natively (not the main frame). This is covered by fake-window web tests only; whether the real
-WebView lets the page delete the injected property, and whether a hosted iframe really finds nothing, is part of
-the device/emulator acceptance (queued on forum, not run here).
+`parent.wizardDownloadsPort.postMessage(...)` is attributed to the parent's frame, so `isMainFrame` alone cannot tell it
+from the shell. Native cannot close that by itself. What this change does:
 
-Still true and unchanged for every existing port (`wizardScreenPort`, `wizardAppsPort`, ...): a same-origin frame
-can script the shell DOM in other ways; this change does not isolate the shell document from hosted apps.
+* Removes the frame-blind exposure: no JavaScript-interface methods, so cross-origin frames, sandboxed frames, frames on
+  other pages and any non-shell top-level page reach nothing. A frame's own copy of the port is refused natively.
+* Defence in depth in the page: `web/core/downloads.js` takes the port into its closure at startup (before any hosted
+  frame exists), binds `postMessage` / `addEventListener`, and removes `window.wizardDownloadsPort`, so
+  `parent.wizardDownloadsPort` is gone for hosted apps. Fake-window web tests cover it.
+* Native->page events (`start | done | failed | sync`) go out only while the shell is the top page, through a script
+  that re-checks origin, path and top frame in the document it lands in.
+
+What it does not do, and cannot at this layer: a same-origin hosted app has the shell's authority (it can script the
+shell DOM and the public `WosDownloads` object, as with every existing port: `wizardScreenPort`, `wizardAppsPort`, ...).
+Closing that needs hosted apps on their own origin or in sandboxed iframes without `allow-same-origin`; that is an
+architecture change outside this fix. Download rows are only taken off the list ("remove"); the file is never deleted.
+Whether the real WebView lets the page delete the injected property, and what a hosted iframe finds, is part of the
+on-device acceptance (queued on forum, not run here).
