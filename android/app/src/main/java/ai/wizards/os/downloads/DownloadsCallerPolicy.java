@@ -78,6 +78,27 @@ public final class DownloadsCallerPolicy {
         } catch (Exception e) { return false; }
     }
 
+    /** Native -> page: an event may be handed to the page only while the shell is the top document. */
+    public static boolean canPush(String primaryOrigin, String topUrl) {
+        return primaryOrigin != null && !primaryOrigin.isEmpty() && shellOnTop(primaryOrigin, topUrl);
+    }
+
+    /**
+     * The script evaluateJavascript runs to deliver one event (start | done | failed | sync). evaluateJavascript only
+     * reaches the main frame, and the script re-checks origin, path and top frame in the document it lands in, so a
+     * navigation between {@link #canPush} and the run cannot hand download names to another page. Null if unusable.
+     */
+    public static String pushScript(String primaryOrigin, String eventJson) {
+        if (primaryOrigin == null || primaryOrigin.isEmpty() || eventJson == null || eventJson.length() > MAX_MESSAGE) return null;
+        try { // exactly one JSON object, nothing after it
+            org.json.JSONTokener t = new org.json.JSONTokener(eventJson);
+            if (!(t.nextValue() instanceof JSONObject) || t.nextClean() != 0) return null;
+        } catch (JSONException e) { return null; }
+        return "(function(){var l=location;if(window.self!==window.top||l.origin!==" + JSONObject.quote(primaryOrigin)
+                + "||!(l.pathname==='/wizard-os-home'||l.pathname.indexOf('/wizard-os-home/')===0))return false;"
+                + "return window.__wosDownloads?window.__wosDownloads(" + eventJson + "):false})()";
+    }
+
     /** The four things the page may ask for; each runs the same code the tap in the sheet always ran. */
     public interface Actions {
         String list();

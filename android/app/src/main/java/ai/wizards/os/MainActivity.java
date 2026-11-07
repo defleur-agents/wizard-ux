@@ -495,7 +495,14 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void run() {
             final String json = pendingDownloads.peekFirst();
             if (json == null || web == null) return;
-            web.evaluateJavascript("(window.__wosDownloads ? window.__wosDownloads(" + json + ") : false)", r -> {
+            // Only the shell document on the Wizard origin may receive download names: guarded here and again inside the page.
+            final String primary = DownloadsCallerPolicy.normalizeOrigin(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this));
+            final String script = DownloadsCallerPolicy.canPush(primary, web.getUrl()) ? DownloadsCallerPolicy.pushScript(primary, json) : null;
+            if (script == null) { // not the shell right now (loading, another page): retry briefly, then the next resume syncs
+                if (++downloadsTries < 60) main.postDelayed(this, 300); else pendingDownloads.clear();
+                return;
+            }
+            web.evaluateJavascript(script, r -> {
                 if ("true".equals(r)) { pendingDownloads.remove(json); if (!pendingDownloads.isEmpty()) main.post(this); return; }
                 if (++downloadsTries < 60) main.postDelayed(this, 300); // shell still loading: retry for ~18 s
                 else pendingDownloads.clear();                           // the sync on next resume catches up
