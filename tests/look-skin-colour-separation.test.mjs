@@ -192,7 +192,8 @@ for (const shell of ['phone', 'desktop']) test(`${shell}: New skin shares Look's
   h.s.WosExperience.defaults = async () => ({ ...defaults });
   h.view.render();
   const visible = id => id === 'miguel/ai-apps' ? shell === 'desktop' : id === 'test/phone' ? shell === 'phone' : true;
-  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id));
+  // Feature switches left Settings for the Wizard OS Tracker app (Miguel, 7 Nov 2026); views stay.
+  for (const t of items) assert.equal(h.root.innerHTML.includes(`data-tweak-toggle="${t.id}"`), visible(t.id) && !!t.view, t.id);
   h.act('data-newskin', '');
   for (let n = 0; n < 10; n++) await Promise.resolve();
   for (const t of items) assert.equal(h.root.innerHTML.includes(`data-draft-tweak="${t.id}"`), visible(t.id), t.id);

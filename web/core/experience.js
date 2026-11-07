@@ -36,6 +36,13 @@
     return files.get(url).then(v => JSON.parse(JSON.stringify(v)));
   };
   const changed = () => window.dispatchEvent(new Event('wos:experience'));
+  /* For everyone keeps feature switches off (Miguel, 7 Nov 2026). The channel is the App Manager's (core/os-updates.js
+   * sends wos:channel once it has read it); the last one is kept per device so the first frame already matches.
+   * On "stable" (For everyone) every experimental tweak loads off and cannot be switched; built-in features
+   * (catalog `defaults`) and shell views (manifest `view`) are unaffected. The owner's saved choices are kept, so For testers brings them back. */
+  const CHANNEL = 'wos.channel.v1';
+  let channel = ''; try { channel = localStorage.getItem(CHANNEL) || ''; } catch (_) {}
+  const locked = () => channel === 'stable';
   const WHO = /^[a-z0-9][a-z0-9-]*$/, STANDARD = 'wizard';
   // The set a color used to bring before the split: only for a device that has no preset saved yet.
   function legacyOwner() {
@@ -205,7 +212,8 @@
       // Keep the last canonical desktop choice if an older sync writer later omits views.
       if (desktop && chosenView('desktop') !== undefined && desktopView !== effectiveDesktopView()) rememberDesktopView(effectiveDesktopView());
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
-      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own), slots, { teamAuthors: catalog.teamAuthors });
+      const allowed = id => !(locked() && !globalIds().includes(id) && !viewOf(id));   // views are not feature switches
+      await window.WosSkinHost.loadTweaks(oneOf(all.filter(id => desktop && layoutForView(id) ? false : viewOf(id) ? id === worn : enabled(id, own)), own).filter(allowed), slots, { teamAuthors: catalog.teamAuthors });
       if (desktop) window.WosSkinHost.setStandardLayout?.(effectiveDesktopView());
     } catch (e) { if (seq === generation) { error = e.message; if (!retried) { retried = true; setTimeout(() => { if (seq === generation) apply(); }, 5000); } } } finally { if (seq === generation) { busy = false; changed(); } }
   }
@@ -249,7 +257,7 @@
     get state() {
       return copy({ owner, busy, error, active: window.WosSkinHost?.tweakState || [],
         shell: shellHere(),
-        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t) });
+        tweaks: [...manifests].filter(([id]) => shownInGroup(id)).map(([id, m]) => ({ id, name: m.name, description: m.description || '', author: id.split('/')[0], builtin: globalIds().includes(id), layout: layoutForView(id), view: viewOf(id), on: groupOf(id) ? groupOn(id) : enabled(id) })).map(t => t.view ? { ...t, shells: shellsOf(t.id), on: t.id === wornView(recipe()) } : Array.isArray(manifests.get(t.id)?.shells) ? { ...t, shells: shellsOf(t.id) } : t).map(t => locked() && !t.builtin && !t.view ? { ...t, on: false, locked: true } : t), locked: locked() });
     },
     installed, defaults, authors,
     // Initial shell routes must see the selected view, including overlapping refreshes.
@@ -298,6 +306,7 @@
     chooseSkin() { if (error || wornOwner() !== owner) return apply(); return Promise.resolve(); },
     async toggle(id) {
       const item = experience.state.tweaks.find(t => t.id === id); if (!item) return;
+      if (item.locked) throw new Error('Feature switches are for testers. Choose For testers in Settings › About & updates.');
       if (desktop && layoutForView(id)) return experience.chooseDesktopView(item.on ? 'classic' : layoutForView(id));
       if (item.view) {  // one view per shell type: on = this one on this type of shell, off = Desks here; the other type keeps its own
         const shell = shellHere(); if (!item.shells.includes(shell)) return;
@@ -313,6 +322,11 @@
     },
   };
   window.WosExperience = experience;
+  window.addEventListener('wos:channel', ev => {
+    const next = ev?.detail?.channel; if (!['stable', 'latest'].includes(next) || next === channel) return;
+    channel = next; try { localStorage.setItem(CHANNEL, next); } catch (_) {}
+    void apply();
+  });
   window.addEventListener('wos:skin-host-ready', apply);
   window.addEventListener('wos:own-skin', apply);
   window.addEventListener('wos:skin', () => { void experience.chooseSkin(); });

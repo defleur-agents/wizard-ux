@@ -301,14 +301,18 @@
     const views = E.desktopViews || [];
     const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b></span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
-    const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
-    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
+    const whereView = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
+    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where: whereView } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
-    // quick buttons. Same list whatever skin is worn; skins are looks only.
-    const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
+    // Feature switches left Settings (Miguel, 7 Nov 2026): they are turned on and off only in the Wizard OS Tracker app
+    // (the box's feature-switch API), and only on For testers. Settings keeps shell views (a view is a way to see the
+    // shell, chosen per device type) and the options of a switch that is on, never the feature switch itself.
+    // Views stay one flat list, A to Z, each labelled "by <author>".
+    const list = [...shown].filter(t => t.view).sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
     const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
-    return `${viewPicker}<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
+    const opts = shown.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
+    const moved = s.locked ? 'New features are for testers: choose For testers in About &amp; updates, then turn them on in the Wizard OS Tracker app.' : 'Turn new features on or off in the Wizard OS Tracker app.';
+    return `${viewPicker}${rows ? `<div class="tw-group"><h4>Views</h4><div class="tw-list">${rows}</div></div>` : ''}<div class="tw-group" data-tweaks-moved><h4>New features</h4><p class="st-hint">${moved}</p>${err}${opts ? `<div class="tw-list">${opts}</div>` : ''}</div>`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
@@ -331,7 +335,7 @@
       if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
       const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
       const on = cardPending.has(id) ? cardPending.get(id) : t.on;
-      return tweakSwitches([{ ...t, on, where: here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here, name);
+      return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
     }).join('');
   }
   const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
