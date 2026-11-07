@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // In-shell captures + checks for the in-app Downloads banner and sheet (web/core/downloads.js).
 // Real phone/desktop shell from this checkout on a SYNTHETIC origin (never a live owner origin), skin chosen
-// before boot (localStorage only on that throwaway origin). A fake WizardOSNative stands in for the Android app.
+// before boot (localStorage only on that throwaway origin). A fake wizardDownloadsPort (shell message port) stands in for the Android app.
 //   QA_SKINS=nebula,sepia OUT=<dir> NODE_PATH=<playwright>/node_modules node tools/qa-downloads-shell.cjs
 const fs = require('fs'), path = require('path');
 const { chromium } = require('./qa-playwright.cjs');
@@ -63,15 +63,16 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
       try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour', 'done'); localStorage.setItem('wos.tour.done', '1');
         localStorage.setItem('wux.shell', shell); localStorage.setItem('wos.skin', skin); } catch (_) {}
       window.__dl = items; window.__calls = [];
-      window.WizardOSNative = new Proxy({}, {
-        has: (_, k) => ['downloadsList', 'downloadsOpen', 'downloadsCancel', 'downloadsRemove'].includes(k),
-        get: (_, k) => ({
-          downloadsList: () => JSON.stringify({ v: 1, items: window.__dl }),
-          downloadsOpen: id => { window.__calls.push(['open', id]); return 'ok'; },
-          downloadsCancel: id => { window.__calls.push(['cancel', id]); window.__dl = window.__dl.filter(x => x.id !== id); return 'ok'; },
-          downloadsRemove: id => { window.__calls.push(['remove', id]); window.__dl = window.__dl.filter(x => x.id !== id); return 'ok'; },
-        })[k],
-      });
+      // Fake of the Android shell message port (window.wizardDownloadsPort, protocol v1). Web-side QA only: native frame
+      // isolation is covered by DownloadsCallerPolicyTest and a device check, not by this fake.
+      const fakePort = () => { const hs = []; const answer = m => {
+        if (m.method === 'list') return { ok: true, result: { v: 1, items: window.__dl } };
+        const id = m.params && m.params.id;
+        if (m.method === 'open') { window.__calls.push(['open', id]); return { ok: true, result: 'ok' }; }
+        if (m.method === 'cancel' || m.method === 'remove') { window.__calls.push([m.method, id]); window.__dl = window.__dl.filter(x => x.id !== id); return { ok: true, result: 'ok' }; }
+        return { ok: false, error: 'unknown method' }; };
+        return { push(ev) { hs.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); }, postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
+      const fp = fakePort(); window.wizardDownloadsPort = fp; window.__qaPush = ev => fp.push(ev);   // QA harness only: stands in for native posting an event on the port
     }, { shell, skin, items: ITEMS() });
     const page = await ctx.newPage();
     const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -82,7 +83,7 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     check(`${tag}: module present, bridge seen`, await page.evaluate(() => window.WosDownloads.available()));
 
     // 1. finished download → banner
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ state: 'visible', timeout: 5000 });
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(out, `${tag}-banner.png`) });
@@ -117,13 +118,13 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     check(`${tag}: banner closes after Open`, await page.locator('.wdl-banner').count() === 0);
 
     // 3. banner auto-dismiss ~6 s, tap on body opens sheet
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
     const t0 = Date.now();
     await page.locator('.wdl-banner').waitFor({ state: 'detached', timeout: 9000 });
     const dt = Date.now() - t0;
     check(`${tag}: banner auto-dismisses at ~6 s`, dt > 5000 && dt < 7500, `${dt} ms`);
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
     await page.locator('.wdl-banner .wdl-main').click();
     await page.locator('.wdl-sheet.on .wdl-row').first().waitFor({ state: 'visible', timeout: 3000 });
@@ -136,7 +137,8 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     const rows = await page.locator('.wdl-row').allInnerTexts();
     check(`${tag}: sheet lists 4 rows (done ×2, running with %, failed)`, rows.length === 4 && /47%/.test(rows.join('\n')) && /Cancel/.test(rows.join('\n')) && /Open/.test(rows.join('\n')) && /Remove/.test(rows.join('\n')), rows.join(' | ').replace(/\n/g, ' '));
     // row Open
-    await page.locator('.wdl-row[data-id="19"] [data-wdl="open"]').click();
+    // by the name on screen: rows carry no download id
+    await page.locator('.wdl-row', { hasText: 'Budget 2027.xlsx' }).locator('[data-wdl="open"]').click();
     await page.waitForFunction(() => window.__calls.some(c => c[0] === 'open' && c[1] === '19'), null, { timeout: 3000 });
     check(`${tag}: sheet row Open calls native open`, true);
     // Back closes one layer
@@ -144,7 +146,9 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     await page.waitForTimeout(400);
     check(`${tag}: Back/Esc closes the sheet first (one layer)`, await page.evaluate(() => !window.WosDownloads.isOpen()) && await page.locator('.wdl-sheet').count() === 0);
     // outside tap closes
-    await page.evaluate(() => window.WosDownloads.show());
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));   // show() is no longer public: reopen via the banner like a user
+    await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
+    await page.locator('.wdl-banner .wdl-main').click();
     await page.locator('.wdl-sheet.on').waitFor({ timeout: 3000 });
     await page.mouse.click(shell === 'phone' ? 195 : 100, shell === 'phone' ? 60 : 60);
     await page.waitForTimeout(400);
@@ -163,8 +167,17 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     });
     await ctx.addInitScript(({ bridge, items, skin }) => {
       try { localStorage.setItem('wos.coached', 'true'); localStorage.setItem('wos.tour', 'done'); localStorage.setItem('wos.tour.done', '1'); localStorage.setItem('wux.shell', 'phone'); localStorage.setItem('wos.skin', skin); } catch (_) {}
-      window.__dl = items;
-      if (bridge) window.WizardOSNative = { downloadsList: () => JSON.stringify({ v: 1, items: window.__dl }), downloadsOpen: () => 'ok', downloadsCancel: () => 'ok', downloadsRemove: () => 'ok', changeServer() {}, openInBrowser() {}, download() {} };
+      window.__dl = items; window.__calls = [];
+      // Fake of the Android shell message port (window.wizardDownloadsPort, protocol v1). Web-side QA only: native frame
+      // isolation is covered by DownloadsCallerPolicyTest and a device check, not by this fake.
+      const fakePort = () => { const hs = []; const answer = m => {
+        if (m.method === 'list') return { ok: true, result: { v: 1, items: window.__dl } };
+        const id = m.params && m.params.id;
+        if (m.method === 'open') { window.__calls.push(['open', id]); return { ok: true, result: 'ok' }; }
+        if (m.method === 'cancel' || m.method === 'remove') { window.__calls.push([m.method, id]); window.__dl = window.__dl.filter(x => x.id !== id); return { ok: true, result: 'ok' }; }
+        return { ok: false, error: 'unknown method' }; };
+        return { push(ev) { hs.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); }, postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
+      if (bridge) { const fp = fakePort(); window.wizardDownloadsPort = fp; window.__qaPush = ev => fp.push(ev); }   // QA harness only: stands in for native posting an event on the port
     }, { bridge, items: ITEMS(), skin: SKINS[0] });
     const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
     await page.goto(`${ORIGIN}/wizard-os-home/?shell=phone&view=settings`, { waitUntil: 'load' });
@@ -183,7 +196,9 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
       }
     } else {
       check('no bridge: module inert, no Settings row, no banner', !(await page.evaluate(() => window.WosDownloads.available())) && await page.locator('[data-st="downloads"]').count() === 0);
-      await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+      // No port exists, so there is no push hook: a stray page-side event must still show nothing (inert without a port).
+      await page.evaluate(() => { window.dispatchEvent(new MessageEvent('message', { data: { v: 1, event: { type: 'done', item: (window.__dl || [])[0] } } })); });
+      check('no bridge: no push hook exists', await page.evaluate(() => typeof window.__qaPush === 'undefined'));
       check('no bridge: a stray push shows nothing', await page.locator('.wdl').count() === 0);
     }
     check(`settings/${bridge ? 'bridge' : 'nobridge'}: no page errors`, errs.length === 0, errs.slice(0, 2).join(' / '));

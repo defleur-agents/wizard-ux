@@ -170,6 +170,9 @@
   "web/index.html:photos": 1,
   "web/live.js:photos": 1,
   "web/store/store-status.js:android-apps": 4,
+  "web/store/store-status.js:photos": 4,
+  "web/store/store-status.js:shopping": 2,
+  "web/store/store-status.js:usuals": 1,
   "web/store/store-status.js:wizard-music": 4,
   "web/styles.css:Mizel": 2,
   "web/styles.css:mizel": 3

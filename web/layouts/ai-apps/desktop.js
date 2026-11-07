@@ -660,10 +660,10 @@ export default function desktop(api) {
     // (round 26: under a By project header the row drops the project, the header says it once; the full title stays its tip)
     const t0 = inProject ? titleInProject(s) : s.title;
     const title = el('span', 'aad-row-t', { text: t0, ...(t0 !== s.title ? { title: s.title } : {}) });
-    if (s.workingAsk) {
-      title.append(el('span', 'aad-working-ask', { text: `${s.workingAsk.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${s.workingAsk.ask}` }));
-      if (s.background) title.append(el('span', 'ch-privtag ch-background aad-working-helper', { text: 'Helper still working' }));
-    }
+    // A Working chat's ask line goes when the thread tracker is on (its dots carry it); no background
+    // helper pill either way: the spinner already shows it (James, 7 Nov 2026).
+    const ask = s.workingAsk && !globalThis.WosThreadTracker?.on?.() ? s.workingAsk : null;
+    if (ask) title.append(el('span', 'aad-working-ask', { text: `${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}` }));
     b.append(title);
     const dots = ttDots(s.id) ? globalThis.WosThreadTracker.dotsNode(s.id, ttAgent(s.id)) : null;
     if (dots) b.append(dots);
@@ -673,7 +673,7 @@ export default function desktop(api) {
     if (s.pinned) b.append(icon('pin', 'aad-ico aad-pin'));
     if (s.kind === 'working' || (s.kind === 'ready' && s.unread)) b.append(el('i', 'aad-st' + (s.kind === 'working' ? '' : ' is-new'), { 'aria-hidden': 'true' }));
     b.setAttribute('aria-label', `${s.note ? 'Notification: ' : ''}${s.title}${s.kind === 'working' ? ', working' : s.kind === 'snoozed' ? ', snoozed' : s.unread ? ', ready, new' : s.snoozed && s.note ? ', snoozed' : s.kind === 'ready' ? ', ready' : ''}${s.pinned ? ', pinned' : ''}`);
-    if (s.workingAsk) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${s.workingAsk.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${s.workingAsk.ask}${s.background ? ', Helper still working' : ''}`);
+    if (ask) b.setAttribute('aria-label', `${b.getAttribute('aria-label')}, ${ask.state === 'needs_you' ? 'Needs you' : 'Your call'}: ${ask.ask}`);
     api.listen(b, 'click', () => { if (q) setSearch(false); unpeek(); noteWant = !!s.note; stepAt = s.id; api.sessions.open(s.id); });
     api.listen(b, 'contextmenu', e => { e.preventDefault(); openMenu(wrap, s, { x: e.clientX, y: e.clientY }); });
     wrap.append(b);
@@ -693,7 +693,8 @@ export default function desktop(api) {
     for (const [k, w0] of acts) {
       const it = el('button', 'aad-pop-i' + (k === 'done' ? ' is-file' : ''), { type: 'button', role: 'menuitem', 'data-act': k });
       it.append(icon(k), el('span', '', { text: k === 'pin' && s.pinned ? 'Unpin' : w0 }));
-      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintList(true); }); });
+      // the row goes on this frame; the later pass reconciles
+      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); readSessions(); paintList(true); api.after(120, () => { readSessions(); paintList(true); }); });
       card.append(it);
     }
     scene.append(card);
@@ -771,7 +772,7 @@ export default function desktop(api) {
     const s = sessions || readSessions(), h = here();
     // A tab switch or picked chat moves the current mark in place, never rebuilding the list.
     const sig = JSON.stringify([q, archiveTop(root),
-      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
+      secOpen, workingOrder(), readyOrder(), groupBy(), badgeText(CHATS), !!globalThis.WosThreadTracker?.on?.(), KINDS.map(k => (s[k] || []).map(r => [r.id, r.title, r.unread, r.pinned, r.state || '', r.at || '', r.workingAsk?.state || '', r.workingAsk?.ask || '', r.background || '', (r.actions || []).join(), globalThis.WosThreadTracker?.on?.() ? globalThis.WosThreadTracker.dots(r.id, globalThis.WizLive?.agentOf?.(r.id) || '') : '']))]);
     if (!force && sig === drawn && scroll.childElementCount) { markCurrent(h.thread); return; }
     drawn = sig;
     const out = [];
@@ -1311,8 +1312,20 @@ export default function desktop(api) {
     if (n > 1 && !wide) { wideAuto = true; setWide(true); }
     else if (n <= 1 && wideAuto) { wideAuto = false; setWide(false); }
   }
+  // Side by side only when the panel really has room for two columns. A narrower panel stacks the app over its
+  // companion (video on top, Feedback below), decided by the panel's measured width before paint
+  // (James, 7 Nov 2026: never a side-by-side split in a narrow window).
+  const STACK_BELOW = 960;
+  let stackEl = null;
+  const stackRo = globalThis.ResizeObserver ? new ResizeObserver(es => { for (const e of es) e.target.toggleAttribute('data-aad-stack', e.contentRect.width < STACK_BELOW); }) : null;
+  function watchStack() {
+    const el = pane?.el || null; if (el === stackEl) return;
+    if (stackEl) { stackRo?.unobserve(stackEl); stackEl.removeAttribute('data-aad-stack'); }
+    stackEl = el; if (el) { if (stackRo) stackRo.observe(el); else el.toggleAttribute('data-aad-stack', el.getBoundingClientRect().width < STACK_BELOW); }
+  }
   function watchPaneWins() {
     const desk = pane?.desk ?? null, n = paneWins();
+    watchStack();
     if (desk !== winsDesk || n !== winsN) { winsDesk = desk; winsN = n; autoWide(n); applySizes(); retileSoon(); }
   }
   const NOTE = '__note__', DRAFT = '__draft__';
@@ -1890,11 +1903,11 @@ export default function desktop(api) {
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove();
-    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
+    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
-    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; }
+    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; delete w.dataset.aadStack; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };

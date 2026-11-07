@@ -123,6 +123,10 @@ function isListWorking(s) {
   const working = ['submitting', 'queued', 'running', 'stopping'];
   const liveRun = !!s.runId && working.includes(s.lastRunStatus);
   const helper = s.helperStatus;
+  // A helper actually running keeps the thread in Working whatever its last run did, including an
+  // interrupted/failed one (James, 7 Nov 2026: Ready only when every worker has stopped). The error
+  // card stays in the thread; approval and recovery gates keep their own place.
+  if (helper?.phase === 'running' && helper.pending > 0 && !['waiting_for_approval', 'unknown'].includes(s.status)) return true;
   // A helper-wait status is not execution evidence once every helper has stopped.
   if (s.waitingOn === 'helper' && !liveRun && helper?.pending === 0 && helper.phase !== 'running'
       && (helper.phase === 'stalled' || helper.failed === true)) return false;

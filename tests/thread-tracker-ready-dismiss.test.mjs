@@ -8,7 +8,7 @@ for (const accepted of [true, false]) test(`Ready Done paints immediately but ${
   const row = { id: 't', archived: false }, writes = [];
   const ctx = { OVER: new Map(), hasNew: () => false, readRestored: () => ({}), writeRestored() {},
     req: async (path, init) => { writes.push({path, body: JSON.parse(init.body)}); }, aq: () => '', J: {},
-    Date, setTimeout() {}, encodeURIComponent };
+    Date, setTimeout() {}, clearTimeout() {}, encodeURIComponent };
   const methods = vm.runInNewContext('({' + live.slice(live.indexOf('    busy(id)'), live.indexOf('    // Stop exactly the watcher')) + '})', ctx);
   const L = { ...methods, session: () => row, seenOf: () => null, emit() {}, refresh() {} };
   let confirm; const confirmed = new Promise(r => { confirm = r; });
@@ -32,7 +32,7 @@ async function unreadHarness({ confirmedPromise, mutateDuring }) {
   const writes = [], local = [];
   const ctx = vm.createContext({ OVER: new Map(), READY_OR_ATTENTION: new Set(['completed']), otherAgent: a => !!a && a !== 'hermes', readRestored: () => ({}), writeRestored() {},
     req: async (path, init) => { writes.push({ kind: 'archive', path, body: JSON.parse(init.body) }); }, aq: () => '', J: {},
-    Date: class extends Date { static now() { return at; } }, setTimeout() {}, encodeURIComponent, MAX: 500,
+    Date: class extends Date { static now() { return at; } }, setTimeout() {}, clearTimeout() {}, encodeURIComponent, MAX: 500,
     readLocal: () => local.at(-1) || null, writeLocal: s => local.push(JSON.parse(JSON.stringify(s))),
     putSeen: async s => { writes.push({ kind: 'seen', state: JSON.parse(JSON.stringify(s)) }); return s; } });
   vm.runInContext(helpers + laterFn + '\nglobalThis.isNew=hasNew;globalThis.merge=(a,b)=>{if(!a)return b;if(!b)return a;const threads={...a.threads};for(const[k,r]of Object.entries(b.threads))threads[k]=later(threads[k],r);return{initializedAt:Math.min(a.initializedAt,b.initializedAt),threads}};', ctx);

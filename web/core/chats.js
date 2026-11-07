@@ -405,7 +405,6 @@ window.WizCore.chats = function createChats(H) {
   // The agent's status line for a finished thread (live.js attention): what it asks of James.
   const ATT = { needs_you: { cls: 'needs', label: 'Needs you' }, check: { cls: 'check', label: 'Your call' }, done: { cls: 'done', label: 'Done' }, fyi: { cls: 'fyi', label: '' } };
   const deferredOf = s => !!s.deferred && !s.archived && !(Date.parse(s.lastUserAt) > Date.parse(s.deferredAt));
-  const backgroundBadge = s => attOf(s) && s.background ? '<span class="ch-privtag ch-background">Helper still working</span>' : '';
   const attOf = s => (s.attention && (!isWorking(s) || ['needs_you', 'check'].includes(s.attention.state)) && s.status !== 'waiting_for_approval' && s.status !== 'failed' && s.status !== 'interrupted') ? s.attention : null;
   const svg = b => `<svg viewBox="0 0 24 24" aria-hidden="true">${b}</svg>`;
   const STI = {
@@ -467,7 +466,12 @@ window.WizCore.chats = function createChats(H) {
     // The icon's meaning in words, in the icon's colour, at the preview's own weight (James, 10 Oct 2026:
     // "most people won't know what those icons mean … same color as the icon … don't make it any brighter or bolder").
     const lab = s.status === 'unknown' && !def ? '<em class="att approval">Needs recovery:</em> ' : STI_LAB[kind] ? `<em class="att ${kind}">${STI_LAB[kind]}:</em> ` : '';
-    const pv = working && at && ['needs_you', 'check'].includes(at.state) ? `<em class="att ${A.cls}">${A.label}:</em> ` + esc(clip(at.ask, 140)) : s.reconnect && needs ? esc(s.reconnect.name) + ' sign-in expired' : working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+    // Working rows: no background-helper pill (the spinner already says it) and, with the thread tracker on, no
+    // 'Needs you:' line either: the tracker's dots carry the asks (James, 7 Nov 2026). Tracker off keeps the line.
+    const inWorking = working || !!window.WizChatsListModel?.isListWorking(s); // a background helper is Working too
+    const trackedAsk = inWorking && at && ['needs_you', 'check'].includes(at.state) && !!globalThis.WosThreadTracker?.on();
+    const pv = trackedAsk ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
+      : working && at && ['needs_you', 'check'].includes(at.state) ? `<em class="att ${A.cls}">${A.label}:</em> ` + esc(clip(at.ask, 140)) : s.reconnect && needs ? esc(s.reconnect.name) + ' sign-in expired' : working ? workLabel(s) + ' · ' + esc(clip((working && s.pendText) || s.preview || '', 110))
       : needs ? lab + esc(clip(s.preview || '', 110))
       : def ? lab + esc(clip(attOf(s)?.ask || s.preview || '', 140))
       : at ? lab + esc(clip(at.ask, 140))
@@ -478,7 +482,7 @@ window.WizCore.chats = function createChats(H) {
     const mark = !topic ? stock : `<span class="ch-topic-mark" data-chpick="thread:${esc(s.id)}" title="Choose topic emoji"><span class="ch-topic-emoji" aria-hidden="true">${topic}</span><span class="emo sti ${kind} ch-topic-status" title="${STI_TIP[kind]}" aria-label="${STI_TIP[kind]}">${STI[kind]}</span></span>`;
     const pinned = PIN.has(s.id), boom = BOOM()?.dueFor(s.id).length ? ' due' : BOOM()?.nextFor(s.id) ? ' set' : '';
     return `<div class="ch-row-wrap${s.reconnect && needs ? ' diagnosed' : ''}${pinned ? ' pinned' : ''}" data-morph-key="row:${esc(s.id)}"><button data-part="thread-row" class="ch-row${unread ? ' unread' : ''}${snip ? ' bodyhit' : ''}${at ? ' att-' + A.cls : ''}${def ? ' deferred' : ''}${priv ? ' private' : ''}" data-chopen="${esc(s.id)}" aria-haspopup="dialog" aria-keyshortcuts="Shift+F10" title="Open thread · hold or open the context menu for actions"${quiet ? ' data-quiet="1"' : ''}${priv ? ' data-wiz-private=""' : ''}>${mark}
-      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${backgroundBadge(s)}${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
+      <span class="bd"><span class="tp"><b>${plock}${esc(s.title)}</b>${globalThis.WosThreadTracker?.on() ? globalThis.WosThreadTracker.dots(s.id, LIVE.agentOf ? LIVE.agentOf(s.id) : '') : ''}<time>${esc(ago(LIVE.cardAt(s)))}</time></span>
       ${snip ? `<span class="pv snip" data-chsnip>${snip.html}</span>` : `<span class="pv">${pv}</span>`}${searchStatus ? `<span class="ch-search-status">${esc(searchStatus)}</span>` : ''}</span>${boom ? `<i class="ch-boom${boom}" title="${boom === ' due' ? 'Back for you' : 'Snoozed'}" aria-label="${boom === ' due' ? 'Back for you' : 'Snoozed'}">◷</i>` : ''}</button>${s.reconnect && needs ? `<button type="button" class="ch-row-signin" data-chreconnect="${esc(s.reconnect.appId)}" data-recovery-run="${esc(s.reconnect.runId || '')}">Sign in</button>` : ''}${PIN.on?.() !== false ? `<button type="button" data-part="pin-button" class="ch-pin-toggle" data-chpin="${esc(s.id)}" aria-label="${pinned ? 'Unpin' : 'Pin'} chat: ${esc(s.title)}" aria-pressed="${pinned}" title="${pinned ? 'Unpin' : 'Pin'}">${PIN_SVG}</button>` : ''}</div>`;
   }
   /* Ready has three orders (James, 10 Oct 2026): Newest (pure recency, labels don't move rows), Priority
@@ -1771,6 +1775,16 @@ window.WizCore.chats = function createChats(H) {
     if (nx) openChat(w.id, nx);
     else { ch(w.id).trail = []; chatsBack(w); }
   }
+  // Repaint every chats list from the already-patched LIVE state on the tap's own frame. The holds that normally defer a
+  // repaint (swipe tray, long press, actions sheet, reading) guard against a poll reshuffling rows under a finger; the
+  // owner's own action is the one repaint that must never wait.
+  let paintForced = false;
+  function paintListsNow() {
+    closeSwipe(true); paintForced = true;
+    try { for (const id of Object.keys(CH)) { const x = W[id]; if (x && !x.thread) renderChats(x); } } finally { paintForced = false; }
+    H.changed?.();
+    window.WosSkinHost?.rendered?.('chats-list', null); // a layout that draws its own list (AI apps sidebar) re-reads it now too
+  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1784,7 +1798,8 @@ window.WizCore.chats = function createChats(H) {
         if (keepThreadOpen()) ch(id).unreadHold = { sid, nav: ch(id).readNav };
         else threadBack(x);
       }
-      const ok = await LIVE.markUnread(sid);
+      const write = LIVE.markUnread(sid); paintListsNow();
+      const ok = await write;
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
@@ -1806,7 +1821,11 @@ window.WizCore.chats = function createChats(H) {
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
-    const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
+    // Same frame as the tap (James, 7 Nov 2026, reported again): LIVE patches its list synchronously and only then awaits
+    // the write, so start it, paint every list now (open sheet / swipe / long-press holds must not defer it), reconcile after.
+    const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid);
+    paintListsNow();
+    const ok = await write;
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
     if (!ok) toast('!', { done: 'Couldn’t archive · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -1822,7 +1841,9 @@ window.WizCore.chats = function createChats(H) {
     ids = ids && ids.length ? ids : [nid];
     // The Notifications app has read / archived, not a separate done or flag state.
     // Archive marks the alert read and takes it out of Ready; Snooze marks it read and keeps it (the snoozed tail).
-    const ok = await window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
+    const write = window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
+    paintListsNow(); // mark() patches its items synchronously; the list follows on this frame, not on the 60 ms watcher
+    const ok = await write;
     const many = ids.length > 1 ? `${ids.length} ` : '';
     toast(ok ? '✓' : '!', ok ? (a === 'unread' ? `${many}Marked unread` : a === 'snooze' ? `${many}Snoozed` : many ? `${ids.length} done` : 'Done') : 'Couldn’t save · restored', ok ? 1600 : 3200);
   }
@@ -2281,7 +2302,7 @@ window.WizCore.chats = function createChats(H) {
     if (NV) msgs = noteRouteHtml(NV) + msgs;   // (quiet: its own line already sits under the note)
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
-    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
+    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav && !threadAlive(w, w.thread)) msgs = threadErrHtml(c);
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
@@ -2709,6 +2730,13 @@ window.WizCore.chats = function createChats(H) {
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}${p.reply ? ' has-rq' : ''}" data-ob="${esc(p.id)}"><div class="bub">${replyCard(KIT.reply.clean(p.reply))}${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
   }
+  // A thread that is still on its way: this device has an unsent/unconfirmed message for it, or the list shows its
+  // run queued, launching or running. Hermes answers 404 for its history until the first message is admitted.
+  function threadAlive(w, sid) {
+    if (pendingFor(w).length) return true;
+    const s = rowOf(w.id, sid); // the routed window's own row, not a same-id main-agent row
+    return !!s && (isWorking(s) || ['queued', 'launching', 'running'].includes(s.status));
+  }
   // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
   function retryRead(w, sid, nav, n) {
     const c = ch(w.id); clearTimeout(c.retryT);
@@ -2738,7 +2766,7 @@ window.WizCore.chats = function createChats(H) {
     if (INC?.active(w.id)) return;
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
-    if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
+    if (c.goneFor === sid && c.goneNav === nav) { if (!threadAlive(w, sid)) return; c.goneFor = ''; } // answered 404 in this open: gone, not worth polling, unless a send for it has since appeared
     const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
@@ -2799,7 +2827,7 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); // the asks of this thread (read right after the history that carries them)
+      if (globalThis.WosThreadTracker?.on()) { globalThis.WosThreadTracker.shown?.(sid, LIVE.agentOf ? LIVE.agentOf(sid) : '', turns); globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); } // the asks of this thread (read right after the history that carries them; its owner bubbles answer older asks)
       Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
@@ -2824,7 +2852,9 @@ window.WizCore.chats = function createChats(H) {
         c.failN = (c.failFor === sid ? c.failN || 0 : 0) + 1; c.failFor = sid; c.errStatus = e.status || 0;
         // A 404 is a verdict, not a blip: the thread is gone (deleted, or a window restored from an earlier install
         // on the same address). Say so once and stop; retrying a missing thread forever reads as a broken Wizard.
-        const gone = e.status === 404;
+        // ...unless the thread is brand new: Hermes has no history for it until its first message is admitted, so a
+        // 404 while a send is pending (or the list already shows it queued/running) is "not yet", not "gone" (James, 7 Nov 2026).
+        const early = e.status === 404 && threadAlive(w, sid), gone = e.status === 404 && !early;
         // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
         // instead of a stale, still-editable copy of a deleted thread.
         if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
@@ -2835,8 +2865,8 @@ window.WizCore.chats = function createChats(H) {
           const saved = LIVE.savedMessages?.(sid);
           if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedNav: nav, savedAt: saved.at }); } catch (_) {}
         }
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
-        if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
+        c.err = early ? '' : e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
+        if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, early ? Math.min(c.failN, 3) : c.failN); }
         renderThreadLive(w);
       }
     }
@@ -3434,6 +3464,7 @@ window.WizCore.chats = function createChats(H) {
   function justPressed() { return lpHeld !== null || Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
+    if (paintForced) return false;
     const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || (!!swipeOpen && swipeOpen.wid === id && swipeOpen.wrap.isConnected) || !!PW?.holds(id) || (!!el && readingIn(el));
     if (hold) ch(id).heldList = true;
     return hold;
