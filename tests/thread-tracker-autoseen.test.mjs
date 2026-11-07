@@ -116,7 +116,8 @@ test('running-only replies keep the strip and Chats running dots', async () => {
   assert.match(h.T.stripHtml('t'), /data-tt-strip/); assert.match(h.T.dots('t'), /running/);
   h.T.click({ target: { closest: s => s.includes('data-tt-strip') ? { dataset: { ttStrip: 't' } } : s.includes('data-tt-toggle') ? {} : null } });
   assert.equal(h.T.isOpen(), true, 'running-only dropdown stays open through repaint');
-  assert.match(h.T.stripHtml('t'), /Running/);
+  // One chronological list (no status sections): the running row itself shows it is working.
+  assert.match(h.T.stripHtml('t'), /class="tt-row run"[^]*?tt-dot run[^]*?Working · since/);
 });
 for (const state of ['done', 'needs_you', 'blocked']) test(`${state} addressable reply renders the strip`, async () => {
   const h = harness([state]); await h.start(); assert.match(h.T.stripHtml('t'), /data-tt-strip/);
