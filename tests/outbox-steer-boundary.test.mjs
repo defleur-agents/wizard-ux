@@ -284,3 +284,11 @@ test('a failed old-client item recovers on Retry after the run finishes', async 
   await restored.api.load(); assert.equal(restored.api.retry(item.id), true);
   assert.equal((await settled(restored.api, item.id)).state, 'sent');
 });
+
+test('the wait marker is cleared once the run ends and the message continues as a normal turn', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.ok(waiting.steerWaitSince);
+  f.options.runStatus = 'completed'; waiting.nextAt = 0; await f.api.pump();
+  const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
+  assert.equal(sent.steerWaitSince, undefined);
+});

@@ -545,7 +545,7 @@
           // this byte-identical, idempotent new turn, never the rejected steer.
           it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
             ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
-          it.rejectedSteerRunId = it.steerTarget;
+          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince; // the wait is over: no stale "Queued" label if this turn is later retried
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
         } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
