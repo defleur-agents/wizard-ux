@@ -42,14 +42,14 @@ function el(tag = 'div') {
   return e;
 }
 
-function load({ bridge = true, items = [], failOpen = null, legacy = false } = {}) {
+function load({ bridge = true, items = [], failOpen = null, legacy = false, grow = false } = {}) {
   const calls = [], sent = [], toasts = [], timers = [], registered = [], refreshed = { n: 0 };
   const body = el('body'), store = new Map();
   // The Android app hands the SHELL main frame one message port (window.wizardDownloadsPort, protocol v1);
   // this fake stands in for it. It certifies the web side only: native frame isolation is the Java policy tests
   // plus a device check, never a fake bridge.
   const answer = m => {
-    if (m.method === 'list') return { ok: true, result: { v: 1, items } };
+    if (m.method === 'list') { if (grow && items[0]) items[0] = { ...items[0], got: items[0].got + 1000 }; return { ok: true, result: { v: 1, items } }; }   // grow: a new byte count on every reply
     if (m.method === 'open') { calls.push(['open', m.params.id]); return { ok: true, result: failOpen || 'ok' }; }
     if (m.method === 'cancel') { calls.push(['cancel', m.params.id]); return { ok: true, result: 'ok' }; }
     if (m.method === 'remove') { calls.push(['remove', m.params.id]); return { ok: true, result: 'ok' }; }
@@ -75,7 +75,7 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false } = {
   vm.runInNewContext(src.replace(MARK, probe + '\n  ' + MARK), ctx);
   const W = window.__t; delete window.__t;
   if (port) ports.set(window, port);
-  return { W, pub: window.WosDownloads, window, ctx, body, calls, sent, toasts, timers, registered, store, port, refreshed };
+  return { W, pub: window.WosDownloads, itemsRef: items, window, ctx, body, calls, sent, toasts, timers, registered, store, port, refreshed };
 }
 // Native -> page events travel on the SAME private port as replies ({v:1, event}); there is no global entry point.
 const ports = new WeakMap();
@@ -235,6 +235,19 @@ test('Settings row text follows the list once it arrives, with one repaint and n
   assert.match(row.html(), /1 recent/);
   await flush();
   assert.equal(r.refreshed.n, 1, 'an unchanged list does not repaint again');
+});
+
+test('Settings does not re-ask in a loop while a download\'s byte count keeps changing (only the row text drives a repaint)', async () => {
+  // Review finding on 3f4bb32c: every list reply had a new `got`, so refresh() called WosSettings.refresh(), whose html() asked
+  // native again, so DownloadManager was polled back to back for the whole transfer.
+  const r = load({ grow: true, items: [pdf({ id: '30', status: 'running', got: 100, size: 9_000_000 })] });
+  // a real Settings: refresh() synchronously re-renders every row, and the downloads row's html() asks native again
+  const row = r.registered[0];
+  r.window.WosSettings.refresh = () => { r.refreshed.n++; if (r.refreshed.n < 500) row.html(); };
+  row.html();
+  for (let i = 0; i < 12; i++) await flush();
+  assert.ok(r.refreshed.n <= 2, 'Settings was repainted ' + r.refreshed.n + ' times');
+  assert.ok(r.sent.length <= 6, 'native was asked ' + r.sent.length + ' times for one open Settings page');
 });
 
 test('a failed download is a short toast, not a banner; a running one never banners', async () => {
