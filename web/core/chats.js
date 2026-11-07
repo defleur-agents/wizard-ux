@@ -2302,7 +2302,7 @@ window.WizCore.chats = function createChats(H) {
     if (NV) msgs = noteRouteHtml(NV) + msgs;   // (quiet: its own line already sits under the note)
     else if (isNew && !pend.length) msgs = newChatHtml(TAG) + `<div class="ch-empty nc-classic"><b>${TAG && AGS()?.isPrivate(agentRec(TAG)) ? `New private chat` : 'New chat'}</b><br>${esc(H.newChatHint || 'Type below.')}</div>${carry}`;
     // A thread answered 404 in this open is gone: that verdict wins over cached turns and queued sends.
-    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav) msgs = threadErrHtml(c);
+    else if (!isNew && c.goneFor === w.thread && c.goneNav === c.readNav && !threadAlive(w, w.thread)) msgs = threadErrHtml(c);
     else if (!turns && !isNew && !pend.length) msgs = c.err && (c.failN > 1 || c.err !== 'Couldn’t load this thread') ? threadErrHtml(c) : skelThread();
     else {
       const all = turns || [];
@@ -2730,6 +2730,13 @@ window.WizCore.chats = function createChats(H) {
     const words = p.text || p.typed || ''; // a voice note not yet transcribed shows the typed words riding with it
     return `<div class="msg u pending ${p.state}${p.steered ? ' steer' : ''}${p.reply ? ' has-rq' : ''}" data-ob="${esc(p.id)}"><div class="bub">${replyCard(KIT.reply.clean(p.reply))}${voice}${userMedia(c || { media: [] }, files, [])}${words ? md(words) : ''}</div><div class="pmeta">${pendingState(p, s)}</div></div>`;
   }
+  // A thread that is still on its way: this device has an unsent/unconfirmed message for it, or the list shows its
+  // run queued, launching or running. Hermes answers 404 for its history until the first message is admitted.
+  function threadAlive(w, sid) {
+    if (pendingFor(w).length) return true;
+    const s = LIVE.session(sid);
+    return !!s && (isWorking(s) || ['queued', 'launching', 'running'].includes(s.status));
+  }
   // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
   function retryRead(w, sid, nav, n) {
     const c = ch(w.id); clearTimeout(c.retryT);
@@ -2759,7 +2766,7 @@ window.WizCore.chats = function createChats(H) {
     if (INC?.active(w.id)) return;
     const c = ch(w.id), sid = w.thread, nav = c.readNav;
     if (!sid || sid === '__new__' || (c.loading && c.loading.sid === sid && c.loading.nav === nav)) return;
-    if (c.goneFor === sid && c.goneNav === nav) return; // answered 404 in this open: gone, not worth polling
+    if (c.goneFor === sid && c.goneNav === nav) { if (!threadAlive(w, sid)) return; c.goneFor = ''; } // answered 404 in this open: gone, not worth polling, unless a send for it has since appeared
     const s = LIVE.session(sid);
     // Cache finished history while its session revision is unchanged. Its existing session poll remains live;
     // any new message/activity/status immediately invalidates this cache, with a 60 s safety re-read.
@@ -2845,7 +2852,9 @@ window.WizCore.chats = function createChats(H) {
         c.failN = (c.failFor === sid ? c.failN || 0 : 0) + 1; c.failFor = sid; c.errStatus = e.status || 0;
         // A 404 is a verdict, not a blip: the thread is gone (deleted, or a window restored from an earlier install
         // on the same address). Say so once and stop; retrying a missing thread forever reads as a broken Wizard.
-        const gone = e.status === 404;
+        // ...unless the thread is brand new: Hermes has no history for it until its first message is admitted, so a
+        // 404 while a send is pending (or the list already shows it queued/running) is "not yet", not "gone" (James, 7 Nov 2026).
+        const early = e.status === 404 && threadAlive(w, sid), gone = e.status === 404 && !early;
         // A gone thread drops any cached or earlier-loaded transcript, so the "no longer here" message renders
         // instead of a stale, still-editable copy of a deleted thread.
         if (gone) { Object.assign(c, { goneFor: sid, goneNav: nav, turns: null, loadedFor: '', cachedFor: '' }); LIVE.forgetMessages?.(sid); }
@@ -2856,8 +2865,8 @@ window.WizCore.chats = function createChats(H) {
           const saved = LIVE.savedMessages?.(sid);
           if (saved?.rows?.length) try { Object.assign(c, { turns: toTurns(saved.rows), cachedFor: sid, cachedNav: nav, loadedFor: '', savedFor: sid, savedNav: nav, savedAt: saved.at }); } catch (_) {}
         }
-        c.err = e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
-        if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, c.failN); }
+        c.err = early ? '' : e.status === 403 ? 'Wizard sign-in needed' : gone ? 'This thread is no longer here. It may have been deleted, or it came from an earlier install. Go back to Chats to start a new one.' : 'Couldn’t load this thread'; c.at = Date.now();
+        if (e.status !== 403 && !gone) { if (!e.status) window.WizReach?.failure(); retryRead(w, sid, nav, early ? Math.min(c.failN, 3) : c.failN); }
         renderThreadLive(w);
       }
     }
