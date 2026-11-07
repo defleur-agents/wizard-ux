@@ -123,12 +123,15 @@ public class DownloadsReceiverPolicyTest {
         String m = read("AndroidManifest.xml");
         int at = m.indexOf(".downloads.DownloadsReceiver");
         assertTrue(at > 0);
-        String block = m.substring(at, m.indexOf("</receiver>", at));
+        String block = m.substring(m.lastIndexOf("<receiver", at), m.indexOf("</receiver>", at));
         assertEquals("exactly one action", 1, block.split("<action ", -1).length - 1);
         assertTrue(block.contains("android.intent.action.DOWNLOAD_COMPLETE"));
         // exported on purpose: DownloadProvider (shared UID android.media, not the system UID) sends this broadcast; an
         // unexported manifest receiver would not get it. Validation, not export, is the defence (tracked id first).
         assertTrue("stays exported while the sender is another app's UID", block.contains("android:exported=\"true\""));
+        // PR #1143 review (a222e3dc): exported does not have to mean "any app". DownloadProvider holds this signature
+        // permission (AOSP: protectionLevel=signature, requested by DownloadProvider), no third-party app can.
+        assertTrue("only a holder of the sender permission may deliver", block.contains("android:permission=\"android.permission.SEND_DOWNLOAD_COMPLETED_INTENTS\""));
     }
 
     @Test public void isTrackedLooksOnlyAtWhatWizardOsStarted() throws Exception {

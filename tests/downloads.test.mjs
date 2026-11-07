@@ -74,8 +74,12 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false } = {
   const probe = 'window.__t = { show, hide, open, banner, hideBanner, bannerOpen: () => !!bannerEl, back, isOpen: () => !!sheet, _fmtSize: fmtSize, available: () => !!native() };';
   vm.runInNewContext(src.replace(MARK, probe + '\n  ' + MARK), ctx);
   const W = window.__t; delete window.__t;
+  if (port) ports.set(window, port);
   return { W, pub: window.WosDownloads, window, ctx, body, calls, sent, toasts, timers, registered, store, port, refreshed };
 }
+// Native -> page events travel on the SAME private port as replies ({v:1, event}); there is no global entry point.
+const ports = new WeakMap();
+const pushEv = (window, ev) => { const p = ports.get(window); if (!p) return false; p.handlers.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); return true; };
 const flush = () => new Promise(r => setImmediate(r));
 const pdf = (over = {}) => ({ id: '12', name: 'Plan.pdf', mime: 'application/pdf', size: 4_700_000, got: 4_700_000, status: 'done', started: Date.now() - 5000, finished: Date.now(), ...over });
 const sentCalls = r => r.sent.map(m => [m.method, m.params]);
@@ -84,7 +88,7 @@ test('without the shell message port the module does nothing at all (desktop, ol
   const { W, window, body, registered, sent } = load({ bridge: false });
   assert.equal(W.available(), false);
   assert.equal(W.show(), false);
-  assert.equal(window.__wosDownloads({ type: 'done', item: pdf() }), true);
+  assert.equal(pushEv(window, { type: 'done', item: pdf() }), false, 'nothing to deliver to without a port');
   assert.equal(body.children.length, 0);
   assert.equal(registered.length, 1);
   assert.equal(registered[0].available(), false);
@@ -96,7 +100,7 @@ test('the old frame-blind WizardOSNative.downloads* bridge is never consulted, e
   const { W, window, body, calls, registered } = load({ bridge: false, legacy: true });
   assert.equal(W.available(), false);
   assert.equal(W.show(), false);
-  window.__wosDownloads({ type: 'sync' });
+  pushEv(window, { type: 'sync' });
   assert.equal(await W.open('12'), 'missing');
   await flush();
   assert.equal(body.children.length, 0);
@@ -108,7 +112,7 @@ test('the old frame-blind WizardOSNative.downloads* bridge is never consulted, e
 
 test('a finished download shows the banner with name and size, then dismisses itself after ~6 s', async () => {
   const { W, window, body, timers } = load({ items: [pdf()] });
-  window.__wosDownloads({ type: 'done', item: pdf() });
+  pushEv(window, { type: 'done', item: pdf() });
   await flush();
   assert.equal(body.children.length, 1);
   const b = body.children[0];
@@ -125,7 +129,7 @@ test('a finished download shows the banner with name and size, then dismisses it
 test('Open on the banner posts one open request over the port, with the digits id, and closes the banner', async () => {
   const r = load({ items: [pdf()] });
   const { window, body, calls, timers, W } = r;
-  window.__wosDownloads({ type: 'done', item: pdf() });
+  pushEv(window, { type: 'done', item: pdf() });
   await flush();
   r.sent.length = 0;
   const b = body.children[0], open = b.querySelector('.wdl-open');
@@ -233,10 +237,10 @@ test('Settings row text follows the list once it arrives, with one repaint and n
 
 test('a failed download is a short toast, not a banner; a running one never banners', async () => {
   const { window, body, toasts } = load({ items: [pdf({ id: '20', status: 'running', got: 10 }), pdf({ id: '21', status: 'failed', name: 'Big.zip' })] });
-  window.__wosDownloads({ type: 'done', item: pdf({ id: '20', status: 'running', got: 10 }) });
+  pushEv(window, { type: 'done', item: pdf({ id: '20', status: 'running', got: 10 }) });
   await flush();
   assert.equal(body.children.length, 0);
-  window.__wosDownloads({ type: 'failed', item: pdf({ id: '21', status: 'failed', name: 'Big.zip' }) });
+  pushEv(window, { type: 'failed', item: pdf({ id: '21', status: 'failed', name: 'Big.zip' }) });
   await flush();
   assert.deepEqual(toasts, ['Couldn’t download Big.zip']);
   assert.equal(body.children.length, 0);
@@ -244,15 +248,15 @@ test('a failed download is a short toast, not a banner; a running one never bann
 
 test('sync on resume announces one recent unseen finish, once', async () => {
   const { window, body, W } = load({ items: [pdf()] });
-  window.__wosDownloads({ type: 'sync' });
+  pushEv(window, { type: 'sync' });
   await flush();
   assert.equal(body.children.length, 1);
   W.hideBanner();
-  window.__wosDownloads({ type: 'sync' });
+  pushEv(window, { type: 'sync' });
   await flush();
   assert.equal(body.children.length, 1, 'already announced; not again');
   const old = load({ items: [pdf({ finished: Date.now() - 3_600_000 })] });
-  old.window.__wosDownloads({ type: 'sync' });
+  pushEv(old.window, { type: 'sync' });
   await flush();
   assert.equal(old.body.children.length, 0, 'an hour-old finish is not news');
 });
@@ -345,36 +349,49 @@ test('parent probe: no raw port, no metadata, no open/cancel reachable from the 
   assert.deepEqual(r.calls, []);
 });
 
-test('a forged native event cannot put chosen text or ids on screen: banners come from the native list', async () => {
+test('there is no callable entry point for native events: the event-ID oracle is gone', async () => {
+  // Review finding on a222e3dc: parent.__wosDownloads({type:'done', item:{id:n}}) re-read the native list and painted the real
+  // name of whatever id was guessed. Events now arrive only on the private port, which a hosted app cannot reach.
   const r = load({ items: listed() });
   const parent = hostedParent(r);
-  parent.__wosDownloads({ type: 'done', item: pdf({ id: '12', name: 'EVIL-update.apk', status: 'done' }) });
-  await flush();
-  assert.equal(r.body.children.length, 1);
-  assert.match(r.body.children[0].innerHTML, /Plan\.pdf/, 'the name the phone holds');
-  assert.doesNotMatch(r.body.children[0].innerHTML, /EVIL/);
-  r.W.hideBanner();
-  const none = load({ items: listed() });
-  none.window.__wosDownloads({ type: 'done', item: pdf({ id: '99', name: 'Invented.pdf' }) });   // an id the phone never tracked
-  await flush();
-  assert.equal(none.body.children.length, 0, 'no banner for an id native does not list');
-  none.window.__wosDownloads({ type: 'failed', item: pdf({ id: '98', status: 'failed', name: 'Invented.zip' }) });
-  await flush();
-  assert.deepEqual(none.toasts, [], 'and no toast with invented text');
+  assert.equal(parent.__wosDownloads, undefined, 'no global entry point');
+  assert.ok(!Object.getOwnPropertyNames(parent).some(k => /wosDownloads|downloadsPort/i.test(k)), 'nothing downloads-shaped on parent');
+  const probe = () => { for (const t of ['done', 'failed', 'sync', 'start']) { try { parent.__wosDownloads?.({ type: t, item: pdf({ id: '12' }) }); } catch (_) {} } };
+  probe(); await flush();
+  assert.equal(r.body.children.length, 0, 'no banner painted from a parent-side call');
+  assert.deepEqual(r.toasts, []);
+  assert.deepEqual(r.sent.filter(m => m.method !== 'list'), []);
+  assert.equal(r.sent.length, r.sent.filter(m => m.method === 'list').length);
+  const lists = r.sent.length; probe(); await flush();
+  assert.equal(r.sent.length, lists, 'and no list read was triggered by it');
 });
 
-test('the native entry point cannot be replaced or deleted by a hosted app', () => {
+test('events from native (on the port) still drive the banner; the banner text comes from the native list', async () => {
   const r = load({ items: listed() });
-  const parent = hostedParent(r);
-  const real = parent.__wosDownloads;
-  try { parent.__wosDownloads = () => 'hijack'; } catch (_) {}
-  try { delete parent.__wosDownloads; } catch (_) {}
-  assert.equal(parent.__wosDownloads, real);
+  await flush();
+  pushEv(r.window, { type: 'done', item: pdf({ id: '12', name: 'EVIL-update.apk' }) });
+  await flush();
+  assert.equal(r.body.children.length, 1);
+  assert.match(r.body.children[0].innerHTML, /Plan\.pdf/);
+  assert.doesNotMatch(r.body.children[0].innerHTML, /EVIL/);
+  const none = load({ items: listed() }); await flush();
+  pushEv(none.window, { type: 'done', item: pdf({ id: '99', name: 'Invented.pdf' }) });
+  pushEv(none.window, { type: 'failed', item: pdf({ id: '98', status: 'failed', name: 'Invented.zip' }) });
+  await flush();
+  assert.equal(none.body.children.length, 0);
+  assert.deepEqual(none.toasts, []);
+});
+
+test('a reply or event with the wrong version, or an event shape that is not an object, is ignored', async () => {
+  const r = load({ items: listed() }); await flush();
+  r.port.handlers.forEach(f => { f({ data: JSON.stringify({ v: 2, event: { type: 'done', item: pdf() } }) }); f({ data: JSON.stringify({ v: 1, event: 'done' }) }); f({ data: 'not json' }); });
+  await flush();
+  assert.equal(r.body.children.length, 0);
 });
 
 test('script-dispatched clicks (isTrusted false) never reach native: banner and sheet', async () => {
   const r = load({ items: listed() });
-  r.window.__wosDownloads({ type: 'done', item: pdf({ id: '12' }) });
+  pushEv(r.window, { type: 'done', item: pdf({ id: '12' }) });
   await flush();
   const banner = r.body.children[0];
   r.sent.length = 0;
@@ -420,7 +437,7 @@ test('a real tap acts on the shell\'s own record of the row, not on attributes a
 test('the page DOM carries names for display but no download ids', async () => {
   const r = load({ items: listed() });
   r.W.show(); await flush();
-  r.window.__wosDownloads({ type: 'done', item: pdf({ id: '12' }) }); await flush();
+  pushEv(r.window, { type: 'done', item: pdf({ id: '12' }) }); await flush();
   const dom = r.body.children.map(c => c.innerHTML + (c.list ? c.list.innerHTML : '') + JSON.stringify(c.dataset)).join('\n');
   assert.doesNotMatch(dom, /data-id|"id":|dataset/i);
   assert.ok(!/\b(12|13)\b/.test(dom.replace(/\d+(\.\d+)? ?(MB|KB|B)|\d+%|\d+ (min|h)/g, '')), 'no id digits in the markup: ' + dom.slice(0, 200));

@@ -213,24 +213,39 @@ public class DownloadsCallerPolicyTest {
         assertFalse(DownloadsCallerPolicy.canPush(null, SHELL));
     }
 
-    @Test public void theDeliveryScriptRechecksTheDocumentItRunsIn() {
+    @Test public void anEventIsWrappedForThePortAsOneJsonObjectAndNothingElse() throws Exception {
         String ev = "{\"type\":\"done\",\"item\":{\"id\":\"12\",\"name\":\"a.pdf\"}}";
-        String js = DownloadsCallerPolicy.pushScript(PRIMARY, ev);
-        assertNotNull(js);
-        assertTrue("the script itself checks the origin it runs on", js.contains(".origin!==\"" + PRIMARY + "\""));
-        assertTrue("and the shell path", js.contains("/wizard-os-home"));
-        assertTrue("and that it is the top frame", js.contains("window.top"));
-        assertTrue(js.contains("__wosDownloads(" + ev + ")"));
-        assertNull("no configured origin: nothing is sent", DownloadsCallerPolicy.pushScript(null, ev));
-        assertNull("not an event object", DownloadsCallerPolicy.pushScript(PRIMARY, "alert(1)"));
-        assertNull("not an event object", DownloadsCallerPolicy.pushScript(PRIMARY, "{} ; alert(1)"));
+        String env = DownloadsCallerPolicy.eventEnvelope(ev);
+        assertNotNull(env);
+        JSONObject o = new JSONObject(env);
+        assertEquals(1, o.getInt("v"));
+        assertEquals("done", o.getJSONObject("event").getString("type"));
+        assertFalse("an event is not a reply: no id", o.has("id"));
+        assertNull("not an object", DownloadsCallerPolicy.eventEnvelope("alert(1)"));
+        assertNull("trailing code", DownloadsCallerPolicy.eventEnvelope("{} ; alert(1)"));
+        assertNull(DownloadsCallerPolicy.eventEnvelope(null));
     }
 
-    @Test public void mainActivityDeliversEventsOnlyThroughTheGuardedScript() throws Exception {
+    @Test public void thereIsNoScriptDeliveryOrGlobalEntryPointLeft() throws Exception {
+        // PR #1143 review (a222e3dc): evaluateJavascript(... window.__wosDownloads(...)) needed a global the hosted app could call
+        // itself, an oracle that painted the real name of a guessed id. Events now go to the main-frame reply proxy only.
         String main = new String(Files.readAllBytes(Paths.get(System.getProperty("user.dir"), "src/main/java/ai/wizards/os/MainActivity.java")), "UTF-8");
-        assertTrue(main.contains("DownloadsCallerPolicy.pushScript("));
-        assertTrue(main.contains("DownloadsCallerPolicy.canPush("));
-        assertFalse("no unguarded evaluateJavascript of __wosDownloads", main.contains("evaluateJavascript(\"(window.__wosDownloads"));
+        String pol = new String(Files.readAllBytes(Paths.get(System.getProperty("user.dir"), "src/main/java/ai/wizards/os/downloads/DownloadsCallerPolicy.java")), "UTF-8");
+        for (String src : new String[] { main, pol }) {
+            assertFalse(src.contains("__wosDownloads"));
+            assertFalse(src.contains("pushScript"));
+        }
+        assertTrue("events are posted through the admitted main-frame proxy", main.contains("DownloadsCallerPolicy.eventEnvelope("));
+        assertTrue(main.contains("downloadsReply"));
+        assertTrue("and only while the shell is on top", main.contains("DownloadsCallerPolicy.canPush("));
+    }
+
+    @Test public void theEventProxyIsOnlyEverRememberedForAnAdmittedMessage() throws Exception {
+        String main = new String(Files.readAllBytes(Paths.get(System.getProperty("user.dir"), "src/main/java/ai/wizards/os/MainActivity.java")), "UTF-8");
+        int admit = main.indexOf("verdict != DownloadsCallerPolicy.Verdict.ALLOW");
+        int store = main.indexOf("downloadsReply = ");
+        assertTrue("assignment exists", store > 0);
+        assertTrue("assigned after the admission check", admit > 0 && store > admit);
     }
 
     // ---- the wiring: the old frame-blind Bridge no longer has these methods -------------------------------------
