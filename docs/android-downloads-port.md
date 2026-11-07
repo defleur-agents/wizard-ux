@@ -45,9 +45,16 @@ anything else never reaches native. Native pushes (`start | done | failed | sync
   native security.
 * Not covered by either: a real WebView with a hosted iframe. That needs a device/emulator check.
 
-## Known limit
+## Same-origin hosted frames
 
-Same-origin hosted frames can script the shell window (`parent.*`), including the port object that
-`addWebMessageListener` places on the shell's own `window`. This change closes the native boundary
-(frame-blind interface, top-URL-only check); it does not isolate the shell's DOM from same-origin
-frames, which holds for every existing port (`wizardScreenPort`, `wizardAppsPort`, …).
+`addWebMessageListener` places the port object on every frame whose origin matches, and a call made through
+`parent.wizardDownloadsPort.postMessage(...)` is attributed to the parent's frame (so `isMainFrame` alone cannot
+tell it from the shell). Native therefore cannot close this by itself. `web/core/downloads.js` takes the port into
+its own closure at startup (before any hosted frame exists), binds `postMessage` / `addEventListener`, and removes
+`window.wizardDownloadsPort`; a hosted app has nothing left to reach through `parent.*`. A frame's own copy of the
+port is refused natively (not the main frame). This is covered by fake-window web tests only; whether the real
+WebView lets the page delete the injected property, and whether a hosted iframe really finds nothing, is part of
+the device/emulator acceptance (queued on forum, not run here).
+
+Still true and unchanged for every existing port (`wizardScreenPort`, `wizardAppsPort`, ...): a same-origin frame
+can script the shell DOM in other ways; this change does not isolate the shell document from hosted apps.

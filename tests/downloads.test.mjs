@@ -19,7 +19,7 @@ function el(tag = 'div') {
 }
 
 function load({ bridge = true, items = [], failOpen = null, legacy = false } = {}) {
-  const calls = [], sent = [], toasts = [], timers = [], registered = [];
+  const calls = [], sent = [], toasts = [], timers = [], registered = [], refreshed = { n: 0 };
   const body = el('body'), store = new Map();
   // The Android app hands the SHELL main frame one message port (window.wizardDownloadsPort, protocol v1);
   // this fake stands in for it. It certifies the web side only: native frame isolation is the Java policy tests
@@ -39,12 +39,12 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false } = {
   // The frame-blind Bridge of older/other builds: must never be consulted.
   const oldBridge = legacy ? { downloadsList: () => { calls.push(['legacy-list']); return '{"v":1,"items":[]}'; }, downloadsOpen: () => { calls.push(['legacy-open']); return 'ok'; } } : undefined;
   const window = { wizardDownloadsPort: port, WizardOSNative: oldBridge, __wos: { toast: (i, t) => toasts.push(t) }, requestAnimationFrame: f => f(), innerHeight: 800,
-    WosSettings: { register: f => registered.push(f) }, WizCore: {} };
+    WosSettings: { register: f => registered.push(f), refresh: () => { refreshed.n++; } }, WizCore: {} };
   const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell: 'phone' } }, querySelectorAll: () => [] },
     localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
     setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, Date, JSON, Number, String, Set, Map, Math, Promise };
   vm.runInNewContext(src, ctx);
-  return { W: window.WosDownloads, window, body, calls, sent, toasts, timers, registered, store, port };
+  return { W: window.WosDownloads, window, body, calls, sent, toasts, timers, registered, store, port, refreshed };
 }
 const flush = () => new Promise(r => setImmediate(r));
 const pdf = (over = {}) => ({ id: '12', name: 'Plan.pdf', mime: 'application/pdf', size: 4_700_000, got: 4_700_000, status: 'done', started: Date.now() - 5000, finished: Date.now(), ...over });
@@ -163,12 +163,45 @@ test('a reply with the wrong version or an unknown id is ignored; a silent nativ
   assert.equal(await q, 'missing');
 });
 
-test('if the port disappears mid-session the module degrades to nothing', async () => {
+test('the shell keeps the port in its own closure and removes window.wizardDownloadsPort, so a same-origin hosted iframe cannot reach parent.wizardDownloadsPort', async () => {
   const r = load({ items: [pdf()] });
-  assert.equal(r.W.available(), true);
-  delete r.window.wizardDownloadsPort;
+  assert.equal('wizardDownloadsPort' in r.window, false, 'what a hosted frame sees through parent.* must be gone');
+  assert.equal(r.W.available(), true, 'the shell itself still has it');
+  assert.equal(await r.W.open('12'), 'ok');
+  assert.deepEqual(sentCalls(r), [['open', { id: '12' }]]);
+});
+
+test('a hosted frame that swaps postMessage / listeners on the port after load intercepts nothing', async () => {
+  const r = load({ items: [pdf()] });
+  const stolen = [];
+  r.port.postMessage = t => stolen.push(t);            // what a hostile frame could still try on a leaked reference
+  assert.equal(await r.W.open('12'), 'ok');
+  assert.deepEqual(stolen, []);
+  assert.equal(r.sent.length, 1);
+});
+
+test('a port that only appears after the module loaded is taken and hidden on first use', async () => {
+  const r = load({ bridge: false });
   assert.equal(r.W.available(), false);
-  assert.equal(await r.W.open('12'), 'missing');
+  const sent = [];
+  const late = { handlers: [], postMessage(t) { const m = JSON.parse(t); sent.push(m); Promise.resolve().then(() => this.handlers.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ok: true, result: 'ok' }) }))); },
+    addEventListener(t, f) { this.handlers.push(f); } };
+  r.window.wizardDownloadsPort = late;
+  assert.equal(r.W.available(), true);
+  assert.equal('wizardDownloadsPort' in r.window, false);
+  assert.equal(await r.W.open('12'), 'ok');
+  assert.equal(sent.length, 1);
+});
+
+test('Settings row text follows the list once it arrives, with one repaint and no loop', async () => {
+  const r = load({ items: [pdf()] });
+  const row = r.registered[0];
+  assert.match(row.html(), /Files you download appear here/);   // nothing loaded yet
+  await flush();
+  assert.equal(r.refreshed.n, 1, 'Settings was told to repaint once the list arrived');
+  assert.match(row.html(), /1 recent/);
+  await flush();
+  assert.equal(r.refreshed.n, 1, 'an unchanged list does not repaint again');
 });
 
 test('a failed download is a short toast, not a banner; a running one never banners', async () => {

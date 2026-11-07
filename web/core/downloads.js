@@ -34,7 +34,22 @@
   const BANNER_MS = 6000, FRESH_MS = 10 * 60 * 1000, POLL_MS = 900;
   const STATUS = new Set(['pending', 'running', 'paused', 'done', 'failed', 'gone']);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const native = () => { const p = window.wizardDownloadsPort; return p && typeof p.postMessage === 'function' ? p : null; };
+  // The shell takes the port into this closure and removes it from window. Hosted apps run in same-origin iframes and
+  // can reach parent.*; with the property gone (and postMessage / addEventListener bound now) they have nothing to call.
+  // Native still admits only the main frame on the shell origin; this closes the parent.wizardDownloadsPort path.
+  let held = null;
+  function takePort() {
+    if (held) return held;
+    const p = window.wizardDownloadsPort;
+    if (!p || typeof p.postMessage !== 'function') return null;
+    const post = p.postMessage.bind(p);
+    const on = typeof p.addEventListener === 'function' ? p.addEventListener.bind(p) : null;
+    held = { postMessage: post, listen: fn => { if (on) on('message', fn); else p.onmessage = fn; } };
+    try { delete window.wizardDownloadsPort; } catch (_) {}
+    if ('wizardDownloadsPort' in window) { try { Object.defineProperty(window, 'wizardDownloadsPort', { value: undefined, configurable: true, writable: false }); } catch (_) {} }
+    return held;
+  }
+  const native = () => held || takePort();
   // request/reply over the port; resolves to the native result, or null if the port is absent, refuses, or stays silent
   const V = 1, ASK_MS = 8000, asking = new Map(); let seq = 0, listening = false;
   function onNative(ev) {
@@ -46,7 +61,7 @@
   }
   function listen(pt) {
     if (listening) return; listening = true;
-    if (typeof pt.addEventListener === 'function') pt.addEventListener('message', onNative); else pt.onmessage = onNative;
+    pt.listen(onNative);
   }
   function ask(method, params) {
     return new Promise(resolve => {
@@ -80,7 +95,12 @@
     const o = r?.result;
     return o && Array.isArray(o.items) ? o.items.map(clean).filter(Boolean) : null;
   }
-  async function refresh() { const l = await read(); if (l) { items = l; loaded = true; } return items; }
+  async function refresh() {
+    const before = JSON.stringify(items), l = await read();
+    if (l) { items = l; loaded = true; if (JSON.stringify(items) !== before) settingsChanged(); }
+    return items;
+  }
+  function settingsChanged() { try { window.WosSettings?.refresh?.(); } catch (_) {} }   // the Settings row text follows the list
   const inFlight = it => it.status === 'pending' || it.status === 'running' || it.status === 'paused';
 
   /* ---- labels ---- */
@@ -277,6 +297,7 @@
     } catch (_) {}
   }
   registerSettings();
+  takePort();                                                // eagerly, before any hosted frame exists
 
   window.WosDownloads = Object.freeze({ available: () => !!native(), show, hide, toggle: () => (sheet ? hide() : show()), isOpen: () => !!sheet,
     back, banner, open, hideBanner, bannerOpen: () => !!bannerEl,
