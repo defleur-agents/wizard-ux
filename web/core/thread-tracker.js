@@ -1,7 +1,8 @@
 /* Thread tracker (tweak wizard/thread-tracker, off by default).
  *
  * The asks inside one thread, kept by the Agent Service from each reply's hidden status line, drawn as
- *   - a strip under the thread title ("7 asks · ●2 ●2 ●3") that opens into Your move / Running / Finished not seen,
+ *   - a strip under the thread title ("7 asks · ●2 ●2 ●3") that opens into one list in the order the replies came in
+ *     (oldest first; rows still working last; acknowledged folded at the end), each row keeping its own status dot,
  *   - small dots on every thread row in Chats (counts of needs-you / running / finished-not-seen),
  *   - Reply on any message (a quote above the composer, a header on the sent bubble: see chat-kit reply.quote).
  * The chat itself stays an ordinary linear chat: nothing here moves a message. Tapping a row only scrolls to the
@@ -94,6 +95,20 @@
     for (const i of groupsOf(items)) { out.total++; out[names[i.kind]]++; }
     return out;
   };
+  // When the reply a row points at arrived in the chat: the anchor message's own time (`at`, set from the message
+  // and never moved by seen or state edits), then its message id (chat order). Unknown keeps ledger order.
+  const anchorAt = i => {
+    const t = Math.max(0, ...(i.members || [i]).map(m => (typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0)));
+    return t > 0 ? t : null;
+  };
+  const anchorSeq = i => (/^\d+$/.test(String(i.message_id ?? '')) ? Number(i.message_id) : null);
+  const byArrival = list => list.map((i, n) => ({ i, n })).sort((a, b) => {
+    const ta = anchorAt(a.i), tb = anchorAt(b.i);
+    if (ta !== null && tb !== null && ta !== tb) return ta - tb;
+    const sa = anchorSeq(a.i), sb = anchorSeq(b.i);
+    if (sa !== null && sb !== null && sa !== sb) return sa - sb;
+    return a.n - b.n;
+  }).map(x => x.i);
   const ago = ms => {
     const s = Math.max(0, (Date.now() - ms) / 1000);
     if (s < 60) return 'just now';
@@ -194,19 +209,19 @@
     const ack = items.filter(i => kindOf(i) === 'ack');
     // Header = rows listed = sum of the visible tally: answered asks still working on it count as open.
     const openN = live.length;
-    const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
-    const run = live.filter(i => i.state === 'running' && kindOf(i) !== 'stopped');
+    // One list in the order the replies came in, oldest first, so the first tap goes to the oldest open reply and
+    // the rest follow down the chat. Status never reorders it; only rows genuinely still working wait at the bottom.
+    const run = byArrival(live.filter(i => kindOf(i) === 'run'));
     const stopped = live.filter(i => kindOf(i) === 'stopped');
-    const fin = live.filter(i => i.state === 'done');
+    const rows = [...byArrival(live.filter(i => kindOf(i) !== 'run')), ...run];
     const session = window.WizLive?.sessionFor?.(sid, agent || '') || window.WizLive?.session?.(sid);
     const fallbackAsk = session?.attention?.ask || '';
-    const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(i => rowHtml(i, fallbackAsk)).join('')}</div>` : '';
     const tl = (n, kind) => n ? `<span class="tt-tally" title="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}" aria-label="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}">${dot(kind)}${n}</span>` : '';
     const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${openN ? `${openN} open` : 'Working on your reply'}</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running - stopped.length, 'run')}${tl(stopped.length, 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
     // One Resume for every stopped row sits beside the header (never inside its toggle button).
     const headRow = stopped.length ? `<div class="tt-hrow">${head}<button type="button" class="tt-btn resume" data-tt-resume-all aria-label="Resume ${stopped.length} stopped">Resume</button></div>` : head;
-    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Stopped', stopped)}${group('Finished · not seen', fin)}`
-      + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
+    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${rows.length ? `<div class="tt-g tt-list">${rows.map(i => rowHtml(i, fallbackAsk)).join('')}</div>` : ''}`
+      + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? byArrival(ack).map(i => rowHtml(i)).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
     return headRow + body;
   }
