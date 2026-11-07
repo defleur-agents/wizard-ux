@@ -125,7 +125,7 @@
     if (Date.now() - at > FRESH) load();
     const auto = isAuto();
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
-    // An App Manager from before #458 installs only For everyone releases by itself, even on For testers: say so.
+    // An App Manager from before the channel fix (wizard-app-manager issue 458) installs only For everyone releases by itself, even on For testers: say so.
     const oldAuto = auto && st.always_auto !== true && ch === 'latest' ? ' Updates install by themselves only for For everyone releases until your Wizard is updated.' : '';
     const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Switch on new features in the Wizard OS Tracker app.${oldAuto}`}</p></div>` : '';
     const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${auto ? '<p class="st-hint">Install by themselves overnight, never during a chat.</p>' : `<button type="button" class="st-wide wz-button secondary" data-osu="auto" ${busy ? 'disabled' : ''}>Turn on automatic updates</button><p class="st-hint">Nothing installs until you tap Install.</p>`}</div>`;
