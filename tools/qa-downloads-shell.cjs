@@ -71,8 +71,8 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
         if (m.method === 'open') { window.__calls.push(['open', id]); return { ok: true, result: 'ok' }; }
         if (m.method === 'cancel' || m.method === 'remove') { window.__calls.push([m.method, id]); window.__dl = window.__dl.filter(x => x.id !== id); return { ok: true, result: 'ok' }; }
         return { ok: false, error: 'unknown method' }; };
-        return { postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
-      window.wizardDownloadsPort = fakePort();
+        return { push(ev) { hs.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); }, postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
+      const fp = fakePort(); window.wizardDownloadsPort = fp; window.__qaPush = ev => fp.push(ev);   // QA harness only: stands in for native posting an event on the port
     }, { shell, skin, items: ITEMS() });
     const page = await ctx.newPage();
     const errs = []; page.on('pageerror', e => errs.push(e.message));
@@ -83,7 +83,7 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     check(`${tag}: module present, bridge seen`, await page.evaluate(() => window.WosDownloads.available()));
 
     // 1. finished download → banner
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ state: 'visible', timeout: 5000 });
     await page.waitForTimeout(400);
     await page.screenshot({ path: path.join(out, `${tag}-banner.png`) });
@@ -118,13 +118,13 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     check(`${tag}: banner closes after Open`, await page.locator('.wdl-banner').count() === 0);
 
     // 3. banner auto-dismiss ~6 s, tap on body opens sheet
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
     const t0 = Date.now();
     await page.locator('.wdl-banner').waitFor({ state: 'detached', timeout: 9000 });
     const dt = Date.now() - t0;
     check(`${tag}: banner auto-dismisses at ~6 s`, dt > 5000 && dt < 7500, `${dt} ms`);
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
     await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
     await page.locator('.wdl-banner .wdl-main').click();
     await page.locator('.wdl-sheet.on .wdl-row').first().waitFor({ state: 'visible', timeout: 3000 });
@@ -145,7 +145,7 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     await page.waitForTimeout(400);
     check(`${tag}: Back/Esc closes the sheet first (one layer)`, await page.evaluate(() => !window.WosDownloads.isOpen()) && await page.locator('.wdl-sheet').count() === 0);
     // outside tap closes
-    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));   // show() is no longer public: reopen via the banner like a user
+    await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));   // show() is no longer public: reopen via the banner like a user
     await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
     await page.locator('.wdl-banner .wdl-main').click();
     await page.locator('.wdl-sheet.on').waitFor({ timeout: 3000 });
@@ -175,8 +175,8 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
         if (m.method === 'open') { window.__calls.push(['open', id]); return { ok: true, result: 'ok' }; }
         if (m.method === 'cancel' || m.method === 'remove') { window.__calls.push([m.method, id]); window.__dl = window.__dl.filter(x => x.id !== id); return { ok: true, result: 'ok' }; }
         return { ok: false, error: 'unknown method' }; };
-        return { postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
-      if (bridge) window.wizardDownloadsPort = fakePort();
+        return { push(ev) { hs.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); }, postMessage(t) { const m = JSON.parse(t); const r = answer(m); setTimeout(() => hs.forEach(f => f({ data: JSON.stringify({ v: 1, id: m.id, ...r }) })), 0); }, addEventListener(t, f) { if (t === 'message') hs.push(f); } }; };
+      if (bridge) { const fp = fakePort(); window.wizardDownloadsPort = fp; window.__qaPush = ev => fp.push(ev); }   // QA harness only: stands in for native posting an event on the port
     }, { bridge, items: ITEMS(), skin: SKINS[0] });
     const page = await ctx.newPage(); const errs = []; page.on('pageerror', e => errs.push(e.message));
     await page.goto(`${ORIGIN}/wizard-os-home/?shell=phone&view=settings`, { waitUntil: 'load' });
@@ -195,7 +195,7 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
       }
     } else {
       check('no bridge: module inert, no Settings row, no banner', !(await page.evaluate(() => window.WosDownloads.available())) && await page.locator('[data-st="downloads"]').count() === 0);
-      await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));
+      await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
       check('no bridge: a stray push shows nothing', await page.locator('.wdl').count() === 0);
     }
     check(`settings/${bridge ? 'bridge' : 'nobridge'}: no page errors`, errs.length === 0, errs.slice(0, 2).join(' / '));

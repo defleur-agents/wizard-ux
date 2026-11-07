@@ -117,6 +117,8 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     }
 
     /** Bumped on the UI thread at every main-frame page start: an admitted Downloads message is stale after a load. */
+    private volatile androidx.webkit.JavaScriptReplyProxy downloadsReply; // main-frame shell document's port, set only after admission
+    private volatile long downloadsReplyEpoch = -1;
     private volatile long downloadsEpoch;
     private final java.util.concurrent.ExecutorService downloadsIo = java.util.concurrent.Executors.newSingleThreadExecutor();
 
@@ -155,6 +157,10 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         final DownloadsCallerPolicy.Verdict verdict = DownloadsCallerPolicy.admit(true,
                 view == target && web == target, isMainFrame, primary, source, web == null ? null : web.getUrl());
         if (verdict != DownloadsCallerPolicy.Verdict.ALLOW) return; // no answer, no action
+        // Events (download finished, ...) go back through the proxy of the last ADMITTED main-frame message, onto the port the shell
+        // module holds privately. A denied frame never gets here, so it can never become the event target.
+        downloadsReply = reply;
+        downloadsReplyEpoch = downloadsEpoch;
         // getData() throws for ArrayBuffer messages; only plain strings are requests.
         final String data = message != null && message.getType() == androidx.webkit.WebMessageCompat.TYPE_STRING ? message.getData() : null;
         final DownloadsCallerPolicy.Request req = DownloadsCallerPolicy.parse(data);
@@ -495,18 +501,21 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         public void run() {
             final String json = pendingDownloads.peekFirst();
             if (json == null || web == null) return;
-            // Only the shell document on the Wizard origin may receive download names: guarded here and again inside the page.
+            // Download names go only to the main-frame shell document that has talked to us on the port in THIS page load.
             final String primary = DownloadsCallerPolicy.normalizeOrigin(ai.wizards.os.device.AppState.primaryOrigin(MainActivity.this));
-            final String script = DownloadsCallerPolicy.canPush(primary, web.getUrl()) ? DownloadsCallerPolicy.pushScript(primary, json) : null;
-            if (script == null) { // not the shell right now (loading, another page): retry briefly, then the next resume syncs
+            final androidx.webkit.JavaScriptReplyProxy proxy = downloadsReply;
+            final String envelope = proxy != null && downloadsReplyEpoch == downloadsEpoch
+                    && DownloadsCallerPolicy.canPush(primary, web.getUrl()) ? DownloadsCallerPolicy.eventEnvelope(json) : null;
+            if (envelope == null) { // not the shell right now (loading, another page, port not opened yet): retry briefly, then the page's own list read catches up
                 if (++downloadsTries < 60) main.postDelayed(this, 300); else pendingDownloads.clear();
                 return;
             }
-            web.evaluateJavascript(script, r -> {
-                if ("true".equals(r)) { pendingDownloads.remove(json); if (!pendingDownloads.isEmpty()) main.post(this); return; }
-                if (++downloadsTries < 60) main.postDelayed(this, 300); // shell still loading: retry for ~18 s
-                else pendingDownloads.clear();                           // the sync on next resume catches up
-            });
+            try { proxy.postMessage(envelope); } catch (RuntimeException e) { // the document went away: try again for a while
+                if (++downloadsTries < 60) main.postDelayed(this, 300); else pendingDownloads.clear();
+                return;
+            }
+            pendingDownloads.remove(json);
+            if (!pendingDownloads.isEmpty()) main.post(this);
         }
     };
 

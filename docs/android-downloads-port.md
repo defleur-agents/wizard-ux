@@ -33,8 +33,11 @@ native → page  {"v":1,"id":"dl1","ok":true,"result":…} | {"v":1,"id":"dl1","
 
 `list` → `{"v":1,"items":[{id,name,mime,size,got,status,started,finished}]}`; `open` → `"ok" | "missing"
 | "none"`; `cancel` / `remove` → `"ok" | "missing"`. Ids are DownloadManager ids as plain digits;
-anything else never reaches native. Native pushes (`start | done | failed | sync`) still arrive through
-`window.__wosDownloads(...)`, delivered with `evaluateJavascript` (main frame only).
+anything else never reaches native. Native events (`start | done | failed | sync`) arrive on the same private port as
+`{"v":1,"event":{...}}` (no `id`), posted through the reply proxy of the last admitted main-frame message and only while the
+shell is the top page in the same page load. There is no global entry point: an earlier version had `window.__wosDownloads`,
+which a hosted app could call to make the shell read the native list and paint the real name of any id it guessed
+(PR #1143 review). The first `list` the module sends at load is what tells native which document to post to.
 
 ## What the tests do and do not prove
 
@@ -56,8 +59,8 @@ from the shell. Native cannot close that by itself. What this change does:
 * Defence in depth in the page: `web/core/downloads.js` takes the port into its closure at startup (before any hosted
   frame exists), binds `postMessage` / `addEventListener`, and removes `window.wizardDownloadsPort`, so
   `parent.wizardDownloadsPort` is gone for hosted apps. Fake-window web tests cover it.
-* Native->page events (`start | done | failed | sync`) go out only while the shell is the top page, through a script
-  that re-checks origin, path and top frame in the document it lands in.
+* Native->page events (`start | done | failed | sync`) go out only while the shell is the top page, on the private port
+  (no global to call).
 
 ## Same-origin hosted apps: this is NOT an isolation boundary
 
@@ -73,8 +76,8 @@ Bounded hardening in `web/core/downloads.js` (closure hiding; each item is cover
 * The raw port is taken into the closure at startup and `window.wizardDownloadsPort` is removed.
 * Actions run only from a click with `isTrusted === true` on the shell's own buttons; the row a tap acts on comes from a
   private map the shell filled when it drew the rows, not from DOM attributes (the markup carries no download ids).
-* `window.__wosDownloads` (called by native) is not writable or deletable. Events are only a nudge: banners and toasts
-  show what the native list returns for the id, never text from the event.
+* No callable event entry point exists (see above). Events are still only a nudge: banners and toasts show what the
+  native list returns for the id, never text from the event.
 * `JSON.stringify/parse` are captured at load.
 
 What a same-origin script can still do, because it shares the realm: read the sheet's DOM while it is open (names, sizes,
@@ -89,7 +92,7 @@ on-device acceptance (queued on forum, not run here).
 `android.intent.action.DOWNLOAD_COMPLETE` is sent by DownloadProvider (`android:sharedUserId="android.media"`, not this
 app's UID and not UID 1000), addressed to the requesting package with `setPackage`. A non-exported manifest receiver
 accepts broadcasts only from its own app UID, root or system, so `exported="false"` would drop genuine completions; it
-stays `exported="true"`. A source-level review found a raw `Thread` started for every non-negative id before the id was
+stays `exported="true"` but is protected by `android:permission="android.permission.SEND_DOWNLOAD_COMPLETED_INTENTS"` (AOSP DownloadProvider manifest: `protectionLevel="signature"`, requested by DownloadProvider), so a third-party app cannot send the action. Not verified on a device or on other ROMs: if completion banners never appear on some phone, check this first (the sheet still refreshes from the list). A source-level review found a raw `Thread` started for every non-negative id before the id was
 checked. Now: exact action and id >= 0, then the id must be one Wizard OS tracked (`Downloads.isTracked`), only then
 `goAsync()`, with work on a single bounded worker (`DownloadsReceiverPolicy`). No device exploit was shown for the old code.
 

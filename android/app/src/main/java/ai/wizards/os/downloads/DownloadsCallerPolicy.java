@@ -84,19 +84,18 @@ public final class DownloadsCallerPolicy {
     }
 
     /**
-     * The script evaluateJavascript runs to deliver one event (start | done | failed | sync). evaluateJavascript only
-     * reaches the main frame, and the script re-checks origin, path and top frame in the document it lands in, so a
-     * navigation between {@link #canPush} and the run cannot hand download names to another page. Null if unusable.
+     * The message that carries one event (start | done | failed | sync) to the page: {"v":1,"event":{...}}, no id (it is not a
+     * reply). It is posted through the reply proxy of an ADMITTED main-frame message, so it lands on the private port the shell
+     * module holds, never on a global a hosted app can call. Null unless the input is exactly one JSON object.
      */
-    public static String pushScript(String primaryOrigin, String eventJson) {
-        if (primaryOrigin == null || primaryOrigin.isEmpty() || eventJson == null || eventJson.length() > MAX_MESSAGE) return null;
-        try { // exactly one JSON object, nothing after it
+    public static String eventEnvelope(String eventJson) {
+        if (eventJson == null || eventJson.length() > MAX_MESSAGE) return null;
+        try {
             org.json.JSONTokener t = new org.json.JSONTokener(eventJson);
-            if (!(t.nextValue() instanceof JSONObject) || t.nextClean() != 0) return null;
+            Object v = t.nextValue();
+            if (!(v instanceof JSONObject) || t.nextClean() != 0) return null;
+            return new JSONObject().put("v", 1).put("event", v).toString();
         } catch (JSONException e) { return null; }
-        return "(function(){var l=location;if(window.self!==window.top||l.origin!==" + JSONObject.quote(primaryOrigin)
-                + "||!(l.pathname==='/wizard-os-home'||l.pathname.indexOf('/wizard-os-home/')===0))return false;"
-                + "return window.__wosDownloads?window.__wosDownloads(" + eventJson + "):false})()";
     }
 
     /** The four things the page may ask for; each runs the same code the tap in the sheet always ran. */

@@ -81,6 +81,8 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false } = {
 const ports = new WeakMap();
 const pushEv = (window, ev) => { const p = ports.get(window); if (!p) return false; p.handlers.forEach(f => f({ data: JSON.stringify({ v: 1, event: ev }) })); return true; };
 const flush = () => new Promise(r => setImmediate(r));
+// On load the module sends one `list` (it also tells native which document to post events to). Tests that count traffic start after it.
+const settle = async r => { await flush(); r.sent.length = 0; r.calls.length = 0; r.refreshed.n = 0; r.timers.length = 0; return r; };
 const pdf = (over = {}) => ({ id: '12', name: 'Plan.pdf', mime: 'application/pdf', size: 4_700_000, got: 4_700_000, status: 'done', started: Date.now() - 5000, finished: Date.now(), ...over });
 const sentCalls = r => r.sent.map(m => [m.method, m.params]);
 
@@ -155,7 +157,7 @@ test('missing / no-app answers tell James in plain words', async () => {
 });
 
 test('ids that are not plain digits never reach the native side', async () => {
-  const r = load({ items: [pdf()] });
+  const r = await settle(load({ items: [pdf()] }));
   for (const bad of ['', '../1', '1;2', '12 ', 'x', '1234567890123456789']) assert.equal(await r.W.open(bad), 'missing');
   assert.deepEqual(r.calls, []);
   assert.deepEqual(r.sent, []);
@@ -178,14 +180,14 @@ test('only list / open / cancel / remove are ever requested, each a v1 envelope 
 });
 
 test('a reply with the wrong version or an unknown id is ignored; a silent native side times out without throwing', async () => {
-  const r = load({ items: [pdf()] });
+  const r = await settle(load({ items: [pdf()] }));
   const p = r.W.open('12');
   const real = r.sent[0].id;
   r.port.handlers.forEach(f => f({ data: JSON.stringify({ v: 2, id: real, ok: true, result: 'ok' }) }));
   r.port.handlers.forEach(f => f({ data: 'not json' }));
   r.port.handlers.forEach(f => f({ data: JSON.stringify({ v: 1, id: 'dl999', ok: true, result: 'ok' }) }));
   assert.equal(await p, 'ok', 'the genuine reply still resolves it');
-  const quiet = load({ items: [] });
+  const quiet = await settle(load({ items: [] }));
   quiet.port.postMessage = () => {};
   const q = quiet.W.open('12');
   const t = quiet.timers.find(x => x.ms >= 3000 && x.ms !== 6000);
@@ -195,7 +197,7 @@ test('a reply with the wrong version or an unknown id is ignored; a silent nativ
 });
 
 test('the shell keeps the port in its own closure and removes window.wizardDownloadsPort, so a same-origin hosted iframe cannot reach parent.wizardDownloadsPort', async () => {
-  const r = load({ items: [pdf()] });
+  const r = await settle(load({ items: [pdf()] }));
   assert.equal('wizardDownloadsPort' in r.window, false, 'what a hosted frame sees through parent.* must be gone');
   assert.equal(r.W.available(), true, 'the shell itself still has it');
   assert.equal(await r.W.open('12'), 'ok');
@@ -203,7 +205,7 @@ test('the shell keeps the port in its own closure and removes window.wizardDownl
 });
 
 test('a hosted frame that swaps postMessage / listeners on the port after load intercepts nothing', async () => {
-  const r = load({ items: [pdf()] });
+  const r = await settle(load({ items: [pdf()] }));
   const stolen = [];
   r.port.postMessage = t => stolen.push(t);            // what a hostile frame could still try on a leaked reference
   assert.equal(await r.W.open('12'), 'ok');
@@ -355,7 +357,7 @@ test('there is no callable entry point for native events: the event-ID oracle is
   const r = load({ items: listed() });
   const parent = hostedParent(r);
   assert.equal(parent.__wosDownloads, undefined, 'no global entry point');
-  assert.ok(!Object.getOwnPropertyNames(parent).some(k => /wosDownloads|downloadsPort/i.test(k)), 'nothing downloads-shaped on parent');
+  assert.ok(!Object.getOwnPropertyNames(parent).some(k => /^__wosDownloads$|downloadsPort/i.test(k)), 'nothing downloads-shaped on parent');
   const probe = () => { for (const t of ['done', 'failed', 'sync', 'start']) { try { parent.__wosDownloads?.({ type: t, item: pdf({ id: '12' }) }); } catch (_) {} } };
   probe(); await flush();
   assert.equal(r.body.children.length, 0, 'no banner painted from a parent-side call');

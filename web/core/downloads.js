@@ -1,7 +1,7 @@
 /* Wizard OS · in-app Downloads (James, 7 Nov 2026).
  *
  * Android's download manager only drops a quiet notification in the tray. On the Android app the shell now tells
- * the page when a download finishes (window.__wosDownloads, pushed by MainActivity) and this module shows:
+ * the page when a download finishes (an event on the private wizardDownloadsPort, posted by MainActivity) and this module shows:
  *   1. a banner INSIDE Wizard: "Downloaded · name · size · Open" (one tap opens the file in the app that handles
  *      it, e.g. a PDF viewer). Auto-dismisses after ~6 s; tapping the banner opens the sheet;
  *   2. the Downloads sheet: recent downloads, progress for in-flight ones, Open for finished ones.
@@ -24,7 +24,7 @@
  *   native → page  JSON string {v:1, id, ok:true, result} | {v:1, id, ok:false, error}
  *     list   → result {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]}
  *     open   → "ok" | "missing" | "none";  cancel / remove → "ok" | "missing"
- *   window.__wosDownloads({type:'start'|'done'|'failed'|'sync', item?}) → true when handled (pushed by MainActivity)
+ *   port message {v:1, event:{type:'start'|'done'|'failed'|'sync', item?}} (native → page; no global entry point exists)
  * The old WizardOSNative.downloads* JavascriptInterface methods no longer exist and are never used here.
  */
 (() => {
@@ -60,6 +60,7 @@
   function onNative(ev) {
     let m; try { m = JS.parse(typeof ev === 'string' ? ev : ev?.data); } catch (_) { return; }
     if (!m || m.v !== V) return;
+    if (m.event && typeof m.event === 'object' && m.id === undefined) return onNativeEvent(m.event);   // native -> page, same private port
     const p = asking.get(m.id); if (!p) return;
     asking.delete(m.id); clearTimeout(p.timer);
     p.resolve(m.ok === true ? { result: m.result } : null);
@@ -101,7 +102,7 @@
     return o && Array.isArray(o.items) ? o.items.map(clean).filter(Boolean) : null;
   }
   async function refresh() {
-    const before = JS.stringify(items), l = await read();
+    const l = await read(), before = JS.stringify(items);   // compared after the await: concurrent refreshes must not both count as a change
     if (l) { items = l; loaded = true; if (JS.stringify(items) !== before) settingsChanged(); }
     return items;
   }
@@ -286,11 +287,12 @@
     const now = Date.now();
     return items.filter(i => i.status === 'done' && i.finished > seenAt && now - i.finished < FRESH_MS).sort((a, b) => b.finished - a.finished)[0] || null;
   }
-  const onNativeEvent = ev => {
+  // Events arrive ONLY on the private port ({v:1, event}); there is no global to call. An earlier version exposed
+  // window.__wosDownloads, and a hosted app could use it to make the shell read the native list and paint the real name of any
+  // id it guessed (PR #1143 review). The event is still only a nudge: what is shown comes from the native list.
+  function onNativeEvent(ev) {
     if (!ev || typeof ev !== 'object') return true;
     if (!native()) return true;
-    // An event is only a nudge. Anything shown comes from the list native returns for the id, never from the payload,
-    // so a script calling window.__wosDownloads cannot put chosen names, ids or toasts on screen.
     if (ev.type === 'done' || ev.type === 'failed') {
       const want = String(ev.item?.id ?? '');
       refresh().then(() => { if (sheet) paint(); const it = items.find(i => i.id === want); if (it) banner(it); });
@@ -298,10 +300,7 @@
     else if (ev.type === 'start') refresh().then(() => { if (sheet) paint(); });
     else if (ev.type === 'sync') refresh().then(() => { if (sheet) paint(); const f = freshUnseen(); if (f) banner(f); });
     return true;
-  };
-  // Native calls this by name. Not writable / deletable, so a hosted app cannot swap in its own handler.
-  try { Object.defineProperty(window, '__wosDownloads', { value: onNativeEvent, writable: false, configurable: false, enumerable: false }); }
-  catch (_) { window.__wosDownloads = onNativeEvent; }
+  }
 
   /* ---- Settings entry: a row to reopen the sheet later ---- */
   function registerSettings() {
@@ -318,7 +317,8 @@
     } catch (_) {}
   }
   registerSettings();
-  takePort();                                                // eagerly, before any hosted frame exists
+  // Eagerly, before any hosted frame exists. The first list request also tells native which page document to send events to.
+  if (takePort()) { listen(held); refresh(); }
 
   // Public surface: three booleans/closers the shell's Back/Escape owners need. No list, no state, no way to open, cancel,
   // remove or show: those stay in this closure and run only from real taps on the shell's own sheet and banner.
