@@ -2820,7 +2820,7 @@ window.WizCore.chats = function createChats(H) {
       // A new open may be showing a skeleton because its old list revision was stale. Even identical
       // history must repaint that open so the one position restore can run on real rows.
       let changed = c.loadedFor !== w.thread || c.loadedNav !== nav || sig !== c.sig;
-      if (globalThis.WosThreadTracker?.on()) globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); // the asks of this thread (read right after the history that carries them)
+      if (globalThis.WosThreadTracker?.on()) { globalThis.WosThreadTracker.shown?.(sid, LIVE.agentOf ? LIVE.agentOf(sid) : '', turns); globalThis.WosThreadTracker.load(sid, LIVE.agentOf ? LIVE.agentOf(sid) : ''); } // the asks of this thread (read right after the history that carries them; its owner bubbles answer older asks)
       Object.assign(c, { turns, cachedFor: '', savedFor: '', loadedFor: w.thread, loadedNav: nav, readCk, at: Date.now(), err: '', sig, readRevision: revision, failN: 0, errStatus: 0 }); clearTimeout(c.retryT);
       // A sent message has landed once a recent user turn in the thread matches it.
       // Transcript absence is not a rejection receipt. Never replay accepted steering.
