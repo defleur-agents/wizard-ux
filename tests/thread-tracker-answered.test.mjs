@@ -16,7 +16,8 @@ async function fixture(items, { status = 'completed', lastUserAt, agent = '', ro
   const row = { status, ...(lastUserAt ? { lastUserAt } : {}) };
   const store = new Map();
   const doc = { documentElement: { dataset: { tweaks: 'wizard/thread-tracker' } }, addEventListener() {}, querySelectorAll() { return []; }, hidden: false };
-  const win = { addEventListener() {}, dispatchEvent() {}, WizLive: { session: () => row, sessionFor: () => row, onChange() {}, cachedMessages: () => rows } };
+  const win = { addEventListener() {}, dispatchEvent() {}, WizLive: { session: () => row, sessionFor: () => row, onChange() {}, cachedMessages: () => rows },
+    WosChat: { parseRows: rs => rs.map(r => (r.role === 'user' ? { u: { at: r.timestamp * 1000 } } : { a: { at: r.timestamp * 1000 } })) } };
   const fetched = [];
   const ctx = vm.createContext({ window: win, document: doc, setInterval() {}, setTimeout() {}, CustomEvent: class {},
     localStorage: { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) },
@@ -115,4 +116,13 @@ test('AI apps sidebar: no helper pill; Working ask line only with the tracker of
   const row = desk.slice(desk.indexOf('  function chatRow('), desk.indexOf('  let menu =', desk.indexOf('  function chatRow(')));
   assert.doesNotMatch(row, /Helper still working|ch-background/);
   assert.match(row, /s\.workingAsk && !globalThis\.WosThreadTracker\?\.on\?\.\(\)/);
+});
+test('a user message the thread shows, newer than the list row time, also answers (voice note lag)', async () => {
+  const rows = [{ id: 1, role: 'assistant', timestamp: T0 / 1000 }, { id: 2, role: 'user', timestamp: (T0 + 5000) / 1000 }];
+  const { T } = await fixture([it('amber', 'needs_you', T0)], { lastUserAt: iso(T0 - 9e6), rows });
+  await T.load('t');
+  assert.equal(T.dots('t'), '');
+  const none = await fixture([it('amber', 'needs_you', T0)], { lastUserAt: iso(T0 - 9e6), rows: rows.slice(0, 1) });
+  await none.T.load('t');
+  assert.match(none.T.dots('t'), /tt-dot you/);
 });

@@ -70,17 +70,32 @@
   // → (item → true when the owner wrote after the reply it sits on), or null when the box gave no owner time.
   // The reply's time is the item's own `at` (set from the message); without one, the anchor message's timestamp
   // in the thread's stored copy. Both sides are server times; the device clock is never read.
+  // The owner's latest message the thread itself shows: the list row's lastUserAt, or a newer user bubble in the
+  // stored copy (the list's time can lag, e.g. voice notes; James, 7 Nov 2026). Memoised per stored copy.
+  const userAtOf = new WeakMap();
+  function latestUserAt(rows) {
+    if (!Array.isArray(rows) || !rows.length || !window.WosChat?.parseRows) return NaN;
+    if (!userAtOf.has(rows)) {
+      let t = NaN;
+      try { for (const tn of window.WosChat.parseRows(rows)) if (tn.u && Number.isFinite(tn.u.at) && !(tn.u.at <= t)) t = tn.u.at; } catch (_) {}
+      userAtOf.set(rows, t);
+    }
+    return userAtOf.get(rows);
+  }
   function repliedBefore(k) {
     const [sid, agent] = splitKey(k);
     const s = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
-    const owner = Date.parse(String(s?.lastUserAt ?? ''));
-    if (!Number.isFinite(owner) || owner <= 0) return null;
     let rows;
+    const stored = () => (rows ??= window.WizLive?.cachedMessages?.(sid) || window.WizLive?.savedMessages?.(sid)?.rows || []);
+    const listed = Date.parse(String(s?.lastUserAt ?? ''));
+    const shown = latestUserAt(stored());
+    const owner = Math.max(Number.isFinite(listed) ? listed : 0, Number.isFinite(shown) ? shown : 0);
+    if (!(owner > 0)) return null;
     const anchorTime = i => {
       const t = Math.max(0, ...(i.members || [i]).map(m => (typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0)));
       if (t > 0) return t;
       const id = anchorKey(i.message_id); if (id === null) return null;
-      rows ??= window.WizLive?.cachedMessages?.(sid) || window.WizLive?.savedMessages?.(sid)?.rows || [];
+      stored();
       const m = Array.isArray(rows) ? rows.find(r => r && String(r.id ?? r.message_id) === id) : null;
       const at = m ? msgMs(m.timestamp ?? m.created_at) : NaN;
       return Number.isFinite(at) && at > 0 ? at : null;
