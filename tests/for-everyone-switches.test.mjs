@@ -76,3 +76,17 @@ test('Settings and the Tracker share one switch: "Try new features" only on For 
   assert.match(l, /window\.addEventListener\('wos:tweak-choice', e => [^\n]*sync\.tweakChoice\(e\.detail\?\.id, e\.detail\?\.on\)\)/);
   assert.match(l, /for \(const type of \['focus', 'online', 'pageshow'\]\) window\.addEventListener\(type, wake\);/, 'a Tracker flip shows when the shell comes back');
 });
+
+test('os-updates stores the channel before it broadcasts it, so a deferred experience.js that missed the event still reads it', () => {
+  const src = read('web/core/os-updates.js');
+  const store = src.indexOf("localStorage.setItem('wos.channel.v1', d.channel)"), send = src.indexOf("window.dispatchEvent(new CustomEvent('wos:channel', { detail: { channel: d.channel } }))");
+  assert.ok(store > 0 && send > store, 'persisted, then broadcast');
+  const b = box('stable');   // experience.js starting after the read sees the stored channel on its first frame
+  assert.equal(b.E.state.locked, true);
+});
+
+test('the New skin draft does not list feature switches, so it cannot flip one (only built-ins and views)', () => {
+  const s = read('web/core/settings.js'), d = s.slice(s.indexOf('  async function draftDefaults('), s.indexOf('  function newSkinHtml('));
+  assert.match(d, /items = items\.filter\(t => t\.view \|\| builtin\.has\(t\.id\)\);/);
+  assert.match(s, /const id = tweak\.dataset\.draftTweak; if \(!\(draft\.items \|\| \[\]\)\.some\(t => t\.id === id\)\) return true;/, 'a stale draft switch cannot be flipped');
+});

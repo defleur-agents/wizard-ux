@@ -397,6 +397,10 @@
         map = Object.fromEntries(Object.entries(map).filter(([id]) => id === pick || !present.includes(id)));
         items = items.filter(t => t.id === pick || !present.includes(t.id));
       }
+      // Feature switches (not built-in, not a view) are switched only under Try new features and in the Tracker app:
+      // the New skin draft does not list them, so it cannot flip one; their current state is carried over unchanged.
+      const builtin = new Set((window.WosExperience.state?.tweaks || []).filter(t => t.builtin).map(t => t.id));
+      items = items.filter(t => t.view || builtin.has(t.id));
       draft.items = items; draft.tweaks = map;
     } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
@@ -521,7 +525,7 @@
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
       if (draft.saving) return true;
-      if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
+      if (tweak) { const id = tweak.dataset.draftTweak; if (!(draft.items || []).some(t => t.id === id)) return true; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {

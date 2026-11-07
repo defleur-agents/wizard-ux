@@ -72,6 +72,9 @@
         if (valid(d)) {
           st = d; off = false; issue = '';
           // core/experience.js: For everyone keeps feature switches off; tell it the channel this box is on.
+          // Persist first: experience.js is deferred and reads wos.channel.v1 when it starts, so the channel holds even
+          // if this answer lands before its wos:channel listener exists.
+          if (['stable', 'latest'].includes(d.channel)) try { localStorage.setItem('wos.channel.v1', d.channel); } catch (_) {}
           if (['stable', 'latest'].includes(d.channel)) try { window.dispatchEvent(new CustomEvent('wos:channel', { detail: { channel: d.channel } })); } catch (_) {}
         }
         else { off = true; issue = r.status === 404 ? 'Update controls are not available on this Wizard.' : r.status === 401 || r.status === 403 ? 'Sign in as this Wizard’s owner to manage server updates.' : 'Could not check server updates.'; }
