@@ -110,3 +110,50 @@ test('real chat row keeps the amber ask (tracker off) with no helper badge, for 
     assert.match(html, /Say what happens when you open Messenger/);
   }
 });
+
+// James, 7 Nov 2026 ('Wizard OS · Chats #2'): a false Interrupted run filed the thread under
+// Errors / inbox Needs you while two helpers it had started were still running. Any running worker
+// keeps it in Working, with the error status kept for the thread's card; Errors only once all stop.
+const running = { phase: 'running', pending: 2, returned: 0 };
+for (const status of ['interrupted', 'failed']) {
+  for (const extra of [{ helperStatus: running }, { background: 'helper' }, { background: 'heavy' }]) {
+    test(`${status} + running worker ${JSON.stringify(extra)} is Working, outside Errors/Ready/Needs-you/orb`, () => {
+      const s = row({ status, attention: { state: 'fyi', ask: 'Two fixes are being built' }, ...extra });
+      for (const layout of ['day', 'status']) {
+        const c = harness([s], { layout }), g = c.group([s], now);
+        assert.equal(g.working.length, 1); assert.equal(g.errors.length + g.ready.length, 0);
+        assert.equal(c.L.groups().working.length, 1); assert.equal(c.L.groups().needs.length + c.L.groups().ready.length, 0);
+        assert.equal(c.needs(s), false); assert.equal(c.waits(s), false); assert.equal(c.orbCount(c.L), 0);
+        assert.equal(c.runWorking(s), false, 'not a steer/Stop target');
+        assert.equal(s.status, status, 'the thread keeps its error status for the card');
+      }
+    });
+  }
+  for (const helperStatus of [null, { phase: 'stalled', pending: 0, returned: 2 }, { phase: 'uncertain', pending: 1 }]) {
+    test(`${status} with ${helperStatus ? helperStatus.phase + ' helper' : 'no helper'} is not Working (Errors / inbox Needs you)`, () => {
+      const s = row({ status, helperStatus, attention: { state: 'fyi', ask: 'Two fixes are being built' } }), c = harness([s]);
+      const g = c.group([s], now);
+      assert.equal(g.working.length, 0); assert.equal(g.errors.length, 1);
+      assert.equal(c.L.groups().working.length, 0); assert.equal(c.L.groups().needs.length, 1);
+    });
+  }
+}
+test('fyi + running helper is Working; approvals and recovery keep their gate', () => {
+  const s = row({ status: 'completed', attention: { state: 'fyi', ask: 'Two fixes are being built' }, helperStatus: running }), c = harness([s]);
+  assert.equal(c.group([s], now).working.length, 1); assert.equal(c.group([s], now).ready.length, 0); assert.equal(c.orbCount(c.L), 0);
+  for (const status of ['waiting_for_approval', 'unknown']) {
+    const gate = row({ status, helperStatus: running }), h = harness([gate]);
+    assert.equal(h.group([gate], now).working.length, 0);
+    assert.equal(h.L.groups().needs.length, 1);
+  }
+});
+test('slim and full list rows carry the running helper of an interrupted thread into Working', () => {
+  const c = modelContext({});
+  vm.runInContext(block(live, '  const READY_OR_ATTENTION', '  /* ---- thread-seen') + '\nthis.normalize = normalize;', c);
+  const full = c.normalize({ id: 'err', title: 'Wizard OS · Chats', status: 'interrupted', wizard_helper_status: running, last_active: now / 1000 });
+  const slim = c.normalize({ ...row({ status: 'interrupted', helperStatus: running }), listVersion: 1 });
+  for (const s of [full, slim]) {
+    assert.equal(s.status, 'interrupted');
+    assert.equal(harness([s]).group([s], now).working.length, 1);
+  }
+});
