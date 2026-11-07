@@ -1156,6 +1156,13 @@
     // One frame so the pressed, spinning icon paints before any work starts.
     requestAnimationFrame(() => { if (OPENING.id !== a.id) return; openApp(a); if (!window.WosAppSetup?.gate || a.kind !== 'wizard' || !a.url) openingEnd(a.id); });
   }
+  // An app's open window taken to one of its own pages (replace: a page change never adds a Back step of its own).
+  function framePage(w, rel) {
+    w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
+    let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
+    if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } }
+    return true;
+  }
   function placeApp(mine, obj, opts = {}, refresh) {
     const here = opts.desk == null ? Object.keys(W).find(id => deskOf(id) >= 0 && mine(W[id])) : null;
     openingReady();
@@ -1246,7 +1253,8 @@
       placeApp(w => w.app === 'frame' && w.appId === a.id && w.from, { app: 'frame', appId: a.id, from: opts.from }, {}, w => { w.from = opts.from; });
       return true;
     }
-    if (a.kind === 'wizard' && a.url) { placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id }, opts); return true; }
+    // extra.path: one of the app's own pages (a spoken declared route), opened exactly like a tap, then at that page.
+    if (a.kind === 'wizard' && a.url) { const path = extra.path || ''; placeApp(w => w.app === 'frame' && w.appId === a.id && !w.from, { app: 'frame', appId: a.id, ...(path ? { url: path } : {}) }, opts, path ? w => framePage(w, path) : null); return true; }
     const q = extra.query || '';
     placeApp(w => w.app === 'app' && w.appId === a.id, { app: 'app', appId: a.id, query: q }, opts, q ? (w, t) => { w.query = q; renderDesk(t); } : null);
     return true;
@@ -3295,7 +3303,7 @@
      * it), never to the main agent and never through the cloud router. A held orb is still a phone command, but
      * only on-device commands run; anything else offers the choices and sends nothing. */
     if (v?.agent && target == null) {
-      if (kind === 'command' && !typed) { const lc = localParse(text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
+      if (kind === 'command' && !typed) { const lc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind), text, snap, kind); if (lc) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(lc, text, opts); } return holdNoMatch(text, opts); }
       const files = typed ? [] : takeFiles(), seal = typed ? null : snap.seal || null;
       setVoice('idle'); txPill('✦', `To ${v.agentLabel}${v.thread && v.thread !== '__new__' ? ' · this thread' : ' · new chat'}${sttNote}`, 'agent'); txHide(1400);
       return sendChat(v.id, text, `voice, in ${v.agentLabel}’s chats`, snap.audio || null, { custodyId: snap.custodyId, sid: v.thread || '__new__', route: snap.route, files, seal: seal || false, instructions: viewContext(v.id, `voice, in ${v.agentLabel}’s chats`, snap) });
@@ -3318,14 +3326,18 @@
       // A tapped take whose first word is a declared app route ("music") opens that app, outside threads, before
       // anything goes to the agent (James, 7 Nov: a tapped "Music" became a new chat instead of song ID).
       if (target == null && !(v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) {
-        const dr = LOCAL_COMMANDS.declaredRoute?.(text);
-        if (dr) { showRouted('command', `Command · on-device${sttNote}`); return finishCmd(dr, text, opts); }
+        // Paint now; act only once the box's fresh app list confirms the route (else it is a message as usual).
+        if (LOCAL_COMMANDS.declaredRoute?.(text)) {
+          showRouted('command', `Command · on-device${sttNote}`);
+          const dr = await LOCAL_COMMANDS.confirmRoute(text);
+          if (dr) return finishCmd(dr, text, opts);
+        }
       }
       if (target == null && (v?.kind === 'chat thread' || v?.review || v?.mode === 'capture')) return toView(v, text, `To ${v.name}${sttNote}`, snap);
       return toAgent(text, `To ${window.WizConfig.agent()}${sttNote}`, opts);
     }
     const t0 = performance.now();
-    const loc = localParse(text, snap, kind, typed);
+    const loc = await LOCAL_COMMANDS.confirm(localParse(text, snap, kind, typed), text, snap, kind, typed);
     if (loc) {
       const ms = Math.max(1, Math.round(performance.now() - t0));
       showRouted('command', `Command · on-device · ${ms} ms${sttNote}`);
@@ -3417,7 +3429,7 @@
     return window.WosCommands.execute(c, text, {
       search: openSearch, settings: openSettings,
       focused: () => W[opts.snap?.id || desks[idx].focus], chats: CHATS, chatList: () => openSheet('inbox'), launcher: q => openSheet('launcher', q),
-      findApp, openApp: app => openApp(app, {}, opts), openAppRoute: (id, url) => window.WizOpenApp(id, url), musicDone: opts.musicDone, layout: c => {
+      findApp, openApp: app => openApp(app, {}, opts), openAppRoute: (id, url) => { const a = hostedOpenable(id); return !!a && appAt(url)?.id === id && openApp(a, { path: url }, opts) !== false; }, musicDone: opts.musicDone, layout: c => {
         const a = c.action, f = opts.snap?.id || desks[idx].focus;
     if (a === 'desk') {
       const to = c.to; closeSheets();
@@ -4255,9 +4267,7 @@
     showAppPath: (id, path) => { let u; try { u = new URL(path, location.href); } catch (_) { return false; } const rel = u.pathname + u.search + u.hash;
       if (u.origin !== location.origin || appAt(rel)?.id !== id) return false;
       const mine = x => x?.app === 'frame' && x.appId === id && !x.from, w = mine(W[desks[idx].focus]) ? W[desks[idx].focus] : Object.values(W).find(x => mine(x) && deskOf(x.id) >= 0); if (!w) return false;
-      w.url = rel; save(); const f = winEl(w.id)?.querySelector('iframe'); if (!f) return true;
-      let now = ''; try { const l = f.contentWindow.location; now = l.pathname + l.search + l.hash; } catch (_) {}
-      if (now !== rel) { const url = window.WosOwnViews?.frameUrl(winApp(w), rel) || rel; try { f.contentWindow.location.replace(url); } catch (_) { f.src = url; } } return true; },   // (replace: no Back step of its own)
+      return framePage(w, rel); },
     phoneDesks: () => desks.map((d, i) => { if (d.home || !d.wins.length) return null; const w = W[d.focus] || W[d.wins[0]]; if (!w) return null; const a = winApp(w); return { desk: i, id: w.appId || a.id || '', name: a.name || w.title || '' }; }).filter(Boolean),
     // An app's mark exactly as the dock draws it (its logo or sigil, its colour): the Apps view's icons.
     phoneMark: id => { const a = id === CHATS_APP.id ? { app: 'chats' } : APP[id] ? { app: 'frame', appId: id } : null; return a ? window.WizCore.workspaceNav.icon({ wins: ['m'], focus: 'm' }, { m: a }, winApp) : ''; },

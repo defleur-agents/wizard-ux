@@ -27,10 +27,11 @@
     return null;
   }
   // A declared first word ("music", "shazam") opens that app's route; the rest of the utterance rides along.
-  // Apps declare words as data; no app hears or claims speech (James, 6 Nov 2026).
-  function declaredRoute(t) {
+  // Apps declare words as data; no app hears or claims speech (James, 6 Nov 2026). fresh: only routes the box's own
+  // app list confirmed in this page (never the device cache).
+  function declaredRoute(t, fresh = false) {
     const spoken = String(window.WizConfig.stripAddress(t) || '').trim().match(/^([^\s.,!?;:]+)[.,!?;:]?(?:\s+([\s\S]*))?$/u);
-    if (spoken) for (const app of Object.values(APP)) for (const route of app.voice_routes || []) {
+    if (spoken) for (const app of Object.values(APP)) for (const route of (!fresh || app.voice_routes_confirmed === true) && app.voice_routes || []) {
       if (!Array.isArray(route.words) || !route.words.some(w => typeof w === 'string' && w.toLowerCase() === spoken[1].toLowerCase())) continue;
       try {
         if (typeof route.open !== 'string' || !/^(?:\?|\/(?!\/))/.test(route.open) || /[\x00-\x1f\x7f\\]/.test(route.open)) continue;
@@ -41,6 +42,23 @@
       } catch (_) {}
     }
     return null;
+  }
+  // A spoken route acts only on the fresh app list (Archimedes, 7 Nov 2026): read the box's list first and match
+  // again. The cached list stands in only when that read fails, and only for apps still in the registry (an app a
+  // fresh read removed is gone from it). Resolves the route to open, marked confirmed, or null.
+  async function confirmRoute(t) {
+    let fresh = false;
+    try { fresh = (await window.WizCore.refreshApps?.()) === true; } catch (_) {}
+    const c = declaredRoute(t, fresh);
+    return c ? { ...c, confirmed: fresh ? 'fresh' : 'cached' } : null;
+  }
+  // A parsed command, with a declared route confirmed first. A route the fresh list no longer declares parses again
+  // (the bare app name, another command, or nothing).
+  async function confirm(c, t, snap, kind, typed = false) {
+    if (c?.action !== 'open_app_route' || c.confirmed) return c;
+    const r = await confirmRoute(t); if (r) return r;
+    const again = localParse(t, snap, kind, typed);
+    return again?.action === 'open_app_route' ? null : again;
   }
   function localParse(t, snap, kind, typed = false) {
     if (isMessageTake(kind, typed)) return null;
@@ -92,13 +110,13 @@
     return null;
   }
 
- return {parse:localParse, declaredRoute};
+ return {parse:localParse, declaredRoute, confirmRoute, confirm};
  }
  function execute(c, text, H) {
    const a = c.action;
    const appResult=window.WosAppVoice?.execute(c,text,H);
    if (appResult != null) return appResult;
-   if (a === 'open_app_route') return !!H.openAppRoute?.(c.app, c.url);
+   if (a === 'open_app_route') return !!c.confirmed && !!H.openAppRoute?.(c.app, c.url);   // confirmRoute first, always
    if (a === 'search' && c.query) return H.search(c.query, c.tab);
    if (a === 'quick_search') return H.search(c.query, c.tab);
    if (a === 'chats_focus' || a === 'chats_filter' || a === 'chats_search') {
