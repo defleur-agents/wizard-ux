@@ -2734,7 +2734,7 @@ window.WizCore.chats = function createChats(H) {
   // run queued, launching or running. Hermes answers 404 for its history until the first message is admitted.
   function threadAlive(w, sid) {
     if (pendingFor(w).length) return true;
-    const s = LIVE.session(sid);
+    const s = rowOf(w.id, sid); // the routed window's own row, not a same-id main-agent row
     return !!s && (isWorking(s) || ['queued', 'launching', 'running'].includes(s.status));
   }
   // Failed thread reads retry by themselves: 1 s, 2 s, 4 s, 8 s, then every 15 s while the thread stays open.
