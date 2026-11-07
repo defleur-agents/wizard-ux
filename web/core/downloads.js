@@ -158,12 +158,16 @@
   function cancelTap(btn, id) {
     const n = native(); if (!n) return;
     const row = btn.closest('.wdl-row'); btn.disabled = true; btn.textContent = 'Cancelling…';
+    const b4 = rowSummary();
     items = items.filter(x => x.id !== id); row?.remove(); if (!items.length) paint();   // paint first, reconcile after
+    if (rowSummary() !== b4) settingsChanged();               // the local change already moved the Settings count line
     nextFrame(() => setTimeout(async () => { await ask('cancel', { id }); await refresh(); paint(); }, 0));
   }
   function removeTap(btn, id) {
     const n = native(); if (!n) return;
+    const b4 = rowSummary();
     items = items.filter(x => x.id !== id); btn.closest('.wdl-row')?.remove(); if (!items.length) paint();
+    if (rowSummary() !== b4) settingsChanged();
     nextFrame(() => setTimeout(() => { ask('remove', { id }); }, 0));
   }
 

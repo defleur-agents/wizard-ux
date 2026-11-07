@@ -137,7 +137,7 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     const rows = await page.locator('.wdl-row').allInnerTexts();
     check(`${tag}: sheet lists 4 rows (done ×2, running with %, failed)`, rows.length === 4 && /47%/.test(rows.join('\n')) && /Cancel/.test(rows.join('\n')) && /Open/.test(rows.join('\n')) && /Remove/.test(rows.join('\n')), rows.join(' | ').replace(/\n/g, ' '));
     // row Open
-    await page.locator('.wdl-row[data-id="19"] [data-wdl="open"]').click();
+    await page.locator('.wdl-row', { hasText: 'Budget 2027.xlsx' }).locator('[data-wdl="open"]')   // by the name on screen: rows carry no download id.click();
     await page.waitForFunction(() => window.__calls.some(c => c[0] === 'open' && c[1] === '19'), null, { timeout: 3000 });
     check(`${tag}: sheet row Open calls native open`, true);
     // Back closes one layer

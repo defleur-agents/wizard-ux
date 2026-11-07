@@ -253,7 +253,7 @@ test('Settings does not re-ask in a loop while a download\'s byte count keeps ch
 test('cancel and remove repaint the Settings row at once, not only when the next list happens to differ', async () => {
   // Review finding on 7c9e9117: the optimistic local change already moved the row summary, so the follow-up list looked "unchanged"
   // and Settings stayed on "1 downloading".
-  for (const [act, item] of [['cancel', pdf({ id: '40', status: 'running', got: 10, size: 100 })], ['remove', pdf({ id: '41' })]]) {
+  for (const [act, item] of [['cancel', pdf({ id: '40', status: 'running', got: 10, size: 100 })], ['remove', pdf({ id: '41', status: 'failed', name: 'Big.zip' })]]) {
     const r = load({ items: [item] });
     await settle(r);
     r.W.show(); await flush(); r.refreshed.n = 0;
