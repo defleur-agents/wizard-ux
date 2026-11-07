@@ -27,6 +27,7 @@
     await api.transition(it.id, 'held', lateLabel(it) + ' · Send when ready.');
     return true;
   }
+  const STEER_RETRY_MS = 3000, STEER_WAIT_MS = 15 * 60e3;
   const J = { 'Content-Type': 'application/json' }, listeners = new Set(), sentHooks = new Set(), newHooks = new Set();
   const items = new Map(), writes = new Map(), encodings = new WeakMap();
   const conversationWork = new Map(), transcriptWork = new Map(), removeErrors = new Map();
@@ -516,7 +517,7 @@
         const rejected = e.status >= 400 && e.status < 500 && e.status !== 408;
         it.steerDispatch = rejected ? 'rejected' : 'started';
         await put(it); // crash before reconciliation must never replay ambiguity
-        let terminal = false;
+        let terminal = false, live = false;
         // Hermes forgets a finished run after a while and answers 404 run_not_found; the run lookup below
         // still proves it terminal in this thread, so the message becomes a same-thread turn instead of failing.
         if ((e.status === 409 && e.code === 'run_not_accepting_steer') || (e.status === 404 && e.code === 'run_not_found')) {
@@ -525,6 +526,10 @@
             const run = await r.json();
             terminal = (run.run_id || run.id) === it.steerTarget && run.session_id === it.sessionId &&
               ['completed', 'failed', 'cancelled', 'interrupted', 'expired'].includes(run.status);
+            // Queued/starting/stopping (or running without a steerable agent) is not a refusal of the message:
+            // it simply cannot be steered yet. Keep it queued and retry until the run ends or becomes steerable.
+            live = !terminal && e.code === 'run_not_accepting_steer' && (run.run_id || run.id) === it.steerTarget &&
+              run.session_id === it.sessionId && ['queued', 'starting', 'running', 'stopping'].includes(run.status);
           } catch (_) { /* unknown status: keep the rejected message for explicit Retry */ }
         }
         // Stop pressed while this steer was in flight: a rejected steer never becomes a new turn.
@@ -538,6 +543,10 @@
           it.rejectedSteerRunId = it.steerTarget;
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
+        } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
+          // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
+          it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
+          await put(it); return;
         } else {
           it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
           it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();

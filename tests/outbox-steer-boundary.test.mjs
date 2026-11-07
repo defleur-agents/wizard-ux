@@ -77,7 +77,7 @@ async function fixture(t, options = {}) {
   t.after(async () => { c.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
   const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId,
     text: 'Follow up in this same thread', model: 'test-model', provider: 'test-provider', instructions: 'Keep original instructions', files: [{ id: 'drop_attachment' }] });
-  return { ...c, calls, admitted, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
+  return { ...c, calls, admitted, options, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
 }
 
 for (const status of ['completed', 'failed', 'cancelled', 'interrupted', 'expired']) {
@@ -106,6 +106,35 @@ test('a forgotten-run steer never falls back while the run still reads as workin
   const f = await fixture(t, { ...forgotten, runStatus: 'running' }); const it = await f.enqueue();
   assert.equal((await settled(f.api, it.id)).state, 'failed');
   assert.equal(f.admitted.size, 0);
+});
+// Owner's screenshot, 7 Nov 2026: a message sent while the run was queued/starting showed
+// "Not sent · Run is not currently accepting steer input". It must wait, never fail, never double-send.
+for (const runStatus of ['queued', 'starting', 'running', 'stopping']) {
+  test(`a steer refused while the run is ${runStatus} waits instead of failing, then continues once the run ends`, async t => {
+    const f = await fixture(t, { runStatus }); const it = await f.enqueue();
+    const waiting = await settled(f.api, it.id);
+    assert.equal(waiting.state, 'waiting', waiting.error);
+    assert.match(waiting.error, /Queued/);
+    assert.equal(f.admitted.size, 0);
+    f.options.runStatus = 'completed'; waiting.nextAt = 0; await f.api.pump();
+    const sent = await settled(f.api, it.id);
+    assert.equal(sent.state, 'sent', sent.error);
+    assert.equal(f.admitted.size, 1);
+    assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 2);
+  });
+}
+test('a queued-run steer that becomes steerable is delivered as a steer, once', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
+  f.options.accepted = true; waiting.nextAt = 0; await f.api.pump();
+  const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
+  assert.equal(sent.steered, true); assert.equal(f.admitted.size, 0);
+});
+test('a run that never becomes steerable stops waiting and fails visibly', async t => {
+  const f = await fixture(t, { runStatus: 'running' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.equal(waiting.state, 'waiting');
+  f.api.get(it.id).steerWaitSince = Date.now() - 16 * 60e3; waiting.nextAt = 0; await f.api.pump();
+  assert.equal((await settled(f.api, it.id)).state, 'failed'); assert.equal(f.admitted.size, 0);
 });
 test('lost continuation receipt retries its frozen admission, never the rejected steer', async t => {
   const f = await fixture(t, { loseAdmission: true }); const it = await f.enqueue();
@@ -174,7 +203,7 @@ for (const status of [408, 425, 429, 500, 503, 403, 413]) test(`ordinary admissi
   assert.equal(new Set(f.calls.map(c => c.body)).size, 1);
 });
 for (const options of [
-  { accepted: true }, { runStatus: 'running' }, { runStatus: 'queued' }, { runStatus: 'stopping' },
+  { accepted: true },
   { readStatus: 503 }, { otherRun: 'another-run' }, { otherSession: 'another-session' },
   { rejection: { error: { code: 'model_lock_mismatch', message: 'Route changed' } } },
   { rejection: { error: 'untyped conflict' } }, { steerStatus: 403 },
@@ -187,7 +216,8 @@ for (const options of [
 
 test('a failed old-client item recovers on Retry after the run finishes', async t => {
   const f = await fixture(t, { runStatus: 'running' }); const item = await f.enqueue();
-  assert.equal((await settled(f.api, item.id)).state, 'failed');
+  assert.equal((await settled(f.api, item.id)).state, 'waiting');
+  f.close(); f.rows.get(item.id).state = 'failed';
   // Restore a historical rejected item. Older clients kept only the rejection
   // text, so Retry must obtain a fresh typed rejection rather than infer one.
   const record = f.rows.get(item.id); record.error = rejection.error.message;
