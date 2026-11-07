@@ -86,7 +86,9 @@ async function run(browser, kind, skins) {
     ok(steers.length === 1, `${kind}/${skin}: exactly one steer attempt`, steers.length);
     ok(runs.length === 1 && JSON.parse(runs[0].body).session_id === SID && JSON.parse(runs[0].body).input === text, `${kind}/${skin}: exactly one same-thread new-turn POST with the words`, runs.map(r => r.body));
     ok(s.bubbles === 1, `${kind}/${skin}: one bubble, no duplicate`, s);
-    ok(s.pending.length === 1 && !/Not sent|not currently accepting/i.test(s.pending[0].meta) && /^Sent/.test(s.pending[0].meta), `${kind}/${skin}: shows Sent, not Not sent`, s.pending);
+    // An accepted message paints as a normal bubble on the timeline (sent-message reconcile); only a failed one would
+    // keep a pending row with Not sent / Retry / Edit / Dismiss.
+    ok(!s.pending.some(p => /Not sent|not currently accepting|Retry|Edit/i.test(p.meta || '')) && !s.items.some(i => i.state === 'failed'), `${kind}/${skin}: shown as sent, not Not sent`, s);
     ok(!/Run is not currently accepting steer/.test(await page.evaluate(() => document.body.innerText)), `${kind}/${skin}: no steer-rejection text anywhere`);
     await page.screenshot({ path: path.join(OUT, `${kind}-${skin}-queued-followup.png`) });
     // The service launches the held turn when the working run ends: its user row lands in history.
