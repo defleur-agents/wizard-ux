@@ -32,16 +32,14 @@ function boot(box, { enabled = true, windows, renders = [] } = {}) {
   return { win, T: win.WosThreadTracker, change(value) { doc.documentElement.dataset.tweaks = value; mutation(); },
     choice(value) { win.dispatchEvent(new ctx.CustomEvent('wos:tweak-choice', { detail: { id: 'wizard/thread-tracker', on: value } })); } };
 }
-test('Chats row renders badge, tracker dots, then timestamp, including tracker-off rows', () => {
+test('Chats row renders title, tracker dots, then timestamp (no helper badge), including tracker-off rows', () => {
   const source = readFileSync(new URL('../web/core/chats.js', import.meta.url), 'utf8');
   const header = source.split('\n').find(l => l.includes('<span class="bd"><span class="tp">')).trim();
   for (const enabled of [true, false]) {
-    const html = vm.runInNewContext('`' + header + '`', { plock: '', s: { id: 't', title: 'Long title' }, esc: String,
-      backgroundBadge: () => '<span class="ch-background">Helper still working</span>', ago: () => '2m',
+    const html = vm.runInNewContext('`' + header + '`', { plock: '', s: { id: 't', title: 'Long title', background: 'helper' }, esc: String, ago: () => '2m',
       LIVE: { cardAt: () => 0, agentOf: () => '' }, WosThreadTracker: { on: () => enabled, dots: () => '<span class="tt-dots">dots</span>' } });
-    assert.ok(html.indexOf('</b>') < html.indexOf('ch-background'));
-    assert.ok(html.indexOf('ch-background') < html.indexOf('<time>'));
-    if (enabled) assert.ok(html.indexOf('ch-background') < html.indexOf('tt-dots') && html.indexOf('tt-dots') < html.indexOf('<time>'));
+    assert.doesNotMatch(html, /ch-background|Helper still working/);
+    if (enabled) assert.ok(html.indexOf('</b>') < html.indexOf('tt-dots') && html.indexOf('tt-dots') < html.indexOf('<time>'));
     else assert.ok(!html.includes('tt-dots'));
   }
   const sidebar = readFileSync(new URL('../web/layouts/ai-apps/desktop.js', import.meta.url), 'utf8');
