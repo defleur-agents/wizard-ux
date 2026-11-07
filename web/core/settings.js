@@ -301,14 +301,24 @@
     const views = E.desktopViews || [];
     const viewPicker = views.length ? `<div class="tw-group"><h4>Shell view</h4><p class="st-hint">On this desktop</p><div role="radiogroup" aria-label="Shell view">${views.map(v => `<button type="button" class="st-row wz-row" data-desktop-view="${esc(v.id)}" role="radio" aria-checked="${E.desktopView === v.id}"><span class="st-tx"><b>${esc(v.name)}</b></span><span aria-hidden="true">${E.desktopView === v.id ? '●' : '○'}</span></button>`).join('')}</div></div>` : '';
     // Views are chosen per type of device (desktop / phone): only the ones this one can wear, marked as such.
-    const where = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
-    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where } : t);
+    const whereView = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
+    const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where: whereView } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    // One flat list, A to Z (Miguel, 1 Nov 2026): one switch per tweak, each labelled "by <author>"; no per-author
-    // quick buttons. Same list whatever skin is worn; skins are looks only.
+    // Feature switches live in two places with one state, Chrome-flags style (Miguel, 7 Nov 2026): here under "Try new
+    // features" and in the Wizard OS Tracker app. Both write look.json `tweaks` (Settings via WosExperience.toggle and
+    // WosLookSync, the Tracker via the box's feature-switch API); WosLookSync's refresh brings either side's flip to the
+    // other. The section shows only when the box is on For testers (channel latest); on For everyone it is hidden and
+    // experience.js keeps the switches off and locked. Views stay their own list (a way to see the shell, not a feature).
+    // Each list is flat, A to Z, each switch labelled "by <author>".
     const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
-    const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
-    return `${viewPicker}<div class="tw-group"><h4>Tweaks</h4><p class="st-hint">Each one is a feature someone is trying out. They work with any skin.</p>${err}<div class="tw-list">${rows}</div></div>`;
+    const cells = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : ''));
+    const viewRows = cells.filter((_, i) => list[i].view).join('');
+    const testers = s.channel === 'latest';
+    const features = testers ? cells.filter((_, i) => !list[i].view).join('') : '';
+    // For everyone, or the channel not read yet: a switch that is on keeps its options, without the switch itself.
+    const opts = testers ? '' : list.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
+    const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it.</p>${err}<div class="tw-list">${features}</div></div>` : '';
+    return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${tryNew ? '' : err}<div class="tw-list">${viewRows}</div></div>` : ''}${tryNew}${opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : ''}${!viewRows && !tryNew ? err : ''}`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))
@@ -331,7 +341,7 @@
       if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
       const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
       const on = cardPending.has(id) ? cardPending.get(id) : t.on;
-      return tweakSwitches([{ ...t, on, where: here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here, name);
+      return tweakSwitches([{ ...t, on, where: t.locked ? 'For testers only' : here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here || !!t.locked, name);
     }).join('');
   }
   const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
@@ -387,6 +397,10 @@
         map = Object.fromEntries(Object.entries(map).filter(([id]) => id === pick || !present.includes(id)));
         items = items.filter(t => t.id === pick || !present.includes(t.id));
       }
+      // Feature switches (not built-in, not a view) are switched only under Try new features and in the Tracker app:
+      // the New skin draft does not list them, so it cannot flip one; their current state is carried over unchanged.
+      const builtin = new Set((window.WosExperience.state?.tweaks || []).filter(t => t.builtin).map(t => t.id));
+      items = items.filter(t => t.view || builtin.has(t.id));
       draft.items = items; draft.tweaks = map;
     } catch (e) { if (ctx.skinDraft === draft && draft.seq === seq) draft.error = 'Could not load installed tweaks. Try again.'; }
     finally { if (ctx.skinDraft === draft && draft.seq === seq) { draft.loading = false; ctx.render?.(); } }
@@ -511,7 +525,7 @@
     if (ctx.skinDraft) {
       const draft = ctx.skinDraft, tweak = el.closest('[data-draft-tweak]'), colour = el.closest('[data-skinpick]');
       if (draft.saving) return true;
-      if (tweak) { const id = tweak.dataset.draftTweak; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
+      if (tweak) { const id = tweak.dataset.draftTweak; if (!(draft.items || []).some(t => t.id === id)) return true; draft.tweaks[id] = !draft.tweaks[id]; ctx.render(); return true; }
       if (colour) { draft.base = colour.dataset.skinpick; ctx.render(); return true; }
       if (el.closest('[data-skinretry]')) { void draftDefaults(ctx, draft.base); return true; }
       if (el.closest('[data-skin-create]') && !draft.loading && !draft.error) {
