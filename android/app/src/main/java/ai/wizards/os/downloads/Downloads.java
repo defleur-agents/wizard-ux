@@ -65,6 +65,9 @@ public final class Downloads {
         emit("start", it);
     }
 
+    /** Whether Wizard OS started this download (a cheap list lookup; no DownloadManager query, no side effect). */
+    public static synchronized boolean isTracked(Context c, long id) { return find(load(c), id) != null; }
+
     /** DownloadManager.ACTION_DOWNLOAD_COMPLETE (also for a failed download). Ignores ids Wizard OS did not start. */
     public static void onComplete(Context c, long id) {
         DownloadsPolicy.Item done = null;
