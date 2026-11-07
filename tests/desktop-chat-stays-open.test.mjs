@@ -16,7 +16,7 @@ function fixture(desktopHost = true, afterAction = 'stay') {
     window: { WizConfig: { chatAfterAction: () => afterAction }, addEventListener: (name, fn) => { listeners[name] = fn; } },
     LIVE: { onChange: fn => { listeners.live = fn; }, markUnread: async () => true, archive: async () => true, restore: async () => true },
     PHONE: () => !desktopHost, hosted: new Map(), ch: () => state, owner: id => id, rowOf: () => row,
-    ACT: { done: {}, file: {}, restore: {}, unread: {} }, vib() {}, closeRowSheet() {}, followUpActive: () => false,
+    ACT: { done: {}, file: {}, restore: {}, unread: {} }, vib() {}, closeRowSheet() {}, paintListsNow() {}, followUpActive: () => false,
     toast() {}, snoozeLast: () => false, renderChats() {}, save() {}, applyLayout() {}, deskOf: () => 0,
     threadBack: x => { backs.push(x.thread); x.thread = null; }, chatsBack: x => { backs.push('list:' + x.thread); x.thread = null; },
     paintBar() {}, syncChatsPane() {}, winEl: () => ({ querySelector: () => null }),
