@@ -545,11 +545,13 @@
           // this byte-identical, idempotent new turn, never the rejected steer.
           it.body = JSON.stringify({ ...frozen, session_id: it.sessionId,
             ...(it.instructions ? { instructions: String(it.instructions).slice(0, 2000) } : {}) });
-          it.rejectedSteerRunId = it.steerTarget;
+          it.rejectedSteerRunId = it.steerTarget; delete it.steerWaitSince;
           it.steerRunId = ''; delete it.steerBody; delete it.steerTarget;
           await put(it);
         } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
           // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
+          // The rejection proved the steer was not accepted: release ownership so Stop can withdraw it while it waits.
+          admitting.delete(it.id); delete it.steerDispatch;
           it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
           admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
           await put(it); return;
