@@ -2694,6 +2694,10 @@ test('desktop app panel: an app with its companion pane (Video Editor video + Fe
   assert.match(css, /\.wsp\[data-aad-role\]:not\(:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\)\) > \.win:not\(\.gone\) \{ inset: 0 !important;/, 'a single window still fills the panel');
   assert.match(js, /paneWins\(\) > 1 \? Math\.max\(sized\.app \?\? 0, 900, W \* \.62\) : sized\.app \?\?/, 'the panel widens for two columns even over a narrow saved width, and returns to it after');
   assert.match(js, /if \(n > 1 && !wide\) \{ wideAuto = true; setWide\(true\); \}/, 'an app with its companion opens full width');
+  // James, 7 Nov 2026: never a side-by-side split in a narrow window.
+  assert.match(js, /const STACK_BELOW = 960;/, 'two columns only from 960px of panel');
+  assert.match(js, /e\.target\.toggleAttribute\('data-aad-stack', e\.contentRect\.width < STACK_BELOW\)/, 'the panel width, measured before paint, decides stacking');
+  assert.match(css, /\[data-aad-stack\]:has\(> \.win:not\(\.gone\) ~ \.win:not\(\.gone\)\) \{ flex-direction: column !important;/, 'a narrow panel stacks the app over its companion');
   assert.match(js, /else if \(n <= 1 && wideAuto\) \{ wideAuto = false; setWide\(false\); \}/, 'and goes back to the side when the companion closes');
   assert.match(js, /api\.listen\(pW, 'click', \(\) => \{ wideAuto = false; setWide\(!wide\); \}\)/, 'the owner\'s own Wider/Back press wins');
   assert.match(js, /host\?\.onChange\(\(\) => \{ paintTop\(\); watchPaneWins\(\); \}\)/, 'a companion opening or closing re-sizes the panel through the host');
