@@ -20,7 +20,8 @@
 
   const refresh = () => { try { S.refresh(); } catch (_) {} };
   const hhmm = t => { const d = new Date(t); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-  const key = () => (st ? st.line + '|' + st.level : '');
+  const stale = () => !!(st && failed && okAt && Date.now() - okAt > STALE);
+  const key = () => (st ? st.line + '|' + st.level + '|' + stale() : '');   // what the row shows
   function load() {
     if (gone || busy || (at && Date.now() - at < (failed ? RETRY : FRESH)) || typeof fetch !== 'function') return;
     busy = true;
@@ -33,14 +34,14 @@
         if (line) { st = { line, level: LEVELS.has(d.level) ? d.level : 'warn' }; okAt = Date.now(); failed = false; }
         else failed = true;
         at = Date.now(); busy = false;
-        if (key() !== was || (failed && st)) refresh();
+        if (key() !== was) refresh();
       });
   }
   function html() {
     load();
     if (!st) return '';
-    const stale = failed && okAt && Date.now() - okAt > STALE ? ` (not rechecked since ${hhmm(okAt)})` : '';
-    return `<div class="st-group" data-disk-encryption data-level="${stale ? 'stale' : st.level}"><h4>Disk</h4><div class="st-row static"><span class="st-tx"><b>Disk encryption</b><small>${esc(st.line + stale)}</small></span></div></div>`;
+    const old = stale() ? ` (not rechecked since ${hhmm(okAt)})` : '';
+    return `<div class="st-group" data-disk-encryption data-level="${old ? 'stale' : st.level}"><h4>Disk</h4><div class="st-row static"><span class="st-tx"><b>Disk encryption</b><small>${esc(st.line + old)}</small></span></div></div>`;
   }
   try {
     S.register({ id: 'disk-encryption', page: 'network', aliases: ['disk', 'disk-encryption', 'security'], available: () => { load(); return !!st; }, html: () => html() });

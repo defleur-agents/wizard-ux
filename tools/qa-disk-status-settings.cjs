@@ -20,6 +20,7 @@ const lum = c => { const [r, g, b] = c.slice(0, 3).map(v => { v /= 255; return v
 const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
 const results = [];
 const check = (name, ok, extra = '') => { results.push({ name, ok: !!ok, extra }); console.log((ok ? 'PASS ' : 'FAIL ') + name + (extra ? ' · ' + extra : '')); };
+const unverified = (name, extra) => { results.push({ name, ok: null, extra }); console.log('UNVERIFIED ' + name + ' · ' + extra); };
 
 async function run(browser, shell, skin, kind) {
   const tag = `${shell}-${skin}-${kind}`, fake = CASES[kind];
@@ -71,7 +72,10 @@ async function run(browser, shell, skin, kind) {
         const layers = []; let images = false;
         for (let n = e; n; n = n.parentElement) {
           const cs = getComputedStyle(n);
-          if (cs.backgroundImage && cs.backgroundImage !== 'none') images = true;
+          for (const st of [cs, getComputedStyle(n, '::before'), getComputedStyle(n, '::after')]) {
+            if (st.backgroundImage && st.backgroundImage !== 'none') images = true;
+            if (st !== cs && st.content !== 'none') { const pc = rgba(st.backgroundColor); if (pc[3] > 0) images = true; }
+          }
           const c = rgba(cs.backgroundColor); if (c[3] > 0) layers.push(c);
           if (c[3] >= 1) break;
         }
@@ -83,9 +87,13 @@ async function run(browser, shell, skin, kind) {
       check(`${tag}: exact backend line`, s.text === fake.body.line && s.title === 'Disk encryption', s.text);
       check(`${tag}: level`, s.level === fake.body.level, s.level);
       const fmt = c => `rgb(${c.slice(0, 3).map(Math.round).join(',')})`;
-      const note = s.images ? ' (a background image is under it: confirm on the screenshot)' : '';
-      check(`${tag}: readable line (contrast >= 4.5)`, contrast(s.ink, s.bg) >= 4.5, `${fmt(s.ink)} on ${fmt(s.bg)} = ${contrast(s.ink, s.bg).toFixed(2)}${note}`);
-      check(`${tag}: readable title (contrast >= 4.5)`, contrast(s.title_ink, s.bg) >= 4.5, `${fmt(s.title_ink)} on ${fmt(s.bg)} = ${contrast(s.title_ink, s.bg).toFixed(2)}${note}`);
+      if (s.images) {
+        // A gradient, image or pseudo-element layer is under the text: colour maths cannot prove it. Never a PASS.
+        unverified(`${tag}: readable line and title`, `background image or pseudo-element layer: judge ${tag}.png`);
+      } else {
+        check(`${tag}: readable line (contrast >= 4.5)`, contrast(s.ink, s.bg) >= 4.5, `${fmt(s.ink)} on ${fmt(s.bg)} = ${contrast(s.ink, s.bg).toFixed(2)}`);
+        check(`${tag}: readable title (contrast >= 4.5)`, contrast(s.title_ink, s.bg) >= 4.5, `${fmt(s.title_ink)} on ${fmt(s.bg)} = ${contrast(s.title_ink, s.bg).toFixed(2)}`);
+      }
     }
     check(`${tag}: route is GET only`, asked.length >= 1 && asked.every(m => m === 'GET'), asked.join(','));
   }
@@ -98,8 +106,8 @@ async function run(browser, shell, skin, kind) {
   const browser = await chromium.launch({ headless: true, args: ['--disable-lcd-text', '--disable-gpu'] });
   for (const shell of ['phone', 'desktop']) for (const skin of SKINS) for (const kind of Object.keys(CASES)) await run(browser, shell, skin, kind);
   await browser.close();
-  const failed = results.filter(r => !r.ok);
-  fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ failed: failed.map(f => f.name), results }, null, 2));
-  console.log(JSON.stringify({ total: results.length, failed: failed.map(f => f.name), out }));
+  const failed = results.filter(r => r.ok === false), open = results.filter(r => r.ok === null);
+  fs.writeFileSync(path.join(out, 'results.json'), JSON.stringify({ failed: failed.map(f => f.name), unverified: open.map(f => f.name), results }, null, 2));
+  console.log(JSON.stringify({ total: results.length, failed: failed.map(f => f.name), unverified: open.map(f => f.name), out }));
   process.exitCode = failed.length ? 1 : 0;
 })().catch(e => { console.error(e); process.exitCode = 2; });
