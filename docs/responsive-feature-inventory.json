@@ -493,6 +493,13 @@
       ],
       "note": "Direct entrypoint import; Settings → About: base main commit and how far ahead/behind main"
     },
+    "core/disk-status.js": {
+      "loadedBy": [
+        "phone",
+        "desktop"
+      ],
+      "note": "Direct entrypoint import; Settings → Network & security: one disk encryption line from wam disk status"
+    },
     "core/orb-switcher.js": {
       "loadedBy": [
         "phone"
@@ -940,6 +947,7 @@
     "core/context-menu.js",
     "core/core.js",
     "core/deeplink.js",
+    "core/disk-status.js",
     "core/dom-morph.js",
     "core/downloads.css",
     "core/downloads.js",
