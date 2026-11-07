@@ -1312,8 +1312,20 @@ export default function desktop(api) {
     if (n > 1 && !wide) { wideAuto = true; setWide(true); }
     else if (n <= 1 && wideAuto) { wideAuto = false; setWide(false); }
   }
+  // Side by side only when the panel really has room for two columns. A narrower panel stacks the app over its
+  // companion (video on top, Feedback below), decided by the panel's measured width before paint
+  // (James, 7 Nov 2026: never a side-by-side split in a narrow window).
+  const STACK_BELOW = 960;
+  let stackEl = null;
+  const stackRo = globalThis.ResizeObserver ? new ResizeObserver(es => { for (const e of es) e.target.toggleAttribute('data-aad-stack', e.contentRect.width < STACK_BELOW); }) : null;
+  function watchStack() {
+    const el = pane?.el || null; if (el === stackEl) return;
+    if (stackEl) { stackRo?.unobserve(stackEl); stackEl.removeAttribute('data-aad-stack'); }
+    stackEl = el; if (el) { if (stackRo) stackRo.observe(el); else el.toggleAttribute('data-aad-stack', el.getBoundingClientRect().width < STACK_BELOW); }
+  }
   function watchPaneWins() {
     const desk = pane?.desk ?? null, n = paneWins();
+    watchStack();
     if (desk !== winsDesk || n !== winsN) { winsDesk = desk; winsN = n; autoWide(n); applySizes(); retileSoon(); }
   }
   const NOTE = '__note__', DRAFT = '__draft__';
@@ -1891,11 +1903,11 @@ export default function desktop(api) {
     closing?.(); closing = null; exitMotion?.cancel?.(); exitMotion = null;
     top.append(pTop); // release layout-owned chrome before restoring Classic Desks
     top.append(cTop); sTop.remove();
-    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
+    closeMenu(); closeWs(); closeTidy(); closeAll(); closeFly(); offSearch?.(); offPeek?.(); ro?.disconnect(); stackRo?.disconnect(); animOff?.(); doneLoading(); toastOff?.(); tidyOff?.();
     scene.remove(); chrome.dispose(); unmountCss(); css.remove(); releaseSettings?.();
     offHost?.();
     for (const k of ['aiApps', 'aiFront', 'aadSide', 'aadTabs', 'aadHome', 'aadNew', 'aadAll', 'aadVoice', 'aadSplit', 'aadChat', 'aadWide', 'aadLoading', 'aadFocus']) delete root.dataset[k];
-    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; }
+    for (const w of wsps()) { delete w.dataset.aadRole; delete w.dataset.aadAnim; delete w.dataset.aadOmitted; delete w.dataset.aadModeHidden; delete w.dataset.aadStack; }
     delete root.dataset.aadResizing; for (const v of Object.values(SIZE_VARS)) root.style.removeProperty(v);
     globalThis.dispatchEvent?.(new Event('resize'));
   };
