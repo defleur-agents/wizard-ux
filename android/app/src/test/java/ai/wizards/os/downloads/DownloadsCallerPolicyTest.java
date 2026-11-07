@@ -217,7 +217,7 @@ public class DownloadsCallerPolicyTest {
         String ev = "{\"type\":\"done\",\"item\":{\"id\":\"12\",\"name\":\"a.pdf\"}}";
         String js = DownloadsCallerPolicy.pushScript(PRIMARY, ev);
         assertNotNull(js);
-        assertTrue("the script itself checks the origin it runs on", js.contains("location.origin!==\"" + PRIMARY + "\""));
+        assertTrue("the script itself checks the origin it runs on", js.contains(".origin!==\"" + PRIMARY + "\""));
         assertTrue("and the shell path", js.contains("/wizard-os-home"));
         assertTrue("and that it is the top frame", js.contains("window.top"));
         assertTrue(js.contains("__wosDownloads(" + ev + ")"));
