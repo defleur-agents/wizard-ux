@@ -73,11 +73,20 @@
   // The owner's latest message the thread itself shows: the list row's lastUserAt, or a newer user bubble in the
   // stored copy (the list's time can lag, e.g. voice notes; James, 7 Nov 2026). Memoised per stored copy.
   const userAtOf = new WeakMap();
+  // Owner bubbles of parsed turns: the turn's own message and any steer sent while it ran (notes are not the owner).
+  function userAtOfTurns(turns) {
+    let t = NaN;
+    for (const tn of turns || []) for (const u of [tn.u, ...(tn.steers || []).filter(x => !x.note)]) if (u && Number.isFinite(u.at) && !(u.at <= t)) t = u.at;
+    return t;
+  }
+  // The transcript Chats just read, for every agent (routed threads keep no stored copy): chats.js hands its turns.
+  const shownUserAt = new Map();
+  function shown(sid, agent, turns) { const t = userAtOfTurns(turns); if (Number.isFinite(t)) shownUserAt.set(key(sid, agent || ''), t); }
   function latestUserAt(rows) {
     if (!Array.isArray(rows) || !rows.length || !window.WosChat?.parseRows) return NaN;
     if (!userAtOf.has(rows)) {
       let t = NaN;
-      try { for (const tn of window.WosChat.parseRows(rows)) if (tn.u && Number.isFinite(tn.u.at) && !(tn.u.at <= t)) t = tn.u.at; } catch (_) {}
+      try { t = userAtOfTurns(window.WosChat.parseRows(rows)); } catch (_) {}
       userAtOf.set(rows, t);
     }
     return userAtOf.get(rows);
@@ -88,8 +97,7 @@
     let rows;
     const stored = () => (rows ??= window.WizLive?.cachedMessages?.(sid) || window.WizLive?.savedMessages?.(sid)?.rows || []);
     const listed = Date.parse(String(s?.lastUserAt ?? ''));
-    const shown = latestUserAt(stored());
-    const owner = Math.max(Number.isFinite(listed) ? listed : 0, Number.isFinite(shown) ? shown : 0);
+    const owner = Math.max(...[listed, latestUserAt(stored()), shownUserAt.get(k)].map(v => (Number.isFinite(v) ? v : 0)));
     if (!(owner > 0)) return null;
     const anchorTime = i => {
       const t = Math.max(0, ...(i.members || [i]).map(m => (typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0)));
@@ -546,7 +554,7 @@
     node.classList.remove('tt-flash'); void node.offsetWidth; node.classList.add('tt-flash');
     setTimeout(() => node.classList.remove('tt-flash'), 1800);
   }
-  window.WosThreadTracker = Object.freeze({ ID, on, load, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
+  window.WosThreadTracker = Object.freeze({ ID, on, load, shown, loadCounts, stripHtml, dots, dotsNode, repaint, click, close, isOpen: () => !!opened, itemFor, flash, watch, viewportTop, beforeSend, key, _tally: tally });
   // The host's mounted state is authoritative: a choice can arrive before its package, and Look sync sends no choice.
   // Reuse the session list's lifecycle notifications; never add a liveness poll.
   window.WizLive?.onChange?.(repaint);

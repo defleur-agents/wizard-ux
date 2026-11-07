@@ -126,3 +126,12 @@ test('a user message the thread shows, newer than the list row time, also answer
   await none.T.load('t');
   assert.match(none.T.dots('t'), /tt-dot you/);
 });
+for (const agent of ['', 'profile']) test(`routed or main: the transcript Chats shows (incl. a steer) answers older asks: ${agent || 'main'}`, async () => {
+  const { T } = await fixture([it('amber', 'needs_you', T0), it('red', 'blocked', T0 + 1)], { lastUserAt: iso(T0 - 9e6), agent });
+  await T.load('t', agent);
+  assert.match(T.dots('t', agent), /tt-dot you/);
+  T.shown('t', agent, [{ u: { at: T0 - 9e6 }, steers: [{ text: 'note', at: T0 + 9e9, note: true }] }]);
+  assert.match(T.dots('t', agent), /tt-dot you/, 'a system note is not the owner');
+  T.shown('t', agent, [{ u: { at: T0 - 9e6 }, steers: [{ text: 'go', at: T0 + 5000 }] }]);
+  assert.equal(T.dots('t', agent), '');
+});
