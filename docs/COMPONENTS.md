@@ -67,8 +67,8 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; action setting | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
-| Thread tracker | `WosThreadTracker` (`thread-tracker.js`): groups/dots/Seen; open count; stopped dots/rows via list model, live repaint; green dwell/send-pinned versions; amber manual; Resume stopped rows (`sendChat`); quote Reply; opaque panel. |
-| Durable send, saved Retry, failed Dismiss; >6h hold | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
+| Thread tracker | `WosThreadTracker` (`thread-tracker.js`): groups/dots/Seen; open count; stopped dots/rows via list model, live repaint; green dwell/send-pinned versions; amber manual; Resume stopped rows (`sendChat`); one chronological list (oldest reply first, running last, acknowledged fold last); quote Reply; opaque panel. |
+| Durable send, saved Retry, failed Dismiss; >6h hold; a steer refused (409 `run_not_accepting_steer`) while the run works waits/re-steers (queued run) or sends the idempotent same-thread follow-up (started run) | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
 | Uploads of any size | `WizUploads` (`uploads.js`) |
@@ -81,7 +81,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Launcher | `WizLauncher`, `WizLauncherDefaults`; 1s boot; `renderLauncher`: unique ids; `WizCore`: native path gate |
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
-| Links: outside → Browser Reader, sheet/window, long-press menu; `data-wizard-browse` = original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
+| Links: outside → Reader (own/failed direct), sheet/window, long-press; `data-wizard-browse`=original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
 | Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android app only; inert without `WizardOSNative.downloadsList`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java` |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
