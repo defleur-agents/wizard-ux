@@ -993,22 +993,36 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
         }
-        /* ---- In-app Downloads (web/core/downloads.js). JSON/strings only; ids are DownloadManager ids as digits. ---- */
+        /* ---- In-app Downloads (web/core/downloads.js). JSON/strings only; ids are DownloadManager ids as digits. ----
+         * Only the Wizard shell page may use these: the current top page must be the shell origin (not a hosted page, not an
+         * outside site). A hosted-app iframe inside the shell shares this bridge like every other Bridge method. */
+        private boolean shellCaller() {
+            final boolean[] ok = {false};
+            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
+            runOnUiThread(() -> { try {
+                String u = web == null ? null : web.getUrl();
+                ok[0] = u != null && Origin.isShell(MainActivity.this, Uri.parse(u));
+            } finally { l.countDown(); } });
+            try { l.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
+            return ok[0];
+        }
         /** {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]} newest first; in-flight rows are refreshed. */
         @JavascriptInterface public String downloadsList() {
+            if (!shellCaller()) return "{\"v\":1,\"items\":[]}";
             try { return ai.wizards.os.downloads.Downloads.listJson(MainActivity.this); }
             catch (RuntimeException e) { return "{\"v\":1,\"items\":[]}"; }
         }
         /** Open the finished file in the app that handles it: "ok" | "missing" | "none" (no app can open it). */
         @JavascriptInterface public String downloadsOpen(String id) {
+            if (!shellCaller()) return "missing";
             final String[] out = {"missing"};
             java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
             runOnUiThread(() -> { try { out[0] = ai.wizards.os.downloads.Downloads.open(MainActivity.this, String.valueOf(id)); } finally { l.countDown(); } });
             try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
             return out[0];
         }
-        @JavascriptInterface public String downloadsCancel(String id) { return ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, String.valueOf(id)); }
-        @JavascriptInterface public String downloadsRemove(String id) { return ai.wizards.os.downloads.Downloads.remove(MainActivity.this, String.valueOf(id)); }
+        @JavascriptInterface public String downloadsCancel(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, String.valueOf(id)) : "missing"; }
+        @JavascriptInterface public String downloadsRemove(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.remove(MainActivity.this, String.valueOf(id)) : "missing"; }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }

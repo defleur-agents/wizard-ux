@@ -25,7 +25,7 @@
   'use strict';
   if (window.WosDownloads) return;
   const SEEN = 'wos.downloads.seen.v1';       // newest finished download already announced (ms)
-  const BANNER_MS = 6000, FRESH_MS = 10 * 60 * 1000, POLL_MS = 900, MAX = 30;
+  const BANNER_MS = 6000, FRESH_MS = 10 * 60 * 1000, POLL_MS = 900;
   const STATUS = new Set(['pending', 'running', 'paused', 'done', 'failed', 'gone']);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const native = () => { const n = window.WizardOSNative; return n && typeof n.downloadsList === 'function' ? n : null; };
@@ -47,7 +47,7 @@
   }
   function read() {
     const n = native(); if (!n) return null;
-    try { const o = JSON.parse(n.downloadsList()); return Array.isArray(o?.items) ? o.items.map(clean).filter(Boolean).slice(0, MAX) : []; }
+    try { const o = JSON.parse(n.downloadsList()); return Array.isArray(o?.items) ? o.items.map(clean).filter(Boolean) : []; }
     catch (_) { return null; }
   }
   function refresh() { const l = read(); if (l) items = l; return items; }
