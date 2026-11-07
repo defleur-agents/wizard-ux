@@ -202,6 +202,37 @@ public class DownloadsCallerPolicyTest {
         try { return s == null ? null : new JSONObject(s); } catch (Exception e) { throw new IllegalStateException(e); }
     }
 
+    // ---- native -> page: events reach only the main-frame shell document --------------------------------------------
+
+    @Test public void downloadEventsAreDeliveredOnlyWhileTheShellIsOnTop() {
+        assertTrue(DownloadsCallerPolicy.canPush(PRIMARY, SHELL));
+        assertTrue(DownloadsCallerPolicy.canPush(PRIMARY, PRIMARY + "/wizard-os-home"));
+        assertFalse("another path on the shell origin", DownloadsCallerPolicy.canPush(PRIMARY, PRIMARY + "/some-hosted-app/"));
+        assertFalse("an outside site", DownloadsCallerPolicy.canPush(PRIMARY, "https://evil.example/wizard-os-home/"));
+        assertFalse(DownloadsCallerPolicy.canPush(PRIMARY, null));
+        assertFalse(DownloadsCallerPolicy.canPush(null, SHELL));
+    }
+
+    @Test public void theDeliveryScriptRechecksTheDocumentItRunsIn() {
+        String ev = "{\"type\":\"done\",\"item\":{\"id\":\"12\",\"name\":\"a.pdf\"}}";
+        String js = DownloadsCallerPolicy.pushScript(PRIMARY, ev);
+        assertNotNull(js);
+        assertTrue("the script itself checks the origin it runs on", js.contains("location.origin!==\"" + PRIMARY + "\""));
+        assertTrue("and the shell path", js.contains("/wizard-os-home"));
+        assertTrue("and that it is the top frame", js.contains("window.top"));
+        assertTrue(js.contains("__wosDownloads(" + ev + ")"));
+        assertNull("no configured origin: nothing is sent", DownloadsCallerPolicy.pushScript(null, ev));
+        assertNull("not an event object", DownloadsCallerPolicy.pushScript(PRIMARY, "alert(1)"));
+        assertNull("not an event object", DownloadsCallerPolicy.pushScript(PRIMARY, "{} ; alert(1)"));
+    }
+
+    @Test public void mainActivityDeliversEventsOnlyThroughTheGuardedScript() throws Exception {
+        String main = new String(Files.readAllBytes(Paths.get(System.getProperty("user.dir"), "src/main/java/ai/wizards/os/MainActivity.java")), "UTF-8");
+        assertTrue(main.contains("DownloadsCallerPolicy.pushScript("));
+        assertTrue(main.contains("DownloadsCallerPolicy.canPush("));
+        assertFalse("no unguarded evaluateJavascript of __wosDownloads", main.contains("evaluateJavascript(\"(window.__wosDownloads"));
+    }
+
     // ---- the wiring: the old frame-blind Bridge no longer has these methods -------------------------------------
 
     private static Path mainJava() {
