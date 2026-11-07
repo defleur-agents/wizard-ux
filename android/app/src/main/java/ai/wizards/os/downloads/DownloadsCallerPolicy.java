@@ -44,6 +44,13 @@ public final class DownloadsCallerPolicy {
         return s + "://" + host.toLowerCase(Locale.ROOT) + (dflt ? "" : ":" + port);
     }
 
+    /** The configured address in the same form originOf gives, so both sides of the comparison are spelled alike. */
+    public static String normalizeOrigin(String origin) {
+        if (origin == null) return null;
+        try { URI u = new URI(origin); return originOf(u.getScheme(), u.getHost(), u.getPort()); }
+        catch (Exception e) { return null; }
+    }
+
     public static Verdict admit(boolean featureSupported, boolean currentWebView, boolean isMainFrame,
                                 String primaryOrigin, String sourceOrigin, String topUrl) {
         if (!supported(featureSupported)) return Verdict.DENY_UNSUPPORTED;

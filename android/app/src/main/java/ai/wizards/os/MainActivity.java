@@ -149,7 +149,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
     /** Runs on the UI thread (WebView listener thread): admission, then the work, with the navigation re-checked. */
     private void onDownloadsMessage(WebView target, WebView view, androidx.webkit.WebMessageCompat message, Uri sourceOrigin,
                                     boolean isMainFrame, androidx.webkit.JavaScriptReplyProxy reply) {
-        final String primary = ai.wizards.os.device.AppState.primaryOrigin(this);
+        final String primary = DownloadsCallerPolicy.normalizeOrigin(ai.wizards.os.device.AppState.primaryOrigin(this));
         final String source = sourceOrigin == null ? null
                 : DownloadsCallerPolicy.originOf(sourceOrigin.getScheme(), sourceOrigin.getHost(), sourceOrigin.getPort());
         final DownloadsCallerPolicy.Verdict verdict = DownloadsCallerPolicy.admit(true,
@@ -165,10 +165,12 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (out != null) postDownloadsReply(reply, out, target, epoch, primary);
             return;
         }
-        downloadsIo.execute(() -> { // the list reads DownloadManager off the UI thread; the answer is re-checked before it is posted
-            final String out = DownloadsCallerPolicy.execute(req, downloadsActions);
-            main.post(() -> postDownloadsReply(reply, out, target, epoch, primary));
-        });
+        try {
+            downloadsIo.execute(() -> { // the list reads DownloadManager off the UI thread; the answer is re-checked before it is posted
+                final String out = DownloadsCallerPolicy.execute(req, downloadsActions);
+                main.post(() -> postDownloadsReply(reply, out, target, epoch, primary));
+            });
+        } catch (java.util.concurrent.RejectedExecutionException ignored) { } // the activity is going away
     }
 
     private void postDownloadsReply(androidx.webkit.JavaScriptReplyProxy reply, String out, WebView target, long epoch, String primary) {

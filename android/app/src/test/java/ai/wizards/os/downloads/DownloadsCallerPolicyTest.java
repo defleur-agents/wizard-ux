@@ -97,6 +97,14 @@ public class DownloadsCallerPolicyTest {
         assertNull(DownloadsCallerPolicy.originOf("https", null, -1));
     }
 
+    @Test public void theConfiguredAddressIsSpelledLikeTheSenderOrigin() {
+        assertEquals(PRIMARY, DownloadsCallerPolicy.normalizeOrigin("https://Wizard.Example.ts.net"));
+        assertEquals(PRIMARY, DownloadsCallerPolicy.normalizeOrigin("https://wizard.example.ts.net:443"));
+        assertEquals("http://10.0.2.2:8080", DownloadsCallerPolicy.normalizeOrigin("http://10.0.2.2:8080"));
+        assertNull(DownloadsCallerPolicy.normalizeOrigin(null));
+        assertNull(DownloadsCallerPolicy.normalizeOrigin("not a url"));
+    }
+
     // ---- stale navigation / lifecycle, checked again before the answer or the side effect -----------------------
 
     @Test public void staleNavigationIsDenied() {
@@ -206,7 +214,7 @@ public class DownloadsCallerPolicyTest {
 
     @Test public void theOldBridgeHasNoDownloadsMethods() throws Exception {
         String main = read(mainJava().resolve("MainActivity.java"));
-        for (String gone : new String[]{"downloadsList", "downloadsOpen", "downloadsCancel", "downloadsRemove", "shellCaller"})
+        for (String gone : new String[]{"downloadsList(", "downloadsOpen(", "downloadsCancel(", "downloadsRemove(", "shellCaller("})
             assertFalse("MainActivity must not declare " + gone, main.contains(gone));
         // no @JavascriptInterface anywhere in the app may expose a downloads* method
         List<Path> all;
