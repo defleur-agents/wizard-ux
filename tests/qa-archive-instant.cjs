@@ -71,22 +71,25 @@ async function open(browser, { desktop, skin, fail = false }) {
   page.on('pageerror', e => server.errors.push(e.message));
   await page.goto(origin + prefix + (desktop ? 'desktop.html' : ''), { waitUntil: 'load' });
   await page.waitForFunction(() => (window.__wux || window.__wos) && window.WizLive?.ok && window.WizLive.session?.('qa-archive-me'));
-  await page.evaluate(() => document.getElementById('wosWelcome')?.remove());
+  await page.evaluate(installRows); await page.evaluate(() => document.getElementById('wosWelcome')?.remove());
   return { ctx, page, server };
 }
 
 // Visible rows of the target thread in any list (phone Chats row, desktop AI-apps row, Classic row), not the open reader.
-const ROW = `(sid) => [...document.querySelectorAll('[data-chopen], .aad-rw[data-sid], .aad-row[data-sid]')].filter(n => (n.dataset.chopen === sid || n.dataset.sid === sid) && !n.closest('.ch-thread')).filter(n => { const r = n.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return false; for (let a = n; a; a = a.parentElement) { const s = getComputedStyle(a); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; }).length`;
-const rowCount = (page, sid = TARGET) => page.evaluate(`(${ROW})(${JSON.stringify(sid)})`);
+// Installed once per page as window.__rows(sid); every other in-page step calls it, no code is built from strings.
+const installRows = () => {
+  window.__rows = sid => [...document.querySelectorAll('[data-chopen], .aad-rw[data-sid], .aad-row[data-sid]')].filter(n => (n.dataset.chopen === sid || n.dataset.sid === sid) && !n.closest('.ch-thread')).filter(n => { const r = n.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return false; for (let a = n; a; a = a.parentElement) { const s = getComputedStyle(a); if (s.display === 'none' || s.visibility === 'hidden') return false; } return true; }).length;
+};
+const rowCount = (page, sid = TARGET) => page.evaluate(s => window.__rows(s), sid);
 
 // Arms one-shot instrumentation: records, at the moment the PATCH/PUT is issued and again after the click task, whether the row is already gone.
 async function arm(page) {
-  await page.evaluate(`(() => {
-    const count = ${ROW}; window.__ai = { clickAt: 0, goneAtFetch: null, goneInTask: null, goneFrame: null };
-    const rf = window.fetch; window.fetch = function (input, init) { const u = String(input?.url || input), m = String(init?.method || input?.method || 'GET').toUpperCase(); if (window.__ai.goneAtFetch === null && ((m === 'PATCH' && /\\/sessions\\//.test(u)) || (m === 'PUT' && /thread-dispositions/.test(u)))) window.__ai.goneAtFetch = count(${JSON.stringify(TARGET)}) === 0; return rf.apply(this, arguments); };
-    document.addEventListener('click', () => { window.__ai.clickAt = performance.now(); setTimeout(() => { window.__ai.goneInTask = count(${JSON.stringify(TARGET)}) === 0; }, 0); requestAnimationFrame(() => setTimeout(() => { window.__ai.goneFrame = count(${JSON.stringify(TARGET)}) === 0; }, 0)); }, true);
-    window.__aiFrame = () => new Promise(res => requestAnimationFrame(() => requestAnimationFrame(() => res(count(${JSON.stringify(TARGET)}) === 0))));
-  })()`);
+  await page.evaluate(sid => {
+    window.__ai = { clickAt: 0, goneAtFetch: null, goneInTask: null, goneFrame: null };
+    const rf = window.fetch; window.fetch = function (input, init) { const u = String(input?.url || input), m = String(init?.method || input?.method || 'GET').toUpperCase(); if (window.__ai.goneAtFetch === null && ((m === 'PATCH' && /\/sessions\//.test(u)) || (m === 'PUT' && /thread-dispositions/.test(u)))) window.__ai.goneAtFetch = window.__rows(sid) === 0; return rf.apply(this, arguments); };
+    document.addEventListener('click', () => { window.__ai.clickAt = performance.now(); setTimeout(() => { window.__ai.goneInTask = window.__rows(sid) === 0; }, 0); requestAnimationFrame(() => setTimeout(() => { window.__ai.goneFrame = window.__rows(sid) === 0; }, 0)); }, true);
+    window.__aiFrame = () => new Promise(res => requestAnimationFrame(() => requestAnimationFrame(() => res(window.__rows(sid) === 0))));
+  }, TARGET);
 }
 async function listVisible(page, desktop) { // phone: chats list shown; desktop: always
   await page.evaluate(desktop => {

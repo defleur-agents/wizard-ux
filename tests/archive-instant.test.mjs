@@ -18,7 +18,8 @@ test('Archive row action in the AI apps sidebar repaints before its 120 ms pass'
   assert.match(aad, /api\.sessions\.act\(s\.id, k\); readSessions\(\); paintList\(true\);/);
 });
 test('a write that never answers cannot pin a thread out of its list', () => {
-  assert.match(live, /setTimeout\(\(\) => no\(new Error\('write timed out'\)\), 60000\)/);
+  assert.match(live, /setTimeout\(\(\) => no\(new Error\('write timed out'\)\), capMs\)/);
+  assert.match(live, /\}, file \? 11 \* 60000 : 60000\);/); // Close & file polls for up to 10 minutes: its cap outlasts that
 });
 test('browser regression (held backend, stale poll, failure)', { skip: !process.env.QA_PLAYWRIGHT }, () => {
   const r = spawnSync(process.execPath, [new URL('./qa-archive-instant.cjs', import.meta.url).pathname], { encoding: 'utf8', env: { ...process.env, QA_SKINS: 'nebula' } });

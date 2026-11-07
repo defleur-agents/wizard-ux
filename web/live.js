@@ -1224,12 +1224,12 @@
     },
     /* ---- thread actions ---- */
     busy(id) { const o = OVER.get(id); return !!o && !o.settled; },
-    async _act(id, patch, write) {
+    async _act(id, patch, write, capMs = 60000) {
       const s = this.session(id); if (!s || this.busy(id)) return false;
       const snap = { archived: s.archived, deferred: s.deferred, deferredAt: s.deferredAt, restoredAt: s.restoredAt };
       const entry = { patch }; OVER.set(id, entry); Object.assign(s, patch); this.emit();
-      // Safety: a write that never answers must not pin the thread out of its list (or block the next tap) forever; after 60 s it counts as failed and the thread is restored.
-      let stall; const cap = new Promise((_, no) => { stall = setTimeout(() => no(new Error('write timed out')), 60000); });
+      // Safety: a write that never answers must not pin the thread out of its list (or block the next tap) forever; after capMs it counts as failed and the thread is restored (Close & file polls for up to 10 minutes, so it gets 11).
+      let stall; const cap = new Promise((_, no) => { stall = setTimeout(() => no(new Error('write timed out')), capMs); });
       try { await Promise.race([write(s), cap]); clearTimeout(stall); entry.settled = Date.now(); this.emit(); setTimeout(() => this.refresh(), 50); return true; }
       catch (e) {
         clearTimeout(stall); if (OVER.get(id) === entry) OVER.delete(id);
@@ -1256,7 +1256,7 @@
           r = await fetch(`/wizard/filings/${encodeURIComponent(id)}/status${aq(id)}`, { method: 'POST', cache: 'no-store', credentials: 'same-origin', headers: J, body: JSON.stringify({ runtime: s.runtime || 'direct' }) });
         }
         if (!r.ok || r.status === 202) { const e = new Error('HTTP ' + r.status); e.status = r.status; throw e; }
-      });
+      }, file ? 11 * 60000 : 60000);
     },
     // Stop exactly the watcher on the row the owner pressed: `agent` is the window's agent scope ('' = main).
     async stopWatching(id, agent) {
