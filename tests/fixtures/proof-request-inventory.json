@@ -241,6 +241,12 @@
       "kind": "read",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/wizard-os-home/store-install/_disk": {
+      "status": "not-exercised",
+      "source": "web/core/disk-status.js",
+      "kind": "read",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
     "/wizard-os-home/store-install/_main-compare": {
       "status": "not-exercised",
       "source": "web/core/box-source.js",
@@ -943,7 +949,6 @@
       "kind": "read",
       "note": "Conservative path literal census (including static paths). Not requested by these three proofs; refused and collected if reached."
     },
-
     "/wizard-os-home/core/skins/macos/{}.webp": {
       "status": "not-exercised",
       "source": "web/core/skins.js",
