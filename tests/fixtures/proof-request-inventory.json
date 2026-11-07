@@ -854,6 +854,12 @@
       "kind": "navigation",
       "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
     },
+    "/photos": {
+      "status": "not-exercised",
+      "source": "web/store/store-status.js",
+      "kind": "navigation",
+      "note": "Not reached by qa-instant-ui-taps, qa-offline-popup or qa-search-archive-routed (panel, write, stream or other app is not opened). Refused and collected, never answered, if a flow reaches it."
+    },
     "/android-apps": {
       "status": "not-exercised",
       "source": "web/store/store-status.js",
