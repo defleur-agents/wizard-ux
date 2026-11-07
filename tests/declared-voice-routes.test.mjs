@@ -15,7 +15,9 @@ test('first-word declarations win over bare names and carry the rest without exp
  const {parser,box,app}=fixture();
  for(const text of ['music','Music.','shazam']) {const c=parser.parse(text,{},'command');assert.equal(c.action,'open_app_route');assert.equal(c.url,'/wizard-music/?view=identify&listen=1');}
  const c=parser.parse('music play Jazz & soul',{},'command');assert.equal(new URL(c.url,'https://fixture.invalid').searchParams.get('q'),'play Jazz & soul');
- let seen;assert(box.WosCommands.execute(c,'',{findApp:()=>{throw Error('No fuzzy route-owner lookup')},openAppRoute:(id,url)=>{seen={id,url};return true;}}));assert.equal(seen.id,app.id);assert.equal(seen.url,c.url);
+ let seen;const H={findApp:()=>{throw Error('No fuzzy route-owner lookup')},openAppRoute:(id,url)=>{seen={id,url};return true;}};
+ assert.equal(box.WosCommands.execute(c,'',H),false,'unconfirmed: never opens (confirmRoute first)');assert.equal(seen,undefined);
+ assert(box.WosCommands.execute({...c,confirmed:'fresh'},'',H));assert.equal(seen.id,app.id);assert.equal(seen.url,c.url);
  assert(box.WosCommands.completedLocally(c,true));
 });
 test('only the first whole word routes; message taps and unrelated commands keep their behaviour',()=>{
