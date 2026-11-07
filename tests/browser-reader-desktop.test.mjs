@@ -21,6 +21,8 @@ function desktopReader({existing = false, checkedLink = false} = {}) {
     goWs: i => {context.cur=i;},
     winEl: id => ({querySelector:()=>({contentWindow:{location:{pathname:'/browser/',search:'',hash:'',replace:url=>navigations.push([id,url])}}})}),
     WosAppSetup:{gate:(_app,resume)=>{gates.push(resume);return true;}},
+    // The layout's goApp now asks the shared panes owner to focus the app pane.
+    panes:(()=>{let state={focus:'chats'};return {get:()=>state,set:next=>{state={...state,...next};}};})(),
     unpeek(){}, closeAll(){}, loading(){}, want:'', focusWant:'', wantAppFocus: id => { context.focusWant = id; }, CHATS_ID:'wizard', chatsFresh:true, chatThread:null, mainChats:()=>null,
   };
   context.window = context;
