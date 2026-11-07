@@ -41,6 +41,7 @@
     .replace(/\[WIZARD_FILES_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILES_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_FILE_CHIPS_V1\]\s*([\s\S]*?)\s*\[\/WIZARD_FILE_CHIPS_V1\]/g, (_, j) => chipLabel(j))
     .replace(/\[WIZARD_IMAGE_INTENT_V1\][\s\S]*?\[\/WIZARD_IMAGE_INTENT_V1\]/g, ' ')
+    .replace(/\[WIZARD_TWEAK_V1\](?:[\s\S]*?\[\/WIZARD_TWEAK_V1\]|[\s\S]*$)/g, ' ') // a tweak card (core/chat-kit.js tweakIds); unterminated: to the end
     .replace(/^Please use the attached files?\.\s*/, '')
     .replace(/<memory-context>[\s\S]*?<\/memory-context>/g, ' ')
     .replace(/\[(?:Browser dogfooding|System note)[^\]]*\][\s\S]*$/m, ' ')
@@ -313,9 +314,9 @@
   const WORKING_SECTION = new Set(['submitting', 'queued', 'running', 'waiting_for_approval', 'stopping']);
   const isErr = s => s.status === 'failed' || s.status === 'interrupted' || (s.status === 'queued' && s.queueReason === 'provider_access');
   const needsApproval = s => ['waiting_for_approval', 'unknown'].includes(s.status);
-  const inWorking = s => WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s);
+  const inWorking = s => window.WizChatsListModel.isListWorking(s);
   const firstValid = (...v) => v.find(x => isFinite(Date.parse(x ?? ''))) ?? '';
-  const cardAt = s => inWorking(s) || isErr(s)
+  const cardAt = s => (WORKING_SECTION.has(s.status) && !needsApproval(s) && !isErr(s)) || isErr(s)
     ? firstValid(s.assignedAt, s.requestAt, s.lastUserAt, s.previewRole === 'user' ? s.previewAt : undefined)
     : firstValid(s.previewAt, s.activityAt, s.lastUserAt, s.updatedAt);
   const newestFirst = (l, r) => {
@@ -341,6 +342,8 @@
     archiveAfterDays: ['wos.chats.archiveAfter.v1', v => Number.isInteger(v) && [0, 1, 3, 7, 14, 30].includes(v), String],
     compact: ['wos.chats.compact.v1', v => typeof v === 'boolean', v => v ? '1' : '0'],
     chatLayout: ['wos.chats.layout.v1', v => v === 'day' || v === 'status', String],
+    chatAfterAction: ['wos.chats.afterAction.v1', v => v === 'stay' || v === 'list', String],
+    workingOrder: ['wos.chats.workingOrder.v1', v => ['alphabetical', 'newest', 'oldest'].includes(v), String],
     readyOrder: ['wos.chats.readyOrder.v1', v => ['newest', 'oldest', 'priority', 'subject'].includes(v), String],
     subjectOrder: ['wos.chats.subjectOrder.v1', v => Array.isArray(v) && v.every(x => typeof x === 'string'), JSON.stringify],
     // Pinned chats (core/chat-pins.js): the same pins on every device.
@@ -518,8 +521,8 @@
       const t = sectionTime(s);
       if (s.archived) g.archive.push(s);
       else if (snoozeLast() && isDeferred(s) && !inWorking(s)) g.ready.push(s);
-      else if (needsApproval(s)) g.ready.push(s);
       else if (inWorking(s)) g.working.push(s);
+      else if (needsApproval(s)) g.ready.push(s);
       else if (isDeferred(s)) g.deferred.push(s);
       else if (isErr(s)) g.errors.push(s);
       else if (isFinite(t) && t <= archB) g.archive.push(s);
@@ -797,9 +800,9 @@
       const d = archiveAfterDays(), t = sectionTime(s);
       return !!d && isFinite(t) && t <= Date.now() - d * DAY;
     },
-    // Visible unread: threads the Chats list actually shows unread (not hidden, archived or snoozed). Focus badges
+    // Visible unread: idle threads the Chats list shows unread (not working, hidden, archived or snoozed). Focus badges
     // (agents, Spaces) count only these, so a dot never points at nothing.
-    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
+    visibleUnread(rows) { const g = groupWork(rows || []), out = []; for (const [k, list] of Object.entries(g)) if (k !== 'archive' && k !== 'deferred' && k !== 'working') for (const s of list) if (hasNew(s, this.seenOf(s))) out.push(s); return out; },
     // Server-owned, agent-qualified receipts: activity metadata only, never transcript text.
     seenOf(s) { return this.seen; },
     seenRecord(s) { return this.seen?.threads?.[seenKeyOf(s)]; },
@@ -813,6 +816,14 @@
     set chatLayout(v) { const x = v === 'status' ? 'status' : 'day'; try { localStorage.setItem(LAYOUT_KEY, x); } catch (e) {} putPrefs({ chatLayout: x }); },
     set archiveAfterDays(d) { try { localStorage.setItem(ARCH_KEY, String(d)); } catch (e) {} putPrefs({ archiveAfterDays: d }); },
     putPrefs,
+    workingOrder: () => { try { return window.WizChatsListModel.workingOrderOf(localStorage.getItem('wos.chats.workingOrder.v1')); } catch (_) { return 'alphabetical'; } },
+    setWorkingOrder: o => {
+      if (!window.WizChatsListModel.WORKING_SORTS.some(([v]) => v === o)) return false;
+      try { if (localStorage.getItem('wos.chats.workingOrder.v1') === o) return true; localStorage.setItem('wos.chats.workingOrder.v1', o); } catch (_) {}
+      // Paint now, reconcile the shared preference afterwards, just like Ready.
+      window.dispatchEvent(new Event('wos:prefs'));
+      putPrefs({ workingOrder: o }); return true;
+    },
     prefOps,
     cardAt,
     groups(agent = '') {
@@ -820,10 +831,10 @@
       for (const s of this.sessionsFor(agent)) {
         if (s.archived || s.hidden) continue;
         const def = this.deferred[seenKeyOf(s)]?.deferred;
-        if (snoozeLast() && isDeferred(s) && !WORKING.has(s.status)) continue; // snoozeOrder('last'): not Needs you until restored/replied
+        if (globalThis.WizChatsListModel.isListWorking(s)) { working.push(s); continue; }
+        if (snoozeLast() && isDeferred(s)) continue; // snoozeOrder('last'): not Needs you until restored/replied
         if (['waiting_for_approval', 'unknown'].includes(s.status)) { needs.push(s); continue; }
         if (s.status === 'queued' && s.queueReason === 'provider_access') { needs.push(s); continue; }
-        if (WORKING.has(s.status)) { working.push(s); continue; }
         if (def) continue;
         const at = Date.parse(assistantAt(s) || s.activityAt || s.updatedAt);
         if (isFinite(at) && at < now - WEEK) continue;
@@ -977,17 +988,24 @@
     // The non-default agent a thread is pinned to, or '' for the main agent.
     agentOf(id) { if (!id || id === '__new__') return ''; const a = AGENT_OF.get(id); return a && otherAgent(a) ? a : ''; },
     pinAgent(id, agent) { if (id && agent && otherAgent(agent)) AGENT_OF.set(id, agent); },
-    markSeen(ids) {
+    // `after` (optional promise<boolean>): record the click-time activity/count now but persist it only if the
+    // promise resolves true; a refused or errored confirmation never marks newer content read.
+    markSeen(ids, { after = null } = {}) {
       const all = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
       const ts = Date.now();
       const list = all;
       if (!list.length) return;
-      let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
-      const threads = { ...state.threads };
-      for (const s of list) threads[seenKeyOf(s)] = recordFor(s, ts);
-      state = { ...state, threads };
-      this.seen = state; writeLocal(state); this.emit();
-      putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      const records = list.map(s => [seenKeyOf(s), recordFor(s, ts)]);
+      const write = deferred => {
+        let state = merge(readLocal(), this.seen) || { initializedAt: ts, threads: {} };
+        const threads = { ...state.threads };
+        for (const [k, r] of records) threads[k] = deferred ? later(threads[k], r) : r;
+        state = { ...state, threads };
+        this.seen = state; writeLocal(state); this.emit();
+        putSeen(state).then(r => { this.seen = merge(this.seen, r); writeLocal(this.seen); this.emit(); }).catch(() => {});
+      };
+      if (after) { Promise.resolve(after).then(ok => { if (ok === true) write(true); }, () => {}); return; }
+      write(false);
     },
     async markUnread(ids) {
       const list = (Array.isArray(ids) ? ids : [ids]).map(id => this.session(id)).filter(Boolean);
@@ -1056,7 +1074,7 @@
       await req('/wizard/hermes/api/sessions' + aq(id), { method: 'POST', headers: J, body: JSON.stringify({ source: 'wizard-mobile', id, ...(agent ? { agent } : {}) }) });
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -1077,14 +1095,14 @@
           if (!M.matchesRuntime(active.runtime, route))
             throw Object.assign(new Error('Queue on the selected model'), { status: 409 });
           const steer = { input, ...route, require_model_lock: true };
-          if (opts.fileIds?.length) steer.wizard_file_ids = opts.fileIds.slice(0, 8);
+          if (opts.fileIds?.length) steer.wizard_file_ids = [...new Set(opts.fileIds)];
           await req(`/wizard/hermes/v1/runs/${encodeURIComponent(s.runId)}/steer${aq(id)}`, { method: 'POST', headers: J, body: JSON.stringify(steer) });
           return { steered: true, runId: s.runId };
         } catch (e) { if (e.code === 'dispatch_already_attempted' || ![404, 409, 410].includes(e.status)) throw e; }
       }
       const body = { session_id: id, input, ...route, require_model_lock: true };
       if (opts.instructions) body.instructions = String(opts.instructions).slice(0, 2000);
-      if (opts.fileIds?.length) body.wizard_file_ids = opts.fileIds.slice(0, 8);
+      if (opts.fileIds?.length) body.wizard_file_ids = [...new Set(opts.fileIds)];
       const r = await req('/wizard/hermes/v1/runs' + aq(id), { method: 'POST', headers: { ...J, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body) });
       const run = await r.json().catch(() => ({}));
       const runId = run.run_id || run.id || '';
@@ -1219,10 +1237,13 @@
       }
     },
     // Done: archive the thread (PATCH archived). Close & file: the Helm filing route, idempotent by command id.
-    archive(id, { file = false } = {}) {
+    archive(id, { file = false, confirmed = null } = {}) {
       // Done marks the thread read too, so it stays read on every client and if it is ever restored.
-      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id);
+      if (this.session(id) && hasNew(this.session(id), this.seenOf(this.session(id)))) this.markSeen(id, confirmed ? { after: confirmed } : {});
       return this._act(id, { archived: true, deferred: false }, async s => {
+        // Tracker Dismiss reuses Done's same-frame paint and rollback. It may
+        // persist only after every version-validated Seen result confirms it.
+        if (confirmed && !await confirmed) throw new Error('Seen version changed');
         const all = readRestored(); if (all[id]) { delete all[id]; writeRestored(all); }
         if (!file) { await req(`/wizard/hermes/api/sessions/${encodeURIComponent(id)}${aq(id)}`, { method: 'PATCH', headers: J, body: JSON.stringify({ archived: true }) }); return; }
         const ag = this.agentOf(id);

@@ -35,14 +35,16 @@ async function snap(name, phone) {
   const b = fs.readFileSync(file); assert.equal(b.readUInt32BE(16), state.width); assert.equal(b.readUInt32BE(20), state.height);
   report.captures.push({ file, ...state }); fs.writeFileSync(path.join(OUT, 'captures.json'), JSON.stringify(report.captures, null, 2));
 }
-async function boot(phone, configure, evidenceSink = null) {
+async function boot(phone, configure, evidenceSink = null, chatActions = null) {
   // No arbitrary origin override: only a live server created by our evidence helper.
   const origin = evidenceSink ? require('./qa-recorder-stop-evidence.cjs').origin(evidenceSink) : ORIGIN;
   const c = await browser.newContext({ ...(phone ? devices['Pixel 7'] : { viewport: { width: 1440, height: 900 } }), deviceScaleFactor: 1, serviceWorkers: 'block' });
   await c.routeWebSocket('**/*', w => w.close());
   const at = FIXTURE_NOW - 120000;
   const s = { rows: [raw('badge-read-ready', at)], seen: { initializedAt: 1, threads: { 'direct:badge-read-ready': { seenAt: at + 1000, assistantActivityAt: new Date(at).toISOString() } } } };
-  s.preferences = { migrations: {} };
+  s.preferences = { migrations: {}, ...(chatActions ? { chatAfterAction: chatActions.after || 'stay' } : {}) };
+  if (chatActions) s.rows = chatActions.rows || [raw('badge-read-ready', at), raw('badge-other-ready', at - 1000)];
+  s.actionWrites = [];
   const launcherContext = { window: {} };
   require('node:vm').runInNewContext(fs.readFileSync(path.join(TREE, 'web/core/launcher-defaults.js'), 'utf8'), launcherContext);
   const launcherDefaults = JSON.parse(JSON.stringify(launcherContext.window.WizLauncherDefaults));
@@ -79,6 +81,23 @@ async function boot(phone, configure, evidenceSink = null) {
     const q = r.request(), u = new URL(q.url()), p = u.pathname, method = q.method();
     report.requests.push({ method, path: p + u.search });
     if (u.origin !== origin) { report.unknown.push({ method, url: u.href }); return r.abort('blockedbyclient'); }
+    // Optional action regression mode: only declared synthetic records can be changed, only in memory.
+    if (chatActions && !['GET', 'HEAD'].includes(method)) {
+      let body; try { body = q.postDataJSON(); } catch (_) { body = null; }
+      const record = { u: p, body: q.postData() || '', method };
+      if (method === 'PUT' && p === '/wizard/v1/ui-preferences') {
+        assert.deepEqual(Object.keys(body), ['chatAfterAction']); assert(['stay','list'].includes(body.chatAfterAction));
+        Object.assign(s.preferences, body); return json(r, s.preferences);
+      }
+      const match = p.match(/^\/wizard\/hermes\/api\/sessions\/([A-Za-z0-9_-]+)$/);
+      if (match && method === 'PATCH') { const row = s.rows.find(x => x.id === match[1]); assert(row, 'only declared synthetic thread'); Object.assign(row, body); s.actionWrites.push(record); return json(r, { session: row }); }
+      if (p === '/wizard/hermes/v1/runs' && method === 'POST') { s.actionWrites.push(record); return chatActions.hold ? json(r, { error: 'synthetic offline' }, 503) : json(r, { run_id: 'synthetic-run', status: 'queued' }, 202); }
+      if (p === '/wizard/hermes/api/sessions' && method === 'POST') { s.actionWrites.push(record); return json(r, { session: { id: 'badge-new-chat' } }); }
+      if (p === '/wizard/voice/transcribe' && method === 'POST') return json(r, { text: 'Synthetic voice reply', ms: 1 });
+      if (p === '/wizard/v1/route' && method === 'POST') return json(r, chatActions.router?.answer || { cmd: { route: 'view' }, ms: 1 });
+      if (p === '/wizard/boomerang' && method === 'POST') return json(r, { ok: true });
+      if (p === '/wizard/thread-dispositions' && method === 'PUT') { assert(s.rows.some(x => x.id === body.sessionId)); return json(r, { record: { deferred: body.deferred, updatedAt: new Date(FIXTURE_NOW).toISOString() } }); }
+    }
     // Only synthetic read receipts are accepted, in memory. All other writes (including sends) are refused.
     if (method === 'PUT' && p === '/wizard/thread-seen' && !u.search) {
       const next = q.postDataJSON();
@@ -91,7 +110,7 @@ async function boot(phone, configure, evidenceSink = null) {
       assert.deepEqual(Object.keys(next).sort(), ['launcher', 'marker']);
       assert.equal(next.marker, 'launcher-seed-v1');
       assert.deepEqual(next.launcher, launcherDefaults, 'only pinned synthetic launcher defaults');
-      if (!s.preferences.migrations[next.marker]) s.preferences = { launcher: next.launcher, migrations: { [next.marker]: true } };
+      if (!s.preferences.migrations[next.marker]) s.preferences = { ...s.preferences, launcher: next.launcher, migrations: { [next.marker]: true } };
       (report.mutations ??= []).push({ method, path: p, marker: next.marker, synthetic: true });
       return json(r, { preferences: s.preferences });
     }
@@ -112,13 +131,13 @@ async function boot(phone, configure, evidenceSink = null) {
     if (p === '/notifications/api/marks') return json(r, { marks: {} });
     if (p === '/notifications/api/items') return json(r, { items: [] });
     if (p === '/notifications/api/count') return json(r, { unread: 0, needs: 0 });
-    if (p === '/wizard/v1/bootstrap') return json(r, { bootstrap: 1, settings: { owner: { name: 'Synthetic QA' }, agent: { name: 'Synthetic Wizard' }, clock: { timezone: 'UTC' } }, endpoints: { apps: '/wizard/v1/apps' }, capabilities: {} });
+    if (p === '/wizard/v1/bootstrap') return json(r, { bootstrap: 1, settings: { owner: { name: 'Synthetic QA' }, agent: { name: 'Synthetic Wizard' }, clock: { timezone: 'UTC' } }, endpoints: { apps: '/wizard/v1/apps', ...(chatActions ? { transcribe: '/wizard/voice/transcribe', route: '/wizard/v1/route', sessions: '/wizard/hermes/api/sessions', runs: '/wizard/hermes/v1/runs' } : {}) }, capabilities: chatActions ? { voice: true, router: true, steer: true, markdown: true } : {} });
     if (p === '/wizard/v1/apps') return json(r, { apps: [] });
     if (p === '/wizard/hermes/api/sessions') return json(r, { object: 'list', data: s.rows, has_more: false, limit: 100, offset: 0 });
     if (p === '/wizard/thread-seen') return json(r, { state: s.seen });
     if (p === '/wizard/v1/ui-preferences' && !u.search) return json(r, s.preferences);
     if (p === '/wizard/hermes/api/model/options') return json(r, { provider: 'qa', model: 'synthetic', providers: [{ slug: 'qa', name: 'Synthetic QA', authenticated: true, is_current: true, models: [{ id: 'synthetic', name: 'Synthetic' }] }] });
-    const m = p.match(/^\/wizard\/hermes\/api\/sessions\/(badge-[a-z-]+)(\/messages)?$/);
+    const m = p.match(/^\/wizard\/hermes\/api\/sessions\/((?:badge-[a-z-]+|qa_return_\d+))(\/messages)?$/);
     if (m) { const item = s.rows.find(x => x.id === m[1]); if (!item) return json(r, { error: 'no synthetic thread' }, 404);
       return json(r, m[2] ? { data: [{ role: 'user', content: 'Synthetic question', timestamp: item.last_user_at }, { role: 'assistant', content: item.preview, timestamp: item.last_active }], has_more: false } : { session: item }); }
     if (p === PREFIX + 'data.js' || p === PREFIX + 'summaries.js') return r.fulfill({ contentType: 'application/javascript', body: '/* Synthetic QA: generated owner data intentionally absent. */' });
