@@ -126,6 +126,9 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
   const canOpen = a => { if (!framed) return false; const id=openId(a); try { if (typeof parent.WizCanOpen === 'function' && parent.WizCanOpen(id)) return true; } catch (_) {} return (S.snapshot?.shell || []).some(x => x?.id === id && x.url); };
 
   /* ---------------- pieces ---------------- */
+  // The App Manager reports only installing / installed, so the bar is indeterminate; the elapsed time shows it is alive.
+  const progressText = id => { const t = Math.max(0, Math.floor((Date.now() - (S.busyAt.get(id) || Date.now())) / 1000)); return t < 2 ? 'Installing…' : `Installing… ${t}s`; };
+  setInterval(() => { if (S.busy.size) document.querySelectorAll('[data-prog]').forEach(el => { const t = progressText(el.dataset.prog); if (el.textContent !== t) el.textContent = t; }); }, 1000);
   function icon(a, size = 'm') {
     // Catalog pictures are not an alternate identity for already-designed apps.
     // Hosted, reuse the registry-aware renderer; standalone uses the same source.
@@ -139,9 +142,6 @@ import {renderInstallResult, successMessage} from './store-install-result.js';
     const img = a.logo ? `<img src="${DATA}logo/${esc(a.id)}" alt="" loading="lazy" decoding="async">` : '';
     return `<span class="ic ic-${size}" style="--c1:${c1};--c2:${c2}"><b>${letter}</b>${img}</span>`;
   }
-  // The App Manager reports only installing / installed, so the bar is indeterminate; the elapsed time shows it is alive.
-  const progressText = id => { const t = Math.max(0, Math.floor((Date.now() - (S.busyAt.get(id) || Date.now())) / 1000)); return t < 2 ? 'Installing…' : `Installing… ${t}s`; };
-  setInterval(() => { if (S.busy.size) document.querySelectorAll('[data-prog]').forEach(el => { const t = progressText(el.dataset.prog); if (el.textContent !== t) el.textContent = t; }); }, 1000);
   function action(a, cls = '') {
     const state=status(a);
     if (S.busy.has(a.id)) return `<span class="get wait ${cls}" data-installing role="status" aria-live="polite"><span class="prog-bar" aria-hidden="true"></span><span class="prog-tx" data-prog="${esc(a.id)}">${progressText(a.id)}</span></span>`;

@@ -52,13 +52,13 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Action menu | `WosContextMenu.open`/`.back` (`core/context-menu.js`) |
 | App setup | `WosAppSetup` (`app-setup.js`) |
 | Chats + opt-in `--wos-new-send-list` | `WizCore` (`chats.js`, `.css`); desktop `keepThreadOpen`; `WizConfig.chatAfterAction` (phone); Archive→next `archiveOrder`; sent reconciliation; `WizLive.messages`/`readyRank`; `setFocus`/`migrateChatsFocus`; `--wos-note-quiet` notification actions; seq resume; provider Errors; Esc → `CHATS.clearFilter(id::list)` |
-| Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows; `executionStatus`/`isListWorking`; `workingSort` (A to Z default, Newest/Oldest); stalled waits Ready; a running helper keeps even an interrupted/failed thread Working. Working: `WizLive.workingOrder` → UI prefs; Ready's `orderBar`; Settings row. |
+| Chats list model | `WizChatsListModel` (`chats-list-model.js`): rows; `executionStatus`/`isListWorking`; `workingSort` (A to Z default, Newest/Oldest); stalled waits Ready; running helper keeps interrupted/failed threads Working; `WizLive.workingOrder` → UI prefs; Ready's `orderBar`; Settings row. |
 | Pane placement | `WizCore.panes` (`pane-layout.js`): Classic split/columns; tiled/centre/pair/full geometry, focus, ratios, dock; AI apps headers/keys; device-local |
 | Desktop lifecycle | `WizDesktop.host` (`core/desktop-host.js`): snapshots, retained frames/readiness/tools, open/focus/close, onChange, panes; chats(id), settings, placements() |
 | Chat time | `WizCore.ago` (`core.js`): hours <24h, then owner day |
 | Chat state | `WizLive` (`web/live.js`): rename/read fences; `WizCore.chats`: dispose |
 | Group by day | `WizCore.chats` / `WizLive.groups`: `miguel/group-by-day` opt-in; Pins/compact independent |
-| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)`: docked New chat stays open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount` |
+| Chats/Ready | `WizChatsHost` / `WizAppExtensions` (`chats-view.js`): surface/mount, notification placement, `replyRecorder`, draft admission; host `keepNewOpen(id)` keeps docked New chat open after send (`WosSkinHost.routeShows`); single-app host; pills: `workspaceNav.chatsCount/refreshChats`; subgroups: `WizChatsListModel.unreadCount` |
 | Bound-view handle (3 intro glows) | `WosSkinHost` built-in (`edge-peek.js`), host storage |
 | Repaint changed nodes without flicker | `WosMorph.morph` (`dom-morph.js`) |
 | Composer mic, retry, model | `WosChatPower` (`chat-power.js`); layouts `voice.reply(wid,sid)` → desktop `recordReply`; `WosModels`; `WosErrors`; `WosWork`; composer `WizCore` (`chats.js` `fitLabel`, `chat-power.css` `lab-row`) |
@@ -67,8 +67,8 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Pins: menu / opt-in row buttons | `WosChatPins` (`chat-pins.js`) |
 | Snooze thread/message: relative dates, Someday, Other date… last; action setting | `WosBoomerang` (`scheduled-reminders.js`) on the one scheduler; Settings → Schedules `WosSchedules` (`schedules.js`) |
 | Thread topic emoji | `WosTopicEmoji` (`chat-topic-emojis.js`, data `WosTopicEmojiData`) |
-| Thread tracker | `WosThreadTracker` (`thread-tracker.js`): groups/dots/Seen; open count; stopped dots/rows via list model, live repaint; green dwell/send-pinned versions; amber manual; Resume stopped rows (`sendChat`); one chronological list (oldest reply first, running last, acknowledged fold last); amber/red answered when the owner's latest message (session `lastUserAt`, or a newer shown user bubble or steer via `shown()` from Chats) is newer than the anchor reply (any device; local send tokens = instant paint); quote Reply; opaque panel. |
-| Durable send, saved Retry, failed Dismiss; >6h hold; a steer refused (409 `run_not_accepting_steer`) while the run works waits/re-steers (queued run) or sends the idempotent same-thread follow-up (started run) | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
+| Thread tracker | `WosThreadTracker` (`thread-tracker.js`): groups/dots/Seen; open count; stopped dots/rows via list model + live repaint; green dwell/send-pinned versions; amber manual; Resume stopped rows (`sendChat`); chronological list (oldest reply first; running, then acknowledged fold, last); answered rule ([details](component-contract-details.md)); quote Reply; opaque panel. |
+| Durable send, saved Retry/failed Dismiss, >6h hold; refused-steer handling ([details](component-contract-details.md)) | `WosOutbox`, `WosCarry` (`web/outbox.js`) |
 | Cancelled-recording keep | `WosCancelled` (`cancelled.js`) |
 | Send to agent | `WizShareWizard` (`share-wizard.js`); `WizSheetBack` (`sheetback.js`) |
 | Uploads of any size | `WizUploads` (`uploads.js`) |
@@ -82,7 +82,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: outside → Reader (own/failed direct), sheet/window, long-press; `data-wizard-browse`=original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
-| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android app only; inert without the `wizardDownloadsPort` port); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java`, `DownloadsCallerPolicy.java` (docs/android-downloads-port.md) |
+| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android only; inert without `wizardDownloadsPort`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java`, `DownloadsCallerPolicy.java` (docs/android-downloads-port.md) |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |
@@ -106,9 +106,9 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | Need | Use |
 |---|---|
 | The orb, any size | `Orb.create(canvas, fallback, {R})` (`web/orb.js`, icon/core); Android `android/app/src/main/assets/assist/everywhere.html` |
-| Skin, scenery and tweaks | `WosSkin` (`skins.js`: setGlass), `WosSkinHost` (`skin-host.js`; sheet yielding, desktop boot guard, Group/Sort and projects); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): ⌥←/→ pass, E/Z Archive/Snooze, Z Back. `api.settings.section(id, 'look', node)`; `slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; `api.apps`/`api.desk`, `api.aiUsage`; `WosExperience` (`experience.js`; retry), `WosMySkin` (`my-skin.js`; explicit recovery; bad skin off), `WosScenery` (`scenery.js`), `WizAppearance` (`appearance-host.js`; desk geometry); tweak `wizard/desktop-chats` |
+| Skin, scenery and tweaks | `WosSkin` (`skins.js`: setGlass), `WosSkinHost` (`skin-host.js`; sheet yield, boot guard, Group/Sort, projects); desktop keys (`desktop/desktop.js`, `layouts/ai-apps/desktop.js`): ⌥←/→ pass, E/Z Archive/Snooze, Z Back. `api.settings.section(id, 'look', node)`; `slots.json`: `home-main`, `paintHome`, `windowRefresh`, beside, inbox/list/notify, `data.read`, `back.push`; `api.apps`/`api.desk`, `api.aiUsage`; `WosExperience` (`experience.js`; retry), `WosMySkin` (`my-skin.js`; explicit recovery; bad skin off), `WosScenery` (`scenery.js`), `WizAppearance` (`appearance-host.js`; desk geometry); tweak `wizard/desktop-chats` |
 | Pins-only orb radial | `WosCreateOrbSwitcher` / `WosOrbSwitcher` (`web/core/orb-switcher.js`, `web/core/orb-switcher.css`), core phone dock default (not desktop/corner orb); saves pins/voice options as before |
-| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel both shells, Wizard desktop: custom Files images (wide/tall), cover/scrim; opaque materials |
+| Background image picker / catalogue / scenery | `WosSettings` Background (`settings.js`) + `WosSkin.wallpapers / setWallpaper` (`skins.js`); Mizel shells + Wizard desktop: Files images (wide/tall), cover/scrim, opaque materials |
 
 | Motion | `WizardMotion` (`web/motion/wizard-motion.js`) |
 | Tour/help, responsive Done, skip/exit; desktop `WosTour.desk` | `WosTour` (`web/core/tour.js`) |
@@ -127,6 +127,6 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 
 `WizCompanionPane` (`companion-pane.js`), `WizardApp` (`app-client.js`), `WizAppCapture` (`app-capture.js`), `WizComposerInput` (`composer-input.js`), `WizAttachChip` (`attach-chip.js`), `WosSkinFrame` (`skin-frame.js`), `WosDevice` (`device.js`), `WizAppServices` (`app-services.js`), `WizCore` (`core.js`, `bridge.js`), `WizConfig` (`config.js`), `WizReach` (`reach.js`), `WizAndroidRelay` (`android-relay.js`), `WizBackgroundAudio` (`background-audio.js`), `WizHomeScreenPolicy` (`home-screen-policy.js`), `WosOwnViews` (`own-views.js`), `WosOrbHandoff` (`orb-handoff.js`), `WosShareSheet` (`share-sheet.js`), `WosBell` (`notif-bell.js`), `WosResources` (`resources.js`), `WosUsage` (`usage.js`), `WizPhotosRelay` (`photos-relay.js`), `WosMusic`, `WizDeviceLegacy` (`voice-legacy.js`), openers `WizAppOpen`, `WizCanOpen`, `WizOpenApp`, `WizOpenAgentChats` (`app.js`), `WosBoundView` (`bound-view.js`), `WosWorkspaceSync` (`workspace-sync.js`), `WosMedia` (`media-watch.js`).
 
-AI usage: EXTEND `WosResources`/`WosUsage` for extra usage. Claude extra shows the OAuth prepaid-credit balance, never inferred from spend/cap; a missing balance is explicit with no meter (`tests/claude-extra-usage.test.mjs`).
+AI usage: EXTEND `WosResources`/`WosUsage` for extra usage; Claude extra is the OAuth prepaid balance, never inferred (`tests/claude-extra-usage.test.mjs`).
 
 Devices: `WizPhoneConnect`, #677 + #648, shared kit. Setup/Mac reuse; +16px tinted Setup action, step-2 green check/Show again, final Done.
