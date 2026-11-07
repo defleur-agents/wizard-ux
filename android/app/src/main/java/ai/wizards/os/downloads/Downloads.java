@@ -108,8 +108,8 @@ public final class Downloads {
         if (("application/octet-stream".equals(mime)) && it.mime != null && !it.mime.isEmpty()) mime = DownloadsPolicy.openMime(it.mime, it.name);
         Intent view = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uri, mime)
-                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                .setClipData(ClipData.newRawUri("", uri));
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        view.setClipData(ClipData.newRawUri("", uri));
         if (!(c instanceof android.app.Activity)) view.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try { c.startActivity(view); return "ok"; }
         catch (ActivityNotFoundException | SecurityException e) { return "none"; }
