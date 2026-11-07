@@ -145,7 +145,9 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
     await page.waitForTimeout(400);
     check(`${tag}: Back/Esc closes the sheet first (one layer)`, await page.evaluate(() => !window.WosDownloads.isOpen()) && await page.locator('.wdl-sheet').count() === 0);
     // outside tap closes
-    await page.evaluate(() => window.WosDownloads.show());
+    await page.evaluate(() => window.__wosDownloads({ type: 'done', item: window.__dl[0] }));   // show() is no longer public: reopen via the banner like a user
+    await page.locator('.wdl-banner.on').waitFor({ timeout: 3000 });
+    await page.locator('.wdl-banner .wdl-main').click();
     await page.locator('.wdl-sheet.on').waitFor({ timeout: 3000 });
     await page.mouse.click(shell === 'phone' ? 195 : 100, shell === 'phone' ? 60 : 60);
     await page.waitForTimeout(400);

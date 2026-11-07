@@ -14,6 +14,7 @@ function fakeButton(cls, row, act) {
   const b = { dataset: act ? { wdl: act } : {}, classList: null, textContent: act ? act[0].toUpperCase() + act.slice(1) : '', disabled: false, isConnected: true, row,
     closest(s) { return s === 'button' || s === '.' + cls || s === '.wdl-act' && cls.includes('wdl-act') ? this : s === '.wdl-row' ? this.row || null : null; } };
   b.classList = el().classList; cls.split(' ').forEach(c => b.classList.add(c));
+  if (cls === 'wdl-open') b.textContent = 'Open'; if (cls === 'wdl-main') b.textContent = 'Downloads';
   return b;
 }
 function fakeList() {
@@ -339,7 +340,7 @@ test('parent probe: no raw port, no metadata, no open/cancel reachable from the 
   const walk = (o, d = 0) => { if (!o || d > 3) return; for (const k of Object.getOwnPropertyNames(o)) { let v; try { v = o[k]; } catch (_) { continue; } seen.push(k); if (v && typeof v === 'object') walk(v, d + 1); } };
   walk(parent.WosDownloads);
   assert.equal(parent.wizardDownloadsPort, undefined, 'raw port hidden');
-  assert.ok(!seen.some(k => /state|items|open|cancel|remove|port/i.test(k)), 'reachable names: ' + seen.join());
+  assert.ok(!seen.some(k => k !== 'isOpen' && /state|items|open|cancel|remove|port/i.test(k)), 'reachable names: ' + seen.join());
   assert.deepEqual(r.sent, []);
   assert.deepEqual(r.calls, []);
 });
@@ -409,7 +410,7 @@ test('a real tap acts on the shell\'s own record of the row, not on attributes a
   r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
   assert.deepEqual(r.calls, [['open', '12']], 'row 12 Open does what row 12 was drawn to do');
   // a button the script made itself (not one of the shell\'s rows) does nothing, even with a real tap
-  r.calls.length = 0; r.sent.length = 0;
+  r.calls.length = 0; r.sent.length = 0; r.timers.length = 0;
   const forged = fakeButton('wdl-act', { closest: s => (s === '.wdl-row' ? forged.row : null), dataset: { id: '13' } }, 'cancel');
   sheet.listeners.click[0]({ target: forged, isTrusted: true, detail: 1 });
   r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();

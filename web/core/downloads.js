@@ -37,6 +37,11 @@
   // The shell takes the port into this closure and removes it from window. Hosted apps run in same-origin iframes and
   // can reach parent.*; with the property gone (and postMessage / addEventListener bound now) parent.wizardDownloadsPort is
   // not there for them. Defence in depth only: a same-origin app still shares the shell's authority (docs/android-downloads-port.md).
+  // JSON is captured now, before any hosted frame exists, so a later swap of JSON.stringify / parse in the shared realm
+  // cannot rewrite what goes to native or what is read back. Same-origin hosted apps remain able to tamper with OTHER
+  // globals: this is bounded hardening, not isolation (docs/android-downloads-port.md, "Same-origin hosted apps").
+  const JS = { stringify: JSON.stringify.bind(JSON), parse: JSON.parse.bind(JSON) };
+  const trusted = e => !!e && e.isTrusted === true;   // a real tap/click; a script's dispatchEvent() / click() is false
   let held = null;
   function takePort() {
     if (held) return held;
@@ -53,7 +58,7 @@
   // request/reply over the port; resolves to the native result, or null if the port is absent, refuses, or stays silent
   const V = 1, ASK_MS = 8000, asking = new Map(); let seq = 0, listening = false;
   function onNative(ev) {
-    let m; try { m = JSON.parse(typeof ev === 'string' ? ev : ev?.data); } catch (_) { return; }
+    let m; try { m = JS.parse(typeof ev === 'string' ? ev : ev?.data); } catch (_) { return; }
     if (!m || m.v !== V) return;
     const p = asking.get(m.id); if (!p) return;
     asking.delete(m.id); clearTimeout(p.timer);
@@ -70,14 +75,14 @@
       const id = 'dl' + (++seq);
       const timer = setTimeout(() => { if (asking.delete(id)) resolve(null); }, ASK_MS);
       asking.set(id, { resolve, timer });
-      try { pt.postMessage(JSON.stringify({ v: V, id, method, params: params || {} })); }
+      try { pt.postMessage(JS.stringify({ v: V, id, method, params: params || {} })); }
       catch (_) { clearTimeout(timer); asking.delete(id); resolve(null); }
     });
   }
   const toast = (i, t, ms) => { try { (window.__wos || window.__wux)?.toast?.(i, t, ms); } catch (_) {} };
   const nextFrame = fn => (window.requestAnimationFrame || (f => setTimeout(f, 16)))(fn);
 
-  let items = [], loaded = false, seenAt = 0, sheet = null, bannerEl = null, bannerTimer = 0, poll = 0, opening = new Set();
+  let items = [], loaded = false, seenAt = 0, sheet = null, bannerEl = null, bannerId = '', rowItem = new WeakMap(), bannerTimer = 0, poll = 0, opening = new Set();
   try { seenAt = Number(localStorage.getItem(SEEN)) || 0; } catch (_) {}
   const markSeen = at => { if (at > seenAt) { seenAt = at; try { localStorage.setItem(SEEN, String(at)); } catch (_) {} } };
 
@@ -96,8 +101,8 @@
     return o && Array.isArray(o.items) ? o.items.map(clean).filter(Boolean) : null;
   }
   async function refresh() {
-    const before = JSON.stringify(items), l = await read();
-    if (l) { items = l; loaded = true; if (JSON.stringify(items) !== before) settingsChanged(); }
+    const before = JS.stringify(items), l = await read();
+    if (l) { items = l; loaded = true; if (JS.stringify(items) !== before) settingsChanged(); }
     return items;
   }
   function settingsChanged() { try { window.WosSettings?.refresh?.(); } catch (_) {} }   // the Settings row text follows the list
@@ -141,7 +146,7 @@
     nextFrame(() => setTimeout(async () => {
       const r = await open(id);
       opening.delete(id);
-      if (r === 'ok' && bannerEl && bannerEl.dataset.id === id) hideBanner();
+      if (r === 'ok' && bannerEl && bannerId === id) hideBanner();
       if (btn.isConnected) { btn.classList.remove('busy'); btn.disabled = false; btn.textContent = label; }
       if (r === 'missing') { await refresh(); paint(); }
     }, 0));
@@ -181,14 +186,16 @@
     if (sheet) { markSeen(it.finished || Date.now()); return true; } // the sheet is already showing it
     hideBanner(); markSeen(it.finished || Date.now());
     const el = document.createElement('div');
-    el.className = 'wdl wdl-banner'; el.dataset.id = it.id; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+    el.className = 'wdl wdl-banner'; bannerId = it.id; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
     el.style.setProperty('--wdl-lift', lift() + 'px');
     const size = fmtSize(it.size);
     el.innerHTML = `<button type="button" class="wdl-main" aria-label="Downloads"><span class="wdl-ic">${ICON.file}</span><span class="wdl-tx"><b>Downloaded</b><small>${esc(it.name)}${size ? ' · ' + esc(size) : ''}</small></span></button><button type="button" class="wdl-open">Open</button>`;
+    const openBtn = el.querySelector('.wdl-open'), mainBtn = el.querySelector('.wdl-main');   // the shell's own buttons, held here
     el.addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) return;
-      if (b.classList.contains('wdl-open')) return openTap(b, it.id);
-      hideBanner(); show();
+      if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
+      const b = e.target?.closest?.('button'); if (!b) return;
+      if (b === openBtn) return openTap(b, it.id);
+      if (b === mainBtn) { hideBanner(); show(); }
     });
     el.addEventListener('pointerdown', () => { clearTimeout(bannerTimer); bannerTimer = 0; });
     document.body.appendChild(el); bannerEl = el;
@@ -216,18 +223,22 @@
       ic = ICON.warn; meta = 'No longer on this phone';
       act = `<button type="button" class="wdl-act ghost" data-wdl="remove">Remove</button>`;
     }
-    return `<div class="wdl-row${it.status === 'failed' || it.status === 'gone' ? ' bad' : ''}" data-id="${esc(it.id)}"><span class="wdl-ic">${ic}</span><span class="wdl-tx"><b>${esc(it.name)}</b><small>${esc(meta)}</small>${extra}</span>${act}</div>`;
+    return `<div class="wdl-row${it.status === 'failed' || it.status === 'gone' ? ' bad' : ''}"><span class="wdl-ic">${ic}</span><span class="wdl-tx"><b>${esc(it.name)}</b><small>${esc(meta)}</small>${extra}</span>${act}</div>`;
   }
   function paint() {
     if (!sheet) return;
     const list = sheet.querySelector('.wdl-list'); if (!list) return;
     list.innerHTML = items.length ? items.map(rowHtml).join('') : loaded ? '<p class="wdl-empty">No downloads yet. Files you download from Wizard appear here.</p>' : '<p class="wdl-empty">Loading…</p>';
+    // The shell remembers which record each row it drew stands for. Taps are resolved from this map, never from
+    // attributes in the DOM, so rewriting the markup (or adding a lookalike row) cannot redirect an action.
+    rowItem = new WeakMap();
+    [...list.querySelectorAll('.wdl-row')].forEach((row, i) => { if (items[i]) rowItem.set(row, items[i]); });
   }
   async function tick() {
     if (!sheet) return;
-    const before = JSON.stringify(items);
+    const before = JS.stringify(items);
     await refresh();
-    if (sheet && JSON.stringify(items) !== before) paint();
+    if (sheet && JS.stringify(items) !== before) paint();
     if (sheet && !items.some(inFlight) && !sheet.dataset.idle) sheet.dataset.idle = '1';
   }
   function show() {
@@ -244,14 +255,16 @@
     el.addEventListener('pointerdown', e => { downOutside = !e.target.closest('.wdl-panel'); });
     el.addEventListener('pointercancel', () => { downOutside = false; });
     el.addEventListener('click', e => {
-      const b = e.target.closest('[data-wdl]');
+      if (!trusted(e)) return;                              // only a real tap: never a script's dispatchEvent / click()
+      const b = e.target?.closest?.('.wdl-act');
       if (b) {
-        const id = b.closest('.wdl-row')?.dataset.id, a = b.dataset.wdl;
-        if (a === 'open') return openTap(b, id);
-        if (a === 'cancel') return cancelTap(b, id);
-        if (a === 'remove') return removeTap(b, id);
+        const it = rowItem.get(b.closest('.wdl-row'));
+        if (!it) return;                                    // not a row the shell drew
+        if (it.status === 'done') return openTap(b, it.id);
+        if (inFlight(it)) return cancelTap(b, it.id);
+        return removeTap(b, it.id);
       }
-      if (e.target.closest('.wdl-panel')) return;
+      if (e.target?.closest?.('.wdl-panel')) return;
       if (downOutside || e.detail === 0) hide();
     });
     document.body.appendChild(el);
@@ -273,14 +286,22 @@
     const now = Date.now();
     return items.filter(i => i.status === 'done' && i.finished > seenAt && now - i.finished < FRESH_MS).sort((a, b) => b.finished - a.finished)[0] || null;
   }
-  window.__wosDownloads = ev => {
+  const onNativeEvent = ev => {
     if (!ev || typeof ev !== 'object') return true;
     if (!native()) return true;
-    if (ev.type === 'done' || ev.type === 'failed') { banner(ev.item); refresh().then(() => { if (sheet) paint(); }); }
+    // An event is only a nudge. Anything shown comes from the list native returns for the id, never from the payload,
+    // so a script calling window.__wosDownloads cannot put chosen names, ids or toasts on screen.
+    if (ev.type === 'done' || ev.type === 'failed') {
+      const want = String(ev.item?.id ?? '');
+      refresh().then(() => { if (sheet) paint(); const it = items.find(i => i.id === want); if (it) banner(it); });
+    }
     else if (ev.type === 'start') refresh().then(() => { if (sheet) paint(); });
     else if (ev.type === 'sync') refresh().then(() => { if (sheet) paint(); const f = freshUnseen(); if (f) banner(f); });
     return true;
   };
+  // Native calls this by name. Not writable / deletable, so a hosted app cannot swap in its own handler.
+  try { Object.defineProperty(window, '__wosDownloads', { value: onNativeEvent, writable: false, configurable: false, enumerable: false }); }
+  catch (_) { window.__wosDownloads = onNativeEvent; }
 
   /* ---- Settings entry: a row to reopen the sheet later ---- */
   function registerSettings() {
@@ -299,7 +320,8 @@
   registerSettings();
   takePort();                                                // eagerly, before any hosted frame exists
 
-  window.WosDownloads = Object.freeze({ available: () => !!native(), show, hide, toggle: () => (sheet ? hide() : show()), isOpen: () => !!sheet,
-    back, banner, open, hideBanner, bannerOpen: () => !!bannerEl,
-    _state: () => ({ items: items.map(i => ({ ...i })), seenAt, sheet: !!sheet, banner: bannerEl?.dataset.id || '' }), _fmtSize: fmtSize });
+  // Public surface: three booleans/closers the shell's Back/Escape owners need. No list, no state, no way to open, cancel,
+  // remove or show: those stay in this closure and run only from real taps on the shell's own sheet and banner.
+  // The test harness splices a private probe in front of this line; production exports nothing else.
+  window.WosDownloads = Object.freeze({ available: () => !!native(), isOpen: () => !!sheet, back });
 })();

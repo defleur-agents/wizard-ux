@@ -59,9 +59,40 @@ from the shell. Native cannot close that by itself. What this change does:
 * Native->page events (`start | done | failed | sync`) go out only while the shell is the top page, through a script
   that re-checks origin, path and top frame in the document it lands in.
 
-What it does not do, and cannot at this layer: a same-origin hosted app has the shell's authority (it can script the
-shell DOM and the public `WosDownloads` object, as with every existing port: `wizardScreenPort`, `wizardAppsPort`, ...).
-Closing that needs hosted apps on their own origin or in sandboxed iframes without `allow-same-origin`; that is an
-architecture change outside this fix. Download rows are only taken off the list ("remove"); the file is never deleted.
+## Same-origin hosted apps: this is NOT an isolation boundary
+
+A same-origin hosted app has the shell's authority. This change does not close that, and nothing here should be read as
+closing it. Closing it needs hosted apps on their own origin or in sandboxed iframes without `allow-same-origin`, an
+architecture change outside this fix. The acceptance hold (`wizard-ux#1140:downloads-frame-isolation`) stays open.
+
+Bounded hardening in `web/core/downloads.js` (closure hiding; each item is covered by a fake-window parent probe in
+`tests/downloads.test.mjs`, which does not certify native or real-WebView behaviour):
+
+* `window.WosDownloads` is frozen and exports only `available`, `isOpen`, `back`. No list, no `_state`, no open /
+  cancel / remove / show. Native actions live in the module closure.
+* The raw port is taken into the closure at startup and `window.wizardDownloadsPort` is removed.
+* Actions run only from a click with `isTrusted === true` on the shell's own buttons; the row a tap acts on comes from a
+  private map the shell filled when it drew the rows, not from DOM attributes (the markup carries no download ids).
+* `window.__wosDownloads` (called by native) is not writable or deletable. Events are only a nudge: banners and toasts
+  show what the native list returns for the id, never text from the event.
+* `JSON.stringify/parse` are captured at load.
+
+What a same-origin script can still do, because it shares the realm: read the sheet's DOM while it is open (names, sizes,
+no ids) via `parent.document`; patch other globals (`Promise`, `Map`, `Array.prototype`, `document.createElement`,
+`Function.prototype`) before the module runs on a later load or around a real tap; cover or imitate the shell UI to
+mislead a real tap; and reach every other shell module the same way (`wizardScreenPort`, `wizardAppsPort`, ...).
+Whether the real WebView lets a page delete the injected property, and what a hosted iframe finds, is part of the
+on-device acceptance (queued on forum, not run here).
+
+## Receiver (`DownloadsReceiver`, separate from the port)
+
+`android.intent.action.DOWNLOAD_COMPLETE` is sent by DownloadProvider (`android:sharedUserId="android.media"`, not this
+app's UID and not UID 1000), addressed to the requesting package with `setPackage`. A non-exported manifest receiver
+accepts broadcasts only from its own app UID, root or system, so `exported="false"` would drop genuine completions; it
+stays `exported="true"`. A source-level review found a raw `Thread` started for every non-negative id before the id was
+checked. Now: exact action and id >= 0, then the id must be one Wizard OS tracked (`Downloads.isTracked`), only then
+`goAsync()`, with work on a single bounded worker (`DownloadsReceiverPolicy`). No device exploit was shown for the old code.
+
+Download rows are only taken off the list ("remove"); the file is never deleted.
 Whether the real WebView lets the page delete the injected property, and what a hosted iframe finds, is part of the
 on-device acceptance (queued on forum, not run here).
