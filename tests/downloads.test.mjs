@@ -9,11 +9,34 @@ import vm from 'node:vm';
 const src = readFileSync(new URL('../web/core/downloads.js', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../web/core/downloads.css', import.meta.url), 'utf8');
 
+// Buttons and rows as the browser would build them from the markup, so a test can click the REAL element (or tamper with it).
+function fakeButton(cls, row, act) {
+  const b = { dataset: act ? { wdl: act } : {}, classList: null, textContent: act ? act[0].toUpperCase() + act.slice(1) : '', disabled: false, isConnected: true, row,
+    closest(s) { return s === 'button' || s === '.' + cls || s === '.wdl-act' && cls.includes('wdl-act') ? this : s === '.wdl-row' ? this.row || null : null; } };
+  b.classList = el().classList; cls.split(' ').forEach(c => b.classList.add(c));
+  return b;
+}
+function fakeList() {
+  const l = { _html: '', _rows: [], get innerHTML() { return this._html; }, set innerHTML(v) { this._html = v; this._rows = null; },
+    querySelectorAll(sel) {
+      if (sel !== '.wdl-row') return [];
+      if (!this._rows) this._rows = [...this._html.matchAll(/<div class="wdl-row[^"]*"[^>]*>[\s\S]*?<button[^>]*data-wdl="(\w+)"/g)].map(m => {
+        const row = { dataset: {}, removed: false, remove() { this.removed = true; }, closest(s) { return s === '.wdl-row' ? this : null; }, querySelector: s => (s === '.wdl-act' ? row.btn : null) };
+        row.btn = fakeButton('wdl-act', row, m[1]); return row;
+      });
+      return this._rows;
+    } };
+  return l;
+}
 function el(tag = 'div') {
   const e = { tag, children: [], listeners: {}, dataset: {}, attrs: {}, _cls: new Set(), style: { setProperty() {}, cssText: '' }, isConnected: true, innerHTML: '', textContent: '', className: '',
     appendChild(c) { this.children.push(c); c.parent = this; return c; }, remove() { this.isConnected = false; if (this.parent) this.parent.children = this.parent.children.filter(x => x !== this); },
     addEventListener(t, f) { (this.listeners[t] ||= []).push(f); }, setAttribute(k, v) { this.attrs[k] = v; },
-    querySelector(sel) { return sel === '.wdl-list' ? (this.list ||= { innerHTML: '' }) : null; }, closest() { return null; } };
+    querySelector(sel) {
+      if (sel === '.wdl-list') return this.list ||= fakeList();
+      if (sel === '.wdl-open' || sel === '.wdl-main') return (this._b ||= {})[sel] ||= fakeButton(sel.slice(1));
+      return null;
+    }, closest() { return null } };
   e.classList = { add: c => e._cls.add(c), remove: c => e._cls.delete(c), contains: c => e._cls.has(c) };
   return e;
 }
@@ -42,9 +65,15 @@ function load({ bridge = true, items = [], failOpen = null, legacy = false } = {
     WosSettings: { register: f => registered.push(f), refresh: () => { refreshed.n++; } }, WizCore: {} };
   const ctx = { window, document: { createElement: el, body, documentElement: { dataset: { shell: 'phone' } }, querySelectorAll: () => [] },
     localStorage: { getItem: k => (store.has(k) ? store.get(k) : null), setItem: (k, v) => store.set(k, String(v)) },
-    setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, Date, JSON, Number, String, Set, Map, Math, Promise };
-  vm.runInNewContext(src, ctx);
-  return { W: window.WosDownloads, window, body, calls, sent, toasts, timers, registered, store, port, refreshed };
+    setTimeout: (f, ms) => { timers.push({ f, ms }); return timers.length; }, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, Date, JSON: { stringify: (...a) => JSON.stringify(...a), parse: (...a) => JSON.parse(...a) }, Number, String, Set, Map, Math, Promise };
+  // The tests drive the module's private functions through a hook the HARNESS splices in. Production code exports only
+  // available / back / isOpen (see 'the public surface...' below), so nothing here is reachable from a hosted app.
+  const MARK = 'window.WosDownloads = Object.freeze({';
+  assert.ok(src.includes(MARK), 'harness anchor missing');
+  const probe = 'window.__t = { show, hide, open, banner, hideBanner, bannerOpen: () => !!bannerEl, back, isOpen: () => !!sheet, _fmtSize: fmtSize, available: () => !!native() };';
+  vm.runInNewContext(src.replace(MARK, probe + '\n  ' + MARK), ctx);
+  const W = window.__t; delete window.__t;
+  return { W, pub: window.WosDownloads, window, ctx, body, calls, sent, toasts, timers, registered, store, port, refreshed };
 }
 const flush = () => new Promise(r => setImmediate(r));
 const pdf = (over = {}) => ({ id: '12', name: 'Plan.pdf', mime: 'application/pdf', size: 4_700_000, got: 4_700_000, status: 'done', started: Date.now() - 5000, finished: Date.now(), ...over });
@@ -79,6 +108,7 @@ test('the old frame-blind WizardOSNative.downloads* bridge is never consulted, e
 test('a finished download shows the banner with name and size, then dismisses itself after ~6 s', async () => {
   const { W, window, body, timers } = load({ items: [pdf()] });
   window.__wosDownloads({ type: 'done', item: pdf() });
+  await flush();
   assert.equal(body.children.length, 1);
   const b = body.children[0];
   assert.match(b.className, /wdl-banner/);
@@ -97,9 +127,8 @@ test('Open on the banner posts one open request over the port, with the digits i
   window.__wosDownloads({ type: 'done', item: pdf() });
   await flush();
   r.sent.length = 0;
-  const b = body.children[0], open = { classList: el().classList, textContent: 'Open', disabled: false, closest: () => open };
-  open.classList.add('wdl-open'); open.closest = s => (s === 'button' ? open : null);
-  b.listeners.click[0]({ target: open });
+  const b = body.children[0], open = b.querySelector('.wdl-open');
+  b.listeners.click[0]({ target: open, isTrusted: true });
   assert.equal(open.textContent, 'Opening…', 'paints on the tap, before the native call');
   assert.deepEqual(calls, []);
   timers.filter(t => t.ms === 0).forEach(t => t.f());
@@ -132,12 +161,9 @@ test('only list / open / cancel / remove are ever requested, each a v1 envelope 
   r.W.show();
   await flush();
   const sheet = r.body.children[0];
-  const tap = (act, id) => {
-    const row = { dataset: { id }, remove() {} };
-    const b = { dataset: { wdl: act }, classList: el().classList, textContent: act, disabled: false, closest: s => (s === '.wdl-row' ? row : null) };
-    sheet.listeners.click[0]({ target: { closest: s => (s === '[data-wdl]' ? b : null) }, detail: 1 });
-  };
-  tap('cancel', '13'); tap('remove', '14'); tap('open', '12');
+  const rows = sheet.list.querySelectorAll('.wdl-row');
+  const tap = row => sheet.listeners.click[0]({ target: row.btn, detail: 1, isTrusted: true });
+  tap(rows[1]); tap(rows[2]); tap(rows[0]);          // cancel 13 · remove 14 · open 12
   r.timers.filter(t => t.ms === 0).forEach(t => t.f());
   await flush();
   for (const m of new Set(r.sent.map(m => m.method))) assert.ok(['list', 'open', 'cancel', 'remove'].includes(m), m);
@@ -205,10 +231,12 @@ test('Settings row text follows the list once it arrives, with one repaint and n
 });
 
 test('a failed download is a short toast, not a banner; a running one never banners', async () => {
-  const { window, body, toasts } = load({ items: [] });
-  window.__wosDownloads({ type: 'done', item: pdf({ status: 'running', got: 10 }) });
+  const { window, body, toasts } = load({ items: [pdf({ id: '20', status: 'running', got: 10 }), pdf({ id: '21', status: 'failed', name: 'Big.zip' })] });
+  window.__wosDownloads({ type: 'done', item: pdf({ id: '20', status: 'running', got: 10 }) });
+  await flush();
   assert.equal(body.children.length, 0);
-  window.__wosDownloads({ type: 'failed', item: pdf({ status: 'failed', name: 'Big.zip' }) });
+  window.__wosDownloads({ type: 'failed', item: pdf({ id: '21', status: 'failed', name: 'Big.zip' }) });
+  await flush();
   assert.deepEqual(toasts, ['Couldn’t download Big.zip']);
   assert.equal(body.children.length, 0);
 });
@@ -282,6 +310,148 @@ test('size labels read like a person would say them', () => {
   assert.equal(W._fmtSize(4_700_000), '4.5 MB');
   assert.equal(W._fmtSize(52_000_000), '50 MB');
   assert.equal(W._fmtSize(0), '');
+});
+
+// ---- same-origin hosted app: what a script holding `parent` can and cannot do ------------------------------------------
+// A hosted app is an unsandboxed same-origin iframe, so it can read `parent.*` and the shell DOM. These probes act as
+// that script, against the production module in the fake-port harness. They pin the BOUNDED hardening (no public data
+// or action export, taps must be real user taps on the shell's own elements, event payloads are never trusted). They do
+// NOT prove isolation: see the residual test at the end and docs/android-downloads-port.md.
+const hostedParent = r => r.window;                       // what `parent` is to the hosted app
+const listed = () => [pdf({ id: '12' }), pdf({ id: '13', status: 'running', finished: 0, name: 'Secret-plans.pdf' })];
+
+test('the public surface is exactly available / isOpen / back: no metadata, no native action, frozen', () => {
+  const r = load({ items: listed() });
+  const parent = hostedParent(r);
+  assert.deepEqual(Object.keys(parent.WosDownloads).sort(), ['available', 'back', 'isOpen']);
+  assert.ok(Object.isFrozen(parent.WosDownloads));
+  for (const gone of ['_state', 'open', 'show', 'hide', 'toggle', 'banner', 'hideBanner', 'bannerOpen', 'cancel', 'remove', 'clear', '_fmtSize'])
+    assert.equal(parent.WosDownloads[gone], undefined, gone);
+  assert.throws(() => { parent.WosDownloads.open = () => 'ok'; }, TypeError);
+});
+
+test('parent probe: no raw port, no metadata, no open/cancel reachable from the parent reference', async () => {
+  const r = load({ items: listed() });
+  const parent = hostedParent(r);
+  r.W.show(); await flush();                              // the shell has the sheet open and a list loaded
+  r.sent.length = 0; r.calls.length = 0;
+  const seen = [];
+  const walk = (o, d = 0) => { if (!o || d > 3) return; for (const k of Object.getOwnPropertyNames(o)) { let v; try { v = o[k]; } catch (_) { continue; } seen.push(k); if (v && typeof v === 'object') walk(v, d + 1); } };
+  walk(parent.WosDownloads);
+  assert.equal(parent.wizardDownloadsPort, undefined, 'raw port hidden');
+  assert.ok(!seen.some(k => /state|items|open|cancel|remove|port/i.test(k)), 'reachable names: ' + seen.join());
+  assert.deepEqual(r.sent, []);
+  assert.deepEqual(r.calls, []);
+});
+
+test('a forged native event cannot put chosen text or ids on screen: banners come from the native list', async () => {
+  const r = load({ items: listed() });
+  const parent = hostedParent(r);
+  parent.__wosDownloads({ type: 'done', item: pdf({ id: '12', name: 'EVIL-update.apk', status: 'done' }) });
+  await flush();
+  assert.equal(r.body.children.length, 1);
+  assert.match(r.body.children[0].innerHTML, /Plan\.pdf/, 'the name the phone holds');
+  assert.doesNotMatch(r.body.children[0].innerHTML, /EVIL/);
+  r.W.hideBanner();
+  const none = load({ items: listed() });
+  none.window.__wosDownloads({ type: 'done', item: pdf({ id: '99', name: 'Invented.pdf' }) });   // an id the phone never tracked
+  await flush();
+  assert.equal(none.body.children.length, 0, 'no banner for an id native does not list');
+  none.window.__wosDownloads({ type: 'failed', item: pdf({ id: '98', status: 'failed', name: 'Invented.zip' }) });
+  await flush();
+  assert.deepEqual(none.toasts, [], 'and no toast with invented text');
+});
+
+test('the native entry point cannot be replaced or deleted by a hosted app', () => {
+  const r = load({ items: listed() });
+  const parent = hostedParent(r);
+  const real = parent.__wosDownloads;
+  try { parent.__wosDownloads = () => 'hijack'; } catch (_) {}
+  try { delete parent.__wosDownloads; } catch (_) {}
+  assert.equal(parent.__wosDownloads, real);
+});
+
+test('script-dispatched clicks (isTrusted false) never reach native: banner and sheet', async () => {
+  const r = load({ items: listed() });
+  r.window.__wosDownloads({ type: 'done', item: pdf({ id: '12' }) });
+  await flush();
+  const banner = r.body.children[0];
+  r.sent.length = 0;
+  const open = banner.querySelector('.wdl-open');
+  banner.listeners.click.forEach(f => f({ target: open, isTrusted: false }));      // dispatchEvent / .click() from script
+  banner.listeners.click.forEach(f => f({ target: open }));
+  r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r.sent, [], 'banner Open ignored');
+  assert.equal(open.textContent, 'Open', 'and nothing was painted either');
+
+  const r2 = load({ items: listed() });
+  r2.W.show(); await flush();
+  const sheet = r2.body.children[0], rows = sheet.list.querySelectorAll('.wdl-row');
+  r2.sent.length = 0;
+  for (const row of rows) { sheet.listeners.click.forEach(f => f({ target: row.btn, isTrusted: false, detail: 1 })); sheet.listeners.click.forEach(f => f({ target: row.btn, detail: 1 })); }
+  r2.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r2.sent, [], 'sheet Open / Cancel ignored: the running transfer stays');
+  assert.deepEqual(r2.calls, []);
+  assert.equal(sheet.list.querySelectorAll('.wdl-row').length, 2, 'rows untouched');
+  // control: the same element tapped by a real user does go through
+  sheet.listeners.click[0]({ target: rows[1].btn, isTrusted: true, detail: 1 });
+  r2.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r2.calls, [['cancel', '13']]);
+});
+
+test('a real tap acts on the shell\'s own record of the row, not on attributes a script rewrote', async () => {
+  const r = load({ items: listed() });
+  r.W.show(); await flush();
+  const sheet = r.body.children[0], rows = sheet.list.querySelectorAll('.wdl-row');
+  r.calls.length = 0;
+  rows[0].dataset.id = '13'; rows[0].btn.dataset.wdl = 'cancel';                      // tampered DOM: row 12's Open now "says" cancel 13
+  sheet.listeners.click[0]({ target: rows[0].btn, isTrusted: true, detail: 1 });
+  r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r.calls, [['open', '12']], 'row 12 Open does what row 12 was drawn to do');
+  // a button the script made itself (not one of the shell\'s rows) does nothing, even with a real tap
+  r.calls.length = 0; r.sent.length = 0;
+  const forged = fakeButton('wdl-act', { closest: s => (s === '.wdl-row' ? forged.row : null), dataset: { id: '13' } }, 'cancel');
+  sheet.listeners.click[0]({ target: forged, isTrusted: true, detail: 1 });
+  r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  assert.deepEqual(r.sent, []);
+});
+
+test('the page DOM carries names for display but no download ids', async () => {
+  const r = load({ items: listed() });
+  r.W.show(); await flush();
+  r.window.__wosDownloads({ type: 'done', item: pdf({ id: '12' }) }); await flush();
+  const dom = r.body.children.map(c => c.innerHTML + (c.list ? c.list.innerHTML : '') + JSON.stringify(c.dataset)).join('\n');
+  assert.doesNotMatch(dom, /data-id|"id":|dataset/i);
+  assert.ok(!/\b(12|13)\b/.test(dom.replace(/\d+(\.\d+)? ?(MB|KB|B)|\d+%|\d+ (min|h)/g, '')), 'no id digits in the markup: ' + dom.slice(0, 200));
+  assert.equal(r.body.children.find(c => /wdl-banner/.test(c.className))?.dataset.id, undefined);
+});
+
+test('a script that swaps JSON.stringify / JSON.parse after load cannot rewrite what goes to native', async () => {
+  const r = load({ items: listed() });
+  r.W.show(); await flush();
+  r.sent.length = 0;
+  const real = { s: r.ctx.JSON.stringify, p: r.ctx.JSON.parse };
+  try {
+    r.ctx.JSON.stringify = () => '{"v":1,"id":"dlX","method":"cancel","params":{"id":"13"}}';
+    r.ctx.JSON.parse = () => ({ v: 1, id: 'dl1', ok: true, result: { v: 1, items: [] } });
+    const rows = r.body.children[0].list.querySelectorAll('.wdl-row');
+    r.body.children[0].listeners.click[0]({ target: rows[0].btn, isTrusted: true, detail: 1 });
+    r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush();
+  } finally { r.ctx.JSON.stringify = real.s; r.ctx.JSON.parse = real.p; }
+  assert.ok(r.sent.length >= 1, 'the tap did reach native');
+  assert.ok(r.sent.every(m => m.method === 'open' && m.params.id === '12'), JSON.stringify(r.sent));
+});
+
+test('REMAINING same-origin residual, pinned so it cannot be forgotten or silently "fixed" on paper', () => {
+  // A hosted app shares the shell's origin and realm. By design of this change it can no longer READ the list, OPEN or
+  // CANCEL through WosDownloads or the port. It can still: read the sheet while it is open (names, not ids) from
+  // parent.document; redraw or overlay shell UI to mislead a real tap; patch other globals (Map, Promise, Array
+  // prototypes, document.createElement) before the user acts. Closing that needs apps on their own origin or in
+  // sandboxed iframes: out of scope here. This test fails if someone claims otherwise in the docs.
+  const doc = readFileSync(new URL('../docs/android-downloads-port.md', import.meta.url), 'utf8');
+  assert.match(doc, /does not (close|isolate)|not an isolation boundary|is not isolat/i);
+  assert.match(doc, /same-origin/i);
+  assert.match(doc, /acceptance hold|stays open|remains open/i);
 });
 
 test('skin: the CSS uses only --wz-* roles (with shell fallbacks) and opaque panels, never a literal text colour or blur', () => {
