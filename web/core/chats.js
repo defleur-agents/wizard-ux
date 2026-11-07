@@ -1771,6 +1771,16 @@ window.WizCore.chats = function createChats(H) {
     if (nx) openChat(w.id, nx);
     else { ch(w.id).trail = []; chatsBack(w); }
   }
+  // Repaint every chats list from the already-patched LIVE state on the tap's own frame. The holds that normally defer a
+  // repaint (swipe tray, long press, actions sheet, reading) guard against a poll reshuffling rows under a finger; the
+  // owner's own action is the one repaint that must never wait.
+  let paintForced = false;
+  function paintListsNow() {
+    closeSwipe(true); paintForced = true;
+    try { for (const id of Object.keys(CH)) { const x = W[id]; if (x && !x.thread) renderChats(x); } } finally { paintForced = false; }
+    H.changed?.();
+    window.WosSkinHost?.rendered?.('chats-list', null); // a layout that draws its own list (AI apps sidebar) re-reads it now too
+  }
   async function threadAct(wid, sid, a) {
     wid = owner(wid);
     const s = rowOf(wid, sid); if (sid === '__new__') { notifAct(wid, a); return; } if (!s || !ACT[a]) return;
@@ -1784,7 +1794,8 @@ window.WizCore.chats = function createChats(H) {
         if (keepThreadOpen()) ch(id).unreadHold = { sid, nav: ch(id).readNav };
         else threadBack(x);
       }
-      const ok = await LIVE.markUnread(sid);
+      const write = LIVE.markUnread(sid); paintListsNow();
+      const ok = await write;
       toast(ok ? '●' : '!', ok ? 'Marked unread' : 'Couldn’t mark unread', ok ? 1600 : 3200);
       for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
       return;
@@ -1806,7 +1817,11 @@ window.WizCore.chats = function createChats(H) {
     else if (!keepThreadOpen() && a !== 'restore' && w && w.thread === sid) threadBack(w);
     const msg = { done: ['✓', followUpActive(s) ? 'Archived · still watching' : 'Archived'], file: ['▤', 'Filing…'], restore: ['↺', 'Restored to Work'] }[a];
     toast(msg[0], msg[1], 1600);
-    const ok = await (a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid));
+    // Same frame as the tap (James, 7 Nov 2026, reported again): LIVE patches its list synchronously and only then awaits
+    // the write, so start it, paint every list now (open sheet / swipe / long-press holds must not defer it), reconcile after.
+    const write = a === 'done' ? LIVE.archive(sid) : a === 'file' ? LIVE.archive(sid, { file: true }) : LIVE.restore(sid);
+    paintListsNow();
+    const ok = await write;
     if (ok && a === 'file') toast('▤', 'Filed in Archive', 1800);
     if (!ok) toast('!', { done: 'Couldn’t archive · thread restored', file: 'Couldn’t close & file · thread restored', restore: 'Couldn’t restore · thread kept where it was' }[a], 3200);
     for (const id of Object.keys(CH)) { const x = W[id]; if (x) renderChats(x); } H.changed?.();
@@ -1822,7 +1837,9 @@ window.WizCore.chats = function createChats(H) {
     ids = ids && ids.length ? ids : [nid];
     // The Notifications app has read / archived, not a separate done or flag state.
     // Archive marks the alert read and takes it out of Ready; Snooze marks it read and keeps it (the snoozed tail).
-    const ok = await window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
+    const write = window.WosBell.mark(ids, a === 'unread' ? { read: false } : a === 'snooze' ? { read: true } : { read: true, archived: true });
+    paintListsNow(); // mark() patches its items synchronously; the list follows on this frame, not on the 60 ms watcher
+    const ok = await write;
     const many = ids.length > 1 ? `${ids.length} ` : '';
     toast(ok ? '✓' : '!', ok ? (a === 'unread' ? `${many}Marked unread` : a === 'snooze' ? `${many}Snoozed` : many ? `${ids.length} done` : 'Done') : 'Couldn’t save · restored', ok ? 1600 : 3200);
   }
@@ -3434,6 +3451,7 @@ window.WizCore.chats = function createChats(H) {
   function justPressed() { return lpHeld !== null || Date.now() < lpUntil; }
   // A list must not re-render under an open actions sheet or a finger mid-press.
   const holdList = id => {
+    if (paintForced) return false;
     const el = elOf(id), hold = rowSheet?.wid === id || (!!lp && lp.wid === id) || (!!swipeOpen && swipeOpen.wid === id && swipeOpen.wrap.isConnected) || !!PW?.holds(id) || (!!el && readingIn(el));
     if (hold) ch(id).heldList = true;
     return hold;
