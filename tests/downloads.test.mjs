@@ -250,6 +250,21 @@ test('Settings does not re-ask in a loop while a download\'s byte count keeps ch
   assert.ok(r.sent.length <= 6, 'native was asked ' + r.sent.length + ' times for one open Settings page');
 });
 
+test('cancel and remove repaint the Settings row at once, not only when the next list happens to differ', async () => {
+  // Review finding on 7c9e9117: the optimistic local change already moved the row summary, so the follow-up list looked "unchanged"
+  // and Settings stayed on "1 downloading".
+  for (const [act, item] of [['cancel', pdf({ id: '40', status: 'running', got: 10, size: 100 })], ['remove', pdf({ id: '41' })]]) {
+    const r = load({ items: [item] });
+    await settle(r);
+    r.W.show(); await flush(); r.refreshed.n = 0;
+    const sheet = r.body.children[0], row = sheet.list.querySelectorAll('.wdl-row')[0];
+    r.itemsRef.length = 0;                                  // native will agree the item is gone
+    sheet.listeners.click[0]({ target: row.btn, isTrusted: true, detail: 1 });
+    r.timers.filter(t => t.ms === 0).forEach(t => t.f()); await flush(); await flush();
+    assert.ok(r.refreshed.n >= 1, act + ': Settings was repainted');
+  }
+});
+
 test('a failed download is a short toast, not a banner; a running one never banners', async () => {
   const { window, body, toasts } = load({ items: [pdf({ id: '20', status: 'running', got: 10 }), pdf({ id: '21', status: 'failed', name: 'Big.zip' })] });
   pushEv(window, { type: 'done', item: pdf({ id: '20', status: 'running', got: 10 }) });
