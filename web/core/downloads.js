@@ -102,10 +102,13 @@
     return o && Array.isArray(o.items) ? o.items.map(clean).filter(Boolean) : null;
   }
   async function refresh() {
-    const l = await read(), before = JS.stringify(items);   // compared after the await: concurrent refreshes must not both count as a change
-    if (l) { items = l; loaded = true; if (JS.stringify(items) !== before) settingsChanged(); }
+    const l = await read(), before = rowSummary();   // compared after the await: concurrent refreshes must not both count as a change
+    if (l) { items = l; loaded = true; if (rowSummary() !== before) settingsChanged(); }
     return items;
   }
+  // Settings shows only a count line. Repaint it only when THAT changes: a growing byte count must not repaint the row, because
+  // the row's html() asks native again (that was an unbounded request loop while a transfer ran).
+  const rowSummary = () => (loaded ? items.filter(inFlight).length + '/' + items.length : '');
   function settingsChanged() { try { window.WosSettings?.refresh?.(); } catch (_) {} }   // the Settings row text follows the list
   const inFlight = it => it.status === 'pending' || it.status === 'running' || it.status === 'paused';
 
