@@ -207,11 +207,39 @@
       return true;
     }
   });
+  let savingChatAction = false;
+  register({ id: 'chat-after-action', page: 'chats', aliases: ['chat-after-action'],
+    html() {
+      const value = window.WizConfig?.chatAfterAction?.() || 'stay';
+      return `<div class="st-group"><h4>After actions on your phone</h4><p class="st-hint">After sending, archiving, snoozing or marking unread. Desktop chats stay open.</p><div role="radiogroup" aria-label="After actions on your phone">${[['stay', 'Stay on this chat'], ['list', 'Back to chats list']].map(([id, label]) => `<button type="button" class="st-row wz-row" data-chat-after="${id}" role="radio" aria-checked="${value === id}" tabindex="${value === id ? 0 : -1}"${savingChatAction ? ' disabled' : ''}><span class="st-tx"><b>${label}</b></span><span aria-hidden="true">${value === id ? '●' : '○'}</span></button>`).join('')}</div></div>`;
+    },
+    act(ctx, el) {
+      const button = el.closest('[data-chat-after]'); if (!button) return false;
+      if (savingChatAction) return true;
+      const value = button.dataset.chatAfter, hadFocus = document.activeElement === button;
+      savingChatAction = true;
+      const done = window.WizConfig.setChatAfterAction(value);
+      ctx.changed?.();
+      done.then(scope => ctx.toast?.('✓', scope === 'owner' ? 'Saved on your Wizard' : 'Saved on this device', 2200), e => ctx.toast?.('!', e.message, 3200)).finally(() => {
+        savingChatAction = false; ctx.changed?.();
+        if (hadFocus && document.activeElement === document.body) ctx.root?.querySelector(`[data-chat-after="${value}"]`)?.focus({ preventScroll: true });
+      });
+      return true;
+    },
+  });
+  window.addEventListener?.('wos:prefs', () => { for (const m of mounts) m.render(); });
   // Reply style belongs to each agent's own persona (SOUL.md), not to Wizard: one source, survives detach.
   register({ id: 'response-style', page: 'chats', aliases: ['response-style'],
     html() {
       return `<div class="st-group"><div class="st-row static"><span class="st-tx"><b>Reply style</b><small>Each agent keeps its own. Tell an agent how you like replies and it remembers.</small></span></div></div>`;
     },
+  });
+  register({ id: 'working-order', page: 'chats', aliases: ['working-order'], available: () => !!window.WizChatsListModel,
+    html() {
+      const M = window.WizChatsListModel, current = window.WizLive?.workingOrder?.() || 'alphabetical';
+      return `<div class="st-group"><h4>Working threads</h4><label class="st-row wz-row"><span class="st-tx"><b>Sort Working</b><small>The same order on your phone and desktop.</small></span><select data-settings-working-order aria-label="Sort Working">${M.WORKING_SORTS.map(([v, word]) => `<option value="${v}"${v === current ? ' selected' : ''}>${word}</option>`).join('')}</select></label></div>`;
+    },
+    input(ctx, el) { if (el.matches('[data-settings-working-order]')) window.WizLive?.setWorkingOrder?.(el.value); },
   });
   const mySkinWorn = () => !!window.WosMySkin?.active;
   function mySkinRow(skin) {
@@ -288,7 +316,48 @@
     tweakOpts.set(id, node); for (const m of mounts) m.render();
     return () => { if (tweakOpts.get(id) === node) { tweakOpts.delete(id); node.remove?.(); for (const m of mounts) m.render(); } };
   }
-  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); });
+  window.addEventListener?.('wos:experience', () => { for (const m of mounts) m.render(); paintTweakCards(); });
+  /* A chat reply can carry a tweak (marker WIZARD_TWEAK_V1, core/chat-kit.js tweakIds): Look's own switch row above, bound
+   * to WosExperience. A message is history, so the card always shows the tweak's CURRENT state, never the state when it
+   * was sent. A tap paints the flipped switch on its own frame (pending), then the real state reconciles; a failure
+   * reverts with the same toast as Look. Every card on screen and Look repaint together on wos:experience. */
+  const cardPending = new Map(), ONLY = { desktop: 'Desktop only', phone: 'Phone only' };
+  function tweakCardRows(list) {
+    const E = window.WosExperience, s = E?.state;
+    if (s && !authorList) E.authors?.().then(a => { authorList = a; paintTweakCards(); }, () => {});
+    const name = who => (authorList || []).find(a => a.id === who)?.name || who;
+    return list.map(id => {
+      const t = s?.tweaks.find(x => x.id === id);
+      if (!t) return `<div class="st-row static tw-row tw-gone" data-chat-tweak-gone="${esc(id)}"><span class="st-tx"><small>${!s || (!s.tweaks.length && !s.error) ? 'Loading tweak…' : 'This tweak isn’t installed on this Wizard'}</small></span></div>`;
+      const here = !Array.isArray(t.shells) || t.shells.includes(s.shell);
+      const on = cardPending.has(id) ? cardPending.get(id) : t.on;
+      return tweakSwitches([{ ...t, on, where: here ? '' : ONLY[t.shells[0]] || '' }], 'data-chat-tweak', s.busy || !here, name);
+    }).join('');
+  }
+  const cardIds = ids => [...new Set((Array.isArray(ids) ? ids : String(ids || '').split(' ')).filter(Boolean))];
+  function tweakCard(ids) {
+    const list = cardIds(ids); if (!list.length) return '';
+    return `<div class="ch-tweak" data-chat-tweak-card="${esc(list.join(' '))}" role="group" aria-label="${list.length > 1 ? 'Tweaks' : 'Tweak'}">${tweakCardRows(list)}</div>`;
+  }
+  function paintTweakCards() {
+    for (const n of document.querySelectorAll?.('[data-chat-tweak-card]') || []) {
+      const rows = tweakCardRows(cardIds(n.dataset.chatTweakCard)); if (n.__wosRows === rows) continue;
+      const focused = n.contains(document.activeElement) ? document.activeElement.dataset?.chatTweak : '';
+      n.innerHTML = rows; n.__wosRows = rows;
+      if (focused) [...n.querySelectorAll('[data-chat-tweak]')].find(x => x.dataset.chatTweak === focused)?.focus({ preventScroll: true });
+    }
+  }
+  function tweakCardTap(btn, toast) {
+    const id = btn.dataset.chatTweak, E = window.WosExperience;
+    if (!id || !E || btn.disabled || cardPending.has(id)) return false;
+    const was = btn.getAttribute('aria-checked') === 'true';
+    cardPending.set(id, !was);
+    btn.setAttribute('aria-checked', String(!was)); btn.querySelector('.sw')?.classList.toggle('on', !was); // this frame
+    paintTweakCards(); // every other card naming it, the same frame
+    const done = () => { cardPending.delete(id); paintTweakCards(); };
+    Promise.resolve().then(() => E.toggle(id)).then(done, e => { done(); toast?.('!', e?.message || 'Couldn’t change that tweak'); });
+    return true;
+  }
   const newTile = () => window.WosMySkin ? '<button type="button" class="skp-card skp-my" data-newskin aria-label="New skin"><span class="skp-mini skp-mini-my" aria-hidden="true"><i class="skp-plus"></i></span><span class="skp-nm">+ New skin</span></button>' : '';
   function skinAction(action, done, failed) {
     try { const result = action(); if (result?.then) result.then(done, failed); else done(result); } catch (e) { failed(e); }
@@ -818,6 +887,13 @@
       } finally { input.value = ''; }
     };
     const key = e => {
+      const choice = e.target.closest?.('[data-chat-after]');
+      if (choice && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
+        e.preventDefault();
+        const choices = [...choice.closest('[role="radiogroup"]').querySelectorAll('[data-chat-after]')];
+        const at = choices.indexOf(choice), next = e.key === 'Home' ? 0 : e.key === 'End' ? choices.length - 1 : (at + (['ArrowRight','ArrowDown'].includes(e.key) ? 1 : -1) + choices.length) % choices.length;
+        choices[next].focus(); choices[next].click(); return;
+      }
       const dialog = root.querySelector('[data-settings-feature] [aria-modal="true"]');
       if (dialog) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, dialog); return; }
       if (confirm) { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); back(); } else trap(e, root.querySelector('.st-confirm')); return; }
@@ -840,8 +916,8 @@
     };
     const unsubscribe = ctx.live?.onChange?.(() => render());
     const appsChanged = () => render();
-    window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
-    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
+    window.addEventListener?.('wos:prefs', appsChanged); window.addEventListener?.('wizard:apps', appsChanged); window.addEventListener?.('wizard:notify-route', appsChanged); window.addEventListener?.('wizard:notify-attention', appsChanged);
+    function destroy() { for (const f of features.values()) f.leave?.(ctx); root.removeEventListener('input', featureInput); if (typeof unsubscribe === 'function') unsubscribe(); window.removeEventListener?.('wos:prefs', appsChanged); window.removeEventListener?.('wizard:apps', appsChanged); window.removeEventListener?.('wizard:notify-route', appsChanged); window.removeEventListener?.('wizard:notify-attention', appsChanged); mounts.delete(api); root.removeEventListener('click', click); root.removeEventListener('keydown', key); root.removeEventListener('change', change); }
     root.addEventListener('input', featureInput); root.addEventListener('click', click); root.addEventListener('keydown', key); root.addEventListener('change', change); mounts.add(api); render(); return api;
   }
   // One deferred System link at a time: a newer link, Back, or anything the user does first cancels the wait.
@@ -872,5 +948,5 @@
     if (at < 0 || (!event.shiftKey && at === controls.length - 1) || (event.shiftKey && at === 0)) { event.preventDefault(); controls[event.shiftKey ? controls.length - 1 : 0].focus(); }
   }
   window.WosMySkin?.on(() => { for (const m of mounts) m.render(); });
-  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
+  window.WosSettings = { refresh: () => { for (const m of mounts) m.render(); }, register, mount, route, cancelWait, tweakCard, tweakCardTap, hasSystem: () => PAGES.some(p => p.group === 'System' && p.available()), systemPages: Object.freeze(PAGES.filter(p => p.group === 'System').map(p => p.id)), trap, pageOf, attention, moveDraft, unsentAll, unsentRow, unsentAction, retryAll, focusUnsent, tweakOptions, get features() { return [...features.values()].map(f => ({ id: f.id, aliases: f.aliases || [], page: pageOf(f) })); } };
 })();

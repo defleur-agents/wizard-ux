@@ -12,7 +12,9 @@
  * Everything paints from local state first (a tap never waits on the box); the box then confirms.
  *
  *   WosThreadTracker.on() · load(sid, agent) · stripHtml(sid, agent) · dots(sid, agent) · dotsNode(sid, agent) · loadCounts()
- *   · click(e, { sid, agent, jump }) · itemFor(message) · isOpen() · close() · repaint()
+ *   · click(e, { sid, agent, jump, resume }) · itemFor(message) · isOpen() · close() · repaint()
+ * Stopped rows (marked running, nothing behind them) carry Resume: resume(text) is the host's ordinary owner send,
+ * the row spins on the tap's frame and goes back to stopped only if that send was refused.
  */
 (() => {
   'use strict';
@@ -30,14 +32,44 @@
   const openKeys = new Set(), ackKeys = new Set();
   let opened = null; // the key of the one open dropdown (a tap outside closes it)
   const pendingSeen = new Map(); // key → seen writes in flight
-  const sendCutoffs = new Map(); // explicit send/steer, scoped to this thread and visit
+  const sendSnapshots = new Map(); // explicit send/steer: exact server versions already loaded in this scope
+  // Owner replies answer older amber/red asks: per-thread server versions (id@updated_at) taken at send time. Never
+  // sent to the box; the agent's next reply re-lists anything still open, which is a new version and so counts again.
+  const ANSWERED_KEY = 'wos:tt-answered';
+  const answered = new Map(); // key → { tokens:Set, at, started }
+  try { for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem(ANSWERED_KEY) || '{}'))) answered.set(k, { tokens: new Set(v), at: 0, started: true }); } catch (_) { /* no storage */ }
+  const saveAnswered = () => { try { localStorage.setItem(ANSWERED_KEY, JSON.stringify(Object.fromEntries([...answered].filter(([, a]) => a.tokens.size).map(([k, a]) => [k, [...a.tokens].slice(-200)])))); } catch (_) { /* no storage */ } };
+  const WORKING = new Set(['submitting', 'queued', 'running', 'stopping']);
+  function workingNow(k, a) {
+    const s = k.indexOf('/'), sid = k.slice(s + 1), agent = k.slice(0, s) === 'hermes' ? '' : k.slice(0, s);
+    const row = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    if (row && WORKING.has(row.status)) { a.started = true; return true; }
+    return !a.started && Date.now() - a.at < 20000; // the run may not have reported yet
+  }
+  // Items as the strip shows them: answered amber/red asks spin while the run works, then stay out of every count.
+  function project(k, items) {
+    const a = answered.get(k); if (!a?.tokens.size) return items;
+    const run = workingNow(k, a);
+    return (items || []).map(i => (i.state === 'needs_you' || i.state === 'blocked') && !i.seen && a.tokens.has(`${i.id}@${i.updated_at}`)
+      ? (run ? { ...i, state: 'running', answered: true } : { ...i, state: 'needs_you', seen: true, answered: true }) : i);
+  }
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
+  // Resume taps: key → { ids:Set, at, started }. The tapped rows spin from the tap until the thread itself reports
+  // work (then the live row owns the spinner) or 30 s pass; a refused send drops the hold at once.
+  const RESUME_MS = 30000;
+  const resuming = new Map();
+  function resumeHeld(k, working) {
+    const r = resuming.get(k); if (!r) return null;
+    if (working) r.started = true;
+    if (r.started || Date.now() - r.at > RESUME_MS) { resuming.delete(k); return null; }
+    return r.ids;
+  }
 
   const isSeen = i => i.seen === true;
   // Same read-time projection as Agent Service: a reply is one thing to check, not one row per ask.
   const anchorKey = value => typeof value === 'string' && value.trim() ? value
     : typeof value === 'number' && Number.isFinite(value) ? String(value) : null;
-  const memberKind = i => (isSeen(i) && (i.state === 'done' || (i.state === 'needs_you' && i.try)) ? 'ack' : i.state === 'done' ? 'done' : i.state === 'blocked' ? 'bad' : i.state === 'needs_you' ? 'you' : 'run');
+  const memberKind = i => (isSeen(i) && (i.state === 'done' || i.state === 'needs_you') ? 'ack' : i.state === 'done' ? 'done' : i.state === 'blocked' ? 'bad' : i.state === 'needs_you' ? 'you' : 'run');
   const urgency = { bad: 0, you: 1, run: 2, done: 3, ack: 4 };
   const groupsOf = items => {
     const groups = [], anchors = new Map();
@@ -75,7 +107,7 @@
   function merge(k, items) {
     const mine = seenLocally.get(k);
     const list = (items || []).map(i => (mine?.has(`${i.id}@${i.updated_at}`) ? { ...i, seen: true } : i));
-    for (const i of list) if (i.seen) mine?.delete(`${i.id}@${i.updated_at}`);
+    for (const i of items || []) if (i.seen) mine?.delete(`${i.id}@${i.updated_at}`); // only server confirmation retires the local pin
     return list;
   }
   async function load(sid, agent = '') {
@@ -92,7 +124,7 @@
       threads.set(k, { items, at: Date.now(), loading: false });
       applySendSeen(sid, agent); // a send may beat ledger ingestion or navigation
       const projected = threads.get(k).items;
-      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(projected))) { counts[k] = tally(projected); changedEvent(); }
+      if (changed || JSON.stringify(counts[k]) !== JSON.stringify(tally(project(k, projected)))) { counts[k] = tally(project(k, projected)); changedEvent(); }
     } catch (_) { threads.set(k, { items: cur?.items || [], at: Date.now(), loading: false }); }
   }
   async function loadCounts(force = false) {
@@ -107,11 +139,11 @@
         // loaded thread whose tally moved is reloaded so its strip follows.
         for (const [k, t] of threads) {
           if (!t.items.length) continue;
-          if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(t.items);
+          if (pendingSeen.get(k) > 0 && next[k]) next[k] = tally(project(k, t.items));
           else {
             if (JSON.stringify(next[k] || null) !== JSON.stringify(counts[k] || null) && !t.loading) { t.at = 0; const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)); }
             // Loaded items own the paint, even while an older backend still returns per-ask counts.
-            next[k] = tally(t.items);
+            next[k] = tally(project(k, t.items));
           }
         }
         if (JSON.stringify(next) !== JSON.stringify(counts)) { counts = next; changedEvent(); }
@@ -131,24 +163,28 @@
   /* ---------- the strip ---------- */
   const dot = (kind) => `<i class="tt-dot ${kind}" aria-hidden="true"></i>`;
   const kindOf = i => i.kind || memberKind(i);
-  const subOf = i => {
+  const subOf = (i, fallbackAsk = '') => {
     if (kindOf(i) === 'stopped') return 'Stopped · nothing running';
     const when = ago(i.updated_at || i.at || Date.now());
-    if (kindOf(i) === 'ack') return `Seen · ${when}`;
+    if (kindOf(i) === 'ack') return i.answered ? `Answered by your reply · ${when}` : `Seen · ${when}`;
+    if (i.answered) return 'Answered · working on it';
     if (i.state === 'done') return `Finished · ${when}`;
     if (i.state === 'blocked') return `Stuck · ${when}`;
-    if (i.state === 'needs_you') return i.try ? `Ready to try · ${when}` : `Waiting on you · ${when}`;
+    if (i.state === 'needs_you') return i.ask || i.summary || fallbackAsk || i.title;
     return `Working · since ${ago(i.created_at || i.at || Date.now()).replace(' ago', '')}`;
   };
-  function rowHtml(i) {
+  function rowHtml(i, fallbackAsk = '') {
     const kind = kindOf(i);
-    const act = kind === 'ack' || kind === 'run' || kind === 'stopped' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
-      : i.try ? '<button type="button" class="tt-btn" data-tt-seen aria-label="Looks good">Looks good</button>' : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
-    return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i))}</span></span>${act}</div>`;
+    const act = kind === 'stopped' ? '<button type="button" class="tt-btn resume" data-tt-resume aria-label="Resume: ask the agent to continue this">Resume</button>'
+      : kind === 'ack' || kind === 'run' ? '' : i.state === 'done' ? '<button type="button" class="tt-btn ok" data-tt-seen aria-label="Mark seen">✓ Seen</button>'
+      : i.state === 'needs_you' ? '<button type="button" class="tt-btn go" data-tt-open>Open</button><button type="button" class="tt-btn" data-tt-dismiss aria-label="Dismiss: read it, nothing to do">Dismiss</button>'
+      : '<button type="button" class="tt-btn go" data-tt-open>Open</button>';
+    return `<div class="tt-row ${kind}" role="button" tabindex="0" data-tt-row="${esc(i.id)}" aria-label="${esc(i.title)}: go to the reply">${dot(kind)}<span class="tt-ti"><span class="tt-t">${esc(i.title)}</span><span class="tt-s">${esc((i.members?.length > 1 ? `${i.members.length} asks in one reply · ` : '') + subOf(i, fallbackAsk))}</span></span>${act}</div>`;
   }
   function innerHtml(sid, agent) {
-    const k = key(sid, agent), raw = threads.get(k)?.items || [], working = listWorking(sid, agent);
-    const items = groupsOf(raw).map(i => i.kind === 'run' && !working ? { ...i, kind: 'stopped' } : i);
+    const k = key(sid, agent), raw = project(k, threads.get(k)?.items || []), working = listWorking(sid, agent);
+    const held = resumeHeld(k, working);
+    const items = groupsOf(raw).map(i => i.kind === 'run' && !working && !held?.has(i.id) ? { ...i, kind: 'stopped' } : i);
     if (!items.length) return '';
     const c = tally(raw), open = openKeys.has(k), fold = ackKeys.has(k);
     // Keep work in progress visible; only acknowledged history has no strip.
@@ -156,16 +192,23 @@
     if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) return '';
     const live = items.filter(i => kindOf(i) !== 'ack');
     const ack = items.filter(i => kindOf(i) === 'ack');
+    // Header = rows listed = sum of the visible tally: answered asks still working on it count as open.
+    const openN = live.length;
     const you = live.filter(i => i.state === 'needs_you' || i.state === 'blocked');
-    const run = live.filter(i => i.state === 'running');
+    const run = live.filter(i => i.state === 'running' && kindOf(i) !== 'stopped');
+    const stopped = live.filter(i => kindOf(i) === 'stopped');
     const fin = live.filter(i => i.state === 'done');
-    const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(rowHtml).join('')}</div>` : '';
+    const session = window.WizLive?.sessionFor?.(sid, agent || '') || window.WizLive?.session?.(sid);
+    const fallbackAsk = session?.attention?.ask || '';
+    const group = (title, list) => list.length ? `<div class="tt-g"><div class="tt-gh">${title}</div>${list.map(i => rowHtml(i, fallbackAsk)).join('')}</div>` : '';
     const tl = (n, kind) => n ? `<span class="tt-tally" title="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}" aria-label="${n} ${kind === 'stopped' ? 'stopped' : kind === 'run' ? 'running' : kind}">${dot(kind)}${n}</span>` : '';
-    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${live.length} open</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running, working ? 'run' : 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
-    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group(working ? 'Running' : 'Stopped', run)}${group('Finished · not seen', fin)}`
+    const head = `<button type="button" class="tt-h" data-tt-toggle aria-expanded="${open}" aria-label="Open items in this thread"><span class="tt-tot">${openN ? `${openN} open` : 'Working on your reply'}</span>${tl(c.needs_you, 'you')}${tl(c.blocked, 'bad')}${tl(c.running - stopped.length, 'run')}${tl(stopped.length, 'stopped')}${tl(c.done_unseen, 'done')}<span class="tt-caret" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span></button>`;
+    // One Resume for every stopped row sits beside the header (never inside its toggle button).
+    const headRow = stopped.length ? `<div class="tt-hrow">${head}<button type="button" class="tt-btn resume" data-tt-resume-all aria-label="Resume ${stopped.length} stopped">Resume</button></div>` : head;
+    const body = `<div class="tt-panel" ${open ? '' : 'hidden'}>${group('Your move', you)}${group('Running', run)}${group('Stopped', stopped)}${group('Finished · not seen', fin)}`
       + (ack.length ? `<div class="tt-g tt-ackg"><button type="button" class="tt-more" data-tt-ack aria-expanded="${fold}">${ack.length} acknowledged · ${fold ? 'hide' : 'show'}</button>${fold ? ack.map(rowHtml).join('') : ''}</div>` : '')
       + (!live.length && !ack.length ? '<div class="tt-none">Nothing here yet</div>' : '') + '</div>';
-    return head + body;
+    return headRow + body;
   }
   function stripHtml(sid, agent = '') {
     if (!on() || !sid || sid === '__new__') return '';
@@ -177,10 +220,11 @@
   function dots(sid, agent = '') {
     if (!on()) return '';
     const k = key(sid, agent), loaded = threads.get(k);
-    const c = loaded?.items.length ? tally(loaded.items) : counts[k];
+    const c = loaded?.items.length ? tally(project(k, loaded.items)) : counts[k];
     if (!c) return '';
+    const lw = listWorking(sid, agent), spin = lw || !!resumeHeld(k, lw);
     const n = (v, kind, label) => v ? `<span class="tt-d" title="${v} ${label}" aria-label="${v} ${label}">${dot(kind)}${v > 1 ? `<b>${v}</b>` : ''}</span>` : '';
-    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, listWorking(sid, agent) ? 'run' : 'stopped', listWorking(sid, agent) ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
+    const html = n(c.needs_you, 'you', 'need you') + n(c.blocked, 'bad', 'stuck') + n(c.running, spin ? 'run' : 'stopped', spin ? 'running' : 'stopped') + n(c.done_unseen, 'done', 'finished, not seen');
     return html ? `<span class="tt-dots" data-tt-dots="${esc(key(sid, agent))}">${html}</span>` : '';
   }
   // The same dots as a node, for a list that builds its rows with the DOM (the AI apps sidebar).
@@ -193,7 +237,7 @@
   function repaint() {
     if (typeof document === 'undefined') return;
     for (const k of openKeys) {
-      const c = tally(threads.get(k)?.items || []);
+      const c = tally(project(k, threads.get(k)?.items || []));
       if (!(c.needs_you || c.blocked || c.done_unseen || c.running)) { openKeys.delete(k); if (opened === k) opened = null; }
     }
     for (const el of document.querySelectorAll('[data-tt-strip]')) {
@@ -261,6 +305,7 @@
         const hit = h > 0 && document.elementFromPoint(x, y);
         const visible = front && !strip?.classList.contains('open') && n.intersects && node.isConnected
           && bottom > top && h >= Math.min(40, r.height)
+          && (r.height > bottom - top || r.top >= top && r.top < bottom - 20 || h >= .4 * Math.min(r.height, bottom - top))
           && node.contains(hit) && (!rstrip || y > rstrip.bottom);
         if (!visible) { n.since = 0; n.attempted = false; continue; }
         if (!n.since) n.since = Date.now();
@@ -279,67 +324,130 @@
 
   /* ---------- taps ---------- */
   const anchorOf = i => ({ message_id: i.message_id || null, at: i.at || 0 });
-  function markSeen(sid, agent, ids, defer = false) {
+  function markSeen(sid, agent, ids, defer = false, versions = null, dismiss = false) {
     const k = key(sid, agent), t = threads.get(k);
     if (!t) return;
+    const expected = new Map(t.items.filter(i => ids.includes(i.id)).map(i => [i.id, { id: i.id, updated_at: i.updated_at }]));
     const restore = new Map(t.items.filter(i => ids.includes(i.id) && !i.seen).map(i => [`${i.id}@${i.updated_at}`, i]));
     const mine = seenLocally.get(k) || new Set(); seenLocally.set(k, mine);
     t.items = t.items.map(i => { if (ids.includes(i.id) && !i.seen) { mine.add(`${i.id}@${i.updated_at}`); return { ...i, seen: true }; } return i; });
-    counts[k] = tally(t.items);
+    counts[k] = tally(project(k, t.items));
+    let readyConfirmed;
+    const c = counts[k], L = window.WizLive;
+    if (dismiss && !c.needs_you && !c.blocked && !c.running && !c.done_unseen && L?.archive
+      && (L.agentOf?.(sid) || 'hermes') === (agent || 'hermes')) {
+      // Reuse Ready's Done operation, including its rollback. Never archive a
+      // thread which still has other unread work, or persist before Seen confirms.
+      const confirmed = new Promise(resolve => { readyConfirmed = resolve; });
+      L.archive(sid, { confirmed });
+    }
     changedEvent(); // painted before the box hears about it
     pendingSeen.set(k, (pendingSeen.get(k) || 0) + 1);
     let phase = 'staged';
     const settle = () => { if (phase === 'settled') return; phase = 'settled'; pendingSeen.set(k, Math.max(0, (pendingSeen.get(k) || 1) - 1)); };
     // A write the box did not take is rolled back at once and the thread re-read, so this device never hides what the others still show.
     const undo = () => {
+      readyConfirmed?.(false);
       settle(); const set = seenLocally.get(k); for (const tok of restore.keys()) set?.delete(tok);
       const cur = threads.get(k);
-      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(cur.items); changedEvent(); }
+      if (cur) { cur.items = cur.items.map(i => restore.get(`${i.id}@${i.updated_at}`) || i); cur.at = 0; counts[k] = tally(project(k, cur.items)); changedEvent(); }
       load(sid, agent);
     };
     const commit = () => {
       if (phase !== 'staged') return; phase = 'committed';
-    req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids }) })
-      .then(r => (r.ok ? r.json() : null)).then(j => { if (!j?.items) { undo(); return; } settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(threads.get(k).items); changedEvent(); })
+      // Custody may take seconds. Never send a blanket id acknowledgement if the
+      // loaded server version or one of its reply-group members changed meanwhile.
+      let posting = ids;
+      if (versions) {
+        const cur = threads.get(k), allowed = new Set(groupsOf(cur?.items || [])
+          .filter(g => g.members.every(i => i.state === 'done' && versions.has(`${i.id}@${i.updated_at}`))).flatMap(g => g.ids));
+        posting = ids.filter(id => allowed.has(id));
+        for (const [tok, i] of restore) if (!allowed.has(i.id)) mine.delete(tok);
+        if (cur) { cur.items = cur.items.map(i => !allowed.has(i.id) ? restore.get(`${i.id}@${i.updated_at}`) || i : i); counts[k] = tally(project(k, cur.items)); changedEvent(); }
+        if (!posting.length) { settle(); return; }
+      }
+    // ids keeps old boxes compatible; new boxes prefer exact versions from the
+    // action's snapshot, not whichever version happens to be loaded at save time.
+    req(`${BASE}/seen`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ thread: sid, agent: agent || 'hermes', ids: posting, items: posting.map(id => expected.get(id)) }) })
+      .then(r => (r.ok ? r.json() : null)).then(j => {
+        if (!j?.items) { undo(); return; }
+        for (const result of j.results || []) if (result.status === 'stale') {
+          const i = expected.get(result.id); if (i) mine.delete(`${i.id}@${i.updated_at}`);
+        }
+        readyConfirmed?.(!j.results?.some(r => r.status === 'stale') && j.items.every(i => i.seen === true));
+        settle(); threads.set(k, { items: merge(k, j.items), at: Date.now(), loading: false }); counts[k] = tally(project(k, threads.get(k).items)); changedEvent();
+      })
       .catch(undo);
     };
     if (!defer) commit();
     return { commit, cancel() { if (phase === 'staged') undo(); } };
   }
   // Sending is explicit evidence that the owner has moved on from older finished replies.
-  // Do not consume mixed/amber/red/running groups, unknown dates, or work completed after the send.
+  // Pin server versions, never compare the phone clock with server timestamps.
+  // A late reload can only acknowledge versions known all-done at the send tap.
   function applySendSeen(sid, agent, defer = false) {
-    const k = key(sid, agent), send = sendCutoffs.get(k); if (!on() || !send || (!send.committed && !defer)) return;
+    const k = key(sid, agent), send = sendSnapshots.get(k); if (!on() || !send || (!send.committed && !defer)) return;
     const ids = [];
     for (const g of groupsOf(threads.get(k)?.items || [])) {
-      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && i.at > 0 && i.at < send.at && (i.updated_at || i.at) <= send.at)) continue;
+      if (g.kind !== 'done' || !g.members.every(i => i.state === 'done' && send.versions.has(`${i.id}@${i.updated_at}`))) continue;
       const tokens = g.members.map(i => `${i.id}@${i.updated_at}`);
       if (tokens.some(t => send.attempted.has(t))) continue;
       tokens.forEach(t => send.attempted.add(t)); ids.push(...g.ids);
     }
-    if (ids.length) return markSeen(sid, agent, ids, defer);
+    if (ids.length) return markSeen(sid, agent, ids, defer, send.versions);
   }
   function beforeSend(sid, agent = '', at = Date.now(), { defer = false } = {}) {
     if (!on() || !sid || sid === '__new__' || !Number.isFinite(at)) return;
-    const k = key(sid, agent), prior = sendCutoffs.get(k);
-    const send = prior && at <= prior.at ? prior : { at, attempted: new Set(), committed: !defer };
-    sendCutoffs.set(k, send);
+    const k = key(sid, agent), prior = sendSnapshots.get(k);
+    const versions = new Set(groupsOf(threads.get(k)?.items || [])
+      .filter(g => g.kind === 'done' && g.members.every(i => i.state === 'done' && Number.isFinite(i.updated_at)))
+      .flatMap(g => g.members.map(i => `${i.id}@${i.updated_at}`)));
+    const send = { versions, attempted: new Set(), committed: !defer };
+    // The owner has now answered every amber/red ask loaded at this tap (exact server versions, no clock).
+    let a = answered.get(k); if (!a) { a = { tokens: new Set(), at: 0, started: false }; answered.set(k, a); }
+    a.at = Date.now(); a.started = false;
+    const added = (threads.get(k)?.items || []).filter(i => (i.state === 'needs_you' || i.state === 'blocked') && !i.seen && Number.isFinite(i.updated_at))
+      .map(i => `${i.id}@${i.updated_at}`).filter(t => !a.tokens.has(t));
+    added.forEach(t => a.tokens.add(t)); if (added.length) { saveAnswered(); changedEvent(); }
+    sendSnapshots.set(k, send);
     const staged = applySendSeen(sid, agent, defer); // same-frame paint before navigation
     const commit = () => {
       send.committed = true; staged?.commit();
       const t = threads.get(k); if (t && !t.loading) t.at = 0;
-      load(sid, agent); // late ledger ingestion still belongs to the original send cutoff
+      load(sid, agent); // late ingestion cannot expand the send's pinned server versions
     };
     if (!defer) commit();
     return { commit, cancel() {
       if (send.committed) return;
-      if (sendCutoffs.get(k) === send) { if (prior) sendCutoffs.set(k, prior); else sendCutoffs.delete(k); }
+      if (added.length) { for (const t of added) a.tokens.delete(t); saveAnswered(); changedEvent(); }
+      if (sendSnapshots.get(k) === send) { if (prior) sendSnapshots.set(k, prior); else sendSnapshots.delete(k); }
       staged?.cancel();
     } };
   }
   function close() { if (!opened) return false; openKeys.delete(opened); opened = null; repaint(); return true; }
   // Returns true when the tap belonged to the tracker.
-  function click(e, { sid, agent = '', jump } = {}) {
+  // Stopped rows as the strip shows them right now (the same projection as innerHtml).
+  function stoppedOf(sid, agent) {
+    const k = key(sid, agent), working = listWorking(sid, agent), held = resumeHeld(k, working);
+    if (working) return [];
+    return groupsOf(project(k, threads.get(k)?.items || [])).filter(i => i.kind === 'run' && !held?.has(i.id));
+  }
+  // Paint first: the rows spin on this frame; the host's ordinary send follows. A refused send puts them back
+  // (the host's send path shows its own error).
+  function resumeRows(sid, agent, rows, resume) {
+    if (!rows.length || typeof resume !== 'function') return null;
+    const k = key(sid, agent), prev = resuming.get(k);
+    const hold = { ids: new Set([...(prev && !prev.started ? prev.ids : []), ...rows.map(i => i.id)]), at: Date.now(), started: false };
+    resuming.set(k, hold); changedEvent();
+    setTimeout(() => { if (resuming.get(k) === hold) repaint(); }, RESUME_MS + 50);
+    const text = `Continue the stopped items: ${rows.map(i => i.title).join('; ')}`;
+    const undo = () => { if (resuming.get(k) === hold) { resuming.delete(k); changedEvent(); } };
+    let sent;
+    try { sent = resume(text); } catch (_) { undo(); return null; }
+    Promise.resolve(sent).then(it => { if (!it) undo(); }, undo);
+    return text;
+  }
+  function click(e, { sid, agent = '', jump, resume } = {}) {
     const t = e.target;
     const strip = t.closest?.('[data-tt-strip]');
     if (!strip) { if (opened && !t.closest?.('[data-tt-strip]')) close(); return false; }
@@ -349,10 +457,13 @@
       repaint(); return true;
     }
     if (t.closest('[data-tt-ack]')) { ackKeys.has(k) ? ackKeys.delete(k) : ackKeys.add(k); repaint(); return true; }
+    if (t.closest('[data-tt-resume-all]')) { resumeRows(s, a, stoppedOf(s, a), resume); return true; }
     const row = t.closest('[data-tt-row]');
     if (!row) return true;
-    const item = groupsOf(threads.get(k)?.items || []).find(i => i.id === row.dataset.ttRow);
+    const item = groupsOf(project(k, threads.get(k)?.items || [])).find(i => i.id === row.dataset.ttRow);
     if (!item) return true;
+    if (t.closest('[data-tt-resume]')) { resumeRows(s, a, stoppedOf(s, a).filter(i => i.id === item.id), resume); return true; }
+    if (t.closest('[data-tt-dismiss]') && item.kind === 'you') { markSeen(s, a, item.ids, false, null, true); return true; }
     if (t.closest('[data-tt-seen]')) { markSeen(s, a, item.ids); return true; }
     // Opening is not seeing: close the list and jump; the visible dwell acknowledges green replies.
     openKeys.delete(k); opened = null; repaint();
@@ -380,7 +491,7 @@
     const enabled = on(); if (enabled === wasOn) return;
     wasOn = enabled;
     if (enabled) { countsAt = 0; loadCounts(true); }
-    else { openKeys.clear(); opened = null; sendCutoffs.clear(); }
+    else { openKeys.clear(); opened = null; sendSnapshots.clear(); }
     changedEvent({ enabled }); // Chats hydrates every currently open thread and refreshes Reply on both edges.
   }
   window.addEventListener('wos:tweak-choice', e => { if (e?.detail?.id === ID) syncEnabled(); });

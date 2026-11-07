@@ -1,5 +1,7 @@
-import '../../core/chats-list-model.js';
-import '../../core/core.js';
+// The shells already ran these as classic scripts; import them only where they have not (node tests), so the
+// browser never fetches them a second time as modules.
+if (!globalThis.WizChatsListModel) await import('../../core/chats-list-model.js');
+if (!globalThis.WizCore?.ago) await import('../../core/core.js');
 const { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep } = globalThis.WizChatsListModel;
 export { STATES, stateOf, stateGroups, READY_SORTS, sortOf, PRIORITY_TIP, rankOf, readySort, readyGroups, NOTES_PROJECT, NO_PROJECT, projectOf, titleInProject, projectGroups, GROUP_MODES, groupMode, readyFlat, readyStep };
 /* The AI apps view's shared marks and words (phone layout.js and desktop.js): one icon set, one row-menu order, so the
@@ -54,9 +56,15 @@ export function svgIcon(doc, name, cls) {
 /** The first letter of a name, for a workspace disc. */
 export const initial = n => (String(n || '').trim()[0] || 'W').toUpperCase();
 /* The chats in Wizard's own sections (round 5, Miguel: in place of Recents and View all), in the stock Chats order
- * (Archive on top, then Working, then Ready nearest the thumb), each header like their Recents label. Round 13
- * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready). */
-export const SECTIONS = [['archive', 'Archive'], ['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready']];
+ * (Working, then Ready, Archive last: James, 6 Nov 2026), each header like their Recents label. Round 13
+ * (Miguel): Snoozed between Working and Ready (the stock snooze state, whether or not a tweak files it under Ready).
+ * Miguel's "Archive on top" tweak (miguel/archive-top) is the only way to put Archive first: sectionsFor(root). */
+export const SECTIONS = [['working', 'Working'], ['snoozed', 'Snoozed'], ['ready', 'Ready'], ['archive', 'Archive']];
+const ARCHIVE_TOP = [SECTIONS[3], ...SECTIONS.slice(0, 3)];
+/** True when the owner wears Miguel's "Archive on top" tweak (the host lists worn tweaks in <html data-tweaks>). */
+export const archiveTop = root => String(root?.dataset?.tweaks || root?.getAttribute?.('data-tweaks') || '').split(/\s+/).includes('miguel/archive-top');
+/** The section order to draw: stock (Archive last), or Archive first under the archive-top tweak. */
+export const sectionsFor = root => archiveTop(root) ? ARCHIVE_TOP : SECTIONS;
 /** Every list the sidebar / drawer shows, for searches and signatures. */
 export const KINDS = ['working', 'snoozed', 'ready', 'archive'];
 /** What an open section with no rows says. */
@@ -91,24 +99,6 @@ export function stateIcon(doc, state, cls) {
   const s = doc.createElementNS(SVG, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('aria-hidden', 'true'); s.setAttribute('class', cls);
   for (const [tag, attrs] of STATE_ICON[state] || STATE_ICON.none) { const p = doc.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) p.setAttribute(k, v); s.append(p); }
   return s;
-}
-/** The notification Chats shows in place of a thread (a New chat holding the note: .ch-notif-thread), if one is on
- * screen; the AI apps view treats it exactly like a chat (never Home). */
-export function noteThread(doc, scope = '') {
-  for (const n of doc.querySelectorAll(`${scope} .ch-thread.ch-notif-thread`.trim())) {
-    if (typeof n.getClientRects === 'function' && !n.getClientRects().length) continue;
-    return n;
-  }
-  return null;
-}
-/** A notification's Badge | Chats choice joins its actions (round 7): moved into the thread's own sticky action row
- * (.ch-tacts), first, so the note reads like a chat with one action row. Chats' click handler finds it there too
- * (.ch-notif-route [data-notify-route]); a repaint puts it back above the message, so call again on renders. */
-export function noteRouteIntoActions(doc, scope = '') {
-  const t = noteThread(doc, scope); if (!t) return false;
-  const route = t.querySelector('.ch-notif-route'), acts = t.querySelector('.ch-tacts');
-  if (!route || !acts || route.parentNode === acts || route.classList?.contains?.('is-quiet')) return false;   // (round 20: the quiet line stays under the note)
-  acts.insertBefore(route, acts.firstChild); return true;
 }
 /** The AI fuel gauge (the network Home's E ▮▮▮ F, miguel/machines-home) copied into a box of the view (the sidebar's or
  * the drawer's foot, round 7): the live one stays where it is painted; this copy follows it (call again on renders)

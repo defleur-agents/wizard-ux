@@ -35,6 +35,21 @@ test('retained iframe handles are not recreated; chats and closed windows have n
   const f = fixture(), frame = f.host.frame('app'); assert.ok(frame); assert.equal(f.host.frame('app'), frame); assert.equal(f.host.frame('chat'), null);
   assert.equal(f.host.close('app'), true); assert.equal(f.host.frame('app'), null); assert.equal(f.host.frame('missing'), null);
 });
+test('Chats bodies and Settings parts delegate without renderer selectors or another lifecycle store', () => {
+  const f = fixture(), surface = { mount() {}, composer: {} }, closePart = {};
+  let open = true, overlays = 0;
+  f.adapter.chats = id => { assert.equal(id, 'chat'); return surface; };
+  f.adapter.settings = () => ({ isOpen: open, closePart });
+  f.adapter.closeSettings = () => { if (!open) return false; open = false; return true; };
+  f.adapter.settingsOverlay = () => { overlays++; return () => overlays--; };
+  assert.equal(f.host.chats('chat'), surface);
+  assert.equal(f.host.chats('app'), null); assert.equal(f.host.chats('missing'), null);
+  assert.equal(f.host.settings.isOpen(), true); assert.equal(f.host.settings.closePart(), closePart);
+  const release = f.host.settings.overlay(); assert.equal(overlays, 1); release(); assert.equal(overlays, 0);
+  assert.equal(f.host.settings.close(), true); assert.equal(f.host.settings.isOpen(), false); assert.equal(f.host.settings.close(), false);
+  f.host.close('chat'); assert.equal(f.host.chats('chat'), null);
+  assert.equal(f.jobs.length, 0, 'part reads/mount leases do not create a focus/notification echo');
+});
 test('changes coalesce after synchronous paint; teardown and broken listeners do not affect the shell', () => {
   const f = fixture(), seen = []; const off = f.host.onChange(state => seen.push(state));
   f.host.onChange(() => { throw Error('broken layout'); }); f.controller.changed(); f.host.focus('app'); f.controller.changed();
@@ -118,4 +133,20 @@ test('desktop host: layout toolbars never crash a shell whose app services lack 
   const { readFile } = await import('node:fs/promises');
   const src = await readFile(new URL('../web/desktop/desktop.js', import.meta.url), 'utf8');
   assert.match(src, /renderTools: \(frame, slot\) => window\.WizAppServices\?\.titlebar\?\.render\?\.\(frame, slot\) === true/);
+});
+
+test('placement containers: the host hands a layout frozen { desk, node, shown } rows from the shell adapter, never its markup', () => {
+  const f = fixture(); assert.deepEqual(JSON.parse(JSON.stringify(f.host.placements())), [], 'no adapter placements: none');
+  const a = { id: 'desk-a' }, b = { id: 'desk-b' };
+  f.adapter.placements = () => [{ desk: 0, node: a, shown: true }, { desk: NaN, node: b, shown: 0 }, { desk: 2, node: null, shown: true }, null];
+  const rows = f.host.placements();
+  assert.ok(Object.isFrozen(rows) && rows.every(Object.isFrozen));
+  assert.equal(rows.length, 2, 'rows without a container are dropped');
+  assert.equal(rows[0].node, a); assert.equal(rows[0].desk, 0); assert.equal(rows[0].shown, true);
+  assert.equal(rows[1].node, b); assert.equal(rows[1].desk, null, 'an unnumbered container never matches a desk'); assert.equal(rows[1].shown, false);
+  // the Classic adapter is where the shell's own container markup is read
+  const desktop = read('web/desktop/desktop.js');
+  assert.match(desktop, /placements: \(\) => \[\.\.\.stage\.children\]\.filter\(n => n\.classList\?\.contains\('wsp'\)\)\.map\(n => \(\{ desk: Number\(n\.dataset\.ws\), node: n, shown: !n\.hidden \}\)\)/);
+  const ai = read('web/layouts/ai-apps/desktop.js');
+  assert.doesNotMatch(ai, /dataset\.ws\b|#stage|\.wsp\b/, 'AI apps reads placement only from the host');
 });
