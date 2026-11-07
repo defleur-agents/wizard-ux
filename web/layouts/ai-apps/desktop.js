@@ -693,7 +693,8 @@ export default function desktop(api) {
     for (const [k, w0] of acts) {
       const it = el('button', 'aad-pop-i' + (k === 'done' ? ' is-file' : ''), { type: 'button', role: 'menuitem', 'data-act': k });
       it.append(icon(k), el('span', '', { text: k === 'pin' && s.pinned ? 'Unpin' : w0 }));
-      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); api.after(120, () => { readSessions(); paintList(true); }); });
+      // the row goes on this frame; the later pass reconciles
+      api.listen(it, 'click', () => { closeMenu(); api.sessions.act(s.id, k); readSessions(); paintList(true); api.after(120, () => { readSessions(); paintList(true); }); });
       card.append(it);
     }
     scene.append(card);

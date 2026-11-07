@@ -23,7 +23,7 @@ function fixture({ ids = ['a', 'b', 'c'], open = 'b', keep = true, phone = !keep
     LIVE: { archive: (id, opts) => { calls.push({ id, opts, painted: w.thread }); rows.get(id).archived = true; return promise.then(ok => { if (!ok) rows.get(id).archived = false; return ok; }); }, restore: id => { calls.push({ restore: id }); return Promise.resolve(true); }, markSeen: no, session: id => rows.get(id) },
     BOOM: () => ({ open: x => calls.push({ snooze: x.sessionId }), nextFor: no }),
     elOf: id => id.endsWith('::list') ? null : ({ querySelectorAll: () => dom }),
-    saveDraft: () => saved.push(w.thread), closeRowSheet: no, clearTimeout: no,
+    saveDraft: () => saved.push(w.thread), closeRowSheet: no, closeSwipe: no, clearTimeout: no,
     save: no, loadDraft: no, listPlace: () => null, applyLayout: no, deskOf: x => x, closeHosted: () => false,
   });
   // The phone "After actions" setting (#1068) is read through the live keepThreadOpen() helper.
