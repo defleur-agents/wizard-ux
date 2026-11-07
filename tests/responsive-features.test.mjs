@@ -145,13 +145,35 @@ test('unsent Edit consumes only after the shared draft store verifies text and a
   assert.equal(sandbox.WosSettings.moveDraft(opts), false); assert.deepEqual(removed, ['fixture']); assert.equal(notices.length, 1);
 });
 
+// Switches live in Settings (For testers only) and in the Wizard OS Tracker app, one state (Miguel, 7 Nov 2026).
+test('Settings › Look shows "Try new features" on For testers and hides it on For everyone, in both mounts', () => {
+  const { sandbox, roots } = harness();
+  sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
+  const tweak = { id:'miguel/snooze-someday', name:'One-tap Snooze', description:'Snooze is one tap', author:'miguel', on:true };
+  const view = { id:'miguel/orb-shell', name:'Orb', author:'miguel', view:'Orb', on:false };
+  for (const channel of ['latest', 'stable']) {
+    const t = channel === 'stable' ? { ...tweak, on:false, locked:true } : tweak;
+    sandbox.WosExperience = { state:{ owner:'miguel', busy:false, error:'', channel, locked: channel === 'stable', tweaks:[t, view], active:[] } };
+    for (const { root, view: v } of roots) {
+      v.focus('look'); assert.equal(v.page, 'appearance');
+      const html = root.innerHTML;
+      assert.match(html, /data-tweak-toggle="miguel\/orb-shell"/, channel + ': views stay');
+      assert.doesNotMatch(html, /Wizard OS Tracker/, 'Settings is self-contained: no pointer to the Tracker');
+      if (channel === 'latest') {
+        assert.match(html, /data-try-features><h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>[^]*data-tweak-toggle="miguel\/snooze-someday"[^]*class="tw-by">by miguel</);
+      } else {
+        assert.doesNotMatch(html, /Try new features|data-try-features|data-tweak-toggle="miguel\/snooze-someday"/, 'For everyone: hidden');
+      }
+    }
+  }
+});
 // Look's new controls stay in the shared Settings stack; Back never navigates out of Wizard.
 test('nested Look / skin tweaks Back returns to Settings before shell root Back, in both mounts', () => {
   const { sandbox, roots } = harness();
   sandbox.WosSkin = { current:'obsidian', list:[], families:[{ id:'mizel', name:'Mizel', tweaks:'miguel', palettes:['obsidian'] }], familyOf:()=>'mizel' };
   sandbox.WosExperience = { state:{owner:'miguel',busy:false,error:'',tweaks:[{id:'miguel/snooze-someday',name:'One-tap Snooze',description:'Snooze is one tap and the lowest priority',author:'miguel',on:true}],active:['miguel/snooze-someday']} };
   for (const { root, view } of roots) {
-    view.focus('look'); assert.equal(view.page,'appearance'); assert.match(root.innerHTML,/<h4>New features<\/h4><p class="st-hint">Turn new features on or off in the Wizard OS Tracker app\.<\/p>/); assert.doesNotMatch(root.innerHTML,/data-tweak-toggle="miguel\/snooze-someday"/);
+    view.focus('look'); assert.equal(view.page,'appearance'); assert.doesNotMatch(root.innerHTML,/Try new features|data-tweak-toggle="miguel\/snooze-someday"/, 'channel not read yet: no switches');
     assert.doesNotMatch(root.innerHTML,/data-tweakauthor|All of /);
     assert.doesNotMatch(root.innerHTML,/Back to my setup|Try Miguel|Your tweaks|stop following/);
     assert.equal(view.back(), true); assert.equal(view.page,''); assert.equal(view.back(), false); assert.match(root.innerHTML,/Settings categories/);

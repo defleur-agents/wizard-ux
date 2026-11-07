@@ -304,15 +304,21 @@
     const whereView = s.shell === 'desktop' ? 'Desktop view' : 'Phone view';
     const shown = shellTweaks(exp, s.shell).map(t => t.view && s.shell ? { ...t, where: whereView } : t);
     const err = s.error ? `<p role="alert">${esc(s.error)}</p>` : '';
-    // Feature switches left Settings (Miguel, 7 Nov 2026): they are turned on and off only in the Wizard OS Tracker app
-    // (the box's feature-switch API), and only on For testers. Settings keeps shell views (a view is a way to see the
-    // shell, chosen per device type) and the options of a switch that is on, never the feature switch itself.
-    // Views stay one flat list, A to Z, each labelled "by <author>".
-    const list = [...shown].filter(t => t.view).sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
-    const rows = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : '')).join('');
-    const opts = shown.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
-    const moved = s.locked ? 'New features are for testers: choose For testers in About &amp; updates, then turn them on in the Wizard OS Tracker app.' : 'Turn new features on or off in the Wizard OS Tracker app.';
-    return `${viewPicker}${rows ? `<div class="tw-group"><h4>Views</h4><div class="tw-list">${rows}</div></div>` : ''}<div class="tw-group" data-tweaks-moved><h4>New features</h4><p class="st-hint">${moved}</p>${err}${opts ? `<div class="tw-list">${opts}</div>` : ''}</div>`;
+    // Feature switches live in two places with one state, Chrome-flags style (Miguel, 7 Nov 2026): here under "Try new
+    // features" and in the Wizard OS Tracker app. Both write look.json `tweaks` (Settings via WosExperience.toggle and
+    // WosLookSync, the Tracker via the box's feature-switch API); WosLookSync's refresh brings either side's flip to the
+    // other. The section shows only when the box is on For testers (channel latest); on For everyone it is hidden and
+    // experience.js keeps the switches off and locked. Views stay their own list (a way to see the shell, not a feature).
+    // Each list is flat, A to Z, each switch labelled "by <author>".
+    const list = [...shown].sort((a, b) => String(a.name || a.id).localeCompare(String(b.name || b.id)) || a.id.localeCompare(b.id));
+    const cells = list.map(t => tweakSwitches([t], 'data-tweak-toggle', s.busy, name) + (t.on && tweakOpts.has(t.id) ? `<div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>` : ''));
+    const viewRows = cells.filter((_, i) => list[i].view).join('');
+    const testers = s.channel === 'latest';
+    const features = testers ? cells.filter((_, i) => !list[i].view).join('') : '';
+    // For everyone, or the channel not read yet: a switch that is on keeps its options, without the switch itself.
+    const opts = testers ? '' : list.filter(t => !t.view && t.on && tweakOpts.has(t.id)).map(t => `<div class="st-row static tw-row"><span class="st-tx"><b>${esc(t.name)}</b></span></div><div class="tw-opts" data-tweak-opts="${esc(t.id)}"></div>`).join('');
+    const tryNew = testers && features ? `<div class="tw-group" data-try-features><h4>Try new features</h4><p class="st-hint">Unfinished features you can switch on to try. The team can see which ones you use only if you allow it.</p>${err}<div class="tw-list">${features}</div></div>` : '';
+    return `${viewPicker}${viewRows ? `<div class="tw-group"><h4>Views</h4>${tryNew ? '' : err}<div class="tw-list">${viewRows}</div></div>` : ''}${tryNew}${opts ? `<div class="tw-group"><div class="tw-list">${opts}</div></div>` : ''}${!viewRows && !tryNew ? err : ''}`;
   }
   let authorList = null;
   const tweakOpts = new Map(); // tweak id -> its options node (skin-host api.settings.section(.., 'look', node))

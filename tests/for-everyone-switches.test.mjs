@@ -1,4 +1,5 @@
-// For everyone keeps feature switches off; For testers turns them on in the Wizard OS Tracker app (Miguel, 7 Nov 2026).
+// For everyone keeps feature switches off; For testers turns them on in Settings › Look ("Try new features") or in the
+// Wizard OS Tracker app, one shared state in look.json `tweaks` (Miguel, 7 Nov 2026).
 // The channel comes from the App Manager (core/os-updates.js → wos:channel), kept per device in wos.channel.v1.
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -60,11 +61,18 @@ test('os-updates tells the shell the box channel after every verified read and c
   assert.match(src, /window\.dispatchEvent\(new CustomEvent\('wos:channel', \{ detail: \{ channel: st\.channel \|\| chan \} \}\)\)/);
 });
 
-test('Settings has no feature switches any more: it points to the Wizard OS Tracker app (and says For testers on For everyone)', () => {
+test('Settings and the Tracker share one switch: "Try new features" only on For testers, written through WosLookSync', () => {
   const s = read('web/core/settings.js'), rows = s.slice(s.indexOf('  function tweakRows('), s.indexOf('  let authorList = null;'));
-  assert.match(rows, /\[\.\.\.shown\]\.filter\(t => t\.view\)/, 'only views keep a switch in Settings');
-  assert.match(rows, /Turn new features on or off in the Wizard OS Tracker app\./);
-  assert.match(rows, /New features are for testers: choose For testers in About &amp; updates, then turn them on in the Wizard OS Tracker app\./);
-  assert.doesNotMatch(rows, /<h4>Tweaks<\/h4>/);
+  assert.match(rows, /const testers = s\.channel === 'latest';/, 'shown only on For testers');
+  assert.match(rows, /const features = testers \? cells\.filter\(\(_, i\) => !list\[i\]\.view\)\.join\(''\) : '';/);
+  assert.match(rows, /<h4>Try new features<\/h4><p class="st-hint">Unfinished features you can switch on to try\. The team can see which ones you use only if you allow it\.<\/p>/);
+  assert.doesNotMatch(rows, /Turn new features on or off|then turn them on in the|st-hint">[^<]*Tracker/, 'no pointer copy: Settings is self-contained for testers');
+  assert.doesNotMatch(rows, /<h4>Tweaks<\/h4>|<h4>New features<\/h4>/);
   assert.match(s, /'data-chat-tweak', s\.busy \|\| !here \|\| !!t\.locked, name\)/, 'a chat tweak card cannot flip a locked switch');
+  // One state: a Settings flip goes to look.json `tweaks` (wos:tweak-choice → WosLookSync), the same doc the Tracker writes.
+  const e = read('web/core/experience.js'), l = read('web/core/look-sync.js');
+  assert.match(e, /locked: locked\(\), channel \}/, 'state carries the channel Settings reads');
+  assert.match(e, /wos:tweak-choice/);
+  assert.match(l, /window\.addEventListener\('wos:tweak-choice', e => [^\n]*sync\.tweakChoice\(e\.detail\?\.id, e\.detail\?\.on\)\)/);
+  assert.match(l, /for \(const type of \['focus', 'online', 'pageshow'\]\) window\.addEventListener\(type, wake\);/, 'a Tracker flip shows when the shell comes back');
 });

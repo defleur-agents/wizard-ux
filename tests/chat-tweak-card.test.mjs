@@ -145,7 +145,7 @@ test('wiring: Chats draws the card inside the reply and routes its tap; WosSetti
 
 test('experience state names the shells a non-view tweak declares (so the card can say Phone only)', () => {
   const src = read('web/core/experience.js');
-  assert.match(src, /: Array\.isArray\(manifests\.get\(t\.id\)\?\.shells\) \? \{ \.\.\.t, shells: shellsOf\(t\.id\) \} : t\)\.map\(t => locked\(\) && !t\.builtin && !t\.view \? \{ \.\.\.t, on: false, locked: true \} : t\), locked: locked\(\) \}\);/);
+  assert.match(src, /: Array\.isArray\(manifests\.get\(t\.id\)\?\.shells\) \? \{ \.\.\.t, shells: shellsOf\(t\.id\) \} : t\)\.map\(t => locked\(\) && !t\.builtin && !t\.view \? \{ \.\.\.t, on: false, locked: true \} : t\), locked: locked\(\), channel \}\);/);
 });
 
 test('marker: a reply cut off inside an unterminated marker never shows the protocol text (saved text, copy, preview)', () => {

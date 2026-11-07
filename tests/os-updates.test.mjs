@@ -138,7 +138,7 @@ test('channel picker: hidden on an App Manager without channels; For testers / F
 
 test('an older App Manager (before #458) on For testers says its automatic updates only take For everyone releases', async () => {
   const { U } = await load(() => [200, { ...STATUS, always_auto: undefined, channel: 'latest', stable: '0.3.16' }]);
-  assert.match(U.html(), /Every new release as soon as it’s out\. Switch on new features in the Wizard OS Tracker app\. Updates install by themselves only for For everyone releases until your Wizard is updated\./);
+  assert.match(U.html(), /Every new release as soon as it’s out\. Try new features in Appearance\. Updates install by themselves only for For everyone releases until your Wizard is updated\./);
   const now = await load(() => [200, { ...STATUS, channel: 'latest', stable: '0.3.16' }]);
   assert.doesNotMatch(now.U.html(), /only for For everyone/);
 });
@@ -157,7 +157,7 @@ test('choosing For testers POSTs only {channel: "latest"} and says For testers',
   assert.equal(post.headers['X-Wizard-Store'], '1');
   assert.equal(U.state.channel, 'latest');
   assert.match(U.html(), /data-osu="ch-latest" role="radio" aria-checked="true"/);
-  assert.match(U.html(), /<p class="st-hint">Every new release as soon as it’s out\. Switch on new features in the Wizard OS Tracker app\.<\/p>/);
+  assert.match(U.html(), /<p class="st-hint">Every new release as soon as it’s out\. Try new features in Appearance\.<\/p>/);
   assert.deepEqual(c.t[0].slice(0, 2), ['✓', 'Channel: For testers']);
   const n = calls.length;
   U.act(btn('ch-latest'), ctx()); await tick();

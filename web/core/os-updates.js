@@ -9,7 +9,8 @@
  * while a chat run is active; Install now is the "now" escape. There is no Automatic / Ask me choice any more.
  * Channels keep their ids (stable / latest) but are shown as "For everyone" and "For testers": every merge to main
  * reaches For testers; a For testers release moves to For everyone after about 3 days with no release blocker.
- * New work ships behind off-by-default feature switches, which testers turn on in the Wizard OS Tracker app.
+ * New work ships behind off-by-default feature switches, which testers turn on in Settings › Appearance ("Try new
+ * features") or in the Wizard OS Tracker app: one shared state (look.json `tweaks`).
  *
  * Same path as the Store's Get: `../store-install/_updates` is the App Manager's owner-only listener behind
  * Tailscale Serve (owner login, the shell's own Origin, JSON + X-Wizard-Store). No token reaches the browser.
@@ -127,7 +128,7 @@
     const ch = ['stable', 'latest'].includes(st.channel) ? st.channel : '';
     // An App Manager from before the channel fix (wizard-app-manager issue 458) installs only For everyone releases by itself, even on For testers: say so.
     const oldAuto = auto && st.always_auto !== true && ch === 'latest' ? ' Updates install by themselves only for For everyone releases until your Wizard is updated.' : '';
-    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Switch on new features in the Wizard OS Tracker app.${oldAuto}`}</p></div>` : '';
+    const channel = ch ? `<div class="osu-sec"><span class="osu-lbl">Channel</span>${seg('Release channel', [['ch-latest', CHANNEL_NAME.latest, ch === 'latest'], ['ch-stable', CHANNEL_NAME.stable, ch === 'stable']])}<p class="st-hint">${ch === 'stable' ? 'Releases testers have used for about 3 days.' : `Every new release as soon as it’s out. Try new features in Appearance.${oldAuto}`}</p></div>` : '';
     const install = `<div class="osu-sec" data-osu-auto><span class="osu-lbl">Updates</span>${auto ? '<p class="st-hint">Install by themselves overnight, never during a chat.</p>' : `<button type="button" class="st-wide wz-button secondary" data-osu="auto" ${busy ? 'disabled' : ''}>Turn on automatic updates</button><p class="st-hint">Nothing installs until you tap Install.</p>`}</div>`;
     return `<div class="st-group" data-osu-group>${cardHtml()}${quietHead()}${install}${channel}</div>`;
   }
