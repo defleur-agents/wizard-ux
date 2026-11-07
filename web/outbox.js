@@ -551,11 +551,12 @@
         } else if (live && now() - (it.steerWaitSince ||= now()) < STEER_WAIT_MS) {
           // Not sent yet, not lost: the next attempt re-steers (rejection proved nothing was accepted).
           it.state = 'waiting'; it.error = 'Queued · sends when the current reply can take it'; it.nextAt = now() + STEER_RETRY_MS;
+          admitting.delete(it.id); // parked with nothing in flight: a Stop now withdraws it instead of waiting on a request that is gone
           await put(it); return;
         } else {
           it.state = rejected ? 'failed' : 'unconfirmed'; it.error = rejected ? reason(e) : unconfirmed;
           it.attempts = (it.attempts || 0) + 1; it.lastAttemptAt = now();
-          it.nextAt = 0; await put(it); return;
+          it.nextAt = 0; admitting.delete(it.id); await put(it); return;
         }
       }
       if (receipt) return done(it, { steered: true, steerQueued: receipt.status === 'queued', runId: it.steerTarget });
