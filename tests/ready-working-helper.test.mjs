@@ -96,16 +96,16 @@ test('full and slim list projection retain the Working ask and badge in every ru
     assert.equal(projected.ready.length, 0);
   }
 });
-test('real chat row keeps the amber ask and helper badge for helper and live-run cases', () => {
+test('real chat row keeps the amber ask (tracker off) with no helper badge, for helper and live-run cases', () => {
   const c = harness([]);
   Object.assign(c, { LIVE: { isNew: () => true, cardAt: () => at }, esc: s => String(s), clip: s => s, workLabel: () => 'Working', ago: () => 'now',
     topicOn: () => false, privRow: () => false, PIN: { has: () => false, on: () => false }, BOOM: () => null,
     STI: { needs: '!', working: '~' }, STI_TIP: {}, STI_LAB: { needs: 'Needs you' },
     ATT: { needs_you: { cls: 'needs', label: 'Needs you' } }, stiKind: s => s.status === 'running' ? 'working' : 'needs' });
-  vm.runInContext(line(chats, 'const backgroundBadge =') + '\n' + block(chats, '  function chatRow(', '  /* Ready has three orders') + '\nthis.renderRow = chatRow;', c);
+  vm.runInContext(block(chats, '  function chatRow(', '  /* Ready has three orders') + '\nthis.renderRow = chatRow;', c);
   for (const status of ['completed', 'running']) {
     const html = c.renderRow(row({ status, background: 'helper' }));
-    assert.match(html, /Helper still working/);
+    assert.doesNotMatch(html, /Helper still working|ch-background/, 'the Working spinner says it (James, 7 Nov 2026)');
     assert.match(html, /<em class="att needs">Needs you:<\/em>/);
     assert.match(html, /Say what happens when you open Messenger/);
   }

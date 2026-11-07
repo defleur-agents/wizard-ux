@@ -48,11 +48,44 @@
     return !a.started && Date.now() - a.at < 20000; // the run may not have reported yet
   }
   // Items as the strip shows them: answered amber/red asks spin while the run works, then stay out of every count.
+  // Answered comes from the box's own times (James, 7 Nov 2026: a reply from any device, or one sent before this
+  // shipped, answers the asks above it): an amber/red ask whose reply is older than the owner's latest message
+  // (the session row's lastUserAt) is answered. A newer reply that lists it again is a newer anchor, so it is live
+  // again. The local send tokens above stay as the same-frame paint until the list row catches up.
   function project(k, items) {
-    const a = answered.get(k); if (!a?.tokens.size) return items;
-    const run = workingNow(k, a);
-    return (items || []).map(i => (i.state === 'needs_you' || i.state === 'blocked') && !i.seen && a.tokens.has(`${i.id}@${i.updated_at}`)
-      ? (run ? { ...i, state: 'running', answered: true } : { ...i, state: 'needs_you', seen: true, answered: true }) : i);
+    const a = answered.get(k), local = a?.tokens.size ? a : null;
+    const replied = repliedBefore(k);
+    if (!local && !replied) return items;
+    let runLocal, runServer;
+    return (items || []).map(i => {
+      if (!(i.state === 'needs_you' || i.state === 'blocked') || i.seen) return i;
+      const byLocal = !!local?.tokens.has(`${i.id}@${i.updated_at}`), byServer = !!replied?.(i);
+      if (!byLocal && !byServer) return i;
+      const run = byLocal ? (runLocal ??= workingNow(k, local)) : (runServer ??= listWorking(...splitKey(k)));
+      return run ? { ...i, state: 'running', answered: true } : { ...i, state: 'needs_you', seen: true, answered: true };
+    });
+  }
+  const splitKey = k => { const s = k.indexOf('/'); return [k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s)]; };
+  const msgMs = v => (typeof v === 'number' && Number.isFinite(v) ? (Math.abs(v) < 1e12 ? v * 1000 : v) : Date.parse(String(v ?? '')));
+  // → (item → true when the owner wrote after the reply it sits on), or null when the box gave no owner time.
+  // The reply's time is the item's own `at` (set from the message); without one, the anchor message's timestamp
+  // in the thread's stored copy. Both sides are server times; the device clock is never read.
+  function repliedBefore(k) {
+    const [sid, agent] = splitKey(k);
+    const s = window.WizLive?.sessionFor?.(sid, agent) || window.WizLive?.session?.(sid);
+    const owner = Date.parse(String(s?.lastUserAt ?? ''));
+    if (!Number.isFinite(owner) || owner <= 0) return null;
+    let rows;
+    const anchorTime = i => {
+      const t = Math.max(0, ...(i.members || [i]).map(m => (typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0)));
+      if (t > 0) return t;
+      const id = anchorKey(i.message_id); if (id === null) return null;
+      rows ??= window.WizLive?.cachedMessages?.(sid) || window.WizLive?.savedMessages?.(sid)?.rows || [];
+      const m = Array.isArray(rows) ? rows.find(r => r && String(r.id ?? r.message_id) === id) : null;
+      const at = m ? msgMs(m.timestamp ?? m.created_at) : NaN;
+      return Number.isFinite(at) && at > 0 ? at : null;
+    };
+    return i => { const t = anchorTime(i); return t !== null && owner > t; };
   }
   const seenLocally = new Map(); // key → Set(id@updated_at): taps the box has not confirmed yet
   // Resume taps: key → { ids:Set, at, started }. The tapped rows spin from the tap until the thread itself reports
@@ -165,7 +198,8 @@
         countsAt = Date.now();
         // A rolling backend upgrade can still count asks. Hydrate multi-ask list rows so unopened Chats dots
         // use the same reply projection too; no change to the stored ledger or the wire schema is needed.
-        for (const [k, c] of Object.entries(next)) if (c.total > 1 && !threads.has(k)) {
+        // Amber/red rows hydrate too: only their items say whether the owner has already replied after them.
+        for (const [k, c] of Object.entries(next)) if ((c.total > 1 || c.needs_you || c.blocked) && !threads.has(k)) {
           const s = k.indexOf('/'); load(k.slice(s + 1), k.slice(0, s) === 'hermes' ? '' : k.slice(0, s));
         }
       }
