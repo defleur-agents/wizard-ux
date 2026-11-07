@@ -82,7 +82,7 @@ Back: `WizEscapeBack`, `WosBack`; `WizChatsHost.registerBack`/back.push share re
 | App groups | `WosAppKinds` (`app-kinds.js`) |
 | Brand hat | `WizBrand` (`brand.js`) |
 | Links: outside → Browser Reader, sheet/window, long-press menu; `data-wizard-browse` = original | `WizLinks` (`links.js`; Android `openInBrowser`/`download`) |
-| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android app only; inert without `WizardOSNative.downloadsList`); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java` |
+| Downloads: in-app “Downloaded · Open” banner + recent-downloads sheet (Android app only; inert without the shell-only `wizardDownloadsPort` message port); Settings → Phone → Downloads | `WosDownloads` (`downloads.js`, `downloads.css`); native `downloads/Downloads.java` + `downloads/DownloadsCallerPolicy.java` (who may call; docs/android-downloads-port.md) |
 | Text-selection actions | `WosSelMenu` (`sel-menu.js`) |
 | Share sheet (text/url/image/file), generic cached People recency, Agents and pending handoffs | `WosShareSheet` (`share-sheet.js`), entered via `WosChat.sharePayload`/`shareFile`; hold → tray: `bindSharePress` |
 | Agent screen context | `WizScreen` (`screen-text.js`) |

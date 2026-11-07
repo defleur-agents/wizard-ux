@@ -30,6 +30,8 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 import android.window.OnBackInvokedDispatcher;
 
+import ai.wizards.os.downloads.DownloadsCallerPolicy;
+
 /**
  * Wizard OS: a native home for the owner's configured Wizard OS shell.
  *
@@ -114,6 +116,66 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 });
     }
 
+    /** Bumped on the UI thread at every main-frame page start: an admitted Downloads message is stale after a load. */
+    private volatile long downloadsEpoch;
+    private final java.util.concurrent.ExecutorService downloadsIo = java.util.concurrent.Executors.newSingleThreadExecutor();
+
+    /**
+     * In-app Downloads port (web/core/downloads.js): the same main-frame/origin boundary as wizardScreenPort, and the
+     * ONLY way the page reaches the downloads list. It replaces four frame-blind JavascriptInterface methods that every
+     * hosted-app iframe could call. Rules and tests: downloads/DownloadsCallerPolicy. Without WEB_MESSAGE_LISTENER the
+     * port is simply absent (fail closed). A denied message gets no answer and runs nothing.
+     */
+    private void installDownloadsPort(WebView target) {
+        if (!DownloadsCallerPolicy.supported(
+                androidx.webkit.WebViewFeature.isFeatureSupported(androidx.webkit.WebViewFeature.WEB_MESSAGE_LISTENER))) return;
+        java.util.Set<String> origins = new java.util.HashSet<>();
+        origins.add(ai.wizards.os.device.AppState.primaryOrigin(this));
+        try {
+            androidx.webkit.WebViewCompat.addWebMessageListener(target, DownloadsCallerPolicy.NAME, origins,
+                    (view, message, sourceOrigin, isMainFrame, reply) -> onDownloadsMessage(target, view, message, sourceOrigin, isMainFrame, reply));
+        } catch (RuntimeException e) {
+            android.util.Log.w("WizardDownloads", "addWebMessageListener failed: no downloads port", e);
+        }
+    }
+
+    private final DownloadsCallerPolicy.Actions downloadsActions = new DownloadsCallerPolicy.Actions() {
+        @Override public String list() { return ai.wizards.os.downloads.Downloads.listJson(MainActivity.this); }
+        @Override public String open(String id) { return ai.wizards.os.downloads.Downloads.open(MainActivity.this, id); }
+        @Override public String cancel(String id) { return ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, id); }
+        @Override public String remove(String id) { return ai.wizards.os.downloads.Downloads.remove(MainActivity.this, id); }
+    };
+
+    /** Runs on the UI thread (WebView listener thread): admission, then the work, with the navigation re-checked. */
+    private void onDownloadsMessage(WebView target, WebView view, androidx.webkit.WebMessageCompat message, Uri sourceOrigin,
+                                    boolean isMainFrame, androidx.webkit.JavaScriptReplyProxy reply) {
+        final String primary = ai.wizards.os.device.AppState.primaryOrigin(this);
+        final String source = sourceOrigin == null ? null
+                : DownloadsCallerPolicy.originOf(sourceOrigin.getScheme(), sourceOrigin.getHost(), sourceOrigin.getPort());
+        final DownloadsCallerPolicy.Verdict verdict = DownloadsCallerPolicy.admit(true,
+                view == target && web == target, isMainFrame, primary, source, web == null ? null : web.getUrl());
+        if (verdict != DownloadsCallerPolicy.Verdict.ALLOW) return; // no answer, no action
+        // getData() throws for ArrayBuffer messages; only plain strings are requests.
+        final String data = message != null && message.getType() == androidx.webkit.WebMessageCompat.TYPE_STRING ? message.getData() : null;
+        final DownloadsCallerPolicy.Request req = DownloadsCallerPolicy.parse(data);
+        if (req == null) return;
+        final long epoch = downloadsEpoch;
+        if (!req.isList()) { // open / cancel / remove: admitted and carried out in this one UI-thread task, so no load can land between
+            String out = DownloadsCallerPolicy.handle(verdict, data, downloadsActions);
+            if (out != null) postDownloadsReply(reply, out, target, epoch, primary);
+            return;
+        }
+        downloadsIo.execute(() -> { // the list reads DownloadManager off the UI thread; the answer is re-checked before it is posted
+            final String out = DownloadsCallerPolicy.execute(req, downloadsActions);
+            main.post(() -> postDownloadsReply(reply, out, target, epoch, primary));
+        });
+    }
+
+    private void postDownloadsReply(androidx.webkit.JavaScriptReplyProxy reply, String out, WebView target, long epoch, String primary) {
+        if (!DownloadsCallerPolicy.stillCurrent(epoch, downloadsEpoch, web == target, primary, web == null ? null : web.getUrl())) return;
+        try { reply.postMessage(out); } catch (RuntimeException ignored) { }
+    }
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -188,6 +250,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 java.util.Collections.singleton(HomeScreenShortcuts.origin(this)));
         }
         installScreenPort(web);
+        installDownloadsPort(web);
         if (!(this instanceof AppSessionActivity)) HomeScreenShortcuts.attach(this, web);
         if (photos != null) photos.detach();
         photos = ai.wizards.os.photos.PhotosBridge.install(this, web); // status/settings only; no media or credentials
@@ -276,6 +339,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
                 if (device != null) device.onPageStarted();
                 pageUrl = url;
                 screenCaptureId = null;
+                downloadsEpoch++; // a new page load revokes every earlier Downloads admission
                 setKeepAwake(false);
                 if (apps != null) apps.onVaultPageStarted();
             }
@@ -968,6 +1032,7 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
         if (mizel != null) { mizel.detach(); mizel = null; }
         if (apps != null) { apps.detach(); apps = null; }
         if (photos != null) { photos.detach(); photos = null; }
+        downloadsIo.shutdownNow();
         if (audio != null) { audio.detach(); audio = null; }
         if (web != null) { root.removeView(web); web.destroy(); }
         super.onDestroy();
@@ -993,36 +1058,6 @@ public class MainActivity extends androidx.fragment.app.FragmentActivity {
             if (!"https".equals(u.getScheme()) && !"http".equals(u.getScheme())) return;
             runOnUiThread(() -> downloadOutside(u.toString(), web == null ? null : web.getSettings().getUserAgentString(), null, null));
         }
-        /* ---- In-app Downloads (web/core/downloads.js). JSON/strings only; ids are DownloadManager ids as digits. ----
-         * Only the Wizard shell page may use these: the current top page must be the shell origin (not a hosted page, not an
-         * outside site). A hosted-app iframe inside the shell shares this bridge like every other Bridge method. */
-        private boolean shellCaller() {
-            final boolean[] ok = {false};
-            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
-            runOnUiThread(() -> { try {
-                String u = web == null ? null : web.getUrl();
-                ok[0] = u != null && Origin.isShell(MainActivity.this, Uri.parse(u));
-            } finally { l.countDown(); } });
-            try { l.await(2, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
-            return ok[0];
-        }
-        /** {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]} newest first; in-flight rows are refreshed. */
-        @JavascriptInterface public String downloadsList() {
-            if (!shellCaller()) return "{\"v\":1,\"items\":[]}";
-            try { return ai.wizards.os.downloads.Downloads.listJson(MainActivity.this); }
-            catch (RuntimeException e) { return "{\"v\":1,\"items\":[]}"; }
-        }
-        /** Open the finished file in the app that handles it: "ok" | "missing" | "none" (no app can open it). */
-        @JavascriptInterface public String downloadsOpen(String id) {
-            if (!shellCaller()) return "missing";
-            final String[] out = {"missing"};
-            java.util.concurrent.CountDownLatch l = new java.util.concurrent.CountDownLatch(1);
-            runOnUiThread(() -> { try { out[0] = ai.wizards.os.downloads.Downloads.open(MainActivity.this, String.valueOf(id)); } finally { l.countDown(); } });
-            try { l.await(3, java.util.concurrent.TimeUnit.SECONDS); } catch (InterruptedException ignored) { }
-            return out[0];
-        }
-        @JavascriptInterface public String downloadsCancel(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.cancel(MainActivity.this, String.valueOf(id)) : "missing"; }
-        @JavascriptInterface public String downloadsRemove(String id) { return shellCaller() ? ai.wizards.os.downloads.Downloads.remove(MainActivity.this, String.valueOf(id)) : "missing"; }
         @JavascriptInterface public void changeServer() { runOnUiThread(MainActivity.this::changeServer); }
         @JavascriptInterface
         public String platform() { return "android:" + BuildConfig.VERSION_NAME; }

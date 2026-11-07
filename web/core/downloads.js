@@ -9,17 +9,23 @@
  *
  * Skin: one look in every skin. Only --wz-* roles (opaque --wz-panel / --wz-panel-raised for the floating banner
  * and sheet; the scrim may dim), exactly like the update banner (.dv-update) and the Share sheet.
- * Without the native bridge (desktop browser, an older Android app) the module does nothing at all.
+ * Without the native port (desktop browser, an older Android app, a WebView without message listeners) the module
+ * does nothing at all.
  *
- *   WosDownloads.available()   → true only where the Android app exposes WizardOSNative.downloadsList
+ *   WosDownloads.available()   → true only where the Android app gives the shell window.wizardDownloadsPort
  *   WosDownloads.show()/.hide() the sheet (also .toggle); .isOpen(); .back() closes one layer (Back / Esc)
  *   WosDownloads.banner(item)  → the finished-download banner (also what a native "done" push calls)
- *   WosDownloads.open(id)      → Open one file (banner / sheet button): "ok" | "missing" | "none"
+ *   WosDownloads.open(id)      → Promise of "ok" | "missing" | "none" (Open one file: banner / sheet button)
  *
- * Native contract (android/.../downloads/Downloads.java, DownloadsPolicy.java):
- *   WizardOSNative.downloadsList() → {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]}
- *   WizardOSNative.downloadsOpen(id) | downloadsCancel(id) | downloadsRemove(id)
- *   window.__wosDownloads({type:'start'|'done'|'failed'|'sync', item?}) → true when handled
+ * Native contract (android/.../downloads/DownloadsCallerPolicy.java, Downloads.java, DownloadsPolicy.java).
+ * One message port, protocol v1, given ONLY to the shell's main frame on the Wizard origin (addWebMessageListener,
+ * like wizardScreenPort); hosted-app iframes and other pages are refused natively and get no answer:
+ *   page → native  JSON string {v:1, id, method:'list'|'open'|'cancel'|'remove', params?:{id}}
+ *   native → page  JSON string {v:1, id, ok:true, result} | {v:1, id, ok:false, error}
+ *     list   → result {"v":1,"items":[{id,name,mime,size,got,status,started,finished}]}
+ *     open   → "ok" | "missing" | "none";  cancel / remove → "ok" | "missing"
+ *   window.__wosDownloads({type:'start'|'done'|'failed'|'sync', item?}) → true when handled (pushed by MainActivity)
+ * The old WizardOSNative.downloads* JavascriptInterface methods no longer exist and are never used here.
  */
 (() => {
   'use strict';
@@ -28,11 +34,35 @@
   const BANNER_MS = 6000, FRESH_MS = 10 * 60 * 1000, POLL_MS = 900;
   const STATUS = new Set(['pending', 'running', 'paused', 'done', 'failed', 'gone']);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const native = () => { const n = window.WizardOSNative; return n && typeof n.downloadsList === 'function' ? n : null; };
+  const native = () => { const p = window.wizardDownloadsPort; return p && typeof p.postMessage === 'function' ? p : null; };
+  // request/reply over the port; resolves to the native result, or null if the port is absent, refuses, or stays silent
+  const V = 1, ASK_MS = 8000, asking = new Map(); let seq = 0, listening = false;
+  function onNative(ev) {
+    let m; try { m = JSON.parse(typeof ev === 'string' ? ev : ev?.data); } catch (_) { return; }
+    if (!m || m.v !== V) return;
+    const p = asking.get(m.id); if (!p) return;
+    asking.delete(m.id); clearTimeout(p.timer);
+    p.resolve(m.ok === true ? { result: m.result } : null);
+  }
+  function listen(pt) {
+    if (listening) return; listening = true;
+    if (typeof pt.addEventListener === 'function') pt.addEventListener('message', onNative); else pt.onmessage = onNative;
+  }
+  function ask(method, params) {
+    return new Promise(resolve => {
+      const pt = native(); if (!pt) return resolve(null);
+      listen(pt);
+      const id = 'dl' + (++seq);
+      const timer = setTimeout(() => { if (asking.delete(id)) resolve(null); }, ASK_MS);
+      asking.set(id, { resolve, timer });
+      try { pt.postMessage(JSON.stringify({ v: V, id, method, params: params || {} })); }
+      catch (_) { clearTimeout(timer); asking.delete(id); resolve(null); }
+    });
+  }
   const toast = (i, t, ms) => { try { (window.__wos || window.__wux)?.toast?.(i, t, ms); } catch (_) {} };
   const nextFrame = fn => (window.requestAnimationFrame || (f => setTimeout(f, 16)))(fn);
 
-  let items = [], seenAt = 0, sheet = null, bannerEl = null, bannerTimer = 0, poll = 0, opening = new Set();
+  let items = [], loaded = false, seenAt = 0, sheet = null, bannerEl = null, bannerTimer = 0, poll = 0, opening = new Set();
   try { seenAt = Number(localStorage.getItem(SEEN)) || 0; } catch (_) {}
   const markSeen = at => { if (at > seenAt) { seenAt = at; try { localStorage.setItem(SEEN, String(at)); } catch (_) {} } };
 
@@ -45,12 +75,12 @@
       size: num(it.size) > 0 ? num(it.size) : -1, got: Math.max(0, num(it.got)), status: STATUS.has(it.status) ? it.status : 'pending',
       started: num(it.started), finished: num(it.finished) };
   }
-  function read() {
-    const n = native(); if (!n) return null;
-    try { const o = JSON.parse(n.downloadsList()); return Array.isArray(o?.items) ? o.items.map(clean).filter(Boolean) : []; }
-    catch (_) { return null; }
+  async function read() {
+    const r = await ask('list');
+    const o = r?.result;
+    return o && Array.isArray(o.items) ? o.items.map(clean).filter(Boolean) : null;
   }
-  function refresh() { const l = read(); if (l) items = l; return items; }
+  async function refresh() { const l = await read(); if (l) { items = l; loaded = true; } return items; }
   const inFlight = it => it.status === 'pending' || it.status === 'running' || it.status === 'paused';
 
   /* ---- labels ---- */
@@ -75,10 +105,10 @@
   };
 
   /* ---- open / cancel / remove (the tap paints first, the native call follows) ---- */
-  function open(id) {
-    const n = native(); if (!n || !/^\d{1,18}$/.test(String(id))) return 'missing';
-    let r = 'missing';
-    try { r = String(n.downloadsOpen(String(id))); } catch (_) {}
+  async function open(id) {
+    if (!native() || !/^\d{1,18}$/.test(String(id))) return 'missing';
+    const a = await ask('open', { id: String(id) });
+    const r = a && typeof a.result === 'string' ? a.result : 'missing';
     if (r === 'missing') toast('!', 'That file is no longer on this phone', 2600);
     else if (r === 'none') toast('!', 'No app can open this file', 2600);
     return r;
@@ -88,24 +118,24 @@
     opening.add(id);
     const label = btn.textContent;
     btn.classList.add('busy'); btn.disabled = true; btn.textContent = 'Opening…'; // same frame as the tap
-    nextFrame(() => setTimeout(() => {
-      const r = open(id);
+    nextFrame(() => setTimeout(async () => {
+      const r = await open(id);
       opening.delete(id);
       if (r === 'ok' && bannerEl && bannerEl.dataset.id === id) hideBanner();
       if (btn.isConnected) { btn.classList.remove('busy'); btn.disabled = false; btn.textContent = label; }
-      if (r === 'missing') { refresh(); paint(); }
+      if (r === 'missing') { await refresh(); paint(); }
     }, 0));
   }
   function cancelTap(btn, id) {
     const n = native(); if (!n) return;
     const row = btn.closest('.wdl-row'); btn.disabled = true; btn.textContent = 'Cancelling…';
     items = items.filter(x => x.id !== id); row?.remove(); if (!items.length) paint();   // paint first, reconcile after
-    nextFrame(() => setTimeout(() => { try { n.downloadsCancel(id); } catch (_) {} refresh(); paint(); }, 0));
+    nextFrame(() => setTimeout(async () => { await ask('cancel', { id }); await refresh(); paint(); }, 0));
   }
   function removeTap(btn, id) {
     const n = native(); if (!n) return;
     items = items.filter(x => x.id !== id); btn.closest('.wdl-row')?.remove(); if (!items.length) paint();
-    nextFrame(() => setTimeout(() => { try { n.downloadsRemove(id); } catch (_) {} }, 0));
+    nextFrame(() => setTimeout(() => { ask('remove', { id }); }, 0));
   }
 
   /* ---- banner ---- */
@@ -171,22 +201,24 @@
   function paint() {
     if (!sheet) return;
     const list = sheet.querySelector('.wdl-list'); if (!list) return;
-    list.innerHTML = items.length ? items.map(rowHtml).join('') : '<p class="wdl-empty">No downloads yet. Files you download from Wizard appear here.</p>';
+    list.innerHTML = items.length ? items.map(rowHtml).join('') : loaded ? '<p class="wdl-empty">No downloads yet. Files you download from Wizard appear here.</p>' : '<p class="wdl-empty">Loading…</p>';
   }
-  function tick() {
+  async function tick() {
     if (!sheet) return;
     const before = JSON.stringify(items);
-    if (refresh() && JSON.stringify(items) !== before) paint();
-    if (!items.some(inFlight) && !sheet.dataset.idle) sheet.dataset.idle = '1';
+    await refresh();
+    if (sheet && JSON.stringify(items) !== before) paint();
+    if (sheet && !items.some(inFlight) && !sheet.dataset.idle) sheet.dataset.idle = '1';
   }
   function show() {
     if (!native()) return false;
     if (sheet) return true;
-    hideBanner(); refresh();
+    hideBanner();
     const el = document.createElement('div');
     el.className = 'wdl wdl-sheet'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', 'Downloads');
     el.innerHTML = '<div class="wdl-scrim"></div><div class="wdl-panel"><div class="wdl-grip"></div><h2 class="wdl-title">Downloads</h2><div class="wdl-list"></div></div>';
-    sheet = el; paint();
+    sheet = el; paint();                                   // the tap paints first; the list follows from native
+    refresh().then(() => { if (sheet === el) paint(); });
     // Outside tap closes; a press that began inside the panel and released outside does not.
     let downOutside = false;
     el.addEventListener('pointerdown', e => { downOutside = !e.target.closest('.wdl-panel'); });
@@ -224,9 +256,9 @@
   window.__wosDownloads = ev => {
     if (!ev || typeof ev !== 'object') return true;
     if (!native()) return true;
-    if (ev.type === 'done' || ev.type === 'failed') { refresh(); if (sheet) paint(); banner(ev.item); }
-    else if (ev.type === 'start') { refresh(); if (sheet) paint(); }
-    else if (ev.type === 'sync') { refresh(); if (sheet) paint(); const f = freshUnseen(); if (f) banner(f); }
+    if (ev.type === 'done' || ev.type === 'failed') { banner(ev.item); refresh().then(() => { if (sheet) paint(); }); }
+    else if (ev.type === 'start') refresh().then(() => { if (sheet) paint(); });
+    else if (ev.type === 'sync') refresh().then(() => { if (sheet) paint(); const f = freshUnseen(); if (f) banner(f); });
     return true;
   };
 
@@ -236,7 +268,7 @@
     try {
       S.register({ id: 'downloads', page: 'phone', aliases: ['downloads'], available: () => !!native(),
         html() {
-          refresh();
+          refresh();                                         // asks native; the row text follows the last list received
           const run = items.filter(inFlight).length;
           const sub = run ? `${run} downloading` : items.length ? `${items.length} recent` : 'Files you download appear here';
           return `<div class="st-group"><h4>Downloads</h4><button class="st-row wz-row" data-st="downloads"><span class="st-tx"><b>Downloads</b><small>${esc(sub)}</small></span><span class="st-go">›</span></button></div>`;
