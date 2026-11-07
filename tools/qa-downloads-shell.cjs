@@ -196,7 +196,9 @@ const styleOf = (page, sel) => page.locator(sel).first().evaluate(e => { const s
       }
     } else {
       check('no bridge: module inert, no Settings row, no banner', !(await page.evaluate(() => window.WosDownloads.available())) && await page.locator('[data-st="downloads"]').count() === 0);
-      await page.evaluate(() => window.__qaPush({ type: 'done', item: window.__dl[0] }));
+      // No port exists, so there is no push hook: a stray page-side event must still show nothing (inert without a port).
+      await page.evaluate(() => { window.dispatchEvent(new MessageEvent('message', { data: { v: 1, event: { type: 'done', item: (window.__dl || [])[0] } } })); });
+      check('no bridge: no push hook exists', await page.evaluate(() => typeof window.__qaPush === 'undefined'));
       check('no bridge: a stray push shows nothing', await page.locator('.wdl').count() === 0);
     }
     check(`settings/${bridge ? 'bridge' : 'nobridge'}: no page errors`, errs.length === 0, errs.slice(0, 2).join(' / '));
