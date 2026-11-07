@@ -17,9 +17,11 @@ async function boot({ answer, clock = { t: 1e12 } } = {}) {
     const a = typeof answer === 'function' ? answer() : answer;
     if (a instanceof Error) throw a;
     if (a === undefined) return { ok: false, status: 404, json: async () => { throw new Error('404'); } };
+    if (a && a.status) return { ok: false, status: a.status, json: async () => a.body };
     return { ok: true, status: 200, json: async () => a };
   };
-  const ctx = vm.createContext({ window: { WosSettings }, document: { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/disk-status.js' } }, location: { href: 'https://box.ts.net/wizard-os-home/' }, fetch, URL, Date: { now: () => clock.t } });
+  class FakeDate extends Date { constructor(...a) { super(...(a.length ? a : [clock.t])); } static now() { return clock.t; } }
+  const ctx = vm.createContext({ window: { WosSettings }, document: { currentScript: { src: 'https://box.ts.net/wizard-os-home/core/disk-status.js' } }, location: { href: 'https://box.ts.net/wizard-os-home/' }, fetch, URL, Date: FakeDate });
   vm.runInContext(src, ctx);
   assert.ok(feature, 'registers a Settings feature');
   const settle = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setImmediate(r)); };
@@ -46,13 +48,26 @@ test('the line is the App Manager\'s words, escaped and clipped', async () => {
   assert.match(h, /data-level="warn"/);
 });
 
-test('a box without the route shows nothing, so the page stays hidden', async () => {
+test('a box without the route shows nothing, so the page stays hidden, and is not asked again', async () => {
   const b = await boot({ answer: undefined });
   assert.equal(await b.render(), '');
   assert.equal(b.feature.available(), false);
+  b.clock.t += 3600e3;
+  await b.render();
+  assert.equal(b.fetched.length, 1);
 });
 
-test('asked at most every 10 minutes, 1 minute after a failure; a failure keeps the last good line', async () => {
+test('an error answer with its own line replaces an older "encrypted" line', async () => {
+  let bad = false;
+  const b = await boot({ answer: () => bad ? { status: 503, body: { line: "Couldn't check disk encryption", level: 'error' } } : { line: 'Disk encrypted', level: 'ok' } });
+  assert.match(text(await b.render()), /Disk encrypted$/);
+  b.clock.t += 601e3; bad = true;
+  const h = await b.render();
+  assert.equal(text(h), "Disk Disk encryption Couldn't check disk encryption");
+  assert.match(h, /data-level="error"/);
+});
+
+test('asked at most every 10 minutes, 1 minute after a failure; a failure keeps the last good line and later says how old it is', async () => {
   let n = 0, fail = false;
   const b = await boot({ answer: () => { n++; return fail ? new Error('offline') : { line: 'Not encrypted', level: 'warn' }; } });
   await b.render(); await b.render(); await b.render();
@@ -60,6 +75,16 @@ test('asked at most every 10 minutes, 1 minute after a failure; a failure keeps 
   b.clock.t += 601e3; fail = true;
   assert.equal(text(await b.render()), 'Disk Disk encryption Not encrypted', 'keeps the last good line');
   assert.equal(n, 2);
+  b.clock.t += 30e3; await b.render();
+  assert.equal(n, 2, 'not before a minute');
+  b.clock.t += 31e3; await b.render();
+  assert.equal(n, 3, 'asked again a minute after a failure, not ten');
+  for (let i = 0; i < 25; i++) { b.clock.t += 61e3; await b.render(); }
+  const h = await b.render();
+  assert.match(text(h), /^Disk Disk encryption Not encrypted \(not rechecked since \d\d:\d\d\)$/, 'says when it was last checked');
+  assert.match(h, /data-level="stale"/);
+  fail = false; b.clock.t += 61e3;
+  assert.equal(text(await b.render()), 'Disk Disk encryption Not encrypted', 'fresh again after an answer');
 });
 
 test('FileVault and VPS lines pass through unchanged', async () => {
