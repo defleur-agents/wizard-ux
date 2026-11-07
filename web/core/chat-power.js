@@ -354,7 +354,8 @@ window.WosChatPower = function chatPower(A) {
   }
   async function continueBackground(id, sid, rid, button) {
     const c = ch(id);
-    if (c.continuing || LIVE.session(sid)?.backgroundResult?.id !== rid) return;
+    const own = LIVE.session(sid);
+    if (c.continuing || !own || own.agent || own.backgroundResult?.id !== rid) return;
     c.continuing = rid; if (button) { button.disabled = true; button.textContent = 'Continuing…'; }
     const ended = ['failed', 'cancelled', 'interrupted'];
     try {
@@ -365,18 +366,19 @@ window.WosChatPower = function chatPower(A) {
       if (!r.ok || ended.includes(outcome.status)) {
         // 409: the thread moved on (a newer message, a gate, a live run). Its latest request stays in charge.
         const stale = r.status === 409 || ended.includes(outcome.status);
-        if (stale) { const s = LIVE.session(sid); if (s) s.backgroundResult = null; }
+        if (stale) { const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid); }
         toast('!', stale ? 'This thread changed · its latest request stays in charge' : 'Couldn’t continue · tap again', 2600);
         LIVE.refresh?.(); return;
       }
-      const s = LIVE.session(sid); if (s) s.backgroundResult = null;
+      const s = LIVE.session(sid); if (s) s.backgroundResult = null; LIVE.backgroundSettled?.(rid);
       toast('↻', outcome.status === 'completed' ? 'Already continued from the saved result' : 'Continuing from the saved result', 1600);
       LIVE.refresh?.();
     } catch (e) { toast('!', 'Couldn’t reach Wizard · tap Continue again', 2600); }
     finally { c.continuing = ''; rerenderAll(); }
   }
   function failureHtml(w, s) {
-    if (s?.backgroundResult && backgroundOn()) return backgroundHtml(w, s);
+    // Main agent only: the Service's discovery and Continue routes are scoped to it (agent_id hermes).
+    if (s?.backgroundResult && !s.agent && backgroundOn()) return backgroundHtml(w, s);
     if (!M || !failedShown(s)) return '';
     const busy = retrying.has(s.id) ? 'retry' : E?.busy.get(s.id) || '';
     const req = requestOf(w, s);

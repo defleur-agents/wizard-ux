@@ -300,6 +300,9 @@
    * While the Service reports it is still scanning, re-read briefly (bounded to one minute). */
   function backgroundOn() { try { return (document.documentElement.dataset.tweaks || '').split(' ').includes('wizard/background-continue'); } catch (_) { return false; } }
   let backgroundPollTimer = null, backgroundPollUntil = 0;
+  // Results this device already continued (or found stale). A discovery read that started before the tap can land
+  // after it; it must never bring the Continue panel back. Ids are per result, so this only ever grows a little.
+  const BACKGROUND_SETTLED = new Set();
   function scheduleBackgroundPoll() {
     if (backgroundPollTimer || document.hidden) return;
     if (!backgroundPollUntil) backgroundPollUntil = Date.now() + 60000;
@@ -313,9 +316,10 @@
     catch (e) { return; } // an older Agent Service lacks this route; normal Chats still works
     if (p?.scanning) scheduleBackgroundPoll();
     else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
-    const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(Boolean));
+    const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
     // The listing is authoritative: a result continued elsewhere (another device) clears here too.
     for (const s of sessions) if (s.backgroundResult && !pending.has(s.backgroundResult.id)) s.backgroundResult = null;
+    // Only the main agent's threads: the Service route is scoped to the main agent (agent_id hermes).
     const byId = new Map(sessions.map(row => [row.id, row]));
     for (const raw of Array.isArray(p?.sessions) ? p.sessions : []) {
       const s = normalize(raw); if (!s || !s.backgroundResult || !pending.has(s.backgroundResult.id)) continue;
@@ -881,6 +885,8 @@
       for (const g of [needs, ready, working]) g.sort((a, b) => t(b) - t(a));
       return { needs, ready, working };
     },
+    // chat-power.js: a Continue tap settled this saved background result (#14); hide it for good on this device.
+    backgroundSettled(id) { if (typeof id === 'string' && id) BACKGROUND_SETTLED.add(id); for (const s of this.sessions || []) if (s.backgroundResult?.id === id) s.backgroundResult = null; },
     async refresh() {
       if (this.loading) return this.loading;
       this.loading = (async () => {

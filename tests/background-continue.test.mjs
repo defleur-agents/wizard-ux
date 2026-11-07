@@ -41,7 +41,7 @@ function discovery({ on, payload, fail = false }) {
   };
   ctx.normalize = normalizer();
   vm.createContext(ctx);
-  vm.runInContext(`${body}; this.merge = mergeBackgroundResults; this.backgroundOn = backgroundOn;`, ctx);
+  vm.runInContext(`${body}; this.merge = mergeBackgroundResults; this.backgroundOn = backgroundOn; this.settled = BACKGROUND_SETTLED;`, ctx);
   return { ctx, calls };
 }
 const listing = {
@@ -73,6 +73,17 @@ test('on: a GET only; an older result adds its thread once, a working thread kee
   assert.equal(sessions.find(s => s.id === 'stale').backgroundResult, null, 'a result no longer pending clears');
 });
 
+test('on: a discovery read that lands after this device continued never brings Continue back', async () => {
+  const { ctx } = discovery({ on: true, payload: listing });
+  ctx.settled.add(RID);
+  const sessions = [{ id: 'old', status: 'completed', backgroundResult: { id: RID } }];
+  await ctx.merge(sessions);
+  assert.equal(sessions.find(s => s.id === 'old').backgroundResult, null);
+  assert.equal(sessions.filter(s => s.id === 'old').length, 1);
+  const src = read('web/live.js');
+  assert.match(src, /backgroundSettled\(id\) \{ if \(typeof id === 'string' && id\) BACKGROUND_SETTLED\.add\(id\);/);
+});
+
 test('on: an older Agent Service without the route leaves Chats as it was', async () => {
   const { ctx } = discovery({ on: true, payload: null, fail: true });
   const sessions = [{ id: 'a', status: 'completed', backgroundResult: null }];
@@ -89,23 +100,23 @@ test('the list normalizer keeps a result only when its id has the bg_ shape and 
 });
 
 // chat-power.js panel + tap.
-function power({ on, status = 202, outcome = { status: 'queued' } }) {
-  const state = {}, notices = [], posts = [];
+function power({ on, status = 202, outcome = { status: 'queued' }, agent = '' }) {
+  const state = {}, notices = [], posts = [], settled = [];
   const w = { id: 'win', app: 'chats', thread: 'old' };
-  const session = { id: 'old', status: 'completed', backgroundResult: { id: RID } };
+  const session = { id: 'old', status: 'completed', agent, backgroundResult: { id: RID } };
   const ctx = { console, URL, Intl, Date, setTimeout, clearTimeout, location: { origin: 'https://fixture.invalid', href: 'https://fixture.invalid/', hostname: 'fixture.invalid' },
     navigator: {}, localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     document: { documentElement: { dataset: { tweaks: on ? ID : '' } }, addEventListener() {}, querySelector: () => null, createElement: () => ({ style: {} }) },
     addEventListener() {},
     fetch: async (url, init) => { posts.push([url, init.method, init.body]); return { ok: status < 300, status, json: async () => outcome }; },
     WizCore: { esc: String, clip: s => s }, WizConfig: { agent: () => 'Fixture' },
-    WizLive: { session: id => id === 'old' ? session : null, refresh() {}, busy: () => false } };
+    WizLive: { session: id => id === 'old' ? session : null, refresh() {}, busy: () => false, backgroundSettled: id => settled.push(id) } };
   ctx.window = ctx; vm.createContext(ctx);
   vm.runInContext(read('web/core/chat-kit.js'), ctx); vm.runInContext(read('web/core/chat-power.js'), ctx);
   const api = ctx.WosChatPower({ ch: () => state, toast: (...x) => notices.push(x), H: { win: () => w }, CH: { win: state }, renderChats() {} });
   const button = { dataset: { backgroundContinue: RID }, disabled: false, textContent: 'Continue' };
   const click = () => api.click({ target: { closest: s => s === '[data-background-continue]' ? button : null } }, 'win');
-  return { api, w, session, state, notices, posts, click };
+  return { api, w, session, state, notices, posts, settled, click };
 }
 const settle = async h => { for (let i = 0; i < 100 && h.state.continuing; i++) await new Promise(r => setTimeout(r, 2)); assert.equal(h.state.continuing, ''); };
 
@@ -127,6 +138,14 @@ test('on: the panel shows Continue; showing it posts nothing; a double tap posts
   assert.deepEqual(h.posts[0].slice(0, 2), [`/wizard/background-results/${RID}/continue`, 'POST']);
   assert.deepEqual(JSON.parse(h.posts[0][2]), { session_id: 'old' });
   assert.equal(h.session.backgroundResult, null);
+  assert.deepEqual(h.settled, [RID], 'the list will not resurrect it from an older read');
+});
+
+for (const kind of ['host-profile', 'container', 'restricted']) test(`on: a routed ${kind} thread gets no panel and never posts (main-agent route only)`, async () => {
+  const h = power({ on: true, agent: `qa-${kind}` });
+  assert.doesNotMatch(h.api.failureHtml(h.w, h.session), /data-background-continue/);
+  h.click(); await new Promise(r => setTimeout(r, 10));
+  assert.deepEqual(h.posts, []);
 });
 
 test('on: a thread that moved on (409) keeps its latest request in charge', async () => {
