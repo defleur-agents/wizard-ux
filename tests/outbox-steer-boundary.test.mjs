@@ -33,6 +33,7 @@ function client(origin, rows = new Map()) {
     setTimeout(fn, ms) { const t = setTimeout(fn, ms); t.unref(); timers.add(t); return t; },
     fetch: (path, init) => fetch(origin + path, init),
     WosModels: { snapshot: (_, route) => route, resolveRoute: async route => route },
+    WosAgents: { isOther: a => !!a, get: () => ({ permissions: {} }) },
   };
   ctx.window = ctx; vm.runInNewContext(source, ctx);
   return { api: ctx.WosOutbox, rows, close: () => { for (const t of timers) clearTimeout(t); } };
@@ -62,7 +63,7 @@ async function fixture(t, options = {}) {
       if (options.beforeRead) await options.beforeRead();
       return json(options.readStatus || 200, { run_id: options.otherRun || runId, session_id: options.otherSession || sessionId, status: options.runStatus || 'completed' });
     }
-    if (req.url === '/wizard/hermes/v1/runs') {
+    if (req.url.split('?')[0] === '/wizard/hermes/v1/runs') {
       if (options.admitStatus) return json(options.admitStatus, { error: 'QA request rejected' });
       const key = req.headers['idempotency-key'];
       if (admitted.has(key)) assert.equal(admitted.get(key), body, 'idempotent replay is byte-identical');
@@ -75,7 +76,7 @@ async function fixture(t, options = {}) {
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const c = client(`http://127.0.0.1:${server.address().port}`);
   t.after(async () => { c.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); });
-  const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId,
+  const enqueue = () => c.api.enqueue({ kind: 'reply', sessionId, steerRunId: runId, ...(options.agent ? { agent: options.agent } : {}),
     text: 'Follow up in this same thread', model: 'test-model', provider: 'test-provider', instructions: 'Keep original instructions', files: [{ id: 'drop_attachment' }] });
   return { ...c, calls, admitted, options, enqueue, origin: `http://127.0.0.1:${server.address().port}` };
 }
@@ -122,6 +123,29 @@ for (const runStatus of ['queued', 'starting']) {
     assert.equal(sent.state, 'sent', sent.error);
     assert.equal(f.admitted.size, 1);
     assert.equal(f.calls.filter(x => x.path.includes('/steer')).length, 2);
+  });
+}
+// Codex review on #1141: Stop while waiting must withdraw; stale wait marker must not outlive the wait; routed threads.
+test('Stop while a refused steer waits withdraws the message and never sends it', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  assert.equal((await settled(f.api, it.id)).state, 'waiting');
+  const out = await Promise.race([f.api.cancel(it.id), new Promise(r => setTimeout(() => r('HUNG'), 2000))]);
+  assert.equal(out.outcome, 'cancelled'); assert.equal(f.admitted.size, 0);
+});
+test('the wait marker is cleared once the run ends and the message continues as a normal turn', async t => {
+  const f = await fixture(t, { runStatus: 'queued' }); const it = await f.enqueue();
+  const waiting = await settled(f.api, it.id); assert.ok(waiting.steerWaitSince);
+  f.options.runStatus = 'completed'; waiting.nextAt = 0; await f.api.pump();
+  const sent = await settled(f.api, it.id); assert.equal(sent.state, 'sent', sent.error);
+  assert.equal(sent.steerWaitSince, undefined);
+});
+for (const runStatus of ['queued', 'running']) {
+  test(`a routed (agent-scoped) thread's refused steer is ${runStatus === 'queued' ? 'kept queued' : 'sent as a follow-up'} on the same agent route`, async t => {
+    const f = await fixture(t, { runStatus, agent: 'ops' }); const it = await f.enqueue();
+    const done = await settled(f.api, it.id);
+    assert.equal(done.state, runStatus === 'queued' ? 'waiting' : 'sent', done.error);
+    for (const c of f.calls) assert.match(c.path, /[?&]agent=ops(&|$)/, `unscoped call: ${c.method} ${c.path}`);
+    assert.equal(f.admitted.size, runStatus === 'queued' ? 0 : 1);
   });
 }
 test('a queued-run steer that becomes steerable is delivered as a steer, once', async t => {
