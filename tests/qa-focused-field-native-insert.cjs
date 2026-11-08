@@ -36,10 +36,11 @@ async function run(page, id, mode) {
     for (const k of Object.keys(log[id])) log[id][k] = 0;
     const seal = ff.capture();
     if (mode === 'blurred') el.blur();
+    if (mode === 'switched') document.getElementById(id === 'ce' ? 'in' : 'ta').focus();
     if (mode === 'false') document.execCommand = () => false;
     if (mode === 'throw') document.execCommand = () => { throw new Error('boom'); };
     const result = ff.insert(seal, WORDS);
-    return { result, text: el.isContentEditable ? (id === 'cm' ? cmDoc() : el.textContent) : el.value, log: { ...log[id] }, focused: document.activeElement === el };
+    return { result, text: el.isContentEditable ? (id === 'cm' ? cmDoc() : el.textContent) : el.value, log: { ...log[id] }, focused: document.activeElement === el, activeId: document.activeElement.id };
   }, { id, mode, WORDS });
 }
 async function fresh(browser) {
@@ -58,6 +59,8 @@ async function fresh(browser) {
     ok(r.log.trusted === 1 && r.log.input === r.log.trusted, `${id}: native pipeline (the one input event is browser-made, no synthetic event)`, r.log);
     const b = await t(id, 'blurred');
     ok(b.result === true && count(b.text, WORDS) === 1 && b.log.input === 1, `${id}: sealed field not focused at insert still receives it once`, { text: b.text, log: b.log });
+    const sw = await t(id, 'switched'), other = id === 'ce' ? 'in' : 'ta';
+    ok(sw.result === true && count(sw.text, WORDS) === 1 && sw.log.input === 1 && sw.activeId === other, `${id}: user moved to another field during the take: words land once, focus stays on the new field`, { text: sw.text, log: sw.log, active: sw.activeId });
     for (const mode of ['false', 'throw']) {
       const f = await t(id, mode);
       ok(f.result === true && count(f.text, WORDS) === 1 && f.log.input === 1 && f.log.before === 0 && f.log.trusted === 0, `${id}: fallback (execCommand ${mode === 'false' ? 'returns false' : 'throws'}) inserts once with one synthetic input`, { text: f.text, log: f.log });

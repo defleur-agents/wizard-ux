@@ -117,6 +117,7 @@
         // IME re-commit the same words (dictation pasted twice). Manual insertion is only the fallback.
         const doc = seal.doc, selection = doc.defaultView.getSelection();
         let t = String(text), native = false;
+        const away = doc.activeElement; // the user may have moved to another field while STT ran: give focus back to it after
         try {
           // Same neighbour spacing as plain fields; only the caret's own text node counts, so a new line never gains a space.
           const c = seal.range.startContainer, o = seal.range.startOffset, prev = c.nodeType === 3 ? c : c.childNodes[o - 1];
@@ -126,6 +127,9 @@
           selection.removeAllRanges(); selection.addRange(seal.range);
           native = !!doc.execCommand('insertText', false, t);
         } catch (_) { native = false; }
+        if (away && away !== doc.body && !el.contains(away) && away.isConnected) {
+          try { away.focus({ preventScroll: true }); } catch (_) { /* element no longer focusable */ }
+        }
         if (native) { refresh(); return true; } // the native input event already fired; never add a second
         const r = seal.range; r.deleteContents();
         const node = doc.createTextNode(String(text)); r.insertNode(node); r.setStartAfter(node); r.collapse(true);
