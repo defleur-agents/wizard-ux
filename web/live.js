@@ -309,16 +309,18 @@
     if (Date.now() > backgroundPollUntil) return;
     backgroundPollTimer = setTimeout(() => { backgroundPollTimer = null; if (!document.hidden) L.refresh(); }, 1000);
   }
-  async function mergeBackgroundResults(sessions) {
+  async function mergeBackgroundResults(sessions, isCurrent = () => true) {
     if (!backgroundOn()) { for (const s of sessions) if (s.backgroundResult) s.backgroundResult = null; return; }
     let p;
     try { p = await (await req('/wizard/background-results', listSignal())).json(); }
     catch (e) { return; } // an older Agent Service lacks this route; normal Chats still works
+    if (!isCurrent()) return;
+    if (!backgroundOn()) { for (const s of sessions) s.backgroundResult = null; return; }
     if (p?.scanning) scheduleBackgroundPoll();
     else { if (backgroundPollTimer) clearTimeout(backgroundPollTimer); backgroundPollTimer = null; backgroundPollUntil = 0; }
     const pending = new Set((Array.isArray(p?.results) ? p.results : []).map(r => r?.id).filter(id => id && !BACKGROUND_SETTLED.has(id)));
     // The listing is authoritative: a result continued elsewhere (another device) clears here too.
-    for (const s of sessions) if (s.backgroundResult && !pending.has(s.backgroundResult.id)) s.backgroundResult = null;
+    for (const s of sessions) if (s.backgroundResult && (WORKING.has(s.status) || !pending.has(s.backgroundResult.id))) s.backgroundResult = null;
     // Only the main agent's threads: the Service route is scoped to the main agent (agent_id hermes).
     const byId = new Map(sessions.map(row => [row.id, row]));
     for (const raw of Array.isArray(p?.sessions) ? p.sessions : []) {
@@ -935,7 +937,14 @@
           const got = await fetchSessions(full, '', early);
           const [deferred, remote] = await side;
           apply(got, deferred, remote);
-          await mergeBackgroundResults(this.sessions);
+          const backgroundSessions = this.sessions;
+          if (backgroundOn()) {
+            // Paint the ordinary list and start routed reads without waiting for optional discovery.
+            void mergeBackgroundResults(backgroundSessions, () => this.sessions === backgroundSessions).then(() => {
+              if (this.sessions !== backgroundSessions) return;
+              writeSnap(this); this.emit();
+            }).catch(() => {});
+          } else { void mergeBackgroundResults(backgroundSessions); }
           if (Date.now() - this.snapAt > SNAP_EVERY) writeSnap(this);
           // Other agents' threads merge in after the main list is on screen; one slow agent never holds Chats.
           // Replacing a snapshot, they get a short head start so main and agents land in the same repaint.
